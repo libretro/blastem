@@ -49,7 +49,7 @@ typedef enum {
 	M68K_JMP,
 	M68K_JSR,
 	M68K_LEA,
-	M68K_LINK
+	M68K_LINK,
 	M68K_LSL,
 	M68K_LSR,
 	M68K_MOVE,
@@ -86,23 +86,29 @@ typedef enum {
 	M68K_SWAP,
 	M68K_TAS,
 	M68K_TRAP,
-	M68k_TRAPV
+	M68K_TRAPV,
 	M68K_TST,
-	M68K_UNLNK
+	M68K_UNLNK,
+	M68K_INVALID
 } m68K_op;
 
 typedef enum {
 	VAR_NORMAL,
-	VAR_QUICK
+	VAR_QUICK,
+	VAR_BYTE,
+	VAR_WORD,
+	VAR_LONG
 } m68K_variant;
 
 typedef enum {
 	OPSIZE_BYTE=0,
 	OPSIZE_WORD,
-	OPSIZE_LONG
+	OPSIZE_LONG,
+	OPSIZE_INVALID
 } m68K_opsizes;
 
 typedef enum {
+//actual addressing mode field values
 	MODE_REG = 0,
 	MODE_AREG,
 	MODE_AREG_INDIRECT,
@@ -110,15 +116,34 @@ typedef enum {
 	MODE_AREG_PREDEC,
 	MODE_AREG_DISPLACE,
 	MODE_AREG_INDEX_MEM, //bunch of relatively complicated modes
-	MODE_PC_INDIRECT_ABS_IMMED //Modes that use the program counter, an absolute address or immediate value
+	MODE_PC_INDIRECT_ABS_IMMED, //Modes that use the program counter, an absolute address or immediate value
+//expanded values
+	MODE_ABSOLUTE_SHORT,
+	MODE_ABSOLUTE,
+	MODE_PC_DISPLACE,
+	MODE_PC_INDEX,
+	MODE_IMMEDIATE,
+	MODE_UNUSED
 } m68k_addr_modes;
 
 typedef enum {
-	MODE_ABSOLUTE=0,
-	MODE_PC_DISPLACE,
-	MODE_PC_INDEX,
-	MODE_IMMEDIATE
-} m68k_addr_extended;
+	COND_TRUE,
+	COND_FALSE,
+	COND_HIGH,
+	COND_LOW_SAME,
+	COND_CARRY_CLR,
+	COND_CARRY_SET,
+	COND_NOT_EQ,
+	COND_EQ,
+	COND_OVERF_CLR,
+	COND_OVERF_SET,
+	COND_PLUS,
+	COND_MINUS,
+	COND_GREATER_EQ,
+	COND_LESS,
+	COND_GREATER,
+	COND_LESS_EQ
+} m68K_condition;
 
 typedef struct {
 	uint8_t addr_mode;
@@ -147,4 +172,5 @@ typedef struct {
 
 uint16_t * m68K_decode(uint16_t * istream, m68kinst * dst);
 uint32_t m68k_cycles(m68kinst * inst);
+int m68K_disasm(m68kinst * decoded, char * dst);
 
