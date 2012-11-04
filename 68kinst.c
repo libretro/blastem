@@ -407,9 +407,15 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 			if ((*istream & 0xC0) == 0xC0) {
 				decoded->op = M68K_MULS;
 				decoded->extra.size = OPSIZE_WORD;
+				decoded->dst.addr_mode = MODE_REG;
+				decoded->dst.params.regs.pri = m68K_reg_quick_field(*istream);
 				istream = m68k_decode_op(istream, OPSIZE_WORD, &(decoded->src));
 			} else if(!(*istream & 0xF0)) {
 				decoded->op = M68K_ABCD;
+				decoded->extra.size = OPSIZE_BYTE;
+				decoded->src.params.regs.pri = *istream & 0x7;
+				decoded->dst.params.regs.pri = m68K_reg_quick_field(*istream);
+				decoded->dst.addr_mode = decoded->src.addr_mode = (*istream & 8) ? MODE_AREG_PREDEC : MODE_REG;
 			} else if(!(*istream & 0x30)) {
 				decoded->op = M68K_EXG;
 				decoded->extra.size = OPSIZE_LONG;
@@ -436,6 +442,8 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 			if ((*istream & 0xC0) == 0xC0) {
 				decoded->op = M68K_MULU;
 				decoded->extra.size = OPSIZE_WORD;
+				decoded->dst.addr_mode = MODE_REG;
+				decoded->dst.params.regs.pri = m68K_reg_quick_field(*istream);
 				istream = m68k_decode_op(istream, OPSIZE_WORD, &(decoded->src));
 			} else {
 				decoded->op = M68K_AND;
