@@ -95,6 +95,8 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 {
 	uint8_t optype = *istream >> 12;
 	uint8_t size;
+	uint8_t reg;
+	uint8_t opmode;
 	uint32_t immed;
 	decoded->op = M68K_INVALID;
 	decoded->src.addr_mode = decoded->dst.addr_mode = MODE_UNUSED;
@@ -102,7 +104,85 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 	switch(optype)
 	{
 	case BIT_MOVEP_IMMED:
-		//TODO: Implement me
+		if (*istream & 0x100) {
+			//BTST, BCHG, BCLR, BSET
+			switch ((*istream >> 6) & 0x3)
+			{
+			case 0:
+				decoded->op = M68K_BTST;
+				break;
+			case 1:
+				decoded->op = M68K_BCHG;
+				break;
+			case 2:
+				decoded->op = M68K_BCLR;
+				break;
+			case 3:
+				decoded->op = M68K_BSET;
+				break;
+			}
+			decoded->src.addr_mode = MODE_REG;
+			decoded->src.params.regs.pri = m68K_reg_quick_field(*istream);
+			istream = m68k_decode_op(istream, OPSIZE_LONG, &(decoded->dst));
+		} else {
+			switch ((*istream >> 9) & 0x7)
+			{
+			case 0:
+				if ((*istream & 0xFF) == 0x3C) {
+					decoded->op = M68K_ORI_CCR;
+					decoded->extra.size = OPSIZE_BYTE;
+					decoded->src.addr_mode = MODE_IMMEDIATE;
+					decoded->src.params.u8 = *(++istream);
+				} else if((*istream & 0xFF) == 0x7C) {
+					decoded->op = M68K_ORI_SR;
+					decoded->extra.size = OPSIZE_WORD;
+					decoded->src.addr_mode = MODE_IMMEDIATE;
+					decoded->src.params.u16 = *(++istream);
+				} else {
+					//ORI, CMP2.b, CHK2.b
+					if ((*istream & 0xC0) != 0xC0) {
+						decoded->op = M68K_OR;
+						decoded->src.addr_mode = MODE_IMMEDIATE;
+						decoded->extra.size = size = (*istream >> 6) & 3;
+						reg = *istream & 0x7;
+						opmode = (*istream >> 3) & 0x7;
+						switch (size)
+						{
+						case OPSIZE_BYTE:
+							decoded->src.params.u8 = *(++istream);
+							break;
+						case OPSIZE_WORD:
+							decoded->src.params.16 = *(++istream);
+							break;
+						case OPSIZE_LONG:
+							immed = *(++istream);
+							decoded->src.params.u32 = immed << 16 | *(++istream);
+							break;
+						}
+						istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
+					} else {
+	#ifdef M68020
+						//TODO: Implement me for 68020 support
+	#endif
+					}
+				}
+				break;
+			case 1:
+				break;
+			case 2:
+				break;
+			case 3:
+				break;
+			case 4:
+				break;
+			case 5:
+				break;
+			case 6:
+				break;
+			case 7:
+				break;
+			}
+		}
 		break;
 	case MOVE_BYTE:
 	case MOVE_LONG:
