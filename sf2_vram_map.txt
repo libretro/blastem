@@ -1,0 +1,64 @@
+0000: single color blocks
+0200: Random symbols????
+0400-0C00: Font
+0C00-0E??: Score font
+0E??: Player name displays
+
+2000-3000: floor (mostly, some garbage around 2800 and 2A00)
+3000-6C00: background
+6C00-8000: not graphics
+8000-~8A00: bat/bird sprites, special attack text
+8A00-9000: ?????
+9000-9200: More special attack text
+9200-9600: another font
+9800-AA00: special attack effects?
+AC00-B000: ????
+B000-B500: character sprite
+????
+C000-C500: chracter sprite
+D000-DA00: window name table
+DA00-DC00: Sprite attribute table
+DC00-E000: horizontal scroll data
+E000-????: plane A&B name table
+C500-FFFF: not graphics
+
+VDP Registers:
+Mode
+00 - 14
+01 - 64
+Scroll A Name Table Address: E000
+02 - 38
+Window Name Table Address: D000
+03 - 34
+Scroll B Name Table Address: E000
+04 - 07
+Sprite Attribute Table Address: DA00
+05 - 6D
+06 - 00
+Backdrop color - 0
+07 - 00
+08 - 00
+09 - 00
+HINT Counter
+0A - AF
+Mode - Full screen vertical scroll, line horizontal scroll, external ints disabled, 32 cell display, no interlacing
+0B - 03
+0C - 00
+H Scroll Data Address: DC00
+0D - 37
+0E - 00
+Auto increment
+0F - 02
+Scroll Size
+10 - 11
+Window H Pos
+11 - 00
+Window V Pos
+12 - 05
+DMA transfer length
+13 - 00
+14 - 00
+DMA source address and mode
+15 - DB
+16 - CF
+17 - 7F
