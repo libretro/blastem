@@ -95,6 +95,7 @@ typedef enum {
 typedef enum {
 	VAR_NORMAL,
 	VAR_QUICK,
+	VAR_IMMEDIATE,
 	VAR_BYTE,
 	VAR_WORD,
 	VAR_LONG
