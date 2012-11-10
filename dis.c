@@ -18,13 +18,11 @@ int main(int argc, char ** argv)
 	fclose(f);
 	for(cur = filebuf; cur - filebuf < (filesize/2); ++cur)
 	{
-		//printf("%x:", *cur);
 		*cur = (*cur >> 8) | (*cur << 8);
-		//printf("%x\n", *cur);
 	}
-	for(cur = filebuf; (cur - filebuf) < (filesize/2); ++cur)
+	for(cur = filebuf; (cur - filebuf) < (filesize/2); )
 	{
-		printf("cur: %p: %x\n", cur, *cur);
+		//printf("cur: %p: %x\n", cur, *cur);
 		cur = m68K_decode(cur, &instbuf);
 		m68k_disasm(&instbuf, disbuf);
 		puts(disbuf);

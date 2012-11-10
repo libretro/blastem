@@ -124,6 +124,11 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 			decoded->src.addr_mode = MODE_REG;
 			decoded->src.params.regs.pri = m68K_reg_quick_field(*istream);
 			istream = m68k_decode_op(istream, OPSIZE_LONG, &(decoded->dst));
+		} else if ((*istream & 0xF00) == 0x800) {
+		} else if ((*istream & 0xC0) == 0xC0) {
+#ifdef M68020
+			//CMP2, CHK2, CAS, CAS2, RTM, CALLM
+#endif
 		} else {
 			switch ((*istream >> 9) & 0x7)
 			{
@@ -139,36 +144,30 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 					decoded->src.addr_mode = MODE_IMMEDIATE;
 					decoded->src.params.u16 = *(++istream);
 				} else {
-					//ORI, CMP2.b, CHK2.b
-					if ((*istream & 0xC0) != 0xC0) {
-						decoded->op = M68K_OR;
-						decoded->src.addr_mode = MODE_IMMEDIATE;
-						decoded->extra.size = size = (*istream >> 6) & 3;
-						reg = *istream & 0x7;
-						opmode = (*istream >> 3) & 0x7;
-						switch (size)
-						{
-						case OPSIZE_BYTE:
-							decoded->src.params.u8 = *(++istream);
-							break;
-						case OPSIZE_WORD:
-							decoded->src.params.16 = *(++istream);
-							break;
-						case OPSIZE_LONG:
-							immed = *(++istream);
-							decoded->src.params.u32 = immed << 16 | *(++istream);
-							break;
-						}
-						istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
-					} else {
-	#ifdef M68020
-						//TODO: Implement me for 68020 support
-	#endif
+					decoded->op = M68K_OR;
+					decoded->variant = VAR_IMMEDIATE;
+					decoded->src.addr_mode = MODE_IMMEDIATE;
+					decoded->extra.size = size = (*istream >> 6) & 3;
+					reg = *istream & 0x7;
+					opmode = (*istream >> 3) & 0x7;
+					switch (size)
+					{
+					case OPSIZE_BYTE:
+						decoded->src.params.u8 = *(++istream);
+						break;
+					case OPSIZE_WORD:
+						decoded->src.params.u16 = *(++istream);
+						break;
+					case OPSIZE_LONG:
+						immed = *(++istream);
+						decoded->src.params.u32 = immed << 16 | *(++istream);
+						break;
 					}
+					istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
 				}
 				break;
 			case 1:
-				//ANDI, ANDI to CCR, ANDI to SR, CMP2.w CHK2.w
+				//ANDI, ANDI to CCR, ANDI to SR
 				if ((*istream & 0xFF) == 0x3C) {
 					decoded->op = M68K_ANDI_CCR;
 					decoded->extra.size = OPSIZE_BYTE;
@@ -180,89 +179,71 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 					decoded->src.addr_mode = MODE_IMMEDIATE;
 					decoded->src.params.u16 = *(++istream);
 				} else {
-					//ANDI, CMP2.w, CHK2.w
-					if ((*istream & 0xC0) != 0xC0) {
-						decoded->op = M68K_AND;
-						decoded->src.addr_mode = MODE_IMMEDIATE;
-						decoded->extra.size = size = (*istream >> 6) & 3;
-						reg = *istream & 0x7;
-						opmode = (*istream >> 3) & 0x7;
-						switch (size)
-						{
-						case OPSIZE_BYTE:
-							decoded->src.params.u8 = *(++istream);
-							break;
-						case OPSIZE_WORD:
-							decoded->src.params.16 = *(++istream);
-							break;
-						case OPSIZE_LONG:
-							immed = *(++istream);
-							decoded->src.params.u32 = immed << 16 | *(++istream);
-							break;
-						}
-						istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
-					} else {
-	#ifdef M68020
-						//TODO: Implement me for 68020 support
-	#endif
+					decoded->op = M68K_AND;
+					decoded->variant = VAR_IMMEDIATE;
+					decoded->src.addr_mode = MODE_IMMEDIATE;
+					decoded->extra.size = size = (*istream >> 6) & 3;
+					reg = *istream & 0x7;
+					opmode = (*istream >> 3) & 0x7;
+					switch (size)
+					{
+					case OPSIZE_BYTE:
+						decoded->src.params.u8 = *(++istream);
+						break;
+					case OPSIZE_WORD:
+						decoded->src.params.u16 = *(++istream);
+						break;
+					case OPSIZE_LONG:
+						immed = *(++istream);
+						decoded->src.params.u32 = immed << 16 | *(++istream);
+						break;
 					}
+					istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
 				}
 				break;
 			case 2:
-				//SUBI, CMP2.l, CHK2.l
-				if ((*istream & 0xC0) != 0xC0) {
-					decoded->op = M68K_SUB;
-					decoded->src.addr_mode = MODE_IMMEDIATE;
-					decoded->extra.size = size = (*istream >> 6) & 3;
-					reg = *istream & 0x7;
-					opmode = (*istream >> 3) & 0x7;
-					switch (size)
-					{
-					case OPSIZE_BYTE:
-						decoded->src.params.u8 = *(++istream);
-						break;
-					case OPSIZE_WORD:
-						decoded->src.params.16 = *(++istream);
-						break;
-					case OPSIZE_LONG:
-						immed = *(++istream);
-						decoded->src.params.u32 = immed << 16 | *(++istream);
-						break;
-					}
-					istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
-				} else {
-	#ifdef M68020
-					//TODO: Implement me for 68020 support
-	#endif
+				decoded->op = M68K_SUB;
+				decoded->variant = VAR_IMMEDIATE;
+				decoded->src.addr_mode = MODE_IMMEDIATE;
+				decoded->extra.size = size = (*istream >> 6) & 3;
+				reg = *istream & 0x7;
+				opmode = (*istream >> 3) & 0x7;
+				switch (size)
+				{
+				case OPSIZE_BYTE:
+					decoded->src.params.u8 = *(++istream);
+					break;
+				case OPSIZE_WORD:
+					decoded->src.params.u16 = *(++istream);
+					break;
+				case OPSIZE_LONG:
+					immed = *(++istream);
+					decoded->src.params.u32 = immed << 16 | *(++istream);
+					break;
 				}
+				istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
 				break;
 			case 3:
-				//RTM, CALLM, ADDI
-				if ((*istream & 0xC0) != 0xC0) {
-					decoded->op = M68K_ADD;
-					decoded->src.addr_mode = MODE_IMMEDIATE;
-					decoded->extra.size = size = (*istream >> 6) & 3;
-					reg = *istream & 0x7;
-					opmode = (*istream >> 3) & 0x7;
-					switch (size)
-					{
-					case OPSIZE_BYTE:
-						decoded->src.params.u8 = *(++istream);
-						break;
-					case OPSIZE_WORD:
-						decoded->src.params.16 = *(++istream);
-						break;
-					case OPSIZE_LONG:
-						immed = *(++istream);
-						decoded->src.params.u32 = immed << 16 | *(++istream);
-						break;
-					}
-					istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
-				} else {
-	#ifdef M68020
-					//TODO: Implement me for 68020 support
-	#endif
+				decoded->op = M68K_ADD;
+				decoded->variant = VAR_IMMEDIATE;
+				decoded->src.addr_mode = MODE_IMMEDIATE;
+				decoded->extra.size = size = (*istream >> 6) & 3;
+				reg = *istream & 0x7;
+				opmode = (*istream >> 3) & 0x7;
+				switch (size)
+				{
+				case OPSIZE_BYTE:
+					decoded->src.params.u8 = *(++istream);
+					break;
+				case OPSIZE_WORD:
+					decoded->src.params.u16 = *(++istream);
+					break;
+				case OPSIZE_LONG:
+					immed = *(++istream);
+					decoded->src.params.u32 = immed << 16 | *(++istream);
+					break;
 				}
+				istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
 				break;
 			case 4:
 				//BTST, BCHG, BCLR, BSET
@@ -298,34 +279,69 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 					decoded->src.addr_mode = MODE_IMMEDIATE;
 					decoded->src.params.u16 = *(++istream);
 				} else {
-					//EORI, CMP2.w, CHK2.w
-					if ((*istream & 0xC0) != 0xC0) {
-						decoded->op = M68K_EOR;
-						decoded->src.addr_mode = MODE_IMMEDIATE;
-						decoded->extra.size = size = (*istream >> 6) & 3;
-						reg = *istream & 0x7;
-						opmode = (*istream >> 3) & 0x7;
-						switch (size)
-						{
-						case OPSIZE_BYTE:
-							decoded->src.params.u8 = *(++istream);
-							break;
-						case OPSIZE_WORD:
-							decoded->src.params.16 = *(++istream);
-							break;
-						case OPSIZE_LONG:
-							immed = *(++istream);
-							decoded->src.params.u32 = immed << 16 | *(++istream);
-							break;
-						}
-						istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
+					decoded->op = M68K_EOR;
+					decoded->variant = VAR_IMMEDIATE;
+					decoded->src.addr_mode = MODE_IMMEDIATE;
+					decoded->extra.size = size = (*istream >> 6) & 3;
+					reg = *istream & 0x7;
+					opmode = (*istream >> 3) & 0x7;
+					switch (size)
+					{
+					case OPSIZE_BYTE:
+						decoded->src.params.u8 = *(++istream);
+						break;
+					case OPSIZE_WORD:
+						decoded->src.params.u16 = *(++istream);
+						break;
+					case OPSIZE_LONG:
+						immed = *(++istream);
+						decoded->src.params.u32 = immed << 16 | *(++istream);
+						break;
 					}
+					istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
 				}
 				break;
 			case 6:
-				
+				decoded->op = M68K_CMP;
+				decoded->variant = VAR_IMMEDIATE;
+				decoded->extra.size = (*istream >> 6) & 0x3;
+				decoded->src.addr_mode = MODE_IMMEDIATE;
+				reg = *istream & 0x7;
+				opmode = (*istream >> 3) & 0x7;
+				switch (decoded->extra.size)
+				{
+				case OPSIZE_BYTE:
+					decoded->src.params.u8 = *(++istream);
+					break;
+				case OPSIZE_WORD:
+					decoded->src.params.u16 = *(++istream);
+					break;
+				case OPSIZE_LONG:
+					immed = *(++istream);
+					decoded->src.params.u32 = (immed << 16) | *(++istream);
+					break;
+				}
+				istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
 				break;
 			case 7:
+				//MOVEP
+				deocded->op = M68K_MOVEP;
+				decoded->extra.size = *istream & 0x40 ? OPSIZE_LONG : OPSIZE_WORD;
+				if (*istream & 0x80) {
+					//memory dest
+					decoded->src.addr_mode = MODE_REG;
+					decoded->src.params.regs.pri = m68K_reg_quick_field(*istream);
+					decoded->dst.addr_mode = MODE_AREG_DISPLACE;
+					decoded->dst.params.regs.pri = *istream & 0x7;
+				} else {
+					//memory source
+					decoded->dst.addr_mode = MODE_REG;
+					decoded->dst.params.regs.pri = m68K_reg_quick_field(*istream);
+					decoded->sr.addr_mode = MODE_AREG_DISPLACE;
+					decoded->sr.params.regs.pri = *istream & 0x7;
+				}
+				immed = *(++istream);
+				
 				break;
 			}
 		}
@@ -860,7 +876,7 @@ int m68k_disasm(m68kinst * decoded, char * dst)
 		size = decoded->extra.size;
 		ret = sprintf(dst, "%s%s.%c", 
 				mnemonics[decoded->op], 
-				decoded->variant == VAR_QUICK ? "q" : "", 
+				decoded->variant == VAR_QUICK ? "q" : (decoded->variant == VAR_IMMEDIATE ? "i" : ""), 
 				decoded->extra.size == OPSIZE_BYTE ? 'b' : (size == OPSIZE_WORD ? 'w' : 'l'));
 	}
 	op1len = m68K_disasm_op(&(decoded->src), size, dst + ret, 0);
