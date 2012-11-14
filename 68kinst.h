@@ -105,7 +105,8 @@ typedef enum {
 	OPSIZE_BYTE=0,
 	OPSIZE_WORD,
 	OPSIZE_LONG,
-	OPSIZE_INVALID
+	OPSIZE_INVALID,
+	OPSIZE_UNSIZED
 } m68K_opsizes;
 
 typedef enum {
