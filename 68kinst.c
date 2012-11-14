@@ -473,8 +473,8 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 #ifdef M68010
 							decoded->op = M68K_BKPT;
 							decoded->src.addr_mode = MODE_IMMEDIATE;
-							decoded->extra.size = OPSIZE_BYTE;
-							decoded->src.params.u8 = *istream & 0x7;
+							decoded->extra.size = OPSIZE_UNSIZED;
+							decoded->src.params.u32 = *istream & 0x7;
 #endif
 							break;
 						case 0x10:
@@ -512,6 +512,7 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 							//BGND - CPU32 only
 						} else if (optype == 0xFC) {
 							decoded->op = M68K_ILLEGAL;
+							decoded->extra.size = OPSIZE_UNSIZED;
 						} else {
 							if (size == OPSIZE_INVALID) {
 								decoded->op = M68K_TAS;
@@ -537,7 +538,8 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 							} else {
 								decoded->op = M68K_JSR;
 							}
-							istream = m68k_decode_op(istream, OPSIZE_INVALID, &(decoded->src));
+							decoded->extra.size = OPSIZE_UNSIZED;
+							istream = m68k_decode_op(istream, OPSIZE_UNSIZED, &(decoded->src));
 						} else {
 							//it would appear bit 6 needs to be set for it to be a valid instruction here
 							switch((*istream >> 3) & 0x7)
@@ -546,9 +548,9 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 							case 1:
 								//TRAP
 								decoded->op = M68K_TRAP;
-								decoded->extra.size = OPSIZE_BYTE;
+								decoded->extra.size = OPSIZE_UNSIZED;
 								decoded->src.addr_mode = MODE_IMMEDIATE;
-								decoded->src.params.u8 = *istream & 0xF;
+								decoded->src.params.u32 = *istream & 0xF;
 								break;
 							case 2:
 								//LINK.w
@@ -562,6 +564,7 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 							case 3:
 								//UNLK
 								decoded->op = M68K_UNLK;
+								decoded->extra.size = OPSIZE_UNSIZED;
 								decoded->dst.addr_mode = MODE_AREG;
 								decoded->dst.params.regs.pri = *istream & 0x7;
 								break;
@@ -578,6 +581,7 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 								}
 								break;
 							case 6:
+								decoded->extra.size = OPSIZE_UNSIZED;
 								switch(*istream & 0x7)
 								{
 								case 0:
@@ -588,9 +592,8 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 									break;
 								case 2:
 									decoded->op = M68K_STOP;
-									decoded->extra.size = OPSIZE_WORD;
 									decoded->src.addr_mode = MODE_IMMEDIATE;
-									decoded->src.params.u16 =*(++istream);
+									decoded->src.params.u32 =*(++istream);
 									break;
 								case 3:
 									decoded->op = M68K_RTE;
@@ -598,9 +601,8 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 								case 4:
 #ifdef M68010
 									decoded->op = M68K_RTD;
-									decoded->extra.size = OPSIZE_WORD;
 									decoded->src.addr_mode = MODE_IMMEDIATE;
-									decoded->src.params.u16 =*(++istream);
+									decoded->src.params.u32 =*(++istream);
 #endif
 									break;
 								case 5:
@@ -1080,7 +1082,7 @@ int m68K_disasm_op(m68k_op_info *decoded, uint8_t size, char *dst, int need_comm
 	case MODE_AREG_PREDEC:
 		return sprintf(dst, "%s -(a%d)", c, decoded->params.regs.pri);
 	case MODE_IMMEDIATE:
-		return sprintf(dst, "%s #%d", c, size == OPSIZE_LONG ? decoded->params.u32 : (size == OPSIZE_WORD ? decoded->params.u16 : decoded->params.u8));
+		return sprintf(dst, "%s #%d", c, (size == OPSIZE_LONG || size == OPSIZE_UNSIZED) ? decoded->params.u32 : (size == OPSIZE_WORD ? decoded->params.u16 : decoded->params.u8));
 	default:
 		return 0;
 	}
@@ -1102,10 +1104,10 @@ int m68k_disasm(m68kinst * decoded, char * dst)
 		ret = sprintf(dst, "bsr%s", decoded->variant == VAR_BYTE ? ".s" : "");
 	} else {
 		size = decoded->extra.size;
-		ret = sprintf(dst, "%s%s.%c", 
+		ret = sprintf(dst, "%s%s.%s", 
 				mnemonics[decoded->op], 
 				decoded->variant == VAR_QUICK ? "q" : (decoded->variant == VAR_IMMEDIATE ? "i" : ""), 
-				decoded->extra.size == OPSIZE_BYTE ? 'b' : (size == OPSIZE_WORD ? 'w' : 'l'));
+				size == OPSIZE_BYTE ? "b" : (size == OPSIZE_WORD ? "w" : (size == OPSIZE_LONG ? "l" : "")));
 	}
 	op1len = m68K_disasm_op(&(decoded->src), size, dst + ret, 0);
 	ret += op1len;
