@@ -88,7 +88,7 @@ typedef enum {
 	M68K_TRAP,
 	M68K_TRAPV,
 	M68K_TST,
-	M68K_UNLNK,
+	M68K_UNLK,
 	M68K_INVALID
 } m68K_op;
 
