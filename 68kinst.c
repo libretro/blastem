@@ -713,7 +713,54 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 		immed = *istream & 0xFF;
 		break;
 	case OR_DIV_SBCD:
-		//TODO: Implement me
+		//for OR, if opmode bit 2 is 1, then src = Dn, dst = <ea>
+		opmode = (*istream >> 6) & 0x7;
+		size = opmode & 0x3;
+		if (size == OPSIZE_INVALID || (opmode & 0x4 && !(*istream & 0x30))) {
+			switch(opmode)
+			{
+			case 3:
+				decoded->op = M68K_DIVU;
+				decoded->extra.size = OPSIZE_WORD;
+				decoded->dst.addr_mode = MODE_REG;
+				decoded->dst.params.regs.pri = (*istream >> 9) & 0x7;
+				istream = m68k_decode_op(istream, OPSIZE_WORD, &(decoded->src));
+				break;
+			case 4:
+				decoded->op = M68K_SBCD;
+				decoded->dst.addr_mode = decoded->src.addr_mode = *istream & 0x8 ? MODE_AREG_PREDEC : MODE_REG;
+				decoded->src.params.regs.pri = *istream & 0x7;
+				decoded->dst.params.regs.pri = (*istream >> 9) & 0x7;
+				break;
+			case 5:
+	#ifdef M68020
+	#endif
+				break;
+			case 6:
+	#ifdef M68020
+	#endif
+				break;
+			case 7:
+				decoded->op = M68K_DIVS;
+				decoded->extra.size = OPSIZE_WORD;
+				decoded->dst.addr_mode = MODE_REG;
+				decoded->dst.params.regs.pri = (*istream >> 9) & 0x7;
+				istream = m68k_decode_op(istream, OPSIZE_WORD, &(decoded->src));
+				break;		
+			}
+		} else {
+			decoded->op = M68K_OR;
+			decoded->extra.size = size;
+			if (opmode & 0x4) {
+				decoded->src.addr_mode = MODE_REG;
+				decoded->src.params.regs.pri = (*istream >> 9) & 0x7;
+				istream = m68k_decode_op(istream, size, &(decoded->dst));
+			} else {
+				decoded->dst.addr_mode = MODE_REG;
+				decoded->dst.params.regs.pri = (*istream >> 9) & 0x7;
+				istream = m68k_decode_op(istream, size, &(decoded->src));
+			}
+		}
 		break;
 	case SUB_SUBX:
 		size = *istream >> 6 & 0x3;
