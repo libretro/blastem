@@ -1,0 +1,88 @@
+	abcd d0, d1
+	abcd -(a2), -(a3)
+	add.b #42, d1
+	add.w d3, d4
+	add.l d5, (a0)+
+	addq.w #5, d0
+	addx d6, d7
+	addx -(a4), -(a5)
+	and.w d5, d7
+	andi.l #5, (a0)+
+	andi #8, CCR
+	andi #9, CCR
+foo:
+	asl d0, d3
+	asr #3, d7
+	bne foo
+	bchg #5, d0
+	bclr #7, d0
+	bset #1, d0
+	bsr bar
+	btst #3, d0
+	chk.w #53, d7
+	clr d5
+	cmp d0, d1
+bar:
+	dbra d0, bar
+	divs.w d5, d7
+	divu.w d3, d4
+	eor.w d0, d6
+	eori.l #5, d2
+	eori #5, ccr
+	eori #2700, sr
+	exg d5, d6
+	ext d2
+	illegal
+	jmp (a0)
+	jsr (a5)
+	lea (a0, 8), a3
+	link.w a6, #32
+	lsl d0, d3
+	lsr #3, d7
+	move.b (a0)+, (32, a5)
+	moveq  #5, d0
+	move #89, ccr
+	move sr, d0
+	move #2700, sr
+	move a5, usp
+	movem.l d0-d3/a4/a6, -(a7)
+	movep.w d4, (40, a3)
+	muls.w d6, d7
+	mulu.w d2, d4
+	nbcd -(a2)
+	neg.l d7
+	negx.b d5
+	nop
+	not.b d3
+	or.w d5, d7
+	ori.b #7, d5
+	ori #5, ccr
+	ori #2700, sr
+	pea (24, a3)
+	reset
+	rol.l #7, d0
+	rol.w d5, d0
+	ror.w d1, d3
+	roxl.l #7, d0
+	roxl.w d5, d0
+	roxr.w d1, d3
+	rte
+	rtr
+	rts
+	sbcd d0, d1
+	sbcd -(a2), -(a3)
+	slt d5
+	stop #3
+	sub.b #42, d1
+	sub.w d3, d4
+	sub.l d5, (a0)+
+	subq.w #5, d0
+	subx d6, d7
+	subx -(a4), -(a5)
+	swap d6
+	tas (a3)
+	trap #7
+	trapv
+	tst.w (a4)+
+	unlk a6
+

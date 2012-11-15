@@ -123,8 +123,31 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 			}
 			decoded->src.addr_mode = MODE_REG;
 			decoded->src.params.regs.pri = m68K_reg_quick_field(*istream);
+			decoded->extra.size = OPSIZE_LONG;
 			istream = m68k_decode_op(istream, OPSIZE_LONG, &(decoded->dst));
 		} else if ((*istream & 0xF00) == 0x800) {
+			//BTST, BCHG, BCLR, BSET
+			switch ((*istream >> 6) & 0x3)
+			{
+			case 0:
+				decoded->op = M68K_BTST;
+				break;
+			case 1:
+				decoded->op = M68K_BCHG;
+				break;
+			case 2:
+				decoded->op = M68K_BCLR;
+				break;
+			case 3:
+				decoded->op = M68K_BSET;
+				break;
+			}
+			opmode = (*istream >> 3) & 0x7;
+			reg = *istream & 0x7;
+			decoded->src.addr_mode = MODE_IMMEDIATE;
+			decoded->src.params.u8 = *(++istream);
+			decoded->extra.size = OPSIZE_BYTE;
+			istream = m68k_decode_op_ex(istream, opmode, reg, OPSIZE_BYTE, &(decoded->dst));
 		} else if ((*istream & 0xC0) == 0xC0) {
 #ifdef M68020
 			//CMP2, CHK2, CAS, CAS2, RTM, CALLM
@@ -1090,7 +1113,7 @@ char * mnemonics[] = {
 	"trap",
 	"trapv",
 	"tst",
-	"unlnk",
+	"unlk",
 	"invalid"
 };
 
