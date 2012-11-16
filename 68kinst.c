@@ -403,12 +403,12 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 				decoded->dst.addr_mode = MODE_REG;
 				decoded->dst.addr_mode = m68K_reg_quick_field(*istream);
 			} else {
-				if ((*istream & 0xB80) == 0x880) {
+				opmode = (*istream >> 3) & 0x7;
+				if ((*istream & 0xB80) == 0x880 && opmode != MODE_REG && opmode != MODE_AREG && opmode != MODE_AREG_POSTINC) {
 					decoded->op = M68K_MOVEM;
 					decoded->extra.size = *istream & 0x40 ? OPSIZE_LONG : OPSIZE_WORD;
-					immed = *(++istream);
-					opmode = (*istream >> 3) & 0x7;
 					reg = *istream & 0x7;
+					immed = *(++istream);
 					if(*istream & 0x400) {
 						decoded->dst.addr_mode = MODE_REG;
 						decoded->dst.params.u16 = immed;
@@ -521,7 +521,7 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 								decoded->op = M68K_NBCD;
 								decoded->extra.size = OPSIZE_BYTE;
 								istream = m68k_decode_op(istream, OPSIZE_BYTE, &(decoded->dst));
-							} else if(*istream & 0x1C0 == 0x40) {
+							} else if((*istream & 0x1C0) == 0x40) {
 								decoded->op = M68K_PEA;
 								decoded->extra.size = OPSIZE_LONG;
 								istream = m68k_decode_op(istream, OPSIZE_LONG, &(decoded->dst));
@@ -582,7 +582,7 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 								decoded->src.addr_mode = MODE_AREG;
 								decoded->src.params.regs.pri = *istream & 0x7;
 								decoded->dst.addr_mode = MODE_IMMEDIATE;
-								decoded->dst.params.u16 = immed;
+								decoded->dst.params.u16 = *(++istream);
 								break;
 							case 3:
 								//UNLK
@@ -1049,8 +1049,8 @@ char * mnemonics[] = {
 	"add",
 	"addx",
 	"and",
-	"andi_ccr",
-	"andi_sr",
+	"andi",//ccr
+	"andi",//sr
 	"asl",
 	"asr",
 	"bcc",
@@ -1066,8 +1066,8 @@ char * mnemonics[] = {
 	"divs",
 	"divu",
 	"eor",
-	"eori_ccr",
-	"eori_sr",
+	"eori",//ccr
+	"eori",//sr
 	"exg",
 	"ext",
 	"illegal",
@@ -1078,9 +1078,9 @@ char * mnemonics[] = {
 	"lsl",
 	"lsr",
 	"move",
-	"move_ccr",
-	"move_from_sr",
-	"move_sr",
+	"move",//ccr
+	"move",//from_sr
+	"move",//sr
 	"move_usp",
 	"movem",
 	"movep",
@@ -1092,8 +1092,8 @@ char * mnemonics[] = {
 	"nop",
 	"not",
 	"or",
-	"ori_ccr",
-	"ori_sr",
+	"ori",//ccr
+	"ori",//sr
 	"pea",
 	"reset",
 	"rol",
@@ -1136,7 +1136,7 @@ char * cond_mnem[] = {
 	"le"
 };
 
-int m68K_disasm_op(m68k_op_info *decoded, uint8_t size, char *dst, int need_comma)
+int m68k_disasm_op(m68k_op_info *decoded, uint8_t size, char *dst, int need_comma)
 {
 	char * c = need_comma ? "," : "";
 	switch(decoded->addr_mode)
@@ -1151,10 +1151,70 @@ int m68K_disasm_op(m68k_op_info *decoded, uint8_t size, char *dst, int need_comm
 		return sprintf(dst, "%s (a%d)+", c, decoded->params.regs.pri);
 	case MODE_AREG_PREDEC:
 		return sprintf(dst, "%s -(a%d)", c, decoded->params.regs.pri);
+	case MODE_AREG_DISPLACE:
+		return sprintf(dst, "%s (a%d, %d)", c, decoded->params.regs.pri, decoded->params.regs.displacement);
 	case MODE_IMMEDIATE:
 		return sprintf(dst, "%s #%d", c, (size == OPSIZE_LONG || size == OPSIZE_UNSIZED) ? decoded->params.u32 : (size == OPSIZE_WORD ? decoded->params.u16 : decoded->params.u8));
+	case MODE_ABSOLUTE_SHORT:
+		return sprintf(dst, "%s $%X.w", c, decoded->params.u32);
+	case MODE_ABSOLUTE:
+		return sprintf(dst, "%s $%X", c, decoded->params.u32);
+	case MODE_PC_DISPLACE:
+		return sprintf(dst, "%s (pc, %d)", c, decoded->params.regs.displacement);
 	default:
 		return 0;
+	}
+}
+
+int m68k_disasm_movem_op(m68k_op_info *decoded, m68k_op_info *other, uint8_t size, char *dst, int need_comma)
+{
+	int8_t dir, reg, bit, regnum, last=-1, lastreg, first=-1;
+	char *rtype, *last_rtype;
+	int oplen;
+	if (decoded->addr_mode == MODE_REG) {
+		if (other->addr_mode == MODE_AREG_PREDEC) {
+			bit = 15;
+			dir = -1;
+		} else {
+			reg = 0;
+			bit = 1;
+		}
+		strcat(dst, " ");
+		for (oplen = 1, reg=0; bit < 16 && bit > -1; bit += dir, reg++) {
+			if (decoded->params.u16 & (1 << bit)) {
+				if (reg > 7) {
+					rtype = "a";
+					regnum = reg - 8;
+				} else {
+					rtype = "d";
+					regnum = reg;
+				}
+				if (last >= 0 && last == regnum - 1 && lastreg == reg - 1) {
+					last = regnum;
+					lastreg = reg;
+				} else if(last >= 0) {
+					if (first != last) {
+						oplen += sprintf(dst + oplen, "-%s%d/%s%d",last_rtype, last, rtype, regnum);
+					} else {
+						oplen += sprintf(dst + oplen, "/%s%d", rtype, regnum);
+					}
+					first = last = regnum;
+					last_rtype = rtype;
+					lastreg = reg;
+				} else {
+					oplen += sprintf(dst + oplen, "%s%d", rtype, regnum);
+					first = last = regnum;
+					last_rtype = rtype;
+					lastreg = reg;
+				}
+			}
+		}
+		if (last >= 0 && last != first) {
+			oplen += sprintf(dst + oplen, "-%s%d", last_rtype, last);
+		}
+		return oplen;
+	} else {
+		return m68k_disasm_op(decoded, size, dst, need_comma);
 	}
 }
 
@@ -1162,26 +1222,57 @@ int m68k_disasm(m68kinst * decoded, char * dst)
 {
 	int ret,op1len;
 	uint8_t size;
-	if (decoded->op == M68K_BCC || decoded->op == M68K_DBCC || decoded->op == M68K_SCC) {
+	char * special_op = "CCR";
+	switch (decoded->op)
+	{
+	case M68K_BCC:
+	case M68K_DBCC:
+	case M68K_SCC:
 		ret = strlen(mnemonics[decoded->op]) - 2;
 		memcpy(dst, mnemonics[decoded->op], ret);
 		dst[ret] = 0;
 		strcat(dst, cond_mnem[decoded->extra.cond]);
 		ret = strlen(dst);
 		size = decoded->op = M68K_BCC ? OPSIZE_LONG : OPSIZE_WORD;
-	} else if (decoded->op == M68K_BSR) {
+		break;
+	case M68K_BSR:
 		size = OPSIZE_LONG;
 		ret = sprintf(dst, "bsr%s", decoded->variant == VAR_BYTE ? ".s" : "");
-	} else {
+		break;
+	case M68K_MOVE_FROM_SR:
+		ret = sprintf(dst, "%s", mnemonics[decoded->op]);
+		ret += sprintf(dst + ret, " SR");
+		ret += m68k_disasm_op(&(decoded->dst), decoded->extra.size, dst + ret, 1);
+		return ret;
+	case M68K_ANDI_SR:
+	case M68K_EORI_SR:
+	case M68K_MOVE_SR:
+	case M68K_ORI_SR:
+		special_op = "SR";
+	case M68K_ANDI_CCR:
+	case M68K_EORI_CCR:
+	case M68K_MOVE_CCR:
+	case M68K_ORI_CCR:
+		ret = sprintf(dst, "%s", mnemonics[decoded->op]);
+		ret += m68k_disasm_op(&(decoded->src), decoded->extra.size, dst + ret, 0);
+		ret += sprintf(dst + ret, ", %s", special_op);
+		return ret;
+	default:
 		size = decoded->extra.size;
-		ret = sprintf(dst, "%s%s.%s", 
+		ret = sprintf(dst, "%s%s%s", 
 				mnemonics[decoded->op], 
 				decoded->variant == VAR_QUICK ? "q" : (decoded->variant == VAR_IMMEDIATE ? "i" : ""), 
-				size == OPSIZE_BYTE ? "b" : (size == OPSIZE_WORD ? "w" : (size == OPSIZE_LONG ? "l" : "")));
+				size == OPSIZE_BYTE ? ".b" : (size == OPSIZE_WORD ? ".w" : (size == OPSIZE_LONG ? ".l" : "")));
 	}
-	op1len = m68K_disasm_op(&(decoded->src), size, dst + ret, 0);
-	ret += op1len;
-	ret += m68K_disasm_op(&(decoded->dst), size, dst + ret, op1len);
+	if (decoded->op == M68K_MOVEM) {
+		op1len = m68k_disasm_movem_op(&(decoded->src), &(decoded->dst), size, dst + ret, 0);
+		ret += op1len;
+		ret += m68k_disasm_movem_op(&(decoded->dst), &(decoded->src), size, dst + ret, op1len);
+	} else {
+		op1len = m68k_disasm_op(&(decoded->src), size, dst + ret, 0);
+		ret += op1len;
+		ret += m68k_disasm_op(&(decoded->dst), size, dst + ret, op1len);
+	}
 	return ret;
 }
 
