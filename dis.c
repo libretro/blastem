@@ -23,9 +23,10 @@ int main(int argc, char ** argv)
 	for(cur = filebuf; (cur - filebuf) < (filesize/2); )
 	{
 		//printf("cur: %p: %x\n", cur, *cur);
+		unsigned short * start = cur;
 		cur = m68K_decode(cur, &instbuf);
 		m68k_disasm(&instbuf, disbuf);
-		puts(disbuf);
+		printf("%lX: %s\n", (start - filebuf)*2, disbuf);
 	}
 	return 0;
 }
