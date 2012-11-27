@@ -1,3 +1,6 @@
+#ifndef M68KINST_H_
+#define M68KINST_H_
+
 #include <stdint.h>
 
 typedef enum {
@@ -175,4 +178,6 @@ typedef struct {
 uint16_t * m68K_decode(uint16_t * istream, m68kinst * dst);
 uint32_t m68k_cycles(m68kinst * inst);
 int m68K_disasm(m68kinst * decoded, char * dst);
+
+#endif
 
