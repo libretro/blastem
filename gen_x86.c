@@ -29,6 +29,7 @@
 #define OP_MOV_I8R 0xB0
 #define OP_MOV_IR 0xB8
 #define OP_RETN 0xC3
+#define OP_MOV_IEA 0xC6
 #define OP_CALL 0xE8
 #define OP_CALL_EA 0xFF
 
@@ -197,79 +198,77 @@ uint8_t * x86_rrind_sizedir(uint8_t * out, uint8_t opcode, uint8_t reg, uint8_t 
 	return out;
 }
 
-uint8_t * x86_i8r(uint8_t * out, uint8_t opcode, uint8_t op_ex, uint8_t al_opcode, uint8_t val, uint8_t dst)
+uint8_t * x86_ir(uint8_t * out, uint8_t opcode, uint8_t op_ex, uint8_t al_opcode, int32_t val, uint8_t dst, uint8_t size)
 {
-	if (dst == RAX) {
+	uint8_t sign_extend = 0;
+	if ((size == SZ_D || size == SZ_Q) && val <= 0x7F && val >= -0x80) {
+		sign_extend = 1;
+		opcode |= BIT_DIR;
+	}
+	if (size == SZ_W) {
+		*(out++) = PRE_SIZE;
+	}
+	if (dst == RAX && !sign_extend) {
+		if (size != SZ_B) {
+			al_opcode |= BIT_SIZE;
+			if (size == SZ_Q) {
+				*out = PRE_REX | REX_QUAD;
+			}
+		}
 		*(out++) = al_opcode | BIT_IMMED_RAX;
 	} else {
+		if (size == SZ_Q || dst >= R8 || (size == SZ_B && dst >= RSP && dst <= RDI)) {
+			*out = PRE_REX;
+			if (size == SZ_Q) {
+				*out |= REX_QUAD;
+			}
+			if (dst >= R8) {
+				*out |= REX_RM_FIELD;
+				dst -= (R8 - X86_R8);
+			}
+			out++;
+		}
 		if (dst >= AH && dst <= BH) {
 			dst -= (AH-X86_AH);
-		} else if(dst >= R8) {
-			*(out++) = PRE_REX | REX_RM_FIELD;
+		}
+		if (size != SZ_B) {
+			opcode |= BIT_SIZE;
 		}
 		*(out++) = opcode;
 		*(out++) = MODE_REG_DIRECT | dst | (op_ex << 3);
 	}
 	*(out++) = val;
+	if (size != SZ_B && !sign_extend) {
+		val >>= 8;
+		*(out++) = val;
+		if (size != SZ_W) {
+			val >>= 8;
+			*(out++) = val;
+			val >>= 8;
+			*(out++) = val;
+		}
+	}
 	return out;
 }
 
-uint8_t * x86_i32r(uint8_t * out, uint8_t opcode, uint8_t op_ex, uint8_t al_opcode, int32_t val, uint8_t dst)
-{
-	uint8_t sign_extend = 0;
-	if (val <= 0x7F && val >= -0x80) {
-		sign_extend = 1;
-		opcode |= BIT_DIR;
-	}
-	if (dst == RAX && !sign_extend) {
-		*(out++) = al_opcode | BIT_IMMED_RAX | BIT_SIZE;
-	} else {
-		if(dst >= R8) {
-			*(out++) = PRE_REX | REX_RM_FIELD;
-		}
-		*(out++) = opcode | BIT_SIZE;
-		*(out++) = MODE_REG_DIRECT | dst | (op_ex << 3);
-	}
-	*(out++) = val;
-	if (!sign_extend) {
-		val >>= 8;
-		*(out++) = val;
-		val >>= 8;
-		*(out++) = val;
-		val >>= 8;
-		*(out++) = val;
-	}
-	return out;
-}
 
 uint8_t * add_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
 {
 	return x86_rr_sizedir(out, OP_ADD, src, dst, size);
 }
 
-uint8_t * add_i8r(uint8_t * out, uint8_t val, uint8_t dst)
+uint8_t * add_ir(uint8_t * out, int32_t val, uint8_t dst, uint8_t size)
 {
-	return x86_i8r(out, OP_IMMED_ARITH, OP_EX_ADDI, OP_ADD, val, dst);
-}
-
-uint8_t * add_i32r(uint8_t * out, int32_t val, uint8_t dst)
-{
-	return x86_i32r(out, OP_IMMED_ARITH, OP_EX_ADDI, OP_ADD, val, dst);
+	return x86_ir(out, OP_IMMED_ARITH, OP_EX_ADDI, OP_ADD, val, dst, size);
 }
 
 uint8_t * or_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
 {
 	return x86_rr_sizedir(out, OP_OR, src, dst, size);
 }
-
-uint8_t * or_i8r(uint8_t * out, uint8_t val, uint8_t dst)
+uint8_t * or_ir(uint8_t * out, int32_t val, uint8_t dst, uint8_t size)
 {
-	return x86_i8r(out, OP_IMMED_ARITH, OP_EX_ORI, OP_OR, val, dst);
-}
-
-uint8_t * or_i32r(uint8_t * out, int32_t val, uint8_t dst)
-{
-	return x86_i32r(out, OP_IMMED_ARITH, OP_EX_ORI, OP_OR, val, dst);
+	return x86_ir(out, OP_IMMED_ARITH, OP_EX_ORI, OP_OR, val, dst, size);
 }
 
 uint8_t * and_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
@@ -277,14 +276,9 @@ uint8_t * and_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
 	return x86_rr_sizedir(out, OP_AND, src, dst, size);
 }
 
-uint8_t * and_i8r(uint8_t * out, uint8_t val, uint8_t dst)
+uint8_t * and_ir(uint8_t * out, int32_t val, uint8_t dst, uint8_t size)
 {
-	return x86_i8r(out, OP_IMMED_ARITH, OP_EX_ANDI, OP_AND, val, dst);
-}
-
-uint8_t * and_i32r(uint8_t * out, int32_t val, uint8_t dst)
-{
-	return x86_i32r(out, OP_IMMED_ARITH, OP_EX_ANDI, OP_AND, val, dst);
+	return x86_ir(out, OP_IMMED_ARITH, OP_EX_ANDI, OP_AND, val, dst, size);
 }
 
 uint8_t * xor_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
@@ -292,14 +286,9 @@ uint8_t * xor_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
 	return x86_rr_sizedir(out, OP_XOR, src, dst, size);
 }
 
-uint8_t * xor_i8r(uint8_t * out, uint8_t val, uint8_t dst)
+uint8_t * xor_ir(uint8_t * out, int32_t val, uint8_t dst, uint8_t size)
 {
-	return x86_i8r(out, OP_IMMED_ARITH, OP_EX_XORI, OP_XOR, val, dst);
-}
-
-uint8_t * xor_i32r(uint8_t * out, int32_t val, uint8_t dst)
-{
-	return x86_i32r(out, OP_IMMED_ARITH, OP_EX_XORI, OP_XOR, val, dst);
+	return x86_ir(out, OP_IMMED_ARITH, OP_EX_XORI, OP_XOR, val, dst, size);
 }
 
 uint8_t * sub_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
@@ -307,30 +296,19 @@ uint8_t * sub_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
 	return x86_rr_sizedir(out, OP_SUB, src, dst, size);
 }
 
-uint8_t * sub_i8r(uint8_t * out, uint8_t val, uint8_t dst)
+uint8_t * sub_ir(uint8_t * out, int32_t val, uint8_t dst, uint8_t size)
 {
-	return x86_i8r(out, OP_IMMED_ARITH, OP_EX_SUBI, OP_SUB, val, dst);
+	return x86_ir(out, OP_IMMED_ARITH, OP_EX_SUBI, OP_SUB, val, dst, size);
 }
-
-uint8_t * sub_i32r(uint8_t * out, int32_t val, uint8_t dst)
-{
-	return x86_i32r(out, OP_IMMED_ARITH, OP_EX_SUBI, OP_SUB, val, dst);
-}
-
 
 uint8_t * cmp_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
 {
 	return x86_rr_sizedir(out, OP_CMP, src, dst, size);
 }
 
-uint8_t * cmp_i8r(uint8_t * out, uint8_t val, uint8_t dst)
+uint8_t * cmp_ir(uint8_t * out, int32_t val, uint8_t dst, uint8_t size)
 {
-	return x86_i8r(out, OP_IMMED_ARITH, OP_EX_CMPI, OP_CMP, val, dst);
-}
-
-uint8_t * cmp_i32r(uint8_t * out, int32_t val, uint8_t dst)
-{
-	return x86_i32r(out, OP_IMMED_ARITH, OP_EX_CMPI, OP_CMP, val, dst);
+	return x86_ir(out, OP_IMMED_ARITH, OP_EX_CMPI, OP_CMP, val, dst, size);
 }
 
 uint8_t * mov_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
@@ -358,49 +336,58 @@ uint8_t * mov_rindr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
 	return x86_rrind_sizedir(out, OP_MOV, dst, src, size, BIT_DIR);
 }
 
-uint8_t * mov_i8r(uint8_t * out, uint8_t val, uint8_t dst)
-{
+uint8_t * mov_ir(uint8_t * out, int64_t val, uint8_t dst, uint8_t size)
+{	
+	uint8_t sign_extend = 0;
+	if (size == SZ_Q && val <= 0x7FFFFFFF && val >= -2147483648) {
+		sign_extend = 1;
+	}
+	if (size == SZ_W) {
+		*(out++) = PRE_SIZE;
+	}
+	if (size == SZ_Q || dst >= R8 || (size == SZ_B && dst >= RSP && dst <= RDI)) {
+		*out = PRE_REX;
+		if (size == SZ_Q) {
+			*out |= REX_QUAD;
+		}
+		if (dst >= R8) {
+			*out |= REX_RM_FIELD;
+			dst -= (R8 - X86_R8);
+		}
+		out++;
+	}
 	if (dst >= AH && dst <= BH) {
-		dst -= AH - X86_AH;
-	} else if (dst >= RSP && dst <= RDI) {
-		*(out++) = PRE_REX;
-	} else if (dst >= R8) {
-		*(out++) = PRE_REX | REX_RM_FIELD;
-		dst -= R8 - X86_R8;
+		dst -= (AH-X86_AH);
 	}
-	*(out++) = OP_MOV_I8R | dst;
-	*(out++) = val;
-	return out;
-}
-
-uint8_t * mov_i16r(uint8_t * out, uint16_t val, uint8_t dst)
-{
-	*(out++) = PRE_SIZE;
-	if (dst >= R8) {
-		*(out++) = PRE_REX | REX_RM_FIELD;
-		dst -= R8 - X86_R8;
+	if (size == SZ_B) {
+		*(out++) = OP_MOV_I8R;
+	} else if (size == SZ_Q && sign_extend) {
+		*(out++) = OP_MOV_IEA | BIT_SIZE;
+		*(out++) = MODE_REG_DIRECT | dst;
+	} else {
+		*(out++) = OP_MOV_IR;
 	}
-	*(out++) = OP_MOV_IR | dst;
 	*(out++) = val;
-	val >>= 8;
-	*(out++) = val;
-	return out;
-}
-
-uint8_t * mov_i32r(uint8_t * out, uint32_t val, uint8_t dst)
-{
-	if (dst >= R8) {
-		*(out++) = PRE_REX | REX_RM_FIELD;
-		dst -= R8 - X86_R8;
+	if (size != SZ_B) {
+		val >>= 8;
+		*(out++) = val;
+		if (size != SZ_W) {
+			val >>= 8;
+			*(out++) = val;
+			val >>= 8;
+			*(out++) = val;
+			if (size == SZ_Q && !sign_extend) {
+				val >>= 8;
+				*(out++) = val;
+				val >>= 8;
+				*(out++) = val;
+				val >>= 8;
+				*(out++) = val;
+				val >>= 8;
+				*(out++) = val;
+			}
+		}
 	}
-	*(out++) = OP_MOV_IR | dst;
-	*(out++) = val;
-	val >>= 8;
-	*(out++) = val;
-	val >>= 8;
-	*(out++) = val;
-	val >>= 8;
-	*(out++) = val;
 	return out;
 }
 
