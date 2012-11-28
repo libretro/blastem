@@ -1,4 +1,5 @@
 #include "gen_x86.h"
+#include "m68k_to_x86.h"
 #include <stdio.h>
 #include <stddef.h>
 
@@ -14,12 +15,13 @@ int main(int argc, char ** argv)
 	cur = mov_rr(cur, R11, R12, SZ_W);
 	cur = mov_rr(cur, RAX, RBX, SZ_D);
 	cur = mov_rr(cur, RAX, RBX, SZ_Q);
-	cur = mov_i32r(cur, 5, RAX);
-	cur = mov_i32r(cur, 3, R8);
-	cur = mov_i8r(cur, 4, RSP);
+	cur = mov_ir(cur, 5, RAX, SZ_D);
+	cur = mov_ir(cur, 3, R8, SZ_D);
+	cur = mov_ir(cur, 4, RSP, SZ_B);
 	cur = add_rr(cur, RAX, RBX, SZ_D);
-	cur = add_i8r(cur, 5, RAX);
-	cur = add_i8r(cur, 5, RBX);
+	cur = add_ir(cur, 5, RAX, SZ_B);
+	cur = add_ir(cur, 5, RBX, SZ_B);
+	cur = add_ir(cur, 5, RBP, SZ_B);
 	cur = pushf(cur);
 	cur = popf(cur);
 	cur = setcc_r(cur, CC_S, RBX);

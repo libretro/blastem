@@ -158,9 +158,7 @@ typedef struct {
 			uint8_t sec;
 			int32_t displacement;
 		} regs;
-		uint8_t u8;
-		uint16_t u16;
-		uint32_t u32;
+		uint32_t immed;
 	} params;
 } m68k_op_info;
 
