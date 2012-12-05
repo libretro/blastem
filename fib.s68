@@ -1,4 +1,5 @@
-	lea 0, a7
+    dc.l $0, start
+start:
 	moveq #10, d0
 	bsr fib
 	illegal

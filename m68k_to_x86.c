@@ -786,6 +786,14 @@ void start_68k_context(m68k_context * context, uint32_t address)
 	m68k_start_context(addr, context);
 }
 
+void m68k_reset(m68k_context * context)
+{
+    //TODO: Make this actually use the normal read functions
+    context->aregs[7] = context->mem_pointers[0][0] << 16 | context->mem_pointers[0][1];
+    uint32_t address = context->mem_pointers[0][2] << 16 | context->mem_pointers[0][3];
+    start_68k_context(context, address);
+}
+
 void init_x86_68k_opts(x86_68k_options * opts)
 {
 	opts->flags = 0;
