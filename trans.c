@@ -34,6 +34,6 @@ int main(int argc, char ** argv)
 	//work RAM
 	context.mem_pointers[1] = malloc(64 * 1024);
 	translate_m68k_stream(transbuf, transbuf + size, 0, &context);
-	start_68k_context(&context, 0);
+	m68k_reset(&context);
 	return 0;
 }
