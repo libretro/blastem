@@ -36,16 +36,15 @@ dl = Z flag
 dh = C flag
 rbp = target cycle count
 rsi = context pointer
-rdi = d0
-r8 = d1
-r9 = d2
-r10 = d3
-r11 = a0
-r12 = a1
-r13 = a6
-r14 = a7
-r15 = work ram address
-r16 = cartridge address
+rdi = scratch register
+r8 = cartridge address
+r9 = work ram address
+r10 = d0
+r11 = d1
+r12 = d2
+r13 = a0
+r14 = a1
+r15 = a7
 rsp = native stack pointer
 
 68K context:

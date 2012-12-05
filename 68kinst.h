@@ -169,13 +169,14 @@ typedef struct {
 		uint8_t size;
 		uint8_t cond;
 	} extra;
+	uint32_t address;
 	m68k_op_info src;
 	m68k_op_info dst;
 } m68kinst;
 
-uint16_t * m68K_decode(uint16_t * istream, m68kinst * dst);
+uint16_t * m68k_decode(uint16_t * istream, m68kinst * dst, uint32_t address);
 uint32_t m68k_cycles(m68kinst * inst);
-int m68K_disasm(m68kinst * decoded, char * dst);
+int m68k_disasm(m68kinst * decoded, char * dst);
 
 #endif
 

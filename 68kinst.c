@@ -86,12 +86,12 @@ void m68k_decode_cond(uint16_t op, m68kinst * decoded)
 	decoded->extra.cond = (op >> 0x8) & 0xF;
 }
 
-uint8_t m68K_reg_quick_field(uint16_t op)
+uint8_t m68k_reg_quick_field(uint16_t op)
 {
 	return (op >> 9) & 0x7;
 }
 
-uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
+uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 {
 	uint8_t optype = *istream >> 12;
 	uint8_t size;
@@ -101,6 +101,7 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 	decoded->op = M68K_INVALID;
 	decoded->src.addr_mode = decoded->dst.addr_mode = MODE_UNUSED;
 	decoded->variant = VAR_NORMAL;
+	decoded->address = address;
 	switch(optype)
 	{
 	case BIT_MOVEP_IMMED:
@@ -122,7 +123,7 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 				break;
 			}
 			decoded->src.addr_mode = MODE_REG;
-			decoded->src.params.regs.pri = m68K_reg_quick_field(*istream);
+			decoded->src.params.regs.pri = m68k_reg_quick_field(*istream);
 			decoded->extra.size = OPSIZE_LONG;
 			istream = m68k_decode_op(istream, OPSIZE_LONG, &(decoded->dst));
 		} else if ((*istream & 0xF00) == 0x800) {
@@ -353,13 +354,13 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 				if (*istream & 0x80) {
 					//memory dest
 					decoded->src.addr_mode = MODE_REG;
-					decoded->src.params.regs.pri = m68K_reg_quick_field(*istream);
+					decoded->src.params.regs.pri = m68k_reg_quick_field(*istream);
 					decoded->dst.addr_mode = MODE_AREG_DISPLACE;
 					decoded->dst.params.regs.pri = *istream & 0x7;
 				} else {
 					//memory source
 					decoded->dst.addr_mode = MODE_REG;
-					decoded->dst.params.regs.pri = m68K_reg_quick_field(*istream);
+					decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
 					decoded->src.addr_mode = MODE_AREG_DISPLACE;
 					decoded->src.params.regs.pri = *istream & 0x7;
 				}
@@ -374,8 +375,10 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 	case MOVE_WORD:
 		decoded->op = M68K_MOVE;
 		decoded->extra.size = optype == MOVE_BYTE ? OPSIZE_BYTE : (optype == MOVE_WORD ? OPSIZE_WORD : OPSIZE_LONG);
+		opmode = (*istream >> 6) & 0x7;
+		reg = m68k_reg_quick_field(*istream);
 		istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
-		istream = m68k_decode_op_ex(istream, (*istream >> 6) & 0x7, m68K_reg_quick_field(*istream), decoded->extra.size, &(decoded->dst));
+		istream = m68k_decode_op_ex(istream, opmode, reg, decoded->extra.size, &(decoded->dst));
 		break;
 	case MISC:
 		
@@ -383,7 +386,7 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 			decoded->op = M68K_LEA;
 			decoded->extra.size = OPSIZE_LONG;
 			decoded->dst.addr_mode = MODE_AREG;
-			decoded->dst.params.regs.pri = m68K_reg_quick_field(*istream);
+			decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
 			istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
 		} else {
 			if (*istream & 0x100) {
@@ -401,7 +404,7 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 				}
 				istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
 				decoded->dst.addr_mode = MODE_REG;
-				decoded->dst.addr_mode = m68K_reg_quick_field(*istream);
+				decoded->dst.addr_mode = m68k_reg_quick_field(*istream);
 			} else {
 				opmode = (*istream >> 3) & 0x7;
 				if ((*istream & 0xB80) == 0x880 && opmode != MODE_REG && opmode != MODE_AREG && opmode != MODE_AREG_POSTINC) {
@@ -684,7 +687,7 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 			decoded->extra.size = size;
 			decoded->src.addr_mode = MODE_IMMEDIATE;
 			istream = m68k_decode_op(istream, size, &(decoded->dst));
-			immed = m68K_reg_quick_field(*istream);
+			immed = m68k_reg_quick_field(*istream);
 			if (!immed) {
 				immed = 8;
 			}
@@ -722,7 +725,7 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 		decoded->src.addr_mode = MODE_IMMEDIATE;
 		decoded->src.params.immed = sign_extend8(*istream & 0xFF);
 		decoded->dst.addr_mode = MODE_REG;
-		decoded->dst.params.regs.pri = m68K_reg_quick_field(*istream);
+		decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
 		immed = *istream & 0xFF;
 		break;
 	case OR_DIV_SBCD:
@@ -785,10 +788,12 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 					//SUBA.l
 					decoded->extra.size = OPSIZE_LONG;
 					decoded->dst.addr_mode = MODE_AREG;
+					decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
 					istream = m68k_decode_op(istream, OPSIZE_LONG, &(decoded->src));
 				} else {
 					decoded->extra.size = size;
 					decoded->src.addr_mode = MODE_REG;
+					decoded->src.params.regs.pri = m68k_reg_quick_field(*istream);
 					istream = m68k_decode_op(istream, size, &(decoded->dst));
 				}
 			} else {
@@ -797,7 +802,7 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 				decoded->extra.size = size;
 				istream = m68k_decode_op(istream, size, &(decoded->src));
 				decoded->dst.addr_mode = decoded->src.addr_mode;
-				decoded->dst.params.regs.pri = m68K_reg_quick_field(*istream);
+				decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
 			}
 		} else {
 			if (size == OPSIZE_INVALID) {
@@ -808,7 +813,7 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 				decoded->extra.size = size;
 				decoded->dst.addr_mode = MODE_REG;
 			}
-			decoded->dst.params.regs.pri = m68K_reg_quick_field(*istream);
+			decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
 			istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
 		}
 		break;
@@ -824,19 +829,19 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 				//CMPM
 				decoded->src.addr_mode = decoded->dst.addr_mode = MODE_AREG_POSTINC;
 				decoded->src.params.regs.pri = decoded->dst.params.regs.pri;
-				decoded->dst.params.regs.pri = m68K_reg_quick_field(*istream);
+				decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
 			} else {
 				//EOR
 				decoded->op = M68K_EOR;
 				decoded->extra.size = size;
 				decoded->src.addr_mode = MODE_REG;
-				decoded->src.params.regs.pri = m68K_reg_quick_field(*istream);
+				decoded->src.params.regs.pri = m68k_reg_quick_field(*istream);
 			}
 		} else {
 			//CMP
 			decoded->extra.size = size;
 			decoded->dst.addr_mode = MODE_REG;
-			decoded->dst.params.regs.pri = m68K_reg_quick_field(*istream);
+			decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
 			istream = m68k_decode_op(istream, size, &(decoded->src));
 		}
 		break;
@@ -855,18 +860,18 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 				decoded->op = M68K_MULS;
 				decoded->extra.size = OPSIZE_WORD;
 				decoded->dst.addr_mode = MODE_REG;
-				decoded->dst.params.regs.pri = m68K_reg_quick_field(*istream);
+				decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
 				istream = m68k_decode_op(istream, OPSIZE_WORD, &(decoded->src));
 			} else if(!(*istream & 0xF0)) {
 				decoded->op = M68K_ABCD;
 				decoded->extra.size = OPSIZE_BYTE;
 				decoded->src.params.regs.pri = *istream & 0x7;
-				decoded->dst.params.regs.pri = m68K_reg_quick_field(*istream);
+				decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
 				decoded->dst.addr_mode = decoded->src.addr_mode = (*istream & 8) ? MODE_AREG_PREDEC : MODE_REG;
 			} else if(!(*istream & 0x30)) {
 				decoded->op = M68K_EXG;
 				decoded->extra.size = OPSIZE_LONG;
-				decoded->src.params.regs.pri = m68K_reg_quick_field(*istream);
+				decoded->src.params.regs.pri = m68k_reg_quick_field(*istream);
 				decoded->dst.params.regs.pri = *istream & 0x7;
 				if (*istream & 0x8) {
 					if (*istream & 0x80) {
@@ -882,7 +887,7 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 				decoded->op = M68K_AND;
 				decoded->extra.size = (*istream >> 6);
 				decoded->dst.addr_mode = MODE_REG;
-				decoded->dst.params.regs.pri = m68K_reg_quick_field(*istream);
+				decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
 				istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
 			}
 		} else {
@@ -890,13 +895,13 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 				decoded->op = M68K_MULU;
 				decoded->extra.size = OPSIZE_WORD;
 				decoded->dst.addr_mode = MODE_REG;
-				decoded->dst.params.regs.pri = m68K_reg_quick_field(*istream);
+				decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
 				istream = m68k_decode_op(istream, OPSIZE_WORD, &(decoded->src));
 			} else {
 				decoded->op = M68K_AND;
 				decoded->extra.size = (*istream >> 6);
 				decoded->src.addr_mode = MODE_REG;
-				decoded->src.params.regs.pri = m68K_reg_quick_field(*istream);
+				decoded->src.params.regs.pri = m68k_reg_quick_field(*istream);
 				istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->dst));
 			}
 		}
@@ -911,10 +916,12 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 					//ADDA.l
 					decoded->extra.size = OPSIZE_LONG;
 					decoded->dst.addr_mode = MODE_AREG;
+					decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
 					istream = m68k_decode_op(istream, OPSIZE_LONG, &(decoded->src));
 				} else {
 					decoded->extra.size = size;
 					decoded->src.addr_mode = MODE_REG;
+					decoded->src.params.regs.pri = m68k_reg_quick_field(*istream);
 					istream = m68k_decode_op(istream, size, &(decoded->dst));
 				}
 			} else {
@@ -924,7 +931,7 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 				decoded->extra.size = size;
 				istream = m68k_decode_op(istream, size, &(decoded->src));
 				decoded->dst.addr_mode = decoded->src.addr_mode;
-				decoded->dst.params.regs.pri = m68K_reg_quick_field(*istream);
+				decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
 			}
 		} else {
 			if (size == OPSIZE_INVALID) {
@@ -935,7 +942,7 @@ uint16_t * m68K_decode(uint16_t * istream, m68kinst * decoded)
 				decoded->extra.size = size;
 				decoded->dst.addr_mode = MODE_REG;
 			}
-			decoded->dst.params.regs.pri = m68K_reg_quick_field(*istream);
+			decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
 			istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
 		}
 		break;

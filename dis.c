@@ -24,9 +24,9 @@ int main(int argc, char ** argv)
 	{
 		//printf("cur: %p: %x\n", cur, *cur);
 		unsigned short * start = cur;
-		cur = m68K_decode(cur, &instbuf);
+		cur = m68k_decode(cur, &instbuf, (start - filebuf)*2);
 		m68k_disasm(&instbuf, disbuf);
-		printf("%lX: %s\n", (start - filebuf)*2, disbuf);
+		printf("%X: %s\n", instbuf.address, disbuf);
 	}
 	return 0;
 }
