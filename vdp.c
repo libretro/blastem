@@ -23,10 +23,11 @@ void init_vdp_context(vdp_context * context)
 	context->tmp_buf_b = context->tmp_buf_a + 24;
 }
 
-void render_sprite_cells(uint32_t linecyc, vdp_context * context)
+void render_sprite_cells(vdp_context * context)
 {
-	if (linecyc < context->sprite_draws) {
-		sprite_draw * d = context->sprite_draw_list + linecyc;
+	if (context->cur_slot >= context->sprite_draws) {
+		sprite_draw * d = context->sprite_draw_list + context->cur_slot;
+		context->cur_slot--;
 		uint16_t dir;
 		int16_t x;
 		if (d->h_flip) {
@@ -54,14 +55,15 @@ void scan_sprite_table(uint32_t line, vdp_context * context)
 	if (context->sprite_index && context->slot_counter) {
 		line += 1;
 		line &= 0xFF;
-		line += 128;
 		context->sprite_index &= 0x7F;
 		//TODO: Read from SAT cache rather than from VRAM
 		uint16_t sat_address = (context->regs[REG_SAT] & 0x7F) << 9;
 		uint16_t address = context->sprite_index * 8 + sat_address;
-		uint16_t y = ((context->vdpmem[address] & 0x3) << 8 | context->vdpmem[address+1]) - 128;
+		int16_t y = ((context->vdpmem[address] & 0x3) << 8 | context->vdpmem[address+1]) - 128;
 		uint8_t height = ((context->vdpmem[address+2] & 0x3) + 1) * 8;
-		if (y >= line && (y + height) < line) {
+		//printf("Sprite %d | y: %d, height: %d\n", context->sprite_index, y, height);
+		if (y <= line && line < (y + height)) {
+			printf("Sprite %d at y: %d with height %d is on line %d\n", context->sprite_index, y, height, line);
 			context->sprite_info_list[--(context->slot_counter)].size = context->vdpmem[address+2];
 			context->sprite_info_list[context->slot_counter].index = context->sprite_index;
 			context->sprite_info_list[context->slot_counter].y = y;
@@ -72,43 +74,50 @@ void scan_sprite_table(uint32_t line, vdp_context * context)
 			address = context->sprite_index * 8 + sat_address;
 			y = ((context->vdpmem[address] & 0x3) << 8 | context->vdpmem[address+1]) - 128;
 			height = ((context->vdpmem[address+2] & 0x3) + 1) * 8;
-			if (y >= line && y < (line + height)) {
+			if (y <= line && line < (y + height)) {
+				printf("Sprite %d at y: %d with height %d is on line %d\n", context->sprite_index, y, height, line);
 				context->sprite_info_list[--(context->slot_counter)].size = context->vdpmem[address+2];
 				context->sprite_info_list[context->slot_counter].index = context->sprite_index;
 				context->sprite_info_list[context->slot_counter].y = y;
 			}
+			context->sprite_index = context->vdpmem[address+3] & 0x7F;
 		}
 	}
 }
 
 void read_sprite_x(uint32_t line, vdp_context * context)
 {
-	if (context->slot_counter && context->sprite_draws) {
-		context->slot_counter--;
-		uint8_t width = (context->sprite_info_list[context->slot_counter].size & 0x3) + 1;
-		uint8_t height = (((context->sprite_info_list[context->slot_counter].size >> 2) & 0x3) + 1) * 8;
-		uint16_t att_addr = ((context->regs[REG_SAT] & 0x7F) << 9) + context->sprite_info_list[context->slot_counter].index * 8 + 4;
+	if ((context->cur_slot >= context->slot_counter) && context->sprite_draws) {
+		line += 1;
+		line &= 0xFF;
+		//in tiles
+		uint8_t width = ((context->sprite_info_list[context->cur_slot].size >> 2) & 0x3) + 1;
+		//in pixels
+		uint8_t height = ((context->sprite_info_list[context->cur_slot].size & 0x3) + 1) * 8;
+		uint16_t att_addr = ((context->regs[REG_SAT] & 0x7F) << 9) + context->sprite_info_list[context->cur_slot].index * 8 + 4;
 		uint16_t tileinfo = (context->vdpmem[att_addr] << 8) | context->vdpmem[att_addr+1];		
 		uint8_t pal_priority = (tileinfo >> 9) & 0x70;
 		uint8_t row;
 		if (tileinfo & MAP_BIT_V_FLIP) {
-			row = (context->sprite_info_list[context->slot_counter].y + height - 1) - line;
+			row = (context->sprite_info_list[context->cur_slot].y + height - 1) - line;
 		} else {
-			row = line-context->sprite_info_list[context->slot_counter].y;
+			row = line-context->sprite_info_list[context->cur_slot].y;
 		}
-		uint16_t address = ((tileinfo & 0x7FF) << 5) + row * width * 4;
-		int16_t x = ((context->vdpmem[att_addr+ 6] & 0x3) << 8) | context->vdpmem[att_addr + 7]; 
+		uint16_t address = ((tileinfo & 0x7FF) << 5) + (row & 0x7) * 4 + (row & 0x18) * width * 4;
+		int16_t x = ((context->vdpmem[att_addr+ 2] & 0x3) << 8) | context->vdpmem[att_addr + 3];
 		if (x) {
 			x -= 128;
-			for (;width && context->sprite_draws; --width, --context->sprite_draws, address += 4, x += 8) {
+			printf("Sprite %d | x: %d, y: %d, width: %d, height: %d, pal_priority: %X, row: %d, tile addr: %X\n", context->sprite_info_list[context->cur_slot].index, x, context->sprite_info_list[context->cur_slot].y, width, height, pal_priority, row, address);
+			for (;width && context->sprite_draws; --width, --context->sprite_draws, address += 32, x += 8) {
 				context->sprite_draw_list[context->sprite_draws].address = address;
 				context->sprite_draw_list[context->sprite_draws].x_pos = x;
 				context->sprite_draw_list[context->sprite_draws].pal_priority = pal_priority;
 				context->sprite_draw_list[context->sprite_draws].h_flip = (tileinfo & MAP_BIT_H_FLIP) ? 1 : 0;
 			}
+			context->cur_slot--;
 		} else {
 			//sprite masking enabled, no more sprites on this line
-			context->slot_counter = 0;
+			context->cur_slot = -1;
 		}
 	}
 }
@@ -245,11 +254,11 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		//}
 		for (; dst < end; ++plane_a, ++plane_b, ++sprite_buf, ++dst) {
 			uint8_t pixel;
-			if (*sprite_buf & BUF_BIT_PRIORITY) {
+			if (*sprite_buf & BUF_BIT_PRIORITY && *sprite_buf & 0xF) {
 				pixel = *sprite_buf;
-			} else if (*plane_a & BUF_BIT_PRIORITY) {
+			} else if (*plane_a & BUF_BIT_PRIORITY && *plane_a & 0xF) {
 				pixel = *plane_a;
-			} else if (*plane_b & BUF_BIT_PRIORITY) {
+			} else if (*plane_b & BUF_BIT_PRIORITY && *plane_b & 0xF) {
 				pixel = *plane_b;
 			} else if (*sprite_buf & 0xF) {
 				pixel = *sprite_buf;
@@ -335,17 +344,18 @@ void vdp_h40(uint32_t line, uint32_t linecyc, vdp_context * context)
 	{
 	//sprite render to line buffer starts
 	case 0:
+		context->cur_slot = MAX_DRAWS;
 		memset(context->linebuf, 0, LINEBUF_SIZE);
-		render_sprite_cells(linecyc, context);
+		render_sprite_cells(context);
 		break;
 	case 1:
 	case 2:
 	case 3:
-		render_sprite_cells(linecyc, context);
+		render_sprite_cells(context);
 		break;
 	//sprite attribute table scan starts
 	case 4:
-		render_sprite_cells(linecyc, context);
+		render_sprite_cells( context);
 		context->sprite_index = 0x80;
 		context->slot_counter = MAX_SPRITES_LINE;
 		scan_sprite_table(line, context);
@@ -369,7 +379,7 @@ void vdp_h40(uint32_t line, uint32_t linecyc, vdp_context * context)
 	//!HSYNC asserted
 	case 21:
 	case 22:
-		render_sprite_cells(linecyc, context);
+		render_sprite_cells(context);
 		scan_sprite_table(line, context);
 		break;
 	case 23:
@@ -386,7 +396,7 @@ void vdp_h40(uint32_t line, uint32_t linecyc, vdp_context * context)
 	case 32:
 	case 33:
 	case 34:
-		render_sprite_cells(linecyc, context);
+		render_sprite_cells(context);
 		scan_sprite_table(line, context);
 		break;
 	case 35:
@@ -409,14 +419,14 @@ void vdp_h40(uint32_t line, uint32_t linecyc, vdp_context * context)
 	case 37:
 	case 38:
 	case 39:
-		render_sprite_cells(linecyc, context);
+		render_sprite_cells(context);
 		scan_sprite_table(line, context);
 		break;
 	case 40:
 		read_map_scroll_a(0, line, context);
 		break;
 	case 41:
-		render_sprite_cells(linecyc, context);
+		render_sprite_cells(context);
 		scan_sprite_table(line, context);
 		break;
 	case 42:
@@ -431,7 +441,7 @@ void vdp_h40(uint32_t line, uint32_t linecyc, vdp_context * context)
 		read_map_scroll_b(0, line, context);
 		break;
 	case 45:
-		render_sprite_cells(linecyc, context);
+		render_sprite_cells(context);
 		scan_sprite_table(line, context);
 		break;
 	case 46:
@@ -443,7 +453,8 @@ void vdp_h40(uint32_t line, uint32_t linecyc, vdp_context * context)
 		scan_sprite_table(line, context);//Just a guess
 		//reverse context slot counter so it counts the number of sprite slots
 		//filled rather than the number of available slots
-		context->slot_counter = MAX_SPRITES_LINE - context->slot_counter;
+		//context->slot_counter = MAX_SPRITES_LINE - context->slot_counter;
+		context->cur_slot = MAX_SPRITES_LINE-1;
 		context->sprite_draws = MAX_DRAWS;
 		break;
 	COLUMN_RENDER_BLOCK(2, 48)

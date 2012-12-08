@@ -60,7 +60,8 @@ typedef struct {
 	uint16_t    hscroll_b;
 	uint8_t	    sprite_index;
 	uint8_t     sprite_draws;
-	uint8_t     slot_counter;
+	int8_t      slot_counter;
+	int8_t      cur_slot;
 	uint8_t     regs[VDP_REGS];
 	sprite_draw sprite_draw_list[MAX_DRAWS];
 	sprite_info sprite_info_list[MAX_SPRITES_LINE];
