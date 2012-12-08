@@ -20,7 +20,7 @@ int main(int argc, char ** argv)
 	{
 		*cur = (*cur >> 8) | (*cur << 8);
 	}
-	for(cur = filebuf; (cur - filebuf) < (filesize/2); )
+	for(cur = filebuf + 0x100; (cur - filebuf) < (filesize/2); )
 	{
 		//printf("cur: %p: %x\n", cur, *cur);
 		unsigned short * start = cur;
