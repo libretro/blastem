@@ -1,6 +1,6 @@
     dc.l $0, start
 start:
-	moveq #10, d0
+	moveq #36, d0
 	bsr fib
 	illegal
 fib:
