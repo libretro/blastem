@@ -129,9 +129,8 @@ void external_slot(vdp_context * context)
 	//TODO: Implement me
 }
 
-void read_map_scroll(uint16_t column, uint32_t line, uint32_t scroll_reg, uint16_t hscroll_val, vdp_context * context)
+void read_map_scroll(uint16_t column, uint32_t line, uint16_t address, uint16_t hscroll_val, vdp_context * context)
 {
-	uint16_t address = (context->regs[scroll_reg] & 0x38) << 10;
 	uint16_t vscroll;
 	switch(context->regs[REG_SCROLL] & 0x30)
 	{
@@ -186,12 +185,12 @@ void read_map_scroll(uint16_t column, uint32_t line, uint32_t scroll_reg, uint16
 
 void read_map_scroll_a(uint16_t column, uint32_t line, vdp_context * context)
 {
-	read_map_scroll(column, line, REG_SCROLL_A, context->hscroll_a, context);
+	read_map_scroll(column, line, (context->regs[REG_SCROLL_A] & 0x38) << 10, context->hscroll_a, context);
 }
 
 void read_map_scroll_b(uint16_t column, uint32_t line, vdp_context * context)
 {
-	read_map_scroll(column, line, REG_SCROLL_B, context->hscroll_b, context);
+	read_map_scroll(column, line, (context->regs[REG_SCROLL_B] & 0x7) << 13, context->hscroll_b, context);
 }
 
 void render_map(uint16_t col, uint8_t * tmp_buf, vdp_context * context)
