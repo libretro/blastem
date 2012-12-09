@@ -13,14 +13,17 @@
 #define BIT_PAL 0x8
 #define BIT_H40 0x1
 
+#define SCROLL_BUFFER_SIZE 32
+#define SCROLL_BUFFER_DRAW 16
+
 void init_vdp_context(vdp_context * context)
 {
 	memset(context, 0, sizeof(context));
 	context->vdpmem = malloc(VRAM_SIZE);
 	context->framebuf = malloc(FRAMEBUF_SIZE);
-	context->linebuf = malloc(LINEBUF_SIZE + 48);
+	context->linebuf = malloc(LINEBUF_SIZE + SCROLL_BUFFER_SIZE*2);
 	context->tmp_buf_a = context->linebuf + LINEBUF_SIZE;
-	context->tmp_buf_b = context->tmp_buf_a + 24;
+	context->tmp_buf_b = context->tmp_buf_a + SCROLL_BUFFER_SIZE;
 	context->sprite_draws = MAX_DRAWS;
 }
 
@@ -196,11 +199,11 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 	switch(context->regs[REG_SCROLL] & 0x3)
 	{
 	case 0:
-		hscroll_mask = 0xF8;
+		hscroll_mask = 0xF0;
 		v_mul = 64;
 		break;
 	case 0x1:
-		hscroll_mask = 0x1F8;
+		hscroll_mask = 0x3F;
 		v_mul = 128;
 		break;
 	case 0x2:
@@ -209,15 +212,15 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 		v_mul = 0;
 		break;
 	case 0x3:
-		hscroll_mask = 0x3F8;
+		hscroll_mask = 0x3F0;
 		v_mul = 256;
 		break;
 	}
 	uint16_t hscroll, offset;
 	for (int i = 0; i < 2; i++) {
-		hscroll = ((column - 2 + i) * 8 - hscroll_val) & hscroll_mask;
-		offset = address + ((vscroll * v_mul + hscroll/4) & 0x1FFF);
-		//printf("%s | line: %d, col: %d, x: %d, hs_mask %X, v_mul: %d, scr reg: %X, tbl addr: %X\n", (vsram_off ? "B" : "A"), line, (column-(2-i)), hscroll, hscroll_mask, v_mul, context->regs[REG_SCROLL], offset);
+		hscroll = (column - 2 + i - ((hscroll_val/8) & 0xFFFE)) & hscroll_mask;
+		offset = address + ((vscroll * v_mul + hscroll*2) & 0x1FFF);
+		//printf("%s | line: %d, col: %d, x: %d, hs_mask %X, scr reg: %X, tbl addr: %X\n", (vsram_off ? "B" : "A"), line, (column-2+i), hscroll, hscroll_mask, context->regs[REG_SCROLL], offset);
 		uint16_t col_val = (context->vdpmem[offset] << 8) | context->vdpmem[offset+1];
 		if (i) {
 			context->col_2 = col_val;
@@ -264,17 +267,17 @@ void render_map(uint16_t col, uint8_t * tmp_buf, vdp_context * context)
 
 void render_map_1(vdp_context * context)
 {
-	render_map(context->col_1, context->tmp_buf_a+8, context);
+	render_map(context->col_1, context->tmp_buf_a+SCROLL_BUFFER_DRAW, context);
 }
 
 void render_map_2(vdp_context * context)
 {
-	render_map(context->col_2, context->tmp_buf_a+16, context);
+	render_map(context->col_2, context->tmp_buf_a+SCROLL_BUFFER_DRAW+8, context);
 }
 
 void render_map_3(vdp_context * context)
 {
-	render_map(context->col_1, context->tmp_buf_b+8, context);
+	render_map(context->col_1, context->tmp_buf_b+SCROLL_BUFFER_DRAW, context);
 }
 
 void render_map_output(uint32_t line, int32_t col, vdp_context * context)
@@ -282,7 +285,7 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 	if (line >= 240) {
 		return;
 	}
-	render_map(context->col_2, context->tmp_buf_b+16, context);
+	render_map(context->col_2, context->tmp_buf_b+SCROLL_BUFFER_DRAW+8, context);
 	uint16_t *dst, *end;
 	uint8_t *sprite_buf, *plane_a, *plane_b;
 	if (col)
@@ -290,8 +293,8 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		col-=2;
 		dst = context->framebuf + line * 320 + col * 8;
 		sprite_buf = context->linebuf + col * 8;
-		plane_a = context->tmp_buf_a + 8 - (context->hscroll_a & 0x7);
-		plane_b = context->tmp_buf_b + 8 - (context->hscroll_b & 0x7);
+		plane_a = context->tmp_buf_a + SCROLL_BUFFER_DRAW - (context->hscroll_a & 0xF);
+		plane_b = context->tmp_buf_b + SCROLL_BUFFER_DRAW - (context->hscroll_b & 0xF);
 		end = dst + 16;
 		//printf("A | tmp_buf offset: %d\n", 8 - (context->hscroll_a & 0x7));
 		for (; dst < end; ++plane_a, ++plane_b, ++sprite_buf, ++dst) {
@@ -321,10 +324,10 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		//end = dst + 8;
 	}
 	
-	uint16_t remaining = context->hscroll_a & 0x7;
-	memcpy(context->tmp_buf_a + 8 - remaining, context->tmp_buf_a + 24 - remaining, remaining);
-	remaining = context->hscroll_b & 0x7;
-	memcpy(context->tmp_buf_b + 8 - remaining, context->tmp_buf_b + 24 - remaining, remaining);
+	uint16_t remaining = context->hscroll_a & 0xF;
+	memcpy(context->tmp_buf_a + SCROLL_BUFFER_DRAW - remaining, context->tmp_buf_a + SCROLL_BUFFER_SIZE - remaining, remaining);
+	remaining = context->hscroll_b & 0xF;
+	memcpy(context->tmp_buf_b + SCROLL_BUFFER_DRAW - remaining, context->tmp_buf_b + SCROLL_BUFFER_SIZE - remaining, remaining);
 }
 
 #define COLUMN_RENDER_BLOCK(column, startcyc) \
@@ -454,7 +457,7 @@ void vdp_h40(uint32_t line, uint32_t linecyc, vdp_context * context)
 		address += line * 4;
 		context->hscroll_a = context->vdpmem[address] << 8 | context->vdpmem[address+1];
 		context->hscroll_b = context->vdpmem[address+2] << 8 | context->vdpmem[address+3];
-		//printf("%d: HScroll A: %d, HScroll B: %d\n", line, context->hscroll_a, context->hscroll_b);
+		printf("%d: HScroll A: %d, HScroll B: %d\n", line, context->hscroll_a, context->hscroll_b);
 		break;
 	case 36:
 	//!HSYNC high
