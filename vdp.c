@@ -129,7 +129,7 @@ void external_slot(vdp_context * context)
 	//TODO: Implement me
 }
 
-void read_map_scroll(uint16_t column, uint32_t line, uint16_t address, uint16_t hscroll_val, vdp_context * context)
+void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_t address, uint16_t hscroll_val, vdp_context * context)
 {
 	uint16_t vscroll;
 	switch(context->regs[REG_SCROLL] & 0x30)
@@ -148,7 +148,7 @@ void read_map_scroll(uint16_t column, uint32_t line, uint16_t address, uint16_t 
 		vscroll = 0x3FF;
 		break;
 	}
-	vscroll &= (context->vsram[context->regs[REG_MODE_3] & 0x4 ? column : 0] + line);
+	vscroll &= (context->vsram[(context->regs[REG_MODE_3] & 0x4 ? column : 0) + vsram_off] + line);
 	context->v_offset = vscroll & 0x7;
 	printf("BG | line %d, vsram: %d, vscroll: %d, v_offset: %d\n", line, context->vsram[context->regs[REG_MODE_3] & 0x4 ? column : 0], vscroll, context->v_offset);
 	vscroll /= 8;
@@ -185,12 +185,12 @@ void read_map_scroll(uint16_t column, uint32_t line, uint16_t address, uint16_t 
 
 void read_map_scroll_a(uint16_t column, uint32_t line, vdp_context * context)
 {
-	read_map_scroll(column, line, (context->regs[REG_SCROLL_A] & 0x38) << 10, context->hscroll_a, context);
+	read_map_scroll(column, 0, line, (context->regs[REG_SCROLL_A] & 0x38) << 10, context->hscroll_a, context);
 }
 
 void read_map_scroll_b(uint16_t column, uint32_t line, vdp_context * context)
 {
-	read_map_scroll(column, line, (context->regs[REG_SCROLL_B] & 0x7) << 13, context->hscroll_b, context);
+	read_map_scroll(column, 1, line, (context->regs[REG_SCROLL_B] & 0x7) << 13, context->hscroll_b, context);
 }
 
 void render_map(uint16_t col, uint8_t * tmp_buf, vdp_context * context)
