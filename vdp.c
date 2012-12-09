@@ -523,352 +523,139 @@ void vdp_h40(uint32_t line, uint32_t linecyc, vdp_context * context)
 
 void vdp_h32(uint32_t line, uint32_t linecyc, vdp_context * context)
 {
+	uint16_t address;
+	uint32_t mask;
 	switch(linecyc)
 	{
 	//sprite render to line buffer starts
 	case 0:
+		context->cur_slot = MAX_DRAWS_H32-1;
+		memset(context->linebuf, 0, LINEBUF_SIZE);
+		render_sprite_cells(context);
 		break;
 	case 1:
-		break;
 	case 2:
-		break;
 	case 3:
+		render_sprite_cells(context);
 		break;
+	//sprite attribute table scan starts
 	case 4:
+		render_sprite_cells( context);
+		context->sprite_index = 0x80;
+		context->slot_counter = MAX_SPRITES_LINE_H32;
+		scan_sprite_table(line, context);
 		break;
 	case 5:
-		break;
 	case 6:
-		break;
 	case 7:
-		break;
 	case 8:
-		break;
 	case 9:
-		break;
 	case 10:
-		break;
 	case 11:
-		break;
 	case 12:
-		break;
 	case 13:
-		break;
+		render_sprite_cells(context);
+		scan_sprite_table(line, context);
 	case 14:
+		external_slot(context);
 		break;
 	case 15:
-		break;
 	case 16:
-		break;
 	case 17:
-		break;
 	case 18:
-		break;
 	case 19:
-		break;
+	//HSYNC start
 	case 20:
-		break;
 	case 21:
-		break;
 	case 22:
-		break;
 	case 23:
-		break;
 	case 24:
-		break;
 	case 25:
-		break;
 	case 26:
+		render_sprite_cells(context);
+		scan_sprite_table(line, context);
 		break;
 	case 27:
+		external_slot(context);
 		break;
 	case 28:
+		address = (context->regs[REG_HSCROLL] & 0x3F) << 10;
+		mask = 0;
+		if (context->regs[REG_MODE_3] & 0x2) {
+			mask |= 0xF8;
+		}
+		if (context->regs[REG_MODE_3] & 0x1) {
+			mask |= 0x7;
+		}
+		line &= mask;
+		address += line * 4;
+		context->hscroll_a = context->vdpmem[address] << 8 | context->vdpmem[address+1];
+		context->hscroll_b = context->vdpmem[address+2] << 8 | context->vdpmem[address+3];
+		//printf("%d: HScroll A: %d, HScroll B: %d\n", line, context->hscroll_a, context->hscroll_b);
 		break;
 	case 29:
-		break;
 	case 30:
-		break;
 	case 31:
-		break;
 	case 32:
+		render_sprite_cells(context);
+		scan_sprite_table(line, context);
 		break;
+	//!HSYNC high
 	case 33:
+		read_map_scroll_a(0, line, context);
 		break;
 	case 34:
+		render_sprite_cells(context);
+		scan_sprite_table(line, context);
 		break;
 	case 35:
+		render_map_1(context);
+		scan_sprite_table(line, context);//Just a guess
 		break;
 	case 36:
+		render_map_2(context);
+		scan_sprite_table(line, context);//Just a guess
 		break;
 	case 37:
+		read_map_scroll_b(0, line, context);
 		break;
 	case 38:
+		render_sprite_cells(context);
+		scan_sprite_table(line, context);
 		break;
 	case 39:
+		render_map_3(context);
+		scan_sprite_table(line, context);//Just a guess
 		break;
 	case 40:
-		break;
-	case 41:
-		break;
-	case 42:
-		break;
-	case 43:
-		break;
-	case 44:
-		break;
-	case 45:
-		break;
-	case 46:
-		break;
-	case 47:
-		break;
-	case 48:
-		break;
-	case 49:
-		break;
-	case 50:
-		break;
-	case 51:
-		break;
-	case 52:
-		break;
-	case 53:
-		break;
-	case 54:
-		break;
-	case 55:
-		break;
-	case 56:
-		break;
-	case 57:
-		break;
-	case 58:
-		break;
-	case 59:
-		break;
-	case 60:
-		break;
-	case 61:
-		break;
-	case 62:
-		break;
-	case 63:
-		break;
-	case 64:
-		break;
-	case 65:
-		break;
-	case 66:
-		break;
-	case 67:
-		break;
-	case 68:
-		break;
-	case 69:
-		break;
-	case 70:
-		break;
-	case 71:
-		break;
-	case 72:
-		break;
-	case 73:
-		break;
-	case 74:
-		break;
-	case 75:
-		break;
-	case 76:
-		break;
-	case 77:
-		break;
-	case 78:
-		break;
-	case 79:
-		break;
-	case 80:
-		break;
-	case 81:
-		break;
-	case 82:
-		break;
-	case 83:
-		break;
-	case 84:
-		break;
-	case 85:
-		break;
-	case 86:
-		break;
-	case 87:
-		break;
-	case 88:
-		break;
-	case 89:
-		break;
-	case 90:
-		break;
-	case 91:
-		break;
-	case 92:
-		break;
-	case 93:
-		break;
-	case 94:
-		break;
-	case 95:
-		break;
-	case 96:
-		break;
-	case 97:
-		break;
-	case 98:
-		break;
-	case 99:
-		break;
-	case 100:
-		break;
-	case 101:
-		break;
-	case 102:
-		break;
-	case 103:
-		break;
-	case 104:
-		break;
-	case 105:
-		break;
-	case 106:
-		break;
-	case 107:
-		break;
-	case 108:
-		break;
-	case 109:
-		break;
-	case 110:
-		break;
-	case 111:
-		break;
-	case 112:
-		break;
-	case 113:
-		break;
-	case 114:
-		break;
-	case 115:
-		break;
-	case 116:
-		break;
-	case 117:
-		break;
-	case 118:
-		break;
-	case 119:
-		break;
-	case 120:
-		break;
-	case 121:
-		break;
-	case 122:
-		break;
-	case 123:
-		break;
-	case 124:
-		break;
-	case 125:
-		break;
-	case 126:
-		break;
-	case 127:
-		break;
-	case 128:
-		break;
-	case 129:
-		break;
-	case 130:
-		break;
-	case 131:
-		break;
-	case 132:
-		break;
-	case 133:
-		break;
-	case 134:
-		break;
-	case 135:
-		break;
-	case 136:
-		break;
-	case 137:
-		break;
-	case 138:
-		break;
-	case 139:
-		break;
-	case 140:
-		break;
-	case 141:
-		break;
-	case 142:
-		break;
-	case 143:
-		break;
-	case 144:
-		break;
-	case 145:
-		break;
-	case 146:
-		break;
-	case 147:
-		break;
-	case 148:
-		break;
-	case 149:
-		break;
-	case 150:
-		break;
-	case 151:
-		break;
-	case 152:
-		break;
-	case 153:
-		break;
-	case 154:
-		break;
-	case 155:
-		break;
-	case 156:
-		break;
-	case 157:
-		break;
-	case 158:
-		break;
-	case 159:
-		break;
-	case 160:
-		break;
-	case 161:
-		break;
-	case 162:
-		break;
-	case 163:
-		break;
-	case 164:
-		break;
-	case 165:
-		break;
-	case 166:
-		break;
-	case 167:
-		break;
-	case 168:
-		break;
+		render_map_output(line, 0, context);
+		scan_sprite_table(line, context);//Just a guess
+		//reverse context slot counter so it counts the number of sprite slots
+		//filled rather than the number of available slots
+		//context->slot_counter = MAX_SPRITES_LINE - context->slot_counter;
+		context->cur_slot = MAX_SPRITES_LINE_H32-1;
+		context->sprite_draws = MAX_DRAWS_H32;
+		context->flags &= (~FLAG_CAN_MASK & ~FLAG_MASKED);
+		break;
+	COLUMN_RENDER_BLOCK(2, 41)
+	COLUMN_RENDER_BLOCK(4, 49)
+	COLUMN_RENDER_BLOCK(6, 57)
+	COLUMN_RENDER_BLOCK_REFRESH(8, 65)
+	COLUMN_RENDER_BLOCK(10, 73)
+	COLUMN_RENDER_BLOCK(12, 81)
+	COLUMN_RENDER_BLOCK(14, 89)
+	COLUMN_RENDER_BLOCK_REFRESH(16, 97)
+	COLUMN_RENDER_BLOCK(18, 105)
+	COLUMN_RENDER_BLOCK(20, 113)
+	COLUMN_RENDER_BLOCK(22, 121)
+	COLUMN_RENDER_BLOCK_REFRESH(24, 129)
+	COLUMN_RENDER_BLOCK(26, 137)
+	COLUMN_RENDER_BLOCK(28, 145)
+	COLUMN_RENDER_BLOCK(30, 153)
+	COLUMN_RENDER_BLOCK_REFRESH(32, 161)
 	case 169:
-		break;
 	case 170:
-		break;
-	case 171:
+		external_slot(context);
 		break;
 	}
 }
