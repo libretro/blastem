@@ -128,12 +128,16 @@ void read_sprite_x(uint32_t line, vdp_context * context)
 					dir = 8;
 				}
 				//printf("Sprite %d | x: %d, y: %d, width: %d, height: %d, pal_priority: %X, row: %d, tile addr: %X\n", context->sprite_info_list[context->cur_slot].index, x, context->sprite_info_list[context->cur_slot].y, width, height, pal_priority, row, address);
-				for (int16_t i=0; i < width && context->sprite_draws; i++, x += dir) {
+				int16_t i;
+				for (i=0; i < width && context->sprite_draws; i++, x += dir) {
 					--context->sprite_draws;
 					context->sprite_draw_list[context->sprite_draws].address = address + i * height * 4;
 					context->sprite_draw_list[context->sprite_draws].x_pos = x;
 					context->sprite_draw_list[context->sprite_draws].pal_priority = pal_priority;
 					context->sprite_draw_list[context->sprite_draws].h_flip = (tileinfo & MAP_BIT_H_FLIP) ? 1 : 0;
+				}
+				if (i < width) {
+					context->flags |= FLAG_DOT_OFLOW;
 				}
 				context->cur_slot--;
 			} else {
