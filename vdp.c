@@ -59,6 +59,15 @@ void scan_sprite_table(uint32_t line, vdp_context * context)
 		line += 1;
 		line &= 0xFF;
 		context->sprite_index &= 0x7F;
+		if (context->latched_mode & BIT_H40) {
+			if (context->sprite_index >= MAX_SPRITES_FRAME) {
+				context->sprite_index = 0;
+				return;
+			}
+		} else if(context->sprite_index >= MAX_SPRITES_FRAME_H32) {
+			context->sprite_index = 0;
+			return;
+		}
 		//TODO: Read from SAT cache rather than from VRAM
 		uint16_t sat_address = (context->regs[REG_SAT] & 0x7F) << 9;
 		uint16_t address = context->sprite_index * 8 + sat_address;
