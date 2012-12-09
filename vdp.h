@@ -12,7 +12,9 @@
 #define FRAMEBUF_ENTRIES 320*224
 #define FRAMEBUF_SIZE (FRAMEBUF_ENTRIES*sizeof(uint16_t))
 #define MAX_DRAWS 40
+#define MAX_DRAWS_H32 32
 #define MAX_SPRITES_LINE 20
+#define MAX_SPRITES_LINE_H32 16
 
 enum {
 	REG_MODE_1=0,
