@@ -89,7 +89,8 @@ void scan_sprite_table(uint32_t line, vdp_context * context)
 }
 
 #define FLAG_DOT_OFLOW 0x1
-#define FLAG_CAN_MASK 0x2
+#define FLAG_CAN_MASK  0x2
+#define FLAG_MASKED    0x4
 void read_sprite_x(uint32_t line, vdp_context * context)
 {
 	if (context->cur_slot >= context->slot_counter) {
@@ -109,15 +110,22 @@ void read_sprite_x(uint32_t line, vdp_context * context)
 			} else {
 				row = line-context->sprite_info_list[context->cur_slot].y;
 			}
-			//uint16_t address = ((tileinfo & 0x7FF) << 5) + (row & 0x7) * 4 + (row & 0x18) * width * 4;
 			uint16_t address = ((tileinfo & 0x7FF) << 5) + row * 4;
 			int16_t x = ((context->vdpmem[att_addr+ 2] & 0x3) << 8) | context->vdpmem[att_addr + 3];
-			if (x || !(context->flags & (FLAG_CAN_MASK | FLAG_DOT_OFLOW))) {
-				//printf("Displaying %d | line: %d, x: %d, flags: %X\n", context->sprite_info_list[context->cur_slot].index, line,  x, context->flags);
-				if (x) {
-					context->flags |= FLAG_CAN_MASK;
+			if (x) {
+				context->flags |= FLAG_CAN_MASK;
+			} else if(context->flags & (FLAG_CAN_MASK | FLAG_DOT_OFLOW)) {
+				context->flags |= FLAG_MASKED;
+			}
+			
+			context->flags &= ~FLAG_DOT_OFLOW;
+			int16_t i;
+			if (context->flags & FLAG_MASKED) {
+				for (i=0; i < width && context->sprite_draws; i++) {
+					--context->sprite_draws;
+					context->sprite_draw_list[context->sprite_draws].x_pos = -128;
 				}
-				context->flags &= ~FLAG_DOT_OFLOW;
+			} else {
 				x -= 128;
 				int16_t base_x = x;
 				int16_t dir;
@@ -128,7 +136,6 @@ void read_sprite_x(uint32_t line, vdp_context * context)
 					dir = 8;
 				}
 				//printf("Sprite %d | x: %d, y: %d, width: %d, height: %d, pal_priority: %X, row: %d, tile addr: %X\n", context->sprite_info_list[context->cur_slot].index, x, context->sprite_info_list[context->cur_slot].y, width, height, pal_priority, row, address);
-				int16_t i;
 				for (i=0; i < width && context->sprite_draws; i++, x += dir) {
 					--context->sprite_draws;
 					context->sprite_draw_list[context->sprite_draws].address = address + i * height * 4;
@@ -136,15 +143,11 @@ void read_sprite_x(uint32_t line, vdp_context * context)
 					context->sprite_draw_list[context->sprite_draws].pal_priority = pal_priority;
 					context->sprite_draw_list[context->sprite_draws].h_flip = (tileinfo & MAP_BIT_H_FLIP) ? 1 : 0;
 				}
-				if (i < width) {
-					context->flags |= FLAG_DOT_OFLOW;
-				}
-				context->cur_slot--;
-			} else {
-				//printf("Masking %d | line: %d, x: %d, flags: %X\n", context->sprite_info_list[context->cur_slot].index, line, x, context->flags);
-				//sprite masking enabled, no more sprites on this line
-				context->cur_slot = -1;
 			}
+			if (i < width) {
+				context->flags |= FLAG_DOT_OFLOW;
+			}
+			context->cur_slot--;
 		} else {
 			context->flags |= FLAG_DOT_OFLOW;
 		}
@@ -486,7 +489,7 @@ void vdp_h40(uint32_t line, uint32_t linecyc, vdp_context * context)
 		//context->slot_counter = MAX_SPRITES_LINE - context->slot_counter;
 		context->cur_slot = MAX_SPRITES_LINE-1;
 		context->sprite_draws = MAX_DRAWS;
-		context->flags &= ~FLAG_CAN_MASK;
+		context->flags &= (~FLAG_CAN_MASK & ~FLAG_MASKED);
 		break;
 	COLUMN_RENDER_BLOCK(2, 48)
 	COLUMN_RENDER_BLOCK(4, 56)
