@@ -88,49 +88,61 @@ void scan_sprite_table(uint32_t line, vdp_context * context)
 	}
 }
 
+#define FLAG_DOT_OFLOW 0x1
+#define FLAG_CAN_MASK 0x2
 void read_sprite_x(uint32_t line, vdp_context * context)
 {
-	if ((context->cur_slot >= context->slot_counter) && context->sprite_draws) {
-		line += 1;
-		line &= 0xFF;
-		//in tiles
-		uint8_t width = ((context->sprite_info_list[context->cur_slot].size >> 2) & 0x3) + 1;
-		//in pixels
-		uint8_t height = ((context->sprite_info_list[context->cur_slot].size & 0x3) + 1) * 8;
-		uint16_t att_addr = ((context->regs[REG_SAT] & 0x7F) << 9) + context->sprite_info_list[context->cur_slot].index * 8 + 4;
-		uint16_t tileinfo = (context->vdpmem[att_addr] << 8) | context->vdpmem[att_addr+1];		
-		uint8_t pal_priority = (tileinfo >> 9) & 0x70;
-		uint8_t row;
-		if (tileinfo & MAP_BIT_V_FLIP) {
-			row = (context->sprite_info_list[context->cur_slot].y + height - 1) - line;
-		} else {
-			row = line-context->sprite_info_list[context->cur_slot].y;
-		}
-		//uint16_t address = ((tileinfo & 0x7FF) << 5) + (row & 0x7) * 4 + (row & 0x18) * width * 4;
-		uint16_t address = ((tileinfo & 0x7FF) << 5) + row * 4;
-		int16_t x = ((context->vdpmem[att_addr+ 2] & 0x3) << 8) | context->vdpmem[att_addr + 3];
-		if (x) {
-			x -= 128;
-			int16_t base_x = x;
-			int16_t dir;
-			if (tileinfo & MAP_BIT_H_FLIP) {
-				x += (width-1) * 8;
-				dir = -8;
+	if (context->cur_slot >= context->slot_counter) {
+		if (context->sprite_draws) {
+			line += 1;
+			line &= 0xFF;
+			//in tiles
+			uint8_t width = ((context->sprite_info_list[context->cur_slot].size >> 2) & 0x3) + 1;
+			//in pixels
+			uint8_t height = ((context->sprite_info_list[context->cur_slot].size & 0x3) + 1) * 8;
+			uint16_t att_addr = ((context->regs[REG_SAT] & 0x7F) << 9) + context->sprite_info_list[context->cur_slot].index * 8 + 4;
+			uint16_t tileinfo = (context->vdpmem[att_addr] << 8) | context->vdpmem[att_addr+1];		
+			uint8_t pal_priority = (tileinfo >> 9) & 0x70;
+			uint8_t row;
+			if (tileinfo & MAP_BIT_V_FLIP) {
+				row = (context->sprite_info_list[context->cur_slot].y + height - 1) - line;
 			} else {
-				dir = 8;
+				row = line-context->sprite_info_list[context->cur_slot].y;
 			}
-			//printf("Sprite %d | x: %d, y: %d, width: %d, height: %d, pal_priority: %X, row: %d, tile addr: %X\n", context->sprite_info_list[context->cur_slot].index, x, context->sprite_info_list[context->cur_slot].y, width, height, pal_priority, row, address);
-			for (int16_t i=0; i < width && context->sprite_draws; i++, x += dir) {
-				--context->sprite_draws;
-				context->sprite_draw_list[context->sprite_draws].address = address + i * height * 4;
-				context->sprite_draw_list[context->sprite_draws].x_pos = x;
-				context->sprite_draw_list[context->sprite_draws].pal_priority = pal_priority;
-				context->sprite_draw_list[context->sprite_draws].h_flip = (tileinfo & MAP_BIT_H_FLIP) ? 1 : 0;
+			//uint16_t address = ((tileinfo & 0x7FF) << 5) + (row & 0x7) * 4 + (row & 0x18) * width * 4;
+			uint16_t address = ((tileinfo & 0x7FF) << 5) + row * 4;
+			int16_t x = ((context->vdpmem[att_addr+ 2] & 0x3) << 8) | context->vdpmem[att_addr + 3];
+			if (x || !(context->flags & (FLAG_CAN_MASK | FLAG_DOT_OFLOW))) {
+				//printf("Displaying %d | line: %d, x: %d, flags: %X\n", context->sprite_info_list[context->cur_slot].index, line,  x, context->flags);
+				if (x) {
+					context->flags |= FLAG_CAN_MASK;
+				}
+				context->flags &= ~FLAG_DOT_OFLOW;
+				x -= 128;
+				int16_t base_x = x;
+				int16_t dir;
+				if (tileinfo & MAP_BIT_H_FLIP) {
+					x += (width-1) * 8;
+					dir = -8;
+				} else {
+					dir = 8;
+				}
+				//printf("Sprite %d | x: %d, y: %d, width: %d, height: %d, pal_priority: %X, row: %d, tile addr: %X\n", context->sprite_info_list[context->cur_slot].index, x, context->sprite_info_list[context->cur_slot].y, width, height, pal_priority, row, address);
+				for (int16_t i=0; i < width && context->sprite_draws; i++, x += dir) {
+					--context->sprite_draws;
+					context->sprite_draw_list[context->sprite_draws].address = address + i * height * 4;
+					context->sprite_draw_list[context->sprite_draws].x_pos = x;
+					context->sprite_draw_list[context->sprite_draws].pal_priority = pal_priority;
+					context->sprite_draw_list[context->sprite_draws].h_flip = (tileinfo & MAP_BIT_H_FLIP) ? 1 : 0;
+				}
+				context->cur_slot--;
+			} else {
+				//printf("Masking %d | line: %d, x: %d, flags: %X\n", context->sprite_info_list[context->cur_slot].index, line, x, context->flags);
+				//sprite masking enabled, no more sprites on this line
+				context->cur_slot = -1;
 			}
-			context->cur_slot--;
 		} else {
-			//sprite masking enabled, no more sprites on this line
-			context->cur_slot = -1;
+			context->flags |= FLAG_DOT_OFLOW;
 		}
 	}
 }
@@ -470,6 +482,7 @@ void vdp_h40(uint32_t line, uint32_t linecyc, vdp_context * context)
 		//context->slot_counter = MAX_SPRITES_LINE - context->slot_counter;
 		context->cur_slot = MAX_SPRITES_LINE-1;
 		context->sprite_draws = MAX_DRAWS;
+		context->flags &= ~FLAG_CAN_MASK;
 		break;
 	COLUMN_RENDER_BLOCK(2, 48)
 	COLUMN_RENDER_BLOCK(4, 56)
