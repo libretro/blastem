@@ -73,11 +73,19 @@ void render_context(vdp_context * context)
         	}
         }
         for (int y = 224; y < 240; y++, buf_32 += (screen->pitch/4 - 320)) {
-        	for (int x = 0; x < 320; x++, buf_32++) {
-        		uint16_t gen_color = context->cram[x/10 + ((y-224)/8)*32];
+        	for (int x = 0; x < 256; x++, buf_32++) {
+        		uint16_t gen_color = context->cram[x/8 + ((y-224)/8)*32];
         		b = ((gen_color >> 8) & 0xE) * 18;
         		g = ((gen_color >> 4) & 0xE) * 18;
         		r = (gen_color& 0xE) * 18;
+        		*buf_32 = SDL_MapRGB(screen->format, r, g, b);
+        	}
+        	for (int x = 256; x < 320; x++, buf_32++) {
+        		if ((x/8 & 1) ^ (y/8 & 1)) {
+        			b = g = r = 255;
+        		} else {
+        			b = g = r = 0;
+        		}
         		*buf_32 = SDL_MapRGB(screen->format, r, g, b);
         	}
         }

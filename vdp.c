@@ -178,6 +178,7 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 		v_mul = 256;
 		break;
 	}
+	/*
 	uint16_t hscroll = (hscroll_val + (column-2) * 8) & hscroll_mask;
 	uint16_t offset = address + ((vscroll * v_mul + hscroll/4) & 0x1FFF);
 	//printf("%s | line: %d, col: %d, x: %d, hs_mask %X, v_mul: %d, scr reg: %X, tbl addr: %X\n", (vsram_off ? "B" : "A"), line, column, hscroll, hscroll_mask, v_mul, context->regs[REG_SCROLL], offset);
@@ -185,6 +186,19 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 	hscroll = (hscroll_val + (column-1) * 8) & hscroll_mask;
 	offset = address + ((vscroll * v_mul + hscroll/4) & 0x1FFF);
 	context->col_2 = (context->vdpmem[offset] << 8) | context->vdpmem[offset+1];
+	*/
+	uint16_t hscroll, offset;
+	for (int i = 0; i < 2; i++) {
+		hscroll = (hscroll_val + (column-(2-i)) * 8) & hscroll_mask;
+		offset = address + ((vscroll * v_mul + hscroll/4) & 0x1FFF);
+		//printf("%s | line: %d, col: %d, x: %d, hs_mask %X, v_mul: %d, scr reg: %X, tbl addr: %X\n", (vsram_off ? "B" : "A"), line, column, hscroll, hscroll_mask, v_mul, context->regs[REG_SCROLL], offset);
+		uint16_t col_val = (context->vdpmem[offset] << 8) | context->vdpmem[offset+1];
+		if (i) {
+			context->col_2 = col_val;
+		} else {
+			context->col_1 = col_val;
+		}
+	}
 }
 
 void read_map_scroll_a(uint16_t column, uint32_t line, vdp_context * context)
@@ -288,7 +302,7 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 	uint16_t remaining = context->hscroll_a & 0x7;
 	memcpy(context->tmp_buf_a + 8 - remaining, context->tmp_buf_a + 24 - remaining, remaining);
 	remaining = context->hscroll_b & 0x7;
-	memcpy(context->tmp_buf_b + 8 - remaining, context->tmp_buf_a + 24 - remaining, remaining);
+	memcpy(context->tmp_buf_b + 8 - remaining, context->tmp_buf_b + 24 - remaining, remaining);
 }
 
 #define COLUMN_RENDER_BLOCK(column, startcyc) \
