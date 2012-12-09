@@ -151,6 +151,7 @@ void read_map_scroll(uint16_t column, uint32_t line, uint32_t scroll_reg, uint16
 	}
 	vscroll &= (context->vsram[context->regs[REG_MODE_3] & 0x4 ? column : 0] + line);
 	context->v_offset = vscroll & 0x7;
+	printf("BG | line %d, vsram: %d, vscroll: %d, v_offset: %d\n", line, context->vsram[context->regs[REG_MODE_3] & 0x4 ? column : 0], vscroll, context->v_offset);
 	vscroll /= 8;
 	uint16_t hscroll_mask;
 	uint16_t v_mul;
@@ -176,7 +177,7 @@ void read_map_scroll(uint16_t column, uint32_t line, uint32_t scroll_reg, uint16
 	}
 	uint16_t hscroll = (hscroll_val + (column-2) * 8) & hscroll_mask;
 	uint16_t offset = address + ((vscroll * v_mul + hscroll/4) & 0x1FFF);
-	//printf("A | line: %d, col: %d, x: %d, hs_mask %X, v_mul: %d, scr reg: %X, tbl addr: %X\n", line, column, hscroll, hscroll_mask, v_mul, context->regs[REG_SCROLL], offset);
+	printf("BG | line: %d, col: %d, x: %d, hs_mask %X, v_mul: %d, scr reg: %X, tbl addr: %X\n", line, column, hscroll, hscroll_mask, v_mul, context->regs[REG_SCROLL], offset);
 	context->col_1 = (context->vdpmem[offset] << 8) | context->vdpmem[offset+1];
 	hscroll = (hscroll_val + (column-1) * 8) & hscroll_mask;
 	offset = address + ((vscroll * v_mul + hscroll/4) & 0x1FFF);
@@ -900,7 +901,7 @@ void vdp_load_savestate(vdp_context * context, FILE * state_file)
 	}
 	fread(tmp_buf, 2, VSRAM_SIZE, state_file);
 	for (int i = 0; i < VSRAM_SIZE; i++) {
-		context->vsram[i] = (tmp_buf[i*2] << 8) | tmp_buf[i*2+1];
+		context->vsram[i] = (tmp_buf[i*2+1] << 8) | tmp_buf[i*2];
 	}
 	fseek(state_file, GST_VDP_MEM, SEEK_SET);
 	fread(context->vdpmem, 1, VRAM_SIZE, state_file);
