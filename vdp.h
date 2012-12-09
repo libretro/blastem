@@ -68,6 +68,7 @@ typedef struct {
 	uint16_t    col_1;
 	uint16_t    col_2;
 	uint8_t     v_offset;
+	uint8_t		flags;
 	uint8_t     *tmp_buf_a;
 	uint8_t     *tmp_buf_b;
 } vdp_context;
