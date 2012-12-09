@@ -180,7 +180,7 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 	}
 	uint16_t hscroll, offset;
 	for (int i = 0; i < 2; i++) {
-		hscroll = (hscroll_val + (column + i) * 8) & hscroll_mask;
+		hscroll = ((column - 2 + i) * 8 - hscroll_val) & hscroll_mask;
 		offset = address + ((vscroll * v_mul + hscroll/4) & 0x1FFF);
 		//printf("%s | line: %d, col: %d, x: %d, hs_mask %X, v_mul: %d, scr reg: %X, tbl addr: %X\n", (vsram_off ? "B" : "A"), line, (column-(2-i)), hscroll, hscroll_mask, v_mul, context->regs[REG_SCROLL], offset);
 		uint16_t col_val = (context->vdpmem[offset] << 8) | context->vdpmem[offset+1];
