@@ -38,14 +38,14 @@ void render_sprite_cells(vdp_context * context)
 			x = d->x_pos;
 			dir = 1;
 		}
-		printf("Draw Slot %d of %d, Rendering sprite cell from %X to x: %d\n", context->cur_slot, context->sprite_draws, d->address, x);
+		//printf("Draw Slot %d of %d, Rendering sprite cell from %X to x: %d\n", context->cur_slot, context->sprite_draws, d->address, x);
 		context->cur_slot--;
 		for (uint16_t address = d->address; address < d->address+4; address++) {
-			if (x >= 0 && x < 320) {
+			if (x >= 0 && x < 320 && !(context->linebuf[x] & 0xF)) {
 				context->linebuf[x] = (context->vdpmem[address] >> 4) | d->pal_priority;
 			}
 			x += dir;
-			if (x >= 0 && x < 320) {
+			if (x >= 0 && x < 320 && !(context->linebuf[x] & 0xF)) {
 				context->linebuf[x] = (context->vdpmem[address] & 0xF)  | d->pal_priority;
 			}
 			x += dir;
@@ -66,7 +66,7 @@ void scan_sprite_table(uint32_t line, vdp_context * context)
 		uint8_t height = ((context->vdpmem[address+2] & 0x3) + 1) * 8;
 		//printf("Sprite %d | y: %d, height: %d\n", context->sprite_index, y, height);
 		if (y <= line && line < (y + height)) {
-			printf("Sprite %d at y: %d with height %d is on line %d\n", context->sprite_index, y, height, line);
+			//printf("Sprite %d at y: %d with height %d is on line %d\n", context->sprite_index, y, height, line);
 			context->sprite_info_list[--(context->slot_counter)].size = context->vdpmem[address+2];
 			context->sprite_info_list[context->slot_counter].index = context->sprite_index;
 			context->sprite_info_list[context->slot_counter].y = y;
@@ -78,7 +78,7 @@ void scan_sprite_table(uint32_t line, vdp_context * context)
 			y = ((context->vdpmem[address] & 0x3) << 8 | context->vdpmem[address+1]) - 128;
 			height = ((context->vdpmem[address+2] & 0x3) + 1) * 8;
 			if (y <= line && line < (y + height)) {
-				printf("Sprite %d at y: %d with height %d is on line %d\n", context->sprite_index, y, height, line);
+				//printf("Sprite %d at y: %d with height %d is on line %d\n", context->sprite_index, y, height, line);
 				context->sprite_info_list[--(context->slot_counter)].size = context->vdpmem[address+2];
 				context->sprite_info_list[context->slot_counter].index = context->sprite_index;
 				context->sprite_info_list[context->slot_counter].y = y;
@@ -112,7 +112,7 @@ void read_sprite_x(uint32_t line, vdp_context * context)
 		if (x) {
 			x -= 128;
 			int16_t base_x = x;
-			printf("Sprite %d | x: %d, y: %d, width: %d, height: %d, pal_priority: %X, row: %d, tile addr: %X\n", context->sprite_info_list[context->cur_slot].index, x, context->sprite_info_list[context->cur_slot].y, width, height, pal_priority, row, address);
+			//printf("Sprite %d | x: %d, y: %d, width: %d, height: %d, pal_priority: %X, row: %d, tile addr: %X\n", context->sprite_info_list[context->cur_slot].index, x, context->sprite_info_list[context->cur_slot].y, width, height, pal_priority, row, address);
 			for (;width && context->sprite_draws; --width, x += 8) {
 				--context->sprite_draws;
 				context->sprite_draw_list[context->sprite_draws].address = address + ((x-base_x) / 8) * height * 4;
