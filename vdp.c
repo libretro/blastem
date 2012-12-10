@@ -16,6 +16,11 @@
 #define SCROLL_BUFFER_SIZE 32
 #define SCROLL_BUFFER_DRAW 16
 
+#define FLAG_DOT_OFLOW 0x1
+#define FLAG_CAN_MASK  0x2
+#define FLAG_MASKED    0x4
+#define FLAG_WINDOW    0x8
+
 void init_vdp_context(vdp_context * context)
 {
 	memset(context, 0, sizeof(context));
@@ -100,9 +105,6 @@ void scan_sprite_table(uint32_t line, vdp_context * context)
 	}
 }
 
-#define FLAG_DOT_OFLOW 0x1
-#define FLAG_CAN_MASK  0x2
-#define FLAG_MASKED    0x4
 void read_sprite_x(uint32_t line, vdp_context * context)
 {
 	if (context->cur_slot >= context->slot_counter) {
@@ -171,8 +173,67 @@ void external_slot(vdp_context * context)
 	//TODO: Implement me
 }
 
+#define WINDOW_RIGHT 0x80
+#define WINDOW_DOWN  0x80
+#define ALWAYS_WINDOW 0
+
 void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_t address, uint16_t hscroll_val, vdp_context * context)
 {
+	if (!vsram_off) {
+		uint16_t left_col, right_col;
+		#if ALWAYS_WINDOW
+			left_col = 0; right_col = 42;
+			uint16_t top_line, bottom_line;
+			top_line = 0; bottom_line = 241;
+		#else
+		if (context->regs[REG_WINDOW_H] & WINDOW_RIGHT) {
+			left_col = 0;
+			right_col = (context->regs[REG_WINDOW_H] & 0x1F) * 2;
+			if (right_col) {
+				right_col += 2;
+			}
+		} else {
+			left_col = (context->regs[REG_WINDOW_H] & 0x1F) * 2;
+			right_col = 42;
+		}
+		if (column >= left_col && column < right_col) {
+			uint16_t top_line, bottom_line;
+			if (context->regs[REG_WINDOW_V] & WINDOW_DOWN) {
+				top_line = (context->regs[REG_WINDOW_V] & 0x1F) * 8;
+				bottom_line = 241;
+			} else {
+				top_line = 0;
+				bottom_line = (context->regs[REG_WINDOW_V] & 0x1F) * 8;
+			}
+			if (line >= top_line && line < bottom_line) {
+		#endif
+				uint16_t address = context->regs[REG_WINDOW] << 10;
+				uint16_t line_offset, offset, mask;
+				if (context->latched_mode & BIT_H40) {
+					address &= 0xF000;
+					line_offset = (((line/* - top_line */) / 8) * 64 * 2) & 0xFFF;
+					mask = 0x7F;
+					
+				} else {
+					address &= 0xF800;
+					line_offset = (((line/* - top_line*/) / 8) * 32 * 2) & 0xFFF;
+					mask = 0x3F;
+				}
+				offset = address + line_offset + (((column - 2/* - left_col*/) * 2) & mask);
+				context->col_1 = (context->vdpmem[offset] << 8) | context->vdpmem[offset+1];
+				printf("Window | top: %d, bot: %d, left: %d, right: %d, base: %X, line: %X offset: %X, tile: %X, reg: %X\n", top_line, bottom_line, left_col, right_col, address, line_offset, offset, ((context->col_1 & 0x3FF) << 5), context->regs[REG_WINDOW]);
+				offset = address + line_offset + (((column - 1/* - left_col*/) * 2) & mask);
+				context->col_2 = (context->vdpmem[offset] << 8) | context->vdpmem[offset+1];
+				context->v_offset = (line/* - top_line*/) & 0x7;
+				context->flags |= FLAG_WINDOW;
+				return;
+	#if !ALWAYS_WINDOW
+			}
+		}
+		context->flags &= ~FLAG_WINDOW;
+	#endif
+		
+	}
 	uint16_t vscroll;
 	switch(context->regs[REG_SCROLL] & 0x30)
 	{
@@ -293,7 +354,11 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		col-=2;
 		dst = context->framebuf + line * 320 + col * 8;
 		sprite_buf = context->linebuf + col * 8;
-		plane_a = context->tmp_buf_a + SCROLL_BUFFER_DRAW - (context->hscroll_a & 0xF);
+		if (context->flags & FLAG_WINDOW) {
+			plane_a = context->tmp_buf_a + SCROLL_BUFFER_DRAW;
+		} else {
+			plane_a = context->tmp_buf_a + SCROLL_BUFFER_DRAW - (context->hscroll_a & 0xF);
+		}
 		plane_b = context->tmp_buf_b + SCROLL_BUFFER_DRAW - (context->hscroll_b & 0xF);
 		end = dst + 16;
 		//printf("A | tmp_buf offset: %d\n", 8 - (context->hscroll_a & 0x7));
@@ -324,8 +389,11 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		//end = dst + 8;
 	}
 	
-	uint16_t remaining = context->hscroll_a & 0xF;
-	memcpy(context->tmp_buf_a + SCROLL_BUFFER_DRAW - remaining, context->tmp_buf_a + SCROLL_BUFFER_SIZE - remaining, remaining);
+	uint16_t remaining;
+	if (!(context->flags & FLAG_WINDOW)) {
+		remaining = context->hscroll_a & 0xF;
+		memcpy(context->tmp_buf_a + SCROLL_BUFFER_DRAW - remaining, context->tmp_buf_a + SCROLL_BUFFER_SIZE - remaining, remaining);
+	}
 	remaining = context->hscroll_b & 0xF;
 	memcpy(context->tmp_buf_b + SCROLL_BUFFER_DRAW - remaining, context->tmp_buf_b + SCROLL_BUFFER_SIZE - remaining, remaining);
 }
