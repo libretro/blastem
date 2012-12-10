@@ -293,7 +293,7 @@ void render_map(uint16_t col, uint8_t * tmp_buf, vdp_context * context)
 {
 	uint16_t address = ((col & 0x7FF) << 5);
 	if (col & MAP_BIT_V_FLIP) {
-		address +=  24 - 4 * context->v_offset;
+		address +=  28 - 4 * context->v_offset;
 	} else {
 		address += 4 * context->v_offset;
 	}
@@ -342,32 +342,43 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		col-=2;
 		dst = context->framebuf + line * 320 + col * 8;
 		sprite_buf = context->linebuf + col * 8;
+		uint16_t a_src;
 		if (context->flags & FLAG_WINDOW) {
 			plane_a = context->tmp_buf_a + SCROLL_BUFFER_DRAW;
+			a_src = FBUF_SRC_W;
 		} else {
 			plane_a = context->tmp_buf_a + SCROLL_BUFFER_DRAW - (context->hscroll_a & 0xF);
+			a_src = FBUF_SRC_A;
 		}
 		plane_b = context->tmp_buf_b + SCROLL_BUFFER_DRAW - (context->hscroll_b & 0xF);
 		end = dst + 16;
+		uint16_t src;
 		//printf("A | tmp_buf offset: %d\n", 8 - (context->hscroll_a & 0x7));
 		for (; dst < end; ++plane_a, ++plane_b, ++sprite_buf, ++dst) {
 			uint8_t pixel;
 			if (*sprite_buf & BUF_BIT_PRIORITY && *sprite_buf & 0xF) {
 				pixel = *sprite_buf;
+				src = FBUF_SRC_S;
 			} else if (*plane_a & BUF_BIT_PRIORITY && *plane_a & 0xF) {
 				pixel = *plane_a;
+				src = a_src;
 			} else if (*plane_b & BUF_BIT_PRIORITY && *plane_b & 0xF) {
 				pixel = *plane_b;
+				src = FBUF_SRC_B;
 			} else if (*sprite_buf & 0xF) {
 				pixel = *sprite_buf;
+				src = FBUF_SRC_S;
 			} else if (*plane_a & 0xF) {
 				pixel = *plane_a;
+				src = a_src;
 			} else if (*plane_b & 0xF){
 				pixel = *plane_b;
+				src = FBUF_SRC_B;
 			} else {
 				pixel = context->regs[REG_BG_COLOR] & 0x3F;
+				src = FBUF_SRC_BG;
 			}
-			*dst = context->cram[pixel & 0x3F] | ((pixel & BUF_BIT_PRIORITY) ? 0x1000 : 0);
+			*dst = context->cram[pixel & 0x3F] | ((pixel & BUF_BIT_PRIORITY) ? FBUF_BIT_PRIORITY : 0) | src;
 		}
 	} else {
 		//dst = context->framebuf + line * 320;

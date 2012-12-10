@@ -30,6 +30,6 @@ int main(int argc, char ** argv)
 	vdp_run_to_vblank(&context);
     render_init(width, height);
     render_context(&context);
-    render_wait_quit();
+    render_wait_quit(&context);
     return 0;
 }
