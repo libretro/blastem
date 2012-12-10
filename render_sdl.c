@@ -4,6 +4,7 @@
 #include "render.h"
 
 SDL_Surface *screen;
+uint8_t render_dbg = 0;
 
 void render_init(int width, int height)
 {
@@ -88,9 +89,37 @@ void render_context(vdp_context * context)
         		uint32_t *line = buf_32;
 		    	for (int x = 0; x < 320; x++) {
 		    		uint16_t gen_color = context->framebuf[y * 320 + x];
-		    		b = ((gen_color >> 8) & 0xE) * 18;
-		    		g = ((gen_color >> 4) & 0xE) * 18;
-		    		r = (gen_color& 0xE) * 18;
+		    		if (render_dbg) {
+		    			r = g = b = 0;
+		    			switch(gen_color & FBUF_SRC_MASK)
+		    			{
+		    			case FBUF_SRC_A:
+		    				g = 127;
+		    				break;
+						case FBUF_SRC_W:
+							g = 127;
+							b = 127;
+							break;
+						case FBUF_SRC_B:
+							b = 127;
+							break;
+						case FBUF_SRC_S:
+							r = 127;
+							break;
+						case FBUF_SRC_BG:
+							r = 127;
+							b = 127;
+		    			}
+		    			if (gen_color & FBUF_BIT_PRIORITY) {
+		    				b *= 2;
+		    				g *= 2;
+		    				r *= 2;
+		    			}
+		    		} else {
+						b = ((gen_color >> 8) & 0xE) * 18;
+						g = ((gen_color >> 4) & 0xE) * 18;
+						r = (gen_color& 0xE) * 18;
+					}
 		    		for (int j = 0; j < repeat_x; j++) {
 		    			*(line++) = SDL_MapRGB(screen->format, r, g, b);
 		    		}
@@ -105,11 +134,17 @@ void render_context(vdp_context * context)
     SDL_UpdateRect(screen, 0, 0, screen->clip_rect.w, screen->clip_rect.h);
 }
 
-void render_wait_quit()
+void render_wait_quit(vdp_context * context)
 {
 	SDL_Event event;
 	while(SDL_WaitEvent(&event)) {
 		switch (event.type) {
+		case SDL_KEYDOWN:
+			if (event.key.keysym.sym == SDLK_LEFTBRACKET) {
+				render_dbg = !render_dbg;
+				render_context(context);
+			}
+			break;
 		case SDL_QUIT:
 			return;
 		}
