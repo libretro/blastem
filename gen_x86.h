@@ -65,6 +65,20 @@ enum {
 } x86_modes;
 
 
+uint8_t * rol_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size);
+uint8_t * ror_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size);
+uint8_t * rcl_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size);
+uint8_t * rcr_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size);
+uint8_t * shl_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size);
+uint8_t * shr_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size);
+uint8_t * sar_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size);
+uint8_t * rol_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t disp, uint8_t size);
+uint8_t * ror_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t disp, uint8_t size);
+uint8_t * rcl_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t disp, uint8_t size);
+uint8_t * rcr_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t disp, uint8_t size);
+uint8_t * shl_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t disp, uint8_t size);
+uint8_t * shr_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t disp, uint8_t size);
+uint8_t * sar_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t disp, uint8_t size);
 uint8_t * add_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size);
 uint8_t * or_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size);
 uint8_t * xor_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size);
