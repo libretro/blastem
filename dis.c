@@ -76,6 +76,9 @@ int main(int argc, char ** argv)
 			break;
 		}
 		for(;;) {
+			if (address > filesize) {
+				break;
+			}
 			visit(address);
 			next = m68k_decode(encoded, &instbuf, address);
 			address += (next-encoded)*2;
