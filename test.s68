@@ -1,3 +1,38 @@
+	dc.l $0, start
+	dc.l start
+	dc.l start
+	dc.l start
+	dc.l start
+	dc.l start
+	dc.l start
+	dc.l start
+	dc.l start
+	dc.l start
+	dc.l start
+	dc.l start
+	dc.l start
+	dc.l start
+	dc.l start
+	dc.l start
+	dc.l start
+	dc.l start
+	dc.l start
+	dc.l start
+	dc.l start
+	dc.l start
+	dc.l start
+	dc.l after
+	dc.l after
+	dc.l after
+	dc.l after
+	dc.l after
+	dc.l after
+	dc.l after
+	dc.l after
+	
+start:
+	bra after
+after:
 	abcd d0, d1
 	abcd -(a2), -(a3)
 	add.b #42, d1
