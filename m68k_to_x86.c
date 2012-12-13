@@ -346,7 +346,7 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 				dst = mov_ir(dst, src.disp, reg, inst->extra.size);
 			}
 		} else if(src.mode == MODE_REG_DIRECT) {
-			printf("mov_rrdisp8 from reg %d to offset %d from reg %d (%d)\n", src.base, (inst->dst.addr_mode == MODE_REG ? offsetof(m68k_context, dregs) : offsetof(m68k_context, aregs)) + 4 * inst->dst.params.regs.pri, CONTEXT, inst->dst.params.regs.pri);
+			printf("mov_rrdisp8 from reg %d to offset %d from reg %d (%d)\n", src.base, (int)(inst->dst.addr_mode == MODE_REG ? offsetof(m68k_context, dregs) : offsetof(m68k_context, aregs)) + 4 * inst->dst.params.regs.pri, CONTEXT, inst->dst.params.regs.pri);
 			dst = mov_rrdisp8(dst, src.base, CONTEXT, (inst->dst.addr_mode == MODE_REG ? offsetof(m68k_context, dregs) : offsetof(m68k_context, aregs)) + 4 * inst->dst.params.regs.pri, inst->extra.size);
 		} else {
 			dst = mov_irdisp8(dst, src.disp, CONTEXT, (inst->dst.addr_mode == MODE_REG ? offsetof(m68k_context, dregs) : offsetof(m68k_context, aregs)) + 4 * inst->dst.params.regs.pri, inst->extra.size);
@@ -458,7 +458,7 @@ uint8_t * translate_m68k_bsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 {
 	//TODO: Add cycles
 	int32_t disp = inst->src.params.immed;
-	uint32_t after = inst->address + (inst->variant == VAR_BYTE ? 2 : (inst->variant == VAR_WORD ? 4 : 6));
+	uint32_t after = inst->address + 2;
 	dst = mov_ir(dst, after, SCRATCH1, SZ_D);
 	dst = push_r(dst, SCRATCH1);
 	dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
@@ -481,7 +481,7 @@ uint8_t * translate_m68k_bcc(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 {
 	//TODO: Add cycles
 	int32_t disp = inst->src.params.immed;
-	uint32_t after = inst->address + (inst->variant == VAR_BYTE ? 2 : (inst->variant == VAR_WORD ? 4 : 6));
+	uint32_t after = inst->address + 2;
 	printf("bcc@%X: after=%X, disp=%X, dest=%X\n", inst->address, after, disp, after+disp);
 	uint8_t * dest_addr = get_native_address(opts->native_code_map, after + disp);
 	if (inst->extra.cond == COND_TRUE) {
@@ -557,6 +557,88 @@ uint8_t * translate_m68k_rts(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 	return dst;
 }
 
+uint8_t * translate_m68k_dbcc(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
+{
+	//best case duration
+	dst = cycles(dst, 10);
+	dst = check_cycles(dst);
+	uint8_t * skip_loc = NULL;
+	//TODO: Check if COND_TRUE technically valid here even though
+	//it's basically a slow NOP
+	if (inst->extra.cond != COND_FALSE) {
+		uint8_t cond = CC_NZ;
+		switch (inst->extra.cond)
+		{
+		case COND_HIGH:
+			cond = CC_Z;
+		case COND_LOW_SAME:
+			dst = mov_rr(dst, FLAG_Z, SCRATCH1, SZ_B);
+			dst = or_rr(dst, FLAG_C, SCRATCH1, SZ_B);
+			break;
+		case COND_CARRY_CLR:
+			cond = CC_Z;
+		case COND_CARRY_SET:
+			dst = cmp_ir(dst, 0, FLAG_C, SZ_B);
+			break;
+		case COND_NOT_EQ:
+			cond = CC_Z;
+		case COND_EQ:
+			dst = cmp_ir(dst, 0, FLAG_Z, SZ_B);
+			break;
+		case COND_OVERF_CLR:
+			cond = CC_Z;
+		case COND_OVERF_SET:
+			dst = cmp_ir(dst, 0, FLAG_V, SZ_B);
+			break;
+		case COND_PLUS:
+			cond = CC_Z;
+		case COND_MINUS:
+			dst = cmp_ir(dst, 0, FLAG_N, SZ_B);
+			break;
+		case COND_GREATER_EQ:
+			cond = CC_Z;
+		case COND_LESS:
+			dst = cmp_rr(dst, FLAG_N, FLAG_V, SZ_B);
+			break;
+		case COND_GREATER:
+			cond = CC_Z;
+		case COND_LESS_EQ:
+			dst = mov_rr(dst, FLAG_V, SCRATCH1, SZ_B);
+			dst = xor_rr(dst, FLAG_N, SCRATCH1, SZ_B);
+			dst = or_rr(dst, FLAG_Z, SCRATCH1, SZ_B);
+			break;
+		}
+		skip_loc = dst + 1;
+		dst = jcc(dst, cond, dst + 2);
+	}
+	if (opts->dregs[inst->dst.params.regs.pri] >= 0) {
+		dst = sub_ir(dst, 1, opts->dregs[inst->dst.params.regs.pri], SZ_W);
+		dst = cmp_ir(dst, -1, opts->dregs[inst->dst.params.regs.pri], SZ_W);
+	} else {
+		dst = sub_irdisp8(dst, 1, CONTEXT, offsetof(m68k_context, dregs) + 4 * inst->dst.params.regs.pri, SZ_W);
+		dst = cmp_irdisp8(dst, -1, CONTEXT, offsetof(m68k_context, dregs) + 4 * inst->dst.params.regs.pri, SZ_W);
+	}
+	uint8_t *loop_end_loc = dst+1;
+	dst = jcc(dst, CC_Z, dst+2);
+	uint32_t after = inst->address + 2;
+	uint8_t * dest_addr = get_native_address(opts->native_code_map, after + inst->src.params.immed);
+	if (!dest_addr) {
+		opts->deferred = defer_address(opts->deferred, after + inst->src.params.immed, dst + 1);
+		//dummy address to be replaced later, make sure it generates a 4-byte displacement
+		dest_addr = dst + 256;
+	}
+	dst = jmp(dst, dest_addr);
+	*loop_end_loc = dst - (loop_end_loc+1);
+	if (skip_loc) {
+		dst = cycles(dst, 2);
+		*skip_loc = dst - (skip_loc+1);
+		dst = cycles(dst, 2);
+	} else {
+		dst = cycles(dst, 4);
+	}
+	dst = check_cycles(dst);
+}
+
 uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 {
 	map_native_address(opts->native_code_map, inst->address, dst);
@@ -570,6 +652,8 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		return translate_m68k_bcc(dst, inst, opts);
 	} else if(inst->op == M68K_RTS) {
 		return translate_m68k_rts(dst, inst, opts);
+	} else if(inst->op == M68K_DBCC) {
+		return translate_m68k_dbcc(dst, inst, opts);
 	}
 	x86_ea src_op, dst_op;
 	if (inst->src.addr_mode != MODE_UNUSED) {
