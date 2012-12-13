@@ -665,9 +665,9 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			case 1: //DBcc
 				decoded->op = M68K_DBCC;
 				decoded->src.addr_mode = MODE_IMMEDIATE;
-				decoded->src.params.immed = *(++istream);
 				decoded->dst.addr_mode = MODE_REG;
 				decoded->dst.params.regs.pri = *istream & 0x7;
+				decoded->src.params.immed = sign_extend16(*(++istream));
 				break;
 			case 7: //TRAPcc
 #ifdef M68020
