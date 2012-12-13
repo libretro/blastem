@@ -1008,11 +1008,14 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			decoded->extra.size = (*istream >> 6) & 0x3;
 			immed = (*istream >> 9) & 0x7;
 			if (*istream & 0x100) {
-				decoded->src.addr_mode = MODE_IMMEDIATE;
-				decoded->src.params.immed = immed;
-			} else {
 				decoded->src.addr_mode = MODE_REG;
 				decoded->src.params.regs.pri = immed;
+			} else {
+				decoded->src.addr_mode = MODE_IMMEDIATE;
+				if (!immed) {
+					immed = 8;
+				}
+				decoded->src.params.immed = immed;
 			}
 			decoded->dst.addr_mode = MODE_REG;
 			decoded->dst.params.regs.pri = *istream & 0x7;
@@ -1067,7 +1070,7 @@ char * mnemonics[] = {
 	"move",//ccr
 	"move",//from_sr
 	"move",//sr
-	"move_usp",
+	"move",//usp
 	"movem",
 	"movep",
 	"muls",
@@ -1217,12 +1220,16 @@ int m68k_disasm(m68kinst * decoded, char * dst)
 		ret = strlen(mnemonics[decoded->op]) - 2;
 		memcpy(dst, mnemonics[decoded->op], ret);
 		dst[ret] = 0;
-		strcat(dst, cond_mnem[decoded->extra.cond]);
+		strcpy(dst+ret, cond_mnem[decoded->extra.cond]);
 		ret = strlen(dst);
+		if (decoded->op != M68K_SCC) {
+			ret += sprintf(dst+ret, " #%d <%X>", decoded->src.params.immed, decoded->address + 2 + decoded->src.params.immed);
+			return ret;
+		}
 		break;
 	case M68K_BSR:
-		ret = sprintf(dst, "bsr%s", decoded->variant == VAR_BYTE ? ".s" : "");
-		break;
+		ret = sprintf(dst, "bsr%s #%d <%X>", decoded->variant == VAR_BYTE ? ".s" : "", decoded->src.params.immed, decoded->address + 2 + decoded->src.params.immed);
+		return ret;
 	case M68K_MOVE_FROM_SR:
 		ret = sprintf(dst, "%s", mnemonics[decoded->op]);
 		ret += sprintf(dst + ret, " SR");
@@ -1240,6 +1247,16 @@ int m68k_disasm(m68kinst * decoded, char * dst)
 		ret = sprintf(dst, "%s", mnemonics[decoded->op]);
 		ret += m68k_disasm_op(&(decoded->src), dst + ret, 0);
 		ret += sprintf(dst + ret, ", %s", special_op);
+		return ret;
+	case M68K_MOVE_USP:
+		ret = sprintf(dst, "%s", mnemonics[decoded->op]);
+		if (decoded->src.addr_mode != MODE_UNUSED) {
+			ret += m68k_disasm_op(&(decoded->src), dst + ret, 0);
+			ret += sprintf(dst + ret, ", USP");
+		} else {
+			ret += sprintf(dst + ret, "USP, ");
+			ret += m68k_disasm_op(&(decoded->dst), dst + ret, 0);
+		}
 		return ret;
 	default:
 		size = decoded->extra.size;
