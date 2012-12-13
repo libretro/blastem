@@ -28,8 +28,11 @@
 #define OP_POPF 0x9D
 #define OP_MOV_I8R 0xB0
 #define OP_MOV_IR 0xB8
+#define OP_SHIFTROT_IR 0xC0
 #define OP_RETN 0xC3
 #define OP_MOV_IEA 0xC6
+#define OP_SHIFTROT_1 0xD0
+#define OP_SHIRTROT_CL 0xD2
 #define OP_CALL 0xE8
 #define OP_JMP 0xE9
 #define OP_JMP_BYTE 0xEB
@@ -46,6 +49,15 @@
 #define OP_EX_SUBI 0x5
 #define OP_EX_XORI 0x6
 #define OP_EX_CMPI 0x7
+
+#define OP_EX_ROL 0x0
+#define OP_EX_ROR 0x1
+#define OP_EX_RCL 0x2
+#define OP_EX_RCR 0x3
+#define OP_EX_SHL 0x4
+#define OP_EX_SHR 0x5
+#define OP_EX_SAL 0x6 //identical to SHL
+#define OP_EX_SAR 0x7
 
 #define BIT_IMMED_RAX 0x4
 #define BIT_DIR 0x2
@@ -293,6 +305,133 @@ uint8_t * x86_irdisp8(uint8_t * out, uint8_t opcode, uint8_t op_ex, int32_t val,
 	return out;
 }
 
+
+uint8_t * x86_shiftrot_ir(uint8_t * out, uint8_t op_ex, uint8_t val, uint8_t dst, uint8_t size)
+{
+	if (size == SZ_W) {
+		*(out++) = PRE_SIZE;
+	}
+	if (size == SZ_Q || dst >= R8 || (size == SZ_B && dst >= RSP && dst <= RDI)) {
+		*out = PRE_REX;
+		if (size == SZ_Q) {
+			*out |= REX_QUAD;
+		}
+		if (dst >= R8) {
+			*out |= REX_RM_FIELD;
+			dst -= (R8 - X86_R8);
+		}
+		out++;
+	}
+	if (dst >= AH && dst <= BH) {
+		dst -= (AH-X86_AH);
+	}
+
+	*(out++) = (val == 1 ? OP_SHIFTROT_1: OP_SHIFTROT_IR) | (size == SZ_B ? 0 : BIT_SIZE);
+	*(out++) = MODE_REG_DIRECT | dst | (op_ex << 3);
+	if (val != 1) {
+		*(out++) = val;
+	}
+	return out;
+}
+
+uint8_t * x86_shiftrot_irdisp8(uint8_t * out, uint8_t op_ex, uint8_t val, uint8_t dst, int8_t disp, uint8_t size)
+{
+	if (size == SZ_W) {
+		*(out++) = PRE_SIZE;
+	}
+	if (size == SZ_Q || dst >= R8 || (size == SZ_B && dst >= RSP && dst <= RDI)) {
+		*out = PRE_REX;
+		if (size == SZ_Q) {
+			*out |= REX_QUAD;
+		}
+		if (dst >= R8) {
+			*out |= REX_RM_FIELD;
+			dst -= (R8 - X86_R8);
+		}
+		out++;
+	}
+	if (dst >= AH && dst <= BH) {
+		dst -= (AH-X86_AH);
+	}
+
+	*(out++) = (val == 1 ? OP_SHIFTROT_1: OP_SHIFTROT_IR) | (size == SZ_B ? 0 : BIT_SIZE);
+	*(out++) = MODE_REG_DISPLACE8 | dst | (op_ex << 3);
+	*(out++) = disp;
+	if (val != 1) {
+		*(out++) = val;
+	}
+	return out;
+}
+
+uint8_t * rol_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size)
+{
+	return x86_shiftrot_ir(out, OP_EX_ROL, val, dst, size);
+}
+
+uint8_t * ror_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size)
+{
+	return x86_shiftrot_ir(out, OP_EX_ROR, val, dst, size);
+}
+
+uint8_t * rcl_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size)
+{
+	return x86_shiftrot_ir(out, OP_EX_RCL, val, dst, size);
+}
+
+uint8_t * rcr_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size)
+{
+	return x86_shiftrot_ir(out, OP_EX_RCR, val, dst, size);
+}
+
+uint8_t * shl_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size)
+{
+	return x86_shiftrot_ir(out, OP_EX_SHL, val, dst, size);
+}
+
+uint8_t * shr_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size)
+{
+	return x86_shiftrot_ir(out, OP_EX_SHR, val, dst, size);
+}
+
+uint8_t * sar_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size)
+{
+	return x86_shiftrot_ir(out, OP_EX_SAR, val, dst, size);
+}
+
+uint8_t * rol_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_shiftrot_irdisp8(out, OP_EX_ROL, val, dst_base, disp, size);
+}
+
+uint8_t * ror_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_shiftrot_irdisp8(out, OP_EX_ROR, val, dst_base, disp, size);
+}
+
+uint8_t * rcl_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_shiftrot_irdisp8(out, OP_EX_RCL, val, dst_base, disp, size);
+}
+
+uint8_t * rcr_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_shiftrot_irdisp8(out, OP_EX_RCR, val, dst_base, disp, size);
+}
+
+uint8_t * shl_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_shiftrot_irdisp8(out, OP_EX_SHL, val, dst_base, disp, size);
+}
+
+uint8_t * shr_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_shiftrot_irdisp8(out, OP_EX_SHR, val, dst_base, disp, size);
+}
+
+uint8_t * sar_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_shiftrot_irdisp8(out, OP_EX_SAR, val, dst_base, disp, size);
+}
 
 uint8_t * add_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
 {

@@ -689,21 +689,47 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = setcc_r(dst, CC_O, FLAG_V);
 		dst = mov_rrind(dst, FLAG_C, CONTEXT, SZ_B);
 		dst = check_cycles(dst);
+		dst = m68k_save_result(inst, dst, opts);
 		break;
 	case M68K_ADDX:
+		break;
 	case M68K_AND:
+		dst = cycles(dst, BUS);
+		if (src_op.mode == MODE_REG_DIRECT) {
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				dst = and_rr(dst, src_op.base, dst_op.base, inst->extra.size);
+			} else {
+				dst = and_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
+			}
+		} else if (src_op.mode == MODE_REG_DISPLACE8) {
+			dst = and_rdisp8r(dst, src_op.base, src_op.disp, dst_op.base, inst->extra.size);
+		} else {
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				dst = and_ir(dst, src_op.disp, dst_op.base, inst->extra.size);
+			} else {
+				dst = and_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
+			}
+		}
+		dst = mov_ir(dst, 0, FLAG_C, SZ_B);
+		dst = setcc_r(dst, CC_Z, FLAG_Z);
+		dst = setcc_r(dst, CC_S, FLAG_N);
+		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
+		dst = check_cycles(dst);
+		dst = m68k_save_result(inst, dst, opts);
+		break;
 	case M68K_ANDI_CCR:
 	case M68K_ANDI_SR:
 	case M68K_ASL:
+	case M68K_LSL:
 	case M68K_ASR:
-	case M68K_BCC:
+	case M68K_LSR:
 	case M68K_BCHG:
 	case M68K_BCLR:
 	case M68K_BSET:
-	case M68K_BSR:
 	case M68K_BTST:
 	case M68K_CHK:
 	case M68K_CLR:
+		break;
 	case M68K_CMP:
 		dst = cycles(dst, BUS);
 		if (src_op.mode == MODE_REG_DIRECT) {
@@ -727,10 +753,33 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = setcc_r(dst, CC_O, FLAG_V);
 		dst = check_cycles(dst);
 		break;
-	case M68K_DBCC:
 	case M68K_DIVS:
 	case M68K_DIVU:
+		break;
 	case M68K_EOR:
+		dst = cycles(dst, BUS);
+		if (src_op.mode == MODE_REG_DIRECT) {
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				dst = xor_rr(dst, src_op.base, dst_op.base, inst->extra.size);
+			} else {
+				dst = xor_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
+			}
+		} else if (src_op.mode == MODE_REG_DISPLACE8) {
+			dst = xor_rdisp8r(dst, src_op.base, src_op.disp, dst_op.base, inst->extra.size);
+		} else {
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				dst = xor_ir(dst, src_op.disp, dst_op.base, inst->extra.size);
+			} else {
+				dst = xor_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
+			}
+		}
+		dst = mov_ir(dst, 0, FLAG_C, SZ_B);
+		dst = setcc_r(dst, CC_Z, FLAG_Z);
+		dst = setcc_r(dst, CC_S, FLAG_N);
+		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
+		dst = check_cycles(dst);
+		dst = m68k_save_result(inst, dst, opts);
+		break;
 	case M68K_EORI_CCR:
 	case M68K_EORI_SR:
 	case M68K_EXG:
@@ -758,6 +807,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	    dst = check_cycles(dst);
 	    break;
 	case M68K_EXT:
+		break;
 	case M68K_ILLEGAL:
 		dst = call(dst, (uint8_t *)m68k_save_context);
 		dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
@@ -767,8 +817,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	case M68K_JSR:
 	case M68K_LEA:
 	case M68K_LINK:
-	case M68K_LSL:
-	case M68K_LSR:
 	case M68K_MOVE_CCR:
 	case M68K_MOVE_FROM_SR:
 	case M68K_MOVE_SR:
@@ -780,9 +828,37 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	case M68K_NBCD:
 	case M68K_NEG:
 	case M68K_NEGX:
+		break;
 	case M68K_NOP:
+		dst = cycles(dst, BUS);
+		dst = check_cycles(dst);
+		break;
 	case M68K_NOT:
+		break;
 	case M68K_OR:
+		dst = cycles(dst, BUS);
+		if (src_op.mode == MODE_REG_DIRECT) {
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				dst = or_rr(dst, src_op.base, dst_op.base, inst->extra.size);
+			} else {
+				dst = or_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
+			}
+		} else if (src_op.mode == MODE_REG_DISPLACE8) {
+			dst = or_rdisp8r(dst, src_op.base, src_op.disp, dst_op.base, inst->extra.size);
+		} else {
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				dst = or_ir(dst, src_op.disp, dst_op.base, inst->extra.size);
+			} else {
+				dst = or_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
+			}
+		}
+		dst = mov_ir(dst, 0, FLAG_C, SZ_B);
+		dst = setcc_r(dst, CC_Z, FLAG_Z);
+		dst = setcc_r(dst, CC_S, FLAG_N);
+		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
+		dst = check_cycles(dst);
+		dst = m68k_save_result(inst, dst, opts);
+		break;
 	case M68K_ORI_CCR:
 	case M68K_ORI_SR:
 	case M68K_PEA:
@@ -793,10 +869,10 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	case M68K_ROXR:
 	case M68K_RTE:
 	case M68K_RTR:
-	case M68K_RTS:
 	case M68K_SBCD:
 	case M68K_SCC:
 	case M68K_STOP:
+		break;
 	case M68K_SUB:
 		dst = cycles(dst, BUS);
 		if (src_op.mode == MODE_REG_DIRECT) {
@@ -820,13 +896,39 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = setcc_r(dst, CC_O, FLAG_V);
 		dst = mov_rrind(dst, FLAG_C, CONTEXT, SZ_B);
 		dst = check_cycles(dst);
+		dst = m68k_save_result(inst, dst, opts);
 		break;
 	case M68K_SUBX:
+		break;
 	case M68K_SWAP:
+		dst = cycles(dst, BUS);
+		if (src_op.mode == MODE_REG_DIRECT) {
+			dst = rol_ir(dst, 16, src_op.base, inst->extra.size);
+		} else{
+			dst = rol_irdisp8(dst, 16, src_op.base, src_op.disp, inst->extra.size);
+		}
+		dst = mov_ir(dst, 0, FLAG_C, SZ_B);
+		dst = setcc_r(dst, CC_Z, FLAG_Z);
+		dst = setcc_r(dst, CC_S, FLAG_N);
+		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
+		dst = check_cycles(dst);
+		break;
 	case M68K_TAS:
 	case M68K_TRAP:
 	case M68K_TRAPV:
 	case M68K_TST:
+		dst = cycles(dst, BUS);
+		if (src_op.mode == MODE_REG_DIRECT) {
+			dst = cmp_ir(dst, 0, src_op.base, inst->extra.size);
+		} else { //M68000 doesn't support immedate operand for tst, so this must be MODE_REG_DISPLACE8
+			dst = cmp_irdisp8(dst, 0, src_op.base, src_op.disp, inst->extra.size);
+		}
+		dst = setcc_r(dst, CC_C, FLAG_C);
+		dst = setcc_r(dst, CC_Z, FLAG_Z);
+		dst = setcc_r(dst, CC_S, FLAG_N);
+		dst = setcc_r(dst, CC_O, FLAG_V);
+		dst = check_cycles(dst);
+		break;
 	case M68K_UNLK:
 	case M68K_INVALID:
 		break;
