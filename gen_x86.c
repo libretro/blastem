@@ -32,7 +32,7 @@
 #define OP_RETN 0xC3
 #define OP_MOV_IEA 0xC6
 #define OP_SHIFTROT_1 0xD0
-#define OP_SHIRTROT_CL 0xD2
+#define OP_SHIFTROT_CL 0xD2
 #define OP_CALL 0xE8
 #define OP_JMP 0xE9
 #define OP_JMP_BYTE 0xEB
@@ -363,6 +363,57 @@ uint8_t * x86_shiftrot_irdisp8(uint8_t * out, uint8_t op_ex, uint8_t val, uint8_
 	return out;
 }
 
+uint8_t * x86_shiftrot_clr(uint8_t * out, uint8_t op_ex, uint8_t dst, uint8_t size)
+{
+	if (size == SZ_W) {
+		*(out++) = PRE_SIZE;
+	}
+	if (size == SZ_Q || dst >= R8 || (size == SZ_B && dst >= RSP && dst <= RDI)) {
+		*out = PRE_REX;
+		if (size == SZ_Q) {
+			*out |= REX_QUAD;
+		}
+		if (dst >= R8) {
+			*out |= REX_RM_FIELD;
+			dst -= (R8 - X86_R8);
+		}
+		out++;
+	}
+	if (dst >= AH && dst <= BH) {
+		dst -= (AH-X86_AH);
+	}
+
+	*(out++) = OP_SHIFTROT_CL | (size == SZ_B ? 0 : BIT_SIZE);
+	*(out++) = MODE_REG_DIRECT | dst | (op_ex << 3);
+	return out;
+}
+
+uint8_t * x86_shiftrot_clrdisp8(uint8_t * out, uint8_t op_ex, uint8_t dst, int8_t disp, uint8_t size)
+{
+	if (size == SZ_W) {
+		*(out++) = PRE_SIZE;
+	}
+	if (size == SZ_Q || dst >= R8 || (size == SZ_B && dst >= RSP && dst <= RDI)) {
+		*out = PRE_REX;
+		if (size == SZ_Q) {
+			*out |= REX_QUAD;
+		}
+		if (dst >= R8) {
+			*out |= REX_RM_FIELD;
+			dst -= (R8 - X86_R8);
+		}
+		out++;
+	}
+	if (dst >= AH && dst <= BH) {
+		dst -= (AH-X86_AH);
+	}
+
+	*(out++) = OP_SHIFTROT_CL | (size == SZ_B ? 0 : BIT_SIZE);
+	*(out++) = MODE_REG_DISPLACE8 | dst | (op_ex << 3);
+	*(out++) = disp;
+	return out;
+}
+
 uint8_t * rol_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size)
 {
 	return x86_shiftrot_ir(out, OP_EX_ROL, val, dst, size);
@@ -431,6 +482,76 @@ uint8_t * shr_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t disp,
 uint8_t * sar_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t disp, uint8_t size)
 {
 	return x86_shiftrot_irdisp8(out, OP_EX_SAR, val, dst_base, disp, size);
+}
+
+uint8_t * rol_clr(uint8_t * out, uint8_t dst, uint8_t size)
+{
+	return x86_shiftrot_clr(out, OP_EX_ROL, dst, size);
+}
+
+uint8_t * ror_clr(uint8_t * out, uint8_t dst, uint8_t size)
+{
+	return x86_shiftrot_clr(out, OP_EX_ROR, dst, size);
+}
+
+uint8_t * rcl_clr(uint8_t * out, uint8_t dst, uint8_t size)
+{
+	return x86_shiftrot_clr(out, OP_EX_RCL, dst, size);
+}
+
+uint8_t * rcr_clr(uint8_t * out, uint8_t dst, uint8_t size)
+{
+	return x86_shiftrot_clr(out, OP_EX_RCR, dst, size);
+}
+
+uint8_t * shl_clr(uint8_t * out, uint8_t dst, uint8_t size)
+{
+	return x86_shiftrot_clr(out, OP_EX_SHL, dst, size);
+}
+
+uint8_t * shr_clr(uint8_t * out, uint8_t dst, uint8_t size)
+{
+	return x86_shiftrot_clr(out, OP_EX_SHR, dst, size);
+}
+
+uint8_t * sar_clr(uint8_t * out, uint8_t dst, uint8_t size)
+{
+	return x86_shiftrot_clr(out, OP_EX_SAR, dst, size);
+}
+
+uint8_t * rol_clrdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_shiftrot_clrdisp8(out, OP_EX_ROL, dst_base, disp, size);
+}
+
+uint8_t * ror_clrdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_shiftrot_clrdisp8(out, OP_EX_ROR, dst_base, disp, size);
+}
+
+uint8_t * rcl_clrdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_shiftrot_clrdisp8(out, OP_EX_RCL, dst_base, disp, size);
+}
+
+uint8_t * rcr_clrdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_shiftrot_clrdisp8(out, OP_EX_RCR, dst_base, disp, size);
+}
+
+uint8_t * shl_clrdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_shiftrot_clrdisp8(out, OP_EX_SHL, dst_base, disp, size);
+}
+
+uint8_t * shr_clrdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_shiftrot_clrdisp8(out, OP_EX_SHR, dst_base, disp, size);
+}
+
+uint8_t * sar_clrdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_shiftrot_clrdisp8(out, OP_EX_SAR, dst_base, disp, size);
 }
 
 uint8_t * add_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
