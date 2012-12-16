@@ -1007,7 +1007,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			}
 			decoded->extra.size = (*istream >> 6) & 0x3;
 			immed = (*istream >> 9) & 0x7;
-			if (*istream & 0x100) {
+			if (*istream & 0x20) {
 				decoded->src.addr_mode = MODE_REG;
 				decoded->src.params.regs.pri = immed;
 			} else {
