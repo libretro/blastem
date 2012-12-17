@@ -36,6 +36,7 @@ void m68k_write_long_highfirst();
 void m68k_write_byte();
 void m68k_save_context();
 void m68k_modified_ret_addr();
+void m68k_native_addr();
 void m68k_start_context(uint8_t * addr, m68k_context * context);
 
 uint8_t * cycles(uint8_t * dst, uint32_t num)
@@ -618,6 +619,39 @@ uint8_t * translate_m68k_bcc(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 	return dst;
 }
 
+uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
+{
+	uint8_t * dest_addr;
+    switch(inst->src.addr_mode)
+    {
+    case MODE_AREG_INDIRECT:
+        dst = cycles(dst, BUS);
+        if (opts->aregs[inst->src.params.regs.pri] >= 0) {
+            dst = mov_rr(dst, opts->aregs[inst->src.params.regs.pri], SCRATCH1, SZ_D);
+        } else {
+            dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->src.params.regs.pri, SCRATCH1, SZ_D);
+        }
+        dst = check_cycles(dst);
+        dst = call(dst, (uint8_t *)m68k_native_addr);
+        //TODO: Finish me
+        //TODO: Fix timing
+        break;
+    case MODE_ABSOLUTE:
+    case MODE_ABSOLUTE_SHORT:
+        dst = cycles(dst, inst->src.addr_mode == MODE_ABSOLUTE ? 12 : 10);
+        dst = check_cycles(dst);
+        dest_addr = get_native_address(opts->native_code_map, inst->src.params.immed);
+        if (!dest_addr) {
+        	opts->deferred = defer_address(opts->deferred, inst->src.params.immed, dst + 1);
+			//dummy address to be replaced later, make sure it generates a 4-byte displacement
+			dest_addr = dst + 256;
+        }
+        dst = jmp(dst, dest_addr);
+        break;
+    }
+	return dst;
+}
+
 uint8_t * translate_m68k_rts(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 {
 	//TODO: Add cycles
@@ -829,6 +863,8 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		return translate_m68k_bsr(dst, inst, opts);
 	} else if(inst->op == M68K_BCC) {
 		return translate_m68k_bcc(dst, inst, opts);
+	} else if(inst->op == M68K_JMP) {
+		return translate_m68k_jmp(dst, inst, opts);
 	} else if(inst->op == M68K_RTS) {
 		return translate_m68k_rts(dst, inst, opts);
 	} else if(inst->op == M68K_DBCC) {

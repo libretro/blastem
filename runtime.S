@@ -124,6 +124,16 @@ m68k_modified_ret_addr:
 	mov $1, %rdi
 	call exit
 
+dyn_addr_msg:
+	.asciz "Program needs dynamically calculated native address\n"
+	
+	.global m68k_native_addr
+m68k_native_addr:
+	lea dyn_addr_msg(%rip), %rdi
+	call puts
+	mov $1, %rdi
+	call exit
+
 	.global m68k_save_context
 m68k_save_context:
 	mov %bl, 1(%rsi) /* N Flag */
