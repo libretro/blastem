@@ -61,6 +61,15 @@ int8_t native_reg(m68k_op_info * op, x86_68k_options * opts)
 	return -1;
 }
 
+//must be called with an m68k_op_info that uses a register
+size_t reg_offset(m68k_op_info *op)
+{
+	if (op->addr_mode == MODE_REG) {
+		return offsetof(m68k_context, dregs) + sizeof(uint32_t) * op->params.regs.pri;
+	}
+	return offsetof(m68k_context, aregs) + sizeof(uint32_t) * op->params.regs.pri;
+}
+
 void print_regs_exit(m68k_context * context)
 {
 	printf("XNVZC\n%d%d%d%d%d\n", context->flags[0], context->flags[1], context->flags[2], context->flags[3], context->flags[4]);
@@ -94,9 +103,9 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		    
 			ea->mode = MODE_REG_DISPLACE8;
 			ea->base = CONTEXT;
-			ea->disp = (inst->src.addr_mode == MODE_REG ? offsetof(m68k_context, dregs) : offsetof(m68k_context, aregs)) + 4 * inst->src.params.regs.pri;
+			ea->disp = reg_offset(&(inst->src));
 		} else {
-			out = mov_rdisp8r(out, CONTEXT, (inst->src.addr_mode == MODE_REG ? offsetof(m68k_context, dregs) : offsetof(m68k_context, aregs)) + 4 * inst->src.params.regs.pri, SCRATCH1, inst->extra.size);
+			out = mov_rdisp8r(out, CONTEXT, reg_offset(&(inst->src)), SCRATCH1, inst->extra.size);
 			ea->mode = MODE_REG_DIRECT;
 			ea->base = SCRATCH1;
 		}
@@ -107,7 +116,7 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
 			out = sub_ir(out, inc_amount, opts->aregs[inst->src.params.regs.pri], SZ_D);
 		} else {
-			out = sub_irdisp8(out, inc_amount, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->src.params.regs.pri, SZ_D);
+			out = sub_irdisp8(out, inc_amount, CONTEXT, reg_offset(&(inst->src)), SZ_D);
 		}
 		out = check_cycles(out);
 	case MODE_AREG_INDIRECT:
@@ -115,7 +124,7 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
 			out = mov_rr(out, opts->aregs[inst->src.params.regs.pri], SCRATCH1, SZ_D);
 		} else {
-			out = mov_rdisp8r(out, CONTEXT,  offsetof(m68k_context, aregs) + 4 * inst->src.params.regs.pri, SCRATCH1, SZ_D);
+			out = mov_rdisp8r(out, CONTEXT,  reg_offset(&(inst->src)), SCRATCH1, SZ_D);
 		}
 		switch (inst->extra.size)
 		{
@@ -135,7 +144,7 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 			if (opts->aregs[inst->src.params.regs.pri] >= 0) {
 				out = add_ir(out, inc_amount, opts->aregs[inst->src.params.regs.pri], SZ_D);
 			} else {
-				out = add_irdisp8(out, inc_amount, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->src.params.regs.pri, SZ_D);
+				out = add_irdisp8(out, inc_amount, CONTEXT, reg_offset(&(inst->src)), SZ_D);
 			}
 		}
 		ea->mode = MODE_REG_DIRECT;
@@ -175,21 +184,21 @@ uint8_t * translate_m68k_dst(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 	case MODE_AREG:
 		ea->mode = MODE_REG_DISPLACE8;
 		ea->base = CONTEXT;
-		ea->disp = (inst->dst.addr_mode == MODE_REG ? offsetof(m68k_context, dregs) : offsetof(m68k_context, aregs)) + 4 * inst->dst.params.regs.pri;
+		ea->disp = reg_offset(&(inst->dst));
 		break;
 	case MODE_AREG_PREDEC:
 		dec_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : 1);
 		if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
 			out = sub_ir(out, dec_amount, opts->aregs[inst->dst.params.regs.pri], SZ_D);
 		} else {
-			out = sub_irdisp8(out, dec_amount, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->dst.params.regs.pri, SZ_D);
+			out = sub_irdisp8(out, dec_amount, CONTEXT, reg_offset(&(inst->dst)), SZ_D);
 		}
 	case MODE_AREG_INDIRECT:
 	case MODE_AREG_POSTINC:
 		if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
 			out = mov_rr(out, opts->aregs[inst->dst.params.regs.pri], SCRATCH1, SZ_D);
 		} else {
-			out = mov_rdisp8r(out, CONTEXT,  offsetof(m68k_context, aregs) + 4 * inst->dst.params.regs.pri, SCRATCH1, SZ_D);
+			out = mov_rdisp8r(out, CONTEXT, reg_offset(&(inst->dst)), SCRATCH1, SZ_D);
 		}
 		switch (inst->extra.size)
 		{
@@ -207,7 +216,7 @@ uint8_t * translate_m68k_dst(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
 			out = mov_rr(out, opts->aregs[inst->dst.params.regs.pri], SCRATCH2, SZ_D);
 		} else {
-			out = mov_rdisp8r(out, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->dst.params.regs.pri, SCRATCH2, SZ_D);
+			out = mov_rdisp8r(out, CONTEXT, reg_offset(&(inst->dst)), SCRATCH2, SZ_D);
 		}
 		
 		if (inst->src.addr_mode == MODE_AREG_POSTINC) {
@@ -215,7 +224,7 @@ uint8_t * translate_m68k_dst(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 			if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
 				out = add_ir(out, inc_amount, opts->aregs[inst->dst.params.regs.pri], SZ_D);
 			} else {
-				out = add_irdisp8(out, inc_amount, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->dst.params.regs.pri, SZ_D);
+				out = add_irdisp8(out, inc_amount, CONTEXT, reg_offset(&(inst->dst)), SZ_D);
 			}
 		}
 		ea->mode = MODE_REG_DIRECT;
@@ -347,10 +356,10 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 				dst = mov_ir(dst, src.disp, reg, inst->extra.size);
 			}
 		} else if(src.mode == MODE_REG_DIRECT) {
-			printf("mov_rrdisp8 from reg %d to offset %d from reg %d (%d)\n", src.base, (int)(inst->dst.addr_mode == MODE_REG ? offsetof(m68k_context, dregs) : offsetof(m68k_context, aregs)) + 4 * inst->dst.params.regs.pri, CONTEXT, inst->dst.params.regs.pri);
-			dst = mov_rrdisp8(dst, src.base, CONTEXT, (inst->dst.addr_mode == MODE_REG ? offsetof(m68k_context, dregs) : offsetof(m68k_context, aregs)) + 4 * inst->dst.params.regs.pri, inst->extra.size);
+			printf("mov_rrdisp8 from reg %d to offset %d from reg %d (%d)\n", src.base, (int)reg_offset(&(inst->dst)), CONTEXT, inst->dst.params.regs.pri);
+			dst = mov_rrdisp8(dst, src.base, CONTEXT, reg_offset(&(inst->dst)), inst->extra.size);
 		} else {
-			dst = mov_irdisp8(dst, src.disp, CONTEXT, (inst->dst.addr_mode == MODE_REG ? offsetof(m68k_context, dregs) : offsetof(m68k_context, aregs)) + 4 * inst->dst.params.regs.pri, inst->extra.size);
+			dst = mov_irdisp8(dst, src.disp, CONTEXT, reg_offset(&(inst->dst)), inst->extra.size);
 		}
 		break;
 	case MODE_AREG_PREDEC:
@@ -358,14 +367,14 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 		if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
 			dst = sub_ir(dst, dec_amount, opts->aregs[inst->dst.params.regs.pri], SZ_D);
 		} else {
-			dst = sub_irdisp8(dst, dec_amount, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->dst.params.regs.pri, SZ_D);
+			dst = sub_irdisp8(dst, dec_amount, CONTEXT, reg_offset(&(inst->dst)), SZ_D);
 		}
 	case MODE_AREG_INDIRECT:
 	case MODE_AREG_POSTINC:
 		if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
 			dst = mov_rr(dst, opts->aregs[inst->dst.params.regs.pri], SCRATCH2, SZ_D);
 		} else {
-			dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->dst.params.regs.pri, SCRATCH2, SZ_D);
+			dst = mov_rdisp8r(dst, CONTEXT, reg_offset(&(inst->dst)), SCRATCH2, SZ_D);
 		}
 		if (src.mode == MODE_REG_DIRECT) {
 			if (src.base != SCRATCH1) {
@@ -393,7 +402,7 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 			if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
 				dst = add_ir(dst, inc_amount, opts->aregs[inst->dst.params.regs.pri], SZ_D);
 			} else {
-				dst = add_irdisp8(dst, inc_amount, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->dst.params.regs.pri, SZ_D);
+				dst = add_irdisp8(dst, inc_amount, CONTEXT, reg_offset(&(inst->dst)), SZ_D);
 			}
 		}
 		break;
@@ -411,6 +420,70 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 	dst = setcc_r(dst, CC_Z, FLAG_Z);
 	dst = setcc_r(dst, CC_S, FLAG_N);
 	dst = check_cycles(dst);
+	return dst;
+}
+
+uint8_t * translate_m68k_clr(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
+{
+	dst = mov_ir(dst, 0, FLAG_N, SZ_B);
+	dst = mov_ir(dst, 0, FLAG_V, SZ_B);
+	dst = mov_ir(dst, 0, FLAG_C, SZ_B);
+	dst = mov_ir(dst, 1, FLAG_Z, SZ_B);
+	uint8_t reg = native_reg(&(inst->dst), opts);
+	if (reg >= 0) {
+		dst = xor_rr(dst, reg, reg, inst->extra.size);
+		return check_cycles(dst);
+	}
+	int32_t dec_amount,inc_amount;
+	switch (inst->dst.addr_mode)
+	{
+	case MODE_REG:
+	case MODE_AREG:
+		dst = cycles(dst, (inst->extra.size == OPSIZE_LONG ? 6 : 4));
+		dst = mov_irdisp8(dst, 0, CONTEXT, reg_offset(&(inst->dst)), inst->extra.size);
+		dst = check_cycles(dst);
+		break;
+	case MODE_AREG_PREDEC:
+		dst = cycles(dst, PREDEC_PENALTY);
+		dec_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : 1);
+		if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
+			dst = sub_ir(dst, dec_amount, opts->aregs[inst->dst.params.regs.pri], SZ_D);
+		} else {
+			dst = sub_irdisp8(dst, dec_amount, CONTEXT, reg_offset(&(inst->dst)), SZ_D);
+		}
+	case MODE_AREG_INDIRECT:
+	case MODE_AREG_POSTINC:
+		//add cycles for prefetch and wasted read
+		dst = cycles(dst, (inst->extra.size == OPSIZE_LONG ? 12 : 8));
+		dst = check_cycles(dst);
+		if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
+			dst = mov_rr(dst, opts->aregs[inst->dst.params.regs.pri], SCRATCH2, SZ_D);
+		} else {
+			dst = mov_rdisp8r(dst, CONTEXT, reg_offset(&(inst->dst)), SCRATCH2, SZ_D);
+		}
+		dst = xor_rr(dst, SCRATCH1, SCRATCH1, SZ_D);
+		switch (inst->extra.size)
+		{
+		case OPSIZE_BYTE:
+			dst = call(dst, (char *)m68k_write_byte);
+			break;
+		case OPSIZE_WORD:
+			dst = call(dst, (char *)m68k_write_word);
+			break;
+		case OPSIZE_LONG:
+			dst = call(dst, (char *)m68k_write_long_highfirst);
+			break;
+		}
+		if (inst->dst.addr_mode == MODE_AREG_POSTINC) {
+			inc_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : 1);
+			if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
+				dst = add_ir(dst, inc_amount, opts->aregs[inst->dst.params.regs.pri], SZ_D);
+			} else {
+				dst = add_irdisp8(dst, inc_amount, CONTEXT, reg_offset(&(inst->dst)), SZ_D);
+			}
+		}
+		break;
+	}
 	return dst;
 }
 
@@ -638,6 +711,7 @@ uint8_t * translate_m68k_dbcc(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 		dst = cycles(dst, 4);
 	}
 	dst = check_cycles(dst);
+	return dst;
 }
 
 typedef uint8_t * (*shift_ir_t)(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size);
@@ -759,6 +833,8 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		return translate_m68k_rts(dst, inst, opts);
 	} else if(inst->op == M68K_DBCC) {
 		return translate_m68k_dbcc(dst, inst, opts);
+	} else if(inst->op == M68K_CLR) {
+		return translate_m68k_clr(dst, inst, opts);
 	}
 	x86_ea src_op, dst_op;
 	if (inst->src.addr_mode != MODE_UNUSED) {
@@ -840,7 +916,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	case M68K_BSET:
 	case M68K_BTST:
 	case M68K_CHK:
-	case M68K_CLR:
 		break;
 	case M68K_CMP:
 		dst = cycles(dst, BUS);
