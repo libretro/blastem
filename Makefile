@@ -1,6 +1,9 @@
 LIBS=sdl
 
-all : dis trans stateview
+all : dis trans stateview blastem
+
+blastem : blastem.o 68kinst.o gen_x86.o m68k_to_x86.o runtime.o mem.o vdp.o render_sdl.o
+	$(CC) -o blastem blastem.o 68kinst.o gen_x86.o m68k_to_x86.o runtime.o mem.o vdp.o render_sdl.o `pkg-config --libs $(LIBS)`
 
 dis : dis.o 68kinst.o
 	$(CC) -o dis dis.o 68kinst.o
