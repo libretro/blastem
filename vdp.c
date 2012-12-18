@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MCLKS_LINE 3420
 #define NTSC_ACTIVE 225
 #define PAL_ACTIVE 241
 #define BUF_BIT_PRIORITY 0x40
@@ -20,16 +19,24 @@
 #define FLAG_CAN_MASK  0x2
 #define FLAG_MASKED    0x4
 #define FLAG_WINDOW    0x8
+#define FLAG_PENDING   0x10
+#define FLAG_UNUSED_SLOT 0x20
+
+#define FIFO_SIZE 4
 
 void init_vdp_context(vdp_context * context)
 {
 	memset(context, 0, sizeof(context));
 	context->vdpmem = malloc(VRAM_SIZE);
 	context->framebuf = malloc(FRAMEBUF_SIZE);
+	memset(context->framebuf, 0, FRAMEBUF_SIZE);
 	context->linebuf = malloc(LINEBUF_SIZE + SCROLL_BUFFER_SIZE*2);
+	memset(context->linebuf, 0, LINEBUF_SIZE + SCROLL_BUFFER_SIZE*2);
 	context->tmp_buf_a = context->linebuf + LINEBUF_SIZE;
 	context->tmp_buf_b = context->tmp_buf_a + SCROLL_BUFFER_SIZE;
 	context->sprite_draws = MAX_DRAWS;
+	context->fifo_cur = malloc(sizeof(fifo_entry) * FIFO_SIZE);
+	context->fifo_end = context->fifo_cur + FIFO_SIZE;
 }
 
 void render_sprite_cells(vdp_context * context)
@@ -168,9 +175,52 @@ void read_sprite_x(uint32_t line, vdp_context * context)
 	}
 }
 
+#define VRAM_READ 0
+#define VRAM_WRITE 1
+#define CRAM_READ 8
+#define CRAM_WRITE 3
+#define VSRAM_READ 4
+#define VSRAM_WRITE 5
+
 void external_slot(vdp_context * context)
 {
-	//TODO: Implement me
+	fifo_entry * start = (context->fifo_end - FIFO_SIZE);
+	//TODO: Implement DMA
+	if (context->fifo_cur != start && start->cycle <= context->cycles) {
+		switch (context->cd & 0x7)
+		{
+		case VRAM_WRITE:
+			if (start->partial) {
+				printf("VRAM Write: %X to %X\n", start->value, context->address ^ 1);
+				context->vdpmem[context->address ^ 1] = start->value;
+			} else {
+				printf("VRAM Write: %X to %X\n", start->value >> 8, context->address);
+				context->vdpmem[context->address] = start->value >> 8;
+				start->partial = 1;
+				//skip auto-increment and removal of entry from fifo
+				return;
+			}
+			break;
+		case CRAM_WRITE:
+			printf("CRAM Write: %X to %X\n", start->value, context->address);
+			context->cram[context->address & (CRAM_SIZE-1)] = start->value;
+			break;
+		case VSRAM_WRITE:
+			if ((context->address & 63) < VSRAM_SIZE) {
+				printf("VSRAM Write: %X to %X\n", start->value, context->address);
+				context->vsram[context->address & 63] = start->value;
+			}
+			break;
+		}
+		context->address += context->regs[REG_AUTOINC];
+		fifo_entry * cur = start+1;
+		if (cur < context->fifo_cur) {
+			memmove(start, cur, sizeof(fifo_entry) * (context->fifo_cur - cur));
+		}
+		context->fifo_cur -= 1;
+	} else {
+		context->flags |= FLAG_UNUSED_SLOT;
+	}
 }
 
 #define WINDOW_RIGHT 0x80
@@ -213,7 +263,7 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 			}
 			offset = address + line_offset + (((column - 2) * 2) & mask);
 			context->col_1 = (context->vdpmem[offset] << 8) | context->vdpmem[offset+1];
-			printf("Window | top: %d, bot: %d, left: %d, right: %d, base: %X, line: %X offset: %X, tile: %X, reg: %X\n", top_line, bottom_line, left_col, right_col, address, line_offset, offset, ((context->col_1 & 0x3FF) << 5), context->regs[REG_WINDOW]);
+			//printf("Window | top: %d, bot: %d, left: %d, right: %d, base: %X, line: %X offset: %X, tile: %X, reg: %X\n", top_line, bottom_line, left_col, right_col, address, line_offset, offset, ((context->col_1 & 0x3FF) << 5), context->regs[REG_WINDOW]);
 			offset = address + line_offset + (((column - 1) * 2) & mask);
 			context->col_2 = (context->vdpmem[offset] << 8) | context->vdpmem[offset+1];
 			context->v_offset = (line) & 0x7;
@@ -524,7 +574,7 @@ void vdp_h40(uint32_t line, uint32_t linecyc, vdp_context * context)
 		address += line * 4;
 		context->hscroll_a = context->vdpmem[address] << 8 | context->vdpmem[address+1];
 		context->hscroll_b = context->vdpmem[address+2] << 8 | context->vdpmem[address+3];
-		printf("%d: HScroll A: %d, HScroll B: %d\n", line, context->hscroll_a, context->hscroll_b);
+		//printf("%d: HScroll A: %d, HScroll B: %d\n", line, context->hscroll_a, context->hscroll_b);
 		break;
 	case 36:
 	//!HSYNC high
@@ -743,16 +793,58 @@ void latch_mode(vdp_context * context)
 	context->latched_mode = (context->regs[REG_MODE_4] & 0x81) | (context->regs[REG_MODE_2] & BIT_PAL);
 }
 
+#define DISPLAY_ENABLE 0x40
+
+int is_refresh(vdp_context * context)
+{
+	uint32_t linecyc = context->cycles % MCLKS_LINE;
+	if (context->latched_mode & BIT_H40) {
+		linecyc = linecyc/16;
+		return (linecyc == 73 || linecyc == 105 || linecyc == 137 || linecyc == 169 || linecyc == 201);
+	} else {
+		linecyc = linecyc/20;
+		return (linecyc == 66 || linecyc == 98 || linecyc == 130 || linecyc == 162);
+	}
+}
+
+void check_render_bg(vdp_context * context, int32_t line)
+{
+	if (line > 0) {
+		line -= 1;
+		uint16_t * start = NULL, *end = NULL;
+		uint32_t linecyc = (context->cycles % MCLKS_LINE);
+		if (context->latched_mode & BIT_H40) {
+			linecyc /= 16;
+			if (linecyc >= 55 && linecyc <= 207 && !((linecyc-55) % 8)) {
+				uint32_t x = ((linecyc-55)&(~0xF))*2;
+				start = context->framebuf + line * 320 + x;
+				end = start + 16;
+			}
+		} else {
+			linecyc /= 20;
+			if (linecyc >= 48 && linecyc <= 168 && !((linecyc-48) % 8)) {
+				uint32_t x = ((linecyc-48)&(~0xF))*2;
+				start = context->framebuf + line * 256 + x;
+				end = start + 16;
+			}
+		}
+		while (start != end) {
+			*start = context->regs[REG_BG_COLOR] & 0x3F;
+			++start;
+		}
+	}
+}
+
 void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 {
 	while(context->cycles < target_cycles)
 	{
 		uint32_t line = context->cycles / MCLKS_LINE;
 		uint32_t active_lines = context->latched_mode & BIT_PAL ? PAL_ACTIVE : NTSC_ACTIVE;
-		if (line < active_lines) {
-			if (!line) {
-				latch_mode(context);
-			}
+		if (!line) {
+			latch_mode(context);
+		}
+		if (line < active_lines && context->regs[REG_MODE_2] & DISPLAY_ENABLE) {
 			//first sort-of active line is treated as 255 internally
 			//it's used for gathering sprite info for line 
 			line = (line - 1) & 0xFF;
@@ -762,15 +854,26 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 			if (context->latched_mode & BIT_H40){
 				//TODO: Deal with nasty clock switching during HBLANK
 				linecyc = linecyc/16;
-				context->cycles += 16;
 				vdp_h40(line, linecyc, context);
+				context->cycles += 16;
 			} else {
 				linecyc = linecyc/20;
-				context->cycles += 20;
 				vdp_h32(line, linecyc, context);
+				context->cycles += 20;
 			}
 		} else {
-			//TODO: Empty FIFO
+			if (!is_refresh(context)) {
+				external_slot(context);
+			}
+			if (line < active_lines) {
+				check_render_bg(context, line);
+			}
+			if (context->latched_mode & BIT_H40){
+				//TODO: Deal with nasty clock switching during HBLANK
+				context->cycles += 16;
+			} else {
+				context->cycles += 20;
+			}
 		}
 	}
 }
@@ -780,6 +883,94 @@ uint32_t vdp_run_to_vblank(vdp_context * context)
 	uint32_t target_cycles = ((context->latched_mode & BIT_PAL) ? PAL_ACTIVE : NTSC_ACTIVE) * MCLKS_LINE;
 	vdp_run_context(context, target_cycles);
 	return context->cycles;
+}
+
+void vdp_control_port_write(vdp_context * context, uint16_t value)
+{
+	printf("control port write: %X\n", value);
+	if (context->flags & FLAG_PENDING) {
+		context->address = (context->address & 0x3FFF) | (value << 14);
+		context->cd = (context->cd & 0x3) | ((value >> 2) & 0x3C);
+		context->flags &= ~FLAG_PENDING;
+	} else {
+		if ((value & 0xC000) == 0x8000) {
+			//Register write
+			uint8_t reg = (value >> 8) & 0x1F;
+			if (reg < VDP_REGS) {
+				printf("register %d set to %X\n", reg, value);
+				context->regs[reg] = value;
+			}
+		} else {
+			context->flags |= FLAG_PENDING;
+			context->address = (context->address &0xC000) | (value & 0x3FFF);
+			context->cd = (context->cd &0x3C) | (value >> 14);
+		}
+	}
+}
+
+void vdp_data_port_write(vdp_context * context, uint16_t value)
+{
+	printf("data port write: %X\n", value);
+	context->flags &= ~FLAG_PENDING;
+	if (context->fifo_cur == context->fifo_end) {
+		printf("FIFO full, waiting for space before next write at cycle %X\n", context->cycles);
+	}
+	while (context->fifo_cur == context->fifo_end) {
+		vdp_run_context(context, context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20));
+	}
+	context->fifo_cur->cycle = context->cycles;
+	context->fifo_cur->value = value;
+	context->fifo_cur->partial = 0;
+	context->fifo_cur++;
+}
+
+uint16_t vdp_control_port_read(vdp_context * context)
+{
+	context->flags &= ~FLAG_PENDING;
+	uint16_t value = 0x3400;
+	if (context->fifo_cur == (context->fifo_end - FIFO_SIZE)) {
+		value |= 0x200;
+	}
+	if (context->fifo_cur == context->fifo_end) {
+		value |= 0x100;
+	}
+	//TODO: Lots of other bits in status port
+	return value;
+}
+
+uint16_t vdp_data_port_read(vdp_context * context)
+{
+	context->flags &= ~FLAG_PENDING;
+	if (!(context->cd & 1)) {
+		return 0;
+	}
+	//Not sure if the FIFO should be drained before processing a read or not, but it would make sense
+	context->flags &= ~FLAG_UNUSED_SLOT;
+	while (!(context->flags & FLAG_UNUSED_SLOT)) {
+		vdp_run_context(context, context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20));
+	}
+	uint16_t value = 0;
+	switch (context->cd & 0x7)
+	{
+	case VRAM_READ:
+		value = context->vdpmem[context->address] << 8;
+		context->flags &= ~FLAG_UNUSED_SLOT;
+		while (!(context->flags & FLAG_UNUSED_SLOT)) {
+			vdp_run_context(context, context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20));
+		}
+		value |= context->vdpmem[context->address ^ 1];
+		break;
+	case CRAM_READ:
+		value = context->cram[(context->address/2) & (CRAM_SIZE-1)];
+		break;
+	case VSRAM_READ:
+		if (((context->address / 2) & 63) < VSRAM_SIZE) {
+			value = context->vsram[context->address & 63];
+		}
+		break;
+	}
+	context->address += context->regs[REG_AUTOINC];
+	return value;
 }
 
 #define GST_VDP_REGS 0xFA
@@ -802,3 +993,4 @@ void vdp_load_savestate(vdp_context * context, FILE * state_file)
 	fseek(state_file, GST_VDP_MEM, SEEK_SET);
 	fread(context->vdpmem, 1, VRAM_SIZE, state_file);
 }
+

@@ -1223,7 +1223,11 @@ int m68k_disasm(m68kinst * decoded, char * dst)
 		strcpy(dst+ret, cond_mnem[decoded->extra.cond]);
 		ret = strlen(dst);
 		if (decoded->op != M68K_SCC) {
-			ret += sprintf(dst+ret, " #%d <%X>", decoded->src.params.immed, decoded->address + 2 + decoded->src.params.immed);
+			if (decoded->op == M68K_DBCC) {
+				ret += sprintf(dst+ret, " d%d, #%d <%X>", decoded->dst.params.regs.pri, decoded->src.params.immed, decoded->address + 2 + decoded->src.params.immed);
+			} else {
+				ret += sprintf(dst+ret, " #%d <%X>", decoded->src.params.immed, decoded->address + 2 + decoded->src.params.immed);
+			}
 			return ret;
 		}
 		break;

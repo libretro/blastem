@@ -6,6 +6,8 @@
 SDL_Surface *screen;
 uint8_t render_dbg = 0;
 
+uint32_t last_frame = 0;
+
 void render_init(int width, int height)
 {
 	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -31,6 +33,7 @@ void render_context(vdp_context * context)
 	uint16_t *buf_16;
 	uint32_t *buf_32; 
 	uint8_t b,g,r;
+	last_frame = SDL_GetTicks();
 	if (SDL_MUSTLOCK(screen)) {
 		if (SDL_LockSurface(screen) < 0) {
 			return;
@@ -43,7 +46,6 @@ void render_context(vdp_context * context)
     } else {
     	repeat_y = repeat_x;
     }
-    printf("w: %d, h: %d, repeat_x: %d, repeat_y: %d\n", screen->clip_rect.w, screen->clip_rect.h, repeat_x, repeat_y);
     switch (screen->format->BytesPerPixel) {
     case 2:
         buf_16 = (uint16_t *)screen->pixels;
@@ -150,4 +152,39 @@ void render_wait_quit(vdp_context * context)
 		}
 	}
 }
+
+#define FRAME_DELAY 16
+#define MIN_DELAY 10
+
+void wait_render_frame(vdp_context * context)
+{
+	SDL_Event event;
+	while(SDL_PollEvent(&event)) {
+		switch (event.type) {
+		case SDL_KEYDOWN:
+			//TODO: Update emulated gamepads
+			if (event.key.keysym.sym == SDLK_LEFTBRACKET) {
+				render_dbg = !render_dbg;
+				render_context(context);
+			}
+			break;
+		case SDL_QUIT:
+			exit(0);
+		}
+	}
+	//TODO: Adjust frame delay so we actually get 60 FPS rather than 62.5 FPS
+	uint32_t current = SDL_GetTicks();
+	uint32_t desired = last_frame + FRAME_DELAY;
+	if (current < desired) {
+		uint32_t delay = last_frame + FRAME_DELAY - current;
+		//TODO: Calculate MIN_DELAY at runtime
+		if (delay > MIN_DELAY) {
+			SDL_Delay((delay/MIN_DELAY)*MIN_DELAY);
+		}
+		while ((desired) < SDL_GetTicks()) {
+		}
+	}
+	render_context(context);
+}
+
 
