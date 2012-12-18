@@ -35,6 +35,8 @@ typedef struct {
 	uint32_t		target_cycle;
 	uint32_t		current_cycle;
 	uint16_t        *mem_pointers[NUM_MEM_AREAS];
+	void            *next_context;
+	uint16_t        value;
 	native_map_slot *native_code_map;
 	void            *options;
 } m68k_context;
@@ -44,3 +46,5 @@ uint8_t * translate_m68k_stream(uint8_t * dst, uint8_t * dst_end, uint32_t addre
 void start_68k_context(m68k_context * context, uint32_t address);
 void init_x86_68k_opts(x86_68k_options * opts);
 void init_68k_context(m68k_context * context, native_map_slot * native_code_map, void * opts);
+void m68k_reset(m68k_context * context);
+
