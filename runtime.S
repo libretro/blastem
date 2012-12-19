@@ -17,6 +17,7 @@ do_vdp_port_write:
 	ret
 
 do_vdp_port_read:
+	mov %ecx, %edi
 	call m68k_save_context
 	call vdp_port_read
 	mov %rax, %rsi
@@ -28,7 +29,7 @@ bad_access_msg:
 	.asciz "Program tried to access illegal 68K address %X\n"
 	
 	.global m68k_write_word
-	.global vdp_psg_w
+	.global try_fifo_write
 m68k_write_word:
 	and $0xFFFFFF, %rdi
 	cmp $0x400000, %edi
@@ -133,7 +134,7 @@ m68k_read_word_scratch1:
 	jle cart
 	cmp $0xE00000, %ecx
 	jge workram
-	cmp $0xC00000, %edi
+	cmp $0xC00000, %ecx
 	jge vdp_psg
 	xor %cx, %cx
 	dec %cx
@@ -143,9 +144,9 @@ workram:
 	mov (%r9, %rcx), %cx
 	jmp inccycles
 vdp_psg:
-	test $0x2700E0, %edi
+	test $0x2700E0, %ecx
 	jnz crash
-	and $0x1F, %edi
+	and $0x1F, %ecx
 	jmp do_vdp_port_read
 cart:
 	mov (%r8, %rcx), %cx
