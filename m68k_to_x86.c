@@ -159,7 +159,6 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 			out = cycles(out, BUS);
 		}
 		out = mov_ir(out, inst->src.params.immed, SCRATCH1, SZ_D);
-		out = check_cycles(out);
 		switch (inst->extra.size)
 		{
 		case OPSIZE_BYTE:
@@ -461,7 +460,6 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 		dst = cmp_ir(dst, 0, flags_reg, inst->extra.size);
 		dst = setcc_r(dst, CC_Z, FLAG_Z);
 		dst = setcc_r(dst, CC_S, FLAG_N);
-		dst = check_cycles(dst);
 		switch (inst->extra.size)
 		{
 		case OPSIZE_BYTE:
