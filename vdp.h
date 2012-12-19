@@ -70,7 +70,7 @@ typedef struct {
 	fifo_entry  *fifo_end;
 	uint16_t    address;
 	uint8_t     cd;
-	uint8_t		flags;
+	uint8_t	    flags;
 	//cycle count in MCLKs
 	uint32_t    cycles;
 	uint8_t     *vdpmem;
@@ -102,6 +102,7 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles);
 //runs from current cycle count to VBLANK for the current mode, returns ending cycle count
 uint32_t vdp_run_to_vblank(vdp_context * context);
 void vdp_load_savestate(vdp_context * context, FILE * state_file);
+void vdp_save_state(vdp_context * context, FILE * outfile);
 void vdp_control_port_write(vdp_context * context, uint16_t value);
 void vdp_data_port_write(vdp_context * context, uint16_t value);
 uint16_t vdp_control_port_read(vdp_context * context);

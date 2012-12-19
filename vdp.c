@@ -203,12 +203,12 @@ void external_slot(vdp_context * context)
 			break;
 		case CRAM_WRITE:
 			printf("CRAM Write: %X to %X\n", start->value, context->address);
-			context->cram[context->address & (CRAM_SIZE-1)] = start->value;
+			context->cram[(context->address/2) & (CRAM_SIZE-1)] = start->value;
 			break;
 		case VSRAM_WRITE:
-			if ((context->address & 63) < VSRAM_SIZE) {
+			if (((context->address/2) & 63) < VSRAM_SIZE) {
 				printf("VSRAM Write: %X to %X\n", start->value, context->address);
-				context->vsram[context->address & 63] = start->value;
+				context->vsram[(context->address/2) & 63] = start->value;
 			}
 			break;
 		}
@@ -992,5 +992,24 @@ void vdp_load_savestate(vdp_context * context, FILE * state_file)
 	}
 	fseek(state_file, GST_VDP_MEM, SEEK_SET);
 	fread(context->vdpmem, 1, VRAM_SIZE, state_file);
+}
+
+void vdp_save_state(vdp_context * context, FILE * outfile)
+{
+	uint8_t tmp_buf[CRAM_SIZE*2];
+	fseek(outfile, GST_VDP_REGS, SEEK_SET);
+	fwrite(context->regs, 1, VDP_REGS, outfile);
+	for (int i = 0; i < CRAM_SIZE; i++) {
+		tmp_buf[i*2] = context->cram[i];
+		tmp_buf[i*2+1] = context->cram[i] >> 8;
+	}
+	fwrite(tmp_buf, 1, sizeof(tmp_buf), outfile);
+	for (int i = 0; i < VSRAM_SIZE; i++) {
+		tmp_buf[i*2] = context->vsram[i];
+		tmp_buf[i*2+1] = context->vsram[i] >> 8;
+	}
+	fwrite(tmp_buf, 2, VSRAM_SIZE, outfile);
+	fseek(outfile, GST_VDP_MEM, SEEK_SET);
+	fwrite(context->vdpmem, 1, VRAM_SIZE, outfile);
 }
 
