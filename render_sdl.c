@@ -86,18 +86,19 @@ void render_context(vdp_context * context)
     	break;
     case 4:
         buf_32 = (uint32_t *)screen->pixels;
-        for (int y = 0; y < 240; y++) {
-        	for (int i = 0; i < repeat_y; i++,buf_32 += screen->pitch/4) {
-        		uint32_t *line = buf_32;
-		    	for (int x = 0; x < 320; x++) {
-		    		uint16_t gen_color = context->framebuf[y * 320 + x];
-		    		if (render_dbg) {
-		    			r = g = b = 0;
-		    			switch(gen_color & FBUF_SRC_MASK)
-		    			{
-		    			case FBUF_SRC_A:
-		    				g = 127;
-		    				break;
+
+	    for (int y = 0; y < 240; y++) {
+	    	for (int i = 0; i < repeat_y; i++,buf_32 += screen->pitch/4) {
+	    		uint32_t *line = buf_32;
+				for (int x = 0; x < 320; x++) {
+					uint16_t gen_color = context->framebuf[y * 320 + x];
+					if (render_dbg == 1) {
+						r = g = b = 0;
+						switch(gen_color & FBUF_SRC_MASK)
+						{
+						case FBUF_SRC_A:
+							g = 127;
+							break;
 						case FBUF_SRC_W:
 							g = 127;
 							b = 127;
@@ -111,25 +112,28 @@ void render_context(vdp_context * context)
 						case FBUF_SRC_BG:
 							r = 127;
 							b = 127;
-		    			}
-		    			if (gen_color & FBUF_BIT_PRIORITY) {
-		    				b *= 2;
-		    				g *= 2;
-		    				r *= 2;
-		    			}
-		    		} else {
+						}
+						if (gen_color & FBUF_BIT_PRIORITY) {
+							b *= 2;
+							g *= 2;
+							r *= 2;
+						}
+					} else {
+						if (render_dbg == 2) {
+							gen_color = context->cram[(y/30)*8 + x/40];
+						}
 						b = ((gen_color >> 8) & 0xE) * 18;
 						g = ((gen_color >> 4) & 0xE) * 18;
 						r = (gen_color& 0xE) * 18;
 					}
-		    		for (int j = 0; j < repeat_x; j++) {
-		    			*(line++) = SDL_MapRGB(screen->format, r, g, b);
-		    		}
-		    	}
-        	}
-        }
-    	break;
-    }
+					for (int j = 0; j < repeat_x; j++) {
+						*(line++) = SDL_MapRGB(screen->format, r, g, b);
+					}
+				}
+	    	}
+	    }
+		break;
+	}
     if ( SDL_MUSTLOCK(screen) ) {
         SDL_UnlockSurface(screen);
     }
@@ -143,7 +147,10 @@ void render_wait_quit(vdp_context * context)
 		switch (event.type) {
 		case SDL_KEYDOWN:
 			if (event.key.keysym.sym == SDLK_LEFTBRACKET) {
-				render_dbg = !render_dbg;
+				render_dbg++;
+				if (render_dbg == 3) {
+					render_dbg = 0;
+				}
 				render_context(context);
 			}
 			break;
@@ -164,8 +171,16 @@ void wait_render_frame(vdp_context * context)
 		case SDL_KEYDOWN:
 			//TODO: Update emulated gamepads
 			if (event.key.keysym.sym == SDLK_LEFTBRACKET) {
-				render_dbg = !render_dbg;
-				render_context(context);
+				render_dbg++;
+				if (render_dbg == 3) {
+					render_dbg = 0;
+				}
+			} else if(event.key.keysym.sym == SDLK_t) {
+				FILE * outfile = fopen("state.gst", "wb");
+				fwrite("GST\0\0\0\xE0\x40", 1, 8, outfile);
+				vdp_save_state(context, outfile);
+				fclose(outfile);
+				puts("state saved to state.gst");
 			}
 			break;
 		case SDL_QUIT:
