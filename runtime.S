@@ -153,7 +153,12 @@ cart:
 inccycles:
 	add $4, %rax
 	cmp %rbp, %rax
-	jge handle_cycle_limit
+	jge do_limit
+	ret
+do_limit:
+	push %rcx
+	call handle_cycle_limit
+	pop %rcx
 	ret
 	
 	.global m68k_read_long_scratch1
