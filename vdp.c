@@ -26,8 +26,9 @@
 
 void init_vdp_context(vdp_context * context)
 {
-	memset(context, 0, sizeof(context));
+	memset(context, 0, sizeof(*context));
 	context->vdpmem = malloc(VRAM_SIZE);
+	memset(context->vdpmem, 0, VRAM_SIZE);
 	context->framebuf = malloc(FRAMEBUF_SIZE);
 	memset(context->framebuf, 0, FRAMEBUF_SIZE);
 	context->linebuf = malloc(LINEBUF_SIZE + SCROLL_BUFFER_SIZE*2);
@@ -191,10 +192,10 @@ void external_slot(vdp_context * context)
 		{
 		case VRAM_WRITE:
 			if (start->partial) {
-				printf("VRAM Write: %X to %X\n", start->value, context->address ^ 1);
+				//printf("VRAM Write: %X to %X\n", start->value, context->address ^ 1);
 				context->vdpmem[context->address ^ 1] = start->value;
 			} else {
-				printf("VRAM Write: %X to %X\n", start->value >> 8, context->address);
+				//printf("VRAM Write: %X to %X\n", start->value >> 8, context->address);
 				context->vdpmem[context->address] = start->value >> 8;
 				start->partial = 1;
 				//skip auto-increment and removal of entry from fifo
@@ -202,12 +203,12 @@ void external_slot(vdp_context * context)
 			}
 			break;
 		case CRAM_WRITE:
-			printf("CRAM Write: %X to %X\n", start->value, context->address);
+			//printf("CRAM Write: %X to %X\n", start->value, context->address);
 			context->cram[(context->address/2) & (CRAM_SIZE-1)] = start->value;
 			break;
 		case VSRAM_WRITE:
 			if (((context->address/2) & 63) < VSRAM_SIZE) {
-				printf("VSRAM Write: %X to %X\n", start->value, context->address);
+				//printf("VSRAM Write: %X to %X\n", start->value, context->address);
 				context->vsram[(context->address/2) & 63] = start->value;
 			}
 			break;
@@ -887,7 +888,7 @@ uint32_t vdp_run_to_vblank(vdp_context * context)
 
 void vdp_control_port_write(vdp_context * context, uint16_t value)
 {
-	printf("control port write: %X\n", value);
+	//printf("control port write: %X\n", value);
 	if (context->flags & FLAG_PENDING) {
 		context->address = (context->address & 0x3FFF) | (value << 14);
 		context->cd = (context->cd & 0x3) | ((value >> 2) & 0x3C);
@@ -897,7 +898,7 @@ void vdp_control_port_write(vdp_context * context, uint16_t value)
 			//Register write
 			uint8_t reg = (value >> 8) & 0x1F;
 			if (reg < VDP_REGS) {
-				printf("register %d set to %X\n", reg, value);
+				//printf("register %d set to %X\n", reg, value);
 				context->regs[reg] = value;
 			}
 		} else {
@@ -910,11 +911,11 @@ void vdp_control_port_write(vdp_context * context, uint16_t value)
 
 void vdp_data_port_write(vdp_context * context, uint16_t value)
 {
-	printf("data port write: %X\n", value);
+	//printf("data port write: %X\n", value);
 	context->flags &= ~FLAG_PENDING;
-	if (context->fifo_cur == context->fifo_end) {
+	/*if (context->fifo_cur == context->fifo_end) {
 		printf("FIFO full, waiting for space before next write at cycle %X\n", context->cycles);
-	}
+	}*/
 	while (context->fifo_cur == context->fifo_end) {
 		vdp_run_context(context, context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20));
 	}
