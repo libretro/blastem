@@ -1009,7 +1009,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		break;
 	case M68K_BTST:
 		dst = cycles(dst, inst->extra.size == OPSIZE_BYTE ? 4 : 6);
-		if (src_op.mode == MODE_IMMEDIATE) {
+		if (src_op.mode == MODE_IMMED) {
 			if (inst->extra.size == OPSIZE_BYTE) {
 				src_op.disp &= 0x7;
 			}
@@ -1044,7 +1044,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		if (src_op.base == SCRATCH2) {
 			dst = pop_r(dst, SCRATCH2);
 		}
-		dst = m68k_save_result(inst, dst, opts);
 		break;
 	case M68K_CHK:
 		break;
