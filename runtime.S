@@ -31,6 +31,7 @@ bad_access_msg:
 	.global m68k_write_word
 	.global try_fifo_write
 m68k_write_word:
+	call inccycles
 	and $0xFFFFFF, %rdi
 	cmp $0x400000, %edi
 	jle cart_w
@@ -38,14 +39,14 @@ m68k_write_word:
 	jge workram_w
 	cmp $0xC00000, %edi
 	jge vdp_psg_w
-	jmp inccycles
+	ret
 workram_w:
 	and $0xFFFF, %rdi
 	mov %cx, (%r9, %rdi)
-	jmp inccycles
+	ret
 cart_w:
 	mov %cx, (%r8, %rdi)
-	jmp inccycles
+	ret
 vdp_psg_w:
 	test $0x2700E0, %edi
 	jnz crash
@@ -77,7 +78,7 @@ try_fifo_write:
 	andb $0xEF, 19(%rdx)
 	pop %rbx
 	pop %rdx
-	jmp inccycles
+	ret
 fifo_fallback:
 	pop %rbx
 	pop %rdx
@@ -91,6 +92,7 @@ crash:
 
 	.global m68k_write_byte
 m68k_write_byte:
+	call inccycles
 	and $0xFFFFFF, %rdi
 	/* deal with byte swapping */
 	xor $1, %edi
@@ -98,14 +100,14 @@ m68k_write_byte:
 	jle cart_wb
 	cmp $0xE00000, %edi
 	jge workram_wb
-	jmp inccycles
+	ret
 workram_wb:
 	and $0xFFFF, %rdi
 	mov %cl, (%r9, %rdi)
-	jmp inccycles
+	ret
 cart_wb:
 	mov %cl, (%r8, %rdi)
-	jmp inccycles
+	ret
 
 	.global m68k_write_long_lowfirst
 m68k_write_long_lowfirst:
@@ -126,9 +128,24 @@ m68k_write_long_highfirst:
 	pop %rdi
 	add $2, %rdi
 	jmp m68k_write_word
+	
+inccycles:
+	cmp %rbp, %rax
+	jge do_limit
+	add $4, %rax
+	ret
+do_limit:
+	push %rcx
+	push %rdi
+	call handle_cycle_limit
+	pop %rdi
+	pop %rcx
+	add $4, %rax
+	ret
 
 	.global m68k_read_word_scratch1
 m68k_read_word_scratch1:
+	call inccycles
 	and $0xFFFFFF, %rcx
 	cmp $0x400000, %ecx
 	jle cart
@@ -138,11 +155,11 @@ m68k_read_word_scratch1:
 	jge vdp_psg
 	xor %cx, %cx
 	dec %cx
-	jmp inccycles
+	ret
 workram:
 	and $0xFFFF, %rcx
 	mov (%r9, %rcx), %cx
-	jmp inccycles
+	ret
 vdp_psg:
 	test $0x2700E0, %ecx
 	jnz crash
@@ -150,15 +167,6 @@ vdp_psg:
 	jmp do_vdp_port_read
 cart:
 	mov (%r8, %rcx), %cx
-inccycles:
-	add $4, %rax
-	cmp %rbp, %rax
-	jge do_limit
-	ret
-do_limit:
-	push %rcx
-	call handle_cycle_limit
-	pop %rcx
 	ret
 	
 	.global m68k_read_long_scratch1
@@ -176,6 +184,7 @@ m68k_read_long_scratch1:
 
 	.global m68k_read_byte_scratch1
 m68k_read_byte_scratch1:
+	call inccycles
 	and $0xFFFFFF, %rcx
 	/* deal with byte swapping */
 	xor $1, %ecx
@@ -185,14 +194,14 @@ m68k_read_byte_scratch1:
 	jge workram_b
 	xor %cl, %cl
 	dec %cl
-	jmp inccycles
+	ret
 workram_b:
 	and $0xFFFF, %rcx
 	mov (%r9, %rcx), %cl
-	jmp inccycles
+	ret
 cart_b:
 	mov (%r8, %rcx), %cl
-	jmp inccycles
+	ret
 	
 ret_addr_msg:
 	.asciz "Program modified return address on stack: found %X, expected %X\n"

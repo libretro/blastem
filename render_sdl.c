@@ -202,6 +202,8 @@ void wait_render_frame(vdp_context * context)
 		}
 	}
 	render_context(context);
+	/*
+	//TODO: Figure out why this causes segfaults
 	frame_counter++;
 	if ((last_frame - start) > 1000) {
 		if (start) {
@@ -210,7 +212,7 @@ void wait_render_frame(vdp_context * context)
 		}
 		start = last_frame;
 		frame_counter = 0;
-	}
+	}*/
 }
 
 
