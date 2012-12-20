@@ -195,7 +195,7 @@ void external_slot(vdp_context * context)
 				//printf("VRAM Write: %X to %X\n", start->value, context->address ^ 1);
 				context->vdpmem[context->address ^ 1] = start->value;
 			} else {
-				//printf("VRAM Write: %X to %X\n", start->value >> 8, context->address);
+				//printf("VRAM Write High: %X to %X\n", start->value >> 8, context->address);
 				context->vdpmem[context->address] = start->value >> 8;
 				start->partial = 1;
 				//skip auto-increment and removal of entry from fifo
@@ -920,9 +920,9 @@ void vdp_data_port_write(vdp_context * context, uint16_t value)
 {
 	//printf("data port write: %X\n", value);
 	context->flags &= ~FLAG_PENDING;
-	/*if (context->fifo_cur == context->fifo_end) {
+	if (context->fifo_cur == context->fifo_end) {
 		printf("FIFO full, waiting for space before next write at cycle %X\n", context->cycles);
-	}*/
+	}
 	while (context->fifo_cur == context->fifo_end) {
 		vdp_run_context(context, context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20));
 	}
@@ -979,6 +979,18 @@ uint16_t vdp_data_port_read(vdp_context * context)
 	}
 	context->address += context->regs[REG_AUTOINC];
 	return value;
+}
+
+void vdp_adjust_cycles(vdp_context * context, uint32_t deduction)
+{
+	context->cycles -= deduction;
+	for(fifo_entry * start = (context->fifo_end - FIFO_SIZE); start < context->fifo_cur; start++) {
+		if (start->cycle >= deduction) {
+			start->cycle -= deduction;
+		} else {
+			start->cycle = 0;
+		}
+	}
 }
 
 #define GST_VDP_REGS 0xFA
