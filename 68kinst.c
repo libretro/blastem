@@ -418,14 +418,13 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 					decoded->op = M68K_MOVEM;
 					decoded->extra.size = *istream & 0x40 ? OPSIZE_LONG : OPSIZE_WORD;
 					reg = *istream & 0x7;
-					immed = *(++istream);
 					if(*istream & 0x400) {
 						decoded->dst.addr_mode = MODE_REG;
-						decoded->dst.params.immed = immed;
+						decoded->dst.params.immed = *(++istream);
 						istream = m68k_decode_op_ex(istream, opmode, reg, decoded->extra.size, &(decoded->src));
 					} else {
 						decoded->src.addr_mode = MODE_REG;
-						decoded->src.params.immed = immed;
+						decoded->src.params.immed = *(++istream);
 						istream = m68k_decode_op_ex(istream, opmode, reg, decoded->extra.size, &(decoded->dst));
 					}
 				} else {
@@ -1176,8 +1175,14 @@ int m68k_disasm_movem_op(m68k_op_info *decoded, m68k_op_info *other, char *dst, 
 			reg = 0;
 			bit = 1;
 		}
-		strcat(dst, " ");
-		for (oplen = 1, reg=0; bit < 16 && bit > -1; bit += dir, reg++) {
+		if (need_comma) {
+			strcat(dst, ", ");
+			oplen = 2;
+		} else {
+			strcat(dst, " ");
+			oplen = 1;
+		}
+		for (reg=0; bit < 16 && bit > -1; bit += dir, reg++) {
 			if (decoded->params.immed & (1 << bit)) {
 				if (reg > 7) {
 					rtype = "a";
