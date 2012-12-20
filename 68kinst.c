@@ -1151,7 +1151,7 @@ int m68k_disasm_op(m68k_op_info *decoded, char *dst, int need_comma)
 		return sprintf(dst, "%s (a%d, %d)", c, decoded->params.regs.pri, decoded->params.regs.displacement);
 	case MODE_IMMEDIATE:
 	case MODE_IMMEDIATE_WORD:
-		return sprintf(dst, "%s #%d", c, decoded->params.immed);
+		return sprintf(dst, (decoded->params.immed <= 128 ? "%s #%d" : "%s #$%X"), c, decoded->params.immed);
 	case MODE_ABSOLUTE_SHORT:
 		return sprintf(dst, "%s $%X.w", c, decoded->params.immed);
 	case MODE_ABSOLUTE:
