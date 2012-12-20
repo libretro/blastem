@@ -25,6 +25,24 @@ do_vdp_port_read:
 	mov 120(%rsi), %cx
 	ret
 	
+do_io_write:
+	call m68k_save_context
+	and $0xFF, %edi
+	mov %rcx, %rdx
+	call io_write
+	mov %rax, %rsi
+	call m68k_load_context
+	ret
+do_io_read:
+	mov %ecx, %edi
+	and $0xFF, %edi
+	call m68k_save_context
+	call io_read
+	mov %rax, %rsi
+	call m68k_load_context
+	mov 120(%rsi), %cl
+	ret
+	
 bad_access_msg:
 	.asciz "Program tried to access illegal 68K address %X\n"
 	
@@ -100,6 +118,14 @@ m68k_write_byte:
 	jle cart_wb
 	cmp $0xE00000, %edi
 	jge workram_wb
+	cmp $0xC00000, %edi
+	jge vdp_psg_wb
+	cmp $0xA10000, %edi
+	jl not_io_wb
+	cmp $0xA10100, %edi
+	jge not_io_wb
+	jmp do_io_write
+not_io_wb:
 	ret
 workram_wb:
 	and $0xFFFF, %rdi
@@ -108,6 +134,14 @@ workram_wb:
 cart_wb:
 	mov %cl, (%r8, %rdi)
 	ret
+vdp_psg_wb:
+	push %rdx
+	mov %cl, %dl
+	and $0xFF, %cx
+	shl $8, %dx
+	or %dx, %cx
+	pop %rdx
+	jmp vdp_psg_w
 
 	.global m68k_write_long_lowfirst
 m68k_write_long_lowfirst:
@@ -192,6 +226,12 @@ m68k_read_byte_scratch1:
 	jle cart_b
 	cmp $0xE00000, %ecx
 	jge workram_b
+	cmp $0xA10000, %ecx
+	jl not_io_b
+	cmp $0xA10100, %ecx
+	jge not_io_b
+	jmp do_io_read
+not_io_b:
 	xor %cl, %cl
 	dec %cl
 	ret

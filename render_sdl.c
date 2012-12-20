@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "render.h"
+#include "blastem.h"
 
 SDL_Surface *screen;
 uint8_t render_dbg = 0;
@@ -160,28 +161,132 @@ void render_wait_quit(vdp_context * context)
 	}
 }
 
+#define DPAD_UP      0x01
+#define BUTTON_Z     0x01
+#define DPAD_DOWN    0x02
+#define BUTTON_Y     0x02
+#define DPAD_LEFT    0x04
+#define BUTTON_X     0x04
+#define DPAD_RIGHT   0x08
+#define BUTTON_MODE  0x08
+#define BUTTON_A     0x10
+#define BUTTON_B     0x10
+#define BUTTON_START 0x20
+#define BUTTON_C     0x20
+
 #define FRAME_DELAY 16
 #define MIN_DELAY 10
 uint32_t frame_counter = 0;
 uint32_t start = 0;
 void wait_render_frame(vdp_context * context)
 {
+	FILE * outfile;
 	SDL_Event event;
 	while(SDL_PollEvent(&event)) {
 		switch (event.type) {
 		case SDL_KEYDOWN:
-			//TODO: Update emulated gamepads
-			if (event.key.keysym.sym == SDLK_LEFTBRACKET) {
+			switch(event.key.keysym.sym)
+			{
+			case SDLK_LEFTBRACKET:
 				render_dbg++;
 				if (render_dbg == 3) {
 					render_dbg = 0;
 				}
-			} else if(event.key.keysym.sym == SDLK_t) {
-				FILE * outfile = fopen("state.gst", "wb");
+				break;
+			case SDLK_t:
+				outfile = fopen("state.gst", "wb");
 				fwrite("GST\0\0\0\xE0\x40", 1, 8, outfile);
 				vdp_save_state(context, outfile);
 				fclose(outfile);
 				puts("state saved to state.gst");
+				break;
+			case SDLK_RETURN:
+				gamepad_1.input[GAMEPAD_TH0] |= BUTTON_START;
+				break;
+			case SDLK_UP:
+				gamepad_1.input[GAMEPAD_TH0] |= DPAD_UP;
+				gamepad_1.input[GAMEPAD_TH1] |= DPAD_UP;
+				break;
+			case SDLK_DOWN:
+				gamepad_1.input[GAMEPAD_TH0] |= DPAD_DOWN;
+				gamepad_1.input[GAMEPAD_TH1] |= DPAD_DOWN;
+				break;
+			case SDLK_LEFT:
+				gamepad_1.input[GAMEPAD_TH1] |= DPAD_LEFT;
+				break;
+			case SDLK_RIGHT:
+				gamepad_1.input[GAMEPAD_TH1] |= DPAD_RIGHT;
+				break;
+			case SDLK_a:
+				gamepad_1.input[GAMEPAD_TH0] |= BUTTON_A;
+				//printf("BUTTON_A Dn | GAMEPAD_TH0: %X\n", gamepad_1.input[GAMEPAD_TH0]);
+				break;
+			case SDLK_s:
+				gamepad_1.input[GAMEPAD_TH1] |= BUTTON_B;
+				gamepad_1.input[GAMEPAD_EXTRA] |= BUTTON_B;
+				break;
+			case SDLK_d:
+				gamepad_1.input[GAMEPAD_TH1] |= BUTTON_C;
+				gamepad_1.input[GAMEPAD_EXTRA] |= BUTTON_C;
+				break;
+			case SDLK_q:
+				gamepad_1.input[GAMEPAD_EXTRA] |= BUTTON_X;
+				break;
+			case SDLK_w:
+				gamepad_1.input[GAMEPAD_EXTRA] |= BUTTON_Y;
+				break;
+			case SDLK_e:
+				gamepad_1.input[GAMEPAD_EXTRA] |= BUTTON_Z;
+				break;
+			case SDLK_f:
+				gamepad_1.input[GAMEPAD_EXTRA] |= BUTTON_MODE;
+				break;
+			}
+			break;
+		case SDL_KEYUP:
+			switch(event.key.keysym.sym)
+			{
+			case SDLK_RETURN:
+				gamepad_1.input[GAMEPAD_TH0] &= ~BUTTON_START;
+				break;
+			case SDLK_UP:
+				gamepad_1.input[GAMEPAD_TH0] &= ~DPAD_UP;
+				gamepad_1.input[GAMEPAD_TH1] &= ~DPAD_UP;
+				break;
+			case SDLK_DOWN:
+				gamepad_1.input[GAMEPAD_TH0] &= ~DPAD_DOWN;
+				gamepad_1.input[GAMEPAD_TH1] &= ~DPAD_DOWN;
+				break;
+			case SDLK_LEFT:
+				gamepad_1.input[GAMEPAD_TH1] &= ~DPAD_LEFT;
+				break;
+			case SDLK_RIGHT:
+				gamepad_1.input[GAMEPAD_TH1] &= ~DPAD_RIGHT;
+				break;
+			case SDLK_a:
+				gamepad_1.input[GAMEPAD_TH0] &= ~BUTTON_A;
+				//printf("BUTTON_A Up | GAMEPAD_TH0: %X\n", gamepad_1.input[GAMEPAD_TH0]);
+				break;
+			case SDLK_s:
+				gamepad_1.input[GAMEPAD_TH1] &= ~BUTTON_B;
+				gamepad_1.input[GAMEPAD_EXTRA] &= ~BUTTON_B;
+				break;
+			case SDLK_d:
+				gamepad_1.input[GAMEPAD_TH1] &= ~BUTTON_C;
+				gamepad_1.input[GAMEPAD_EXTRA] &= ~BUTTON_C;
+				break;
+			case SDLK_q:
+				gamepad_1.input[GAMEPAD_EXTRA] &= ~BUTTON_X;
+				break;
+			case SDLK_w:
+				gamepad_1.input[GAMEPAD_EXTRA] &= ~BUTTON_Y;
+				break;
+			case SDLK_e:
+				gamepad_1.input[GAMEPAD_EXTRA] &= ~BUTTON_Z;
+				break;
+			case SDLK_f:
+				gamepad_1.input[GAMEPAD_EXTRA] &= ~BUTTON_MODE;
+				break;
 			}
 			break;
 		case SDL_QUIT:
