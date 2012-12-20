@@ -906,6 +906,7 @@ uint8_t * translate_shift(uint8_t * dst, m68kinst * inst, x86_ea *src_op, x86_ea
 	if (inst->src.addr_mode == MODE_UNUSED) {
 		dst = m68k_save_result(inst, dst, opts);
 	}
+	return dst;
 }
 
 uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
