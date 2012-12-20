@@ -1172,8 +1172,8 @@ int m68k_disasm_movem_op(m68k_op_info *decoded, m68k_op_info *other, char *dst, 
 			bit = 15;
 			dir = -1;
 		} else {
-			reg = 0;
-			bit = 1;
+			dir = 1;
+			bit = 0;
 		}
 		if (need_comma) {
 			strcat(dst, ", ");
