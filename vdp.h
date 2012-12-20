@@ -107,5 +107,6 @@ void vdp_control_port_write(vdp_context * context, uint16_t value);
 void vdp_data_port_write(vdp_context * context, uint16_t value);
 uint16_t vdp_control_port_read(vdp_context * context);
 uint16_t vdp_data_port_read(vdp_context * context);
+void vdp_adjust_cycles(vdp_context * context, uint32_t deduction);
 
 #endif //VDP_H_
