@@ -124,8 +124,11 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			}
 			decoded->src.addr_mode = MODE_REG;
 			decoded->src.params.regs.pri = m68k_reg_quick_field(*istream);
-			decoded->extra.size = OPSIZE_LONG;
-			istream = m68k_decode_op(istream, OPSIZE_LONG, &(decoded->dst));
+			decoded->extra.size = OPSIZE_BYTE;
+			istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->dst));
+			if (decoded->dst.addr_mode == MODE_REG) {
+				decoded->extra.size = OPSIZE_LONG;
+			}
 		} else if ((*istream & 0xF00) == 0x800) {
 			//BTST, BCHG, BCLR, BSET
 			switch ((*istream >> 6) & 0x3)
@@ -145,10 +148,13 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			}
 			opmode = (*istream >> 3) & 0x7;
 			reg = *istream & 0x7;
-			decoded->src.addr_mode = MODE_IMMEDIATE;
+			decoded->src.addr_mode = MODE_IMMEDIATE_WORD;
 			decoded->src.params.immed = *(++istream) & 0xFF;
 			decoded->extra.size = OPSIZE_BYTE;
-			istream = m68k_decode_op_ex(istream, opmode, reg, OPSIZE_BYTE, &(decoded->dst));
+			istream = m68k_decode_op_ex(istream, opmode, reg, decoded->extra.size, &(decoded->dst));
+			if (decoded->dst.addr_mode == MODE_REG) {
+				decoded->extra.size = OPSIZE_LONG;
+			}
 		} else if ((*istream & 0xC0) == 0xC0) {
 #ifdef M68020
 			//CMP2, CHK2, CAS, CAS2, RTM, CALLM
@@ -407,7 +413,8 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				decoded->dst.addr_mode = m68k_reg_quick_field(*istream);
 			} else {
 				opmode = (*istream >> 3) & 0x7;
-				if ((*istream & 0xB80) == 0x880 && opmode != MODE_REG && opmode != MODE_AREG && opmode != MODE_AREG_POSTINC) {
+				if ((*istream & 0xB80) == 0x880 && opmode != MODE_REG && opmode != MODE_AREG) {
+					//TODO: Check for invalid modes that are dependent on direction
 					decoded->op = M68K_MOVEM;
 					decoded->extra.size = *istream & 0x40 ? OPSIZE_LONG : OPSIZE_WORD;
 					reg = *istream & 0x7;
@@ -1143,6 +1150,7 @@ int m68k_disasm_op(m68k_op_info *decoded, char *dst, int need_comma)
 	case MODE_AREG_DISPLACE:
 		return sprintf(dst, "%s (a%d, %d)", c, decoded->params.regs.pri, decoded->params.regs.displacement);
 	case MODE_IMMEDIATE:
+	case MODE_IMMEDIATE_WORD:
 		return sprintf(dst, "%s #%d", c, decoded->params.immed);
 	case MODE_ABSOLUTE_SHORT:
 		return sprintf(dst, "%s $%X.w", c, decoded->params.immed);

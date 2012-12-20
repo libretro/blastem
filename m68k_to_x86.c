@@ -175,8 +175,9 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		ea->base = SCRATCH1;
 		break;
 	case MODE_IMMEDIATE:
+	case MODE_IMMEDIATE_WORD:
 		if (inst->variant != VAR_QUICK) {
-			if (inst->extra.size == OPSIZE_LONG) {
+			if (inst->extra.size == OPSIZE_LONG && inst->src.addr_mode == MODE_IMMEDIATE) {
 				out = cycles(out, BUS);
 				out = check_cycles(out);
 			}
@@ -251,6 +252,32 @@ uint8_t * translate_m68k_dst(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 				out = add_irdisp8(out, inc_amount, CONTEXT, reg_offset(&(inst->dst)), SZ_D);
 			}
 		}
+		ea->mode = MODE_REG_DIRECT;
+		ea->base = SCRATCH1;
+		break;
+	case MODE_ABSOLUTE:
+	case MODE_ABSOLUTE_SHORT:
+		//Add cycles for reading address from instruction stream
+		if (inst->dst.addr_mode == MODE_ABSOLUTE) {
+			out = cycles(out, BUS*2);
+		} else {
+			out = cycles(out, BUS);
+		}
+		out = mov_ir(out, inst->dst.params.immed, SCRATCH1, SZ_D);
+		out = push_r(out, SCRATCH1);
+		switch (inst->extra.size)
+		{
+		case OPSIZE_BYTE:
+			out = call(out, (char *)m68k_read_byte_scratch1);
+			break;
+		case OPSIZE_WORD:
+			out = call(out, (char *)m68k_read_word_scratch1);
+			break;
+		case OPSIZE_LONG:
+			out = call(out, (char *)m68k_read_long_scratch1);
+			break;
+		}
+		out = pop_r(out, SCRATCH2);
 		ea->mode = MODE_REG_DIRECT;
 		ea->base = SCRATCH1;
 		break;
@@ -1010,7 +1037,46 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	case M68K_BCHG:
 	case M68K_BCLR:
 	case M68K_BSET:
+		break;
 	case M68K_BTST:
+		dst = cycles(dst, inst->extra.size == OPSIZE_BYTE ? 4 : 6);
+		if (src_op.mode == MODE_IMMEDIATE) {
+			if (inst->extra.size == OPSIZE_BYTE) {
+				src_op.disp &= 0x7;
+			}
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				dst = bt_ir(dst, src_op.disp, dst_op.base, SZ_D);
+			} else {
+				dst = bt_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, SZ_D);
+			}
+		} else {
+			if (src_op.mode == MODE_REG_DISPLACE8) {
+				if (dst_op.base == SCRATCH1) {
+					dst = push_r(dst, SCRATCH2);
+					dst = mov_rdisp8r(dst, src_op.base, src_op.disp, SCRATCH2, SZ_B);
+					src_op.base = SCRATCH1;
+				} else {
+					dst = mov_rdisp8r(dst, src_op.base, src_op.disp, SCRATCH1, SZ_B);
+					src_op.base = SCRATCH1;
+				}
+			}
+			if (inst->extra.size == OPSIZE_BYTE) {
+				dst = and_ir(dst, 0x7, src_op.base, SZ_B);
+			}
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				dst = bt_rr(dst, src_op.base, dst_op.base, SZ_D);
+			} else {
+				dst = bt_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, SZ_D);
+			}
+		}
+		//x86 sets the carry flag to the value of the bit tested
+		//68K sets the zero flag to the complement of the bit tested
+		dst = setcc_r(dst, CC_NC, FLAG_Z);
+		if (src_op.base == SCRATCH2) {
+			dst = pop_r(dst, SCRATCH2);
+		}
+		dst = m68k_save_result(inst, dst, opts);
+		break;
 	case M68K_CHK:
 		break;
 	case M68K_CMP:
@@ -1096,7 +1162,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
 		dst = call(dst, (uint8_t *)print_regs_exit);
 		break;
-	case M68K_JMP:
 	case M68K_JSR:
 	case M68K_LEA:
 	case M68K_LINK:
