@@ -128,6 +128,7 @@ typedef enum {
 	MODE_PC_DISPLACE,
 	MODE_PC_INDEX,
 	MODE_IMMEDIATE,
+	MODE_IMMEDIATE_WORD,//used to indicate an immediate operand that only uses a single extension word even for a long operation
 	MODE_UNUSED
 } m68k_addr_modes;
 
