@@ -44,13 +44,6 @@ uint8_t * cycles(uint8_t * dst, uint32_t num)
 	dst = add_ir(dst, num, CYCLES, SZ_D);
 }
 
-uint8_t * check_cycles(uint8_t * dst)
-{
-	dst = cmp_rr(dst, CYCLES, LIMIT, SZ_D);
-	dst = jcc(dst, CC_G, dst+7);
-	dst = call(dst, (char *)handle_cycle_limit);
-}
-
 int8_t native_reg(m68k_op_info * op, x86_68k_options * opts)
 {
 	if (op->addr_mode == MODE_REG) {
@@ -119,7 +112,6 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		} else {
 			out = sub_irdisp8(out, inc_amount, CONTEXT, reg_offset(&(inst->src)), SZ_D);
 		}
-		out = check_cycles(out);
 	case MODE_AREG_INDIRECT:
 	case MODE_AREG_POSTINC:	
 		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
@@ -177,12 +169,7 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 	case MODE_IMMEDIATE:
 	case MODE_IMMEDIATE_WORD:
 		if (inst->variant != VAR_QUICK) {
-			if (inst->extra.size == OPSIZE_LONG && inst->src.addr_mode == MODE_IMMEDIATE) {
-				out = cycles(out, BUS);
-				out = check_cycles(out);
-			}
-			out = cycles(out, BUS);
-			out = check_cycles(out);
+			out = cycles(out, (inst->extra.size == OPSIZE_LONG && inst->src.addr_mode == MODE_IMMEDIATE) ? BUS*2 : BUS);
 		}
 		ea->mode = MODE_IMMED;
 		ea->disp = inst->src.params.immed;
@@ -507,7 +494,6 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 
 	//add cycles for prefetch
 	dst = cycles(dst, BUS);
-	dst = check_cycles(dst);
 	return dst;
 }
 
@@ -519,8 +505,8 @@ uint8_t * translate_m68k_clr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 	dst = mov_ir(dst, 1, FLAG_Z, SZ_B);
 	uint8_t reg = native_reg(&(inst->dst), opts);
 	if (reg >= 0) {
-		dst = xor_rr(dst, reg, reg, inst->extra.size);
-		return check_cycles(dst);
+		dst = cycles(dst, (inst->extra.size == OPSIZE_LONG ? 6 : 4));
+		return  xor_rr(dst, reg, reg, inst->extra.size);
 	}
 	int32_t dec_amount,inc_amount;
 	switch (inst->dst.addr_mode)
@@ -529,7 +515,6 @@ uint8_t * translate_m68k_clr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 	case MODE_AREG:
 		dst = cycles(dst, (inst->extra.size == OPSIZE_LONG ? 6 : 4));
 		dst = mov_irdisp8(dst, 0, CONTEXT, reg_offset(&(inst->dst)), inst->extra.size);
-		dst = check_cycles(dst);
 		break;
 	case MODE_AREG_PREDEC:
 		dst = cycles(dst, PREDEC_PENALTY);
@@ -543,7 +528,6 @@ uint8_t * translate_m68k_clr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 	case MODE_AREG_POSTINC:
 		//add cycles for prefetch and wasted read
 		dst = cycles(dst, (inst->extra.size == OPSIZE_LONG ? 12 : 8));
-		dst = check_cycles(dst);
 		if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
 			dst = mov_rr(dst, opts->aregs[inst->dst.params.regs.pri], SCRATCH2, SZ_D);
 		} else {
@@ -596,21 +580,15 @@ uint8_t * translate_m68k_lea(uint8_t * dst, m68kinst * inst, x86_68k_options * o
                 dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->dst.params.regs.pri, SZ_D);
             }
         }
-        dst = check_cycles(dst);
         break;
     case MODE_ABSOLUTE:
-        dst = cycles(dst, BUS);
-        dst = check_cycles(dst);
     case MODE_ABSOLUTE_SHORT:
-        dst = cycles(dst, BUS);
-        dst = check_cycles(dst);
-        dst = cycles(dst, BUS);
+        dst = cycles(dst, (inst->src.addr_mode == MODE_ABSOLUTE) ? BUS * 3 : BUS * 2);
         if (dst_reg >= 0) {
             dst = mov_ir(dst, inst->src.params.immed, dst_reg, SZ_D);
         } else {
             dst = mov_irdisp8(dst, inst->src.params.immed, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->dst.params.regs.pri, SZ_D);
         }
-        dst = check_cycles(dst);
         break;
     }
 	return dst;
@@ -718,7 +696,6 @@ uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * o
         } else {
             dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->src.params.regs.pri, SCRATCH1, SZ_D);
         }
-        dst = check_cycles(dst);
         dst = call(dst, (uint8_t *)m68k_native_addr);
         //TODO: Finish me
         //TODO: Fix timing
@@ -726,7 +703,6 @@ uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * o
     case MODE_ABSOLUTE:
     case MODE_ABSOLUTE_SHORT:
         dst = cycles(dst, inst->src.addr_mode == MODE_ABSOLUTE ? 12 : 10);
-        dst = check_cycles(dst);
         dest_addr = get_native_address(opts->native_code_map, inst->src.params.immed);
         if (!dest_addr) {
         	opts->deferred = defer_address(opts->deferred, inst->src.params.immed, dst + 1);
@@ -756,7 +732,6 @@ uint8_t * translate_m68k_dbcc(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 {
 	//best case duration
 	dst = cycles(dst, 10);
-	dst = check_cycles(dst);
 	uint8_t * skip_loc = NULL;
 	//TODO: Check if COND_TRUE technically valid here even though
 	//it's basically a slow NOP
@@ -831,7 +806,6 @@ uint8_t * translate_m68k_dbcc(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 	} else {
 		dst = cycles(dst, 4);
 	}
-	dst = check_cycles(dst);
 	return dst;
 }
 
@@ -845,12 +819,10 @@ uint8_t * translate_shift(uint8_t * dst, m68kinst * inst, x86_ea *src_op, x86_ea
 	uint8_t * end_off = NULL;
 	if (inst->src.addr_mode == MODE_UNUSED) {
 		dst = cycles(dst, BUS);
-		dst = check_cycles(dst);
 		//Memory shift
 		dst = shift_ir(dst, 1, dst_op->base, SZ_W);
 	} else {
 		dst = cycles(dst, inst->extra.size == OPSIZE_LONG ? 8 : 6);
-		dst = check_cycles(dst);
 		if (src_op->mode == MODE_IMMED) {
 			if (dst_op->mode == MODE_REG_DIRECT) {
 				dst = shift_ir(dst, src_op->disp, dst_op->base, inst->extra.size);
@@ -933,8 +905,6 @@ uint8_t * translate_shift(uint8_t * dst, m68kinst * inst, x86_ea *src_op, x86_ea
 	dst = mov_rrind(dst, FLAG_C, CONTEXT, SZ_B);
 	if (inst->src.addr_mode == MODE_UNUSED) {
 		dst = m68k_save_result(inst, dst, opts);
-	} else {
-		dst = check_cycles(dst);
 	}
 }
 
@@ -992,7 +962,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = setcc_r(dst, CC_S, FLAG_N);
 		dst = setcc_r(dst, CC_O, FLAG_V);
 		dst = mov_rrind(dst, FLAG_C, CONTEXT, SZ_B);
-		dst = check_cycles(dst);
 		dst = m68k_save_result(inst, dst, opts);
 		break;
 	case M68K_ADDX:
@@ -1018,7 +987,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = setcc_r(dst, CC_Z, FLAG_Z);
 		dst = setcc_r(dst, CC_S, FLAG_N);
 		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
-		dst = check_cycles(dst);
 		dst = m68k_save_result(inst, dst, opts);
 		break;
 	case M68K_ANDI_CCR:
@@ -1100,7 +1068,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = setcc_r(dst, CC_Z, FLAG_Z);
 		dst = setcc_r(dst, CC_S, FLAG_N);
 		dst = setcc_r(dst, CC_O, FLAG_V);
-		dst = check_cycles(dst);
 		break;
 	case M68K_DIVS:
 	case M68K_DIVU:
@@ -1126,7 +1093,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = setcc_r(dst, CC_Z, FLAG_Z);
 		dst = setcc_r(dst, CC_S, FLAG_N);
 		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
-		dst = check_cycles(dst);
 		dst = m68k_save_result(inst, dst, opts);
 		break;
 	case M68K_EORI_CCR:
@@ -1153,7 +1119,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	            dst = mov_rrdisp8(dst, SCRATCH2, src_op.base, src_op.disp, SZ_D);
 	        }
 	    }
-	    dst = check_cycles(dst);
 	    break;
 	case M68K_EXT:
 		break;
@@ -1179,7 +1144,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		break;
 	case M68K_NOP:
 		dst = cycles(dst, BUS);
-		dst = check_cycles(dst);
 		break;
 	case M68K_NOT:
 		break;
@@ -1204,7 +1168,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = setcc_r(dst, CC_Z, FLAG_Z);
 		dst = setcc_r(dst, CC_S, FLAG_N);
 		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
-		dst = check_cycles(dst);
 		dst = m68k_save_result(inst, dst, opts);
 		break;
 	case M68K_ORI_CCR:
@@ -1243,7 +1206,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = setcc_r(dst, CC_S, FLAG_N);
 		dst = setcc_r(dst, CC_O, FLAG_V);
 		dst = mov_rrind(dst, FLAG_C, CONTEXT, SZ_B);
-		dst = check_cycles(dst);
 		dst = m68k_save_result(inst, dst, opts);
 		break;
 	case M68K_SUBX:
@@ -1259,7 +1221,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = setcc_r(dst, CC_Z, FLAG_Z);
 		dst = setcc_r(dst, CC_S, FLAG_N);
 		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
-		dst = check_cycles(dst);
 		break;
 	case M68K_TAS:
 	case M68K_TRAP:
@@ -1275,7 +1236,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = setcc_r(dst, CC_Z, FLAG_Z);
 		dst = setcc_r(dst, CC_S, FLAG_N);
 		dst = setcc_r(dst, CC_O, FLAG_V);
-		dst = check_cycles(dst);
 		break;
 	case M68K_UNLK:
 	case M68K_INVALID:
