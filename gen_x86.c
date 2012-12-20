@@ -40,6 +40,8 @@
 
 #define OP2_JCC 0x80
 #define OP2_SETCC 0x90
+#define OP2_BT 0xA3
+#define OP2_BTX_I 0xBA
 
 #define OP_EX_ADDI 0x0
 #define OP_EX_ORI  0x1
@@ -58,6 +60,11 @@
 #define OP_EX_SHR 0x5
 #define OP_EX_SAL 0x6 //identical to SHL
 #define OP_EX_SAR 0x7
+
+#define OP_EX_BT  0x4
+#define OP_EX_BTS 0x5
+#define OP_EX_BTR 0x6
+#define OP_EX_BTC 0x7
 
 #define BIT_IMMED_RAX 0x4
 #define BIT_DIR 0x2
@@ -877,6 +884,106 @@ uint8_t * setcc_rind(uint8_t * out, uint8_t cc, uint8_t dst)
 	*(out++) = PRE_2BYTE;
 	*(out++) = OP2_SETCC | cc;
 	*(out++) = MODE_REG_INDIRECT | dst;
+	return out;
+}
+
+uint8_t * bt_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
+{
+	if (size == SZ_W) {
+		*(out++) = PRE_SIZE;
+	}
+	if (size == SZ_Q || src >= R8 || dst >= R8) {
+		*out = PRE_REX;
+		if (size == SZ_Q) {
+			*out |= REX_QUAD;
+		}
+		if (src >= R8) {
+			*out |= REX_REG_FIELD;
+			src -= (R8 - X86_R8);
+		}
+		if (dst >= R8) {
+			*out |= REX_RM_FIELD;
+			dst -= (R8 - X86_R8);
+		}
+		out++;
+	}
+	*(out++) = PRE_2BYTE;
+	*(out++) = OP2_BT;
+	*(out++) = MODE_REG_DIRECT | dst | (src << 3);
+	return out;
+}
+
+uint8_t * bt_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t dst_disp, uint8_t size)
+{
+	if (size == SZ_W) {
+		*(out++) = PRE_SIZE;
+	}
+	if (size == SZ_Q || src >= R8 || dst_base >= R8) {
+		*out = PRE_REX;
+		if (size == SZ_Q) {
+			*out |= REX_QUAD;
+		}
+		if (src >= R8) {
+			*out |= REX_REG_FIELD;
+			src -= (R8 - X86_R8);
+		}
+		if (dst_base >= R8) {
+			*out |= REX_RM_FIELD;
+			dst_base -= (R8 - X86_R8);
+		}
+		out++;
+	}
+	*(out++) = PRE_2BYTE;
+	*(out++) = OP2_BT;
+	*(out++) = MODE_REG_DISPLACE8 | dst_base | (src << 3);
+	*(out++) = dst_disp;
+	return out;
+}
+
+uint8_t * bt_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size)
+{
+	if (size == SZ_W) {
+		*(out++) = PRE_SIZE;
+	}
+	if (size == SZ_Q || dst >= R8) {
+		*out = PRE_REX;
+		if (size == SZ_Q) {
+			*out |= REX_QUAD;
+		}
+		if (dst >= R8) {
+			*out |= REX_RM_FIELD;
+			dst -= (R8 - X86_R8);
+		}
+		out++;
+	}
+	*(out++) = PRE_2BYTE;
+	*(out++) = OP2_BTX_I;
+	*(out++) = MODE_REG_DIRECT | dst | (OP_EX_BT << 3);
+	*(out++) = val;
+	return out;
+}
+
+uint8_t * bt_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t dst_disp, uint8_t size)
+{
+	if (size == SZ_W) {
+		*(out++) = PRE_SIZE;
+	}
+	if (size == SZ_Q || dst_base >= R8) {
+		*out = PRE_REX;
+		if (size == SZ_Q) {
+			*out |= REX_QUAD;
+		}
+		if (dst_base >= R8) {
+			*out |= REX_RM_FIELD;
+			dst_base -= (R8 - X86_R8);
+		}
+		out++;
+	}
+	*(out++) = PRE_2BYTE;
+	*(out++) = OP2_BTX_I;
+	*(out++) = MODE_REG_DISPLACE8 | dst_base | (OP_EX_BT << 3);
+	*(out++) = dst_disp;
+	*(out++) = val;
 	return out;
 }
 
