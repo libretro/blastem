@@ -892,14 +892,21 @@ void vdp_control_port_write(vdp_context * context, uint16_t value)
 	if (context->flags & FLAG_PENDING) {
 		context->address = (context->address & 0x3FFF) | (value << 14);
 		context->cd = (context->cd & 0x3) | ((value >> 2) & 0x3C);
+		if (context->cd & 0x30) {
+			puts("attempt to use DMA detected!");
+		}
+		//printf("New Address: %X, New CD: %X\n", context->address, context->cd);
 		context->flags &= ~FLAG_PENDING;
 	} else {
 		if ((value & 0xC000) == 0x8000) {
 			//Register write
 			uint8_t reg = (value >> 8) & 0x1F;
 			if (reg < VDP_REGS) {
-				//printf("register %d set to %X\n", reg, value);
+				//printf("register %d set to %X\n", reg, value & 0xFF);
 				context->regs[reg] = value;
+				/*if (reg == REG_MODE_2) {
+					printf("Display is now %s\n", (context->regs[REG_MODE_2] & DISPLAY_ENABLE) ? "enabled" : "disabled");
+				}*/
 			}
 		} else {
 			context->flags |= FLAG_PENDING;

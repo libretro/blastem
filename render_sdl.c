@@ -162,7 +162,8 @@ void render_wait_quit(vdp_context * context)
 
 #define FRAME_DELAY 16
 #define MIN_DELAY 10
-
+uint32_t frame_counter = 0;
+uint32_t start = 0;
 void wait_render_frame(vdp_context * context)
 {
 	SDL_Event event;
@@ -184,6 +185,7 @@ void wait_render_frame(vdp_context * context)
 			}
 			break;
 		case SDL_QUIT:
+			puts("");
 			exit(0);
 		}
 	}
@@ -200,6 +202,15 @@ void wait_render_frame(vdp_context * context)
 		}
 	}
 	render_context(context);
+	frame_counter++;
+	if ((last_frame - start) > 1000) {
+		if (start) {
+			printf("\r%f fps", ((float)frame_counter) / (((float)(last_frame-start)) / 1000.0));
+			fflush(stdout);
+		}
+		start = last_frame;
+		frame_counter = 0;
+	}
 }
 
 
