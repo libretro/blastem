@@ -130,6 +130,7 @@ uint8_t * mov_rrind(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size);
 uint8_t * mov_rindr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size);
 uint8_t * mov_ir(uint8_t * out, int64_t val, uint8_t dst, uint8_t size);
 uint8_t * mov_irdisp8(uint8_t * out, int32_t val, uint8_t dst, int8_t disp, uint8_t size);
+uint8_t * mov_irind(uint8_t * out, int32_t val, uint8_t dst, uint8_t size);
 uint8_t * pushf(uint8_t * out);
 uint8_t * popf(uint8_t * out);
 uint8_t * push_r(uint8_t * out, uint8_t reg);
