@@ -827,6 +827,42 @@ uint8_t * mov_irdisp8(uint8_t * out, int32_t val, uint8_t dst, int8_t disp, uint
 	return out;
 }
 
+uint8_t * mov_irind(uint8_t * out, int32_t val, uint8_t dst, uint8_t size)
+{
+	if (size == SZ_W) {
+		*(out++) = PRE_SIZE;
+	}
+	if (size == SZ_Q || dst >= R8 || (size == SZ_B && dst >= RSP && dst <= RDI)) {
+		*out = PRE_REX;
+		if (size == SZ_Q) {
+			*out |= REX_QUAD;
+		}
+		if (dst >= R8) {
+			*out |= REX_RM_FIELD;
+			dst -= (R8 - X86_R8);
+		}
+		out++;
+	}
+	if (dst >= AH && dst <= BH) {
+		dst -= (AH-X86_AH);
+	}
+	*(out++) = OP_MOV_IEA | (size == SZ_B ? 0 : BIT_SIZE);
+	*(out++) = MODE_REG_INDIRECT | dst;
+
+	*(out++) = val;
+	if (size != SZ_B) {
+		val >>= 8;
+		*(out++) = val;
+		if (size != SZ_W) {
+			val >>= 8;
+			*(out++) = val;
+			val >>= 8;
+			*(out++) = val;
+		}
+	}
+	return out;
+}
+
 uint8_t * pushf(uint8_t * out)
 {
 	*(out++) = OP_PUSHF;
