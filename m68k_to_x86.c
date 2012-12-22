@@ -912,9 +912,10 @@ uint8_t * translate_m68k_lea(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 
 uint8_t * translate_m68k_bsr(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 {
-	//TODO: Add cycles
 	int32_t disp = inst->src.params.immed;
 	uint32_t after = inst->address + 2;
+	//TODO: Add cycles in the right place relative to pushing the return address on the stack
+	dst = cycles(dst, 10);
 	dst = mov_ir(dst, after, SCRATCH1, SZ_D);
 	dst = push_r(dst, SCRATCH1);
 	dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
@@ -1006,7 +1007,7 @@ uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 	switch(inst->src.addr_mode)
 	{
 	case MODE_AREG_INDIRECT:
-		dst = cycles(dst, BUS);
+		dst = cycles(dst, BUS*2);
 		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
 			dst = mov_rr(dst, opts->aregs[inst->src.params.regs.pri], SCRATCH1, SZ_D);
 		} else {
@@ -1014,7 +1015,17 @@ uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		}
 		dst = call(dst, (uint8_t *)m68k_native_addr);
 		//TODO: Finish me
-		//TODO: Fix timing
+		printf("address mode %d not yet supported (jmp)\n", inst->src.addr_mode);
+		break;
+	case MODE_PC_DISPLACE:
+		dst = cycles(dst, 10);
+		dest_addr = get_native_address(opts->native_code_map, inst->src.params.regs.displacement + inst->address + 2);
+		if (!dest_addr) {
+			opts->deferred = defer_address(opts->deferred, inst->src.params.immed, dst + 1);
+			//dummy address to be replaced later, make sure it generates a 4-byte displacement
+			dest_addr = dst + 256;
+		}
+		dst = jmp(dst, dest_addr);
 		break;
 	case MODE_ABSOLUTE:
 	case MODE_ABSOLUTE_SHORT:
@@ -1027,6 +1038,68 @@ uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		}
 		dst = jmp(dst, dest_addr);
 		break;
+	default:
+		printf("address mode %d not yet supported (jmp)\n", inst->src.addr_mode);
+	}
+	return dst;
+}
+
+uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
+{
+	uint8_t * dest_addr;
+	uint32_t after;
+	switch(inst->src.addr_mode)
+	{
+	case MODE_AREG_INDIRECT:
+		dst = cycles(dst, BUS*2);
+		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
+			dst = mov_rr(dst, opts->aregs[inst->src.params.regs.pri], SCRATCH1, SZ_D);
+		} else {
+			dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->src.params.regs.pri, SCRATCH1, SZ_D);
+		}
+		dst = call(dst, (uint8_t *)m68k_native_addr);
+		//TODO: Finish me
+		printf("address mode %d not yet supported (jsr)\n", inst->src.addr_mode);
+		break;
+	case MODE_PC_DISPLACE:
+		//TODO: Add cycles in the right place relative to pushing the return address on the stack
+		dst = cycles(dst, 10);
+		dst = mov_ir(dst, inst->address + 8, SCRATCH1, SZ_D);
+		dst = push_r(dst, SCRATCH1);
+		dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
+		dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
+		dst = call(dst, (char *)m68k_write_long_highfirst);
+		dest_addr = get_native_address(opts->native_code_map, inst->src.params.regs.displacement + inst->address + 2);
+		if (!dest_addr) {
+			opts->deferred = defer_address(opts->deferred, inst->src.params.immed, dst + 1);
+			//dummy address to be replaced later, make sure it generates a 4-byte displacement
+			dest_addr = dst + 5;
+		}
+		dst = call(dst, (char *)dest_addr);
+		//would add_ir(dst, 8, RSP, SZ_Q) be faster here?
+		dst = pop_r(dst, SCRATCH1);
+		break;
+	case MODE_ABSOLUTE:
+	case MODE_ABSOLUTE_SHORT:
+		//TODO: Add cycles in the right place relative to pushing the return address on the stack
+		dst = cycles(dst, inst->src.addr_mode == MODE_ABSOLUTE ? 12 : 10);
+		dst = mov_ir(dst, inst->address + 8, SCRATCH1, SZ_D);
+		dst = push_r(dst, SCRATCH1);
+		dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
+		dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
+		dst = call(dst, (char *)m68k_write_long_highfirst);
+		dest_addr = get_native_address(opts->native_code_map, inst->src.params.immed);
+		if (!dest_addr) {
+			opts->deferred = defer_address(opts->deferred, inst->src.params.immed, dst + 1);
+			//dummy address to be replaced later, make sure it generates a 4-byte displacement
+			dest_addr = dst + 5;
+		}
+		dst = call(dst, (char *)dest_addr);
+		//would add_ir(dst, 8, RSP, SZ_Q) be faster here?
+		dst = pop_r(dst, SCRATCH1);
+		break;
+	default:
+		printf("address mode %d not yet supported (jsr)\n", inst->src.addr_mode);
 	}
 	return dst;
 }
@@ -1241,6 +1314,8 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		return translate_m68k_bcc(dst, inst, opts);
 	} else if(inst->op == M68K_JMP) {
 		return translate_m68k_jmp(dst, inst, opts);
+	} else if(inst->op == M68K_JSR) {
+		return translate_m68k_jsr(dst, inst, opts);
 	} else if(inst->op == M68K_RTS) {
 		return translate_m68k_rts(dst, inst, opts);
 	} else if(inst->op == M68K_DBCC) {
