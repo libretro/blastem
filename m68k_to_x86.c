@@ -1191,6 +1191,30 @@ uint8_t * translate_m68k_dbcc(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 	return dst;
 }
 
+uint8_t * translate_m68k_link(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
+{
+	int8_t reg = native_reg(&(inst->src), opts);
+	//compensate for displacement word
+	dst = cycles(dst, BUS);
+	dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
+	dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
+	if (reg >= 0) {
+		dst = mov_rr(dst, reg, SCRATCH1, SZ_D);
+	} else {
+		dst = mov_rdisp8r(dst, CONTEXT, reg_offset(&(inst->src)), SCRATCH1, SZ_D);
+	}
+	dst = call(dst, (char *)m68k_write_long_highfirst);
+	if (reg >= 0) {
+		dst = mov_rr(dst, opts->aregs[7], reg, SZ_D);
+	} else {
+		dst = mov_rrdisp8(dst, opts->aregs[7], CONTEXT, reg_offset(&(inst->src)), SZ_D);
+	}
+	dst = add_ir(dst, inst->dst.params.immed, opts->aregs[7], SZ_D);
+	//prefetch
+	dst = cycles(dst, BUS);
+	return dst;
+}
+
 typedef uint8_t * (*shift_ir_t)(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size);
 typedef uint8_t * (*shift_irdisp8_t)(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t disp, uint8_t size);
 typedef uint8_t * (*shift_clr_t)(uint8_t * out, uint8_t dst, uint8_t size);
@@ -1317,6 +1341,8 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		return translate_m68k_clr(dst, inst, opts);
 	} else if(inst->op == M68K_MOVEM) {
 		return translate_m68k_movem(dst, inst, opts);
+	} else if(inst->op == M68K_LINK) {
+		return translate_m68k_link(dst, inst, opts);
 	}
 	x86_ea src_op, dst_op;
 	if (inst->src.addr_mode != MODE_UNUSED) {
@@ -1543,7 +1569,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		break;
 	/*case M68K_JSR:
 	case M68K_LEA:
-	case M68K_LINK:
 	case M68K_MOVE_FROM_SR:
 		break;*/
 	case M68K_MOVE_CCR:
@@ -1718,8 +1743,22 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = setcc_r(dst, CC_S, FLAG_N);
 		dst = setcc_r(dst, CC_O, FLAG_V);
 		break;
-	/*case M68K_UNLK:
-	case M68K_INVALID:
+	case M68K_UNLK:
+		dst = cycles(dst, BUS);
+		if (dst_op.mode == MODE_REG_DIRECT) {
+			dst = mov_rr(dst, dst_op.base, opts->aregs[7], SZ_D);
+		} else {
+			dst = mov_rdisp8r(dst, dst_op.base, dst_op.disp, opts->aregs[7], SZ_D);
+		}
+		dst = mov_rr(dst, opts->aregs[7], SCRATCH1, SZ_D);
+		dst = call(dst, (uint8_t *)m68k_read_long_scratch1);
+		if (dst_op.mode == MODE_REG_DIRECT) {
+			dst = mov_rr(dst, SCRATCH1, dst_op.base, SZ_D);
+		} else {
+			dst = mov_rdisp8r(dst, SCRATCH1, dst_op.base, dst_op.disp, SZ_D);
+		}
+		break;
+	/*case M68K_INVALID:
 		break;*/
 	default:
 		printf("instruction %d not yet implemented\n", inst->op);
