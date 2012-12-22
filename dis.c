@@ -26,6 +26,7 @@ deferred * defer(uint32_t address, deferred * next)
 	if (is_visited(address)) {
 		return next;
 	}
+	//printf("deferring %X\n", address);
 	deferred * d = malloc(sizeof(deferred));
 	d->address = address;
 	d->next = next;
@@ -83,7 +84,8 @@ int main(int argc, char ** argv)
 			next = m68k_decode(encoded, &instbuf, address);
 			address += (next-encoded)*2;
 			encoded = next;
-			m68k_disasm(&instbuf, disbuf);
+			//m68k_disasm(&instbuf, disbuf);
+			//printf("%X: %s\n", instbuf.address, disbuf);
 			if (instbuf.op == M68K_ILLEGAL || instbuf.op == M68K_RTS || instbuf.op == M68K_RTE) {
 				break;
 			} else if (instbuf.op == M68K_BCC || instbuf.op == M68K_DBCC || instbuf.op == M68K_BSR) {
@@ -98,7 +100,7 @@ int main(int argc, char ** argv)
 					def = defer(tmp_addr, def);
 				}
 			} else if(instbuf.op == M68K_JMP) {
-				if (instbuf.src.addr_mode == MODE_ABSOLUTE || MODE_ABSOLUTE_SHORT) {
+				if (instbuf.src.addr_mode == MODE_ABSOLUTE || instbuf.src.addr_mode == MODE_ABSOLUTE_SHORT) {
 					address = instbuf.src.params.immed;
 					encoded = filebuf + address/2;
 					if (is_visited(address)) {
@@ -108,7 +110,7 @@ int main(int argc, char ** argv)
 					break;
 				}
 			} else if(instbuf.op == M68K_JSR) {
-				if (instbuf.src.addr_mode == MODE_ABSOLUTE || MODE_ABSOLUTE_SHORT) {
+				if (instbuf.src.addr_mode == MODE_ABSOLUTE || instbuf.src.addr_mode == MODE_ABSOLUTE_SHORT) {
 					def = defer(instbuf.src.params.immed, def);
 				}
 			}
@@ -125,7 +127,6 @@ int main(int argc, char ** argv)
 	#else
 	for(cur = filebuf + 0x100; (cur - filebuf) < (filesize/2); )
 	{
-		//printf("cur: %p: %x\n", cur, *cur);
 		unsigned short * start = cur;
 		cur = m68k_decode(cur, &instbuf, (start - filebuf)*2);
 		m68k_disasm(&instbuf, disbuf);
