@@ -31,7 +31,15 @@ uint16_t *m68k_decode_op_ex(uint16_t *cur, uint8_t mode, uint8_t reg, uint8_t si
 		dst->params.regs.displacement = sign_extend16(ext);
 		break;
 	case MODE_AREG_INDEX_MEM:
-		//TODO: implement me
+		#ifdef M68020
+			//TODO: implement me for M68020+ support
+		#else
+			dst->addr_mode = MODE_AREG_INDEX_DISP8;
+			dst->params.regs.pri = reg;
+			ext = *(++cur);
+			dst->params.regs.sec = ext >> 11;//includes areg/dreg bit, reg num and word/long bit
+			dst->params.regs.displacement = sign_extend8(ext&0xFF);
+		#endif
 		break;
 	case MODE_PC_INDIRECT_ABS_IMMED:
 		switch(reg)
@@ -46,6 +54,15 @@ uint16_t *m68k_decode_op_ex(uint16_t *cur, uint8_t mode, uint8_t reg, uint8_t si
 			ext = *(++cur);
 			dst->params.immed = ext << 16 | *(++cur);
 			break;
+		case 3:
+#ifdef M68020
+			//TODO: Implement me for M68020+ support;
+#else
+			dst->addr_mode = MODE_PC_INDEX_DISP8;
+			ext = *(++cur);
+			dst->params.regs.sec = ext >> 11;//includes areg/dreg bit, reg num and word/long bit
+			dst->params.regs.displacement = sign_extend8(ext&0xFF);
+#endif
 		case 2:
 			dst->addr_mode = MODE_PC_DISPLACE;
 			ext = *(++cur);
@@ -67,7 +84,6 @@ uint16_t *m68k_decode_op_ex(uint16_t *cur, uint8_t mode, uint8_t reg, uint8_t si
 				break;
 			}
 			break;
-		//TODO: implement the rest of these
 		}
 		break;
 	}
@@ -1147,7 +1163,9 @@ int m68k_disasm_op(m68k_op_info *decoded, char *dst, int need_comma)
 	case MODE_AREG_PREDEC:
 		return sprintf(dst, "%s -(a%d)", c, decoded->params.regs.pri);
 	case MODE_AREG_DISPLACE:
-		return sprintf(dst, "%s (a%d, %d)", c, decoded->params.regs.pri, decoded->params.regs.displacement);
+		return sprintf(dst, "%s (%d, a%d)", c, decoded->params.regs.displacement, decoded->params.regs.pri);
+	case MODE_AREG_INDEX_DISP8:
+		return sprintf(dst, "%s (%d, a%d, %c%d.%c)", c, decoded->params.regs.displacement, decoded->params.regs.pri, (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w');
 	case MODE_IMMEDIATE:
 	case MODE_IMMEDIATE_WORD:
 		return sprintf(dst, (decoded->params.immed <= 128 ? "%s #%d" : "%s #$%X"), c, decoded->params.immed);
@@ -1156,7 +1174,9 @@ int m68k_disasm_op(m68k_op_info *decoded, char *dst, int need_comma)
 	case MODE_ABSOLUTE:
 		return sprintf(dst, "%s $%X", c, decoded->params.immed);
 	case MODE_PC_DISPLACE:
-		return sprintf(dst, "%s (pc, %d)", c, decoded->params.regs.displacement);
+		return sprintf(dst, "%s (%d, pc)", c, decoded->params.regs.displacement);
+	case MODE_PC_INDEX_DISP8:
+		return sprintf(dst, "%s (%d, pc, %c%d.%c)", c, decoded->params.regs.displacement, (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w');
 	default:
 		return 0;
 	}
