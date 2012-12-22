@@ -1223,6 +1223,8 @@ uint8_t * translate_shift(uint8_t * dst, m68kinst * inst, x86_ea *src_op, x86_ea
 	return dst;
 }
 
+#define BIT_SUPERVISOR 5
+
 uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 {
 	uint8_t * end_off;
@@ -1306,9 +1308,35 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
 		dst = m68k_save_result(inst, dst, opts);
 		break;
-	//case M68K_ANDI_CCR:
-	//case M68K_ANDI_SR:
-	//	break;
+	case M68K_ANDI_CCR:
+	case M68K_ANDI_SR:
+		dst = cycles(dst, 20);
+		//TODO: If ANDI to SR, trap if not in supervisor mode
+		if (!(inst->src.params.immed & 0x1)) {
+			dst = mov_ir(dst, 0, FLAG_C, SZ_B);
+		}
+		if (!(inst->src.params.immed & 0x2)) {
+			dst = mov_ir(dst, 0, FLAG_V, SZ_B);
+		}
+		if (!(inst->src.params.immed & 0x4)) {
+			dst = mov_ir(dst, 0, FLAG_Z, SZ_B);
+		}
+		if (!(inst->src.params.immed & 0x8)) {
+			dst = mov_ir(dst, 0, FLAG_N, SZ_B);
+		}
+		if (!(inst->src.params.immed & 0x10)) {
+			dst = mov_irind(dst, 0, CONTEXT, SZ_B);
+		}
+		if (inst->op == M68K_ANDI_SR) {
+			dst = and_irdisp8(dst, inst->src.params.immed >> 8, CONTEXT, offsetof(m68k_context, status), SZ_B);
+			if (!((inst->src.params.immed >> 8) & (1 << BIT_SUPERVISOR))) {
+				//leave supervisor mode
+				dst = mov_rr(dst, opts->aregs[7], SCRATCH1, SZ_B);
+				dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, opts->aregs[7], SZ_B);
+				dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SZ_B);
+			}
+		}
+		break;
 	case M68K_ASL:
 	case M68K_LSL:
 		dst = translate_shift(dst, inst, &src_op, &dst_op, opts, shl_ir, shl_irdisp8, shl_clr, shl_clrdisp8, shr_ir, shr_irdisp8);
@@ -1436,8 +1464,8 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 			}
 		}
 		break;
-	case M68K_EXT:
-		break;
+	//case M68K_EXT:
+	//	break;
 	case M68K_ILLEGAL:
 		dst = call(dst, (uint8_t *)m68k_save_context);
 		dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
@@ -1459,6 +1487,12 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 			dst = mov_irind(dst, (src_op.disp >> 4) & 0x1, CONTEXT, SZ_B);
 			if (inst->op == M68K_MOVE_SR) {
 				dst = mov_irdisp8(dst, (src_op.disp >> 8), CONTEXT, offsetof(m68k_context, status), SZ_B);
+				if (!((inst->src.params.immed >> 8) & (1 << BIT_SUPERVISOR))) {
+					//leave supervisor mode
+					dst = mov_rr(dst, opts->aregs[7], SCRATCH1, SZ_D);
+					dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, opts->aregs[7], SZ_D);
+					dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SZ_D);
+				}
 			}
 			dst = cycles(dst, 12);
 		} else {
@@ -1492,8 +1526,27 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 			dst = mov_rrdisp8(dst, SCRATCH2, CONTEXT, offsetof(m68k_context, status), SZ_B);
 		}
 		break;
-	/*case M68K_MOVE_USP:
-	case M68K_MOVEP:
+	case M68K_MOVE_USP:
+		dst = cycles(dst, BUS);
+		//TODO: Trap if not in supervisor mode
+		//dst = bt_irdisp8(dst, BIT_SUPERVISOR, CONTEXT, offsetof(m68k_context, status), SZ_B);
+		if (inst->src.addr_mode == MODE_UNUSED) {
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, dst_op.base, SZ_D);
+			} else {
+				dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SCRATCH1, SZ_D);
+				dst = mov_rrdisp8(dst, SCRATCH1, dst_op.base, dst_op.disp, SZ_D);
+			}
+		} else {
+			if (src_op.mode == MODE_REG_DIRECT) {
+				dst = mov_rrdisp8(dst, src_op.base, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SZ_D);
+			} else {
+				dst = mov_rdisp8r(dst, src_op.base, src_op.disp, SCRATCH1, SZ_D);
+				dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SZ_D);
+			}
+		}
+		break;
+	/*case M68K_MOVEP:
 	case M68K_MULS:
 	case M68K_MULU:
 	case M68K_NBCD:
@@ -1503,8 +1556,8 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	case M68K_NOP:
 		dst = cycles(dst, BUS);
 		break;
-	case M68K_NOT:
-		break;
+	//case M68K_NOT:
+	//	break;
 	case M68K_OR:
 		dst = cycles(dst, BUS);
 		if (src_op.mode == MODE_REG_DIRECT) {
