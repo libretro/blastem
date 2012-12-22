@@ -28,6 +28,17 @@
 
 #define MCLKS_LINE 3420
 
+#define FLAG_DOT_OFLOW 0x1
+#define FLAG_CAN_MASK  0x2
+#define FLAG_MASKED    0x4
+#define FLAG_WINDOW    0x8
+#define FLAG_PENDING   0x10
+#define FLAG_UNUSED_SLOT 0x20
+#define FLAG_DMA_RUN   0x40
+#define FLAG_DMA_PROG  0x80
+
+#define DISPLAY_ENABLE 0x40
+
 enum {
 	REG_MODE_1=0,
 	REG_MODE_2,
@@ -43,7 +54,12 @@ enum {
 	REG_AUTOINC=0xF,
 	REG_SCROLL,
 	REG_WINDOW_H,
-	REG_WINDOW_V
+	REG_WINDOW_V,
+	REG_DMALEN_L,
+	REG_DMALEN_H,
+	REG_DMASRC_L,
+	REG_DMASRC_M,
+	REG_DMASRC_H
 } vdp_regs;
 
 typedef struct {
@@ -92,6 +108,7 @@ typedef struct {
 	sprite_info sprite_info_list[MAX_SPRITES_LINE];
 	uint16_t    col_1;
 	uint16_t    col_2;
+	uint16_t    dma_val;
 	uint8_t     v_offset;
 	uint8_t     *tmp_buf_a;
 	uint8_t     *tmp_buf_b;
@@ -101,9 +118,11 @@ void init_vdp_context(vdp_context * context);
 void vdp_run_context(vdp_context * context, uint32_t target_cycles);
 //runs from current cycle count to VBLANK for the current mode, returns ending cycle count
 uint32_t vdp_run_to_vblank(vdp_context * context);
+//runs until the target cycle is reached or the current DMA operation has completed, whicever comes first
+void vdp_run_dma_done(vdp_context * context, uint32_t target_cycles);
 void vdp_load_savestate(vdp_context * context, FILE * state_file);
 void vdp_save_state(vdp_context * context, FILE * outfile);
-void vdp_control_port_write(vdp_context * context, uint16_t value);
+int vdp_control_port_write(vdp_context * context, uint16_t value);
 void vdp_data_port_write(vdp_context * context, uint16_t value);
 uint16_t vdp_control_port_read(vdp_context * context);
 uint16_t vdp_data_port_read(vdp_context * context);

@@ -1,4 +1,5 @@
 #include "vdp.h"
+#include "blastem.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -9,18 +10,12 @@
 #define MAP_BIT_H_FLIP 0x800
 #define MAP_BIT_V_FLIP 0x1000
 
-#define BIT_PAL 0x8
-#define BIT_H40 0x1
+#define BIT_PAL        0x8
+#define BIT_DMA_ENABLE 0x4
+#define BIT_H40        0x1
 
 #define SCROLL_BUFFER_SIZE 32
 #define SCROLL_BUFFER_DRAW 16
-
-#define FLAG_DOT_OFLOW 0x1
-#define FLAG_CAN_MASK  0x2
-#define FLAG_MASKED    0x4
-#define FLAG_WINDOW    0x8
-#define FLAG_PENDING   0x10
-#define FLAG_UNUSED_SLOT 0x20
 
 #define FIFO_SIZE 4
 
@@ -182,45 +177,162 @@ void read_sprite_x(uint32_t line, vdp_context * context)
 #define CRAM_WRITE 3
 #define VSRAM_READ 4
 #define VSRAM_WRITE 5
+#define DMA_START 0x20
 
 void external_slot(vdp_context * context)
 {
-	fifo_entry * start = (context->fifo_end - FIFO_SIZE);
-	//TODO: Implement DMA
-	if (context->fifo_cur != start && start->cycle <= context->cycles) {
-		switch (context->cd & 0x7)
+	//TODO: Figure out what happens if CD bit 4 is not set in DMA copy mode
+	//TODO: Figure out what happens when CD:0-3 is not set to a write mode in DMA operations
+	//TODO: Figure out what happens if DMA gets disabled part way through a DMA fill or DMA copy
+	if((context->regs[REG_MODE_2] & BIT_DMA_ENABLE) && (context->flags & FLAG_DMA_RUN)) {
+		uint16_t dma_len;
+		switch(context->regs[REG_DMASRC_H] & 0xC0)
 		{
-		case VRAM_WRITE:
-			if (start->partial) {
-				//printf("VRAM Write: %X to %X\n", start->value, context->address ^ 1);
-				context->vdpmem[context->address ^ 1] = start->value;
+		//68K -> VDP
+		case 0:
+		case 0x40:
+			switch(context->cd & 0xF)
+			{
+			case VRAM_WRITE:
+				if (context->flags & FLAG_DMA_PROG) {
+					context->vdpmem[context->address ^ 1] = context->dma_val;
+					context->flags &= ~FLAG_DMA_PROG;
+				} else {
+					context->dma_val = read_dma_value((context->regs[REG_DMASRC_H] << 16) | (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]);
+					context->vdpmem[context->address] = context->dma_val >> 8;
+					context->flags |= FLAG_DMA_PROG;
+				}
+				break;
+			case CRAM_WRITE:
+				context->cram[(context->address/2) & (CRAM_SIZE-1)] = read_dma_value((context->regs[REG_DMASRC_H] << 16) | (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]);
+				break;
+			case VSRAM_WRITE:
+				if (((context->address/2) & 63) < VSRAM_SIZE) {
+					context->vsram[(context->address/2) & 63] = read_dma_value((context->regs[REG_DMASRC_H] << 16) | (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]);
+				}
+				break;
+			}
+			break;
+		//Fill
+		case 0x80:
+			switch(context->cd & 0xF)
+			{
+			case VRAM_WRITE:
+				//Charles MacDonald's VDP doc says that the low byte gets written first
+				//this doesn't make a lot of sense to me, but until I've had a change to
+				//verify it myself, I'll assume it's true
+				if (context->flags & FLAG_DMA_PROG) {
+					context->vdpmem[context->address ^ 1] = context->dma_val >> 8;
+					context->flags &= ~FLAG_DMA_PROG;
+				} else {
+					context->dma_val = read_dma_value((context->regs[REG_DMASRC_H] << 16) | (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]);
+					context->vdpmem[context->address] = context->dma_val;
+					context->flags |= FLAG_DMA_PROG;
+				}
+				break;
+			case CRAM_WRITE:
+				context->cram[(context->address/2) & (CRAM_SIZE-1)] = context->dma_val;
+				break;
+			case VSRAM_WRITE:
+				if (((context->address/2) & 63) < VSRAM_SIZE) {
+					context->vsram[(context->address/2) & 63] = context->dma_val;
+				}
+				break;
+			}
+			break;
+		//Copy
+		case 0xC0:
+			if (context->flags & FLAG_DMA_PROG) {
+				switch(context->cd & 0xF)
+				{
+				case VRAM_WRITE:
+					context->vdpmem[context->address] = context->dma_val;
+					break;
+				case CRAM_WRITE:
+					context->cram[(context->address/2) & (CRAM_SIZE-1)] = context->dma_val;
+					break;
+				case VSRAM_WRITE:
+					if (((context->address/2) & 63) < VSRAM_SIZE) {
+						context->vsram[(context->address/2) & 63] = context->dma_val;
+					}
+					break;
+				}
+				context->flags &= ~FLAG_DMA_PROG;
 			} else {
-				//printf("VRAM Write High: %X to %X\n", start->value >> 8, context->address);
-				context->vdpmem[context->address] = start->value >> 8;
-				start->partial = 1;
-				//skip auto-increment and removal of entry from fifo
-				return;
-			}
-			break;
-		case CRAM_WRITE:
-			//printf("CRAM Write: %X to %X\n", start->value, context->address);
-			context->cram[(context->address/2) & (CRAM_SIZE-1)] = start->value;
-			break;
-		case VSRAM_WRITE:
-			if (((context->address/2) & 63) < VSRAM_SIZE) {
-				//printf("VSRAM Write: %X to %X\n", start->value, context->address);
-				context->vsram[(context->address/2) & 63] = start->value;
+				//I assume, that DMA copy copies from the same RAM as the destination
+				//but it's possible I'm mistaken
+				switch(context->cd & 0xF)
+				{
+				case VRAM_WRITE:
+					context->dma_val = context->vdpmem[(context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]];
+					break;
+				case CRAM_WRITE:
+					context->dma_val = context->cram[context->regs[REG_DMASRC_L] & (CRAM_SIZE-1)];
+					break;
+				case VSRAM_WRITE:
+					if ((context->regs[REG_DMASRC_L] & 63) < VSRAM_SIZE) {
+						context->dma_val = context->vsram[context->regs[REG_DMASRC_L] & 63];
+					} else {
+						context->dma_val = 0;
+					}
+					break;
+				}
+				context->flags |= FLAG_DMA_PROG;
 			}
 			break;
 		}
-		context->address += context->regs[REG_AUTOINC];
-		fifo_entry * cur = start+1;
-		if (cur < context->fifo_cur) {
-			memmove(start, cur, sizeof(fifo_entry) * (context->fifo_cur - cur));
+		if (!(context->flags & FLAG_DMA_PROG)) {
+			context->address += context->regs[REG_AUTOINC];
+			context->regs[REG_DMASRC_L] += 1;
+			dma_len = ((context->regs[REG_DMALEN_H] << 8) | context->regs[REG_DMALEN_L]) - 1;
+			context->regs[REG_DMALEN_H] = dma_len >> 8;
+			context->regs[REG_DMALEN_L] = dma_len;
+			if (!dma_len) {
+				context->flags &= ~FLAG_DMA_RUN;
+			}
 		}
-		context->fifo_cur -= 1;
 	} else {
-		context->flags |= FLAG_UNUSED_SLOT;
+		fifo_entry * start = (context->fifo_end - FIFO_SIZE);
+		if (context->fifo_cur != start && start->cycle <= context->cycles) {
+			if ((context->regs[REG_MODE_2] & BIT_DMA_ENABLE) && (context->cd & DMA_START)) {
+				context->flags |= FLAG_DMA_RUN;
+				context->dma_val = start->value;
+			} else {
+				switch (context->cd & 0xF)
+				{
+				case VRAM_WRITE:
+					if (start->partial) {
+						//printf("VRAM Write: %X to %X\n", start->value, context->address ^ 1);
+						context->vdpmem[context->address ^ 1] = start->value;
+					} else {
+						//printf("VRAM Write High: %X to %X\n", start->value >> 8, context->address);
+						context->vdpmem[context->address] = start->value >> 8;
+						start->partial = 1;
+						//skip auto-increment and removal of entry from fifo
+						return;
+					}
+					break;
+				case CRAM_WRITE:
+					//printf("CRAM Write: %X to %X\n", start->value, context->address);
+					context->cram[(context->address/2) & (CRAM_SIZE-1)] = start->value;
+					break;
+				case VSRAM_WRITE:
+					if (((context->address/2) & 63) < VSRAM_SIZE) {
+						//printf("VSRAM Write: %X to %X\n", start->value, context->address);
+						context->vsram[(context->address/2) & 63] = start->value;
+					}
+					break;
+				}
+				context->address += context->regs[REG_AUTOINC];
+			}
+			fifo_entry * cur = start+1;
+			if (cur < context->fifo_cur) {
+				memmove(start, cur, sizeof(fifo_entry) * (context->fifo_cur - cur));
+			}
+			context->fifo_cur -= 1;
+		} else {
+			context->flags |= FLAG_UNUSED_SLOT;
+		}
 	}
 }
 
@@ -794,8 +906,6 @@ void latch_mode(vdp_context * context)
 	context->latched_mode = (context->regs[REG_MODE_4] & 0x81) | (context->regs[REG_MODE_2] & BIT_PAL);
 }
 
-#define DISPLAY_ENABLE 0x40
-
 int is_refresh(vdp_context * context)
 {
 	uint32_t linecyc = context->cycles % MCLKS_LINE;
@@ -886,17 +996,49 @@ uint32_t vdp_run_to_vblank(vdp_context * context)
 	return context->cycles;
 }
 
-void vdp_control_port_write(vdp_context * context, uint16_t value)
+void vdp_run_dma_done(vdp_context * context, uint32_t target_cycles)
+{
+	for(;;) {
+		uint32_t dmalen = (context->regs[REG_DMALEN_H] << 8) | context->regs[REG_DMALEN_L];
+		if (!dmalen) {
+			dmalen = 0x10000;
+		}
+		uint32_t min_dma_complete = dmalen * (context->latched_mode & BIT_H40 ? 16 : 20);
+		if ((context->regs[REG_DMASRC_H] & 0xC0) == 0xC0 || (context->cd & 0xF) == VRAM_WRITE) {
+			//DMA copies take twice as long to complete since they require a read and a write
+			//DMA Fills and transfers to VRAM also take twice as long as it requires 2 writes for a single word
+			min_dma_complete *= 2;
+		}
+		min_dma_complete += context->cycles;
+		if (target_cycles < min_dma_complete) {
+			vdp_run_context(context, target_cycles);
+			return;
+		} else {
+			vdp_run_context(context, min_dma_complete);
+			if (!(context->flags & FLAG_DMA_RUN)) {
+				return;
+			}
+		}
+	}
+}
+
+int vdp_control_port_write(vdp_context * context, uint16_t value)
 {
 	//printf("control port write: %X\n", value);
 	if (context->flags & FLAG_PENDING) {
 		context->address = (context->address & 0x3FFF) | (value << 14);
 		context->cd = (context->cd & 0x3) | ((value >> 2) & 0x3C);
-		if (context->cd & 0x30) {
-			puts("attempt to use DMA detected!");
-		}
-		//printf("New Address: %X, New CD: %X\n", context->address, context->cd);
 		context->flags &= ~FLAG_PENDING;
+		//printf("New Address: %X, New CD: %X\n", context->address, context->cd);
+		if (context->cd & 0x20) {
+			if((context->regs[REG_DMASRC_H] & 0xC0) != 0x80) {
+				//DMA copy or 68K -> VDP, transfer starts immediately
+				context->flags |= FLAG_DMA_RUN;
+				if (!(context->regs[REG_DMASRC_H] & 0x80)) {
+					return 1;
+				}
+			}
+		}
 	} else {
 		if ((value & 0xC000) == 0x8000) {
 			//Register write
@@ -914,6 +1056,7 @@ void vdp_control_port_write(vdp_context * context, uint16_t value)
 			context->cd = (context->cd &0x3C) | (value >> 14);
 		}
 	}
+	return 0;
 }
 
 void vdp_data_port_write(vdp_context * context, uint16_t value)
@@ -941,6 +1084,9 @@ uint16_t vdp_control_port_read(vdp_context * context)
 	}
 	if (context->fifo_cur == context->fifo_end) {
 		value |= 0x100;
+	}
+	if (context->flags & FLAG_DMA_RUN) {
+		value |= 0x20;
 	}
 	//TODO: Lots of other bits in status port
 	return value;
