@@ -412,7 +412,6 @@ void process_deferred(x86_68k_options * opts)
 		uint8_t * native = get_native_address(opts->native_code_map, cur->address);
 		if (native) {
 			int32_t disp = native - (cur->dest + 4);
-			printf("Native dest: %p, Offset address: %p, displacement: %X\n", native, cur->dest, disp);
 			uint8_t * out = cur->dest;
 			*(out++) = disp;
 			disp >>= 8;
@@ -465,7 +464,6 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 		if (reg >= 0) {
 			flags_reg = reg;
 		} else {
-			printf("moving %d to temp register %d\n", src.disp, SCRATCH1);
 			dst = mov_ir(dst, src.disp, SCRATCH1, SZ_D);
 			src.mode = MODE_REG_DIRECT;
 			flags_reg = src.base = SCRATCH1;
@@ -484,7 +482,6 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 				dst = mov_ir(dst, src.disp, reg, inst->extra.size);
 			}
 		} else if(src.mode == MODE_REG_DIRECT) {
-			printf("mov_rrdisp8 from reg %d to offset %d from reg %d (%d)\n", src.base, (int)reg_offset(&(inst->dst)), CONTEXT, inst->dst.params.regs.pri);
 			dst = mov_rrdisp8(dst, src.base, CONTEXT, reg_offset(&(inst->dst)), inst->extra.size);
 		} else {
 			dst = mov_irdisp8(dst, src.disp, CONTEXT, reg_offset(&(inst->dst)), inst->extra.size);
@@ -749,14 +746,12 @@ uint8_t * translate_m68k_movem(uint8_t * dst, m68kinst * inst, x86_68k_options *
 					dst = call(dst, (uint8_t *)m68k_read_word_scratch1);
 				}
 				if (reg > 7) {
-					printf("movem.%c to a%d\n", (inst->extra.size == OPSIZE_WORD ? 'w' : 'l'), reg-8);
 					if (opts->aregs[reg-8] >= 0) {
 						dst = mov_rr(dst, SCRATCH1, opts->aregs[reg-8], inst->extra.size);
 					} else {
 						dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * (reg-8), inst->extra.size);
 					}
 				} else {
-					printf("movem.%c to d%d\n", (inst->extra.size == OPSIZE_WORD ? 'w' : 'l'), reg);
 					if (opts->dregs[reg] >= 0) {
 						dst = mov_rr(dst, SCRATCH1, opts->dregs[reg], inst->extra.size);
 					} else {
@@ -921,7 +916,6 @@ uint8_t * translate_m68k_bsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 	dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
 	dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
 	dst = call(dst, (char *)m68k_write_long_highfirst);
-	printf("bsr@%X: after=%X, disp=%X, dest=%X\n", inst->address, after, disp, after+disp);
 	uint8_t * dest_addr = get_native_address(opts->native_code_map, after + disp);
 	if (!dest_addr) {
 		opts->deferred = defer_address(opts->deferred, after + disp, dst + 1);
@@ -939,7 +933,6 @@ uint8_t * translate_m68k_bcc(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 	//TODO: Add cycles
 	int32_t disp = inst->src.params.immed;
 	uint32_t after = inst->address + 2;
-	printf("bcc@%X: after=%X, disp=%X, dest=%X\n", inst->address, after, disp, after+disp);
 	uint8_t * dest_addr = get_native_address(opts->native_code_map, after + disp);
 	if (inst->extra.cond == COND_TRUE) {
 		if (!dest_addr) {
