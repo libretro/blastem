@@ -2,6 +2,16 @@
 #include <stdio.h>
 #include "vdp.h"
 #include "render.h"
+#include "blastem.h"
+
+//not used, but referenced by the renderer since it handles input
+io_port gamepad_1;
+io_port gamepad_2;
+
+uint16_t read_dma_value(uint32_t address)
+{
+	return 0;
+}
 
 int main(int argc, char ** argv)
 {
@@ -28,6 +38,7 @@ int main(int argc, char ** argv)
 	init_vdp_context(&context);
 	vdp_load_savestate(&context, state_file);
 	vdp_run_to_vblank(&context);
+	printf("Display %s\n", (context.regs[REG_MODE_2] & DISPLAY_ENABLE) ? "enabled" : "disabled");
     render_init(width, height);
     render_context(&context);
     render_wait_quit(&context);
