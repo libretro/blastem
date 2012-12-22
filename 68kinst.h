@@ -123,10 +123,17 @@ typedef enum {
 	MODE_AREG_INDEX_MEM, //bunch of relatively complicated modes
 	MODE_PC_INDIRECT_ABS_IMMED, //Modes that use the program counter, an absolute address or immediate value
 //expanded values
+	MODE_AREG_INDEX_DISP8,
+#ifdef M68020
+	MODE_AREG_INDEX_DISP32,
+#endif
 	MODE_ABSOLUTE_SHORT,
 	MODE_ABSOLUTE,
 	MODE_PC_DISPLACE,
-	MODE_PC_INDEX,
+	MODE_PC_INDEX_DISP8,
+#ifdef M68020
+	MODE_PC_INDEX_DISP32,
+#endif
 	MODE_IMMEDIATE,
 	MODE_IMMEDIATE_WORD,//used to indicate an immediate operand that only uses a single extension word even for a long operation
 	MODE_UNUSED
