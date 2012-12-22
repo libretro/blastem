@@ -22,7 +22,7 @@ do_vdp_port_read:
 	call vdp_port_read
 	mov %rax, %rsi
 	call m68k_load_context
-	mov 120(%rsi), %cx
+	mov 128(%rsi), %cx
 	ret
 	
 do_io_write:
@@ -40,7 +40,7 @@ do_io_read:
 	call io_read
 	mov %rax, %rsi
 	call m68k_load_context
-	mov 120(%rsi), %cl
+	mov 128(%rsi), %cl
 	ret
 	
 bad_access_msg:
@@ -76,7 +76,7 @@ try_fifo_write:
 	push %rdx
 	push %rbx
 	/* fetch VDP context pointer from 68K context */
-	mov 112(%rsi), %rdx
+	mov 120(%rsi), %rdx
 	/* get fifo_cur and compare it to fifo_end */
 	mov (%rdx), %rbx
 	cmp %rbx, 8(%rdx)
@@ -187,6 +187,17 @@ m68k_read_word_scratch1:
 	jge workram
 	cmp $0xC00000, %ecx
 	jge vdp_psg
+	cmp $0xA10000, %ecx
+	jl not_io
+	cmp $0xA10100, %ecx
+	jge not_io
+	call do_io_read
+	mov %cl, %dil
+	and $0xFF, %cx
+	shl $8, %di
+	or %di, %cx
+	ret
+not_io:
 	xor %cx, %cx
 	dec %cx
 	ret
@@ -277,7 +288,7 @@ m68k_save_context:
 	mov %r13d, 40(%rsi) /* a0 */
 	mov %r14d, 44(%rsi) /* a1 */
 	mov %r15d, 68(%rsi) /* a7 */
-	mov %eax, 76(%rsi) /* current cycle count */
+	mov %eax, 80(%rsi) /* current cycle count */
 	ret
 
 	.global m68k_load_context
@@ -292,10 +303,10 @@ m68k_load_context:
 	mov 40(%rsi), %r13d /* a0 */
 	mov 44(%rsi), %r14d /* a1 */
 	mov 68(%rsi), %r15d /* a7 */
-	mov 72(%rsi), %ebp /* target cycle count */
-	mov 76(%rsi), %eax /* current cycle count */
-	mov 80(%rsi), %r8d /* cartridge address */
-	mov 88(%rsi), %r9d /* work ram address */
+	mov 76(%rsi), %ebp /* target cycle count */
+	mov 80(%rsi), %eax /* current cycle count */
+	mov 88(%rsi), %r8d /* cartridge address */
+	mov 96(%rsi), %r9d /* work ram address */
 	ret
 
 	.global m68k_start_context
