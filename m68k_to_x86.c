@@ -79,6 +79,7 @@ void print_regs_exit(m68k_context * context)
 uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68k_options * opts)
 {
 	int8_t reg = native_reg(&(inst->src), opts);
+	uint8_t sec_reg;
 	int32_t dec_amount,inc_amount;
 	if (reg >= 0) {
 		ea->mode = MODE_REG_DIRECT;
@@ -166,6 +167,48 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		ea->mode = MODE_REG_DIRECT;
 		ea->base = SCRATCH1;
 		break;
+	case MODE_AREG_INDEX_DISP8:
+		out = cycles(out, 6);
+		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
+			out = mov_rr(out, opts->aregs[inst->src.params.regs.pri], SCRATCH1, SZ_D);
+		} else {
+			out = mov_rdisp8r(out, CONTEXT,  reg_offset(&(inst->src)), SCRATCH1, SZ_D);
+		}
+		sec_reg = (inst->src.params.regs.sec >> 1) & 0x7;
+		if (inst->src.params.regs.sec & 1) {
+			if (inst->src.params.regs.sec & 0x10) {
+				if (opts->aregs[sec_reg] >= 0) {
+					out = add_rr(out, opts->aregs[sec_reg], SCRATCH1, SZ_D);
+				} else {
+					out = add_rdisp8r(out, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, SCRATCH1, SZ_D);
+				}
+			} else {
+				if (opts->dregs[sec_reg] >= 0) {
+					out = add_rr(out, opts->dregs[sec_reg], SCRATCH1, SZ_D);
+				} else {
+					out = add_rdisp8r(out, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, SCRATCH1, SZ_D);
+				}
+			}
+		} else {
+			if (inst->src.params.regs.sec & 0x10) {
+				if (opts->aregs[sec_reg] >= 0) {
+					out = movsx_rr(out, opts->aregs[sec_reg], SCRATCH2, SZ_W, SZ_D);
+				} else {
+					out = movsx_rdisp8r(out, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, SCRATCH2, SZ_W, SZ_D);
+				}
+			} else {
+				if (opts->dregs[sec_reg] >= 0) {
+					out = movsx_rr(out, opts->dregs[sec_reg], SCRATCH2, SZ_W, SZ_D);
+				} else {
+					out = movsx_rdisp8r(out, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, SCRATCH2, SZ_W, SZ_D);
+				}
+			}
+			out = add_rr(out, SCRATCH2, SCRATCH1, SZ_D);
+		}
+		if (inst->src.params.regs.displacement) {
+			out = add_ir(out, inst->src.params.regs.displacement, SCRATCH1, SZ_D);
+		}
+		break;
 	case MODE_PC_DISPLACE:
 		out = cycles(out, BUS);
 		out = mov_ir(out, inst->src.params.regs.displacement + inst->address+2, SCRATCH1, SZ_D);
@@ -183,6 +226,44 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		}
 		ea->mode = MODE_REG_DIRECT;
 		ea->base = SCRATCH1;
+		break;
+	case MODE_PC_INDEX_DISP8:
+		out = cycles(out, 6);
+		out = mov_ir(out, inst->address, SCRATCH1, SZ_D);
+		sec_reg = (inst->src.params.regs.sec >> 1) & 0x7;
+		if (inst->src.params.regs.sec & 1) {
+			if (inst->src.params.regs.sec & 0x10) {
+				if (opts->aregs[sec_reg] >= 0) {
+					out = add_rr(out, opts->aregs[sec_reg], SCRATCH1, SZ_D);
+				} else {
+					out = add_rdisp8r(out, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, SCRATCH1, SZ_D);
+				}
+			} else {
+				if (opts->dregs[sec_reg] >= 0) {
+					out = add_rr(out, opts->dregs[sec_reg], SCRATCH1, SZ_D);
+				} else {
+					out = add_rdisp8r(out, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, SCRATCH1, SZ_D);
+				}
+			}
+		} else {
+			if (inst->src.params.regs.sec & 0x10) {
+				if (opts->aregs[sec_reg] >= 0) {
+					out = movsx_rr(out, opts->aregs[sec_reg], SCRATCH2, SZ_W, SZ_D);
+				} else {
+					out = movsx_rdisp8r(out, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, SCRATCH2, SZ_W, SZ_D);
+				}
+			} else {
+				if (opts->dregs[sec_reg] >= 0) {
+					out = movsx_rr(out, opts->dregs[sec_reg], SCRATCH2, SZ_W, SZ_D);
+				} else {
+					out = movsx_rdisp8r(out, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, SCRATCH2, SZ_W, SZ_D);
+				}
+			}
+			out = add_rr(out, SCRATCH2, SCRATCH1, SZ_D);
+		}
+		if (inst->src.params.regs.displacement) {
+			out = add_ir(out, inst->src.params.regs.displacement, SCRATCH1, SZ_D);
+		}
 		break;
 	case MODE_ABSOLUTE:
 	case MODE_ABSOLUTE_SHORT:
@@ -1007,8 +1088,7 @@ uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 			dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->src.params.regs.pri, SCRATCH1, SZ_D);
 		}
 		dst = call(dst, (uint8_t *)m68k_native_addr);
-		//TODO: Finish me
-		printf("address mode %d not yet supported (jmp)\n", inst->src.addr_mode);
+		dst = jmp_r(dst, SCRATCH1);
 		break;
 	case MODE_PC_DISPLACE:
 		dst = cycles(dst, 10);
@@ -1045,14 +1125,20 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 	{
 	case MODE_AREG_INDIRECT:
 		dst = cycles(dst, BUS*2);
+		dst = mov_ir(dst, inst->address + 8, SCRATCH1, SZ_D);
+		dst = push_r(dst, SCRATCH1);
+		dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
+		dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
+		dst = call(dst, (char *)m68k_write_long_highfirst);
 		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
 			dst = mov_rr(dst, opts->aregs[inst->src.params.regs.pri], SCRATCH1, SZ_D);
 		} else {
 			dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->src.params.regs.pri, SCRATCH1, SZ_D);
 		}
 		dst = call(dst, (uint8_t *)m68k_native_addr);
-		//TODO: Finish me
-		printf("address mode %d not yet supported (jsr)\n", inst->src.addr_mode);
+		dst = call_r(dst, SCRATCH1);
+		//would add_ir(dst, 8, RSP, SZ_Q) be faster here?
+		dst = pop_r(dst, SCRATCH1);
 		break;
 	case MODE_PC_DISPLACE:
 		//TODO: Add cycles in the right place relative to pushing the return address on the stack
