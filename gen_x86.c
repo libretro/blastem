@@ -20,6 +20,7 @@
 #define PRE_REX 0x40
 #define OP_PUSH 0x50
 #define OP_POP 0x58
+#define OP_MOVSXD 0x63
 #define PRE_SIZE 0x66
 #define OP_JCC 0x70
 #define OP_IMMED_ARITH 0x80
@@ -36,12 +37,13 @@
 #define OP_CALL 0xE8
 #define OP_JMP 0xE9
 #define OP_JMP_BYTE 0xEB
-#define OP_CALL_EA 0xFF
+#define OP_SINGLE_EA 0xFF
 
 #define OP2_JCC 0x80
 #define OP2_SETCC 0x90
 #define OP2_BT 0xA3
 #define OP2_BTX_I 0xBA
+#define OP2_MOVSX 0xBE
 
 #define OP_EX_ADDI 0x0
 #define OP_EX_ORI  0x1
@@ -65,6 +67,12 @@
 #define OP_EX_BTS 0x5
 #define OP_EX_BTR 0x6
 #define OP_EX_BTC 0x7
+
+#define OP_EX_INC     0x0
+#define OP_EX_DEC     0x1
+#define OP_EX_CALL_EA 0x2
+#define OP_EX_JMP_EA  0x4
+#define OP_EX_PUSH_EA 0x6
 
 #define BIT_IMMED_RAX 0x4
 #define BIT_DIR 0x2
@@ -863,6 +871,67 @@ uint8_t * mov_irind(uint8_t * out, int32_t val, uint8_t dst, uint8_t size)
 	return out;
 }
 
+uint8_t * movsx_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t src_size, uint8_t size)
+{
+	if (size == SZ_W) {
+		*(out++) = PRE_SIZE;
+	}
+	if (size == SZ_Q || dst >= R8 || src >= R8) {
+		*out = PRE_REX;
+		if (size == SZ_Q) {
+			*out |= REX_QUAD;
+		}
+		if (src >= R8) {
+			*out |= REX_REG_FIELD;
+			src -= (R8 - X86_R8);
+		}
+		if (dst >= R8) {
+			*out |= REX_RM_FIELD;
+			dst -= (R8 - X86_R8);
+		}
+		out++;
+	}
+	if (src_size == SZ_D) {
+		*(out++) = OP_MOVSXD;
+	} else {
+		*(out++) = PRE_2BYTE;
+		*(out++) = OP2_MOVSX | (src_size == SZ_B ? 0 : BIT_SIZE);
+	}
+	*(out++) = MODE_REG_DIRECT | src | (dst << 3);
+	return out;
+}
+
+uint8_t * movsx_rdisp8r(uint8_t * out, uint8_t src, int8_t disp, uint8_t dst, uint8_t src_size, uint8_t size)
+{
+	if (size == SZ_W) {
+		*(out++) = PRE_SIZE;
+	}
+	if (size == SZ_Q || dst >= R8 || src >= R8) {
+		*out = PRE_REX;
+		if (size == SZ_Q) {
+			*out |= REX_QUAD;
+		}
+		if (src >= R8) {
+			*out |= REX_REG_FIELD;
+			src -= (R8 - X86_R8);
+		}
+		if (dst >= R8) {
+			*out |= REX_RM_FIELD;
+			dst -= (R8 - X86_R8);
+		}
+		out++;
+	}
+	if (src_size == SZ_D) {
+		*(out++) = OP_MOVSXD;
+	} else {
+		*(out++) = PRE_2BYTE;
+		*(out++) = OP2_MOVSX | (src_size == SZ_B ? 0 : BIT_SIZE);
+	}
+	*(out++) = MODE_REG_DISPLACE8 | src | (dst << 3);
+	*(out++) = disp;
+	return out;
+}
+
 uint8_t * pushf(uint8_t * out)
 {
 	*(out++) = OP_PUSHF;
@@ -1074,6 +1143,12 @@ uint8_t * jmp(uint8_t * out, uint8_t * dest)
 	return out;
 }
 
+uint8_t * jmp_r(uint8_t * out, uint8_t dst)
+{
+	*(out++) = OP_SINGLE_EA;
+	*(out++) = MODE_REG_DIRECT | dst | (OP_EX_JMP_EA << 3);
+}
+
 uint8_t * call(uint8_t * out, uint8_t * fun)
 {
 	ptrdiff_t disp = fun-(out+5);
@@ -1092,6 +1167,12 @@ uint8_t * call(uint8_t * out, uint8_t * fun)
 		return NULL;
 	}
 	return out;
+}
+
+uint8_t * call_r(uint8_t * out, uint8_t dst)
+{
+	*(out++) = OP_SINGLE_EA;
+	*(out++) = MODE_REG_DIRECT | dst | (OP_EX_CALL_EA << 3);
 }
 
 uint8_t * retn(uint8_t * out)
