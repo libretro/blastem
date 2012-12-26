@@ -1,11 +1,107 @@
 
 	.global handle_cycle_limit
 handle_cycle_limit:
+	cmp 84(%rsi), %eax
+	jb skip_sync
 	call m68k_save_context
 	mov %rsi, %rdi
 	call sync_components
 	mov %rax, %rsi
 	call m68k_load_context
+skip_sync:
+	ret
+
+	.global handle_cycle_limit_int
+handle_cycle_limit_int:
+	cmp 88(%rsi), %eax
+	jb skip_int
+	push %rcx
+	/* swap USP and SSP if not already in supervisor mode */
+	bt $5, 5(%rsi)
+	jc already_supervisor
+	mov 72(%rsi), %edi
+	mov %r15d, 72(%rsi)
+	mov %edi, %r15d
+already_supervisor:
+	/* save status register on stack */
+	sub $2, %r15d
+	mov %r15d, %edi
+	call get_sr
+	call m68k_write_word
+	/* update status register */
+	andb $0xF8, 5(%rsi)
+	mov 92(%rsi), %cl
+	or $0x20, %cl
+	or %cl, 5(%rsi)
+	/* save PC */
+	sub $4, %r15d
+	mov %r15d, %edi
+	pop %rcx
+	call m68k_write_long_lowfirst
+	/* calculate interrupt vector address */
+	mov 92(%rsi), %ecx
+	shl $2, %ecx
+	add $0x60, %ecx
+	call m68k_read_long_scratch1
+	call m68k_native_addr_and_sync
+	add $24, %eax
+	/* discard function return address */
+	pop %rdi
+	jmp *%rcx
+skip_int:
+	ret
+
+	.global get_sr
+get_sr:
+	mov 5(%rsi), %cl
+	shl $8, %cx
+	mov (%rsi), %cl
+	shl $1, %cl
+	or %bl, %cl
+	shl $1, %cl
+	or %dl, %cl
+	shl $1, %cl
+	or %bh, %cl
+	shl $1, %cl
+	or %dh, %cl
+	ret
+
+	.global set_sr
+set_sr:
+	mov %cl, %dh
+	and $1, %dh
+	shr $1, %cl
+	mov %cl, %bh
+	and $1, %bh
+	shr $1, %cl
+	mov %cl, %dl
+	and $1, %dl
+	shr $1, %cl
+	mov %cl, %bl
+	and $1, %bl
+	shr $1, %cl
+	and $1, %cl
+	mov %cl, (%rsi)
+	shr $8, %cx
+	mov %cl, 5(%rsi)
+	ret
+
+	.global set_ccr
+set_ccr:
+	mov %cl, %dh
+	and $1, %dh
+	shr $1, %cl
+	mov %cl, %bh
+	and $1, %bh
+	shr $1, %cl
+	mov %cl, %dl
+	and $1, %dl
+	shr $1, %cl
+	mov %cl, %bl
+	and $1, %bl
+	shr $1, %cl
+	and $1, %cl
+	mov %cl, (%rsi)
 	ret
 
 do_vdp_port_write:
@@ -22,7 +118,7 @@ do_vdp_port_read:
 	call vdp_port_read
 	mov %rax, %rsi
 	call m68k_load_context
-	mov 128(%rsi), %cx
+	mov 136(%rsi), %cx
 	ret
 	
 do_io_write:
@@ -40,7 +136,7 @@ do_io_read:
 	call io_read
 	mov %rax, %rsi
 	call m68k_load_context
-	mov 128(%rsi), %cl
+	mov 136(%rsi), %cl
 	ret
 	
 bad_access_msg:
@@ -76,7 +172,7 @@ try_fifo_write:
 	push %rdx
 	push %rbx
 	/* fetch VDP context pointer from 68K context */
-	mov 120(%rsi), %rdx
+	mov 128(%rsi), %rdx
 	/* get fifo_cur and compare it to fifo_end */
 	mov (%rdx), %rbx
 	cmp %rbx, 8(%rdx)
@@ -165,7 +261,7 @@ m68k_write_long_highfirst:
 	
 inccycles:
 	cmp %rbp, %rax
-	jge do_limit
+	jnb do_limit
 	add $4, %rax
 	ret
 do_limit:
@@ -271,10 +367,30 @@ dyn_addr_msg:
 	
 	.global m68k_native_addr
 m68k_native_addr:
-	lea dyn_addr_msg(%rip), %rdi
-	call puts
-	mov $1, %rdi
-	call exit
+	call m68k_save_context
+	push %rcx
+	mov %rsi, %rdi
+	call sync_components
+	pop %rsi
+	push %rax
+	mov 144(%rax), %rdi
+	call get_native_address
+	mov %rax, %rcx
+	pop %rsi
+	call m68k_load_context
+	ret
+
+	.global m68k_native_addr_and_sync
+m68k_native_addr_and_sync:
+	call m68k_save_context
+	push %rsi
+	mov 144(%rsi), %rdi
+	mov %ecx, %esi
+	call get_native_address
+	mov %rax, %rcx
+	pop %rsi
+	call m68k_load_context
+	ret
 
 	.global m68k_save_context
 m68k_save_context:
@@ -305,8 +421,8 @@ m68k_load_context:
 	mov 68(%rsi), %r15d /* a7 */
 	mov 76(%rsi), %ebp /* target cycle count */
 	mov 80(%rsi), %eax /* current cycle count */
-	mov 88(%rsi), %r8d /* cartridge address */
-	mov 96(%rsi), %r9d /* work ram address */
+	mov 96(%rsi), %r8d /* cartridge address */
+	mov 104(%rsi), %r9d /* work ram address */
 	ret
 
 	.global m68k_start_context

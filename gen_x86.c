@@ -37,6 +37,7 @@
 #define OP_CALL 0xE8
 #define OP_JMP 0xE9
 #define OP_JMP_BYTE 0xEB
+#define OP_NOT_NEG 0xF6
 #define OP_SINGLE_EA 0xFF
 
 #define OP2_JCC 0x80
@@ -67,6 +68,10 @@
 #define OP_EX_BTS 0x5
 #define OP_EX_BTR 0x6
 #define OP_EX_BTC 0x7
+
+#define OP_EX_TEST_I 0x0
+#define OP_EX_NOT    0x2
+#define OP_EX_NEG    0x3
 
 #define OP_EX_INC     0x0
 #define OP_EX_DEC     0x1
@@ -222,6 +227,61 @@ uint8_t * x86_rrind_sizedir(uint8_t * out, uint8_t opcode, uint8_t reg, uint8_t 
 	return out;
 }
 
+uint8_t * x86_r_size(uint8_t * out, uint8_t opcode, uint8_t opex, uint8_t dst, uint8_t size)
+{
+	uint8_t tmp;
+	if (size == SZ_W) {
+		*(out++) = PRE_SIZE;
+	}
+	if (size == SZ_Q || dst >= R8) {
+		*out = PRE_REX;
+		if (size == SZ_Q) {
+			*out |= REX_QUAD;
+		}
+		if (dst >= R8) {
+			*out |= REX_RM_FIELD;
+			dst -= (R8 - X86_R8);
+		}
+		out++;
+	}
+	if (size == SZ_B) {
+		if (dst >= AH && dst <= BH) {
+			dst -= (AH-X86_AH);
+		}
+	} else {
+		opcode |= BIT_SIZE;
+	}
+	*(out++) = opcode;
+	*(out++) = MODE_REG_DIRECT | dst | (opex << 3);
+	return out;
+}
+
+uint8_t * x86_rdisp8_size(uint8_t * out, uint8_t opcode, uint8_t opex, uint8_t dst, int8_t disp, uint8_t size)
+{
+	uint8_t tmp;
+	if (size == SZ_W) {
+		*(out++) = PRE_SIZE;
+	}
+	if (size == SZ_Q || dst >= R8) {
+		*out = PRE_REX;
+		if (size == SZ_Q) {
+			*out |= REX_QUAD;
+		}
+		if (dst >= R8) {
+			*out |= REX_RM_FIELD;
+			dst -= (R8 - X86_R8);
+		}
+		out++;
+	}
+	if (size != SZ_B) {
+		opcode |= BIT_SIZE;
+	}
+	*(out++) = opcode;
+	*(out++) = MODE_REG_DISPLACE8 | dst | (opex << 3);
+	*(out++) = disp;
+	return out;
+}
+
 uint8_t * x86_ir(uint8_t * out, uint8_t opcode, uint8_t op_ex, uint8_t al_opcode, int32_t val, uint8_t dst, uint8_t size)
 {
 	uint8_t sign_extend = 0;
@@ -296,9 +356,6 @@ uint8_t * x86_irdisp8(uint8_t * out, uint8_t opcode, uint8_t op_ex, int32_t val,
 			dst -= (R8 - X86_R8);
 		}
 		out++;
-	}
-	if (dst >= AH && dst <= BH) {
-		dst -= (AH-X86_AH);
 	}
 	if (size != SZ_B) {
 		opcode |= BIT_SIZE;
@@ -716,6 +773,26 @@ uint8_t * cmp_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t disp,
 uint8_t * cmp_rdisp8r(uint8_t * out, uint8_t src_base, int8_t disp, uint8_t dst, uint8_t size)
 {
 	return x86_rrdisp8_sizedir(out, OP_CMP, dst, src_base, disp, size, BIT_DIR);
+}
+
+uint8_t * not_r(uint8_t * out, uint8_t dst, uint8_t size)
+{
+	return x86_r_size(out, OP_NOT_NEG, OP_EX_NOT, dst, size);
+}
+
+uint8_t * neg_r(uint8_t * out, uint8_t dst, uint8_t size)
+{
+	return x86_r_size(out, OP_NOT_NEG, OP_EX_NEG, dst, size);
+}
+
+uint8_t * not_rdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_rdisp8_size(out, OP_NOT_NEG, OP_EX_NOT, dst_base, disp, size);
+}
+
+uint8_t * neg_rdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_rdisp8_size(out, OP_NOT_NEG, OP_EX_NEG, dst_base, disp, size);
 }
 
 uint8_t * mov_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
@@ -1147,6 +1224,7 @@ uint8_t * jmp_r(uint8_t * out, uint8_t dst)
 {
 	*(out++) = OP_SINGLE_EA;
 	*(out++) = MODE_REG_DIRECT | dst | (OP_EX_JMP_EA << 3);
+	return out;
 }
 
 uint8_t * call(uint8_t * out, uint8_t * fun)
