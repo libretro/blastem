@@ -123,6 +123,10 @@ uint8_t * sub_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t disp,
 uint8_t * sub_rdisp8r(uint8_t * out, uint8_t src_base, int8_t disp, uint8_t dst, uint8_t size);
 uint8_t * cmp_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t disp, uint8_t size);
 uint8_t * cmp_rdisp8r(uint8_t * out, uint8_t src_base, int8_t disp, uint8_t dst, uint8_t size);
+uint8_t * not_r(uint8_t * out, uint8_t dst, uint8_t size);
+uint8_t * neg_r(uint8_t * out, uint8_t dst, uint8_t size);
+uint8_t * not_rdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size);
+uint8_t * neg_rdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size);
 uint8_t * mov_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size);
 uint8_t * mov_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t disp, uint8_t size);
 uint8_t * mov_rdisp8r(uint8_t * out, uint8_t src_base, int8_t disp, uint8_t dst, uint8_t size);

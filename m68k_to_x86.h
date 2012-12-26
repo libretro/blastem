@@ -4,11 +4,11 @@
 #define NUM_MEM_AREAS 4
 #define NATIVE_MAP_CHUNKS (32*1024)
 #define NATIVE_CHUNK_SIZE ((16 * 1024 * 1024 / NATIVE_MAP_CHUNKS)/2)
-#define INVALID_OFFSET 0xFFFF
+#define INVALID_OFFSET 0xFFFFFFFF
 
 typedef struct {
 	uint8_t  *base;
-	uint16_t *offsets;
+	int32_t *offsets;
 } native_map_slot;
 
 typedef struct deferred_addr {
@@ -35,9 +35,12 @@ typedef struct {
 	uint32_t		target_cycle; //cycle at which the next synchronization or interrupt occurs
 	uint32_t		current_cycle;
 	uint32_t        sync_cycle;
+	uint32_t        int_cycle;
+	uint32_t        int_num;
 	uint16_t        *mem_pointers[NUM_MEM_AREAS];
 	void            *next_context;
 	uint16_t        value;
+	
 	native_map_slot *native_code_map;
 	void            *options;
 } m68k_context;
