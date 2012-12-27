@@ -313,7 +313,7 @@ void external_slot(vdp_context * context)
 					}
 					break;
 				case CRAM_WRITE:
-					//printf("CRAM Write: %X to %X\n", start->value, context->address);
+					printf("CRAM Write: %X to %X, autoinc: %d\n", start->value, context->address, context->regs[REG_AUTOINC]);
 					context->cram[(context->address/2) & (CRAM_SIZE-1)] = start->value;
 					break;
 				case VSRAM_WRITE:
@@ -1029,7 +1029,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 		context->address = (context->address & 0x3FFF) | (value << 14);
 		context->cd = (context->cd & 0x3) | ((value >> 2) & 0x3C);
 		context->flags &= ~FLAG_PENDING;
-		//printf("New Address: %X, New CD: %X\n", context->address, context->cd);
+		printf("New Address: %X, New CD: %X\n", context->address, context->cd);
 		if (context->cd & 0x20) {
 			if((context->regs[REG_DMASRC_H] & 0xC0) != 0x80) {
 				//DMA copy or 68K -> VDP, transfer starts immediately
