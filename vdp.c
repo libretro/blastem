@@ -313,7 +313,7 @@ void external_slot(vdp_context * context)
 					}
 					break;
 				case CRAM_WRITE:
-					printf("CRAM Write: %X to %X, autoinc: %d\n", start->value, context->address, context->regs[REG_AUTOINC]);
+					//printf("CRAM Write: %X to %X\n", start->value, context->address);
 					context->cram[(context->address/2) & (CRAM_SIZE-1)] = start->value;
 					break;
 				case VSRAM_WRITE:
@@ -1029,7 +1029,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 		context->address = (context->address & 0x3FFF) | (value << 14);
 		context->cd = (context->cd & 0x3) | ((value >> 2) & 0x3C);
 		context->flags &= ~FLAG_PENDING;
-		printf("New Address: %X, New CD: %X\n", context->address, context->cd);
+		//printf("New Address: %X, New CD: %X\n", context->address, context->cd);
 		if (context->cd & 0x20) {
 			if((context->regs[REG_DMASRC_H] & 0xC0) != 0x80) {
 				//DMA copy or 68K -> VDP, transfer starts immediately
@@ -1044,11 +1044,11 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 			//Register write
 			uint8_t reg = (value >> 8) & 0x1F;
 			if (reg < VDP_REGS) {
-				printf("register %d set to %X\n", reg, value & 0xFF);
+				//printf("register %d set to %X\n", reg, value & 0xFF);
 				context->regs[reg] = value;
-				if (reg == REG_MODE_2) {
+				/*if (reg == REG_MODE_2) {
 					printf("Display is now %s\n", (context->regs[REG_MODE_2] & DISPLAY_ENABLE) ? "enabled" : "disabled");
-				}
+				}*/
 			}
 		} else {
 			context->flags |= FLAG_PENDING;
