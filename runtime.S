@@ -123,17 +123,35 @@ do_vdp_port_read:
 	
 do_io_write:
 	call m68k_save_context
-	and $0xFF, %edi
-	mov %rcx, %rdx
+	and $0x3FF, %edi
+	mov %ecx, %edx
 	call io_write
 	mov %rax, %rsi
 	call m68k_load_context
 	ret
 do_io_read:
 	mov %ecx, %edi
-	and $0xFF, %edi
+	and $0x3FF, %edi
 	call m68k_save_context
 	call io_read
+	mov %rax, %rsi
+	call m68k_load_context
+	mov 136(%rsi), %cl
+	ret
+
+do_io_write_w:
+	call m68k_save_context
+	and $0x3FF, %edi
+	mov %ecx, %edx
+	call io_write_w
+	mov %rax, %rsi
+	call m68k_load_context
+	ret
+do_io_read_w:
+	mov %ecx, %edi
+	and $0x3FF, %edi
+	call m68k_save_context
+	call io_read_w
 	mov %rax, %rsi
 	call m68k_load_context
 	mov 136(%rsi), %cl
@@ -208,8 +226,6 @@ crash:
 m68k_write_byte:
 	call inccycles
 	and $0xFFFFFF, %rdi
-	/* deal with byte swapping */
-	xor $1, %edi
 	cmp $0x400000, %edi
 	jle cart_wb
 	cmp $0xE00000, %edi
@@ -218,16 +234,20 @@ m68k_write_byte:
 	jge vdp_psg_wb
 	cmp $0xA10000, %edi
 	jl not_io_wb
-	cmp $0xA10100, %edi
+	cmp $0xA10300, %edi
 	jge not_io_wb
 	jmp do_io_write
 not_io_wb:
 	ret
 workram_wb:
+	/* deal with byte swapping */
+	xor $1, %edi
 	and $0xFFFF, %rdi
 	mov %cl, (%r9, %rdi)
 	ret
 cart_wb:
+	/* deal with byte swapping */
+	xor $1, %edi
 	mov %cl, (%r8, %rdi)
 	ret
 vdp_psg_wb:
@@ -285,13 +305,9 @@ m68k_read_word_scratch1:
 	jge vdp_psg
 	cmp $0xA10000, %ecx
 	jl not_io
-	cmp $0xA10100, %ecx
+	cmp $0xA10300, %ecx
 	jge not_io
-	call do_io_read
-	mov %cl, %dil
-	and $0xFF, %cx
-	shl $8, %di
-	or %di, %cx
+	call do_io_read_w
 	ret
 not_io:
 	xor %cx, %cx
@@ -327,15 +343,13 @@ m68k_read_long_scratch1:
 m68k_read_byte_scratch1:
 	call inccycles
 	and $0xFFFFFF, %rcx
-	/* deal with byte swapping */
-	xor $1, %ecx
 	cmp $0x400000, %ecx
 	jle cart_b
 	cmp $0xE00000, %ecx
 	jge workram_b
 	cmp $0xA10000, %ecx
 	jl not_io_b
-	cmp $0xA10100, %ecx
+	cmp $0xA10300, %ecx
 	jge not_io_b
 	jmp do_io_read
 not_io_b:
@@ -343,10 +357,14 @@ not_io_b:
 	dec %cl
 	ret
 workram_b:
+	/* deal with byte swapping */
+	xor $1, %ecx
 	and $0xFFFF, %rcx
 	mov (%r9, %rcx), %cl
 	ret
 cart_b:
+	/* deal with byte swapping */
+	xor $1, %ecx
 	mov (%r8, %rcx), %cl
 	ret
 	
