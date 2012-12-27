@@ -708,8 +708,8 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			decoded->variant = VAR_QUICK;
 			decoded->extra.size = size;
 			decoded->src.addr_mode = MODE_IMMEDIATE;
-			istream = m68k_decode_op(istream, size, &(decoded->dst));
 			immed = m68k_reg_quick_field(*istream);
+			istream = m68k_decode_op(istream, size, &(decoded->dst));
 			if (!immed) {
 				immed = 8;
 			}
