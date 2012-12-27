@@ -16,6 +16,7 @@ handle_cycle_limit_int:
 	cmp 88(%rsi), %eax
 	jb skip_int
 	push %rcx
+	/* call print_int_dbg */
 	/* swap USP and SSP if not already in supervisor mode */
 	bt $5, 5(%rsi)
 	jc already_supervisor
@@ -49,6 +50,17 @@ already_supervisor:
 	pop %rdi
 	jmp *%rcx
 skip_int:
+	ret
+	
+int_dbg_msg:
+	.asciz "Executing Interrupt!"
+print_int_dbg:
+	call m68k_save_context
+	push %rsi
+	lea int_dbg_msg(%rip), %rdi
+	call puts
+	pop %rsi
+	call m68k_load_context
 	ret
 
 	.global get_sr
