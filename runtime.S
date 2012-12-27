@@ -154,7 +154,7 @@ do_io_read_w:
 	call io_read_w
 	mov %rax, %rsi
 	call m68k_load_context
-	mov 136(%rsi), %cl
+	mov 136(%rsi), %cx
 	ret
 	
 bad_access_msg:
@@ -333,7 +333,9 @@ m68k_read_long_scratch1:
 	mov %cx, %di
 	pop %rcx
 	add $2, %ecx
+	push %rdi
 	call m68k_read_word_scratch1
+	pop %rdi
 	and $0xFFFF, %ecx
 	shl $16, %edi
 	or %edi, %ecx
