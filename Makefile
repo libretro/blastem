@@ -27,7 +27,7 @@ gen_fib : gen_fib.o gen_x86.o mem.o
 	$(CC) -ggdb -std=gnu99 `pkg-config --cflags-only-I $(LIBS)` -c -o $@ $<
 
 %.bin : %.s68
-	vasmm68k_mot -Fbin -m68000 -spaces -o $@ $<
+	vasmm68k_mot -Fbin -m68000 -no-opt -spaces -o $@ $<
 
 clean :
 	rm -rf dis trans stateview test_x86 gen_fib *.o
