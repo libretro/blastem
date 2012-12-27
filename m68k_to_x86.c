@@ -50,7 +50,7 @@ uint8_t * cycles(uint8_t * dst, uint32_t num)
 
 uint8_t * check_cycles_int(uint8_t * dst, uint32_t address)
 {
-	dst = cmp_rr(dst, LIMIT, CYCLES, SZ_D);
+	dst = cmp_rr(dst, CYCLES, LIMIT, SZ_D);
 	uint8_t * jmp_off = dst+1;
 	dst = jcc(dst, CC_NC, dst + 7);
 	dst = mov_ir(dst, address, SCRATCH1, SZ_D);
