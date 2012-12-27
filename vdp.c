@@ -1044,11 +1044,11 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 			//Register write
 			uint8_t reg = (value >> 8) & 0x1F;
 			if (reg < VDP_REGS) {
-				//printf("register %d set to %X\n", reg, value & 0xFF);
+				printf("register %d set to %X\n", reg, value & 0xFF);
 				context->regs[reg] = value;
-				/*if (reg == REG_MODE_2) {
+				if (reg == REG_MODE_2) {
 					printf("Display is now %s\n", (context->regs[REG_MODE_2] & DISPLAY_ENABLE) ? "enabled" : "disabled");
-				}*/
+				}
 			}
 		} else {
 			context->flags |= FLAG_PENDING;
