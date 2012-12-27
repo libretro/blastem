@@ -190,11 +190,11 @@ uint8_t new_busack = 0;
 
 void io_adjust_cycles(io_port * pad, uint32_t current_cycle, uint32_t deduction)
 {
-	uint8_t control = pad->control | 0x80;
+	/*uint8_t control = pad->control | 0x80;
 	uint8_t th = control & pad->output;
 	if (pad->input[GAMEPAD_TH0] || pad->input[GAMEPAD_TH1]) {
 		printf("adjust_cycles | control: %X, TH: %X, GAMEPAD_TH0: %X, GAMEPAD_TH1: %X, TH Counter: %d, Timeout: %d, Cycle: %d\n", control, th, pad->input[GAMEPAD_TH0], pad->input[GAMEPAD_TH1], pad->th_counter,pad->timeout_cycle, current_cycle);
-	}
+	}*/
 	if (current_cycle >= pad->timeout_cycle) {
 		pad->th_counter = 0;
 	} else {
@@ -230,9 +230,9 @@ void io_data_read(io_port * pad, m68k_context * context)
 	if (context->current_cycle >= pad->timeout_cycle) {
 		pad->th_counter = 0;
 	}
-	if (pad->input[GAMEPAD_TH0] || pad->input[GAMEPAD_TH1]) {
+	/*if (pad->input[GAMEPAD_TH0] || pad->input[GAMEPAD_TH1]) {
 		printf("io_data_read | control: %X, TH: %X, GAMEPAD_TH0: %X, GAMEPAD_TH1: %X, TH Counter: %d, Timeout: %d, Cycle: %d\n", control, th, pad->input[GAMEPAD_TH0], pad->input[GAMEPAD_TH1], pad->th_counter,pad->timeout_cycle, context->current_cycle);
-	}
+	}*/
 	if (th) {
 		if (pad->th_counter == 2) {
 			input = pad->input[GAMEPAD_EXTRA];
@@ -245,7 +245,7 @@ void io_data_read(io_port * pad, m68k_context * context)
 		} else if(pad->th_counter == 3) {
 			input = pad->input[GAMEPAD_TH0]  & 0x30;
 		} else {
-			input = pad->input[GAMEPAD_TH0];
+			input = pad->input[GAMEPAD_TH0] | 0xC;
 		}
 	}
 	context->value = ((~input) & (~control)) | (pad->output & control);
@@ -328,7 +328,7 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 			break;
 		}
 	} else {
-		printf("IO Write of %X to %X\n", value, location);
+		//printf("IO Write of %X to %X\n", value, location);
 		if (location == 0x1100) {
 			if (busack_cycle > context->current_cycle) {
 				busack = new_busack;
@@ -393,7 +393,7 @@ m68k_context * io_read(uint32_t location, m68k_context * context)
 				busack_cycle = CYCLE_NEVER;
 			}
 			context->value = (!reset) && busack;
-			printf("Byte read of BUSREQ returned %d\n", context->value);
+			//printf("Byte read of BUSREQ returned %d\n", context->value);
 		} else if (location == 0x1200) {
 			context->value = !reset;
 		} else {
@@ -433,7 +433,7 @@ m68k_context * io_read_w(uint32_t location, m68k_context * context)
 			break;
 		}
 		context->value = context->value | (context->value << 8);
-		printf("Word read to %X returned %d\n", location, context->value);
+		//printf("Word read to %X returned %d\n", location, context->value);
 	} else {
 		if (location == 0x1100) {
 			if (busack_cycle > context->current_cycle) {
@@ -441,7 +441,7 @@ m68k_context * io_read_w(uint32_t location, m68k_context * context)
 				busack_cycle = CYCLE_NEVER;
 			}
 			context->value = ((!reset) && busack) << 8;
-			printf("Word read of BUSREQ returned %d\n", context->value);
+			//printf("Word read of BUSREQ returned %d\n", context->value);
 		} else if (location == 0x1200) {
 			context->value = (!reset) << 8;
 		} else {
