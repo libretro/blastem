@@ -479,6 +479,9 @@ uint8_t * m68k_save_result(m68kinst * inst, uint8_t * out, x86_68k_options * opt
 uint8_t * get_native_address(native_map_slot * native_code_map, uint32_t address)
 {
 	address &= 0xFFFFFF;
+	if (address > 0x400000) {
+		printf("get_native_address: %X\n", address);
+	}
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
 	if (!native_code_map[chunk].base) {
 		return NULL;

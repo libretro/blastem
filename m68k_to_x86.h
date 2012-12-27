@@ -2,7 +2,7 @@
 #include "68kinst.h"
 
 #define NUM_MEM_AREAS 4
-#define NATIVE_MAP_CHUNKS (32*1024)
+#define NATIVE_MAP_CHUNKS (64*1024)
 #define NATIVE_CHUNK_SIZE ((16 * 1024 * 1024 / NATIVE_MAP_CHUNKS)/2)
 #define INVALID_OFFSET 0xFFFFFFFF
 
