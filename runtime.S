@@ -268,10 +268,12 @@ vdp_psg_wb:
 	.global m68k_write_long_lowfirst
 m68k_write_long_lowfirst:
 	push %rdi
+	push %rcx
 	add $2, %edi
 	call m68k_write_word
-	shr $16, %ecx
+	pop %rcx
 	pop %rdi
+	shr $16, %ecx
 	jmp m68k_write_word
 
 	.global m68k_write_long_highfirst
@@ -391,8 +393,8 @@ m68k_modified_ret_addr:
 dyn_addr_msg:
 	.asciz "Program needs dynamically calculated native address\n"
 	
-	.global m68k_native_addr
-m68k_native_addr:
+	.global m68k_native_addr_and_sync
+m68k_native_addr_and_sync:
 	call m68k_save_context
 	push %rcx
 	mov %rsi, %rdi
@@ -406,8 +408,8 @@ m68k_native_addr:
 	call m68k_load_context
 	ret
 
-	.global m68k_native_addr_and_sync
-m68k_native_addr_and_sync:
+	.global m68k_native_addr
+m68k_native_addr:
 	call m68k_save_context
 	push %rsi
 	mov 144(%rsi), %rdi
