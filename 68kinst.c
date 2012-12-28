@@ -802,11 +802,11 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 		}
 		break;
 	case SUB_SUBX:
-		size = *istream >> 6 & 0x3;
+		size = (*istream >> 6) & 0x3;
 		decoded->op = M68K_SUB;
 		if (*istream & 0x100) {
 			//<ea> destination, SUBA.l or SUBX
-			if (*istream & 0x6) {
+			if (*istream & 0x30 || size == OPSIZE_INVALID) {
 				if (size == OPSIZE_INVALID) {
 					//SUBA.l
 					decoded->extra.size = OPSIZE_LONG;
@@ -930,11 +930,11 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 		}
 		break;
 	case ADD_ADDX:
-		size = *istream >> 6 & 0x3;
+		size = (*istream >> 6) & 0x3;
 		decoded->op = M68K_ADD;
 		if (*istream & 0x100) {
 			//<ea> destination, ADDA.l or ADDX
-			if (*istream & 0x6) {
+			if (*istream & 0x30 || size == OPSIZE_INVALID) {
 				if (size == OPSIZE_INVALID) {
 					//ADDA.l
 					decoded->extra.size = OPSIZE_LONG;
