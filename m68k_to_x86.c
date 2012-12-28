@@ -1443,6 +1443,7 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		break;
 	default:
 		printf("address mode %d not yet supported (jsr)\n", inst->src.addr_mode);
+		exit(1);
 	}
 	return dst;
 }
@@ -1913,15 +1914,21 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 			}
 		}
 		break;
-	//case M68K_EXT:
-	//	break;
 	case M68K_ILLEGAL:
 		dst = call(dst, (uint8_t *)m68k_save_context);
 		dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
 		dst = call(dst, (uint8_t *)print_regs_exit);
 		break;
-	/*case M68K_MOVE_FROM_SR:
-		break;*/
+	case M68K_MOVE_FROM_SR:
+		//TODO: Trap if not in system mode
+		dst = call(dst, (uint8_t *)get_sr);
+		if (dst_op.mode == MODE_REG_DIRECT) {
+			dst = mov_rr(dst, SCRATCH1, dst_op.base, SZ_W);
+		} else {
+			dst = mov_rrdisp8(dst, SCRATCH1, dst_op.base, dst_op.disp, SZ_W);
+		}
+		dst = m68k_save_result(inst, dst, opts);
+		break;
 	case M68K_MOVE_CCR:
 	case M68K_MOVE_SR:
 		//TODO: Privilege check for MOVE to SR
