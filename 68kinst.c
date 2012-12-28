@@ -709,7 +709,6 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			decoded->extra.size = size;
 			decoded->src.addr_mode = MODE_IMMEDIATE;
 			immed = m68k_reg_quick_field(*istream);
-			istream = m68k_decode_op(istream, size, &(decoded->dst));
 			if (!immed) {
 				immed = 8;
 			}
@@ -719,6 +718,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			} else {
 				decoded->op = M68K_ADD;
 			}
+			istream = m68k_decode_op(istream, size, &(decoded->dst));
 		}
 		break;
 	case BRANCH:
