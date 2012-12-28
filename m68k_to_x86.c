@@ -245,7 +245,7 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		break;
 	case MODE_PC_INDEX_DISP8:
 		out = cycles(out, 6);
-		out = mov_ir(out, inst->address, SCRATCH1, SZ_D);
+		out = mov_ir(out, inst->address+2, SCRATCH1, SZ_D);
 		sec_reg = (inst->src.params.regs.sec >> 1) & 0x7;
 		if (inst->src.params.regs.sec & 1) {
 			if (inst->src.params.regs.sec & 0x10) {
@@ -280,6 +280,20 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		if (inst->src.params.regs.displacement) {
 			out = add_ir(out, inst->src.params.regs.displacement, SCRATCH1, SZ_D);
 		}
+		switch (inst->extra.size)
+		{
+		case OPSIZE_BYTE:
+			out = call(out, (char *)m68k_read_byte_scratch1);
+			break;
+		case OPSIZE_WORD:
+			out = call(out, (char *)m68k_read_word_scratch1);
+			break;
+		case OPSIZE_LONG:
+			out = call(out, (char *)m68k_read_long_scratch1);
+			break;
+		}
+		ea->mode = MODE_REG_DIRECT;
+		ea->base = SCRATCH1;
 		break;
 	case MODE_ABSOLUTE:
 	case MODE_ABSOLUTE_SHORT:
@@ -487,9 +501,9 @@ uint8_t * m68k_save_result(m68kinst * inst, uint8_t * out, x86_68k_options * opt
 uint8_t * get_native_address(native_map_slot * native_code_map, uint32_t address)
 {
 	address &= 0xFFFFFF;
-	//if (address > 0x400000) {
+	if (address > 0x400000) {
 		printf("get_native_address: %X\n", address);
-	//}
+	}
 	address /= 2;
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
 	if (!native_code_map[chunk].base) {
