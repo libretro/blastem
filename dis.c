@@ -26,7 +26,7 @@ deferred * defer(uint32_t address, deferred * next)
 	if (is_visited(address)) {
 		return next;
 	}
-	printf("deferring %X\n", address);
+	//printf("deferring %X\n", address);
 	deferred * d = malloc(sizeof(deferred));
 	d->address = address;
 	d->next = next;
@@ -84,8 +84,8 @@ int main(int argc, char ** argv)
 			next = m68k_decode(encoded, &instbuf, address);
 			address += (next-encoded)*2;
 			encoded = next;
-			m68k_disasm(&instbuf, disbuf);
-			printf("%X: %s\n", instbuf.address, disbuf);
+			//m68k_disasm(&instbuf, disbuf);
+			//printf("%X: %s\n", instbuf.address, disbuf);
 			if (instbuf.op == M68K_ILLEGAL || instbuf.op == M68K_RTS || instbuf.op == M68K_RTE) {
 				break;
 			} else if (instbuf.op == M68K_BCC || instbuf.op == M68K_DBCC || instbuf.op == M68K_BSR) {
