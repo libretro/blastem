@@ -1139,7 +1139,7 @@ uint8_t * translate_m68k_ext(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 
 uint8_t * translate_m68k_lea(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 {
-	int8_t dst_reg = native_reg(&(inst->dst), opts);
+	int8_t dst_reg = native_reg(&(inst->dst), opts), sec_reg;
 	switch(inst->src.addr_mode)
 	{
 	case MODE_AREG_INDIRECT:
@@ -1176,6 +1176,53 @@ uint8_t * translate_m68k_lea(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 				dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, reg_offset(&(inst->dst)), SZ_D);
 			}
 			dst = add_irdisp8(dst, inst->src.params.regs.displacement, CONTEXT, reg_offset(&(inst->src)), SZ_D);
+		}
+		break;
+	case MODE_AREG_INDEX_DISP8:
+		dst = cycles(dst, 6);//TODO: Check to make sure this is correct
+		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
+			dst = mov_rr(dst, opts->aregs[inst->src.params.regs.pri], SCRATCH2, SZ_D);
+		} else {
+			dst = mov_rdisp8r(dst, CONTEXT,  reg_offset(&(inst->src)), SCRATCH2, SZ_D);
+		}
+		sec_reg = (inst->src.params.regs.sec >> 1) & 0x7;
+		if (inst->src.params.regs.sec & 1) {
+			if (inst->src.params.regs.sec & 0x10) {
+				if (opts->aregs[sec_reg] >= 0) {
+					dst = add_rr(dst, opts->aregs[sec_reg], SCRATCH2, SZ_D);
+				} else {
+					dst = add_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, SCRATCH2, SZ_D);
+				}
+			} else {
+				if (opts->dregs[sec_reg] >= 0) {
+					dst = add_rr(dst, opts->dregs[sec_reg], SCRATCH2, SZ_D);
+				} else {
+					dst = add_rdisp8r(dst, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, SCRATCH2, SZ_D);
+				}
+			}
+		} else {
+			if (inst->src.params.regs.sec & 0x10) {
+				if (opts->aregs[sec_reg] >= 0) {
+					dst = movsx_rr(dst, opts->aregs[sec_reg], SCRATCH1, SZ_W, SZ_D);
+				} else {
+					dst = movsx_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, SCRATCH1, SZ_W, SZ_D);
+				}
+			} else {
+				if (opts->dregs[sec_reg] >= 0) {
+					dst = movsx_rr(dst, opts->dregs[sec_reg], SCRATCH1, SZ_W, SZ_D);
+				} else {
+					dst = movsx_rdisp8r(dst, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, SCRATCH1, SZ_W, SZ_D);
+				}
+			}
+			dst = add_rr(dst, SCRATCH1, SCRATCH2, SZ_D);
+		}
+		if (inst->src.params.regs.displacement) {
+			dst = add_ir(dst, inst->src.params.regs.displacement, SCRATCH2, SZ_D);
+		}
+		if (dst_reg >= 0) {
+			dst = mov_rr(dst, SCRATCH2, dst_reg, SZ_D);
+		} else {
+			dst = mov_rrdisp8(dst, SCRATCH2, CONTEXT, reg_offset(&(inst->src)), SZ_D);
 		}
 		break;
 	case MODE_PC_DISPLACE:
