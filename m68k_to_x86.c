@@ -1383,7 +1383,7 @@ uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 
 uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 {
-	uint8_t * dest_addr;
+	uint8_t * dest_addr, sec_reg;
 	uint32_t after;
 	switch(inst->src.addr_mode)
 	{
@@ -1398,6 +1398,57 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 			dst = mov_rr(dst, opts->aregs[inst->src.params.regs.pri], SCRATCH1, SZ_D);
 		} else {
 			dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->src.params.regs.pri, SCRATCH1, SZ_D);
+		}
+		dst = call(dst, (uint8_t *)m68k_native_addr);
+		dst = call_r(dst, SCRATCH1);
+		//would add_ir(dst, 8, RSP, SZ_Q) be faster here?
+		dst = pop_r(dst, SCRATCH1);
+		break;
+	case MODE_AREG_INDEX_DISP8:
+		dst = cycles(dst, BUS*3);//TODO: CHeck that this is correct
+		dst = mov_ir(dst, inst->address + 8, SCRATCH1, SZ_D);
+		dst = push_r(dst, SCRATCH1);
+		dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
+		dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
+		dst = call(dst, (char *)m68k_write_long_highfirst);
+		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
+			dst = mov_rr(dst, opts->aregs[inst->src.params.regs.pri], SCRATCH1, SZ_D);
+		} else {
+			dst = mov_rdisp8r(dst, CONTEXT,  reg_offset(&(inst->src)), SCRATCH1, SZ_D);
+		}
+		sec_reg = (inst->src.params.regs.sec >> 1) & 0x7;
+		if (inst->src.params.regs.sec & 1) {
+			if (inst->src.params.regs.sec & 0x10) {
+				if (opts->aregs[sec_reg] >= 0) {
+					dst = add_rr(dst, opts->aregs[sec_reg], SCRATCH1, SZ_D);
+				} else {
+					dst = add_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, SCRATCH1, SZ_D);
+				}
+			} else {
+				if (opts->dregs[sec_reg] >= 0) {
+					dst = add_rr(dst, opts->dregs[sec_reg], SCRATCH1, SZ_D);
+				} else {
+					dst = add_rdisp8r(dst, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, SCRATCH1, SZ_D);
+				}
+			}
+		} else {
+			if (inst->src.params.regs.sec & 0x10) {
+				if (opts->aregs[sec_reg] >= 0) {
+					dst = movsx_rr(dst, opts->aregs[sec_reg], SCRATCH2, SZ_W, SZ_D);
+				} else {
+					dst = movsx_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, SCRATCH2, SZ_W, SZ_D);
+				}
+			} else {
+				if (opts->dregs[sec_reg] >= 0) {
+					dst = movsx_rr(dst, opts->dregs[sec_reg], SCRATCH2, SZ_W, SZ_D);
+				} else {
+					dst = movsx_rdisp8r(dst, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, SCRATCH2, SZ_W, SZ_D);
+				}
+			}
+			dst = add_rr(dst, SCRATCH2, SCRATCH1, SZ_D);
+		}
+		if (inst->src.params.regs.displacement) {
+			dst = add_ir(dst, inst->src.params.regs.displacement, SCRATCH1, SZ_D);
 		}
 		dst = call(dst, (uint8_t *)m68k_native_addr);
 		dst = call_r(dst, SCRATCH1);
@@ -1419,6 +1470,53 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 			dest_addr = dst + 5;
 		}
 		dst = call(dst, (char *)dest_addr);
+		//would add_ir(dst, 8, RSP, SZ_Q) be faster here?
+		dst = pop_r(dst, SCRATCH1);
+		break;
+	case MODE_PC_INDEX_DISP8:
+		dst = cycles(dst, BUS*3);//TODO: CHeck that this is correct
+		dst = mov_ir(dst, inst->address + 8, SCRATCH1, SZ_D);
+		dst = push_r(dst, SCRATCH1);
+		dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
+		dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
+		dst = call(dst, (char *)m68k_write_long_highfirst);
+		dst = mov_ir(dst, inst->address+2, SCRATCH1, SZ_D);
+		sec_reg = (inst->src.params.regs.sec >> 1) & 0x7;
+		if (inst->src.params.regs.sec & 1) {
+			if (inst->src.params.regs.sec & 0x10) {
+				if (opts->aregs[sec_reg] >= 0) {
+					dst = add_rr(dst, opts->aregs[sec_reg], SCRATCH1, SZ_D);
+				} else {
+					dst = add_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, SCRATCH1, SZ_D);
+				}
+			} else {
+				if (opts->dregs[sec_reg] >= 0) {
+					dst = add_rr(dst, opts->dregs[sec_reg], SCRATCH1, SZ_D);
+				} else {
+					dst = add_rdisp8r(dst, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, SCRATCH1, SZ_D);
+				}
+			}
+		} else {
+			if (inst->src.params.regs.sec & 0x10) {
+				if (opts->aregs[sec_reg] >= 0) {
+					dst = movsx_rr(dst, opts->aregs[sec_reg], SCRATCH2, SZ_W, SZ_D);
+				} else {
+					dst = movsx_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, SCRATCH2, SZ_W, SZ_D);
+				}
+			} else {
+				if (opts->dregs[sec_reg] >= 0) {
+					dst = movsx_rr(dst, opts->dregs[sec_reg], SCRATCH2, SZ_W, SZ_D);
+				} else {
+					dst = movsx_rdisp8r(dst, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, SCRATCH2, SZ_W, SZ_D);
+				}
+			}
+			dst = add_rr(dst, SCRATCH2, SCRATCH1, SZ_D);
+		}
+		if (inst->src.params.regs.displacement) {
+			dst = add_ir(dst, inst->src.params.regs.displacement, SCRATCH1, SZ_D);
+		}
+		dst = call(dst, (uint8_t *)m68k_native_addr);
+		dst = call_r(dst, SCRATCH1);
 		//would add_ir(dst, 8, RSP, SZ_Q) be faster here?
 		dst = pop_r(dst, SCRATCH1);
 		break;
