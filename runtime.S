@@ -413,8 +413,8 @@ m68k_native_addr_and_sync:
 	call sync_components
 	pop %rsi
 	push %rax
-	mov 144(%rax), %rdi
-	call get_native_address
+	mov %rax, %rdi
+	call get_native_address_trans
 	mov %rax, %rcx
 	pop %rsi
 	call m68k_load_context
@@ -424,9 +424,9 @@ m68k_native_addr_and_sync:
 m68k_native_addr:
 	call m68k_save_context
 	push %rsi
-	mov 144(%rsi), %rdi
+	mov %rsi, %rdi
 	mov %ecx, %esi
-	call get_native_address
+	call get_native_address_trans
 	mov %rax, %rcx
 	pop %rsi
 	call m68k_load_context
