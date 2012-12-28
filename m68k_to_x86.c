@@ -826,14 +826,14 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 		break;
 	case MODE_AREG_INDEX_DISP8:
 		dst = cycles(dst, 6);//TODO: Check to make sure this is correct
-		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
-			dst = mov_rr(dst, opts->aregs[inst->src.params.regs.pri], SCRATCH2, SZ_D);
+		if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
+			dst = mov_rr(dst, opts->aregs[inst->dst.params.regs.pri], SCRATCH2, SZ_D);
 		} else {
-			dst = mov_rdisp8r(dst, CONTEXT,  reg_offset(&(inst->src)), SCRATCH2, SZ_D);
+			dst = mov_rdisp8r(dst, CONTEXT,  reg_offset(&(inst->dst)), SCRATCH2, SZ_D);
 		}
-		sec_reg = (inst->src.params.regs.sec >> 1) & 0x7;
-		if (inst->src.params.regs.sec & 1) {
-			if (inst->src.params.regs.sec & 0x10) {
+		sec_reg = (inst->dst.params.regs.sec >> 1) & 0x7;
+		if (inst->dst.params.regs.sec & 1) {
+			if (inst->dst.params.regs.sec & 0x10) {
 				if (opts->aregs[sec_reg] >= 0) {
 					dst = add_rr(dst, opts->aregs[sec_reg], SCRATCH2, SZ_D);
 				} else {
@@ -850,7 +850,7 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 			if (src.base == SCRATCH1) {
 				dst = push_r(dst, SCRATCH1);
 			}
-			if (inst->src.params.regs.sec & 0x10) {
+			if (inst->dst.params.regs.sec & 0x10) {
 				if (opts->aregs[sec_reg] >= 0) {
 					dst = movsx_rr(dst, opts->aregs[sec_reg], SCRATCH1, SZ_W, SZ_D);
 				} else {
@@ -868,8 +868,8 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 				dst = pop_r(dst, SCRATCH1);
 			}
 		}
-		if (inst->src.params.regs.displacement) {
-			dst = add_ir(dst, inst->src.params.regs.displacement, SCRATCH2, SZ_D);
+		if (inst->dst.params.regs.displacement) {
+			dst = add_ir(dst, inst->dst.params.regs.displacement, SCRATCH2, SZ_D);
 		}
 		dst = cmp_ir(dst, 0, flags_reg, inst->extra.size);
 		dst = setcc_r(dst, CC_Z, FLAG_Z);
