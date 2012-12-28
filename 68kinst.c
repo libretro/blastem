@@ -683,26 +683,22 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 		if (size == 0x3) {
 			//DBcc, TRAPcc or Scc
 			m68k_decode_cond(*istream, decoded);
-			switch ((*istream >> 3) & 0x7)
-			{
-			case 1: //DBcc
+			if (((*istream >> 3) & 0x7) == 1) {
 				decoded->op = M68K_DBCC;
 				decoded->src.addr_mode = MODE_IMMEDIATE;
 				decoded->dst.addr_mode = MODE_REG;
 				decoded->dst.params.regs.pri = *istream & 0x7;
 				decoded->src.params.immed = sign_extend16(*(++istream));
-				break;
-			case 7: //TRAPcc
+			} else if(((*istream >> 3) & 0x7) == 1 && (*istream & 0x7) > 1 && (*istream & 0x7) < 5) {
 #ifdef M68020
 				decoded->op = M68K_TRAPCC;
 				decoded->src.addr_mode = MODE_IMMEDIATE;
 				//TODO: Figure out what to do with OPMODE and optional extention words
 #endif
-				break;
-			default: //Scc
+			} else {
 				decoded->op = M68K_SCC;
+				decoded->extra.cond = (*istream >> 8) & 0xF;
 				istream = m68k_decode_op(istream, OPSIZE_BYTE, &(decoded->dst));
-				break;
 			}
 		} else {
 			//ADDQ, SUBQ
