@@ -411,7 +411,7 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 	switch(context->regs[REG_SCROLL] & 0x3)
 	{
 	case 0:
-		hscroll_mask = 0xF0;
+		hscroll_mask = 0x1F;
 		v_mul = 64;
 		break;
 	case 0x1:
@@ -424,7 +424,7 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 		v_mul = 0;
 		break;
 	case 0x3:
-		hscroll_mask = 0x3F0;
+		hscroll_mask = 0x7F;
 		v_mul = 256;
 		break;
 	}
