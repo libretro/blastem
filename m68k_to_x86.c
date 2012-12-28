@@ -349,7 +349,7 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 
 uint8_t * translate_m68k_dst(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68k_options * opts, uint8_t fake_read)
 {
-	int8_t reg = native_reg(&(inst->dst), opts);
+	int8_t reg = native_reg(&(inst->dst), opts), sec_reg;
 	int32_t dec_amount, inc_amount;
 	if (reg >= 0) {
 		ea->mode = MODE_REG_DIRECT;
@@ -440,10 +440,129 @@ uint8_t * translate_m68k_dst(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		ea->mode = MODE_REG_DIRECT;
 		ea->base = SCRATCH1;
 		break;
+	case MODE_AREG_INDEX_DISP8:
+		out = cycles(out, fake_read ? (6 + inst->extra.size == OPSIZE_LONG ? 8 : 4) : 6);
+		if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
+			out = mov_rr(out, opts->aregs[inst->dst.params.regs.pri], SCRATCH1, SZ_D);
+		} else {
+			out = mov_rdisp8r(out, CONTEXT,  reg_offset(&(inst->dst)), SCRATCH1, SZ_D);
+		}
+		sec_reg = (inst->dst.params.regs.sec >> 1) & 0x7;
+		if (inst->dst.params.regs.sec & 1) {
+			if (inst->dst.params.regs.sec & 0x10) {
+				if (opts->aregs[sec_reg] >= 0) {
+					out = add_rr(out, opts->aregs[sec_reg], SCRATCH1, SZ_D);
+				} else {
+					out = add_rdisp8r(out, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, SCRATCH1, SZ_D);
+				}
+			} else {
+				if (opts->dregs[sec_reg] >= 0) {
+					out = add_rr(out, opts->dregs[sec_reg], SCRATCH1, SZ_D);
+				} else {
+					out = add_rdisp8r(out, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, SCRATCH1, SZ_D);
+				}
+			}
+		} else {
+			if (inst->dst.params.regs.sec & 0x10) {
+				if (opts->aregs[sec_reg] >= 0) {
+					out = movsx_rr(out, opts->aregs[sec_reg], SCRATCH2, SZ_W, SZ_D);
+				} else {
+					out = movsx_rdisp8r(out, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, SCRATCH2, SZ_W, SZ_D);
+				}
+			} else {
+				if (opts->dregs[sec_reg] >= 0) {
+					out = movsx_rr(out, opts->dregs[sec_reg], SCRATCH2, SZ_W, SZ_D);
+				} else {
+					out = movsx_rdisp8r(out, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, SCRATCH2, SZ_W, SZ_D);
+				}
+			}
+			out = add_rr(out, SCRATCH2, SCRATCH1, SZ_D);
+		}
+		if (inst->dst.params.regs.displacement) {
+			out = add_ir(out, inst->dst.params.regs.displacement, SCRATCH1, SZ_D);
+		}
+		if (fake_read) {
+			out = mov_rr(out, SCRATCH1, SCRATCH2, SZ_D);
+		} else {
+			out = push_r(out, SCRATCH1);
+			switch (inst->extra.size)
+			{
+			case OPSIZE_BYTE:
+				out = call(out, (char *)m68k_read_byte_scratch1);
+				break;
+			case OPSIZE_WORD:
+				out = call(out, (char *)m68k_read_word_scratch1);
+				break;
+			case OPSIZE_LONG:
+				out = call(out, (char *)m68k_read_long_scratch1);
+				break;
+			}
+			out = pop_r(out, SCRATCH2);
+		}
+		ea->mode = MODE_REG_DIRECT;
+		ea->base = SCRATCH1;
 	case MODE_PC_DISPLACE:
 		out = cycles(out, fake_read ? BUS+(inst->extra.size == OPSIZE_LONG ? BUS*2 : BUS) : BUS);
 		out = mov_ir(out, inst->dst.params.regs.displacement + inst->address+2, fake_read ? SCRATCH2 : SCRATCH1, SZ_D);
 		if (!fake_read) {
+			out = push_r(out, SCRATCH1);
+			switch (inst->extra.size)
+			{
+			case OPSIZE_BYTE:
+				out = call(out, (char *)m68k_read_byte_scratch1);
+				break;
+			case OPSIZE_WORD:
+				out = call(out, (char *)m68k_read_word_scratch1);
+				break;
+			case OPSIZE_LONG:
+				out = call(out, (char *)m68k_read_long_scratch1);
+				break;
+			}
+			out = pop_r(out, SCRATCH2);
+		}
+		ea->mode = MODE_REG_DIRECT;
+		ea->base = SCRATCH1;
+		break;
+	case MODE_PC_INDEX_DISP8:
+		out = cycles(out, fake_read ? (6 + inst->extra.size == OPSIZE_LONG ? 8 : 4) : 6);
+		out = mov_ir(out, inst->address+2, SCRATCH1, SZ_D);
+		sec_reg = (inst->dst.params.regs.sec >> 1) & 0x7;
+		if (inst->dst.params.regs.sec & 1) {
+			if (inst->dst.params.regs.sec & 0x10) {
+				if (opts->aregs[sec_reg] >= 0) {
+					out = add_rr(out, opts->aregs[sec_reg], SCRATCH1, SZ_D);
+				} else {
+					out = add_rdisp8r(out, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, SCRATCH1, SZ_D);
+				}
+			} else {
+				if (opts->dregs[sec_reg] >= 0) {
+					out = add_rr(out, opts->dregs[sec_reg], SCRATCH1, SZ_D);
+				} else {
+					out = add_rdisp8r(out, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, SCRATCH1, SZ_D);
+				}
+			}
+		} else {
+			if (inst->dst.params.regs.sec & 0x10) {
+				if (opts->aregs[sec_reg] >= 0) {
+					out = movsx_rr(out, opts->aregs[sec_reg], SCRATCH2, SZ_W, SZ_D);
+				} else {
+					out = movsx_rdisp8r(out, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, SCRATCH2, SZ_W, SZ_D);
+				}
+			} else {
+				if (opts->dregs[sec_reg] >= 0) {
+					out = movsx_rr(out, opts->dregs[sec_reg], SCRATCH2, SZ_W, SZ_D);
+				} else {
+					out = movsx_rdisp8r(out, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, SCRATCH2, SZ_W, SZ_D);
+				}
+			}
+			out = add_rr(out, SCRATCH2, SCRATCH1, SZ_D);
+		}
+		if (inst->dst.params.regs.displacement) {
+			out = add_ir(out, inst->dst.params.regs.displacement, SCRATCH1, SZ_D);
+		}
+		if (fake_read) {
+			out = mov_rr(out, SCRATCH1, SCRATCH2, SZ_D);
+		} else {
 			out = push_r(out, SCRATCH1);
 			switch (inst->extra.size)
 			{
