@@ -701,7 +701,7 @@ void map_native_address(native_map_slot * native_code_map, uint32_t address, uin
 
 uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 {
-	int8_t reg, flags_reg;
+	int8_t reg, flags_reg, sec_reg;
 	uint8_t dir = 0;
 	int32_t offset;
 	int32_t inc_amount, dec_amount;
@@ -807,6 +807,69 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 			dst = mov_rdisp8r(dst, src.base, src.disp, SCRATCH1, inst->extra.size);
 		} else {
 			dst = mov_ir(dst, src.disp, SCRATCH1, inst->extra.size);
+		}
+		dst = cmp_ir(dst, 0, flags_reg, inst->extra.size);
+		dst = setcc_r(dst, CC_Z, FLAG_Z);
+		dst = setcc_r(dst, CC_S, FLAG_N);
+		switch (inst->extra.size)
+		{
+		case OPSIZE_BYTE:
+			dst = call(dst, (char *)m68k_write_byte);
+			break;
+		case OPSIZE_WORD:
+			dst = call(dst, (char *)m68k_write_word);
+			break;
+		case OPSIZE_LONG:
+			dst = call(dst, (char *)m68k_write_long_highfirst);
+			break;
+		}
+		break;
+	case MODE_AREG_INDEX_DISP8:
+		dst = cycles(dst, 6);//TODO: Check to make sure this is correct
+		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
+			dst = mov_rr(dst, opts->aregs[inst->src.params.regs.pri], SCRATCH2, SZ_D);
+		} else {
+			dst = mov_rdisp8r(dst, CONTEXT,  reg_offset(&(inst->src)), SCRATCH2, SZ_D);
+		}
+		sec_reg = (inst->src.params.regs.sec >> 1) & 0x7;
+		if (inst->src.params.regs.sec & 1) {
+			if (inst->src.params.regs.sec & 0x10) {
+				if (opts->aregs[sec_reg] >= 0) {
+					dst = add_rr(dst, opts->aregs[sec_reg], SCRATCH2, SZ_D);
+				} else {
+					dst = add_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, SCRATCH2, SZ_D);
+				}
+			} else {
+				if (opts->dregs[sec_reg] >= 0) {
+					dst = add_rr(dst, opts->dregs[sec_reg], SCRATCH2, SZ_D);
+				} else {
+					dst = add_rdisp8r(dst, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, SCRATCH2, SZ_D);
+				}
+			}
+		} else {
+			if (src.base == SCRATCH1) {
+				dst = push_r(dst, SCRATCH1);
+			}
+			if (inst->src.params.regs.sec & 0x10) {
+				if (opts->aregs[sec_reg] >= 0) {
+					dst = movsx_rr(dst, opts->aregs[sec_reg], SCRATCH1, SZ_W, SZ_D);
+				} else {
+					dst = movsx_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, SCRATCH1, SZ_W, SZ_D);
+				}
+			} else {
+				if (opts->dregs[sec_reg] >= 0) {
+					dst = movsx_rr(dst, opts->dregs[sec_reg], SCRATCH1, SZ_W, SZ_D);
+				} else {
+					dst = movsx_rdisp8r(dst, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, SCRATCH1, SZ_W, SZ_D);
+				}
+			}
+			dst = add_rr(dst, SCRATCH1, SCRATCH2, SZ_D);
+			if (src.base == SCRATCH1) {
+				dst = pop_r(dst, SCRATCH1);
+			}
+		}
+		if (inst->src.params.regs.displacement) {
+			dst = add_ir(dst, inst->src.params.regs.displacement, SCRATCH2, SZ_D);
 		}
 		dst = cmp_ir(dst, 0, flags_reg, inst->extra.size);
 		dst = setcc_r(dst, CC_Z, FLAG_Z);
