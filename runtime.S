@@ -178,15 +178,15 @@ m68k_write_word:
 	call inccycles
 	and $0xFFFFFF, %rdi
 	cmp $0x400000, %edi
-	jle cart_w
+	jbe cart_w
 	cmp $0xE00000, %edi
-	jge workram_w
+	jae workram_w
 	cmp $0xC00000, %edi
-	jge vdp_psg_w
+	jae vdp_psg_w
 	cmp $0xA10000, %edi
-	jl not_io_w
+	jb not_io_w
 	cmp $0xA12000, %edi
-	jge not_io_w
+	jae not_io_w
 	jmp do_io_write_w
 not_io_w:
 	ret
@@ -202,7 +202,7 @@ vdp_psg_w:
 	jnz crash
 	and $0x1F, %edi
 	cmp $4, %edi
-	jl try_fifo_write
+	jb try_fifo_write
 	jmp do_vdp_port_write
 try_fifo_write:
 	push %rdx
@@ -245,15 +245,15 @@ m68k_write_byte:
 	call inccycles
 	and $0xFFFFFF, %rdi
 	cmp $0x400000, %edi
-	jle cart_wb
+	jbe cart_wb
 	cmp $0xE00000, %edi
-	jge workram_wb
+	jae workram_wb
 	cmp $0xC00000, %edi
-	jge vdp_psg_wb
+	jae vdp_psg_wb
 	cmp $0xA10000, %edi
-	jl not_io_wb
+	jb not_io_wb
 	cmp $0xA12000, %edi
-	jge not_io_wb
+	jae not_io_wb
 	jmp do_io_write
 not_io_wb:
 	ret
@@ -318,15 +318,15 @@ m68k_read_word_scratch1:
 	call inccycles
 	and $0xFFFFFF, %rcx
 	cmp $0x400000, %ecx
-	jle cart
+	jbe cart
 	cmp $0xE00000, %ecx
-	jge workram
+	jae workram
 	cmp $0xC00000, %ecx
-	jge vdp_psg
+	jae vdp_psg
 	cmp $0xA10000, %ecx
-	jl not_io
+	jb not_io
 	cmp $0xA12000, %ecx
-	jge not_io
+	jae not_io
 	call do_io_read_w
 	ret
 not_io:
@@ -366,13 +366,13 @@ m68k_read_byte_scratch1:
 	call inccycles
 	and $0xFFFFFF, %rcx
 	cmp $0x400000, %ecx
-	jle cart_b
+	jbe cart_b
 	cmp $0xE00000, %ecx
-	jge workram_b
+	jae workram_b
 	cmp $0xA10000, %ecx
-	jl not_io_b
+	jb not_io_b
 	cmp $0xA12000, %ecx
-	jge not_io_b
+	jae not_io_b
 	jmp do_io_read
 not_io_b:
 	xor %cl, %cl

@@ -1376,6 +1376,7 @@ uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		break;
 	default:
 		printf("address mode %d not yet supported (jmp)\n", inst->src.addr_mode);
+		exit(1);
 	}
 	return dst;
 }
