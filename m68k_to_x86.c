@@ -224,6 +224,20 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		if (inst->src.params.regs.displacement) {
 			out = add_ir(out, inst->src.params.regs.displacement, SCRATCH1, SZ_D);
 		}
+		switch (inst->extra.size)
+		{
+		case OPSIZE_BYTE:
+			out = call(out, (char *)m68k_read_byte_scratch1);
+			break;
+		case OPSIZE_WORD:
+			out = call(out, (char *)m68k_read_word_scratch1);
+			break;
+		case OPSIZE_LONG:
+			out = call(out, (char *)m68k_read_long_scratch1);
+			break;
+		}
+		ea->mode = MODE_REG_DIRECT;
+		ea->base = SCRATCH1;
 		break;
 	case MODE_PC_DISPLACE:
 		out = cycles(out, BUS);
