@@ -527,14 +527,14 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 							break;
 						case 0x10:
 							decoded->op = M68K_EXT;
-							decoded->src.addr_mode = MODE_REG;
-							decoded->src.params.regs.pri = *istream & 0x7;
+							decoded->dst.addr_mode = MODE_REG;
+							decoded->dst.params.regs.pri = *istream & 0x7;
 							decoded->extra.size = OPSIZE_WORD;
 							break;
 						case 0x18:
 							decoded->op = M68K_EXT;
-							decoded->src.addr_mode = MODE_REG;
-							decoded->src.params.regs.pri = *istream & 0x7;
+							decoded->dst.addr_mode = MODE_REG;
+							decoded->dst.params.regs.pri = *istream & 0x7;
 							decoded->extra.size = OPSIZE_LONG;
 							break;
 						case 0x38:
@@ -607,7 +607,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 								decoded->src.addr_mode = MODE_AREG;
 								decoded->src.params.regs.pri = *istream & 0x7;
 								decoded->dst.addr_mode = MODE_IMMEDIATE;
-								decoded->dst.params.immed = *(++istream);
+								decoded->dst.params.immed = sign_extend16(*(++istream));
 								break;
 							case 3:
 								//UNLK

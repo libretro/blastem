@@ -901,6 +901,29 @@ uint8_t * translate_m68k_clr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 	return dst;
 }
 
+uint8_t * translate_m68k_ext(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
+{
+	x86_ea dst_op;
+	uint8_t dst_size = inst->extra.size;
+	inst->extra.size--;
+	dst = translate_m68k_dst(inst, &dst_op, dst, opts, 0);
+	if (dst_op.mode == MODE_REG_DIRECT) {
+		dst = movsx_rr(dst, dst_op.base, dst_op.base, inst->extra.size, dst_size);
+		dst = cmp_ir(dst, 0, dst_op.base, dst_size);
+	} else {
+		dst = movsx_rdisp8r(dst, dst_op.base, dst_op.disp, SCRATCH1, inst->extra.size, dst_size);
+		dst = cmp_ir(dst, 0, SCRATCH1, dst_size);
+		dst = mov_rrdisp8(dst, SCRATCH1, dst_op.base, dst_op.disp, dst_size);
+	}
+	inst->extra.size = dst_size;
+	dst = mov_ir(dst, 0, FLAG_V, SZ_B);
+	dst = mov_ir(dst, 0, FLAG_C, SZ_B);
+	dst = setcc_r(dst, CC_Z, FLAG_Z);
+	dst = setcc_r(dst, CC_S, FLAG_N);
+	//M68K EXT only operates on registers so no need for a call to save result here
+	return dst;
+}
+
 uint8_t * translate_m68k_lea(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 {
 	int8_t dst_reg = native_reg(&(inst->dst), opts);
@@ -1410,6 +1433,8 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		return translate_m68k_movem(dst, inst, opts);
 	} else if(inst->op == M68K_LINK) {
 		return translate_m68k_link(dst, inst, opts);
+	} else if(inst->op == M68K_EXT) {
+		return translate_m68k_ext(dst, inst, opts);
 	}
 	x86_ea src_op, dst_op;
 	if (inst->src.addr_mode != MODE_UNUSED) {
@@ -1842,8 +1867,9 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		if (dst_op.mode == MODE_REG_DIRECT) {
 			dst = mov_rr(dst, SCRATCH1, dst_op.base, SZ_D);
 		} else {
-			dst = mov_rdisp8r(dst, SCRATCH1, dst_op.base, dst_op.disp, SZ_D);
+			dst = mov_rrdisp8(dst, SCRATCH1, dst_op.base, dst_op.disp, SZ_D);
 		}
+		dst = add_ir(dst, 4, opts->aregs[7], SZ_D);
 		break;
 	/*case M68K_INVALID:
 		break;*/
