@@ -1,5 +1,6 @@
 #include "gen_x86.h"
 #include "m68k_to_x86.h"
+#include "mem.h"
 #include <stdio.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -486,9 +487,10 @@ uint8_t * m68k_save_result(m68kinst * inst, uint8_t * out, x86_68k_options * opt
 uint8_t * get_native_address(native_map_slot * native_code_map, uint32_t address)
 {
 	address &= 0xFFFFFF;
-	if (address > 0x400000) {
+	//if (address > 0x400000) {
 		printf("get_native_address: %X\n", address);
-	}
+	//}
+	address /= 2;
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
 	if (!native_code_map[chunk].base) {
 		return NULL;
@@ -539,6 +541,7 @@ void process_deferred(x86_68k_options * opts)
 void map_native_address(native_map_slot * native_code_map, uint32_t address, uint8_t * native_addr)
 {
 	address &= 0xFFFFFF;
+	address/= 2;
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
 	if (!native_code_map[chunk].base) {
 		native_code_map[chunk].base = native_addr;
@@ -1880,15 +1883,25 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	return dst;
 }
 
-uint8_t * translate_m68k_stream(uint8_t * dst, uint8_t * dst_end, uint32_t address, m68k_context * context)
+uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context)
 {
 	m68kinst instbuf;
 	x86_68k_options * opts = context->options;
+	uint8_t * dst = opts->cur_code;
+	uint8_t * dst_end = opts->code_end; 
 	if(get_native_address(opts->native_code_map, address)) {
 		return dst;
 	}
 	char disbuf[1024];
-	uint16_t *encoded = context->mem_pointers[0] + address/2, *next;
+	uint16_t *encoded, *next;
+	if ((address & 0xFFFFFF) < 0x400000) {
+		encoded = context->mem_pointers[0] + (address & 0xFFFFFF)/2;
+	} else if ((address & 0xFFFFFF) > 0xE00000) {
+		encoded = context->mem_pointers[1] + (address  & 0xFFFF)/2;
+	} else {
+		printf("attempt to translate non-memory address: %X\n", address);
+		exit(1);
+	}
 	do {
 		do {
 			if (dst_end-dst < 128) {
@@ -1910,7 +1923,19 @@ uint8_t * translate_m68k_stream(uint8_t * dst, uint8_t * dst_end, uint32_t addre
 			encoded = NULL;
 		}
 	} while(encoded != NULL);
+	opts->cur_code = dst;
 	return dst;
+}
+
+uint8_t * get_native_address_trans(m68k_context * context, uint32_t address)
+{
+	address &= 0xFFFFFF;
+	uint8_t * ret = get_native_address(context->native_code_map, address);
+	if (!ret) {
+		translate_m68k_stream(address, context);
+		ret = get_native_address(context->native_code_map, address);
+	}
+	return ret;
 }
 
 void start_68k_context(m68k_context * context, uint32_t address)
@@ -1941,6 +1966,9 @@ void init_x86_68k_opts(x86_68k_options * opts)
 	opts->native_code_map = malloc(sizeof(native_map_slot) * NATIVE_MAP_CHUNKS);
 	memset(opts->native_code_map, 0, sizeof(native_map_slot) * NATIVE_MAP_CHUNKS);
 	opts->deferred = NULL;
+	size_t size = 1024 * 1024;
+	opts->cur_code = alloc_code(&size);
+	opts->code_end = opts->cur_code + size;
 }
 
 void init_68k_context(m68k_context * context, native_map_slot * native_code_map, void * opts)

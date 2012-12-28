@@ -63,6 +63,7 @@ uint16_t *m68k_decode_op_ex(uint16_t *cur, uint8_t mode, uint8_t reg, uint8_t si
 			dst->params.regs.sec = ext >> 11;//includes areg/dreg bit, reg num and word/long bit
 			dst->params.regs.displacement = sign_extend8(ext&0xFF);
 #endif
+			break;
 		case 2:
 			dst->addr_mode = MODE_PC_DISPLACE;
 			ext = *(++cur);

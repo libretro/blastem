@@ -472,8 +472,6 @@ int main(int argc, char ** argv)
 		}
 	}
 	render_init(width, height);
-	size_t size = 1024 * 1024;
-	uint8_t * transbuf = alloc_code(&size);
 	
 	x86_68k_options opts;
 	m68k_context context;
@@ -490,14 +488,13 @@ int main(int argc, char ** argv)
 	context.mem_pointers[1] = ram;
 	uint32_t address;
 	address = cart[0x68/2] << 16 | cart[0x6A/2];
-	uint8_t * end = transbuf + size;
-	transbuf = translate_m68k_stream(transbuf, end, address, &context);
+	translate_m68k_stream(address, &context);
 	address = cart[0x70/2] << 16 | cart[0x72/2];
-	transbuf = translate_m68k_stream(transbuf, end, address, &context);
+	translate_m68k_stream(address, &context);
 	address = cart[0x78/2] << 16 | cart[0x7A/2];
-	transbuf = translate_m68k_stream(transbuf, end, address, &context);
+	translate_m68k_stream(address, &context);
 	address = cart[2] << 16 | cart[3];
-	translate_m68k_stream(transbuf, end, address, &context);
+	translate_m68k_stream(address, &context);
 	m68k_reset(&context);
 	return 0;
 }
