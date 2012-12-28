@@ -487,12 +487,12 @@ int main(int argc, char ** argv)
 	//work RAM
 	context.mem_pointers[1] = ram;
 	uint32_t address;
-	address = cart[0x68/2] << 16 | cart[0x6A/2];
+	/*address = cart[0x68/2] << 16 | cart[0x6A/2];
 	translate_m68k_stream(address, &context);
 	address = cart[0x70/2] << 16 | cart[0x72/2];
 	translate_m68k_stream(address, &context);
 	address = cart[0x78/2] << 16 | cart[0x7A/2];
-	translate_m68k_stream(address, &context);
+	translate_m68k_stream(address, &context);*/
 	address = cart[2] << 16 | cart[3];
 	translate_m68k_stream(address, &context);
 	m68k_reset(&context);
