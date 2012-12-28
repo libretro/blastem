@@ -2162,8 +2162,16 @@ uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context)
 	do {
 		do {
 			if (dst_end-dst < 128) {
-				puts("out of code memory");
-				exit(1);
+				if (dst_end-dst < 5) {
+					puts("out of code memory, not enough space for jmp to next chunk");
+					exit(1);
+				}
+				size_t size = 1024*1024;
+				opts->cur_code = alloc_code(&size);
+				opts->code_end = opts->cur_code + size;
+				jmp(dst, opts->cur_code);
+				dst = opts->cur_code;
+				dst_end = opts->code_end;
 			}
 			next = m68k_decode(encoded, &instbuf, address);
 			address += (next-encoded)*2;
