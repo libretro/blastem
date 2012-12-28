@@ -1063,9 +1063,9 @@ void vdp_data_port_write(vdp_context * context, uint16_t value)
 {
 	//printf("data port write: %X\n", value);
 	context->flags &= ~FLAG_PENDING;
-	if (context->fifo_cur == context->fifo_end) {
+	/*if (context->fifo_cur == context->fifo_end) {
 		printf("FIFO full, waiting for space before next write at cycle %X\n", context->cycles);
-	}
+	}*/
 	while (context->fifo_cur == context->fifo_end) {
 		vdp_run_context(context, context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20));
 	}
