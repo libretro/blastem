@@ -1449,7 +1449,7 @@ uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		dst = cycles(dst, 10);
 		dest_addr = get_native_address(opts->native_code_map, inst->src.params.regs.displacement + inst->address + 2);
 		if (!dest_addr) {
-			opts->deferred = defer_address(opts->deferred, inst->src.params.immed, dst + 1);
+			opts->deferred = defer_address(opts->deferred, inst->src.params.regs.displacement + inst->address + 2, dst + 1);
 			//dummy address to be replaced later, make sure it generates a 4-byte displacement
 			dest_addr = dst + 256;
 		}
@@ -1557,7 +1557,7 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		dst = call(dst, (char *)m68k_write_long_highfirst);
 		dest_addr = get_native_address(opts->native_code_map, inst->src.params.regs.displacement + inst->address + 2);
 		if (!dest_addr) {
-			opts->deferred = defer_address(opts->deferred, inst->src.params.immed, dst + 1);
+			opts->deferred = defer_address(opts->deferred, inst->src.params.regs.displacement + inst->address + 2, dst + 1);
 			//dummy address to be replaced later, make sure it generates a 4-byte displacement
 			dest_addr = dst + 5;
 		}
