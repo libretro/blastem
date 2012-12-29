@@ -839,27 +839,39 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 	case RESERVED:
 		break;
 	case CMP_XOR:
-		size = *istream >> 6 & 0x3;
+		size = (*istream >> 6) & 0x3;
 		decoded->op = M68K_CMP;
 		if (*istream & 0x100) {
-			//CMPM or EOR
-			istream = m68k_decode_op(istream, size, &(decoded->dst));
-			if (decoded->src.addr_mode == MODE_AREG) {
-				//CMPM
-				decoded->src.addr_mode = decoded->dst.addr_mode = MODE_AREG_POSTINC;
-				decoded->src.params.regs.pri = decoded->dst.params.regs.pri;
+			//CMPM or CMPA.l or EOR
+			if (size == OPSIZE_INVALID) {
+				decoded->extra.size = OPSIZE_LONG;
+				decoded->dst.addr_mode = MODE_AREG;
 				decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
+				istream = m68k_decode_op(istream, size, &(decoded->src));
 			} else {
-				//EOR
-				decoded->op = M68K_EOR;
-				decoded->extra.size = size;
-				decoded->src.addr_mode = MODE_REG;
-				decoded->src.params.regs.pri = m68k_reg_quick_field(*istream);
+				istream = m68k_decode_op(istream, size, &(decoded->dst));
+				if (decoded->src.addr_mode == MODE_AREG) {
+					//CMPM
+					decoded->src.addr_mode = decoded->dst.addr_mode = MODE_AREG_POSTINC;
+					decoded->src.params.regs.pri = decoded->dst.params.regs.pri;
+					decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
+				} else {
+					//EOR
+					decoded->op = M68K_EOR;
+					decoded->extra.size = size;
+					decoded->src.addr_mode = MODE_REG;
+					decoded->src.params.regs.pri = m68k_reg_quick_field(*istream);
+				}
 			}
 		} else {
-			//CMP
-			decoded->extra.size = size;
-			decoded->dst.addr_mode = MODE_REG;
+			//CMP or CMPA.w
+			if (size == OPSIZE_INVALID) {
+				decoded->extra.size = OPSIZE_WORD;
+				decoded->dst.addr_mode = MODE_AREG;
+			} else {
+				decoded->extra.size = size;
+				decoded->dst.addr_mode = MODE_REG;
+			}
 			decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
 			istream = m68k_decode_op(istream, size, &(decoded->src));
 		}
