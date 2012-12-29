@@ -550,7 +550,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 							} else if((*istream & 0x1C0) == 0x40) {
 								decoded->op = M68K_PEA;
 								decoded->extra.size = OPSIZE_LONG;
-								istream = m68k_decode_op(istream, OPSIZE_LONG, &(decoded->dst));
+								istream = m68k_decode_op(istream, OPSIZE_LONG, &(decoded->src));
 							}
 						}
 						break;
