@@ -1565,7 +1565,7 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 	{
 	case MODE_AREG_INDIRECT:
 		dst = cycles(dst, BUS*2);
-		dst = mov_ir(dst, inst->address + 8, SCRATCH1, SZ_D);
+		dst = mov_ir(dst, inst->address + 2, SCRATCH1, SZ_D);
 		dst = push_r(dst, SCRATCH1);
 		dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
 		dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
@@ -1582,7 +1582,7 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		break;
 	case MODE_AREG_INDEX_DISP8:
 		dst = cycles(dst, BUS*3);//TODO: CHeck that this is correct
-		dst = mov_ir(dst, inst->address + 8, SCRATCH1, SZ_D);
+		dst = mov_ir(dst, inst->address + 4, SCRATCH1, SZ_D);
 		dst = push_r(dst, SCRATCH1);
 		dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
 		dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
@@ -1634,7 +1634,7 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 	case MODE_PC_DISPLACE:
 		//TODO: Add cycles in the right place relative to pushing the return address on the stack
 		dst = cycles(dst, 10);
-		dst = mov_ir(dst, inst->address + 8, SCRATCH1, SZ_D);
+		dst = mov_ir(dst, inst->address + 4, SCRATCH1, SZ_D);
 		dst = push_r(dst, SCRATCH1);
 		dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
 		dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
@@ -1651,7 +1651,7 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		break;
 	case MODE_PC_INDEX_DISP8:
 		dst = cycles(dst, BUS*3);//TODO: CHeck that this is correct
-		dst = mov_ir(dst, inst->address + 8, SCRATCH1, SZ_D);
+		dst = mov_ir(dst, inst->address + 4, SCRATCH1, SZ_D);
 		dst = push_r(dst, SCRATCH1);
 		dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
 		dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
@@ -1700,7 +1700,7 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 	case MODE_ABSOLUTE_SHORT:
 		//TODO: Add cycles in the right place relative to pushing the return address on the stack
 		dst = cycles(dst, inst->src.addr_mode == MODE_ABSOLUTE ? 12 : 10);
-		dst = mov_ir(dst, inst->address + 8, SCRATCH1, SZ_D);
+		dst = mov_ir(dst, inst->address + (inst->src.addr_mode == MODE_ABSOLUTE ? 6 : 4), SCRATCH1, SZ_D);
 		dst = push_r(dst, SCRATCH1);
 		dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
 		dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
