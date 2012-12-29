@@ -2356,7 +2356,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = pop_r(dst, SCRATCH1);
 		dst = bt_irdisp8(dst, 5, CONTEXT, offsetof(m68k_context, status), SZ_B);
 		end_off = dst+1;
-		dst = jcc(dst, CC_NC, dst+2);
+		dst = jcc(dst, CC_C, dst+2);
 		dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
 		dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, opts->aregs[7], SZ_D);
 		dst = mov_rrdisp8(dst, SCRATCH2, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SZ_D);
