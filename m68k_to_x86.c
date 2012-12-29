@@ -47,6 +47,7 @@ void m68k_start_context(uint8_t * addr, m68k_context * context);
 uint8_t * cycles(uint8_t * dst, uint32_t num)
 {
 	dst = add_ir(dst, num, CYCLES, SZ_D);
+	return dst;
 }
 
 uint8_t * check_cycles_int(uint8_t * dst, uint32_t address)
