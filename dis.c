@@ -106,12 +106,20 @@ int main(int argc, char ** argv)
 					if (is_visited(address)) {
 						break;
 					}
+				} else if (instbuf.src.addr_mode = MODE_PC_DISPLACE) {
+					address = instbuf.src.params.regs.displacement + instbuf.address + 2;
+					encoded = filebuf + address/2;
+					if (is_visited(address)) {
+						break;
+					}
 				} else {
 					break;
 				}
 			} else if(instbuf.op == M68K_JSR) {
 				if (instbuf.src.addr_mode == MODE_ABSOLUTE || instbuf.src.addr_mode == MODE_ABSOLUTE_SHORT) {
 					def = defer(instbuf.src.params.immed, def);
+				} else if (instbuf.src.addr_mode = MODE_PC_DISPLACE) {
+					def = defer(instbuf.src.params.regs.displacement + instbuf.address + 2, def);
 				}
 			}
 		}
