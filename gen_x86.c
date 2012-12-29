@@ -1264,6 +1264,7 @@ uint8_t * call_r(uint8_t * out, uint8_t dst)
 {
 	*(out++) = OP_SINGLE_EA;
 	*(out++) = MODE_REG_DIRECT | dst | (OP_EX_CALL_EA << 3);
+	return out;
 }
 
 uint8_t * retn(uint8_t * out)
