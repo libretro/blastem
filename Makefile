@@ -24,7 +24,7 @@ gen_fib : gen_fib.o gen_x86.o mem.o
 	$(CC) -c -o $@ $<
 
 %.o : %.c
-	$(CC) -ggdb -std=gnu99 `pkg-config --cflags-only-I $(LIBS)` -c -o $@ $<
+	$(CC) -ggdb -std=gnu99 `pkg-config --cflags-only-I $(LIBS)` -c -Wreturn-type -Werror=return-type -o $@ $<
 
 %.bin : %.s68
 	vasmm68k_mot -Fbin -m68000 -no-opt -spaces -o $@ $<
