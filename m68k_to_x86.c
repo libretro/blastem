@@ -1338,6 +1338,98 @@ uint8_t * translate_m68k_bcc(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 	return dst;
 }
 
+uint8_t * translate_m68k_scc(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
+{
+	uint8_t cond = inst->extra.cond;
+	x86_ea dst_op;
+	inst->extra.size = OPSIZE_BYTE;
+	dst = translate_m68k_dst(inst, &dst_op, dst, opts, 1);
+	if (cond == COND_TRUE || cond == COND_FALSE) {
+		if ((inst->dst.addr_mode == MODE_REG || inst->dst.addr_mode == MODE_AREG) && inst->extra.cond == COND_TRUE) {
+			dst = cycles(dst, 6);
+		} else {
+			dst = cycles(dst, BUS);
+		}
+		if (dst_op.mode == MODE_REG_DIRECT) {
+			dst = mov_ir(dst, cond == COND_TRUE, dst_op.base, SZ_B);
+		} else {
+			dst = mov_irdisp8(dst, cond == COND_TRUE, dst_op.base, dst_op.disp, SZ_B);
+		}
+	} else {
+		uint8_t cc = CC_NZ;
+		switch (cond)
+		{
+		case COND_HIGH:
+			cc = CC_Z;
+		case COND_LOW_SAME:
+			dst = mov_rr(dst, FLAG_Z, SCRATCH1, SZ_B);
+			dst = or_rr(dst, FLAG_C, SCRATCH1, SZ_B);
+			break;
+		case COND_CARRY_CLR:
+			cc = CC_Z;
+		case COND_CARRY_SET:
+			dst = cmp_ir(dst, 0, FLAG_C, SZ_B);
+			break;
+		case COND_NOT_EQ:
+			cc = CC_Z;
+		case COND_EQ:
+			dst = cmp_ir(dst, 0, FLAG_Z, SZ_B);
+			break;
+		case COND_OVERF_CLR:
+			cc = CC_Z;
+		case COND_OVERF_SET:
+			dst = cmp_ir(dst, 0, FLAG_V, SZ_B);
+			break;
+		case COND_PLUS:
+			cc = CC_Z;
+		case COND_MINUS:
+			dst = cmp_ir(dst, 0, FLAG_N, SZ_B);
+			break;
+		case COND_GREATER_EQ:
+			cc = CC_Z;
+		case COND_LESS:
+			dst = cmp_rr(dst, FLAG_N, FLAG_V, SZ_B);
+			break;
+		case COND_GREATER:
+			cc = CC_Z;
+		case COND_LESS_EQ:
+			dst = mov_rr(dst, FLAG_V, SCRATCH1, SZ_B);
+			dst = xor_rr(dst, FLAG_N, SCRATCH1, SZ_B);
+			dst = or_rr(dst, FLAG_Z, SCRATCH1, SZ_B);
+			break;
+		}
+		if ((inst->dst.addr_mode == MODE_REG || inst->dst.addr_mode == MODE_AREG)) {
+			uint8_t *true_off = dst + 1;
+			dst = jcc(dst, cc, dst+2);
+			dst = cycles(dst, BUS);
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				dst = mov_ir(dst, 0, dst_op.base, SZ_B);
+			} else {
+				dst = mov_irdisp8(dst, 0, dst_op.base, dst_op.disp, SZ_B);
+			}
+			uint8_t *end_off = dst+1;
+			dst = jmp(dst, dst+2);
+			*true_off = dst - (true_off+1);
+			dst = cycles(dst, 6);
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				dst = mov_ir(dst, 1, dst_op.base, SZ_B);
+			} else {
+				dst = mov_irdisp8(dst, 1, dst_op.base, dst_op.disp, SZ_B);
+			}
+			*end_off = dst - (end_off+1);
+		} else {
+			dst = cycles(dst, BUS);
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				dst = setcc_r(dst, cc, dst_op.base);
+			} else {
+				dst = setcc_rdisp8(dst, cc, dst_op.base, dst_op.disp);
+			}
+		}
+	}
+	dst = m68k_save_result(inst, dst, opts);
+	return dst;
+}
+
 uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 {
 	uint8_t * dest_addr;
@@ -1795,6 +1887,8 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		return translate_m68k_link(dst, inst, opts);
 	} else if(inst->op == M68K_EXT) {
 		return translate_m68k_ext(dst, inst, opts);
+	} else if(inst->op == M68K_SCC) {
+		return translate_m68k_scc(dst, inst, opts);
 	}
 	x86_ea src_op, dst_op;
 	if (inst->src.addr_mode != MODE_UNUSED) {
