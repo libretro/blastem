@@ -143,6 +143,7 @@ uint8_t * push_r(uint8_t * out, uint8_t reg);
 uint8_t * pop_r(uint8_t * out, uint8_t reg);
 uint8_t * setcc_r(uint8_t * out, uint8_t cc, uint8_t dst);
 uint8_t * setcc_rind(uint8_t * out, uint8_t cc, uint8_t dst);
+uint8_t * setcc_rdisp8(uint8_t * out, uint8_t cc, uint8_t dst, int8_t disp);
 uint8_t * bt_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size);
 uint8_t * bt_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t dst_disp, uint8_t size);
 uint8_t * bt_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size);

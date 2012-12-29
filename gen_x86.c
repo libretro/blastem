@@ -1069,6 +1069,19 @@ uint8_t * setcc_rind(uint8_t * out, uint8_t cc, uint8_t dst)
 	return out;
 }
 
+uint8_t * setcc_rdisp8(uint8_t * out, uint8_t cc, uint8_t dst, int8_t disp)
+{
+	if (dst >= R8) {
+		*(out++) = PRE_REX | REX_RM_FIELD;
+		dst -= R8 - X86_R8;
+	}
+	*(out++) = PRE_2BYTE;
+	*(out++) = OP2_SETCC | cc;
+	*(out++) = MODE_REG_DISPLACE8 | dst;
+	*(out++) = disp;
+	return out;
+}
+
 uint8_t * bt_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
 {
 	if (size == SZ_W) {
