@@ -398,6 +398,7 @@ m68k_modified_ret_addr:
 	lea ret_addr_msg(%rip), %rdi
 	mov %rcx, %rsi
 	mov 8(%rsp), %rdx
+	xor %rax, %rax
 	call printf
 	mov $1, %rdi
 	call exit
