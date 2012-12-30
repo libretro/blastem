@@ -1517,6 +1517,7 @@ uint8_t * translate_m68k_scc(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 {
 	uint8_t * dest_addr;
+	uint32_t m68k_addr;
 	switch(inst->src.addr_mode)
 	{
 	case MODE_AREG_INDIRECT:
@@ -1531,24 +1532,38 @@ uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		break;
 	case MODE_PC_DISPLACE:
 		dst = cycles(dst, 10);
-		dest_addr = get_native_address(opts->native_code_map, inst->src.params.regs.displacement + inst->address + 2);
-		if (!dest_addr) {
-			opts->deferred = defer_address(opts->deferred, inst->src.params.regs.displacement + inst->address + 2, dst + 1);
-			//dummy address to be replaced later, make sure it generates a 4-byte displacement
-			dest_addr = dst + 256;
+		m68k_addr = inst->src.params.regs.displacement + inst->address + 2;
+		if ((m68k_addr & 0xFFFFFF) < 0x400000) {
+			dest_addr = get_native_address(opts->native_code_map, m68k_addr);
+			if (!dest_addr) {
+				opts->deferred = defer_address(opts->deferred, m68k_addr, dst + 1);
+				//dummy address to be replaced later, make sure it generates a 4-byte displacement
+				dest_addr = dst + 256;
+			}
+			dst = jmp(dst, dest_addr);
+		} else {
+			dst = mov_ir(dst, m68k_addr, SCRATCH1, SZ_D);
+			dst = call(dst, (uint8_t *)m68k_native_addr);
+			dst = jmp_r(dst, SCRATCH1);
 		}
-		dst = jmp(dst, dest_addr);
 		break;
 	case MODE_ABSOLUTE:
 	case MODE_ABSOLUTE_SHORT:
 		dst = cycles(dst, inst->src.addr_mode == MODE_ABSOLUTE ? 12 : 10);
-		dest_addr = get_native_address(opts->native_code_map, inst->src.params.immed);
-		if (!dest_addr) {
-			opts->deferred = defer_address(opts->deferred, inst->src.params.immed, dst + 1);
-			//dummy address to be replaced later, make sure it generates a 4-byte displacement
-			dest_addr = dst + 256;
+		m68k_addr = inst->src.params.immed;
+		if ((m68k_addr & 0xFFFFFF) < 0x400000) {
+			dest_addr = get_native_address(opts->native_code_map, m68k_addr);
+			if (!dest_addr) {
+				opts->deferred = defer_address(opts->deferred, m68k_addr, dst + 1);
+				//dummy address to be replaced later, make sure it generates a 4-byte displacement
+				dest_addr = dst + 256;
+			}
+			dst = jmp(dst, dest_addr);
+		} else {
+			dst = mov_ir(dst, m68k_addr, SCRATCH1, SZ_D);
+			dst = call(dst, (uint8_t *)m68k_native_addr);
+			dst = jmp_r(dst, SCRATCH1);
 		}
-		dst = jmp(dst, dest_addr);
 		break;
 	default:
 		printf("address mode %d not yet supported (jmp)\n", inst->src.addr_mode);
@@ -1561,6 +1576,7 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 {
 	uint8_t * dest_addr, sec_reg;
 	uint32_t after;
+	uint32_t m68k_addr;
 	switch(inst->src.addr_mode)
 	{
 	case MODE_AREG_INDIRECT:
@@ -1639,13 +1655,20 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
 		dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
 		dst = call(dst, (char *)m68k_write_long_highfirst);
-		dest_addr = get_native_address(opts->native_code_map, inst->src.params.regs.displacement + inst->address + 2);
-		if (!dest_addr) {
-			opts->deferred = defer_address(opts->deferred, inst->src.params.regs.displacement + inst->address + 2, dst + 1);
-			//dummy address to be replaced later, make sure it generates a 4-byte displacement
-			dest_addr = dst + 5;
+		m68k_addr = inst->src.params.regs.displacement + inst->address + 2;
+		if ((m68k_addr & 0xFFFFFF) < 0x400000) {
+			dest_addr = get_native_address(opts->native_code_map, m68k_addr);
+			if (!dest_addr) {
+				opts->deferred = defer_address(opts->deferred, m68k_addr, dst + 1);
+				//dummy address to be replaced later, make sure it generates a 4-byte displacement
+				dest_addr = dst + 5;
+			}
+			dst = call(dst, (char *)dest_addr);
+		} else {
+			dst = mov_ir(dst, m68k_addr, SCRATCH1, SZ_D);
+			dst = call(dst, (uint8_t *)m68k_native_addr);
+			dst = call_r(dst, SCRATCH1);
 		}
-		dst = call(dst, (char *)dest_addr);
 		//would add_ir(dst, 8, RSP, SZ_Q) be faster here?
 		dst = pop_r(dst, SCRATCH1);
 		break;
@@ -1705,13 +1728,20 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
 		dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
 		dst = call(dst, (char *)m68k_write_long_highfirst);
-		dest_addr = get_native_address(opts->native_code_map, inst->src.params.immed);
-		if (!dest_addr) {
-			opts->deferred = defer_address(opts->deferred, inst->src.params.immed, dst + 1);
-			//dummy address to be replaced later, make sure it generates a 4-byte displacement
-			dest_addr = dst + 5;
+		m68k_addr = inst->src.params.immed;
+		if ((m68k_addr & 0xFFFFFF) < 0x400000) {
+			dest_addr = get_native_address(opts->native_code_map, m68k_addr);
+			if (!dest_addr) {
+				opts->deferred = defer_address(opts->deferred, m68k_addr, dst + 1);
+				//dummy address to be replaced later, make sure it generates a 4-byte displacement
+				dest_addr = dst + 5;
+			}
+			dst = call(dst, (char *)dest_addr);
+		} else {
+			dst = mov_ir(dst, m68k_addr, SCRATCH1, SZ_D);
+			dst = call(dst, (uint8_t *)m68k_native_addr);
+			dst = call_r(dst, SCRATCH1);
 		}
-		dst = call(dst, (char *)dest_addr);
 		//would add_ir(dst, 8, RSP, SZ_Q) be faster here?
 		dst = pop_r(dst, SCRATCH1);
 		break;
@@ -2622,7 +2652,14 @@ uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context)
 		process_deferred(opts);
 		if (opts->deferred) {
 			address = opts->deferred->address;
-			encoded = context->mem_pointers[0] + address/2;
+			if ((address & 0xFFFFFF) < 0x400000) {
+				encoded = context->mem_pointers[0] + (address & 0xFFFFFF)/2;
+			} else if ((address & 0xFFFFFF) > 0xE00000) {
+				encoded = context->mem_pointers[1] + (address  & 0xFFFF)/2;
+			} else {
+				printf("attempt to translate non-memory address: %X\n", address);
+				exit(1);
+			}
 		} else {
 			encoded = NULL;
 		}
