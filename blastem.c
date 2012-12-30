@@ -359,6 +359,12 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 	return context;
 }
 
+#define USA 0x80
+#define JAP 0x00
+#define EUR 0xC0
+#define NO_DISK 0x20
+uint8_t version_reg = NO_DISK | USA;
+
 m68k_context * io_read(uint32_t location, m68k_context * context)
 {
 	if (location < 0x100) {
@@ -367,7 +373,7 @@ m68k_context * io_read(uint32_t location, m68k_context * context)
 		case 0x0:
 			//version bits should be 0 for now since we're not emulating TMSS
 			//Not sure about the other bits
-			context->value = 0;
+			context->value = version_reg;
 			break;
 		case 0x1:
 			io_data_read(&gamepad_1, context);
