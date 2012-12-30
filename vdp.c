@@ -225,7 +225,6 @@ void external_slot(vdp_context * context)
 					context->vdpmem[context->address ^ 1] = context->dma_val >> 8;
 					context->flags &= ~FLAG_DMA_PROG;
 				} else {
-					context->dma_val = read_dma_value((context->regs[REG_DMASRC_H] << 16) | (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]);
 					context->vdpmem[context->address] = context->dma_val;
 					context->flags |= FLAG_DMA_PROG;
 				}
@@ -284,6 +283,9 @@ void external_slot(vdp_context * context)
 		if (!(context->flags & FLAG_DMA_PROG)) {
 			context->address += context->regs[REG_AUTOINC];
 			context->regs[REG_DMASRC_L] += 1;
+			if (!context->regs[REG_DMASRC_L]) {
+				context->regs[REG_DMASRC_M] += 1;
+			}
 			dma_len = ((context->regs[REG_DMALEN_H] << 8) | context->regs[REG_DMALEN_L]) - 1;
 			context->regs[REG_DMALEN_H] = dma_len >> 8;
 			context->regs[REG_DMALEN_L] = dma_len;
