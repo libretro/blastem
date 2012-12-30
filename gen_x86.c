@@ -962,11 +962,11 @@ uint8_t * movsx_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t src_size, ui
 			*out |= REX_QUAD;
 		}
 		if (src >= R8) {
-			*out |= REX_REG_FIELD;
+			*out |= REX_RM_FIELD;
 			src -= (R8 - X86_R8);
 		}
 		if (dst >= R8) {
-			*out |= REX_RM_FIELD;
+			*out |= REX_REG_FIELD;
 			dst -= (R8 - X86_R8);
 		}
 		out++;
@@ -992,11 +992,11 @@ uint8_t * movsx_rdisp8r(uint8_t * out, uint8_t src, int8_t disp, uint8_t dst, ui
 			*out |= REX_QUAD;
 		}
 		if (src >= R8) {
-			*out |= REX_REG_FIELD;
+			*out |= REX_RM_FIELD;
 			src -= (R8 - X86_R8);
 		}
 		if (dst >= R8) {
-			*out |= REX_RM_FIELD;
+			*out |= REX_REG_FIELD;
 			dst -= (R8 - X86_R8);
 		}
 		out++;
