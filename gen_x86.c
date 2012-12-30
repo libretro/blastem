@@ -43,7 +43,10 @@
 #define OP2_JCC 0x80
 #define OP2_SETCC 0x90
 #define OP2_BT 0xA3
+#define OP2_BTS 0xAB
+#define OP2_BTR 0xB3
 #define OP2_BTX_I 0xBA
+#define OP2_BTC 0xBB
 #define OP2_MOVSX 0xBE
 
 #define OP_EX_ADDI 0x0
@@ -1082,7 +1085,7 @@ uint8_t * setcc_rdisp8(uint8_t * out, uint8_t cc, uint8_t dst, int8_t disp)
 	return out;
 }
 
-uint8_t * bt_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
+uint8_t * bit_rr(uint8_t * out, uint8_t op2, uint8_t src, uint8_t dst, uint8_t size)
 {
 	if (size == SZ_W) {
 		*(out++) = PRE_SIZE;
@@ -1103,12 +1106,12 @@ uint8_t * bt_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
 		out++;
 	}
 	*(out++) = PRE_2BYTE;
-	*(out++) = OP2_BT;
+	*(out++) = op2;
 	*(out++) = MODE_REG_DIRECT | dst | (src << 3);
 	return out;
 }
 
-uint8_t * bt_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t dst_disp, uint8_t size)
+uint8_t * bit_rrdisp8(uint8_t * out, uint8_t op2, uint8_t src, uint8_t dst_base, int8_t dst_disp, uint8_t size)
 {
 	if (size == SZ_W) {
 		*(out++) = PRE_SIZE;
@@ -1129,13 +1132,13 @@ uint8_t * bt_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t dst_di
 		out++;
 	}
 	*(out++) = PRE_2BYTE;
-	*(out++) = OP2_BT;
+	*(out++) = op2;
 	*(out++) = MODE_REG_DISPLACE8 | dst_base | (src << 3);
 	*(out++) = dst_disp;
 	return out;
 }
 
-uint8_t * bt_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size)
+uint8_t * bit_ir(uint8_t * out, uint8_t op_ex, uint8_t val, uint8_t dst, uint8_t size)
 {
 	if (size == SZ_W) {
 		*(out++) = PRE_SIZE;
@@ -1153,12 +1156,12 @@ uint8_t * bt_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size)
 	}
 	*(out++) = PRE_2BYTE;
 	*(out++) = OP2_BTX_I;
-	*(out++) = MODE_REG_DIRECT | dst | (OP_EX_BT << 3);
+	*(out++) = MODE_REG_DIRECT | dst | (op_ex << 3);
 	*(out++) = val;
 	return out;
 }
 
-uint8_t * bt_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t dst_disp, uint8_t size)
+uint8_t * bit_irdisp8(uint8_t * out, uint8_t op_ex, uint8_t val, uint8_t dst_base, int8_t dst_disp, uint8_t size)
 {
 	if (size == SZ_W) {
 		*(out++) = PRE_SIZE;
@@ -1176,10 +1179,90 @@ uint8_t * bt_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t dst_di
 	}
 	*(out++) = PRE_2BYTE;
 	*(out++) = OP2_BTX_I;
-	*(out++) = MODE_REG_DISPLACE8 | dst_base | (OP_EX_BT << 3);
+	*(out++) = MODE_REG_DISPLACE8 | dst_base | (op_ex << 3);
 	*(out++) = dst_disp;
 	*(out++) = val;
 	return out;
+}
+
+uint8_t * bt_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
+{
+	return bit_rr(out, OP2_BT, src, dst, size);
+}
+
+uint8_t * bt_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t dst_disp, uint8_t size)
+{
+	return bit_rrdisp8(out, OP2_BT, src, dst_base, dst_disp, size);
+}
+
+uint8_t * bt_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size)
+{
+	return bit_ir(out, OP_EX_BT, val, dst, size);
+}
+
+uint8_t * bt_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t dst_disp, uint8_t size)
+{
+	return bit_irdisp8(out, OP_EX_BT, val, dst_base, dst_disp, size);
+}
+
+uint8_t * bts_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
+{
+	return bit_rr(out, OP2_BT, src, dst, size);
+}
+
+uint8_t * bts_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t dst_disp, uint8_t size)
+{
+	return bit_rrdisp8(out, OP2_BT, src, dst_base, dst_disp, size);
+}
+
+uint8_t * bts_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size)
+{
+	return bit_ir(out, OP_EX_BTS, val, dst, size);
+}
+
+uint8_t * bts_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t dst_disp, uint8_t size)
+{
+	return bit_irdisp8(out, OP_EX_BTS, val, dst_base, dst_disp, size);
+}
+
+uint8_t * btr_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
+{
+	return bit_rr(out, OP2_BTR, src, dst, size);
+}
+
+uint8_t * btr_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t dst_disp, uint8_t size)
+{
+	return bit_rrdisp8(out, OP2_BTR, src, dst_base, dst_disp, size);
+}
+
+uint8_t * btr_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size)
+{
+	return bit_ir(out, OP_EX_BTR, val, dst, size);
+}
+
+uint8_t * btr_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t dst_disp, uint8_t size)
+{
+	return bit_irdisp8(out, OP_EX_BTR, val, dst_base, dst_disp, size);
+}
+
+uint8_t * btc_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
+{
+	return bit_rr(out, OP2_BTC, src, dst, size);
+}
+
+uint8_t * btc_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t dst_disp, uint8_t size)
+{
+	return bit_rrdisp8(out, OP2_BTC, src, dst_base, dst_disp, size);
+}
+
+uint8_t * btc_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size)
+{
+	return bit_ir(out, OP_EX_BTC, val, dst, size);
+}
+
+uint8_t * btc_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t dst_disp, uint8_t size)
+{
+	return bit_irdisp8(out, OP_EX_BTC, val, dst_base, dst_disp, size);
 }
 
 uint8_t * jcc(uint8_t * out, uint8_t cc, uint8_t * dest)

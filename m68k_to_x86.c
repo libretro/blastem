@@ -2075,20 +2075,39 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	case M68K_LSR:
 		dst = translate_shift(dst, inst, &src_op, &dst_op, opts, shr_ir, shr_irdisp8, shr_clr, shr_clrdisp8, shl_ir, shl_irdisp8);
 		break;
-	/*case M68K_BCHG:
+	case M68K_BCHG:
 	case M68K_BCLR:
 	case M68K_BSET:
-		break;*/
 	case M68K_BTST:
 		dst = cycles(dst, inst->extra.size == OPSIZE_BYTE ? 4 : 6);
 		if (src_op.mode == MODE_IMMED) {
 			if (inst->extra.size == OPSIZE_BYTE) {
 				src_op.disp &= 0x7;
 			}
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				dst = bt_ir(dst, src_op.disp, dst_op.base, SZ_D);
+			if (inst->op == M68K_BTST) {
+				if (dst_op.mode == MODE_REG_DIRECT) {
+					dst = bt_ir(dst, src_op.disp, dst_op.base, SZ_D);
+				} else {
+					dst = bt_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, SZ_D);
+				}
+			} else if (inst->op == M68K_BSET) {
+				if (dst_op.mode == MODE_REG_DIRECT) {
+					dst = bts_ir(dst, src_op.disp, dst_op.base, SZ_D);
+				} else {
+					dst = bts_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, SZ_D);
+				}
+			} else if (inst->op == M68K_BCLR) {
+				if (dst_op.mode == MODE_REG_DIRECT) {
+					dst = btr_ir(dst, src_op.disp, dst_op.base, SZ_D);
+				} else {
+					dst = btr_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, SZ_D);
+				}
 			} else {
-				dst = bt_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, SZ_D);
+				if (dst_op.mode == MODE_REG_DIRECT) {
+					dst = btc_ir(dst, src_op.disp, dst_op.base, SZ_D);
+				} else {
+					dst = btc_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, SZ_D);
+				}
 			}
 		} else {
 			if (src_op.mode == MODE_REG_DISPLACE8) {
@@ -2104,10 +2123,30 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 			if (inst->extra.size == OPSIZE_BYTE) {
 				dst = and_ir(dst, 0x7, src_op.base, SZ_B);
 			}
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				dst = bt_rr(dst, src_op.base, dst_op.base, SZ_D);
+			if (inst->op == M68K_BTST) {
+				if (dst_op.mode == MODE_REG_DIRECT) {
+					dst = bt_rr(dst, src_op.base, dst_op.base, SZ_D);
+				} else {
+					dst = bt_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, SZ_D);
+				}
+			} else if (inst->op == M68K_BSET) {
+				if (dst_op.mode == MODE_REG_DIRECT) {
+					dst = bts_rr(dst, src_op.base, dst_op.base, SZ_D);
+				} else {
+					dst = bts_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, SZ_D);
+				}
+			} else if (inst->op == M68K_BCLR) {
+				if (dst_op.mode == MODE_REG_DIRECT) {
+					dst = btr_rr(dst, src_op.base, dst_op.base, SZ_D);
+				} else {
+					dst = btr_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, SZ_D);
+				}
 			} else {
-				dst = bt_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, SZ_D);
+				if (dst_op.mode == MODE_REG_DIRECT) {
+					dst = btc_rr(dst, src_op.base, dst_op.base, SZ_D);
+				} else {
+					dst = btc_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, SZ_D);
+				}
 			}
 		}
 		//x86 sets the carry flag to the value of the bit tested
