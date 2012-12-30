@@ -185,6 +185,7 @@ typedef struct {
 uint16_t * m68k_decode(uint16_t * istream, m68kinst * dst, uint32_t address);
 uint32_t m68k_cycles(m68kinst * inst);
 int m68k_disasm(m68kinst * decoded, char * dst);
+int m68k_disasm_labels(m68kinst * decoded, char * dst);
 
 #endif
 

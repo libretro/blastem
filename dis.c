@@ -3,6 +3,7 @@
 #include <stdlib.h>
 
 uint8_t visited[(16*1024*1024)/16];
+uint8_t label[(16*1024*1024)/16];
 
 void visit(uint32_t address)
 {
@@ -10,10 +11,23 @@ void visit(uint32_t address)
 	visited[address/16] |= 1 << ((address / 2) % 8);
 }
 
+void reference(uint32_t address)
+{
+	address &= 0xFFFFFF;
+	//printf("referenced: %X\n", address);
+	label[address/16] |= 1 << ((address / 2) % 8);
+}
+
 uint8_t is_visited(uint32_t address)
 {
 	address &= 0xFFFFFF;
 	return visited[address/16] & (1 << ((address / 2) % 8));
+}
+
+uint8_t is_label(uint32_t address)
+{
+	address &= 0xFFFFFF;
+	return label[address/16] & (1 << ((address / 2) % 8));
 }
 
 typedef struct deferred {
@@ -33,7 +47,22 @@ deferred * defer(uint32_t address, deferred * next)
 	return d;
 }
 
-#define SIMPLE 0
+void check_reference(m68kinst * inst, m68k_op_info * op)
+{
+	switch(op->addr_mode)
+	{
+	case MODE_PC_DISPLACE:
+		reference(inst->address + 2 + op->params.regs.displacement);
+		break;
+	case MODE_ABSOLUTE:
+	case MODE_ABSOLUTE_SHORT:
+		reference(op->params.immed);
+		break;
+	}
+}
+
+uint8_t labels = 0;
+uint8_t addr = 0;
 
 int main(int argc, char ** argv)
 {
@@ -49,12 +78,24 @@ int main(int argc, char ** argv)
 	filebuf = malloc(filesize);
 	fread(filebuf, 2, filesize/2, f);
 	fclose(f);
+	for(uint8_t opt = 2; opt < argc; ++opt) {
+		if (argv[opt][0] == '-') {
+			switch (argv[opt][1])
+			{
+			case 'l':
+				labels = 1;
+				break;
+			case 'a':
+				addr = 1;
+				break;
+			}
+		}
+	}
 	for(cur = filebuf; cur - filebuf < (filesize/2); ++cur)
 	{
 		*cur = (*cur >> 8) | (*cur << 8);
 	}
 	uint32_t address = filebuf[2] << 16 | filebuf[3], tmp_addr;
-	#if !SIMPLE
 	uint16_t *encoded, *next;
 	uint32_t size;
 	deferred *def = NULL, *tmpd;
@@ -86,17 +127,21 @@ int main(int argc, char ** argv)
 			encoded = next;
 			//m68k_disasm(&instbuf, disbuf);
 			//printf("%X: %s\n", instbuf.address, disbuf);
+			check_reference(&instbuf, &(instbuf.src));
+			check_reference(&instbuf, &(instbuf.dst));
 			if (instbuf.op == M68K_ILLEGAL || instbuf.op == M68K_RTS || instbuf.op == M68K_RTE) {
 				break;
 			} else if (instbuf.op == M68K_BCC || instbuf.op == M68K_DBCC || instbuf.op == M68K_BSR) {
 				if (instbuf.op == M68K_BCC && instbuf.extra.cond == COND_TRUE) {
 					address = instbuf.address + 2 + instbuf.src.params.immed;
 					encoded = filebuf + address/2;
+					reference(address);
 					if (is_visited(address)) {
 						break;
 					}
 				} else {
 					tmp_addr = instbuf.address + 2 + instbuf.src.params.immed;
+					reference(tmp_addr);
 					def = defer(tmp_addr, def);
 				}
 			} else if(instbuf.op == M68K_JMP) {
@@ -124,22 +169,33 @@ int main(int argc, char ** argv)
 			}
 		}
 	}
+	if (labels) {
+		for (address = filesize; address < (16*1024*1024); address++) {
+			if (is_label(address)) {
+				printf("ADR_%X equ $%X\n", address, address);
+			}
+		}
+		puts("");
+	}
 	for (address = 0; address < filesize; address+=2) {
 		if (is_visited(address)) {
 			encoded = filebuf + address/2;
 			m68k_decode(encoded, &instbuf, address);
-			m68k_disasm(&instbuf, disbuf);
-			printf("%X: %s\n", instbuf.address, disbuf);
+			if (labels) {
+				m68k_disasm_labels(&instbuf, disbuf);
+				if (is_label(instbuf.address)) {
+					printf("ADR_%X:\n", instbuf.address);
+				}
+				if (addr) {
+					printf("\t%s\t;%X\n", disbuf, instbuf.address);
+				} else {
+					printf("\t%s\n", disbuf);
+				}
+			} else {
+				m68k_disasm(&instbuf, disbuf);
+				printf("%X: %s\n", instbuf.address, disbuf);
+			}
 		}
 	}
-	#else
-	for(cur = filebuf + 0x100; (cur - filebuf) < (filesize/2); )
-	{
-		unsigned short * start = cur;
-		cur = m68k_decode(cur, &instbuf, (start - filebuf)*2);
-		m68k_disasm(&instbuf, disbuf);
-		printf("%X: %s\n", instbuf.address, disbuf);
-	}
-	#endif
 	return 0;
 }
