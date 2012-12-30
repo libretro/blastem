@@ -110,7 +110,7 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		//We only get one memory parameter, so if the dst operand is a register in memory,
 		//we need to copy this to a temp register first
 		reg = native_reg(&(inst->dst), opts);
-		if (reg >= 0 || inst->dst.addr_mode == MODE_UNUSED || (inst->dst.addr_mode != MODE_REG && inst->dst.addr_mode == MODE_AREG) 
+		if (reg >= 0 || inst->dst.addr_mode == MODE_UNUSED || (inst->dst.addr_mode != MODE_REG && inst->dst.addr_mode != MODE_AREG) 
 		    || inst->op == M68K_EXG) {
 			
 			ea->mode = MODE_REG_DISPLACE8;
