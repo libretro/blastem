@@ -110,6 +110,7 @@ typedef struct {
 	uint16_t    col_2;
 	uint16_t    dma_val;
 	uint8_t     v_offset;
+	uint8_t     dma_cd;
 	uint8_t     *tmp_buf_a;
 	uint8_t     *tmp_buf_b;
 } vdp_context;
