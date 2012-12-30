@@ -191,7 +191,7 @@ void external_slot(vdp_context * context)
 		//68K -> VDP
 		case 0:
 		case 0x40:
-			switch(context->cd & 0xF)
+			switch(context->dma_cd & 0xF)
 			{
 			case VRAM_WRITE:
 				if (context->flags & FLAG_DMA_PROG) {
@@ -215,7 +215,7 @@ void external_slot(vdp_context * context)
 			break;
 		//Fill
 		case 0x80:
-			switch(context->cd & 0xF)
+			switch(context->dma_cd & 0xF)
 			{
 			case VRAM_WRITE:
 				//Charles MacDonald's VDP doc says that the low byte gets written first
@@ -243,7 +243,7 @@ void external_slot(vdp_context * context)
 		//Copy
 		case 0xC0:
 			if (context->flags & FLAG_DMA_PROG) {
-				switch(context->cd & 0xF)
+				switch(context->dma_cd & 0xF)
 				{
 				case VRAM_WRITE:
 					context->vdpmem[context->address] = context->dma_val;
@@ -261,7 +261,7 @@ void external_slot(vdp_context * context)
 			} else {
 				//I assume, that DMA copy copies from the same RAM as the destination
 				//but it's possible I'm mistaken
-				switch(context->cd & 0xF)
+				switch(context->dma_cd & 0xF)
 				{
 				case VRAM_WRITE:
 					context->dma_val = context->vdpmem[(context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]];
@@ -297,6 +297,7 @@ void external_slot(vdp_context * context)
 			if ((context->regs[REG_MODE_2] & BIT_DMA_ENABLE) && (context->cd & DMA_START)) {
 				context->flags |= FLAG_DMA_RUN;
 				context->dma_val = start->value;
+				context->dma_cd = context->cd;
 			} else {
 				switch (context->cd & 0xF)
 				{
@@ -1034,6 +1035,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 			if((context->regs[REG_DMASRC_H] & 0xC0) != 0x80) {
 				//DMA copy or 68K -> VDP, transfer starts immediately
 				context->flags |= FLAG_DMA_RUN;
+				context->dma_cd = context->cd;
 				if (!(context->regs[REG_DMASRC_H] & 0x80)) {
 					return 1;
 				}
