@@ -110,7 +110,7 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		//We only get one memory parameter, so if the dst operand is a register in memory,
 		//we need to copy this to a temp register first
 		reg = native_reg(&(inst->dst), opts);
-		if (reg >= 0 || inst->dst.addr_mode == MODE_UNUSED || (inst->dst.addr_mode != MODE_REG && inst->dst.addr_mode != MODE_AREG) 
+		if (reg >= 0 || inst->dst.addr_mode == MODE_UNUSED || !(inst->dst.addr_mode == MODE_REG || inst->dst.addr_mode == MODE_AREG) 
 		    || inst->op == M68K_EXG) {
 			
 			ea->mode = MODE_REG_DISPLACE8;
@@ -635,9 +635,9 @@ uint8_t * m68k_save_result(m68kinst * inst, uint8_t * out, x86_68k_options * opt
 uint8_t * get_native_address(native_map_slot * native_code_map, uint32_t address)
 {
 	address &= 0xFFFFFF;
-	//if (address > 0x400000) {
+	if (address > 0x400000) {
 		printf("get_native_address: %X\n", address);
-	//}
+	}
 	address /= 2;
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
 	if (!native_code_map[chunk].base) {
@@ -719,7 +719,11 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 		if (reg >= 0) {
 			flags_reg = reg;
 		} else {
-			dst = mov_ir(dst, src.disp, SCRATCH1, SZ_D);
+			if(src.mode == MODE_REG_DISPLACE8) {
+				dst = mov_rdisp8r(dst, src.base, src.disp, SCRATCH1, inst->extra.size);
+			} else {
+				dst = mov_ir(dst, src.disp, SCRATCH1, inst->extra.size);
+			}
 			src.mode = MODE_REG_DIRECT;
 			flags_reg = src.base = SCRATCH1;
 		}
@@ -2116,27 +2120,27 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 			}
 			if (inst->op == M68K_BTST) {
 				if (dst_op.mode == MODE_REG_DIRECT) {
-					dst = bt_ir(dst, src_op.disp, dst_op.base, SZ_D);
+					dst = bt_ir(dst, src_op.disp, dst_op.base, inst->extra.size);
 				} else {
-					dst = bt_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, SZ_D);
+					dst = bt_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
 				}
 			} else if (inst->op == M68K_BSET) {
 				if (dst_op.mode == MODE_REG_DIRECT) {
-					dst = bts_ir(dst, src_op.disp, dst_op.base, SZ_D);
+					dst = bts_ir(dst, src_op.disp, dst_op.base, inst->extra.size);
 				} else {
-					dst = bts_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, SZ_D);
+					dst = bts_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
 				}
 			} else if (inst->op == M68K_BCLR) {
 				if (dst_op.mode == MODE_REG_DIRECT) {
-					dst = btr_ir(dst, src_op.disp, dst_op.base, SZ_D);
+					dst = btr_ir(dst, src_op.disp, dst_op.base, inst->extra.size);
 				} else {
-					dst = btr_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, SZ_D);
+					dst = btr_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
 				}
 			} else {
 				if (dst_op.mode == MODE_REG_DIRECT) {
-					dst = btc_ir(dst, src_op.disp, dst_op.base, SZ_D);
+					dst = btc_ir(dst, src_op.disp, dst_op.base, inst->extra.size);
 				} else {
-					dst = btc_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, SZ_D);
+					dst = btc_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
 				}
 			}
 		} else {
@@ -2144,46 +2148,46 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 				if (dst_op.base == SCRATCH1) {
 					dst = push_r(dst, SCRATCH2);
 					dst = mov_rdisp8r(dst, src_op.base, src_op.disp, SCRATCH2, SZ_B);
-					src_op.base = SCRATCH1;
+					src_op.base = SCRATCH2;
 				} else {
 					dst = mov_rdisp8r(dst, src_op.base, src_op.disp, SCRATCH1, SZ_B);
 					src_op.base = SCRATCH1;
 				}
 			}
-			if (inst->extra.size == OPSIZE_BYTE) {
-				dst = and_ir(dst, 0x7, src_op.base, SZ_B);
-			}
 			if (inst->op == M68K_BTST) {
 				if (dst_op.mode == MODE_REG_DIRECT) {
-					dst = bt_rr(dst, src_op.base, dst_op.base, SZ_D);
+					dst = bt_rr(dst, src_op.base, dst_op.base, inst->extra.size);
 				} else {
-					dst = bt_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, SZ_D);
+					dst = bt_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
 				}
 			} else if (inst->op == M68K_BSET) {
 				if (dst_op.mode == MODE_REG_DIRECT) {
-					dst = bts_rr(dst, src_op.base, dst_op.base, SZ_D);
+					dst = bts_rr(dst, src_op.base, dst_op.base, inst->extra.size);
 				} else {
-					dst = bts_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, SZ_D);
+					dst = bts_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
 				}
 			} else if (inst->op == M68K_BCLR) {
 				if (dst_op.mode == MODE_REG_DIRECT) {
-					dst = btr_rr(dst, src_op.base, dst_op.base, SZ_D);
+					dst = btr_rr(dst, src_op.base, dst_op.base, inst->extra.size);
 				} else {
-					dst = btr_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, SZ_D);
+					dst = btr_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
 				}
 			} else {
 				if (dst_op.mode == MODE_REG_DIRECT) {
-					dst = btc_rr(dst, src_op.base, dst_op.base, SZ_D);
+					dst = btc_rr(dst, src_op.base, dst_op.base, inst->extra.size);
 				} else {
-					dst = btc_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, SZ_D);
+					dst = btc_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
 				}
 			}
+		}
+		if (src_op.base == SCRATCH2) {
+			dst = pop_r(dst, SCRATCH2);
 		}
 		//x86 sets the carry flag to the value of the bit tested
 		//68K sets the zero flag to the complement of the bit tested
 		dst = setcc_r(dst, CC_NC, FLAG_Z);
-		if (src_op.base == SCRATCH2) {
-			dst = pop_r(dst, SCRATCH2);
+		if (inst->op != M68K_BTST) {
+			dst = m68k_save_result(inst, dst, opts);
 		}
 		break;
 	/*case M68K_CHK:
