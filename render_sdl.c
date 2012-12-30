@@ -6,6 +6,7 @@
 
 SDL_Surface *screen;
 uint8_t render_dbg = 0;
+uint8_t debug_pal = 0;
 
 uint32_t last_frame = 0;
 
@@ -122,6 +123,12 @@ void render_context(vdp_context * context)
 					} else {
 						if (render_dbg == 2) {
 							gen_color = context->cram[(y/30)*8 + x/40];
+						} else if(render_dbg == 3) {
+							if (x & 1) {
+								gen_color = context->cram[ (debug_pal << 4) | (context->vdpmem[(x/8)*32 + (y/8)*32*40 + (x%8)/2 + (y%8)*4] & 0xF) ];
+							} else {
+								gen_color = context->cram[ (debug_pal << 4) | (context->vdpmem[(x/8)*32 + (y/8)*32*40 + (x%8)/2 + (y%8)*4] >> 4) ];
+							}
 						}
 						b = ((gen_color >> 8) & 0xE) * 18;
 						g = ((gen_color >> 4) & 0xE) * 18;
@@ -149,10 +156,15 @@ void render_wait_quit(vdp_context * context)
 		case SDL_KEYDOWN:
 			if (event.key.keysym.sym == SDLK_LEFTBRACKET) {
 				render_dbg++;
-				if (render_dbg == 3) {
+				if (render_dbg == 4) {
 					render_dbg = 0;
 				}
 				render_context(context);
+			} else if(event.key.keysym.sym ==  SDLK_RIGHTBRACKET) {
+				debug_pal++;
+				if (debug_pal == 4) {
+					debug_pal = 0;
+				}
 			}
 			break;
 		case SDL_QUIT:
@@ -189,8 +201,14 @@ void wait_render_frame(vdp_context * context)
 			{
 			case SDLK_LEFTBRACKET:
 				render_dbg++;
-				if (render_dbg == 3) {
+				if (render_dbg == 4) {
 					render_dbg = 0;
+				}
+				break;
+			case SDLK_RIGHTBRACKET:
+				debug_pal++;
+				if (debug_pal == 4) {
+					debug_pal = 0;
 				}
 				break;
 			case SDLK_t:
