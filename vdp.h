@@ -77,7 +77,9 @@ typedef struct {
 
 typedef struct {
 	uint32_t cycle;
+	uint16_t address;
 	uint16_t value;
+	uint8_t  cd;
 	uint8_t  partial;
 } fifo_entry;
 
@@ -87,6 +89,7 @@ typedef struct {
 	uint16_t    address;
 	uint8_t     cd;
 	uint8_t	    flags;
+	uint8_t     regs[VDP_REGS];
 	//cycle count in MCLKs
 	uint32_t    cycles;
 	uint8_t     *vdpmem;
@@ -103,7 +106,6 @@ typedef struct {
 	uint8_t     sprite_draws;
 	int8_t      slot_counter;
 	int8_t      cur_slot;
-	uint8_t     regs[VDP_REGS];
 	sprite_draw sprite_draw_list[MAX_DRAWS];
 	sprite_info sprite_info_list[MAX_SPRITES_LINE];
 	uint16_t    col_1;
