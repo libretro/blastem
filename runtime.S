@@ -215,15 +215,22 @@ try_fifo_write:
 	/* bail out if fifo is full */
 	je fifo_fallback
 	/* populate FIFO entry */
-	mov %cx, 4(%rbx) /* value */
-	movb $0, 6(%rbx) /* partial */
+	mov %cx, 6(%rbx) /* value */
+	mov 16(%rdx), %cx
+	mov %cx, 4(%rbx) /* address */
+	mov 18(%rdx), %cl
+	mov %cl, 8(%rbx) /* cd */
+	movb $0, 9(%rbx) /* partial */
 	mov %eax, %ecx
 	shl $3, %ecx /* multiply by 68K cycle by 7 to get MCLK cycle */
 	sub %eax, %ecx
 	mov %ecx, (%rbx) /* cycle */
 	/* update fifo_cur and store back in 68K context */
-	add $8, %rbx
+	add $12, %rbx
 	mov %rbx, (%rdx)
+	/* update address register */
+	movzbw 35(%rdx), %bx
+	add %bx, 16(%rdx)
 	/* clear pending flag */
 	andb $0xEF, 19(%rdx)
 	pop %rbx
