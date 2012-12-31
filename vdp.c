@@ -299,17 +299,18 @@ void external_slot(vdp_context * context)
 			if ((context->regs[REG_MODE_2] & BIT_DMA_ENABLE) && (context->cd & DMA_START)) {
 				context->flags |= FLAG_DMA_RUN;
 				context->dma_val = start->value;
+				context->address = start->address; //undo auto-increment
 				context->dma_cd = context->cd;
 			} else {
-				switch (context->cd & 0xF)
+				switch (start->cd & 0xF)
 				{
 				case VRAM_WRITE:
 					if (start->partial) {
 						//printf("VRAM Write: %X to %X\n", start->value, context->address ^ 1);
-						context->vdpmem[context->address ^ 1] = start->value;
+						context->vdpmem[start->address ^ 1] = start->value;
 					} else {
 						//printf("VRAM Write High: %X to %X\n", start->value >> 8, context->address);
-						context->vdpmem[context->address] = start->value >> 8;
+						context->vdpmem[start->address] = start->value >> 8;
 						start->partial = 1;
 						//skip auto-increment and removal of entry from fifo
 						return;
@@ -317,16 +318,16 @@ void external_slot(vdp_context * context)
 					break;
 				case CRAM_WRITE:
 					//printf("CRAM Write: %X to %X\n", start->value, context->address);
-					context->cram[(context->address/2) & (CRAM_SIZE-1)] = start->value;
+					context->cram[(start->address/2) & (CRAM_SIZE-1)] = start->value;
 					break;
 				case VSRAM_WRITE:
-					if (((context->address/2) & 63) < VSRAM_SIZE) {
+					if (((start->address/2) & 63) < VSRAM_SIZE) {
 						//printf("VSRAM Write: %X to %X\n", start->value, context->address);
-						context->vsram[(context->address/2) & 63] = start->value;
+						context->vsram[(start->address/2) & 63] = start->value;
 					}
 					break;
 				}
-				context->address += context->regs[REG_AUTOINC];
+				//context->address += context->regs[REG_AUTOINC];
 			}
 			fifo_entry * cur = start+1;
 			if (cur < context->fifo_cur) {
@@ -1074,9 +1075,12 @@ void vdp_data_port_write(vdp_context * context, uint16_t value)
 		vdp_run_context(context, context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20));
 	}
 	context->fifo_cur->cycle = context->cycles;
+	context->fifo_cur->address = context->address;
 	context->fifo_cur->value = value;
+	context->fifo_cur->cd = context->cd;
 	context->fifo_cur->partial = 0;
 	context->fifo_cur++;
+	context->address += context->regs[REG_AUTOINC];
 }
 
 uint16_t vdp_control_port_read(vdp_context * context)
@@ -1103,7 +1107,7 @@ uint16_t vdp_control_port_read(vdp_context * context)
 uint16_t vdp_data_port_read(vdp_context * context)
 {
 	context->flags &= ~FLAG_PENDING;
-	if (!(context->cd & 1)) {
+	if (context->cd & 1) {
 		return 0;
 	}
 	//Not sure if the FIFO should be drained before processing a read or not, but it would make sense
@@ -1112,7 +1116,7 @@ uint16_t vdp_data_port_read(vdp_context * context)
 		vdp_run_context(context, context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20));
 	}
 	uint16_t value = 0;
-	switch (context->cd & 0x7)
+	switch (context->cd & 0xF)
 	{
 	case VRAM_READ:
 		value = context->vdpmem[context->address] << 8;
