@@ -3,7 +3,7 @@
 #include <stdlib.h>
 
 uint8_t visited[(16*1024*1024)/16];
-uint8_t label[(16*1024*1024)/16];
+uint8_t label[(16*1024*1024)/8];
 
 void visit(uint32_t address)
 {
@@ -15,7 +15,7 @@ void reference(uint32_t address)
 {
 	address &= 0xFFFFFF;
 	//printf("referenced: %X\n", address);
-	label[address/16] |= 1 << ((address / 2) % 8);
+	label[address/16] |= 1 << (address % 8);
 }
 
 uint8_t is_visited(uint32_t address)
@@ -27,7 +27,7 @@ uint8_t is_visited(uint32_t address)
 uint8_t is_label(uint32_t address)
 {
 	address &= 0xFFFFFF;
-	return label[address/16] & (1 << ((address / 2) % 8));
+	return label[address/16] & (1 << (address % 8));
 }
 
 typedef struct deferred {
@@ -95,14 +95,18 @@ int main(int argc, char ** argv)
 	{
 		*cur = (*cur >> 8) | (*cur << 8);
 	}
-	uint32_t address = filebuf[2] << 16 | filebuf[3], tmp_addr;
+	uint32_t start = filebuf[2] << 16 | filebuf[3], tmp_addr;
+	uint32_t int_2 = filebuf[0x68/2] << 16 | filebuf[0x6A/2];
+	uint32_t int_4 = filebuf[0x70/2] << 16 | filebuf[0x72/2];
+	uint32_t int_6 = filebuf[0x78/2] << 16 | filebuf[0x7A/2];
 	uint16_t *encoded, *next;
 	uint32_t size;
 	deferred *def = NULL, *tmpd;
-	def = defer(address, def);
-	def = defer(filebuf[0x68/2] << 16 | filebuf[0x6A/2], def);
-	def = defer(filebuf[0x70/2] << 16 | filebuf[0x72/2], def);
-	def = defer(filebuf[0x78/2] << 16 | filebuf[0x7A/2], def);
+	def = defer(start, def);
+	def = defer(int_2, def);
+	def = defer(int_4, def);
+	def = defer(int_6, def);
+	uint32_t address;
 	while(def) {
 		do {
 			encoded = NULL;
@@ -183,6 +187,18 @@ int main(int argc, char ** argv)
 			m68k_decode(encoded, &instbuf, address);
 			if (labels) {
 				m68k_disasm_labels(&instbuf, disbuf);
+				if (address == start) {
+					puts("start:");
+				}
+				if(address == int_2) {
+					puts("int_2:");
+				}
+				if(address == int_4) {
+					puts("int_4:");
+				}
+				if(address == int_6) {
+					puts("int_6:");
+				}
 				if (is_label(instbuf.address)) {
 					printf("ADR_%X:\n", instbuf.address);
 				}
