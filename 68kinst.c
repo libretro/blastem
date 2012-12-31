@@ -847,7 +847,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				decoded->extra.size = OPSIZE_LONG;
 				decoded->dst.addr_mode = MODE_AREG;
 				decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
-				istream = m68k_decode_op(istream, size, &(decoded->src));
+				istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
 			} else {
 				istream = m68k_decode_op(istream, size, &(decoded->dst));
 				if (decoded->src.addr_mode == MODE_AREG) {
@@ -873,7 +873,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				decoded->dst.addr_mode = MODE_REG;
 			}
 			decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
-			istream = m68k_decode_op(istream, size, &(decoded->src));
+			istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
 		}
 		break;
 	case AND_MUL_ABCD_EXG:
