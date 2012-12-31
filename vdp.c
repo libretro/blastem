@@ -1092,6 +1092,10 @@ uint16_t vdp_control_port_read(vdp_context * context)
 	if (context->flags & FLAG_DMA_RUN) {
 		value |= 0x20;
 	}
+	uint32_t line= context->cycles / MCLKS_LINE;
+	if (line >= (context->latched_mode & BIT_PAL ? PAL_ACTIVE : NTSC_ACTIVE)) {
+		value |= 0x8;
+	}
 	//TODO: Lots of other bits in status port
 	return value;
 }
@@ -1129,6 +1133,43 @@ uint16_t vdp_data_port_read(vdp_context * context)
 	}
 	context->address += context->regs[REG_AUTOINC];
 	return value;
+}
+
+uint16_t vdp_hv_counter_read(vdp_context * context)
+{
+	uint32_t line= context->cycles / MCLKS_LINE;
+	if (!line) {
+		line = 0xFF;
+	} else {
+		line--;
+		if (line > 0xEA) {
+			line = (line + 0xFA) & 0xFF;
+		}
+	}
+	uint32_t linecyc = context->cycles % MCLKS_LINE;
+	if (context->latched_mode & BIT_H40) {
+		linecyc /= 8;
+		if (linecyc >= 86) {
+			linecyc -= 86;
+		} else {
+			linecyc += 334;
+		}
+		if (linecyc > 0x16C) {
+			linecyc += 92;
+		}
+	} else {
+		linecyc /= 10;
+		if (linecyc >= 74) {
+			linecyc -= 74;
+		} else {
+			linecyc += 268;
+		}
+		if (linecyc > 0x127) {
+			linecyc += 170;
+		}
+	}
+	linecyc &= 0xFF;
+	return (line << 8) | linecyc;
 }
 
 void vdp_adjust_cycles(vdp_context * context, uint32_t deduction)

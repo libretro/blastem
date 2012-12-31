@@ -369,6 +369,8 @@ m68k_read_byte_scratch1:
 	jbe cart_b
 	cmp $0xE00000, %ecx
 	jae workram_b
+	cmp $0xC00000, %ecx
+	jae vdp_psg_b
 	cmp $0xA10000, %ecx
 	jb not_io_b
 	cmp $0xA12000, %ecx
@@ -377,6 +379,17 @@ m68k_read_byte_scratch1:
 not_io_b:
 	xor %cl, %cl
 	dec %cl
+	ret
+vdp_psg_b:
+	test $0x2700E0, %ecx
+	jnz crash
+	and $0x1F, %ecx
+	bt $0, %ecx
+	jnc vdp_swap
+	jmp do_vdp_port_read
+vdp_swap:
+	call do_vdp_port_read
+	shr $8, %cx
 	ret
 workram_b:
 	/* deal with byte swapping */

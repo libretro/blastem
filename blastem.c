@@ -167,8 +167,8 @@ m68k_context * vdp_port_read(uint32_t vdp_port, m68k_context * context)
 		} else if(vdp_port < 8) {
 			context->value = vdp_control_port_read(v_context);
 		} else {
-			//TODO: Implement H/V counter
-			context->value = 0;
+			context->value = vdp_hv_counter_read(v_context);
+			//printf("HV Counter: %X at cycle %d\n", context->value, v_context->cycles);
 		}
 		context->current_cycle = v_context->cycles/MCLKS_PER_68K;
 	} else {
