@@ -1180,19 +1180,19 @@ int m68k_disasm_op(m68k_op_info *decoded, char *dst, int need_comma, uint8_t lab
 		return sprintf(dst, (decoded->params.immed <= 128 ? "%s #%d" : "%s #$%X"), c, decoded->params.immed);
 	case MODE_ABSOLUTE_SHORT:
 		if (labels) {
-			return sprintf(dst, "%s ADDR_%X.w", c, decoded->params.immed);
+			return sprintf(dst, "%s ADR_%X.w", c, decoded->params.immed);
 		} else {
 			return sprintf(dst, "%s $%X.w", c, decoded->params.immed);
 		}
 	case MODE_ABSOLUTE:
 		if (labels) {
-			return sprintf(dst, "%s ADDR_%X.l", c, decoded->params.immed);
+			return sprintf(dst, "%s ADR_%X.l", c, decoded->params.immed);
 		} else {
 			return sprintf(dst, "%s $%X", c, decoded->params.immed);
 		}
 	case MODE_PC_DISPLACE:
 		if (labels) {
-			return sprintf(dst, "%s ADDR_%X(pc)", c, address + 2 + decoded->params.regs.displacement);
+			return sprintf(dst, "%s ADR_%X(pc)", c, address + 2 + decoded->params.regs.displacement);
 		} else {
 			return sprintf(dst, "%s (%d, pc)", c, decoded->params.regs.displacement);
 		}
@@ -1279,9 +1279,9 @@ int m68k_disasm_ex(m68kinst * decoded, char * dst, uint8_t labels)
 		if (decoded->op != M68K_SCC) {
 			if (labels) {
 				if (decoded->op == M68K_DBCC) {
-					ret += sprintf(dst+ret, " d%d, ADDR_%X", decoded->dst.params.regs.pri, decoded->address + 2 + decoded->src.params.immed);
+					ret += sprintf(dst+ret, " d%d, ADR_%X", decoded->dst.params.regs.pri, decoded->address + 2 + decoded->src.params.immed);
 				} else {
-					ret += sprintf(dst+ret, " ADDR_%X", decoded->address + 2 + decoded->src.params.immed);
+					ret += sprintf(dst+ret, " ADR_%X", decoded->address + 2 + decoded->src.params.immed);
 				}
 			} else {
 				if (decoded->op == M68K_DBCC) {
@@ -1295,7 +1295,7 @@ int m68k_disasm_ex(m68kinst * decoded, char * dst, uint8_t labels)
 		break;
 	case M68K_BSR:
 		if (labels) {
-			ret = sprintf(dst, "bsr%s ADDR_%X", decoded->variant == VAR_BYTE ? ".s" : "", 
+			ret = sprintf(dst, "bsr%s ADR_%X", decoded->variant == VAR_BYTE ? ".s" : "", 
 			decoded->address + 2 + decoded->src.params.immed);
 		} else {
 			ret = sprintf(dst, "bsr%s #%d <%X>", decoded->variant == VAR_BYTE ? ".s" : "", decoded->src.params.immed, decoded->address + 2 + decoded->src.params.immed);
