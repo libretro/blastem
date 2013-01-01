@@ -410,18 +410,11 @@ cart_b:
 	mov (%r8, %rcx), %cl
 	ret
 	
-ret_addr_msg:
-	.asciz "Program modified return address on stack: found %X, expected %X\n"
-	
 	.global m68k_modified_ret_addr
 m68k_modified_ret_addr:
-	lea ret_addr_msg(%rip), %rdi
-	mov %rcx, %rsi
-	mov 8(%rsp), %rdx
-	xor %rax, %rax
-	call printf
-	mov $1, %rdi
-	call exit
+	add $16, %rsp
+	call m68k_native_addr
+	jmp *%rcx
 
 dyn_addr_msg:
 	.asciz "Program needs dynamically calculated native address\n"
