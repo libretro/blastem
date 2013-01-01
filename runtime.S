@@ -1,8 +1,10 @@
 
 	.global handle_cycle_limit
+	.global do_sync
 handle_cycle_limit:
 	cmp 84(%rsi), %eax
 	jb skip_sync
+do_sync:
 	call m68k_save_context
 	mov %rsi, %rdi
 	call sync_components
@@ -49,8 +51,13 @@ already_supervisor:
 	/* discard function return address */
 	pop %rdi
 	jmp *%rcx
-skip_int:
 	ret
+skip_int:
+	cmp 84(%rsi), %eax
+	jnb do_sync
+	ret
+	
+	.global do_sync
 	
 int_dbg_msg:
 	.asciz "Executing Interrupt!"
