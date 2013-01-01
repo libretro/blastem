@@ -133,7 +133,7 @@ int main(int argc, char ** argv)
 			//printf("%X: %s\n", instbuf.address, disbuf);
 			check_reference(&instbuf, &(instbuf.src));
 			check_reference(&instbuf, &(instbuf.dst));
-			if (instbuf.op == M68K_ILLEGAL || instbuf.op == M68K_RTS || instbuf.op == M68K_RTE) {
+			if (instbuf.op == M68K_ILLEGAL || instbuf.op == M68K_RTS || instbuf.op == M68K_RTE || instbuf.op == M68K_INVALID) {
 				break;
 			} else if (instbuf.op == M68K_BCC || instbuf.op == M68K_DBCC || instbuf.op == M68K_BSR) {
 				if (instbuf.op == M68K_BCC && instbuf.extra.cond == COND_TRUE) {
