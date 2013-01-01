@@ -184,7 +184,7 @@ void external_slot(vdp_context * context)
 	//TODO: Figure out what happens if CD bit 4 is not set in DMA copy mode
 	//TODO: Figure out what happens when CD:0-3 is not set to a write mode in DMA operations
 	//TODO: Figure out what happens if DMA gets disabled part way through a DMA fill or DMA copy
-	if((context->regs[REG_MODE_2] & BIT_DMA_ENABLE) && (context->flags & FLAG_DMA_RUN)) {
+	if(context->flags & FLAG_DMA_RUN) {
 		uint16_t dma_len;
 		switch(context->regs[REG_DMASRC_H] & 0xC0)
 		{
@@ -1022,6 +1022,9 @@ void vdp_run_dma_done(vdp_context * context, uint32_t target_cycles)
 int vdp_control_port_write(vdp_context * context, uint16_t value)
 {
 	//printf("control port write: %X\n", value);
+	if (context->flags & FLAG_DMA_RUN) {
+		return -1;
+	}
 	if (context->flags & FLAG_PENDING) {
 		context->address = (context->address & 0x3FFF) | (value << 14);
 		context->cd = (context->cd & 0x3) | ((value >> 2) & 0x3C);
@@ -1057,9 +1060,16 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 	return 0;
 }
 
-void vdp_data_port_write(vdp_context * context, uint16_t value)
+int vdp_data_port_write(vdp_context * context, uint16_t value)
 {
 	//printf("data port write: %X\n", value);
+	if (context->flags & FLAG_DMA_RUN) {
+		return -1;
+	}
+	if (!(context->cd & 1)) {
+		//ignore writes when cd is configured for read
+		return 0;
+	}
 	context->flags &= ~FLAG_PENDING;
 	/*if (context->fifo_cur == context->fifo_end) {
 		printf("FIFO full, waiting for space before next write at cycle %X\n", context->cycles);
@@ -1074,6 +1084,7 @@ void vdp_data_port_write(vdp_context * context, uint16_t value)
 	context->fifo_cur->partial = 0;
 	context->fifo_cur++;
 	context->address += context->regs[REG_AUTOINC];
+	return 0;
 }
 
 uint16_t vdp_control_port_read(vdp_context * context)
@@ -1086,7 +1097,7 @@ uint16_t vdp_control_port_read(vdp_context * context)
 	if (context->fifo_cur == context->fifo_end) {
 		value |= 0x100;
 	}
-	if ((context->regs[REG_MODE_2] & BIT_DMA_ENABLE) && (context->flags & FLAG_DMA_RUN)) {
+	if (context->flags & FLAG_DMA_RUN) {
 		value |= 0x2;
 	}
 	uint32_t line= context->cycles / MCLKS_LINE;

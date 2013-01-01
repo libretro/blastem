@@ -115,11 +115,9 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 	sync_components(context);
 	vdp_context * v_context = context->next_context;
 	if (vdp_port < 0x10) {
+		int blocked;
 		if (vdp_port < 4) {
-			vdp_data_port_write(v_context, value);
-		} else if(vdp_port < 8) {
-			int blocked = vdp_control_port_write(v_context, value);
-			if (blocked) {
+			while (vdp_data_port_write(v_context, value) < 0) {
 				while(v_context->flags & FLAG_DMA_RUN) {
 					vdp_run_dma_done(v_context, MCLKS_PER_FRAME);
 					if (v_context->cycles >= MCLKS_PER_FRAME) {
@@ -127,6 +125,27 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 						vdp_adjust_cycles(v_context, MCLKS_PER_FRAME);
 						io_adjust_cycles(&gamepad_1, v_context->cycles/MCLKS_PER_68K, MCLKS_PER_FRAME/MCLKS_PER_68K);
 						io_adjust_cycles(&gamepad_2, v_context->cycles/MCLKS_PER_68K, MCLKS_PER_FRAME/MCLKS_PER_68K);
+					}
+				}
+				context->current_cycle = v_context->cycles / MCLKS_PER_68K;
+			}
+		} else if(vdp_port < 8) {
+			blocked = vdp_control_port_write(v_context, value);
+			if (blocked) {
+				while (blocked) {
+					while(v_context->flags & FLAG_DMA_RUN) {
+						vdp_run_dma_done(v_context, MCLKS_PER_FRAME);
+						if (v_context->cycles >= MCLKS_PER_FRAME) {
+							wait_render_frame(v_context);
+							vdp_adjust_cycles(v_context, MCLKS_PER_FRAME);
+							io_adjust_cycles(&gamepad_1, v_context->cycles/MCLKS_PER_68K, MCLKS_PER_FRAME/MCLKS_PER_68K);
+							io_adjust_cycles(&gamepad_2, v_context->cycles/MCLKS_PER_68K, MCLKS_PER_FRAME/MCLKS_PER_68K);
+						}
+					}
+					if (blocked < 0) {
+						blocked = vdp_control_port_write(v_context, value);
+					} else {
+						blocked = 0;
 					}
 				}
 				context->current_cycle = v_context->cycles / MCLKS_PER_68K;
