@@ -209,6 +209,9 @@ try_fifo_write:
 	push %rbx
 	/* fetch VDP context pointer from 68K context */
 	mov 128(%rsi), %rdx
+	/* check DMA flag */
+	bt $6, 19(%rdx)
+	jc fifo_fallback
 	/* get fifo_cur and compare it to fifo_end */
 	mov (%rdx), %rbx
 	cmp %rbx, 8(%rdx)
