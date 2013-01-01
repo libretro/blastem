@@ -42,6 +42,7 @@ void m68k_native_addr_and_sync();
 void set_sr();
 void set_ccr();
 void get_sr();
+void do_sync();
 void m68k_start_context(uint8_t * addr, m68k_context * context);
 
 uint8_t * cycles(uint8_t * dst, uint32_t num)
@@ -2247,6 +2248,9 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 				dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, opts->aregs[7], SZ_B);
 				dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SZ_B);
 			}
+			if (inst->src.params.immed & 0x700) {
+				dst = call(dst, (uint8_t *)do_sync);
+			}
 		}
 		break;
 	case M68K_ASL:
@@ -2447,6 +2451,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 					dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, opts->aregs[7], SZ_D);
 					dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SZ_D);
 				}
+				dst = call(dst, (uint8_t *)do_sync);
 			}
 			dst = cycles(dst, 12);
 		} else {
@@ -2557,8 +2562,11 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		if (inst->src.params.immed & 0x10) {
 			dst = mov_irind(dst, 1, CONTEXT, SZ_B);
 		}
-		if (inst->op == M68K_ANDI_SR) {
+		if (inst->op == M68K_ORI_SR) {
 			dst = or_irdisp8(dst, inst->src.params.immed >> 8, CONTEXT, offsetof(m68k_context, status), SZ_B);
+			if (inst->src.params.immed & 0x700) {
+				dst = call(dst, (uint8_t *)do_sync);
+			}
 		}
 		break;
 	/*case M68K_RESET:*/
@@ -2921,8 +2929,8 @@ uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context)
 			next = m68k_decode(encoded, &instbuf, address);
 			address += (next-encoded)*2;
 			encoded = next;
-			m68k_disasm(&instbuf, disbuf);
-			printf("%X: %s\n", instbuf.address, disbuf);
+			//m68k_disasm(&instbuf, disbuf);
+			//printf("%X: %s\n", instbuf.address, disbuf);
 			dst = translate_m68k(dst, &instbuf, opts);
 		} while(instbuf.op != M68K_ILLEGAL && instbuf.op != M68K_RTS && instbuf.op != M68K_RTE && !(instbuf.op == M68K_BCC && instbuf.extra.cond == COND_TRUE) && instbuf.op != M68K_JMP);
 		process_deferred(opts);
