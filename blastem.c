@@ -327,7 +327,7 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 			break;
 		}
 	} else {
-		printf("IO Write of %X to %X @ %d\n", value, location, context->current_cycle);
+		//printf("IO Write of %X to %X @ %d\n", value, location, context->current_cycle);
 		if (location == 0x1100) {
 			if (busack_cycle > context->current_cycle) {
 				busack = new_busack;
@@ -397,7 +397,7 @@ m68k_context * io_read(uint32_t location, m68k_context * context)
 				busack_cycle = CYCLE_NEVER;
 			}
 			context->value = reset || busack;
-			printf("Byte read of BUSREQ returned %d @ %d (reset: %d, busack: %d)\n", context->value, context->current_cycle, reset, busack);
+			//printf("Byte read of BUSREQ returned %d @ %d (reset: %d, busack: %d)\n", context->value, context->current_cycle, reset, busack);
 		} else if (location == 0x1200) {
 			context->value = !reset;
 		} else {
@@ -445,7 +445,7 @@ m68k_context * io_read_w(uint32_t location, m68k_context * context)
 				busack_cycle = CYCLE_NEVER;
 			}
 			context->value = (reset || busack) << 8;
-			printf("Word read of BUSREQ returned %d\n", context->value);
+			//printf("Word read of BUSREQ returned %d\n", context->value);
 		} else if (location == 0x1200) {
 			context->value = (!reset) << 8;
 		} else {
