@@ -1,0 +1,19 @@
+syntax: glob
+*.dis
+*.asm
+*.bin
+*.png
+*.jpg
+*.pdf
+*.tar.gz
+*~
+starscream/*
+vdpreverse/*
+nemesis/*
+html/*
+*.o
+blastem
+dis
+stateview
+trans
+
