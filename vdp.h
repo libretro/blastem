@@ -126,7 +126,7 @@ void vdp_run_dma_done(vdp_context * context, uint32_t target_cycles);
 void vdp_load_savestate(vdp_context * context, FILE * state_file);
 void vdp_save_state(vdp_context * context, FILE * outfile);
 int vdp_control_port_write(vdp_context * context, uint16_t value);
-void vdp_data_port_write(vdp_context * context, uint16_t value);
+int vdp_data_port_write(vdp_context * context, uint16_t value);
 uint16_t vdp_control_port_read(vdp_context * context);
 uint16_t vdp_data_port_read(vdp_context * context);
 uint16_t vdp_hv_counter_read(vdp_context * context);
