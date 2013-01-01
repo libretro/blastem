@@ -654,6 +654,31 @@ uint8_t * add_rdisp8r(uint8_t * out, uint8_t src_base, int8_t disp, uint8_t dst,
 	return x86_rrdisp8_sizedir(out, OP_ADD, dst, src_base, disp, size, BIT_DIR);
 }
 
+uint8_t * adc_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
+{
+	return x86_rr_sizedir(out, OP_ADC, src, dst, size);
+}
+
+uint8_t * adc_ir(uint8_t * out, int32_t val, uint8_t dst, uint8_t size)
+{
+	return x86_ir(out, OP_IMMED_ARITH, OP_EX_ADCI, OP_ADC, val, dst, size);
+}
+
+uint8_t * adc_irdisp8(uint8_t * out, int32_t val, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_irdisp8(out, OP_IMMED_ARITH, OP_EX_ADCI, val, dst_base, disp, size);
+}
+
+uint8_t * adc_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_rrdisp8_sizedir(out, OP_ADC, src, dst_base, disp, size, 0);
+}
+
+uint8_t * adc_rdisp8r(uint8_t * out, uint8_t src_base, int8_t disp, uint8_t dst, uint8_t size)
+{
+	return x86_rrdisp8_sizedir(out, OP_ADC, dst, src_base, disp, size, BIT_DIR);
+}
+
 uint8_t * or_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
 {
 	return x86_rr_sizedir(out, OP_OR, src, dst, size);
@@ -751,6 +776,31 @@ uint8_t * sub_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t disp,
 uint8_t * sub_rdisp8r(uint8_t * out, uint8_t src_base, int8_t disp, uint8_t dst, uint8_t size)
 {
 	return x86_rrdisp8_sizedir(out, OP_SUB, dst, src_base, disp, size, BIT_DIR);
+}
+
+uint8_t * sbb_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
+{
+	return x86_rr_sizedir(out, OP_SBB, src, dst, size);
+}
+
+uint8_t * sbb_ir(uint8_t * out, int32_t val, uint8_t dst, uint8_t size)
+{
+	return x86_ir(out, OP_IMMED_ARITH, OP_EX_SBBI, OP_SBB, val, dst, size);
+}
+
+uint8_t * sbb_irdisp8(uint8_t * out, int32_t val, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_irdisp8(out, OP_IMMED_ARITH, OP_EX_SBBI, val, dst_base, disp, size);
+}
+
+uint8_t * sbb_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_rrdisp8_sizedir(out, OP_SBB, src, dst_base, disp, size, 0);
+}
+
+uint8_t * sbb_rdisp8r(uint8_t * out, uint8_t src_base, int8_t disp, uint8_t dst, uint8_t size)
+{
+	return x86_rrdisp8_sizedir(out, OP_SBB, dst, src_base, disp, size, BIT_DIR);
 }
 
 uint8_t * cmp_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
