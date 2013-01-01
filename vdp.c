@@ -219,15 +219,8 @@ void external_slot(vdp_context * context)
 			{
 			case VRAM_WRITE:
 				//Charles MacDonald's VDP doc says that the low byte gets written first
-				//this doesn't make a lot of sense to me, but until I've had a change to
-				//verify it myself, I'll assume it's true
-				if (context->flags & FLAG_DMA_PROG) {
-					context->vdpmem[context->address ^ 1] = context->dma_val >> 8;
-					context->flags &= ~FLAG_DMA_PROG;
-				} else {
-					context->vdpmem[context->address] = context->dma_val;
-					context->flags |= FLAG_DMA_PROG;
-				}
+				context->vdpmem[context->address] = context->dma_val;
+				context->dma_val = (context->dma_val << 8) | ((context->dma_val >> 8) & 0xFF);
 				break;
 			case CRAM_WRITE:
 				context->cram[(context->address/2) & (CRAM_SIZE-1)] = context->dma_val;
