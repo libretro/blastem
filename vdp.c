@@ -1093,8 +1093,8 @@ uint16_t vdp_control_port_read(vdp_context * context)
 	if (context->fifo_cur == context->fifo_end) {
 		value |= 0x100;
 	}
-	if (context->flags & FLAG_DMA_RUN) {
-		value |= 0x20;
+	if ((context->regs[REG_MODE_2] & BIT_DMA_ENABLE) && (context->flags & FLAG_DMA_RUN)) {
+		value |= 0x2;
 	}
 	uint32_t line= context->cycles / MCLKS_LINE;
 	if (line >= (context->latched_mode & BIT_PAL ? PAL_ACTIVE : NTSC_ACTIVE)) {
