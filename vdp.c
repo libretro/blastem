@@ -205,6 +205,7 @@ void external_slot(vdp_context * context)
 				break;
 			case CRAM_WRITE:
 				context->cram[(context->address/2) & (CRAM_SIZE-1)] = read_dma_value((context->regs[REG_DMASRC_H] << 16) | (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]);
+				//printf("CRAM DMA | %X set to %X from %X at %d\n", (context->address/2) & (CRAM_SIZE-1), context->cram[(context->address/2) & (CRAM_SIZE-1)], (context->regs[REG_DMASRC_H] << 17) | (context->regs[REG_DMASRC_M] << 9) | (context->regs[REG_DMASRC_L] << 1), context->cycles);
 				break;
 			case VSRAM_WRITE:
 				if (((context->address/2) & 63) < VSRAM_SIZE) {
@@ -310,7 +311,7 @@ void external_slot(vdp_context * context)
 					}
 					break;
 				case CRAM_WRITE:
-					//printf("CRAM Write: %X to %X\n", start->value, context->address);
+					//printf("CRAM Write | %X to %X\n", start->value, (start->address/2) & (CRAM_SIZE-1));
 					context->cram[(start->address/2) & (CRAM_SIZE-1)] = start->value;
 					break;
 				case VSRAM_WRITE:
@@ -1047,9 +1048,9 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 			if (reg < VDP_REGS) {
 				//printf("register %d set to %X\n", reg, value & 0xFF);
 				context->regs[reg] = value;
-				/*if (reg == REG_MODE_2) {
-					printf("Display is now %s\n", (context->regs[REG_MODE_2] & DISPLAY_ENABLE) ? "enabled" : "disabled");
-				}*/
+				if (reg == REG_MODE_2) {
+					//printf("Display is now %s\n", (context->regs[REG_MODE_2] & DISPLAY_ENABLE) ? "enabled" : "disabled");
+				}
 			}
 		} else {
 			context->flags |= FLAG_PENDING;

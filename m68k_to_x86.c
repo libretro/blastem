@@ -27,6 +27,8 @@ typedef struct {
 	uint8_t cycles;
 } x86_ea;
 
+char disasm_buf[1024];
+
 void handle_cycle_limit_int();
 void m68k_read_word_scratch1();
 void m68k_read_long_scratch1();
@@ -343,7 +345,8 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		ea->disp = inst->src.params.immed;
 		break;
 	default:
-		printf("address mode %d not implemented (src)\n", inst->src.addr_mode);
+		m68k_disasm(inst, disasm_buf);
+		printf("%s\naddress mode %d not implemented (src)\n", disasm_buf, inst->src.addr_mode);
 		exit(1);
 	}
 	return out;
@@ -608,7 +611,8 @@ uint8_t * translate_m68k_dst(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		ea->base = SCRATCH1;
 		break;
 	default:
-		printf("address mode %d not implemented (dst)\n", inst->dst.addr_mode);
+		m68k_disasm(inst, disasm_buf);
+		printf("%s\naddress mode %d not implemented (dst)\n", disasm_buf, inst->dst.addr_mode);
 		exit(1);
 	}
 	return out;
@@ -955,7 +959,8 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 		}
 		break;
 	default:
-		printf("address mode %d not implemented (move dst)\n", inst->dst.addr_mode);
+		m68k_disasm(inst, disasm_buf);
+		printf("%s\naddress mode %d not implemented (move dst)\n", disasm_buf, inst->dst.addr_mode);
 		exit(1);
 	}
 
@@ -995,7 +1000,8 @@ uint8_t * translate_m68k_movem(uint8_t * dst, m68kinst * inst, x86_68k_options *
 			dst = mov_ir(dst, inst->dst.params.immed, SCRATCH2, SZ_D);
 			break;
 		default:
-			printf("address mode %d not implemented (movem dst)\n", inst->dst.addr_mode);
+			m68k_disasm(inst, disasm_buf);
+			printf("%s\naddress mode %d not implemented (movem dst)\n", disasm_buf, inst->dst.addr_mode);
 			exit(1);
 		}
 		dst = cycles(dst, early_cycles);
@@ -1056,7 +1062,8 @@ uint8_t * translate_m68k_movem(uint8_t * dst, m68kinst * inst, x86_68k_options *
 			dst = mov_ir(dst, inst->src.params.immed, SCRATCH1, SZ_D);
 			break;
 		default:
-			printf("address mode %d not implemented (movem src)\n", inst->src.addr_mode);
+			m68k_disasm(inst, disasm_buf);
+			printf("%s\naddress mode %d not implemented (movem src)\n", disasm_buf, inst->src.addr_mode);
 			exit(1);
 		}
 		dst = cycles(dst, early_cycles);
@@ -1292,7 +1299,8 @@ uint8_t * translate_m68k_lea(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		}
 		break;
 	default:
-		printf("address mode %d not implemented (lea src)\n", inst->src.addr_mode);
+		m68k_disasm(inst, disasm_buf);
+		printf("%s\naddress mode %d not implemented (lea src)\n", disasm_buf, inst->src.addr_mode);
 		exit(1);
 	}
 	return dst;
@@ -1372,7 +1380,8 @@ uint8_t * translate_m68k_pea(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		dst = mov_ir(dst, inst->src.params.immed, SCRATCH1, SZ_D);
 		break;
 	default:
-		printf("address mode %d not implemented (lea src)\n", inst->src.addr_mode);
+		m68k_disasm(inst, disasm_buf);
+		printf("%s\naddress mode %d not implemented (lea src)\n", disasm_buf, inst->src.addr_mode);
 		exit(1);
 	}
 	dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
@@ -1698,7 +1707,8 @@ uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		}
 		break;
 	default:
-		printf("address mode %d not yet supported (jmp)\n", inst->src.addr_mode);
+		m68k_disasm(inst, disasm_buf);
+		printf("%s\naddress mode %d not yet supported (jmp)\n", disasm_buf, inst->src.addr_mode);
 		exit(1);
 	}
 	return dst;
@@ -1878,7 +1888,8 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		dst = pop_r(dst, SCRATCH1);
 		break;
 	default:
-		printf("address mode %d not yet supported (jsr)\n", inst->src.addr_mode);
+		m68k_disasm(inst, disasm_buf);
+		printf("%s\naddress mode %d not yet supported (jsr)\n", disasm_buf, inst->src.addr_mode);
 		exit(1);
 	}
 	return dst;
@@ -2107,6 +2118,7 @@ uint8_t * translate_shift(uint8_t * dst, m68kinst * inst, x86_ea *src_op, x86_ea
 uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 {
 	uint8_t * end_off, *zero_off, *norm_off;
+	uint8_t dst_reg;
 	map_native_address(opts->native_code_map, inst->address, dst);
 	dst = check_cycles_int(dst, inst->address);
 	if (inst->op == M68K_MOVE) {
@@ -2368,9 +2380,69 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = setcc_r(dst, CC_S, FLAG_N);
 		dst = setcc_r(dst, CC_O, FLAG_V);
 		break;
-	/*case M68K_DIVS:
+	case M68K_DIVS:
 	case M68K_DIVU:
-		break;*/
+		//TODO: Trap on division by zero
+		dst = cycles(dst, inst->op == M68K_DIVS ? 158 : 140);
+		dst = push_r(dst, RDX);
+		dst = push_r(dst, RAX);
+		if (dst_op.mode == MODE_REG_DIRECT) {
+			dst = mov_rr(dst, dst_op.base, RAX, SZ_D);
+		} else {
+			dst = mov_rdisp8r(dst, dst_op.base, dst_op.disp, RAX, SZ_D);
+		}
+		if (src_op.mode == MODE_IMMED) {
+			dst = mov_ir(dst, src_op.disp, SCRATCH2, SZ_D);
+		} else if (src_op.mode == MODE_REG_DIRECT) {
+			if (inst->op == M68K_DIVS) {
+				dst = movsx_rr(dst, src_op.base, SCRATCH2, SZ_W, SZ_D);
+			} else {
+				dst = movzx_rr(dst, src_op.base, SCRATCH2, SZ_W, SZ_D);
+			}
+		} else if (src_op.mode == MODE_REG_DISPLACE8) {
+			if (inst->op == M68K_DIVS) {
+				dst = movsx_rdisp8r(dst, src_op.base, src_op.disp, SCRATCH2, SZ_W, SZ_D);
+			} else {
+				dst = movzx_rdisp8r(dst, src_op.base, src_op.disp, SCRATCH2, SZ_W, SZ_D);
+			}
+		}
+		if (inst->op == M68K_DIVS) {
+			dst = cdq(dst);
+		} else {
+			dst = xor_rr(dst, RDX, RDX, SZ_D);
+		}
+		if (inst->op == M68K_DIVS) {
+			dst = idiv_r(dst, SCRATCH2, SZ_D);
+		} else {
+			dst = div_r(dst, SCRATCH2, SZ_D);
+		}
+		dst = cmp_ir(dst, 0x10000, RAX, SZ_D);
+		norm_off = dst+1;
+		dst = jcc(dst, CC_NC, dst+2);
+		if (dst_op.mode == MODE_REG_DIRECT) {
+			dst = mov_rr(dst, RDX, dst_op.base, SZ_W);
+			dst = shl_ir(dst, 16, dst_op.base, SZ_D);
+			dst = mov_rr(dst, RAX, dst_op.base, SZ_W);
+		} else {
+			dst = mov_rrdisp8(dst, RDX, dst_op.base, dst_op.disp, SZ_W);
+			dst = shl_irdisp8(dst, 16, dst_op.base, dst_op.disp, SZ_D);
+			dst = mov_rrdisp8(dst, RAX, dst_op.base, dst_op.disp, SZ_W);
+		}
+		dst = pop_r(dst, RAX);
+		dst = pop_r(dst, RDX);
+		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
+		dst = cmp_ir(dst, 0, RAX, SZ_W);
+		dst = setcc_r(dst, CC_Z, FLAG_Z);
+		dst = setcc_r(dst, CC_S, FLAG_N);
+		end_off = dst+1;
+		dst = jmp(dst, dst+2);
+		*norm_off = dst - (norm_off + 1);
+		dst = pop_r(dst, RAX);
+		dst = pop_r(dst, RDX);
+		dst = mov_ir(dst, 1, FLAG_V, SZ_B);
+		*end_off = dst - (end_off + 1);
+		dst = mov_ir(dst, 0, FLAG_C, SZ_B);
+		break;
 	case M68K_EOR:
 		dst = cycles(dst, BUS);
 		if (src_op.mode == MODE_REG_DIRECT) {
@@ -2487,10 +2559,52 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 			}
 		}
 		break;
-	/*case M68K_MOVEP:
+	//case M68K_MOVEP:
 	case M68K_MULS:
 	case M68K_MULU:
-	case M68K_NBCD:*/
+		dst = cycles(dst, 70); //TODO: Calculate the actual value based on the value of the <ea> parameter
+		if (src_op.mode == MODE_IMMED) {
+			//immediate value should already be sign extended to 32-bits
+			dst = mov_ir(dst, inst->op == M68K_MULU ? (src_op.disp & 0xFFFF) : src_op.disp, SCRATCH1, SZ_D);
+		} else if (src_op.mode == MODE_REG_DIRECT) {
+			if (inst->op == M68K_MULS) {
+				dst = movsx_rr(dst, src_op.base, SCRATCH1, SZ_W, SZ_D);
+			} else {
+				dst = movzx_rr(dst, src_op.base, SCRATCH1, SZ_W, SZ_D);
+			}
+		} else {
+			if (inst->op == M68K_MULS) {
+				dst = movsx_rdisp8r(dst, src_op.base, src_op.disp, SCRATCH1, SZ_W, SZ_D);
+			} else {
+				dst = movzx_rdisp8r(dst, src_op.base, src_op.disp, SCRATCH1, SZ_W, SZ_D);
+			}
+		}
+		if (dst_op.mode == MODE_REG_DIRECT) {
+			dst_reg = dst_op.base;
+			if (inst->op == M68K_MULS) {
+				dst = movsx_rr(dst, dst_reg, dst_reg, SZ_W, SZ_D);
+			} else {
+				dst = movzx_rr(dst, dst_reg, dst_reg, SZ_W, SZ_D);
+			}
+		} else {
+			dst_reg = SCRATCH2;
+			if (inst->op == M68K_MULS) {
+				dst = movsx_rdisp8r(dst, dst_op.base, dst_op.disp, SCRATCH2, SZ_W, SZ_D);
+			} else {
+				dst = movzx_rdisp8r(dst, dst_op.base, dst_op.disp, SCRATCH2, SZ_W, SZ_D);
+			}
+		}
+		dst = imul_rr(dst, SCRATCH1, dst_reg, SZ_D);
+		if (dst_op.mode == MODE_REG_DISPLACE8) {
+			dst = mov_rrdisp8(dst, dst_reg, dst_op.base, dst_op.disp, SZ_D);
+		}
+		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
+		dst = mov_ir(dst, 0, FLAG_C, SZ_B);
+		dst = cmp_ir(dst, 0, dst_reg, SZ_D);
+		dst = setcc_r(dst, CC_Z, FLAG_Z);
+		dst = setcc_r(dst, CC_S, FLAG_N);
+		break;
+	//case M68K_NBCD:
 	case M68K_NEG:
 		if (dst_op.mode == MODE_REG_DIRECT) {
 			dst = neg_r(dst, dst_op.base, inst->extra.size);
@@ -2887,7 +3001,8 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	/*case M68K_INVALID:
 		break;*/
 	default:
-		printf("instruction %d not yet implemented\n", inst->op);
+		m68k_disasm(inst, disasm_buf);
+		printf("%X: %s\ninstruction %d not yet implemented\n", inst->address, disasm_buf, inst->op);
 		exit(1);
 	}
 	return dst;
