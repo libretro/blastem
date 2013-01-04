@@ -41,6 +41,7 @@ void m68k_save_context();
 void m68k_modified_ret_addr();
 void m68k_native_addr();
 void m68k_native_addr_and_sync();
+void m68k_trap();
 void set_sr();
 void set_ccr();
 void get_sr();
@@ -2967,9 +2968,13 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = setcc_r(dst, CC_S, FLAG_N);
 		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
 		break;
-	/*case M68K_TAS:
+	//case M68K_TAS:
 	case M68K_TRAP:
-	case M68K_TRAPV:*/
+		dst = mov_ir(dst, src_op.disp, SCRATCH2, SZ_D);
+		dst = mov_ir(dst, inst->address, SCRATCH1, SZ_D);
+		dst = jmp(dst, (uint8_t *)m68k_trap);
+		break;
+	//case M68K_TRAPV:
 	case M68K_TST:
 		dst = cycles(dst, BUS);
 		if (src_op.mode == MODE_REG_DIRECT) {
@@ -3047,7 +3052,7 @@ uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context)
 			//m68k_disasm(&instbuf, disbuf);
 			//printf("%X: %s\n", instbuf.address, disbuf);
 			dst = translate_m68k(dst, &instbuf, opts);
-		} while(instbuf.op != M68K_ILLEGAL && instbuf.op != M68K_RTS && instbuf.op != M68K_RTE && !(instbuf.op == M68K_BCC && instbuf.extra.cond == COND_TRUE) && instbuf.op != M68K_JMP);
+		} while(instbuf.op != M68K_ILLEGAL && instbuf.op != M68K_TRAP && instbuf.op != M68K_RTS && instbuf.op != M68K_RTE && !(instbuf.op == M68K_BCC && instbuf.extra.cond == COND_TRUE) && instbuf.op != M68K_JMP);
 		process_deferred(opts);
 		if (opts->deferred) {
 			address = opts->deferred->address;
