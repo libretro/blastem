@@ -57,7 +57,40 @@ skip_int:
 	jnb do_sync
 	ret
 	
-	.global do_sync
+	.global m68k_trap
+m68k_trap:
+	push %rdi
+	push %rcx
+	/* swap USP and SSP if not already in supervisor mode */
+	bt $5, 5(%rsi)
+	jc already_supervisor_trap
+	mov 72(%rsi), %edi
+	mov %r15d, 72(%rsi)
+	mov %edi, %r15d
+already_supervisor_trap:
+	/* save status register on stack */
+	sub $2, %r15d
+	mov %r15d, %edi
+	call get_sr
+	call m68k_write_word
+	/* update status register */
+	andb $0xF8, 5(%rsi)
+	mov 92(%rsi), %cl
+	or $0x20, %cl
+	or %cl, 5(%rsi)
+	/* save PC */
+	sub $4, %r15d
+	mov %r15d, %edi
+	pop %rcx
+	call m68k_write_long_lowfirst
+	/* calculate interrupt vector address */
+	pop %rcx
+	shl $2, %ecx
+	add $0x80, %ecx
+	call m68k_read_long_scratch1
+	call m68k_native_addr_and_sync
+	add $24, %eax
+	jmp *%rcx
 	
 int_dbg_msg:
 	.asciz "Executing Interrupt!"
