@@ -63,6 +63,7 @@ void check_reference(m68kinst * inst, m68k_op_info * op)
 
 uint8_t labels = 0;
 uint8_t addr = 0;
+uint8_t only = 0;
 
 int main(int argc, char ** argv)
 {
@@ -78,6 +79,7 @@ int main(int argc, char ** argv)
 	filebuf = malloc(filesize);
 	fread(filebuf, 2, filesize/2, f);
 	fclose(f);
+	deferred *def = NULL, *tmpd;
 	for(uint8_t opt = 2; opt < argc; ++opt) {
 		if (argv[opt][0] == '-') {
 			switch (argv[opt][1])
@@ -88,7 +90,14 @@ int main(int argc, char ** argv)
 			case 'a':
 				addr = 1;
 				break;
+			case 'o':
+				only = 1;
+				break;
 			}
+		} else {
+			uint32_t address = strtol(argv[opt], NULL, 16);
+			def = defer(address, def);
+			reference(address);
 		}
 	}
 	for(cur = filebuf; cur - filebuf < (filesize/2); ++cur)
@@ -101,11 +110,12 @@ int main(int argc, char ** argv)
 	uint32_t int_6 = filebuf[0x78/2] << 16 | filebuf[0x7A/2];
 	uint16_t *encoded, *next;
 	uint32_t size;
-	deferred *def = NULL, *tmpd;
-	def = defer(start, def);
-	def = defer(int_2, def);
-	def = defer(int_4, def);
-	def = defer(int_6, def);
+	if (!def || !only) {
+		def = defer(start, def);
+		def = defer(int_2, def);
+		def = defer(int_4, def);
+		def = defer(int_6, def);
+	}
 	uint32_t address;
 	while(def) {
 		do {

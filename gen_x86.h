@@ -133,10 +133,21 @@ uint8_t * sbb_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t disp,
 uint8_t * sbb_rdisp8r(uint8_t * out, uint8_t src_base, int8_t disp, uint8_t dst, uint8_t size);
 uint8_t * cmp_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t disp, uint8_t size);
 uint8_t * cmp_rdisp8r(uint8_t * out, uint8_t src_base, int8_t disp, uint8_t dst, uint8_t size);
+uint8_t * imul_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size);
+uint8_t * imul_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t disp, uint8_t size);
+uint8_t * imul_rdisp8r(uint8_t * out, uint8_t src_base, int8_t disp, uint8_t dst, uint8_t size);
 uint8_t * not_r(uint8_t * out, uint8_t dst, uint8_t size);
 uint8_t * neg_r(uint8_t * out, uint8_t dst, uint8_t size);
 uint8_t * not_rdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size);
 uint8_t * neg_rdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size);
+uint8_t * mul_r(uint8_t * out, uint8_t dst, uint8_t size);
+uint8_t * imul_r(uint8_t * out, uint8_t dst, uint8_t size);
+uint8_t * div_r(uint8_t * out, uint8_t dst, uint8_t size);
+uint8_t * idiv_r(uint8_t * out, uint8_t dst, uint8_t size);
+uint8_t * mul_rdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size);
+uint8_t * imul_rdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size);
+uint8_t * div_rdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size);
+uint8_t * idiv_rdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size);
 uint8_t * mov_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size);
 uint8_t * mov_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t disp, uint8_t size);
 uint8_t * mov_rdisp8r(uint8_t * out, uint8_t src_base, int8_t disp, uint8_t dst, uint8_t size);
@@ -147,6 +158,8 @@ uint8_t * mov_irdisp8(uint8_t * out, int32_t val, uint8_t dst, int8_t disp, uint
 uint8_t * mov_irind(uint8_t * out, int32_t val, uint8_t dst, uint8_t size);
 uint8_t * movsx_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t src_size, uint8_t size);
 uint8_t * movsx_rdisp8r(uint8_t * out, uint8_t src, int8_t disp, uint8_t dst, uint8_t src_size, uint8_t size);
+uint8_t * movzx_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t src_size, uint8_t size);
+uint8_t * movzx_rdisp8r(uint8_t * out, uint8_t src, int8_t disp, uint8_t dst, uint8_t src_size, uint8_t size);
 uint8_t * pushf(uint8_t * out);
 uint8_t * popf(uint8_t * out);
 uint8_t * push_r(uint8_t * out, uint8_t reg);
@@ -176,6 +189,7 @@ uint8_t * jmp_r(uint8_t * out, uint8_t dst);
 uint8_t * call(uint8_t * out, uint8_t * fun);
 uint8_t * call_r(uint8_t * out, uint8_t dst);
 uint8_t * retn(uint8_t * out);
+uint8_t * cdq(uint8_t * out);
 
 #endif //GEN_X86_H_
 
