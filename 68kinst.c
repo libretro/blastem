@@ -122,7 +122,26 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 	switch(optype)
 	{
 	case BIT_MOVEP_IMMED:
-		if (*istream & 0x100) {
+		if ((*istream & 0x138) == 0x108) {
+			//MOVEP
+			decoded->op = M68K_MOVEP;
+			decoded->extra.size = *istream & 0x40 ? OPSIZE_LONG : OPSIZE_WORD;
+			if (*istream & 0x80) {
+				//memory dest
+				decoded->src.addr_mode = MODE_REG;
+				decoded->src.params.regs.pri = m68k_reg_quick_field(*istream);
+				decoded->dst.addr_mode = MODE_AREG_DISPLACE;
+				decoded->dst.params.regs.pri = *istream & 0x7;
+				decoded->dst.params.regs.displacement = *(++istream);
+			} else {
+				//memory source
+				decoded->dst.addr_mode = MODE_REG;
+				decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
+				decoded->src.addr_mode = MODE_AREG_DISPLACE;
+				decoded->src.params.regs.pri = *istream & 0x7;
+				decoded->src.params.regs.displacement = *(++istream);
+			}
+		} else if (*istream & 0x100) {
 			//BTST, BCHG, BCLR, BSET
 			switch ((*istream >> 6) & 0x3)
 			{
@@ -371,23 +390,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
 				break;
 			case 7:
-				//MOVEP
-				decoded->op = M68K_MOVEP;
-				decoded->extra.size = *istream & 0x40 ? OPSIZE_LONG : OPSIZE_WORD;
-				if (*istream & 0x80) {
-					//memory dest
-					decoded->src.addr_mode = MODE_REG;
-					decoded->src.params.regs.pri = m68k_reg_quick_field(*istream);
-					decoded->dst.addr_mode = MODE_AREG_DISPLACE;
-					decoded->dst.params.regs.pri = *istream & 0x7;
-				} else {
-					//memory source
-					decoded->dst.addr_mode = MODE_REG;
-					decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
-					decoded->src.addr_mode = MODE_AREG_DISPLACE;
-					decoded->src.params.regs.pri = *istream & 0x7;
-				}
-				immed = *(++istream);
+				
 				
 				break;
 			}
