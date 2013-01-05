@@ -6,6 +6,8 @@
 #define NATIVE_CHUNK_SIZE ((16 * 1024 * 1024 / NATIVE_MAP_CHUNKS)/2)
 #define INVALID_OFFSET 0xFFFFFFFF
 
+#define OPT_NATIVE_CALL_STACK 0x1
+ 
 typedef struct {
 	uint8_t  *base;
 	int32_t *offsets;
