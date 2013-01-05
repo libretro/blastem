@@ -983,6 +983,7 @@ uint8_t * translate_m68k_movem(uint8_t * dst, m68kinst * inst, x86_68k_options *
 			dir = -1;
 		} else {
 			reg = 0;
+			dir = 1;
 		}
 		switch (inst->dst.addr_mode)
 		{
@@ -3110,6 +3111,11 @@ uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context)
 				jmp(dst, opts->cur_code);
 				dst = opts->cur_code;
 				dst_end = opts->code_end;
+			}
+			if (address >= 0x400000 && address < 0xE00000) {
+				dst = xor_rr(dst, RDI, RDI, SZ_D);
+				dst = call(dst, (uint8_t *)exit);
+				break;
 			}
 			next = m68k_decode(encoded, &instbuf, address);
 			address += (next-encoded)*2;
