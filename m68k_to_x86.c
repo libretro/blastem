@@ -1422,7 +1422,7 @@ uint8_t * translate_m68k_bsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 
 uint8_t * translate_m68k_bcc(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 {
-	//TODO: Add cycles
+	dst = cycles(dst, 10);//TODO: Adjust this for branch not taken case
 	int32_t disp = inst->src.params.immed;
 	uint32_t after = inst->address + 2;
 	uint8_t * dest_addr = get_native_address(opts->native_code_map, after + disp);
