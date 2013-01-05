@@ -286,6 +286,7 @@ fifo_fallback:
 crash:
 	mov %edi, %esi
 	lea bad_access_msg(%rip), %rdi
+	xor %rax, %rax
 	call printf
 	mov $1, %rdi
 	call exit
