@@ -130,9 +130,9 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		dec_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : 1);
 		out = cycles(out, PREDEC_PENALTY);
 		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
-			out = sub_ir(out, inc_amount, opts->aregs[inst->src.params.regs.pri], SZ_D);
+			out = sub_ir(out, dec_amount, opts->aregs[inst->src.params.regs.pri], SZ_D);
 		} else {
-			out = sub_irdisp8(out, inc_amount, CONTEXT, reg_offset(&(inst->src)), SZ_D);
+			out = sub_irdisp8(out, dec_amount, CONTEXT, reg_offset(&(inst->src)), SZ_D);
 		}
 	case MODE_AREG_INDIRECT:
 	case MODE_AREG_POSTINC:	

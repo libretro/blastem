@@ -34,6 +34,10 @@ int load_rom(char * filename)
 	}
 	fseek(f, 0, SEEK_END);
 	long filesize = ftell(f);
+	if (filesize/2 > CARTRIDGE_WORDS) {
+		//carts bigger than 4MB not currently supported
+		filesize = CARTRIDGE_WORDS*2;
+	}
 	fseek(f, 0, SEEK_SET);
 	fread(cart, 2, MIN(filesize/2, CARTRIDGE_WORDS), f);
 	fclose(f);
