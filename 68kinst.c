@@ -727,10 +727,12 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			decoded->variant = VAR_WORD;
 			immed = *(++istream);
 			immed = sign_extend16(immed);
+#ifdef M68020
 		} else if (immed == 0xFF) {
 			decoded->variant = VAR_LONG;
 			immed = *(++istream) << 16;
 			immed |= *(++istream);
+#endif
 		} else {
 			decoded->variant = VAR_BYTE;
 			immed = sign_extend8(immed);

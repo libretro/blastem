@@ -347,7 +347,7 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		break;
 	default:
 		m68k_disasm(inst, disasm_buf);
-		printf("%s\naddress mode %d not implemented (src)\n", disasm_buf, inst->src.addr_mode);
+		printf("%X: %s\naddress mode %d not implemented (src)\n", inst->address, disasm_buf, inst->src.addr_mode);
 		exit(1);
 	}
 	return out;
@@ -613,7 +613,7 @@ uint8_t * translate_m68k_dst(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		break;
 	default:
 		m68k_disasm(inst, disasm_buf);
-		printf("%s\naddress mode %d not implemented (dst)\n", disasm_buf, inst->dst.addr_mode);
+		printf("%X: %s\naddress mode %d not implemented (dst)\n", inst->address, disasm_buf, inst->dst.addr_mode);
 		exit(1);
 	}
 	return out;
@@ -961,7 +961,7 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 		break;
 	default:
 		m68k_disasm(inst, disasm_buf);
-		printf("%s\naddress mode %d not implemented (move dst)\n", disasm_buf, inst->dst.addr_mode);
+		printf("%X: %s\naddress mode %d not implemented (move dst)\n", inst->address, disasm_buf, inst->dst.addr_mode);
 		exit(1);
 	}
 
@@ -1002,7 +1002,7 @@ uint8_t * translate_m68k_movem(uint8_t * dst, m68kinst * inst, x86_68k_options *
 			break;
 		default:
 			m68k_disasm(inst, disasm_buf);
-			printf("%s\naddress mode %d not implemented (movem dst)\n", disasm_buf, inst->dst.addr_mode);
+			printf("%X: %s\naddress mode %d not implemented (movem dst)\n", inst->address, disasm_buf, inst->dst.addr_mode);
 			exit(1);
 		}
 		dst = cycles(dst, early_cycles);
@@ -1064,7 +1064,7 @@ uint8_t * translate_m68k_movem(uint8_t * dst, m68kinst * inst, x86_68k_options *
 			break;
 		default:
 			m68k_disasm(inst, disasm_buf);
-			printf("%s\naddress mode %d not implemented (movem src)\n", disasm_buf, inst->src.addr_mode);
+			printf("%X: %s\naddress mode %d not implemented (movem src)\n", inst->address, disasm_buf, inst->src.addr_mode);
 			exit(1);
 		}
 		dst = cycles(dst, early_cycles);
@@ -1301,7 +1301,7 @@ uint8_t * translate_m68k_lea(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		break;
 	default:
 		m68k_disasm(inst, disasm_buf);
-		printf("%s\naddress mode %d not implemented (lea src)\n", disasm_buf, inst->src.addr_mode);
+		printf("%X: %s\naddress mode %d not implemented (lea src)\n", inst->address, disasm_buf, inst->src.addr_mode);
 		exit(1);
 	}
 	return dst;
@@ -1382,7 +1382,7 @@ uint8_t * translate_m68k_pea(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		break;
 	default:
 		m68k_disasm(inst, disasm_buf);
-		printf("%s\naddress mode %d not implemented (lea src)\n", disasm_buf, inst->src.addr_mode);
+		printf("%X: %s\naddress mode %d not implemented (lea src)\n", inst->address, disasm_buf, inst->src.addr_mode);
 		exit(1);
 	}
 	dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
@@ -1394,7 +1394,7 @@ uint8_t * translate_m68k_pea(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 uint8_t * translate_m68k_bsr(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 {
 	int32_t disp = inst->src.params.immed;
-	uint32_t after = inst->address + 2;
+	uint32_t after = inst->address + (inst->variant == VAR_BYTE ? 2 : 4);
 	//TODO: Add cycles in the right place relative to pushing the return address on the stack
 	dst = cycles(dst, 10);
 	dst = mov_ir(dst, after, SCRATCH1, SZ_D);
@@ -1402,9 +1402,9 @@ uint8_t * translate_m68k_bsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 	dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
 	dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
 	dst = call(dst, (char *)m68k_write_long_highfirst);
-	uint8_t * dest_addr = get_native_address(opts->native_code_map, after + disp);
+	uint8_t * dest_addr = get_native_address(opts->native_code_map, (inst->address+2) + disp);
 	if (!dest_addr) {
-		opts->deferred = defer_address(opts->deferred, after + disp, dst + 1);
+		opts->deferred = defer_address(opts->deferred, (inst->address+2) + disp, dst + 1);
 		//dummy address to be replaced later
 		dest_addr = dst + 5;
 	}
@@ -2320,6 +2320,18 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 					dst = mov_rdisp8r(dst, src_op.base, src_op.disp, SCRATCH1, SZ_B);
 					src_op.base = SCRATCH1;
 				}
+			}
+			if (dst_op.mode == MODE_REG_DISPLACE8) {
+				if (src_op.base != SCRATCH1 && src_op.base != SCRATCH2) {
+					if (src_op.mode == MODE_REG_DIRECT) {
+						dst = mov_rr(dst, src_op.base, SCRATCH1, SZ_D);
+					} else {
+						dst = mov_rdisp8r(dst, src_op.base, src_op.disp, SCRATCH1, SZ_D);
+						src_op.mode = MODE_REG_DIRECT;
+					}
+					src_op.base = SCRATCH1;
+				}
+				dst = and_ir(dst, 31, SCRATCH1, SZ_D);
 			}
 			if (inst->op == M68K_BTST) {
 				if (dst_op.mode == MODE_REG_DIRECT) {
