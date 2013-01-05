@@ -175,7 +175,7 @@ do_vdp_port_read:
 	
 do_io_write:
 	call m68k_save_context
-	and $0x1FFF, %edi
+	and $0x1FFFF, %edi
 	mov %ecx, %edx
 	call io_write
 	mov %rax, %rsi
@@ -183,7 +183,7 @@ do_io_write:
 	ret
 do_io_read:
 	mov %ecx, %edi
-	and $0x1FFF, %edi
+	and $0x1FFFF, %edi
 	call m68k_save_context
 	call io_read
 	mov %rax, %rsi
@@ -193,7 +193,7 @@ do_io_read:
 
 do_io_write_w:
 	call m68k_save_context
-	and $0x1FFF, %edi
+	and $0x1FFFF, %edi
 	mov %ecx, %edx
 	call io_write_w
 	mov %rax, %rsi
@@ -201,7 +201,7 @@ do_io_write_w:
 	ret
 do_io_read_w:
 	mov %ecx, %edi
-	and $0x1FFF, %edi
+	and $0x1FFFF, %edi
 	call m68k_save_context
 	call io_read_w
 	mov %rax, %rsi
@@ -223,7 +223,7 @@ m68k_write_word:
 	jae workram_w
 	cmp $0xC00000, %edi
 	jae vdp_psg_w
-	cmp $0xA10000, %edi
+	cmp $0xA00000, %edi
 	jb not_io_w
 	cmp $0xA12000, %edi
 	jae not_io_w
@@ -300,7 +300,7 @@ m68k_write_byte:
 	jae workram_wb
 	cmp $0xC00000, %edi
 	jae vdp_psg_wb
-	cmp $0xA10000, %edi
+	cmp $0xA00000, %edi
 	jb not_io_wb
 	cmp $0xA12000, %edi
 	jae not_io_wb
@@ -373,7 +373,7 @@ m68k_read_word_scratch1:
 	jae workram
 	cmp $0xC00000, %ecx
 	jae vdp_psg
-	cmp $0xA10000, %ecx
+	cmp $0xA00000, %ecx
 	jb not_io
 	cmp $0xA12000, %ecx
 	jae not_io
@@ -421,7 +421,7 @@ m68k_read_byte_scratch1:
 	jae workram_b
 	cmp $0xC00000, %ecx
 	jae vdp_psg_b
-	cmp $0xA10000, %ecx
+	cmp $0xA00000, %ecx
 	jb not_io_b
 	cmp $0xA12000, %ecx
 	jae not_io_b
