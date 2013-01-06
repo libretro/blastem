@@ -2261,6 +2261,115 @@ uint8_t * translate_m68k_link(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 	return dst;
 }
 
+uint8_t * translate_m68k_movep(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
+{
+	int8_t reg;
+	dst = cycles(dst, BUS*2);
+	if (inst->src.addr_mode == MODE_REG) {
+		if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
+			dst = mov_rr(dst, opts->aregs[inst->dst.params.regs.pri], SCRATCH2, SZ_D);
+		} else {
+			dst = mov_rdisp8r(dst, CONTEXT, reg_offset(&(inst->dst)), SCRATCH2, SZ_D);
+		}
+		if (inst->dst.params.regs.displacement) {
+			dst = add_ir(dst, inst->dst.params.regs.displacement, SCRATCH2, SZ_D);
+		}
+		reg = native_reg(&(inst->src), opts);
+		if (inst->extra.size == OPSIZE_LONG) {
+			if (reg >= 0) {
+				dst = mov_rr(dst, reg, SCRATCH1, SZ_D);
+				dst = shr_ir(dst, 24, SCRATCH1, SZ_D);
+				dst = push_r(dst, SCRATCH2);
+				dst = call(dst, (uint8_t *)m68k_write_byte);
+				dst = pop_r(dst, SCRATCH2);
+				dst = mov_rr(dst, reg, SCRATCH1, SZ_D);
+				dst = shr_ir(dst, 16, SCRATCH1, SZ_D);
+				
+			} else {
+				dst = mov_rdisp8r(dst, CONTEXT, reg_offset(&(inst->src))+3, SCRATCH1, SZ_B);
+				dst = push_r(dst, SCRATCH2);
+				dst = call(dst, (uint8_t *)m68k_write_byte);
+				dst = pop_r(dst, SCRATCH2);
+				dst = mov_rdisp8r(dst, CONTEXT, reg_offset(&(inst->src))+2, SCRATCH1, SZ_B);
+			}
+			dst = add_ir(dst, 2, SCRATCH2, SZ_D);
+			dst = push_r(dst, SCRATCH2);
+			dst = call(dst, (uint8_t *)m68k_write_byte);
+			dst = pop_r(dst, SCRATCH2);
+			dst = add_ir(dst, 2, SCRATCH2, SZ_D);
+		}
+		if (reg >= 0) {
+			dst = mov_rr(dst, reg, SCRATCH1, SZ_W);
+			dst = shr_ir(dst, 8, SCRATCH1, SZ_W);
+			dst = push_r(dst, SCRATCH2);
+			dst = call(dst, (uint8_t *)m68k_write_byte);
+			dst = pop_r(dst, SCRATCH2);
+			dst = mov_rr(dst, reg, SCRATCH1, SZ_W);
+		} else {
+			dst = mov_rdisp8r(dst, CONTEXT, reg_offset(&(inst->src))+1, SCRATCH1, SZ_B);
+			dst = push_r(dst, SCRATCH2);
+			dst = call(dst, (uint8_t *)m68k_write_byte);
+			dst = pop_r(dst, SCRATCH2);
+			dst = mov_rdisp8r(dst, CONTEXT, reg_offset(&(inst->src)), SCRATCH1, SZ_B);
+		}
+		dst = add_ir(dst, 2, SCRATCH2, SZ_D);
+		dst = call(dst, (uint8_t *)m68k_write_byte);
+	} else {
+		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
+			dst = mov_rr(dst, opts->aregs[inst->src.params.regs.pri], SCRATCH1, SZ_D);
+		} else {
+			dst = mov_rdisp8r(dst, CONTEXT, reg_offset(&(inst->src)), SCRATCH1, SZ_D);
+		}
+		if (inst->src.params.regs.displacement) {
+			dst = add_ir(dst, inst->src.params.regs.displacement, SCRATCH1, SZ_D);
+		}
+		reg = native_reg(&(inst->dst), opts);
+		if (inst->extra.size == OPSIZE_LONG) {
+			if (reg >= 0) {
+				dst = push_r(dst, SCRATCH1);
+				dst = call(dst, (uint8_t *)m68k_read_byte_scratch1);
+				dst = shl_ir(dst, 24, SCRATCH1, SZ_D);
+				dst = mov_rr(dst, SCRATCH1, reg, SZ_D);
+				dst = pop_r(dst, SCRATCH1);
+				dst = add_ir(dst, 2, SCRATCH1, SZ_D);
+				dst = push_r(dst, SCRATCH1);
+				dst = call(dst, (uint8_t *)m68k_read_byte_scratch1);
+				dst = shl_ir(dst, 16, SCRATCH1, SZ_D);
+				dst = or_rr(dst, SCRATCH1, reg, SZ_D);
+			} else {
+				dst = push_r(dst, SCRATCH1);
+				dst = call(dst, (uint8_t *)m68k_read_byte_scratch1);
+				dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, reg_offset(&(inst->dst))+3, SZ_B);
+				dst = pop_r(dst, SCRATCH1);
+				dst = add_ir(dst, 2, SCRATCH1, SZ_D);
+				dst = push_r(dst, SCRATCH1);
+				dst = call(dst, (uint8_t *)m68k_read_byte_scratch1);
+				dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, reg_offset(&(inst->dst))+2, SZ_B);
+			}
+			dst = pop_r(dst, SCRATCH1);
+			dst = add_ir(dst, 2, SCRATCH1, SZ_D);
+		}
+		dst = push_r(dst, SCRATCH1);
+		dst = call(dst, (uint8_t *)m68k_read_byte_scratch1);
+		if (reg >= 0) {
+			
+			dst = shl_ir(dst, 8, SCRATCH1, SZ_W);
+			dst = mov_rr(dst, SCRATCH1, reg, SZ_W);
+			dst = pop_r(dst, SCRATCH1);
+			dst = add_ir(dst, 2, SCRATCH1, SZ_D);
+			dst = call(dst, (uint8_t *)m68k_read_byte_scratch1);
+			dst = mov_rr(dst, SCRATCH1, reg, SZ_B);
+		} else {
+			dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, reg_offset(&(inst->dst))+1, SZ_B);
+			dst = pop_r(dst, SCRATCH1);
+			dst = add_ir(dst, 2, SCRATCH1, SZ_D);
+			dst = call(dst, (uint8_t *)m68k_read_byte_scratch1);
+			dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, reg_offset(&(inst->dst)), SZ_B);
+		}
+	}
+	return dst;
+}
+
 typedef uint8_t * (*shift_ir_t)(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size);
 typedef uint8_t * (*shift_irdisp8_t)(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t disp, uint8_t size);
 typedef uint8_t * (*shift_clr_t)(uint8_t * out, uint8_t dst, uint8_t size);
@@ -2397,6 +2506,8 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		return translate_m68k_ext(dst, inst, opts);
 	} else if(inst->op == M68K_SCC) {
 		return translate_m68k_scc(dst, inst, opts);
+	} else if(inst->op == M68K_MOVEP) {
+		return translate_m68k_movep(dst, inst, opts);
 	}
 	x86_ea src_op, dst_op;
 	if (inst->src.addr_mode != MODE_UNUSED) {
