@@ -1366,24 +1366,28 @@ uint8_t * translate_m68k_lea(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 	case MODE_AREG_DISPLACE:
 		dst = cycles(dst, 8);
 		if (dst_reg >= 0) {
-			if (opts->aregs[inst->src.params.regs.pri] >= 0) {
-				dst = mov_rr(dst, opts->aregs[inst->src.params.regs.pri], dst_reg, SZ_D);
-			} else {
-				dst = mov_rdisp8r(dst, CONTEXT, reg_offset(&(inst->src)), dst_reg, SZ_D);
+			if (inst->src.params.regs.pri != inst->dst.params.regs.pri) {
+				if (opts->aregs[inst->src.params.regs.pri] >= 0) {
+					dst = mov_rr(dst, opts->aregs[inst->src.params.regs.pri], dst_reg, SZ_D);
+				} else {
+					dst = mov_rdisp8r(dst, CONTEXT, reg_offset(&(inst->src)), dst_reg, SZ_D);
+				}
 			}
 			dst = add_ir(dst, inst->src.params.regs.displacement, dst_reg, SZ_D);
 		} else {
-			if (opts->aregs[inst->src.params.regs.pri] >= 0) {
-				dst = mov_rrdisp8(dst, opts->aregs[inst->src.params.regs.pri], CONTEXT, reg_offset(&(inst->dst)), SZ_D);
-			} else {
-				dst = mov_rdisp8r(dst, CONTEXT, reg_offset(&(inst->src)), SCRATCH1, SZ_D);
-				dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, reg_offset(&(inst->dst)), SZ_D);
+			if (inst->src.params.regs.pri != inst->dst.params.regs.pri) {
+				if (opts->aregs[inst->src.params.regs.pri] >= 0) {
+					dst = mov_rrdisp8(dst, opts->aregs[inst->src.params.regs.pri], CONTEXT, reg_offset(&(inst->dst)), SZ_D);
+				} else {
+					dst = mov_rdisp8r(dst, CONTEXT, reg_offset(&(inst->src)), SCRATCH1, SZ_D);
+					dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, reg_offset(&(inst->dst)), SZ_D);
+				}
 			}
 			dst = add_irdisp8(dst, inst->src.params.regs.displacement, CONTEXT, reg_offset(&(inst->dst)), SZ_D);
 		}
 		break;
 	case MODE_AREG_INDEX_DISP8:
-		dst = cycles(dst, 6);//TODO: Check to make sure this is correct
+		dst = cycles(dst, 12);
 		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
 			dst = mov_rr(dst, opts->aregs[inst->src.params.regs.pri], SCRATCH2, SZ_D);
 		} else {
@@ -1438,7 +1442,7 @@ uint8_t * translate_m68k_lea(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		}
 		break;
 	case MODE_PC_INDEX_DISP8:
-		dst = cycles(dst, BUS*3);//TODO: CHeck that this is correct
+		dst = cycles(dst, BUS*3);
 		dst = mov_ir(dst, inst->address+2, SCRATCH1, SZ_D);
 		sec_reg = (inst->src.params.regs.sec >> 1) & 0x7;
 		if (inst->src.params.regs.sec & 1) {
