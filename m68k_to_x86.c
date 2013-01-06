@@ -1155,23 +1155,23 @@ uint8_t * translate_m68k_movem(uint8_t * dst, m68kinst * inst, x86_68k_options *
 		case MODE_AREG_DISPLACE:
 			early_cycles += BUS;
 			reg = SCRATCH2;
-			if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
-				dst = mov_rr(dst, opts->aregs[inst->dst.params.regs.pri], SCRATCH1, SZ_D);
+			if (opts->aregs[inst->src.params.regs.pri] >= 0) {
+				dst = mov_rr(dst, opts->aregs[inst->src.params.regs.pri], SCRATCH1, SZ_D);
 			} else {
-				dst = mov_rdisp8r(dst, CONTEXT,  reg_offset(&(inst->dst)), SCRATCH1, SZ_D);
+				dst = mov_rdisp8r(dst, CONTEXT,  reg_offset(&(inst->src)), SCRATCH1, SZ_D);
 			}
-			dst = add_ir(dst, inst->dst.params.regs.displacement, SCRATCH1, SZ_D);
+			dst = add_ir(dst, inst->src.params.regs.displacement, SCRATCH1, SZ_D);
 			break;
 		case MODE_AREG_INDEX_DISP8:
 			early_cycles += 6;
-			if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
-				dst = mov_rr(dst, opts->aregs[inst->dst.params.regs.pri], SCRATCH1, SZ_D);
+			if (opts->aregs[inst->src.params.regs.pri] >= 0) {
+				dst = mov_rr(dst, opts->aregs[inst->src.params.regs.pri], SCRATCH1, SZ_D);
 			} else {
-				dst = mov_rdisp8r(dst, CONTEXT,  reg_offset(&(inst->dst)), SCRATCH1, SZ_D);
+				dst = mov_rdisp8r(dst, CONTEXT,  reg_offset(&(inst->src)), SCRATCH1, SZ_D);
 			}
-			sec_reg = (inst->dst.params.regs.sec >> 1) & 0x7;
-			if (inst->dst.params.regs.sec & 1) {
-				if (inst->dst.params.regs.sec & 0x10) {
+			sec_reg = (inst->src.params.regs.sec >> 1) & 0x7;
+			if (inst->src.params.regs.sec & 1) {
+				if (inst->src.params.regs.sec & 0x10) {
 					if (opts->aregs[sec_reg] >= 0) {
 						dst = add_rr(dst, opts->aregs[sec_reg], SCRATCH1, SZ_D);
 					} else {
@@ -1185,7 +1185,7 @@ uint8_t * translate_m68k_movem(uint8_t * dst, m68kinst * inst, x86_68k_options *
 					}
 				}
 			} else {
-				if (inst->dst.params.regs.sec & 0x10) {
+				if (inst->src.params.regs.sec & 0x10) {
 					if (opts->aregs[sec_reg] >= 0) {
 						dst = movsx_rr(dst, opts->aregs[sec_reg], SCRATCH2, SZ_W, SZ_D);
 					} else {
@@ -1200,20 +1200,20 @@ uint8_t * translate_m68k_movem(uint8_t * dst, m68kinst * inst, x86_68k_options *
 				}
 				dst = add_rr(dst, SCRATCH2, SCRATCH1, SZ_D);
 			}
-			if (inst->dst.params.regs.displacement) {
-				dst = add_ir(dst, inst->dst.params.regs.displacement, SCRATCH1, SZ_D);
+			if (inst->src.params.regs.displacement) {
+				dst = add_ir(dst, inst->src.params.regs.displacement, SCRATCH1, SZ_D);
 			}
 			break;
 		case MODE_PC_DISPLACE:
 			early_cycles += BUS;
-			dst = mov_ir(dst, inst->dst.params.regs.displacement + inst->address+2, SCRATCH1, SZ_D);
+			dst = mov_ir(dst, inst->src.params.regs.displacement + inst->address+2, SCRATCH1, SZ_D);
 			break;
 		case MODE_PC_INDEX_DISP8:
 			early_cycles += 6;
 			dst = mov_ir(dst, inst->address+2, SCRATCH1, SZ_D);
-			sec_reg = (inst->dst.params.regs.sec >> 1) & 0x7;
-			if (inst->dst.params.regs.sec & 1) {
-				if (inst->dst.params.regs.sec & 0x10) {
+			sec_reg = (inst->src.params.regs.sec >> 1) & 0x7;
+			if (inst->src.params.regs.sec & 1) {
+				if (inst->src.params.regs.sec & 0x10) {
 					if (opts->aregs[sec_reg] >= 0) {
 						dst = add_rr(dst, opts->aregs[sec_reg], SCRATCH1, SZ_D);
 					} else {
@@ -1227,7 +1227,7 @@ uint8_t * translate_m68k_movem(uint8_t * dst, m68kinst * inst, x86_68k_options *
 					}
 				}
 			} else {
-				if (inst->dst.params.regs.sec & 0x10) {
+				if (inst->src.params.regs.sec & 0x10) {
 					if (opts->aregs[sec_reg] >= 0) {
 						dst = movsx_rr(dst, opts->aregs[sec_reg], SCRATCH2, SZ_W, SZ_D);
 					} else {
@@ -1242,8 +1242,8 @@ uint8_t * translate_m68k_movem(uint8_t * dst, m68kinst * inst, x86_68k_options *
 				}
 				dst = add_rr(dst, SCRATCH2, SCRATCH1, SZ_D);
 			}
-			if (inst->dst.params.regs.displacement) {
-				dst = add_ir(dst, inst->dst.params.regs.displacement, SCRATCH1, SZ_D);
+			if (inst->src.params.regs.displacement) {
+				dst = add_ir(dst, inst->src.params.regs.displacement, SCRATCH1, SZ_D);
 			}
 			break;
 		case MODE_ABSOLUTE:
