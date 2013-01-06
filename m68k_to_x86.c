@@ -1379,7 +1379,7 @@ uint8_t * translate_m68k_lea(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 				dst = mov_rdisp8r(dst, CONTEXT, reg_offset(&(inst->src)), SCRATCH1, SZ_D);
 				dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, reg_offset(&(inst->dst)), SZ_D);
 			}
-			dst = add_irdisp8(dst, inst->src.params.regs.displacement, CONTEXT, reg_offset(&(inst->src)), SZ_D);
+			dst = add_irdisp8(dst, inst->src.params.regs.displacement, CONTEXT, reg_offset(&(inst->dst)), SZ_D);
 		}
 		break;
 	case MODE_AREG_INDEX_DISP8:
@@ -1426,7 +1426,7 @@ uint8_t * translate_m68k_lea(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		if (dst_reg >= 0) {
 			dst = mov_rr(dst, SCRATCH2, dst_reg, SZ_D);
 		} else {
-			dst = mov_rrdisp8(dst, SCRATCH2, CONTEXT, reg_offset(&(inst->src)), SZ_D);
+			dst = mov_rrdisp8(dst, SCRATCH2, CONTEXT, reg_offset(&(inst->dst)), SZ_D);
 		}
 		break;
 	case MODE_PC_DISPLACE:
@@ -2865,7 +2865,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		if (dst_op.mode == MODE_REG_DIRECT) {
 			dst = neg_r(dst, dst_op.base, inst->extra.size);
 		} else {
-			dst = not_rdisp8(dst, dst_op.base, dst_op.disp, inst->extra.size);
+			dst = neg_rdisp8(dst, dst_op.base, dst_op.disp, inst->extra.size);
 		}
 		dst = mov_ir(dst, 0, FLAG_C, SZ_B);
 		dst = setcc_r(dst, CC_Z, FLAG_Z);
@@ -3312,7 +3312,7 @@ uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context)
 			//m68k_disasm(&instbuf, disbuf);
 			//printf("%X: %s\n", instbuf.address, disbuf);
 			dst = translate_m68k(dst, &instbuf, opts);
-		} while(instbuf.op != M68K_ILLEGAL && instbuf.op != M68K_TRAP && instbuf.op != M68K_RTS && instbuf.op != M68K_RTE && !(instbuf.op == M68K_BCC && instbuf.extra.cond == COND_TRUE) && instbuf.op != M68K_JMP);
+		} while(instbuf.op != M68K_ILLEGAL && instbuf.op != M68K_TRAP && instbuf.op != M68K_RTS && instbuf.op != M68K_RTR && instbuf.op != M68K_RTE && !(instbuf.op == M68K_BCC && instbuf.extra.cond == COND_TRUE) && instbuf.op != M68K_JMP);
 		process_deferred(opts);
 		if (opts->deferred) {
 			address = opts->deferred->address;
