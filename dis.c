@@ -145,7 +145,8 @@ int main(int argc, char ** argv)
 			check_reference(&instbuf, &(instbuf.dst));
 			if (instbuf.op == M68K_ILLEGAL || instbuf.op == M68K_RTS || instbuf.op == M68K_RTE || instbuf.op == M68K_INVALID) {
 				break;
-			} else if (instbuf.op == M68K_BCC || instbuf.op == M68K_DBCC || instbuf.op == M68K_BSR) {
+			}
+			if (instbuf.op == M68K_BCC || instbuf.op == M68K_DBCC || instbuf.op == M68K_BSR) {
 				if (instbuf.op == M68K_BCC && instbuf.extra.cond == COND_TRUE) {
 					address = instbuf.address + 2 + instbuf.src.params.immed;
 					encoded = filebuf + address/2;
@@ -177,7 +178,7 @@ int main(int argc, char ** argv)
 			} else if(instbuf.op == M68K_JSR) {
 				if (instbuf.src.addr_mode == MODE_ABSOLUTE || instbuf.src.addr_mode == MODE_ABSOLUTE_SHORT) {
 					def = defer(instbuf.src.params.immed, def);
-				} else if (instbuf.src.addr_mode = MODE_PC_DISPLACE) {
+				} else if (instbuf.src.addr_mode == MODE_PC_DISPLACE) {
 					def = defer(instbuf.src.params.regs.displacement + instbuf.address + 2, def);
 				}
 			}
