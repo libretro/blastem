@@ -26,12 +26,37 @@ io_port gamepad_2;
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #endif
 
+#define SMD_HEADER_SIZE 512
+#define SMD_MAGIC1 0x03
+#define SMD_MAGIC2 0xAA
+#define SMD_MAGIC3 0xBB
+#define SMD_BLOCK_SIZE 0x4000
+
+int load_smd_rom(long filesize, FILE * f)
+{
+	uint8_t block[SMD_BLOCK_SIZE];
+	filesize -= SMD_HEADER_SIZE;
+	fseek(f, SMD_HEADER_SIZE, SEEK_SET);
+	
+	uint16_t * dst = cart;
+	while (filesize > 0) {
+		fread(block, 1, SMD_BLOCK_SIZE, f);
+		for (uint8_t *low = block, *high = (block+SMD_BLOCK_SIZE/2), *end = block+SMD_BLOCK_SIZE; high < end; high++, low++) {
+			*(dst++) = *high << 8 | *low;
+		}
+		filesize -= SMD_BLOCK_SIZE;
+	}
+	return 1;
+}
+
 int load_rom(char * filename)
 {
+	uint8_t header[10];
 	FILE * f = fopen(filename, "rb");
 	if (!f) {
 		return 0;
 	}
+	fread(header, 1, sizeof(header), f);
 	fseek(f, 0, SEEK_END);
 	long filesize = ftell(f);
 	if (filesize/2 > CARTRIDGE_WORDS) {
@@ -39,7 +64,22 @@ int load_rom(char * filename)
 		filesize = CARTRIDGE_WORDS*2;
 	}
 	fseek(f, 0, SEEK_SET);
-	fread(cart, 2, MIN(filesize/2, CARTRIDGE_WORDS), f);
+	if (header[1] == SMD_MAGIC1 && header[8] == SMD_MAGIC2 && header[9] == SMD_MAGIC3) {
+		int i;
+		for (i = 3; i < 8; i++) {
+			if (header[i] != 0) {
+				break;
+			}
+		}
+		if (i == 8) {
+			if (header[2]) {
+				fprintf(stderr, "%s is a split SMD ROM which is not currently supported", filename);
+				exit(1);
+			}
+			return load_smd_rom(filesize, f);
+		}
+	}
+	fread(cart, 2, filesize/2, f);
 	fclose(f);
 	for(unsigned short * cur = cart; cur - cart < (filesize/2); ++cur)
 	{
