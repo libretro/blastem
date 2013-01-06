@@ -2726,8 +2726,32 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
 		dst = m68k_save_result(inst, dst, opts);
 		break;
-	/*case M68K_EORI_CCR:
-	case M68K_EORI_SR:*/
+	case M68K_EORI_CCR:
+	case M68K_EORI_SR:
+		dst = cycles(dst, 20);
+		//TODO: If ANDI to SR, trap if not in supervisor mode
+		if (inst->src.params.immed & 0x1) {
+			dst = xor_ir(dst, 1, FLAG_C, SZ_B);
+		}
+		if (inst->src.params.immed & 0x2) {
+			dst = xor_ir(dst, 1, FLAG_V, SZ_B);
+		}
+		if (inst->src.params.immed & 0x4) {
+			dst = xor_ir(dst, 1, FLAG_Z, SZ_B);
+		}
+		if (inst->src.params.immed & 0x8) {
+			dst = xor_ir(dst, 1, FLAG_N, SZ_B);
+		}
+		if (inst->src.params.immed & 0x10) {
+			dst = xor_irdisp8(dst, 1, CONTEXT, 0, SZ_B);
+		}
+		if (inst->op == M68K_ORI_SR) {
+			dst = xor_irdisp8(dst, inst->src.params.immed >> 8, CONTEXT, offsetof(m68k_context, status), SZ_B);
+			if (inst->src.params.immed & 0x700) {
+				dst = call(dst, (uint8_t *)do_sync);
+			}
+		}
+		break;
 	case M68K_EXG:
 		dst = cycles(dst, 6);
 		if (dst_op.mode == MODE_REG_DIRECT) {
