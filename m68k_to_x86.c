@@ -3001,19 +3001,50 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		break;
 	//case M68K_NBCD:
 	case M68K_NEG:
+		dst = cycles(dst, BUS);
 		if (dst_op.mode == MODE_REG_DIRECT) {
 			dst = neg_r(dst, dst_op.base, inst->extra.size);
 		} else {
 			dst = neg_rdisp8(dst, dst_op.base, dst_op.disp, inst->extra.size);
 		}
-		dst = mov_ir(dst, 0, FLAG_C, SZ_B);
+		dst = setcc_r(dst, CC_C, FLAG_C);
 		dst = setcc_r(dst, CC_Z, FLAG_Z);
 		dst = setcc_r(dst, CC_S, FLAG_N);
-		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
+		dst = setcc_r(dst, CC_O, FLAG_V);
+		dst = mov_rrind(dst, FLAG_C, CONTEXT, SZ_B);
 		dst = m68k_save_result(inst, dst, opts);
 		break;
-	/*case M68K_NEGX:
-		break;*/
+	case M68K_NEGX:
+		dst = cycles(dst, BUS);
+		if (dst_op.mode == MODE_REG_DIRECT) {
+			if (dst_op.base == SCRATCH1) {
+				dst = push_r(dst, SCRATCH2);
+				dst = xor_rr(dst, SCRATCH2, SCRATCH2, inst->extra.size);
+				dst = bt_irdisp8(dst, 0, CONTEXT, 0, SZ_B);
+				dst = sbb_rr(dst, dst_op.base, SCRATCH2, inst->extra.size);
+				dst = mov_rr(dst, SCRATCH2, dst_op.base, inst->extra.size);
+				dst = pop_r(dst, SCRATCH2);
+			} else {
+				dst = xor_rr(dst, SCRATCH1, SCRATCH1, inst->extra.size);
+				dst = bt_irdisp8(dst, 0, CONTEXT, 0, SZ_B);
+				dst = sbb_rr(dst, dst_op.base, SCRATCH1, inst->extra.size);
+				dst = mov_rr(dst, SCRATCH1, dst_op.base, inst->extra.size);
+			}
+		} else {
+			dst = xor_rr(dst, SCRATCH1, SCRATCH1, inst->extra.size);
+			dst = bt_irdisp8(dst, 0, CONTEXT, 0, SZ_B);
+			dst = sbb_rdisp8r(dst, dst_op.base, dst_op.disp, SCRATCH1, inst->extra.size);
+			dst = mov_rrdisp8(dst, SCRATCH1, dst_op.base, dst_op.disp, inst->extra.size);
+		}
+		dst = setcc_r(dst, CC_C, FLAG_C);
+		dst = jcc(dst, CC_NZ, dst+4);
+		dst = mov_ir(dst, 1, FLAG_Z, SZ_B);
+		dst = setcc_r(dst, CC_S, FLAG_N);
+		dst = setcc_r(dst, CC_O, FLAG_V);
+		dst = mov_rrind(dst, FLAG_C, CONTEXT, SZ_B);
+		dst = m68k_save_result(inst, dst, opts);
+		break;
+		break;
 	case M68K_NOP:
 		dst = cycles(dst, BUS);
 		break;
