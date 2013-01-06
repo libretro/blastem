@@ -3143,6 +3143,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		}
 		break;
 	case M68K_RTE:
+		//TODO: Trap if not in system mode
 		dst = mov_rr(dst, opts->aregs[7], SCRATCH1, SZ_D);
 		dst = call(dst, (uint8_t *)m68k_read_long_scratch1);
 		dst = push_r(dst, SCRATCH1);
@@ -3162,8 +3163,20 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = call(dst, (uint8_t *)m68k_native_addr_and_sync);
 		dst = jmp_r(dst, SCRATCH1);
 		break;
-	/*case M68K_RTR:
-	case M68K_SBCD:
+	case M68K_RTR:
+		dst = mov_rr(dst, opts->aregs[7], SCRATCH1, SZ_D);
+		dst = call(dst, (uint8_t *)m68k_read_long_scratch1);
+		dst = push_r(dst, SCRATCH1);
+		dst = add_ir(dst, 4, opts->aregs[7], SZ_D);
+		dst = mov_rr(dst, opts->aregs[7], SCRATCH1, SZ_D);
+		dst = call(dst, (uint8_t *)m68k_read_word_scratch1);
+		dst = add_ir(dst, 2, opts->aregs[7], SZ_D);
+		dst = call(dst, (uint8_t *)set_ccr);
+		dst = pop_r(dst, SCRATCH1);
+		dst = call(dst, (uint8_t *)m68k_native_addr_and_sync);
+		dst = jmp_r(dst, SCRATCH1);
+		break;
+	/*case M68K_SBCD:
 	case M68K_STOP:
 		break;*/
 	case M68K_SUB:
