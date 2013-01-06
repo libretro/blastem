@@ -3382,5 +3382,6 @@ void init_68k_context(m68k_context * context, native_map_slot * native_code_map,
 	context->native_code_map = native_code_map;
 	context->options = opts;
 	context->int_cycle = 0xFFFFFFFF;
+	context->status = 0x27;
 }
 
