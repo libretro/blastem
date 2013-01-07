@@ -88,6 +88,18 @@ already_supervisor_trap:
 	call m68k_native_addr_and_sync
 	add $24, %eax
 	jmp *%rcx
+
+invalid_msg:
+	.asciz "Invalid instruction at %X\n"
+	
+	.global m68k_invalid
+m68k_invalid:
+	lea invalid_msg(%rip), %rdi
+	mov %ecx, %esi
+	xor %rax, %rax
+	call printf
+	mov $1, %rdi
+	call exit
 	
 int_dbg_msg:
 	.asciz "Executing Interrupt!"
