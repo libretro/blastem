@@ -3343,6 +3343,10 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = call(dst, (uint8_t *)m68k_read_word_scratch1);
 		dst = add_ir(dst, 2, opts->aregs[7], SZ_D);
 		dst = call(dst, (uint8_t *)set_sr);
+		//Read saved PC
+		dst = mov_rr(dst, opts->aregs[7], SCRATCH1, SZ_D);
+		dst = call(dst, (uint8_t *)m68k_read_long_scratch1);
+		dst = add_ir(dst, 4, opts->aregs[7], SZ_D);
 		//Check if we've switched to user mode and swap stack pointers if needed
 		dst = bt_irdisp8(dst, 5, CONTEXT, offsetof(m68k_context, status), SZ_B);
 		end_off = dst+1;
@@ -3351,10 +3355,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, opts->aregs[7], SZ_D);
 		dst = mov_rrdisp8(dst, SCRATCH2, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SZ_D);
 		*end_off = dst - (end_off+1);
-		//Read saved PC
-		dst = mov_rr(dst, opts->aregs[7], SCRATCH1, SZ_D);
-		dst = call(dst, (uint8_t *)m68k_read_long_scratch1);
-		dst = add_ir(dst, 4, opts->aregs[7], SZ_D);
 		//Get native address, sync components, recalculate integer points and jump to returned address
 		dst = call(dst, (uint8_t *)m68k_native_addr_and_sync);
 		dst = jmp_r(dst, SCRATCH1);
