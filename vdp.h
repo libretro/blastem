@@ -9,7 +9,7 @@
 #define VSRAM_SIZE 40
 #define VRAM_SIZE (64*1024)
 #define LINEBUF_SIZE 320
-#define FRAMEBUF_ENTRIES 320*224
+#define FRAMEBUF_ENTRIES (320+27)*(240+27) //PAL active display + full border
 #define FRAMEBUF_SIZE (FRAMEBUF_ENTRIES*sizeof(uint16_t))
 #define MAX_DRAWS 40
 #define MAX_DRAWS_H32 32
