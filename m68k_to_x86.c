@@ -3524,7 +3524,7 @@ uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context)
 			//m68k_disasm(&instbuf, disbuf);
 			//printf("%X: %s\n", instbuf.address, disbuf);
 			dst = translate_m68k(dst, &instbuf, opts);
-		} while(instbuf.op != M68K_ILLEGAL && instbuf.op != M68K_TRAP && instbuf.op != M68K_RTS && instbuf.op != M68K_RTR && instbuf.op != M68K_RTE && !(instbuf.op == M68K_BCC && instbuf.extra.cond == COND_TRUE) && instbuf.op != M68K_JMP);
+		} while(instbuf.op != M68K_ILLEGAL && instbuf.op != M68K_INVALID && instbuf.op != M68K_TRAP && instbuf.op != M68K_RTS && instbuf.op != M68K_RTR && instbuf.op != M68K_RTE && !(instbuf.op == M68K_BCC && instbuf.extra.cond == COND_TRUE) && instbuf.op != M68K_JMP);
 		process_deferred(opts);
 		if (opts->deferred) {
 			address = opts->deferred->address;
