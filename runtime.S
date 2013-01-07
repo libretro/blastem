@@ -17,8 +17,6 @@ skip_sync:
 handle_cycle_limit_int:
 	cmp 88(%rsi), %eax
 	jb skip_int
-	push %rcx
-	/* call print_int_dbg */
 	/* swap USP and SSP if not already in supervisor mode */
 	bt $5, 5(%rsi)
 	jc already_supervisor
@@ -26,6 +24,10 @@ handle_cycle_limit_int:
 	mov %r15d, 72(%rsi)
 	mov %edi, %r15d
 already_supervisor:
+	/* save PC */
+	sub $4, %r15d
+	mov %r15d, %edi
+	call m68k_write_long_lowfirst
 	/* save status register on stack */
 	sub $2, %r15d
 	mov %r15d, %edi
@@ -36,11 +38,6 @@ already_supervisor:
 	mov 92(%rsi), %cl
 	or $0x20, %cl
 	or %cl, 5(%rsi)
-	/* save PC */
-	sub $4, %r15d
-	mov %r15d, %edi
-	pop %rcx
-	call m68k_write_long_lowfirst
 	/* calculate interrupt vector address */
 	mov 92(%rsi), %ecx
 	shl $2, %ecx
@@ -68,6 +65,11 @@ m68k_trap:
 	mov %r15d, 72(%rsi)
 	mov %edi, %r15d
 already_supervisor_trap:
+	/* save PC */
+	sub $4, %r15d
+	mov %r15d, %edi
+	pop %rcx
+	call m68k_write_long_lowfirst
 	/* save status register on stack */
 	sub $2, %r15d
 	mov %r15d, %edi
@@ -78,11 +80,6 @@ already_supervisor_trap:
 	mov 92(%rsi), %cl
 	or $0x20, %cl
 	or %cl, 5(%rsi)
-	/* save PC */
-	sub $4, %r15d
-	mov %r15d, %edi
-	pop %rcx
-	call m68k_write_long_lowfirst
 	/* calculate interrupt vector address */
 	pop %rcx
 	shl $2, %ecx
