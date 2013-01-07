@@ -1945,6 +1945,30 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 			dst = jmp_r(dst, SCRATCH1);
 		}
 		break;
+	case MODE_AREG_DISPLACE:
+		dst = cycles(dst, BUS*2);
+		dst = mov_ir(dst, inst->address + 2, SCRATCH1, SZ_D);
+		if (opts->flags & OPT_NATIVE_CALL_STACK) {
+			dst = push_r(dst, SCRATCH1);
+		}
+		dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
+		dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
+		dst = call(dst, (char *)m68k_write_long_highfirst);
+		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
+			dst = mov_rr(dst, opts->aregs[inst->src.params.regs.pri], SCRATCH1, SZ_D);
+		} else {
+			dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->src.params.regs.pri, SCRATCH1, SZ_D);
+		}
+		dst = add_ir(dst, inst->src.params.regs.displacement, SCRATCH1, SZ_D);
+		dst = call(dst, (uint8_t *)m68k_native_addr);
+		if (opts->flags & OPT_NATIVE_CALL_STACK) {
+			dst = call_r(dst, SCRATCH1);
+			//would add_ir(dst, 8, RSP, SZ_Q) be faster here?
+			dst = pop_r(dst, SCRATCH1);
+		} else {
+			dst = jmp_r(dst, SCRATCH1);
+		}
+		break;
 	case MODE_AREG_INDEX_DISP8:
 		dst = cycles(dst, BUS*3);//TODO: CHeck that this is correct
 		dst = mov_ir(dst, inst->address + 4, SCRATCH1, SZ_D);
