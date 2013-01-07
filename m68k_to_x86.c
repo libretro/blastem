@@ -42,6 +42,7 @@ void m68k_modified_ret_addr();
 void m68k_native_addr();
 void m68k_native_addr_and_sync();
 void m68k_trap();
+void m68k_invalid();
 void set_sr();
 void set_ccr();
 void get_sr();
@@ -2532,6 +2533,9 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		return translate_m68k_scc(dst, inst, opts);
 	} else if(inst->op == M68K_MOVEP) {
 		return translate_m68k_movep(dst, inst, opts);
+	} else if(inst->op == M68K_INVALID) {
+		dst = mov_ir(dst, inst->address, SCRATCH1, SZ_D);
+		return call(dst, (uint8_t *)m68k_invalid);
 	}
 	x86_ea src_op, dst_op;
 	if (inst->src.addr_mode != MODE_UNUSED) {
@@ -3468,8 +3472,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		}
 		dst = add_ir(dst, 4, opts->aregs[7], SZ_D);
 		break;
-	/*case M68K_INVALID:
-		break;*/
 	default:
 		m68k_disasm(inst, disasm_buf);
 		printf("%X: %s\ninstruction %d not yet implemented\n", inst->address, disasm_buf, inst->op);
