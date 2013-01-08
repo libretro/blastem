@@ -1694,9 +1694,9 @@ uint8_t * translate_m68k_scc(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 			dst = cycles(dst, BUS);
 		}
 		if (dst_op.mode == MODE_REG_DIRECT) {
-			dst = mov_ir(dst, cond == COND_TRUE, dst_op.base, SZ_B);
+			dst = mov_ir(dst, cond == COND_TRUE ? 0xFF : 0, dst_op.base, SZ_B);
 		} else {
-			dst = mov_irdisp8(dst, cond == COND_TRUE, dst_op.base, dst_op.disp, SZ_B);
+			dst = mov_irdisp8(dst, cond == COND_TRUE ? 0xFF : 0, dst_op.base, dst_op.disp, SZ_B);
 		}
 	} else {
 		uint8_t cc = CC_NZ;
@@ -1741,33 +1741,24 @@ uint8_t * translate_m68k_scc(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 			dst = or_rr(dst, FLAG_Z, SCRATCH1, SZ_B);
 			break;
 		}
-		if ((inst->dst.addr_mode == MODE_REG || inst->dst.addr_mode == MODE_AREG)) {
-			uint8_t *true_off = dst + 1;
-			dst = jcc(dst, cc, dst+2);
-			dst = cycles(dst, BUS);
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				dst = mov_ir(dst, 0, dst_op.base, SZ_B);
-			} else {
-				dst = mov_irdisp8(dst, 0, dst_op.base, dst_op.disp, SZ_B);
-			}
-			uint8_t *end_off = dst+1;
-			dst = jmp(dst, dst+2);
-			*true_off = dst - (true_off+1);
-			dst = cycles(dst, 6);
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				dst = mov_ir(dst, 1, dst_op.base, SZ_B);
-			} else {
-				dst = mov_irdisp8(dst, 1, dst_op.base, dst_op.disp, SZ_B);
-			}
-			*end_off = dst - (end_off+1);
+		uint8_t *true_off = dst + 1;
+		dst = jcc(dst, cc, dst+2);
+		dst = cycles(dst, BUS);
+		if (dst_op.mode == MODE_REG_DIRECT) {
+			dst = mov_ir(dst, 0, dst_op.base, SZ_B);
 		} else {
-			dst = cycles(dst, BUS);
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				dst = setcc_r(dst, cc, dst_op.base);
-			} else {
-				dst = setcc_rdisp8(dst, cc, dst_op.base, dst_op.disp);
-			}
+			dst = mov_irdisp8(dst, 0, dst_op.base, dst_op.disp, SZ_B);
 		}
+		uint8_t *end_off = dst+1;
+		dst = jmp(dst, dst+2);
+		*true_off = dst - (true_off+1);
+		dst = cycles(dst, 6);
+		if (dst_op.mode == MODE_REG_DIRECT) {
+			dst = mov_ir(dst, 0xFF, dst_op.base, SZ_B);
+		} else {
+			dst = mov_irdisp8(dst, 0xFF, dst_op.base, dst_op.disp, SZ_B);
+		}
+		*end_off = dst - (end_off+1);
 	}
 	dst = m68k_save_result(inst, dst, opts);
 	return dst;
