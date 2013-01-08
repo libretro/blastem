@@ -82,26 +82,27 @@ void scan_sprite_table(uint32_t line, vdp_context * context)
 		//TODO: Read from SAT cache rather than from VRAM
 		uint16_t sat_address = (context->regs[REG_SAT] & 0x7F) << 9;
 		uint16_t address = context->sprite_index * 8 + sat_address;
-		int16_t y = ((context->vdpmem[address] & 0x3) << 8 | context->vdpmem[address+1]) - 128;
+		line += 128;
+		uint16_t y = ((context->vdpmem[address] & 0x3) << 8 | context->vdpmem[address+1]);
 		uint8_t height = ((context->vdpmem[address+2] & 0x3) + 1) * 8;
 		//printf("Sprite %d | y: %d, height: %d\n", context->sprite_index, y, height);
 		if (y <= line && line < (y + height)) {
 			//printf("Sprite %d at y: %d with height %d is on line %d\n", context->sprite_index, y, height, line);
 			context->sprite_info_list[--(context->slot_counter)].size = context->vdpmem[address+2];
 			context->sprite_info_list[context->slot_counter].index = context->sprite_index;
-			context->sprite_info_list[context->slot_counter].y = y;
+			context->sprite_info_list[context->slot_counter].y = y-128;
 		}
 		context->sprite_index = context->vdpmem[address+3] & 0x7F;
 		if (context->sprite_index && context->slot_counter)
 		{
 			address = context->sprite_index * 8 + sat_address;
-			y = ((context->vdpmem[address] & 0x3) << 8 | context->vdpmem[address+1]) - 128;
+			y = ((context->vdpmem[address] & 0x3) << 8 | context->vdpmem[address+1]);
 			height = ((context->vdpmem[address+2] & 0x3) + 1) * 8;
 			if (y <= line && line < (y + height)) {
 				//printf("Sprite %d at y: %d with height %d is on line %d\n", context->sprite_index, y, height, line);
 				context->sprite_info_list[--(context->slot_counter)].size = context->vdpmem[address+2];
 				context->sprite_info_list[context->slot_counter].index = context->sprite_index;
-				context->sprite_info_list[context->slot_counter].y = y;
+				context->sprite_info_list[context->slot_counter].y = y-128;
 			}
 			context->sprite_index = context->vdpmem[address+3] & 0x7F;
 		}
