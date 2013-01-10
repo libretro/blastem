@@ -105,7 +105,12 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 	int32_t dec_amount,inc_amount;
 	if (reg >= 0) {
 		ea->mode = MODE_REG_DIRECT;
-		ea->base = reg;
+		if (inst->dst.addr_mode == MODE_AREG && inst->extra.size == OPSIZE_WORD) {
+			out = movsx_rr(out, reg, SCRATCH1, SZ_W, SZ_D);
+			ea->base = SCRATCH1;
+		} else {
+			ea->base = reg;
+		}
 		return out;
 	}
 	switch (inst->src.addr_mode)
@@ -122,9 +127,15 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 			ea->base = CONTEXT;
 			ea->disp = reg_offset(&(inst->src));
 		} else {
-			out = mov_rdisp8r(out, CONTEXT, reg_offset(&(inst->src)), SCRATCH1, inst->extra.size);
+			if (inst->dst.addr_mode == MODE_AREG && inst->extra.size == OPSIZE_WORD) {
+				out = movsx_rdisp8r(out, CONTEXT, reg_offset(&(inst->src)), SCRATCH1, SZ_W, SZ_D);
+			} else {
+				out = mov_rdisp8r(out, CONTEXT, reg_offset(&(inst->src)), SCRATCH1, inst->extra.size);
+			}
 			ea->mode = MODE_REG_DIRECT;
 			ea->base = SCRATCH1;
+			//we're explicitly handling the areg dest here, so we exit immediately
+			return out;
 		}
 		break;
 	case MODE_AREG_PREDEC:
@@ -345,11 +356,20 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		}
 		ea->mode = MODE_IMMED;
 		ea->disp = inst->src.params.immed;
-		break;
+		return out;
 	default:
 		m68k_disasm(inst, disasm_buf);
 		printf("%X: %s\naddress mode %d not implemented (src)\n", inst->address, disasm_buf, inst->src.addr_mode);
 		exit(1);
+	}
+	if (inst->dst.addr_mode == MODE_AREG && inst->extra.size == OPSIZE_WORD) {
+		if (ea->mode == MODE_REG_DIRECT) {
+			out = movsx_rr(out, ea->base, SCRATCH1, SZ_W, SZ_D);
+		} else {
+			out = movsx_rdisp8r(out, ea->base, ea->disp, SCRATCH1, SZ_W, SZ_D);
+			ea->mode = MODE_REG_DIRECT;
+		}
+		ea->base = SCRATCH1;
 	}
 	return out;
 }
@@ -736,24 +756,26 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 			flags_reg = src.base = SCRATCH1;
 		}
 	}
+	uint8_t size = inst->extra.size;
 	switch(inst->dst.addr_mode)
 	{
-	case MODE_REG:
 	case MODE_AREG:
+		size = OPSIZE_LONG;
+	case MODE_REG:
 		if (reg >= 0) {
 			if (src.mode == MODE_REG_DIRECT) {
-				dst = mov_rr(dst, src.base, reg, inst->extra.size);
+				dst = mov_rr(dst, src.base, reg, size);
 			} else if (src.mode == MODE_REG_DISPLACE8) {
-				dst = mov_rdisp8r(dst, src.base, src.disp, reg, inst->extra.size);
+				dst = mov_rdisp8r(dst, src.base, src.disp, reg, size);
 			} else {
-				dst = mov_ir(dst, src.disp, reg, inst->extra.size);
+				dst = mov_ir(dst, src.disp, reg, size);
 			}
 		} else if(src.mode == MODE_REG_DIRECT) {
-			dst = mov_rrdisp8(dst, src.base, CONTEXT, reg_offset(&(inst->dst)), inst->extra.size);
+			dst = mov_rrdisp8(dst, src.base, CONTEXT, reg_offset(&(inst->dst)), size);
 		} else {
-			dst = mov_irdisp8(dst, src.disp, CONTEXT, reg_offset(&(inst->dst)), inst->extra.size);
+			dst = mov_irdisp8(dst, src.disp, CONTEXT, reg_offset(&(inst->dst)), size);
 		}
-		dst = cmp_ir(dst, 0, flags_reg, inst->extra.size);
+		dst = cmp_ir(dst, 0, flags_reg, size);
 		dst = setcc_r(dst, CC_Z, FLAG_Z);
 		dst = setcc_r(dst, CC_S, FLAG_N);
 		break;
@@ -2386,6 +2408,45 @@ uint8_t * translate_m68k_movep(uint8_t * dst, m68kinst * inst, x86_68k_options *
 	return dst;
 }
 
+uint8_t * translate_m68k_cmp(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
+{
+	uint8_t size = inst->extra.size;
+	x86_ea src_op, dst_op;
+	dst = translate_m68k_src(inst, &src_op, dst, opts);
+	if (inst->dst.addr_mode == MODE_AREG_POSTINC) {
+		dst = push_r(dst, SCRATCH1);
+		dst = translate_m68k_dst(inst, &dst_op, dst, opts, 0);
+		dst = pop_r(dst, SCRATCH2);
+		src_op.base = SCRATCH2;
+	} else {
+		dst = translate_m68k_dst(inst, &dst_op, dst, opts, 0);
+		if (inst->dst.addr_mode == MODE_AREG && size == OPSIZE_WORD) {
+			size = OPSIZE_LONG;
+		}
+	}
+	dst = cycles(dst, BUS);
+	if (src_op.mode == MODE_REG_DIRECT) {
+		if (dst_op.mode == MODE_REG_DIRECT) {
+			dst = cmp_rr(dst, src_op.base, dst_op.base, size);
+		} else {
+			dst = cmp_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, size);
+		}
+	} else if (src_op.mode == MODE_REG_DISPLACE8) {
+		dst = cmp_rdisp8r(dst, src_op.base, src_op.disp, dst_op.base, size);
+	} else {
+		if (dst_op.mode == MODE_REG_DIRECT) {
+			dst = cmp_ir(dst, src_op.disp, dst_op.base, size);
+		} else {
+			dst = cmp_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, size);
+		}
+	}
+	dst = setcc_r(dst, CC_C, FLAG_C);
+	dst = setcc_r(dst, CC_Z, FLAG_Z);
+	dst = setcc_r(dst, CC_S, FLAG_N);
+	dst = setcc_r(dst, CC_O, FLAG_V);
+	return dst;
+}
+
 typedef uint8_t * (*shift_ir_t)(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size);
 typedef uint8_t * (*shift_irdisp8_t)(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t disp, uint8_t size);
 typedef uint8_t * (*shift_clr_t)(uint8_t * out, uint8_t dst, uint8_t size);
@@ -2527,6 +2588,8 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	} else if(inst->op == M68K_INVALID) {
 		dst = mov_ir(dst, inst->address, SCRATCH1, SZ_D);
 		return call(dst, (uint8_t *)m68k_invalid);
+	} else if(inst->op == M68K_CMP) {
+		return translate_m68k_cmp(dst, inst, opts);
 	}
 	x86_ea src_op, dst_op;
 	if (inst->src.addr_mode != MODE_UNUSED) {
@@ -2535,25 +2598,27 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	if (inst->dst.addr_mode != MODE_UNUSED) {
 		dst = translate_m68k_dst(inst, &dst_op, dst, opts, 0);
 	}
+	uint8_t size;
 	switch(inst->op)
 	{
 	//case M68K_ABCD:
 	//	break;
 	case M68K_ADD:
 		dst = cycles(dst, BUS);
+		size = inst->dst.addr_mode == MODE_AREG ? OPSIZE_LONG : inst->extra.size;
 		if (src_op.mode == MODE_REG_DIRECT) {
 			if (dst_op.mode == MODE_REG_DIRECT) {
-				dst = add_rr(dst, src_op.base, dst_op.base, inst->extra.size);
+				dst = add_rr(dst, src_op.base, dst_op.base, size);
 			} else {
-				dst = add_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
+				dst = add_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, size);
 			}
 		} else if (src_op.mode == MODE_REG_DISPLACE8) {
-			dst = add_rdisp8r(dst, src_op.base, src_op.disp, dst_op.base, inst->extra.size);
+			dst = add_rdisp8r(dst, src_op.base, src_op.disp, dst_op.base, size);
 		} else {
 			if (dst_op.mode == MODE_REG_DIRECT) {
-				dst = add_ir(dst, src_op.disp, dst_op.base, inst->extra.size);
+				dst = add_ir(dst, src_op.disp, dst_op.base, size);
 			} else {
-				dst = add_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
+				dst = add_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, size);
 			}
 		}
 		dst = setcc_r(dst, CC_C, FLAG_C);
@@ -2735,9 +2800,9 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 					dst = btc_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
 				}
 			}
-		}
-		if (src_op.base == SCRATCH2) {
-			dst = pop_r(dst, SCRATCH2);
+			if (src_op.base == SCRATCH2) {
+				dst = pop_r(dst, SCRATCH2);
+			}
 		}
 		//x86 sets the carry flag to the value of the bit tested
 		//68K sets the zero flag to the complement of the bit tested
@@ -2748,28 +2813,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		break;
 	/*case M68K_CHK:
 		break;*/
-	case M68K_CMP:
-		dst = cycles(dst, BUS);
-		if (src_op.mode == MODE_REG_DIRECT) {
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				dst = cmp_rr(dst, src_op.base, dst_op.base, inst->extra.size);
-			} else {
-				dst = cmp_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
-			}
-		} else if (src_op.mode == MODE_REG_DISPLACE8) {
-			dst = cmp_rdisp8r(dst, src_op.base, src_op.disp, dst_op.base, inst->extra.size);
-		} else {
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				dst = cmp_ir(dst, src_op.disp, dst_op.base, inst->extra.size);
-			} else {
-				dst = cmp_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
-			}
-		}
-		dst = setcc_r(dst, CC_C, FLAG_C);
-		dst = setcc_r(dst, CC_Z, FLAG_Z);
-		dst = setcc_r(dst, CC_S, FLAG_N);
-		dst = setcc_r(dst, CC_O, FLAG_V);
-		break;
 	case M68K_DIVS:
 	case M68K_DIVU:
 		//TODO: Trap on division by zero
@@ -2807,8 +2850,17 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 			dst = div_r(dst, SCRATCH2, SZ_D);
 		}
 		dst = cmp_ir(dst, 0x10000, RAX, SZ_D);
-		norm_off = dst+1;
-		dst = jcc(dst, CC_NC, dst+2);
+		if (inst->op == M68K_DIVS) {
+			uint8_t * skip_sec_check = dst + 1;
+			dst = jcc(dst, CC_C, dst+2);
+			dst = cmp_ir(dst, -0x10000, RAX, SZ_D);
+			norm_off = dst+1;
+			dst = jcc(dst, CC_LE, dst+2);
+			*skip_sec_check = dst - (skip_sec_check+1);
+		} else {
+			norm_off = dst+1;
+			dst = jcc(dst, CC_NC, dst+2);
+		}
 		if (dst_op.mode == MODE_REG_DIRECT) {
 			dst = mov_rr(dst, RDX, dst_op.base, SZ_W);
 			dst = shl_ir(dst, 16, dst_op.base, SZ_D);
@@ -3368,20 +3420,21 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	case M68K_STOP:
 		break;*/
 	case M68K_SUB:
+		size = inst->dst.addr_mode == MODE_AREG ? OPSIZE_LONG : inst->extra.size;
 		dst = cycles(dst, BUS);
 		if (src_op.mode == MODE_REG_DIRECT) {
 			if (dst_op.mode == MODE_REG_DIRECT) {
-				dst = sub_rr(dst, src_op.base, dst_op.base, inst->extra.size);
+				dst = sub_rr(dst, src_op.base, dst_op.base, size);
 			} else {
-				dst = sub_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
+				dst = sub_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, size);
 			}
 		} else if (src_op.mode == MODE_REG_DISPLACE8) {
-			dst = sub_rdisp8r(dst, src_op.base, src_op.disp, dst_op.base, inst->extra.size);
+			dst = sub_rdisp8r(dst, src_op.base, src_op.disp, dst_op.base, size);
 		} else {
 			if (dst_op.mode == MODE_REG_DIRECT) {
-				dst = sub_ir(dst, src_op.disp, dst_op.base, inst->extra.size);
+				dst = sub_ir(dst, src_op.disp, dst_op.base, size);
 			} else {
-				dst = sub_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
+				dst = sub_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, size);
 			}
 		}
 		dst = setcc_r(dst, CC_C, FLAG_C);
@@ -3442,10 +3495,10 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		} else { //M68000 doesn't support immedate operand for tst, so this must be MODE_REG_DISPLACE8
 			dst = cmp_irdisp8(dst, 0, src_op.base, src_op.disp, inst->extra.size);
 		}
-		dst = setcc_r(dst, CC_C, FLAG_C);
+		dst = mov_ir(dst, 0, FLAG_C, SZ_B);
 		dst = setcc_r(dst, CC_Z, FLAG_Z);
 		dst = setcc_r(dst, CC_S, FLAG_N);
-		dst = setcc_r(dst, CC_O, FLAG_V);
+		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
 		break;
 	case M68K_UNLK:
 		dst = cycles(dst, BUS);
