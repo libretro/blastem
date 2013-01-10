@@ -167,7 +167,7 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		}
 		
 		if (inst->src.addr_mode == MODE_AREG_POSTINC) {
-			inc_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : 1);
+			inc_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (inst->src.params.regs.pri == 7 ? 2 : 1));
 			if (opts->aregs[inst->src.params.regs.pri] >= 0) {
 				out = add_ir(out, inc_amount, opts->aregs[inst->src.params.regs.pri], SZ_D);
 			} else {
@@ -3484,7 +3484,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	//case M68K_TAS:
 	case M68K_TRAP:
 		dst = mov_ir(dst, src_op.disp, SCRATCH2, SZ_D);
-		dst = mov_ir(dst, inst->address, SCRATCH1, SZ_D);
+		dst = mov_ir(dst, inst->address+2, SCRATCH1, SZ_D);
 		dst = jmp(dst, (uint8_t *)m68k_trap);
 		break;
 	//case M68K_TRAPV:
