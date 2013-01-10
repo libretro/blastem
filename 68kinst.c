@@ -876,7 +876,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				decoded->dst.addr_mode = MODE_REG;
 				decoded->dst.params.regs.pri = (*istream >> 9) & 0x7;
 				istream = m68k_decode_op(istream, OPSIZE_WORD, &(decoded->src));
-				if (!istream) {
+				if (!istream || decoded->src.addr_mode == MODE_AREG) {
 					decoded->op = M68K_INVALID;
 					return start+1;
 				}
@@ -901,7 +901,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				decoded->dst.addr_mode = MODE_REG;
 				decoded->dst.params.regs.pri = (*istream >> 9) & 0x7;
 				istream = m68k_decode_op(istream, OPSIZE_WORD, &(decoded->src));
-				if (!istream) {
+				if (!istream || decoded->src.addr_mode == MODE_AREG) {
 					decoded->op = M68K_INVALID;
 					return start+1;
 				}
