@@ -1006,7 +1006,8 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 					decoded->op = M68K_INVALID;
 					return start+1;
 				}
-				if (decoded->src.addr_mode == MODE_AREG) {
+				decoded->extra.size = size;
+				if (decoded->dst.addr_mode == MODE_AREG) {
 					//CMPM
 					decoded->src.addr_mode = decoded->dst.addr_mode = MODE_AREG_POSTINC;
 					decoded->src.params.regs.pri = decoded->dst.params.regs.pri;
@@ -1014,7 +1015,6 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				} else {
 					//EOR
 					decoded->op = M68K_EOR;
-					decoded->extra.size = size;
 					decoded->src.addr_mode = MODE_REG;
 					decoded->src.params.regs.pri = m68k_reg_quick_field(*istream);
 				}
