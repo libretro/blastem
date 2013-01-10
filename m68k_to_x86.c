@@ -392,7 +392,7 @@ uint8_t * translate_m68k_dst(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		ea->disp = reg_offset(&(inst->dst));
 		break;
 	case MODE_AREG_PREDEC:
-		dec_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : 1);
+		dec_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (inst->dst.params.regs.pri == 7 ? 2 : 1));
 		if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
 			out = sub_ir(out, dec_amount, opts->aregs[inst->dst.params.regs.pri], SZ_D);
 		} else {
@@ -780,7 +780,7 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 		dst = setcc_r(dst, CC_S, FLAG_N);
 		break;
 	case MODE_AREG_PREDEC:
-		dec_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : 1);
+		dec_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (inst->dst.params.regs.pri == 7 ? 2 : 1));
 		if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
 			dst = sub_ir(dst, dec_amount, opts->aregs[inst->dst.params.regs.pri], SZ_D);
 		} else {
