@@ -54,4 +54,6 @@ void start_68k_context(m68k_context * context, uint32_t address);
 void init_x86_68k_opts(x86_68k_options * opts);
 void init_68k_context(m68k_context * context, native_map_slot * native_code_map, void * opts);
 void m68k_reset(m68k_context * context);
+void insert_breakpoint(m68k_context * context, uint32_t address, uint8_t * bp_handler);
+void remove_breakpoint(m68k_context * context, uint32_t address);
 
