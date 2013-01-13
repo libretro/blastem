@@ -775,6 +775,8 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 					for (int flag = 0; flag < 5; flag++) {
 						value |= context->flags[flag] << (4-flag);
 					}
+				} else if(param[0] == 'c') {
+					value = context->current_cycle;
 				} else if (param[0] == '0' && param[1] == 'x') {
 					uint32_t p_addr = strtol(param+2, NULL, 16);
 					value = read_dma_value(p_addr/2);
