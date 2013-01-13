@@ -38,6 +38,7 @@ void m68k_write_long_lowfirst();
 void m68k_write_long_highfirst();
 void m68k_write_byte();
 void m68k_save_context();
+void m68k_load_context();
 void m68k_modified_ret_addr();
 void m68k_native_addr();
 void m68k_native_addr_and_sync();
@@ -175,7 +176,7 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 			}
 		}
 		ea->mode = MODE_REG_DIRECT;
-		ea->base = SCRATCH1;
+		ea->base = (inst->dst.addr_mode == MODE_AREG_PREDEC && inst->op != M68K_MOVE) ? SCRATCH2 : SCRATCH1;
 		break;
 	case MODE_AREG_DISPLACE:
 		out = cycles(out, BUS);
@@ -392,6 +393,9 @@ uint8_t * translate_m68k_dst(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		ea->disp = reg_offset(&(inst->dst));
 		break;
 	case MODE_AREG_PREDEC:
+		if (inst->src.addr_mode == MODE_AREG_PREDEC) {
+			out = push_r(out, SCRATCH1);
+		}
 		dec_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (inst->dst.params.regs.pri == 7 ? 2 : 1));
 		if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
 			out = sub_ir(out, dec_amount, opts->aregs[inst->dst.params.regs.pri], SZ_D);
@@ -421,11 +425,16 @@ uint8_t * translate_m68k_dst(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 				break;
 			}
 		}
-		//save reg value in SCRATCH2 so we can use it to save the result in memory later
-		if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
-			out = mov_rr(out, opts->aregs[inst->dst.params.regs.pri], SCRATCH2, SZ_D);
+		if (inst->src.addr_mode == MODE_AREG_PREDEC) {
+			//restore src operand to SCRATCH2
+			out =pop_r(out, SCRATCH2);
 		} else {
-			out = mov_rdisp8r(out, CONTEXT, reg_offset(&(inst->dst)), SCRATCH2, SZ_D);
+			//save reg value in SCRATCH2 so we can use it to save the result in memory later
+			if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
+				out = mov_rr(out, opts->aregs[inst->dst.params.regs.pri], SCRATCH2, SZ_D);
+			} else {
+				out = mov_rdisp8r(out, CONTEXT, reg_offset(&(inst->dst)), SCRATCH2, SZ_D);
+			}
 		}
 		
 		if (inst->dst.addr_mode == MODE_AREG_POSTINC) {
@@ -644,6 +653,13 @@ uint8_t * translate_m68k_dst(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 uint8_t * m68k_save_result(m68kinst * inst, uint8_t * out, x86_68k_options * opts)
 {
 	if (inst->dst.addr_mode != MODE_REG && inst->dst.addr_mode != MODE_AREG) {
+		if (inst->dst.addr_mode == MODE_AREG_PREDEC && inst->src.addr_mode == MODE_AREG_PREDEC && inst->op != M68K_MOVE) {
+			if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
+				out = mov_rr(out, opts->aregs[inst->dst.params.regs.pri], SCRATCH2, SZ_D);
+			} else {
+				out = mov_rdisp8r(out, CONTEXT, reg_offset(&(inst->dst)), SCRATCH2, SZ_D);
+			}
+		}
 		switch (inst->extra.size)
 		{
 		case OPSIZE_BYTE:
@@ -737,9 +753,11 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 	x86_ea src;
 	dst = translate_m68k_src(inst, &src, dst, opts);
 	reg = native_reg(&(inst->dst), opts);
-	//update statically set flags
-	dst = mov_ir(dst, 0, FLAG_V, SZ_B);
-	dst = mov_ir(dst, 0, FLAG_C, SZ_B);
+	if (inst->dst.addr_mode != MODE_AREG) {
+		//update statically set flags
+		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
+		dst = mov_ir(dst, 0, FLAG_C, SZ_B);
+	}
 	
 	if (src.mode == MODE_REG_DIRECT) {
 		flags_reg = src.base;
@@ -775,9 +793,11 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 		} else {
 			dst = mov_irdisp8(dst, src.disp, CONTEXT, reg_offset(&(inst->dst)), size);
 		}
-		dst = cmp_ir(dst, 0, flags_reg, size);
-		dst = setcc_r(dst, CC_Z, FLAG_Z);
-		dst = setcc_r(dst, CC_S, FLAG_N);
+		if (inst->dst.addr_mode != MODE_AREG) {
+			dst = cmp_ir(dst, 0, flags_reg, size);
+			dst = setcc_r(dst, CC_Z, FLAG_Z);
+			dst = setcc_r(dst, CC_S, FLAG_N);
+		}
 		break;
 	case MODE_AREG_PREDEC:
 		dec_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (inst->dst.params.regs.pri == 7 ? 2 : 1));
@@ -802,9 +822,11 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 		} else {
 			dst = mov_ir(dst, src.disp, SCRATCH1, inst->extra.size);
 		}
-		dst = cmp_ir(dst, 0, flags_reg, inst->extra.size);
-		dst = setcc_r(dst, CC_Z, FLAG_Z);
-		dst = setcc_r(dst, CC_S, FLAG_N);
+		if (inst->dst.addr_mode != MODE_AREG) {
+			dst = cmp_ir(dst, 0, flags_reg, inst->extra.size);
+			dst = setcc_r(dst, CC_Z, FLAG_Z);
+			dst = setcc_r(dst, CC_S, FLAG_N);
+		}
 		switch (inst->extra.size)
 		{
 		case OPSIZE_BYTE:
@@ -843,9 +865,11 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 		} else {
 			dst = mov_ir(dst, src.disp, SCRATCH1, inst->extra.size);
 		}
-		dst = cmp_ir(dst, 0, flags_reg, inst->extra.size);
-		dst = setcc_r(dst, CC_Z, FLAG_Z);
-		dst = setcc_r(dst, CC_S, FLAG_N);
+		if (inst->dst.addr_mode != MODE_AREG) {
+			dst = cmp_ir(dst, 0, flags_reg, inst->extra.size);
+			dst = setcc_r(dst, CC_Z, FLAG_Z);
+			dst = setcc_r(dst, CC_S, FLAG_N);
+		}
 		switch (inst->extra.size)
 		{
 		case OPSIZE_BYTE:
@@ -906,9 +930,20 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 		if (inst->dst.params.regs.displacement) {
 			dst = add_ir(dst, inst->dst.params.regs.displacement, SCRATCH2, SZ_D);
 		}
-		dst = cmp_ir(dst, 0, flags_reg, inst->extra.size);
-		dst = setcc_r(dst, CC_Z, FLAG_Z);
-		dst = setcc_r(dst, CC_S, FLAG_N);
+		if (src.mode == MODE_REG_DIRECT) {
+			if (src.base != SCRATCH1) {
+				dst = mov_rr(dst, src.base, SCRATCH1, inst->extra.size);
+			}
+		} else if (src.mode == MODE_REG_DISPLACE8) {
+			dst = mov_rdisp8r(dst, src.base, src.disp, SCRATCH1, inst->extra.size);
+		} else {
+			dst = mov_ir(dst, src.disp, SCRATCH1, inst->extra.size);
+		}
+		if (inst->dst.addr_mode != MODE_AREG) {
+			dst = cmp_ir(dst, 0, flags_reg, inst->extra.size);
+			dst = setcc_r(dst, CC_Z, FLAG_Z);
+			dst = setcc_r(dst, CC_S, FLAG_N);
+		}
 		switch (inst->extra.size)
 		{
 		case OPSIZE_BYTE:
@@ -934,9 +969,11 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 		} else {
 			dst = mov_ir(dst, src.disp, SCRATCH1, inst->extra.size);
 		}
-		dst = cmp_ir(dst, 0, flags_reg, inst->extra.size);
-		dst = setcc_r(dst, CC_Z, FLAG_Z);
-		dst = setcc_r(dst, CC_S, FLAG_N);
+		if (inst->dst.addr_mode != MODE_AREG) {
+			dst = cmp_ir(dst, 0, flags_reg, inst->extra.size);
+			dst = setcc_r(dst, CC_Z, FLAG_Z);
+			dst = setcc_r(dst, CC_S, FLAG_N);
+		}
 		switch (inst->extra.size)
 		{
 		case OPSIZE_BYTE:
@@ -967,9 +1004,11 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 			dst = cycles(dst, BUS);
 		}
 		dst = mov_ir(dst, inst->dst.params.immed, SCRATCH2, SZ_D);
-		dst = cmp_ir(dst, 0, flags_reg, inst->extra.size);
-		dst = setcc_r(dst, CC_Z, FLAG_Z);
-		dst = setcc_r(dst, CC_S, FLAG_N);
+		if (inst->dst.addr_mode != MODE_AREG) {
+			dst = cmp_ir(dst, 0, flags_reg, inst->extra.size);
+			dst = setcc_r(dst, CC_Z, FLAG_Z);
+			dst = setcc_r(dst, CC_S, FLAG_N);
+		}
 		switch (inst->extra.size)
 		{
 		case OPSIZE_BYTE:
@@ -2621,11 +2660,13 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 				dst = add_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, size);
 			}
 		}
-		dst = setcc_r(dst, CC_C, FLAG_C);
-		dst = setcc_r(dst, CC_Z, FLAG_Z);
-		dst = setcc_r(dst, CC_S, FLAG_N);
-		dst = setcc_r(dst, CC_O, FLAG_V);
-		dst = mov_rrind(dst, FLAG_C, CONTEXT, SZ_B);
+		if (inst->dst.addr_mode != MODE_AREG) {
+			dst = setcc_r(dst, CC_C, FLAG_C);
+			dst = setcc_r(dst, CC_Z, FLAG_Z);
+			dst = setcc_r(dst, CC_S, FLAG_N);
+			dst = setcc_r(dst, CC_O, FLAG_V);
+			dst = mov_rrind(dst, FLAG_C, CONTEXT, SZ_B);
+		}
 		dst = m68k_save_result(inst, dst, opts);
 		break;
 	case M68K_ADDX:
@@ -2647,7 +2688,8 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 			}
 		}
 		dst = setcc_r(dst, CC_C, FLAG_C);
-		dst = setcc_r(dst, CC_Z, FLAG_Z);
+		dst = jcc(dst, CC_Z, dst+4);
+		dst = mov_ir(dst, 0, FLAG_Z, SZ_B);
 		dst = setcc_r(dst, CC_S, FLAG_N);
 		dst = setcc_r(dst, CC_O, FLAG_V);
 		dst = mov_rrind(dst, FLAG_C, CONTEXT, SZ_B);
@@ -2710,6 +2752,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		break;
 	case M68K_ASL:
 	case M68K_LSL:
+		//TODO: Check overflow flag behavior
 		dst = translate_shift(dst, inst, &src_op, &dst_op, opts, shl_ir, shl_irdisp8, shl_clr, shl_clrdisp8, shr_ir, shr_irdisp8);
 		break;
 	case M68K_ASR:
@@ -3294,6 +3337,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 			dst = cmp_ir(dst, 0, dst_op.base, inst->extra.size);
 			dst = setcc_r(dst, CC_Z, FLAG_Z);
 			dst = setcc_r(dst, CC_S, FLAG_N);
+			dst = mov_rrind(dst, FLAG_C, CONTEXT, SZ_B);
 			dst = m68k_save_result(inst, dst, opts);
 		} else {
 			if (src_op.mode == MODE_IMMED) {
@@ -3313,6 +3357,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 					}
 				}
 				dst = setcc_r(dst, CC_C, FLAG_C);
+				dst = mov_rrind(dst, FLAG_C, CONTEXT, SZ_B);
 			} else {
 				if (src_op.mode == MODE_REG_DIRECT) {
 					if (src_op.base != SCRATCH1) {
@@ -3364,10 +3409,12 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 					}
 				}
 				dst = setcc_r(dst, CC_C, FLAG_C);
+				dst = mov_rr(dst, FLAG_C, CONTEXT, SZ_B);
 				end_off = dst + 1;
 				dst = jmp(dst, dst+2);
 				*zero_off = dst - (zero_off+1);
-				dst = mov_ir(dst, 0, FLAG_C, SZ_B);
+				//Carry flag is set to X flag when count is 0, this is different from ROR/ROL
+				dst = mov_rindr(dst, CONTEXT, FLAG_C, SZ_B);
 				*end_off = dst - (end_off+1);
 			}
 			if (dst_op.mode == MODE_REG_DIRECT) {
@@ -3437,11 +3484,13 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 				dst = sub_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, size);
 			}
 		}
-		dst = setcc_r(dst, CC_C, FLAG_C);
-		dst = setcc_r(dst, CC_Z, FLAG_Z);
-		dst = setcc_r(dst, CC_S, FLAG_N);
-		dst = setcc_r(dst, CC_O, FLAG_V);
-		dst = mov_rrind(dst, FLAG_C, CONTEXT, SZ_B);
+		if (inst->dst.addr_mode != MODE_AREG) {
+			dst = setcc_r(dst, CC_C, FLAG_C);
+			dst = setcc_r(dst, CC_Z, FLAG_Z);
+			dst = setcc_r(dst, CC_S, FLAG_N);
+			dst = setcc_r(dst, CC_O, FLAG_V);
+			dst = mov_rrind(dst, FLAG_C, CONTEXT, SZ_B);
+		}
 		dst = m68k_save_result(inst, dst, opts);
 		break;
 	case M68K_SUBX:
@@ -3463,7 +3512,8 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 			}
 		}
 		dst = setcc_r(dst, CC_C, FLAG_C);
-		dst = setcc_r(dst, CC_Z, FLAG_Z);
+		dst = jcc(dst, CC_Z, dst+4);
+		dst = mov_ir(dst, 0, FLAG_Z, SZ_B);
 		dst = setcc_r(dst, CC_S, FLAG_N);
 		dst = setcc_r(dst, CC_O, FLAG_V);
 		dst = mov_rrind(dst, FLAG_C, CONTEXT, SZ_B);
@@ -3562,6 +3612,11 @@ uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context)
 				dst = call(dst, (uint8_t *)exit);
 				break;
 			}
+			uint8_t * existing = get_native_address(opts->native_code_map, address);
+			if (existing) {
+				dst = jmp(dst, existing);
+				break;
+			}
 			next = m68k_decode(encoded, &instbuf, address);
 			address += (next-encoded)*2;
 			encoded = next;
@@ -3597,6 +3652,61 @@ uint8_t * get_native_address_trans(m68k_context * context, uint32_t address)
 		ret = get_native_address(context->native_code_map, address);
 	}
 	return ret;
+}
+
+void insert_breakpoint(m68k_context * context, uint32_t address, uint8_t * bp_handler)
+{
+	static uint8_t * bp_stub = NULL;
+	uint8_t * native = get_native_address_trans(context, address);
+	uint8_t * start_native = native;
+	native = mov_ir(native, address, SCRATCH1, SZ_D);
+	if (!bp_stub) {
+		x86_68k_options * opts = context->options;
+		uint8_t * dst = opts->cur_code;
+		uint8_t * dst_end = opts->code_end;
+		if (dst_end - dst < 128) {
+			size_t size = 1024*1024;
+			dst = alloc_code(&size);
+			opts->code_end = dst_end = dst + size;
+		}
+		bp_stub = dst;
+		native = call(native, bp_stub);
+		
+		//Calculate length of prologue
+		dst = check_cycles_int(dst, address);
+		int check_int_size = dst-bp_stub;
+		dst = bp_stub;
+		
+		//Save context and call breakpoint handler
+		dst = call(dst, (uint8_t *)m68k_save_context);
+		dst = push_r(dst, SCRATCH1);
+		dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
+		dst = mov_rr(dst, SCRATCH1, RSI, SZ_D);
+		dst = call(dst, bp_handler);
+		dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
+		//Restore context
+		dst = call(dst, (uint8_t *)m68k_load_context);
+		dst = pop_r(dst, SCRATCH1);
+		//do prologue stuff
+		dst = cmp_rr(dst, CYCLES, LIMIT, SZ_D);
+		uint8_t * jmp_off = dst+1;
+		dst = jcc(dst, CC_NC, dst + 7);
+		dst = call(dst, (uint8_t *)handle_cycle_limit_int);
+		*jmp_off = dst - (jmp_off+1);
+		//jump back to body of translated instruction
+		dst = pop_r(dst, SCRATCH1);
+		dst = add_ir(dst, check_int_size - (native-start_native), SCRATCH1, SZ_Q);
+		dst = jmp_r(dst, SCRATCH1);
+		opts->cur_code = dst;
+	} else {
+		native = call(native, bp_stub);
+	}
+}
+
+void remove_breakpoint(m68k_context * context, uint32_t address)
+{
+	uint8_t * native = get_native_address(context->native_code_map, address);
+	check_cycles_int(native, address);
 }
 
 void start_68k_context(m68k_context * context, uint32_t address)
