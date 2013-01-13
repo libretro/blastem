@@ -6,6 +6,7 @@
 #include "blastem.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define CARTRIDGE_WORDS 0x200000
 #define RAM_WORDS 32 * 1024
@@ -585,6 +586,232 @@ m68k_context * io_read_w(uint32_t location, m68k_context * context)
 	return context;
 }
 
+typedef struct bp_def {
+	struct bp_def * next;
+	uint32_t address;
+	uint32_t index;
+} bp_def;
+
+bp_def * breakpoints = NULL;
+uint32_t bp_index = 0;
+
+bp_def ** find_breakpoint(bp_def ** cur, uint32_t address)
+{
+	while (*cur) {
+		if ((*cur)->address == address) {
+			break;
+		}
+		cur = &((*cur)->next);
+	}
+	return cur;
+}
+
+bp_def ** find_breakpoint_idx(bp_def ** cur, uint32_t index)
+{
+	while (*cur) {
+		if ((*cur)->index == index) {
+			break;
+		}
+		cur = &((*cur)->next);
+	}
+	return cur;
+}
+
+char * find_param(char * buf)
+{
+	for (; *buf; buf++) {
+		if (*buf == ' ') {
+			if (*(buf+1)) {
+				return buf+1;
+			}
+		}
+	}
+	return NULL;
+}
+
+void strip_nl(char * buf)
+{
+	for(; *buf; buf++) {
+		if (*buf == '\n') {
+			*buf = 0;
+			return;
+		}
+	}
+}
+
+m68k_context * debugger(m68k_context * context, uint32_t address)
+{
+	static char last_cmd[1024];
+	char input_buf[1024];
+	static uint32_t branch_t;
+	static uint32_t branch_f;
+	m68kinst inst;
+	//probably not necessary, but let's play it safe
+	address &= 0xFFFFFF;
+	if (address == branch_t) {
+		bp_def ** f_bp = find_breakpoint(&breakpoints, branch_f);
+		if (!*f_bp) {
+			remove_breakpoint(context, branch_f);
+		}
+		branch_t = branch_f = 0;
+	} else if(address == branch_f) {
+		bp_def ** t_bp = find_breakpoint(&breakpoints, branch_t);
+		if (!*t_bp) {
+			remove_breakpoint(context, branch_t);
+		}
+		branch_t = branch_f = 0;
+	}
+	//Check if this is a user set breakpoint, or just a temporary one
+	bp_def ** this_bp = find_breakpoint(&breakpoints, address);
+	if (*this_bp) {
+		printf("Breakpoint %d hit\n", (*this_bp)->index);
+	} else {
+		remove_breakpoint(context, address);
+	}
+	uint16_t * pc;
+	if (address < 0x400000) {
+		pc = cart + address/2;
+	} else if(address > 0xE00000) {
+		pc = ram + (address & 0xFFFF)/2;
+	} else {
+		fprintf(stderr, "Entered debugger at address %X\n", address);
+		exit(1);
+	}
+	uint16_t * after_pc = m68k_decode(pc, &inst, address);
+	m68k_disasm(&inst, input_buf);
+	printf("%X: %s\n", address, input_buf);
+	uint32_t after = address + (after_pc-pc)*2;
+	int debugging = 1;
+	while (debugging) {
+		fputs(">", stdout);
+		if (!fgets(input_buf, sizeof(input_buf), stdin)) {
+			fputs("fgets failed", stderr);
+			break;
+		}
+		strip_nl(input_buf);
+		//hitting enter repeats last command
+		if (input_buf[0]) {
+			strcpy(last_cmd, input_buf);
+		} else {
+			strcpy(input_buf, last_cmd);
+		}
+		char * param;
+		char format[8];
+		uint32_t value;
+		bp_def * new_bp;
+		switch(input_buf[0])
+		{
+			case 'c':
+				puts("Continuing");
+				debugging = 0;
+				break;
+			case 'b':
+				param = find_param(input_buf);
+				if (!param) {
+					fputs("b command requires a parameter\n", stderr);
+					break;
+				}
+				value = strtol(param, NULL, 16);
+				insert_breakpoint(context, value, (uint8_t *)debugger);
+				new_bp = malloc(sizeof(bp_def));
+				new_bp->next = breakpoints;
+				new_bp->address = value;
+				new_bp->index = bp_index++;
+				breakpoints = new_bp;
+				printf("Breakpoint %d set at %X\n", new_bp->index, value);
+				break;
+			case 'a':
+				param = find_param(input_buf);
+				if (!param) {
+					fputs("a command requires a parameter\n", stderr);
+					break;
+				}
+				value = strtol(param, NULL, 16);
+				insert_breakpoint(context, value, (uint8_t *)debugger);
+				debugging = 0;
+				break;
+			case 'd':
+				param = find_param(input_buf);
+				if (!param) {
+					fputs("b command requires a parameter\n", stderr);
+					break;
+				}
+				value = atoi(param);
+				this_bp = find_breakpoint_idx(&breakpoints, value);
+				if (!*this_bp) {
+					fprintf(stderr, "Breakpoint %d does not exist\n", value);
+					break;
+				}
+				new_bp = *this_bp;
+				*this_bp = (*this_bp)->next;
+				free(new_bp);
+				break;
+			case 'p':
+				strcpy(format, "%s: %d\n");
+				if (input_buf[1] == '/') {
+					switch (input_buf[2])
+					{
+					case 'x':
+					case 'X':
+					case 'd':
+					case 'c':
+						format[5] = input_buf[2];
+						break;
+					default:
+						fprintf(stderr, "Unrecognized format character: %c\n", input_buf[2]);
+					}
+				}
+				param = find_param(input_buf);
+				if (!param) {
+					fputs("p command requires a parameter\n", stderr);
+					break;
+				}
+				if (param[0] == 'd' && param[1] >= '0' && param[1] <= '7') {
+					value = context->dregs[param[1]-'0'];
+				} else if (param[0] == 'a' && param[1] >= '0' && param[1] <= '7') {
+					value = context->aregs[param[1]-'0'];
+				} else if (param[0] == 'S' && param[1] == 'R') {
+					value = (context->status << 8);
+					for (int flag = 0; flag < 5; flag++) {
+						value |= context->flags[flag] << (4-flag);
+					}
+				} else if (param[0] == '0' && param[1] == 'x') {
+					uint32_t p_addr = strtol(param+2, NULL, 16);
+					value = read_dma_value(p_addr/2);
+				} else {
+					fprintf(stderr, "Unrecognized parameter to p: %s\n", param);
+					break;
+				}
+				printf(format, param, value);
+				break;
+			case 'n':
+				//TODO: Deal with jmp, dbcc, rtr and rte
+				if (inst.op == M68K_RTS) {
+					after = (read_dma_value(context->aregs[7]/2) << 16) | read_dma_value(context->aregs[7]/2 + 1);
+				} else if(inst.op == M68K_BCC && inst.extra.cond != COND_FALSE) {
+					if (inst.extra.cond = COND_TRUE) {
+						after = inst.address + 2 + inst.src.params.immed;
+					} else {
+						branch_f = after;
+						branch_t = inst.address + 2 + inst.src.params.immed;
+						insert_breakpoint(context, branch_t, (uint8_t *)debugger);
+					}
+				}
+				insert_breakpoint(context, after, (uint8_t *)debugger);
+				debugging = 0;
+				break;
+			case 'q':
+				puts("Quitting");
+				exit(0);
+				break;
+			default:
+				fprintf(stderr, "Unrecognized debugger command %s\n", input_buf);
+				break;
+		}
+	}
+	return context;
+}
+
 int main(int argc, char ** argv)
 {
 	if (argc < 2) {
@@ -595,16 +822,27 @@ int main(int argc, char ** argv)
 		fprintf(stderr, "Failed to open %s for reading\n", argv[1]);
 		return 1;
 	}
-	int width = 320;
-	int height = 240;
-	if (argc > 2) {
-		width = atoi(argv[2]);
-		if (argc > 3) {
-			height = atoi(argv[3]);
-		} else {
-			height = (width/320) * 240;
+	int width = -1;
+	int height = -1;
+	int debug = 0;
+	for (int i = 2; i < argc; i++) {
+		if (argv[i][0] == '-') {
+			switch(argv[i][1]) {
+			case 'd':
+				debug = 1;
+				break;
+			default:
+				fprintf(stderr, "Unrecognized switch %s\n", argv[i]);
+				return 1;
+			}
+		} else if (width < 0) {
+			width = atoi(argv[i]);
+		} else if (height < 0) {
+			height = atoi(argv[i]);
 		}
 	}
+	width = width < 320 ? 320 : width;
+	height = height < 240 ? (width/320) * 240 : height;
 	render_init(width, height);
 	
 	x86_68k_options opts;
@@ -629,6 +867,9 @@ int main(int argc, char ** argv)
 	translate_m68k_stream(address, &context);*/
 	address = cart[2] << 16 | cart[3];
 	translate_m68k_stream(address, &context);
+	if (debug) {
+		insert_breakpoint(&context, address, (uint8_t *)debugger);
+	}
 	m68k_reset(&context);
 	return 0;
 }
