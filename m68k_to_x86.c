@@ -1328,17 +1328,20 @@ uint8_t * translate_m68k_movem(uint8_t * dst, m68kinst * inst, x86_68k_options *
 				} else {
 					dst = call(dst, (uint8_t *)m68k_read_word_scratch1);
 				}
+				if (inst->extra.size == OPSIZE_WORD) {
+					dst = movsx_rr(dst, SCRATCH1, SCRATCH1, SZ_W, SZ_D);
+				}
 				if (reg > 7) {
 					if (opts->aregs[reg-8] >= 0) {
-						dst = mov_rr(dst, SCRATCH1, opts->aregs[reg-8], inst->extra.size);
+						dst = mov_rr(dst, SCRATCH1, opts->aregs[reg-8], SZ_D);
 					} else {
-						dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * (reg-8), inst->extra.size);
+						dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * (reg-8), SZ_D);
 					}
 				} else {
 					if (opts->dregs[reg] >= 0) {
-						dst = mov_rr(dst, SCRATCH1, opts->dregs[reg], inst->extra.size);
+						dst = mov_rr(dst, SCRATCH1, opts->dregs[reg], SZ_D);
 					} else {
-						dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t) * (reg), inst->extra.size);
+						dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t) * (reg), SZ_D);
 					}
 				}
 				dst = pop_r(dst, SCRATCH1);
@@ -3580,6 +3583,7 @@ uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context)
 	x86_68k_options * opts = context->options;
 	uint8_t * dst = opts->cur_code;
 	uint8_t * dst_end = opts->code_end; 
+	address &= 0xFFFFFF;
 	if(get_native_address(opts->native_code_map, address)) {
 		return dst;
 	}
