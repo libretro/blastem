@@ -929,16 +929,16 @@ void check_render_bg(vdp_context * context, int32_t line)
 		if (context->latched_mode & BIT_H40) {
 			linecyc /= 16;
 			if (linecyc >= 50 && linecyc < 210) {
-				uint32_t x = ((linecyc-50)&(~0x1))*2;
+				uint32_t x = (linecyc-50)*2;
 				start = context->framebuf + line * 320 + x;
-				end = start + 4;
+				end = start + 2;
 			}
 		} else {
 			linecyc /= 20;
 			if (linecyc >= 43 && linecyc < 171) {
-				uint32_t x = ((linecyc-48)&(~0x1))*2;
+				uint32_t x = (linecyc-43)*2;
 				start = context->framebuf + line * 256 + x;
-				end = start + 4;
+				end = start + 2;
 			}
 		}
 		uint16_t color = context->cram[context->regs[REG_BG_COLOR] & 0x3F];
