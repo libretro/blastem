@@ -2000,7 +2000,7 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		break;
 	case MODE_AREG_DISPLACE:
 		dst = cycles(dst, BUS*2);
-		dst = mov_ir(dst, inst->address + 2, SCRATCH1, SZ_D);
+		dst = mov_ir(dst, inst->address + 4, SCRATCH1, SZ_D);
 		if (opts->flags & OPT_NATIVE_CALL_STACK) {
 			dst = push_r(dst, SCRATCH1);
 		}
