@@ -910,9 +910,12 @@ int is_refresh(vdp_context * context)
 	uint32_t linecyc = context->cycles % MCLKS_LINE;
 	if (context->latched_mode & BIT_H40) {
 		linecyc = linecyc/16;
-		return (linecyc == 73 || linecyc == 105 || linecyc == 137 || linecyc == 169 || linecyc == 201);
+		//TODO: Figure out the exact behavior that reduces DMA slots for direct color DMA demos
+		return (linecyc == 37 || linecyc == 69 || linecyc == 102 || linecyc == 133 || linecyc == 165 || linecyc == 197 || linecyc >= 210 || (linecyc < 6 && (context->flags & FLAG_DMA_RUN) && ((context->dma_cd & 0xF) == CRAM_WRITE)));
 	} else {
 		linecyc = linecyc/20;
+		//TODO: Figure out which slots are refresh when display is off in 32-cell mode
+		//The numbers below are the refresh slots during active display
 		return (linecyc == 66 || linecyc == 98 || linecyc == 130 || linecyc == 162);
 	}
 }
@@ -925,21 +928,22 @@ void check_render_bg(vdp_context * context, int32_t line)
 		uint32_t linecyc = (context->cycles % MCLKS_LINE);
 		if (context->latched_mode & BIT_H40) {
 			linecyc /= 16;
-			if (linecyc >= 55 && linecyc <= 207 && !((linecyc-55) % 8)) {
-				uint32_t x = ((linecyc-55)&(~0xF))*2;
+			if (linecyc >= 50 && linecyc < 210) {
+				uint32_t x = ((linecyc-50)&(~0x1))*2;
 				start = context->framebuf + line * 320 + x;
-				end = start + 16;
+				end = start + 4;
 			}
 		} else {
 			linecyc /= 20;
-			if (linecyc >= 48 && linecyc <= 168 && !((linecyc-48) % 8)) {
-				uint32_t x = ((linecyc-48)&(~0xF))*2;
+			if (linecyc >= 43 && linecyc < 171) {
+				uint32_t x = ((linecyc-48)&(~0x1))*2;
 				start = context->framebuf + line * 256 + x;
-				end = start + 16;
+				end = start + 4;
 			}
 		}
+		uint16_t color = context->cram[context->regs[REG_BG_COLOR] & 0x3F];
 		while (start != end) {
-			*start = context->regs[REG_BG_COLOR] & 0x3F;
+			*start = color;
 			++start;
 		}
 	}
