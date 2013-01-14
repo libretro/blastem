@@ -104,6 +104,20 @@ uint16_t read_dma_value(uint32_t address)
 
 #define VINT_CYCLE ((MCLKS_LINE * 226)/MCLKS_PER_68K)
 
+void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
+{
+	if (!(v_context->regs[REG_MODE_2] & 0x20 && ((context->status & 0x7) < 6)) || context->current_cycle >= VINT_CYCLE) {
+		context->int_cycle = CYCLE_NEVER;
+		context->target_cycle = context->sync_cycle;
+	} else if (context->int_cycle > VINT_CYCLE) {
+		context->int_cycle = VINT_CYCLE;
+		context->int_num = 6;
+		if (context->int_cycle < context->sync_cycle) {
+			context->target_cycle = context->int_cycle;
+		}
+	}
+}
+
 m68k_context * sync_components(m68k_context * context)
 {
 	//TODO: Handle sync targets smaller than a single frame
@@ -121,38 +135,11 @@ m68k_context * sync_components(m68k_context * context)
 		if (mclks) {
 			vdp_run_context(v_context, mclks);
 		}
-		if (v_context->regs[REG_MODE_2] & 0x20 && ((context->status & 0x7) < 6)) {
-			if (context->int_cycle > VINT_CYCLE) {
-				context->int_cycle = VINT_CYCLE;
-				context->int_num = 6;
-				if (context->int_cycle < context->sync_cycle) {
-					context->target_cycle = context->int_cycle;
-				}
-			}
-		} else {
-			context->int_cycle = 0xFFFFFFFF;
-			context->target_cycle = context->sync_cycle;
-		}
 	} else {
 		//printf("running VDP for %d cycles\n", mclks - v_context->cycles);
 		vdp_run_context(v_context, mclks);
-		if (v_context->regs[REG_MODE_2] & 0x20 && ((context->status & 0x7) < 6)) {
-			if (context->int_cycle > VINT_CYCLE) {
-				context->int_cycle = VINT_CYCLE;
-				context->int_num = 6;
-				if (context->int_cycle < context->sync_cycle && context->int_cycle < context->current_cycle) {
-					context->target_cycle = context->int_cycle;
-				}
-			}
-			if (context->int_cycle <= context->current_cycle) {
-				context->int_cycle = CYCLE_NEVER;
-				context->target_cycle = context->sync_cycle;
-			}
-		} else {
-			context->int_cycle = CYCLE_NEVER;
-			context->target_cycle = context->sync_cycle;
-		}
 	}
+	adjust_int_cycle(context, v_context);
 	return context;
 }
 
@@ -197,18 +184,7 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 				}
 				context->current_cycle = v_context->cycles / MCLKS_PER_68K;
 			} else {
-				if (v_context->regs[REG_MODE_2] & 0x20 && ((context->status & 0x7) < 6)) {
-					if (context->int_cycle > VINT_CYCLE) {
-						context->int_cycle = VINT_CYCLE;
-						context->int_num = 6;
-						if (context->int_cycle < context->sync_cycle) {
-							context->target_cycle = context->int_cycle;
-						}
-					}
-				} else {
-					context->int_cycle = 0xFFFFFFFF;
-					context->target_cycle = context->sync_cycle;
-				}
+				adjust_int_cycle(context, v_context);
 			}
 		} else {
 			printf("Illegal write to HV Counter port %X\n", vdp_port);
