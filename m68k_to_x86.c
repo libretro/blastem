@@ -730,9 +730,22 @@ void process_deferred(x86_68k_options * opts)
 	}
 }
 
-void map_native_address(native_map_slot * native_code_map, uint32_t address, uint8_t * native_addr)
+void map_native_address(m68k_context * context, uint32_t address, uint8_t * native_addr, uint8_t size, uint8_t native_size)
 {
+	native_map_slot * native_code_map = context->native_code_map;
+	x86_68k_options * opts = context->options;
 	address &= 0xFFFFFF;
+	if (address > 0xE00000) {
+		context->ram_code_flags[(address & 0xC000) >> 14] |= 1 << ((address & 0x3800) >> 11);
+		if (((address & 0x3FFF) + size) & 0xC000) {
+			context->ram_code_flags[((address+size) & 0xC000) >> 14] |= 1 << (((address+size) & 0x3800) >> 11);
+		}
+		uint32_t slot = (address & 0xFFFF)/1024;
+		if (!opts->ram_inst_sizes[slot]) {
+			opts->ram_inst_sizes[slot] = malloc(sizeof(uint8_t) * 512);
+		}
+		opts->ram_inst_sizes[slot][((address & 0xFFFF)/2)%512] = native_size;
+	}
 	address/= 2;
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
 	if (!native_code_map[chunk].base) {
@@ -2595,7 +2608,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 {
 	uint8_t * end_off, *zero_off, *norm_off;
 	uint8_t dst_reg;
-	map_native_address(opts->native_code_map, inst->address, dst);
 	dst = check_cycles_int(dst, inst->address);
 	if (inst->op == M68K_MOVE) {
 		return translate_m68k_move(dst, inst, opts);
@@ -3622,11 +3634,14 @@ uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context)
 				break;
 			}
 			next = m68k_decode(encoded, &instbuf, address);
-			address += (next-encoded)*2;
+			uint16_t m68k_size = (next-encoded)*2;
+			address += m68k_size;
 			encoded = next;
 			//m68k_disasm(&instbuf, disbuf);
 			//printf("%X: %s\n", instbuf.address, disbuf);
-			dst = translate_m68k(dst, &instbuf, opts);
+			uint8_t * after = translate_m68k(dst, &instbuf, opts);
+			map_native_address(context, instbuf.address, dst, m68k_size, after-dst);
+			dst = after;
 		} while(instbuf.op != M68K_ILLEGAL && instbuf.op != M68K_INVALID && instbuf.op != M68K_TRAP && instbuf.op != M68K_RTS && instbuf.op != M68K_RTR && instbuf.op != M68K_RTE && !(instbuf.op == M68K_BCC && instbuf.extra.cond == COND_TRUE) && instbuf.op != M68K_JMP);
 		process_deferred(opts);
 		if (opts->deferred) {
@@ -3744,6 +3759,7 @@ void init_x86_68k_opts(x86_68k_options * opts)
 	size_t size = 1024 * 1024;
 	opts->cur_code = alloc_code(&size);
 	opts->code_end = opts->cur_code + size;
+	opts->ram_inst_sizes = malloc(sizeof(uint8_t *) * 64);
 }
 
 void init_68k_context(m68k_context * context, native_map_slot * native_code_map, void * opts)

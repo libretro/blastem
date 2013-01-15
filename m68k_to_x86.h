@@ -27,6 +27,7 @@ typedef struct {
 	deferred_addr   *deferred;
 	uint8_t         *cur_code;
 	uint8_t         *code_end;
+	uint8_t         **ram_inst_sizes;
 } x86_68k_options;
 
 typedef struct {
@@ -46,6 +47,7 @@ typedef struct {
 	
 	native_map_slot *native_code_map;
 	void            *options;
+	uint8_t         ram_code_flags[32/8];
 } m68k_context;
 
 uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts);
