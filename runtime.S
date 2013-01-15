@@ -240,8 +240,17 @@ m68k_write_word:
 not_io_w:
 	ret
 workram_w:
-	and $0xFFFF, %rdi
+	and $0xFFFF, %edi
 	mov %cx, (%r9, %rdi)
+	mov %edi, %ecx
+	shr $10, %ecx
+	bt %ecx, 160(%rsi)
+	jnc not_code
+	call m68k_save_context
+	call m68k_handle_code_write
+	mov %rax, %rsi
+	call m68k_load_context
+not_code:
 	ret
 cart_w:
 	mov %cx, (%r8, %rdi)
@@ -322,6 +331,16 @@ workram_wb:
 	xor $1, %edi
 	and $0xFFFF, %rdi
 	mov %cl, (%r9, %rdi)
+	mov %edi, %ecx
+	shr $10, %ecx
+	bt %ecx, 160(%rsi)
+	jnc not_code_b
+	xor $1, %edi
+	call m68k_save_context
+	call m68k_handle_code_write
+	mov %rax, %rsi
+	call m68k_load_context
+not_code_b:
 	ret
 cart_wb:
 	/* deal with byte swapping */
@@ -498,6 +517,16 @@ m68k_native_addr:
 	pop %rsi
 	call m68k_load_context
 	ret
+	
+	.global m68k_retrans_stub
+m68k_retrans_stub:
+	call m68k_save_context
+	push %rsi
+	call m68k_retranslate_inst
+	pop %rsi
+	mov %rax, %rcx
+	call m68k_load_context
+	jmp *%rcx
 
 	.global m68k_save_context
 m68k_save_context:
