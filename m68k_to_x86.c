@@ -44,6 +44,7 @@ void m68k_native_addr();
 void m68k_native_addr_and_sync();
 void m68k_trap();
 void m68k_invalid();
+void m68k_retrans_stub();
 void set_sr();
 void set_ccr();
 void get_sr();
@@ -679,19 +680,36 @@ uint8_t * m68k_save_result(m68kinst * inst, uint8_t * out, x86_68k_options * opt
 uint8_t * get_native_address(native_map_slot * native_code_map, uint32_t address)
 {
 	address &= 0xFFFFFF;
-	if (address > 0x400000) {
-		printf("get_native_address: %X\n", address);
-	}
 	address /= 2;
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
 	if (!native_code_map[chunk].base) {
 		return NULL;
 	}
 	uint32_t offset = address % NATIVE_CHUNK_SIZE;
-	if (native_code_map[chunk].offsets[offset] == INVALID_OFFSET) {
+	if (native_code_map[chunk].offsets[offset] == INVALID_OFFSET || native_code_map[chunk].offsets[offset] == EXTENSION_WORD) {
 		return NULL;
 	}
 	return native_code_map[chunk].base + native_code_map[chunk].offsets[offset];
+}
+
+uint32_t get_instruction_start(native_map_slot * native_code_map, uint32_t address)
+{
+	address &= 0xFFFFFF;
+	address /= 2;
+	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
+	if (!native_code_map[chunk].base) {
+		return 0;
+	}
+	uint32_t offset = address % NATIVE_CHUNK_SIZE;
+	if (native_code_map[chunk].offsets[offset] == INVALID_OFFSET) {
+		return 0;
+	}
+	while (native_code_map[chunk].offsets[offset] == EXTENSION_WORD) {
+		--address;
+		chunk = address / NATIVE_CHUNK_SIZE;
+		offset = address % NATIVE_CHUNK_SIZE;
+	}
+	return address*2;
 }
 
 deferred_addr * defer_address(deferred_addr * old_head, uint32_t address, uint8_t *dest)
@@ -755,6 +773,25 @@ void map_native_address(m68k_context * context, uint32_t address, uint8_t * nati
 	}
 	uint32_t offset = address % NATIVE_CHUNK_SIZE;
 	native_code_map[chunk].offsets[offset] = native_addr-native_code_map[chunk].base;
+	for(address++,size-=2; size; address++,size-=2) {
+		chunk = address / NATIVE_CHUNK_SIZE;
+		offset = address % NATIVE_CHUNK_SIZE;
+		if (!native_code_map[chunk].base) {
+			native_code_map[chunk].base = native_addr;
+			native_code_map[chunk].offsets = malloc(sizeof(int32_t) * NATIVE_CHUNK_SIZE);
+			memset(native_code_map[chunk].offsets, 0xFF, sizeof(int32_t) * NATIVE_CHUNK_SIZE);
+		}
+		native_code_map[chunk].offsets[offset] = EXTENSION_WORD;
+	}
+}
+
+uint8_t get_native_inst_size(x86_68k_options * opts, uint32_t address)
+{
+	if (address < 0xE00000) {
+		return 0;
+	}
+	uint32_t slot = (address & 0xFFFF)/1024;
+	return opts->ram_inst_sizes[slot][((address & 0xFFFF)/2)%512];
 }
 
 uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
@@ -3611,7 +3648,7 @@ uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context)
 	}
 	do {
 		do {
-			if (dst_end-dst < 128) {
+			if (dst_end-dst < MAX_NATIVE_SIZE) {
 				if (dst_end-dst < 5) {
 					puts("out of code memory, not enough space for jmp to next chunk");
 					exit(1);
@@ -3671,6 +3708,60 @@ uint8_t * get_native_address_trans(m68k_context * context, uint32_t address)
 		ret = get_native_address(context->native_code_map, address);
 	}
 	return ret;
+}
+
+void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
+{
+	x86_68k_options * opts = context->options;
+	uint8_t orig_size = get_native_inst_size(opts, address);
+	uint8_t * orig_start = get_native_address(context->native_code_map, address);
+	uint32_t orig = address;
+	address &= 0xFFFF;
+	uint8_t * dst = opts->cur_code;
+	uint8_t * dst_end = opts->code_end;
+	uint16_t *after, *inst = context->mem_pointers[1] + address/2;
+	m68kinst instbuf;
+	after = m68k_decode(inst, &instbuf, orig);
+	if (orig_size != MAX_NATIVE_SIZE) {
+		if (dst_end - dst < 128) {
+			size_t size = 1024*1024;
+			dst = alloc_code(&size);
+			opts->code_end = dst_end = dst + size;
+			opts->cur_code = dst;
+		}
+		uint8_t * native_end = translate_m68k(dst, &instbuf, opts);
+		if ((native_end - dst) <= orig_size) {
+			native_end = translate_m68k(orig_start, &instbuf, opts);
+			while (native_end < orig_start + orig_size) {
+				*(native_end++) = 0x90; //NOP
+			}
+			return orig_start;
+		} else {
+			map_native_address(context, instbuf.address, dst, (after-inst)*2, MAX_NATIVE_SIZE);
+			opts->code_end = dst+MAX_NATIVE_SIZE;
+			if (instbuf.op != M68K_RTS && instbuf.op != M68K_RTE && instbuf.op != M68K_RTR && instbuf.op != M68K_JMP && (instbuf.op != M68K_BCC || instbuf.extra.cond != COND_TRUE)) {
+				jmp(native_end, get_native_address(context->native_code_map, address + (after-inst)*2));
+			}
+			return dst;
+		}
+	} else {
+		dst = translate_m68k(orig_start, &instbuf, opts);
+		if (instbuf.op != M68K_RTS && instbuf.op != M68K_RTE && instbuf.op != M68K_RTR && instbuf.op != M68K_JMP && (instbuf.op != M68K_BCC || instbuf.extra.cond != COND_TRUE)) {
+			dst = jmp(dst, get_native_address(context->native_code_map, address + (after-inst)*2));
+		}
+		return orig_start;
+	}
+}
+
+m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context)
+{
+	uint32_t inst_start = get_instruction_start(context->native_code_map, address | 0xFF0000);
+	if (inst_start) {
+		uint8_t * dst = get_native_address(context->native_code_map, inst_start);
+		dst = mov_ir(dst, inst_start, SCRATCH2, SZ_D);
+		dst = jmp(dst, (uint8_t *)m68k_retrans_stub);
+	}
+	return context;
 }
 
 void insert_breakpoint(m68k_context * context, uint32_t address, uint8_t * bp_handler)
@@ -3760,6 +3851,7 @@ void init_x86_68k_opts(x86_68k_options * opts)
 	opts->cur_code = alloc_code(&size);
 	opts->code_end = opts->cur_code + size;
 	opts->ram_inst_sizes = malloc(sizeof(uint8_t *) * 64);
+	memset(opts->ram_inst_sizes, 0, sizeof(uint8_t *) * 64);
 }
 
 void init_68k_context(m68k_context * context, native_map_slot * native_code_map, void * opts)
