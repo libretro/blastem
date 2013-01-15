@@ -915,8 +915,10 @@ int is_refresh(vdp_context * context)
 	} else {
 		linecyc = linecyc/20;
 		//TODO: Figure out which slots are refresh when display is off in 32-cell mode
+		//These numbers are guesses based on H40 numbers
+		return (linecyc == 24 || linecyc == 56 || linecyc == 88 || linecyc == 120 || linecyc == 152 || (linecyc < 5 && (context->flags & FLAG_DMA_RUN) && ((context->dma_cd & 0xF) == CRAM_WRITE)));
 		//The numbers below are the refresh slots during active display
-		return (linecyc == 66 || linecyc == 98 || linecyc == 130 || linecyc == 162);
+		//return (linecyc == 66 || linecyc == 98 || linecyc == 130 || linecyc == 162);
 	}
 }
 
@@ -937,7 +939,7 @@ void check_render_bg(vdp_context * context, int32_t line)
 			linecyc /= 20;
 			if (linecyc >= 43 && linecyc < 171) {
 				uint32_t x = (linecyc-43)*2;
-				start = context->framebuf + line * 256 + x;
+				start = context->framebuf + line * 320 + x;
 				end = start + 2;
 			}
 		}
