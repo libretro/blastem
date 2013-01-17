@@ -49,6 +49,8 @@ void set_sr();
 void set_ccr();
 void get_sr();
 void do_sync();
+void bcd_add();
+void bcd_sub();
 void m68k_start_context(uint8_t * addr, m68k_context * context);
 
 uint8_t * cycles(uint8_t * dst, uint32_t num)
@@ -2692,8 +2694,39 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	uint8_t size;
 	switch(inst->op)
 	{
-	//case M68K_ABCD:
-	//	break;
+	case M68K_ABCD:
+		if (src_op.base != SCRATCH2) {
+			if (src_op.mode == MODE_REG_DIRECT) {
+				dst = mov_rr(dst, src_op.base, SCRATCH2, SZ_B);
+			} else {
+				dst = mov_rdisp8r(dst, src_op.base, src_op.disp, SCRATCH2, SZ_B);
+			}
+		}
+		if (dst_op.base != SCRATCH1) {
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				dst = mov_rr(dst, dst_op.base, SCRATCH1, SZ_B);
+			} else {
+				dst = mov_rdisp8r(dst, dst_op.base, dst_op.disp, SCRATCH1, SZ_B);
+			}
+		}
+		dst = bt_irdisp8(dst, 0, CONTEXT, 0, SZ_B);
+		dst = jcc(dst, CC_NC, dst+5);
+		dst = add_ir(dst, 1, SCRATCH1, SZ_B);
+		dst = call(dst, (uint8_t *)bcd_add);
+		dst = mov_rr(dst, CH, FLAG_C, SZ_B);
+		dst = mov_rrind(dst, FLAG_C, CONTEXT, SZ_B);
+		dst = cmp_ir(dst, 0, SCRATCH1, SZ_B);
+		dst = jcc(dst, CC_Z, dst+4);
+		dst = mov_ir(dst, 0, FLAG_Z, SZ_B);
+		if (dst_op.base != SCRATCH1) {
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				dst = mov_rr(dst, SCRATCH1, dst_op.base, SZ_B);
+			} else {
+				dst = mov_rrdisp8(dst, SCRATCH1, dst_op.base, dst_op.disp, SZ_B);
+			}
+		}
+		dst = m68k_save_result(inst, dst, opts);
+		break;
 	case M68K_ADD:
 		dst = cycles(dst, BUS);
 		size = inst->dst.addr_mode == MODE_AREG ? OPSIZE_LONG : inst->extra.size;
@@ -3515,8 +3548,40 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = call(dst, (uint8_t *)m68k_native_addr);
 		dst = jmp_r(dst, SCRATCH1);
 		break;
-	/*case M68K_SBCD:
-	case M68K_STOP:
+	case M68K_SBCD:
+		if (src_op.base != SCRATCH2) {
+			if (src_op.mode == MODE_REG_DIRECT) {
+				dst = mov_rr(dst, src_op.base, SCRATCH2, SZ_B);
+			} else {
+				dst = mov_rdisp8r(dst, src_op.base, src_op.disp, SCRATCH2, SZ_B);
+			}
+		}
+		if (dst_op.base != SCRATCH1) {
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				dst = mov_rr(dst, dst_op.base, SCRATCH1, SZ_B);
+			} else {
+				dst = mov_rdisp8r(dst, dst_op.base, dst_op.disp, SCRATCH1, SZ_B);
+			}
+		}
+		dst = bt_irdisp8(dst, 0, CONTEXT, 0, SZ_B);
+		dst = jcc(dst, CC_NC, dst+5);
+		dst = sub_ir(dst, 1, SCRATCH1, SZ_B);
+		dst = call(dst, (uint8_t *)bcd_sub);
+		dst = mov_rr(dst, CH, FLAG_C, SZ_B);
+		dst = mov_rrind(dst, FLAG_C, CONTEXT, SZ_B);
+		dst = cmp_ir(dst, 0, SCRATCH1, SZ_B);
+		dst = jcc(dst, CC_Z, dst+4);
+		dst = mov_ir(dst, 0, FLAG_Z, SZ_B);
+		if (dst_op.base != SCRATCH1) {
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				dst = mov_rr(dst, SCRATCH1, dst_op.base, SZ_B);
+			} else {
+				dst = mov_rrdisp8(dst, SCRATCH1, dst_op.base, dst_op.disp, SZ_B);
+			}
+		}
+		dst = m68k_save_result(inst, dst, opts);
+		break;
+	/*case M68K_STOP:
 		break;*/
 	case M68K_SUB:
 		size = inst->dst.addr_mode == MODE_AREG ? OPSIZE_LONG : inst->extra.size;

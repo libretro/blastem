@@ -128,7 +128,7 @@ uint8_t * x86_rr_sizedir(uint8_t * out, uint16_t opcode, uint8_t src, uint8_t ds
 		opcode |= BIT_DIR;
 		tmp = dst;
 		dst = src;
-		src = dst;
+		src = tmp;
 	}
 	if (size == SZ_Q || src >= R8 || dst >= R8 || (size == SZ_B && src >= RSP && src <= RDI)) {
 		*out = PRE_REX;
@@ -1378,12 +1378,12 @@ uint8_t * bt_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t dst_di
 
 uint8_t * bts_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
 {
-	return bit_rr(out, OP2_BT, src, dst, size);
+	return bit_rr(out, OP2_BTS, src, dst, size);
 }
 
 uint8_t * bts_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t dst_disp, uint8_t size)
 {
-	return bit_rrdisp8(out, OP2_BT, src, dst_base, dst_disp, size);
+	return bit_rrdisp8(out, OP2_BTS, src, dst_base, dst_disp, size);
 }
 
 uint8_t * bts_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size)
