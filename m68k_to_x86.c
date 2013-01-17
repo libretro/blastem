@@ -1039,6 +1039,76 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 			break;
 		}
 		break;
+	case MODE_PC_INDEX_DISP8:
+		dst = cycles(dst, 6);//TODO: Check to make sure this is correct
+		dst = mov_ir(dst, inst->address, SCRATCH2, SZ_D);
+		sec_reg = (inst->dst.params.regs.sec >> 1) & 0x7;
+		if (inst->dst.params.regs.sec & 1) {
+			if (inst->dst.params.regs.sec & 0x10) {
+				if (opts->aregs[sec_reg] >= 0) {
+					dst = add_rr(dst, opts->aregs[sec_reg], SCRATCH2, SZ_D);
+				} else {
+					dst = add_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, SCRATCH2, SZ_D);
+				}
+			} else {
+				if (opts->dregs[sec_reg] >= 0) {
+					dst = add_rr(dst, opts->dregs[sec_reg], SCRATCH2, SZ_D);
+				} else {
+					dst = add_rdisp8r(dst, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, SCRATCH2, SZ_D);
+				}
+			}
+		} else {
+			if (src.base == SCRATCH1) {
+				dst = push_r(dst, SCRATCH1);
+			}
+			if (inst->dst.params.regs.sec & 0x10) {
+				if (opts->aregs[sec_reg] >= 0) {
+					dst = movsx_rr(dst, opts->aregs[sec_reg], SCRATCH1, SZ_W, SZ_D);
+				} else {
+					dst = movsx_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, SCRATCH1, SZ_W, SZ_D);
+				}
+			} else {
+				if (opts->dregs[sec_reg] >= 0) {
+					dst = movsx_rr(dst, opts->dregs[sec_reg], SCRATCH1, SZ_W, SZ_D);
+				} else {
+					dst = movsx_rdisp8r(dst, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, SCRATCH1, SZ_W, SZ_D);
+				}
+			}
+			dst = add_rr(dst, SCRATCH1, SCRATCH2, SZ_D);
+			if (src.base == SCRATCH1) {
+				dst = pop_r(dst, SCRATCH1);
+			}
+		}
+		if (inst->dst.params.regs.displacement) {
+			dst = add_ir(dst, inst->dst.params.regs.displacement, SCRATCH2, SZ_D);
+		}
+		if (src.mode == MODE_REG_DIRECT) {
+			if (src.base != SCRATCH1) {
+				dst = mov_rr(dst, src.base, SCRATCH1, inst->extra.size);
+			}
+		} else if (src.mode == MODE_REG_DISPLACE8) {
+			dst = mov_rdisp8r(dst, src.base, src.disp, SCRATCH1, inst->extra.size);
+		} else {
+			dst = mov_ir(dst, src.disp, SCRATCH1, inst->extra.size);
+		}
+		if (inst->dst.addr_mode != MODE_AREG) {
+			dst = cmp_ir(dst, 0, flags_reg, inst->extra.size);
+			dst = setcc_r(dst, CC_Z, FLAG_Z);
+			dst = setcc_r(dst, CC_S, FLAG_N);
+		}
+		switch (inst->extra.size)
+		{
+		case OPSIZE_BYTE:
+			dst = call(dst, (char *)m68k_write_byte);
+			break;
+		case OPSIZE_WORD:
+			dst = call(dst, (char *)m68k_write_word);
+			break;
+		case OPSIZE_LONG:
+			dst = call(dst, (char *)m68k_write_long_highfirst);
+			break;
+		}
+		break;
 	case MODE_ABSOLUTE:
 	case MODE_ABSOLUTE_SHORT:
 		if (src.mode == MODE_REG_DIRECT) {
