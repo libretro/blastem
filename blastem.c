@@ -276,15 +276,15 @@ void io_data_read(io_port * pad, m68k_context * context)
 		printf("io_data_read | control: %X, TH: %X, GAMEPAD_TH0: %X, GAMEPAD_TH1: %X, TH Counter: %d, Timeout: %d, Cycle: %d\n", control, th, pad->input[GAMEPAD_TH0], pad->input[GAMEPAD_TH1], pad->th_counter,pad->timeout_cycle, context->current_cycle);
 	}*/
 	if (th) {
-		if (pad->th_counter == 2) {
+		if (pad->th_counter == 3) {
 			input = pad->input[GAMEPAD_EXTRA];
 		} else {
 			input = pad->input[GAMEPAD_TH1];
 		}
 	} else {
-		if (pad->th_counter == 2) {
+		if (pad->th_counter == 3) {
 			input = pad->input[GAMEPAD_TH0] | 0xF;
-		} else if(pad->th_counter == 3) {
+		} else if(pad->th_counter == 4) {
 			input = pad->input[GAMEPAD_TH0]  & 0x30;
 		} else {
 			input = pad->input[GAMEPAD_TH0] | 0xC;
