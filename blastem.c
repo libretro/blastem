@@ -803,11 +803,15 @@ int main(int argc, char ** argv)
 	int width = -1;
 	int height = -1;
 	int debug = 0;
+	FILE *address_log = NULL;
 	for (int i = 2; i < argc; i++) {
 		if (argv[i][0] == '-') {
 			switch(argv[i][1]) {
 			case 'd':
 				debug = 1;
+				break;
+			case 'l':
+				address_log = fopen("address.log", "w");
 				break;
 			default:
 				fprintf(stderr, "Unrecognized switch %s\n", argv[i]);
@@ -828,6 +832,7 @@ int main(int argc, char ** argv)
 	vdp_context v_context;
 	
 	init_x86_68k_opts(&opts);
+	opts.address_log = address_log;
 	init_68k_context(&context, opts.native_code_map, &opts);
 	init_vdp_context(&v_context);
 	context.next_context = &v_context;
