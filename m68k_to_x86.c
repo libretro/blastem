@@ -3782,6 +3782,9 @@ uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context)
 		exit(1);
 	}
 	do {
+		if (opts->address_log) {
+			fprintf(opts->address_log, "%X\n", address);
+		}
 		do {
 			if (dst_end-dst < MAX_NATIVE_SIZE) {
 				if (dst_end-dst < 5) {

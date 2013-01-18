@@ -448,7 +448,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			return start+1;
 		}
 		istream = m68k_decode_op_ex(istream, opmode, reg, decoded->extra.size, &(decoded->dst));
-		if (!istream) {
+		if (!istream || decoded->dst.addr_mode == MODE_IMMEDIATE) {
 			decoded->op = M68K_INVALID;
 			return start+1;
 		}

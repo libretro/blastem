@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdio.h>
 #include "68kinst.h"
 
 #define NUM_MEM_AREAS 4
@@ -30,6 +31,7 @@ typedef struct {
 	uint8_t         *cur_code;
 	uint8_t         *code_end;
 	uint8_t         **ram_inst_sizes;
+	FILE            *address_log;
 } x86_68k_options;
 
 typedef struct {
