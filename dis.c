@@ -82,6 +82,7 @@ int main(int argc, char ** argv)
 	deferred *def = NULL, *tmpd;
 	for(uint8_t opt = 2; opt < argc; ++opt) {
 		if (argv[opt][0] == '-') {
+			FILE * address_log;
 			switch (argv[opt][1])
 			{
 			case 'l':
@@ -93,6 +94,26 @@ int main(int argc, char ** argv)
 			case 'o':
 				only = 1;
 				break;
+			case 'f':
+				opt++;
+				if (opt >= argc) {
+					fputs("-f must be followed by a filename\n", stderr);
+					exit(1);
+				}
+				address_log = fopen(argv[opt], "r");
+				if (!address_log) {
+					fprintf(stderr, "Failed to open %s for reading\n", argv[opt]);
+					exit(1);
+				}
+				while (fgets(disbuf, sizeof(disbuf), address_log)) {
+				 	if (disbuf[0]) {
+						uint32_t address = strtol(disbuf, NULL, 16);
+						if (address) {
+							def = defer(address, def);
+							reference(address);
+						}
+					}
+				}
 			}
 		} else {
 			uint32_t address = strtol(argv[opt], NULL, 16);
