@@ -1,0 +1,193 @@
+#include "z80inst.h"
+#include <stdio.h>
+#include <stdlib.h>
+
+uint8_t visited[(64*1024)/8];
+uint8_t label[(64*1024)/8];
+
+void visit(uint16_t address)
+{
+	visited[address/8] |= 1 << (address % 8);
+}
+
+void reference(uint16_t address)
+{
+	//printf("referenced: %X\n", address);
+	label[address/8] |= 1 << (address % 8);
+}
+
+uint8_t is_visited(uint16_t address)
+{
+	return visited[address/8] & (1 << (address % 8));
+}
+
+uint8_t is_label(uint16_t address)
+{
+	return label[address/8] & (1 << (address % 8));
+}
+
+typedef struct deferred {
+	uint16_t address;
+	struct deferred *next;
+} deferred;
+
+deferred * defer(uint16_t address, deferred * next)
+{
+	if (is_visited(address)) {
+		return next;
+	}
+	//printf("deferring %X\n", address);
+	deferred * d = malloc(sizeof(deferred));
+	d->address = address;
+	d->next = next;
+	return d;
+}
+
+uint8_t labels = 0;
+uint8_t addr = 0;
+uint8_t only = 0;
+
+int main(int argc, char ** argv)
+{
+	long filesize;
+	uint8_t *filebuf;
+	char disbuf[1024];
+	z80inst instbuf;
+	uint8_t * cur;
+	FILE * f = fopen(argv[1], "rb");
+	fseek(f, 0, SEEK_END);
+	filesize = ftell(f);
+	fseek(f, 0, SEEK_SET);
+	filebuf = malloc(filesize);
+	fread(filebuf, 1, filesize, f);
+	fclose(f);
+	deferred *def = NULL, *tmpd;
+	for(uint8_t opt = 2; opt < argc; ++opt) {
+		if (argv[opt][0] == '-') {
+			FILE * address_log;
+			switch (argv[opt][1])
+			{
+			case 'l':
+				labels = 1;
+				break;
+			case 'a':
+				addr = 1;
+				break;
+			case 'o':
+				only = 1;
+				break;
+			case 'f':
+				opt++;
+				if (opt >= argc) {
+					fputs("-f must be followed by a filename\n", stderr);
+					exit(1);
+				}
+				address_log = fopen(argv[opt], "r");
+				if (!address_log) {
+					fprintf(stderr, "Failed to open %s for reading\n", argv[opt]);
+					exit(1);
+				}
+				while (fgets(disbuf, sizeof(disbuf), address_log)) {
+				 	if (disbuf[0]) {
+						uint16_t address = strtol(disbuf, NULL, 16);
+						if (address) {
+							def = defer(address, def);
+							reference(address);
+						}
+					}
+				}
+			}
+		} else {
+			uint16_t address = strtol(argv[opt], NULL, 16);
+			def = defer(address, def);
+			reference(address);
+		}
+	}
+	uint16_t start = 0;
+	uint8_t *encoded, *next;
+	uint32_t size;
+	if (!def || !only) {
+		def = defer(start, def);
+	}
+	uint16_t address;
+	while(def) {
+		do {
+			encoded = NULL;
+			address = def->address;
+			if (!is_visited(address)) {
+				encoded = filebuf + address;
+			}
+			tmpd = def;
+			def = def->next;
+			free(tmpd);
+		} while(def && encoded == NULL);
+		if (!encoded) {
+			break;
+		}
+		for(;;) {
+			if (address > filesize) {
+				break;
+			}
+			visit(address);
+			next = z80_decode(encoded, &instbuf);
+			address += (next-encoded);
+			encoded = next;
+			
+			//m68k_disasm(&instbuf, disbuf);
+			//printf("%X: %s\n", instbuf.address, disbuf);
+			if (instbuf.op == Z80_HALT || instbuf.op == Z80_RET || instbuf.op == Z80_RETI || instbuf.op == Z80_RETN || instbuf.op == Z80_RST) {
+				break;
+			}
+			switch (instbuf.op)
+			{
+			case Z80_JR:
+				address += instbuf.immed;
+				encoded = filebuf + address;
+				break;
+			case Z80_JRCC:
+				reference(address + instbuf.immed);
+				def = defer(address + instbuf.immed, def);
+				break;
+			case Z80_JP:
+				address = instbuf.immed;
+				encoded = filebuf + address;
+				break;
+			case Z80_JPCC:
+			case Z80_CALL:
+			case Z80_CALLCC:
+				reference(instbuf.immed);
+				def = defer(instbuf.immed, def);
+				break;
+			}
+		}
+	}
+	if (labels) {
+		for (address = filesize; address < (64*1024); address++) {
+			if (is_label(address)) {
+				printf("ADR_%X equ $%X\n", address, address);
+			}
+		}
+		puts("");
+	}
+	for (address = 0; address < filesize; address++) {
+		if (is_visited(address)) {
+			encoded = filebuf + address;
+			z80_decode(encoded, &instbuf);
+			if (labels) {
+				/*m68k_disasm_labels(&instbuf, disbuf);
+				if (is_label(instbuf.address)) {
+					printf("ADR_%X:\n", instbuf.address);
+				}
+				if (addr) {
+					printf("\t%s\t;%X\n", disbuf, instbuf.address);
+				} else {
+					printf("\t%s\n", disbuf);
+				}*/
+			} else {
+				z80_disasm(&instbuf, disbuf);
+				printf("%X: %s\n", address, disbuf);
+			}
+		}
+	}
+	return 0;
+}
