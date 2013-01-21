@@ -118,7 +118,9 @@ void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 	}
 }
 
-m68k_context * sync_components(m68k_context * context)
+int break_on_sync = 0;
+
+m68k_context * sync_components(m68k_context * context, uint32_t address)
 {
 	//TODO: Handle sync targets smaller than a single frame
 	vdp_context * v_context = context->next_context;
@@ -126,7 +128,7 @@ m68k_context * sync_components(m68k_context * context)
 	if (mclks >= MCLKS_PER_FRAME) {
 		//printf("reached frame end | 68K Cycles: %d, MCLK Cycles: %d\n", context->current_cycle, mclks);
 		vdp_run_context(v_context, MCLKS_PER_FRAME);
-		wait_render_frame(v_context);
+		break_on_sync |= wait_render_frame(v_context);
 		mclks -= MCLKS_PER_FRAME;
 		vdp_adjust_cycles(v_context, MCLKS_PER_FRAME);
 		io_adjust_cycles(&gamepad_1, context->current_cycle, MCLKS_PER_FRAME/MCLKS_PER_68K);
@@ -140,13 +142,17 @@ m68k_context * sync_components(m68k_context * context)
 		vdp_run_context(v_context, mclks);
 	}
 	adjust_int_cycle(context, v_context);
+	if (break_on_sync && address) {
+		break_on_sync = 0;
+		debugger(context, address);
+	}
 	return context;
 }
 
 m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_t value)
 {
 	//printf("vdp_port write: %X, value: %X, cycle: %d\n", vdp_port, value, context->current_cycle);
-	sync_components(context);
+	sync_components(context, 0);
 	vdp_context * v_context = context->next_context;
 	if (vdp_port < 0x10) {
 		int blocked;
@@ -201,7 +207,7 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 
 m68k_context * vdp_port_read(uint32_t vdp_port, m68k_context * context)
 {
-	sync_components(context);
+	sync_components(context, 0);
 	vdp_context * v_context = context->next_context;
 	if (vdp_port < 0x10) {
 		if (vdp_port < 4) {

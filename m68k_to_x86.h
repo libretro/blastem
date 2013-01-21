@@ -1,3 +1,5 @@
+#ifndef M68K_TO_X86_H_
+#define M68K_TO_X86_H_
 #include <stdint.h>
 #include <stdio.h>
 #include "68kinst.h"
@@ -62,4 +64,6 @@ void init_68k_context(m68k_context * context, native_map_slot * native_code_map,
 void m68k_reset(m68k_context * context);
 void insert_breakpoint(m68k_context * context, uint32_t address, uint8_t * bp_handler);
 void remove_breakpoint(m68k_context * context, uint32_t address);
+
+#endif //M68K_TO_X86_H_
 

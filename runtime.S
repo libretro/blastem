@@ -7,6 +7,7 @@ handle_cycle_limit:
 do_sync:
 	call m68k_save_context
 	mov %rsi, %rdi
+	xor %esi, %esi
 	call sync_components
 	mov %rax, %rsi
 	call m68k_load_context
@@ -51,7 +52,14 @@ already_supervisor:
 	ret
 skip_int:
 	cmp 84(%rsi), %eax
-	jnb do_sync
+	jb skip_sync_int
+	call m68k_save_context
+	mov %rsi, %rdi
+	mov %ecx, %esi
+	call sync_components
+	mov %rax, %rsi
+	call m68k_load_context
+skip_sync_int:
 	ret
 	
 	.global m68k_trap
@@ -554,6 +562,7 @@ m68k_native_addr_and_sync:
 	call m68k_save_context
 	push %rcx
 	mov %rsi, %rdi
+	xor %esi, %esi
 	call sync_components
 	pop %rsi
 	push %rax

@@ -2,6 +2,7 @@
 #define BLASTEM_H_
 
 #include <stdint.h>
+#include "m68k_to_x86.h"
 
 typedef struct {
 	uint32_t th_counter;
@@ -20,6 +21,7 @@ extern io_port gamepad_2;
 
 void io_adjust_cycles(io_port * pad, uint32_t current_cycle, uint32_t deduction);
 uint16_t read_dma_value(uint32_t address);
+m68k_context * debugger(m68k_context * context, uint32_t address);
 
 #endif //BLASTEM_H_
 
