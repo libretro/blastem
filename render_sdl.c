@@ -190,10 +190,11 @@ void render_wait_quit(vdp_context * context)
 #define MIN_DELAY 10
 uint32_t frame_counter = 0;
 uint32_t start = 0;
-void wait_render_frame(vdp_context * context)
+int wait_render_frame(vdp_context * context)
 {
 	FILE * outfile;
 	SDL_Event event;
+	int ret = 0;
 	while(SDL_PollEvent(&event)) {
 		switch (event.type) {
 		case SDL_KEYDOWN:
@@ -217,6 +218,9 @@ void wait_render_frame(vdp_context * context)
 				vdp_save_state(context, outfile);
 				fclose(outfile);
 				puts("state saved to state.gst");
+				break;
+			case SDLK_u:
+				ret = 1;
 				break;
 			case SDLK_RETURN:
 				gamepad_1.input[GAMEPAD_TH0] |= BUTTON_START;
@@ -336,6 +340,7 @@ void wait_render_frame(vdp_context * context)
 		start = last_frame;
 		frame_counter = 0;
 	}*/
+	return ret;
 }
 
 
