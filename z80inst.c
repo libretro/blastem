@@ -2,9 +2,11 @@
 #include <string.h>
 #include <stdio.h>
 
+#define NOP {Z80_NOP, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0}
+
 z80inst z80_tbl_a[256] = {
 	//0
-	{Z80_NOP, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	NOP,
 	{Z80_LD, Z80_BC, Z80_IMMED, Z80_UNUSED, 0},
 	{Z80_LD, Z80_A, Z80_REG_INDIRECT | Z80_DIR, Z80_BC, 0},
 	{Z80_INC, Z80_BC, Z80_UNUSED, Z80_UNUSED, 0},
@@ -277,29 +279,175 @@ z80inst z80_tbl_a[256] = {
 	{Z80_RST, Z80_UNUSED, Z80_IMMED, Z80_UNUSED, 0x38}
 };
 
+z80inst z80_tbl_extd[0xC0-0x40] = {
+	//4
+	{Z80_IN, Z80_B, Z80_REG_INDIRECT, Z80_C, 0},
+	{Z80_OUT, Z80_B, Z80_REG_INDIRECT | Z80_DIR, Z80_C, 0},
+	{Z80_SBC, Z80_HL, Z80_REG, Z80_BC, 0},
+	{Z80_LD, Z80_BC, Z80_IMMED_INDIRECT | Z80_DIR, Z80_UNUSED, 0},
+	{Z80_NEG, Z80_A, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_RETN, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_IM, Z80_UNUSED, Z80_IMMED, Z80_UNUSED, 0},
+	{Z80_LD, Z80_I, Z80_REG, Z80_A, 0},
+	{Z80_IN, Z80_C, Z80_REG_INDIRECT, Z80_C, 0},
+	{Z80_OUT, Z80_C, Z80_REG_INDIRECT | Z80_DIR, Z80_C, 0},
+	{Z80_ADC, Z80_HL, Z80_REG, Z80_BC, 0},
+	{Z80_LD, Z80_BC, Z80_IMMED_INDIRECT, Z80_UNUSED, 0},
+	{Z80_NEG, Z80_A, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_RETI, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_IM, Z80_UNUSED, Z80_IMMED, Z80_UNUSED, 3},//Set undocumented mode 0/1
+	{Z80_LD, Z80_R, Z80_REG, Z80_A, 0},
+	//5
+	{Z80_IN, Z80_D, Z80_REG_INDIRECT, Z80_C, 0},
+	{Z80_OUT, Z80_D, Z80_REG_INDIRECT | Z80_DIR, Z80_C, 0},
+	{Z80_SBC, Z80_HL, Z80_REG, Z80_DE, 0},
+	{Z80_LD, Z80_DE, Z80_IMMED_INDIRECT | Z80_DIR, Z80_UNUSED, 0},
+	{Z80_NEG, Z80_A, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_RETN, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_IM, Z80_UNUSED, Z80_IMMED, Z80_UNUSED, 1},
+	{Z80_LD, Z80_A, Z80_REG, Z80_I, 0},
+	{Z80_IN, Z80_E, Z80_REG_INDIRECT, Z80_C, 0},
+	{Z80_OUT, Z80_E, Z80_REG_INDIRECT | Z80_DIR, Z80_C, 0},
+	{Z80_ADC, Z80_HL, Z80_REG, Z80_DE, 0},
+	{Z80_LD, Z80_DE, Z80_IMMED_INDIRECT, Z80_UNUSED, 0},
+	{Z80_NEG, Z80_A, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_RETN, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_IM, Z80_UNUSED, Z80_IMMED, Z80_UNUSED, 2},
+	{Z80_LD, Z80_A, Z80_REG, Z80_R, 0},
+	//6
+	{Z80_IN, Z80_H, Z80_REG_INDIRECT, Z80_C, 0},
+	{Z80_OUT, Z80_H, Z80_REG_INDIRECT | Z80_DIR, Z80_C, 0},
+	{Z80_SBC, Z80_HL, Z80_REG, Z80_HL, 0},
+	{Z80_LD, Z80_HL, Z80_IMMED_INDIRECT | Z80_DIR, Z80_UNUSED, 0},
+	{Z80_NEG, Z80_A, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_RETN, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_IM, Z80_UNUSED, Z80_IMMED, Z80_UNUSED, 0},
+	{Z80_RRD, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_IN, Z80_L, Z80_REG_INDIRECT, Z80_C, 0},
+	{Z80_OUT, Z80_L, Z80_REG_INDIRECT | Z80_DIR, Z80_C, 0},
+	{Z80_ADC, Z80_HL, Z80_REG, Z80_HL, 0},
+	{Z80_LD, Z80_HL, Z80_IMMED_INDIRECT, Z80_UNUSED, 0},
+	{Z80_NEG, Z80_A, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_RETN, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_IM, Z80_UNUSED, Z80_IMMED, Z80_UNUSED, 3},//Set undocumented mode 0/1
+	{Z80_RLD, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	//7
+	{Z80_IN, Z80_UNUSED, Z80_REG_INDIRECT, Z80_C, 0},
+	{Z80_OUT, Z80_USE_IMMED, Z80_REG_INDIRECT | Z80_DIR, Z80_C, 0},
+	{Z80_SBC, Z80_HL, Z80_REG, Z80_SP, 0},
+	{Z80_LD, Z80_SP, Z80_IMMED_INDIRECT | Z80_DIR, Z80_UNUSED, 0},
+	{Z80_NEG, Z80_A, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_RETN, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_IM, Z80_UNUSED, Z80_IMMED, Z80_UNUSED, 1},
+	NOP,
+	{Z80_IN, Z80_A, Z80_REG_INDIRECT, Z80_C, 0},
+	{Z80_OUT, Z80_A, Z80_REG_INDIRECT | Z80_DIR, Z80_C, 0},
+	{Z80_ADC, Z80_HL, Z80_REG, Z80_SP, 0},
+	{Z80_LD, Z80_SP, Z80_IMMED_INDIRECT, Z80_UNUSED, 0},
+	{Z80_NEG, Z80_A, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_RETN, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_IM, Z80_UNUSED, Z80_IMMED, Z80_UNUSED, 2},
+	NOP,
+	//8
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	//9
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	//A
+	{Z80_LDI, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_CPI, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_INI, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_OUTI, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	{Z80_LDD, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_CPD, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_IND, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_OUTD, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	//B
+	{Z80_LDIR, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_CPIR, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_INIR, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_OTIR, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	NOP,
+	NOP,
+	NOP,
+	NOP,
+	{Z80_LDDR, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_CPDR, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_INDR, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_OTDR, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 0},
+	NOP,
+	NOP,
+	NOP,
+	NOP
+};
+
 uint8_t * z80_decode(uint8_t * istream, z80inst * decoded)
 {
 	if (*istream == 0xCB) {
 	} else if (*istream == 0xDD) {
 	} else if (*istream == 0xED) {
+		istream++;
+		if (*istream < 0x40 || *istream >= 0xC0) {
+			memcpy(decoded, z80_tbl_extd + 0xBF, sizeof(z80inst));
+		} else {
+			memcpy(decoded, z80_tbl_extd + *istream-0x40, sizeof(z80inst));
+		}
 	} else if (*istream == 0xFD) {
 	} else {
 		memcpy(decoded, z80_tbl_a + *istream, sizeof(z80inst));
-		if (decoded->addr_mode == Z80_IMMED && decoded->op != Z80_RST) {
-			decoded->immed = *(++istream);
-			if (decoded->reg >= Z80_BC) {
-				decoded->immed |= *(++istream) << 8;
-			} else if (decoded->immed & 0x80) {
-				decoded->immed |= 0xFF00;
-			}
-		} else if (decoded->addr_mode == Z80_IMMED_INDIRECT) {
-			decoded->immed = *(++istream);
-			if (decoded->op != Z80_OUT && decoded->op != Z80_IN) {
-				decoded->immed |= *(++istream) << 8;
-			}
-		} else if (decoded->reg == Z80_USE_IMMED) {
-			decoded->immed = *(++istream);
+		
+	}
+	if ((decoded->addr_mode & 0xF) == Z80_IMMED && decoded->op != Z80_RST && decoded->op != Z80_IM) {
+		decoded->immed = *(++istream);
+		if (decoded->reg >= Z80_BC && decoded->reg < Z80_USE_IMMED) {
+			decoded->immed |= *(++istream) << 8;
+		} else if (decoded->immed & 0x80) {
+			decoded->immed |= 0xFF00;
 		}
+	} else if ((decoded->addr_mode & 0xF) == Z80_IMMED_INDIRECT) {
+		decoded->immed = *(++istream);
+		if (decoded->op != Z80_OUT && decoded->op != Z80_IN) {
+			decoded->immed |= *(++istream) << 8;
+		}
+	} else if (decoded->reg == Z80_USE_IMMED) {
+		decoded->immed = *(++istream);
 	}
 	return istream+1;
 }
@@ -363,6 +511,7 @@ char *z80_mnemonics[Z80_OTDR+1] = {
 	"in",
 	"ini",
 	"inir",
+	"ind",
 	"indr",
 	"out",
 	"outi",
@@ -380,6 +529,8 @@ char * z80_regs[Z80_USE_IMMED] = {
 	"l",
 	"",
 	"a",
+	"i",
+	"r",
 	"bc",
 	"de",
 	"hl",
@@ -402,7 +553,7 @@ int z80_disasm(z80inst * decoded, char * dst)
 {
 	int len = sprintf(dst, "%s", z80_mnemonics[decoded->op]);
 	if (decoded->addr_mode & Z80_DIR) {
-		switch (decoded->addr_mode)
+		switch (decoded->addr_mode & 0xF)
 		{
 		case Z80_REG:
 			len += sprintf(dst+len,  " %s", z80_regs[decoded->ea_reg]);
