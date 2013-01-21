@@ -7,6 +7,9 @@ blastem : blastem.o 68kinst.o gen_x86.o m68k_to_x86.o runtime.o mem.o vdp.o rend
 
 dis : dis.o 68kinst.o
 	$(CC) -o dis dis.o 68kinst.o
+
+zdis : zdis.o z80inst.o
+	$(CC) -o zdis zdis.o z80inst.o
 	
 trans : trans.o 68kinst.o gen_x86.o m68k_to_x86.o runtime.o mem.o
 	$(CC) -o trans trans.o 68kinst.o gen_x86.o m68k_to_x86.o runtime.o mem.o
@@ -28,6 +31,9 @@ gen_fib : gen_fib.o gen_x86.o mem.o
 
 %.bin : %.s68
 	vasmm68k_mot -Fbin -m68000 -no-opt -spaces -o $@ $<
+
+%.bin : %.sz8
+	vasmz80_mot -Fbin -spaces -o $@ $<
 
 clean :
 	rm -rf dis trans stateview test_x86 gen_fib *.o
