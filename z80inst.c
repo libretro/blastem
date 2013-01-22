@@ -418,9 +418,82 @@ z80inst z80_tbl_extd[0xC0-0x40] = {
 	NOP
 };
 
+#define SHIFT_BLOCK(op) \
+	{op, Z80_B, Z80_UNUSED, Z80_UNUSED, 0},\
+	{op, Z80_C, Z80_UNUSED, Z80_UNUSED, 0},\
+	{op, Z80_D, Z80_UNUSED, Z80_UNUSED, 0},\
+	{op, Z80_E, Z80_UNUSED, Z80_UNUSED, 0},\
+	{op, Z80_H, Z80_UNUSED, Z80_UNUSED, 0},\
+	{op, Z80_L, Z80_UNUSED, Z80_UNUSED, 0},\
+	{op, Z80_UNUSED, Z80_REG_INDIRECT, Z80_HL, 0},\
+	{op, Z80_A, Z80_UNUSED, Z80_UNUSED, 0}
+	
+#define BIT_BLOCK(op, bit) \
+	{op, Z80_USE_IMMED, Z80_REG, Z80_B, bit},\
+	{op, Z80_USE_IMMED, Z80_REG, Z80_C, bit},\
+	{op, Z80_USE_IMMED, Z80_REG, Z80_D, bit},\
+	{op, Z80_USE_IMMED, Z80_REG, Z80_E, bit},\
+	{op, Z80_USE_IMMED, Z80_REG, Z80_H, bit},\
+	{op, Z80_USE_IMMED, Z80_REG, Z80_L, bit},\
+	{op, Z80_USE_IMMED, Z80_REG_INDIRECT, Z80_HL, bit},\
+	{op, Z80_USE_IMMED, Z80_REG, Z80_A, bit}
+
+z80inst z80_tbl_bit[256] = {
+	//0
+	SHIFT_BLOCK(Z80_RLC),
+	SHIFT_BLOCK(Z80_RRC),
+	//1
+	SHIFT_BLOCK(Z80_RL),
+	SHIFT_BLOCK(Z80_RR),
+	//2
+	SHIFT_BLOCK(Z80_SLA),
+	SHIFT_BLOCK(Z80_SRA),
+	//3
+	SHIFT_BLOCK(Z80_SLL),
+	SHIFT_BLOCK(Z80_SRL),
+	//4
+	BIT_BLOCK(Z80_BIT, 0),
+	BIT_BLOCK(Z80_BIT, 1),
+	//5
+	BIT_BLOCK(Z80_BIT, 2),
+	BIT_BLOCK(Z80_BIT, 3),
+	//6
+	BIT_BLOCK(Z80_BIT, 4),
+	BIT_BLOCK(Z80_BIT, 5),
+	//7
+	BIT_BLOCK(Z80_BIT, 6),
+	BIT_BLOCK(Z80_BIT, 7),
+	//8
+	BIT_BLOCK(Z80_RES, 0),
+	BIT_BLOCK(Z80_RES, 1),
+	//9
+	BIT_BLOCK(Z80_RES, 2),
+	BIT_BLOCK(Z80_RES, 3),
+	//A
+	BIT_BLOCK(Z80_RES, 4),
+	BIT_BLOCK(Z80_RES, 5),
+	//B
+	BIT_BLOCK(Z80_RES, 6),
+	BIT_BLOCK(Z80_RES, 7),
+	//C
+	BIT_BLOCK(Z80_SET, 0),
+	BIT_BLOCK(Z80_SET, 1),
+	//D
+	BIT_BLOCK(Z80_SET, 2),
+	BIT_BLOCK(Z80_SET, 3),
+	//E
+	BIT_BLOCK(Z80_SET, 4),
+	BIT_BLOCK(Z80_SET, 5),
+	//F
+	BIT_BLOCK(Z80_SET, 6),
+	BIT_BLOCK(Z80_SET, 7)
+};
+
 uint8_t * z80_decode(uint8_t * istream, z80inst * decoded)
 {
 	if (*istream == 0xCB) {
+		istream++;
+		memcpy(decoded, z80_tbl_bit + *istream, sizeof(z80inst));
 	} else if (*istream == 0xDD) {
 	} else if (*istream == 0xED) {
 		istream++;
@@ -446,7 +519,7 @@ uint8_t * z80_decode(uint8_t * istream, z80inst * decoded)
 		if (decoded->op != Z80_OUT && decoded->op != Z80_IN) {
 			decoded->immed |= *(++istream) << 8;
 		}
-	} else if (decoded->reg == Z80_USE_IMMED) {
+	} else if (decoded->reg == Z80_USE_IMMED && decoded->op != Z80_BIT && decoded->op != Z80_RES && decoded->op != Z80_SET) {
 		decoded->immed = *(++istream);
 	}
 	return istream+1;
@@ -490,7 +563,10 @@ char *z80_mnemonics[Z80_OTDR+1] = {
 	"rl",
 	"rrc",
 	"rr",
-	"sl",
+	"sla",
+	"sra",
+	"sll",
+	"srl",
 	"rld",
 	"rrd",
 	"bit",
@@ -568,7 +644,9 @@ int z80_disasm(z80inst * decoded, char * dst)
 			len += sprintf(dst+len, " (%d)", decoded->immed);
 			break;
 		}
-		if (decoded->reg != Z80_UNUSED) {
+		if (decoded->reg == Z80_USE_IMMED) {
+			len += sprintf(dst+len, " %d", decoded->immed);
+		} else if (decoded->reg != Z80_UNUSED) {
 			if (decoded->op == Z80_JRCC || decoded->op == Z80_JPCC || decoded->op == Z80_CALLCC || decoded->op == Z80_RETCC) {
 				len += sprintf(dst+len,  "%s %s", decoded->reg == Z80_UNUSED ? "" : "," , z80_conditions[decoded->reg]);
 			} else {
@@ -576,7 +654,9 @@ int z80_disasm(z80inst * decoded, char * dst)
 			}
 		}
 	} else {
-		if (decoded->reg != Z80_UNUSED) {
+		if (decoded->reg == Z80_USE_IMMED) {
+			len += sprintf(dst+len, " %d", decoded->immed);
+		} else if (decoded->reg != Z80_UNUSED) {
 			if (decoded->op == Z80_JRCC || decoded->op == Z80_JPCC || decoded->op == Z80_CALLCC || decoded->op == Z80_RETCC) {
 				len += sprintf(dst+len,  " %s", z80_conditions[decoded->reg]);
 			} else {
