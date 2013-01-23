@@ -490,7 +490,280 @@ z80inst z80_tbl_bit[256] = {
 	BIT_BLOCK(Z80_SET, 7)
 };
 
-z80inst z80_tbl_ix[256
+z80inst z80_tbl_ix[256] = {
+	//0
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	{Z80_ADD, Z80_IX, Z80_REG, Z80_BC, 0},
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	//1
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	{Z80_ADD, Z80_IX, Z80_REG, Z80_DE, 0},
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	//2
+	NOP2,
+	{Z80_LD, Z80_IX, Z80_IMMED, Z80_UNUSED, 0},
+	{Z80_LD, Z80_IX, Z80_IMMED_INDIRECT | Z80_DIR, Z80_UNUSED, 0},
+	{Z80_INC, Z80_IX, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_INC, Z80_IXH, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_DEC, Z80_IXH, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_LD, Z80_IXH, Z80_IMMED, Z80_UNUSED, 0},
+	NOP2,
+	NOP2,
+	{Z80_ADD, Z80_IX, Z80_REG, Z80_IX, 0},
+	{Z80_LD, Z80_IX, Z80_IMMED_INDIRECT, Z80_UNUSED, 0},
+	{Z80_DEC, Z80_IX, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_INC, Z80_IXL, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_DEC, Z80_IXL, Z80_UNUSED, Z80_UNUSED, 0},
+	{Z80_LD, Z80_IXL, Z80_IMMED, Z80_UNUSED, 0},
+	NOP2,
+	//3
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	{Z80_INC, Z80_UNUSED, Z80_IX_DISPLACE, 0, 0},
+	{Z80_DEC, Z80_UNUSED, Z80_IX_DISPLACE, 0, 0},
+	{Z80_LD, Z80_USE_IMMED, Z80_IX_DISPLACE | Z80_DIR, 0, 0},
+	NOP2,
+	NOP2,
+	{Z80_ADD, Z80_IX, Z80_REG, Z80_SP, 0},
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	//4
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	{Z80_LD, Z80_B, Z80_REG, Z80_IXH, 0},
+	{Z80_LD, Z80_B, Z80_REG, Z80_IXL, 0},
+	{Z80_LD, Z80_B, Z80_IX_DISPLACE, 0, 0},
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	{Z80_LD, Z80_C, Z80_REG, Z80_IXH, 0},
+	{Z80_LD, Z80_C, Z80_REG, Z80_IXL, 0},
+	{Z80_LD, Z80_C, Z80_IX_DISPLACE, 0, 0},
+	NOP2,
+	//5
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	{Z80_LD, Z80_D, Z80_REG, Z80_IXH, 0},
+	{Z80_LD, Z80_D, Z80_REG, Z80_IXL, 0},
+	{Z80_LD, Z80_D, Z80_IX_DISPLACE, 0, 0},
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	{Z80_LD, Z80_E, Z80_REG, Z80_IXH, 0},
+	{Z80_LD, Z80_E, Z80_REG, Z80_IXL, 0},
+	{Z80_LD, Z80_E, Z80_IX_DISPLACE, 0, 0},
+	NOP2,
+	//6
+	{Z80_LD, Z80_IXH, Z80_REG, Z80_B, 0},
+	{Z80_LD, Z80_IXH, Z80_REG, Z80_C, 0},
+	{Z80_LD, Z80_IXH, Z80_REG, Z80_D, 0},
+	{Z80_LD, Z80_IXH, Z80_REG, Z80_E, 0},
+	{Z80_LD, Z80_IXH, Z80_REG, Z80_IXH, 0},
+	{Z80_LD, Z80_IXH, Z80_REG, Z80_IXL, 0},
+	{Z80_LD, Z80_H, Z80_IX_DISPLACE, 0, 0},
+	{Z80_LD, Z80_IXH, Z80_REG, Z80_A, 0},
+	{Z80_LD, Z80_IXL, Z80_REG, Z80_B, 0},
+	{Z80_LD, Z80_IXL, Z80_REG, Z80_C, 0},
+	{Z80_LD, Z80_IXL, Z80_REG, Z80_D, 0},
+	{Z80_LD, Z80_IXL, Z80_REG, Z80_E, 0},
+	{Z80_LD, Z80_IXL, Z80_REG, Z80_IXH, 0},
+	{Z80_LD, Z80_IXL, Z80_REG, Z80_IXL, 0},
+	{Z80_LD, Z80_L, Z80_IX_DISPLACE, 0, 0},
+	{Z80_LD, Z80_IXL, Z80_REG, Z80_A, 0},
+	//7
+	{Z80_LD, Z80_B, Z80_IX_DISPLACE | Z80_DIR, 0, 0},
+	{Z80_LD, Z80_C, Z80_IX_DISPLACE | Z80_DIR, 0, 0},
+	{Z80_LD, Z80_D, Z80_IX_DISPLACE | Z80_DIR, 0, 0},
+	{Z80_LD, Z80_E, Z80_IX_DISPLACE | Z80_DIR, 0, 0},
+	{Z80_LD, Z80_H, Z80_IX_DISPLACE | Z80_DIR, 0, 0},
+	{Z80_LD, Z80_L, Z80_IX_DISPLACE | Z80_DIR, 0, 0},
+	NOP2,
+	{Z80_LD, Z80_A, Z80_IX_DISPLACE | Z80_DIR, 0, 0},
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	{Z80_LD, Z80_A, Z80_REG, Z80_IXH, 0},
+	{Z80_LD, Z80_A, Z80_REG, Z80_IXL, 0},
+	{Z80_LD, Z80_A, Z80_IX_DISPLACE, 0, 0},
+	NOP2,
+	//8
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	{Z80_ADD, Z80_A, Z80_REG, Z80_IXH, 0},
+	{Z80_ADD, Z80_A, Z80_REG, Z80_IXL, 0},
+	{Z80_ADD, Z80_A, Z80_IX_DISPLACE, 0, 0},
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	{Z80_ADC, Z80_A, Z80_REG, Z80_IXH, 0},
+	{Z80_ADC, Z80_A, Z80_REG, Z80_IXL, 0},
+	{Z80_ADC, Z80_A, Z80_IX_DISPLACE, 0, 0},
+	NOP2,
+	//9
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	{Z80_SUB, Z80_A, Z80_REG, Z80_IXH, 0},
+	{Z80_SUB, Z80_A, Z80_REG, Z80_IXL, 0},
+	{Z80_SUB, Z80_A, Z80_IX_DISPLACE, 0, 0},
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	{Z80_SBC, Z80_A, Z80_REG, Z80_IXH, 0},
+	{Z80_SBC, Z80_A, Z80_REG, Z80_IXL, 0},
+	{Z80_SBC, Z80_A, Z80_IX_DISPLACE, 0, 0},
+	NOP2,
+	//A
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	{Z80_AND, Z80_A, Z80_REG, Z80_IXH, 0},
+	{Z80_AND, Z80_A, Z80_REG, Z80_IXL, 0},
+	{Z80_AND, Z80_A, Z80_IX_DISPLACE, 0, 0},
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	{Z80_XOR, Z80_A, Z80_REG, Z80_IXH, 0},
+	{Z80_XOR, Z80_A, Z80_REG, Z80_IXL, 0},
+	{Z80_XOR, Z80_A, Z80_IX_DISPLACE, 0, 0},
+	NOP2,
+	//B
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	{Z80_OR, Z80_A, Z80_REG, Z80_IXH, 0},
+	{Z80_OR, Z80_A, Z80_REG, Z80_IXL, 0},
+	{Z80_OR, Z80_A, Z80_IX_DISPLACE, 0, 0},
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	{Z80_CP, Z80_A, Z80_REG, Z80_IXH, 0},
+	{Z80_CP, Z80_A, Z80_REG, Z80_IXL, 0},
+	{Z80_CP, Z80_A, Z80_IX_DISPLACE, 0, 0},
+	NOP2,
+	//C
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	//D
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	//E
+	NOP2,
+	{Z80_POP, Z80_IX, Z80_UNUSED, Z80_UNUSED, 0},
+	NOP2,
+	{Z80_EX, Z80_IX, Z80_REG_INDIRECT | Z80_DIR, Z80_SP, 0},
+	NOP2,
+	{Z80_PUSH, Z80_IX, Z80_UNUSED, Z80_UNUSED, 0},
+	NOP2,
+	NOP2,
+	NOP2,
+	{Z80_JP, Z80_UNUSED, Z80_REG_INDIRECT, Z80_IX, 0},
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	//F
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	{Z80_LD, Z80_SP, Z80_REG, Z80_IX, 0},
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2,
+	NOP2
+};
 
 uint8_t * z80_decode(uint8_t * istream, z80inst * decoded)
 {
@@ -498,6 +771,11 @@ uint8_t * z80_decode(uint8_t * istream, z80inst * decoded)
 		istream++;
 		memcpy(decoded, z80_tbl_bit + *istream, sizeof(z80inst));
 	} else if (*istream == 0xDD) {
+		istream++;
+		if (*istream == 0xCB) {
+		} else {
+			memcpy(decoded, z80_tbl_ix + *istream, sizeof(z80inst));
+		}
 	} else if (*istream == 0xED) {
 		istream++;
 		if (*istream < 0x40 || *istream >= 0xC0) {
@@ -510,19 +788,22 @@ uint8_t * z80_decode(uint8_t * istream, z80inst * decoded)
 		memcpy(decoded, z80_tbl_a + *istream, sizeof(z80inst));
 		
 	}
-	if ((decoded->addr_mode & 0xF) == Z80_IMMED && decoded->op != Z80_RST && decoded->op != Z80_IM) {
+	if ((decoded->addr_mode & 0x1F) == Z80_IX_DISPLACE || (decoded->addr_mode & 0x1F) == Z80_IY_DISPLACE) {
+		decoded->ea_reg = *(++istream);
+	} else if ((decoded->addr_mode & 0x1F) == Z80_IMMED && decoded->op != Z80_RST && decoded->op != Z80_IM) {
 		decoded->immed = *(++istream);
 		if (decoded->reg >= Z80_BC && decoded->reg < Z80_USE_IMMED) {
 			decoded->immed |= *(++istream) << 8;
 		} else if (decoded->immed & 0x80) {
 			decoded->immed |= 0xFF00;
 		}
-	} else if ((decoded->addr_mode & 0xF) == Z80_IMMED_INDIRECT) {
+	} else if ((decoded->addr_mode & 0x1F) == Z80_IMMED_INDIRECT) {
 		decoded->immed = *(++istream);
 		if (decoded->op != Z80_OUT && decoded->op != Z80_IN) {
 			decoded->immed |= *(++istream) << 8;
 		}
-	} else if (decoded->reg == Z80_USE_IMMED && decoded->op != Z80_BIT && decoded->op != Z80_RES && decoded->op != Z80_SET) {
+	}
+	if (decoded->reg == Z80_USE_IMMED && decoded->op != Z80_BIT && decoded->op != Z80_RES && decoded->op != Z80_SET) {
 		decoded->immed = *(++istream);
 	}
 	return istream+1;
@@ -608,6 +889,8 @@ char * z80_regs[Z80_USE_IMMED] = {
 	"l",
 	"",
 	"a",
+	"ixh",
+	"ixl",
 	"i",
 	"r",
 	"bc",
@@ -615,6 +898,8 @@ char * z80_regs[Z80_USE_IMMED] = {
 	"hl",
 	"sp",
 	"af",
+	"ix",
+	"iy",
 };
 
 char * z80_conditions[Z80_CC_M+1] = {
@@ -632,7 +917,7 @@ int z80_disasm(z80inst * decoded, char * dst)
 {
 	int len = sprintf(dst, "%s", z80_mnemonics[decoded->op]);
 	if (decoded->addr_mode & Z80_DIR) {
-		switch (decoded->addr_mode & 0xF)
+		switch (decoded->addr_mode & 0x1F)
 		{
 		case Z80_REG:
 			len += sprintf(dst+len,  " %s", z80_regs[decoded->ea_reg]);
@@ -645,6 +930,12 @@ int z80_disasm(z80inst * decoded, char * dst)
 			break;
 		case Z80_IMMED_INDIRECT:
 			len += sprintf(dst+len, " (%d)", decoded->immed);
+			break;
+		case Z80_IX_DISPLACE:
+			len += sprintf(dst+len, " (ix+%d)", decoded->ea_reg);
+			break;
+		case Z80_IY_DISPLACE:
+			len += sprintf(dst+len, " (iy+%d)", decoded->ea_reg);
 			break;
 		}
 		if (decoded->reg == Z80_USE_IMMED) {
@@ -679,6 +970,12 @@ int z80_disasm(z80inst * decoded, char * dst)
 			break;
 		case Z80_IMMED_INDIRECT:
 			len += sprintf(dst+len, "%s (%d)", decoded->reg == Z80_UNUSED ? "" : "," , decoded->immed);
+			break;
+		case Z80_IX_DISPLACE:
+			len += sprintf(dst+len, "%s (ix+%d)", decoded->reg == Z80_UNUSED ? "" : "," , decoded->ea_reg);
+			break;
+		case Z80_IY_DISPLACE:
+			len += sprintf(dst+len, "%s (iy+%d)", decoded->reg == Z80_UNUSED ? "" : "," , decoded->ea_reg);
 			break;
 		}
 	}

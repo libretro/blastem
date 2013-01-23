@@ -56,11 +56,21 @@ uint32_t aregs[8]; //40 + 4 * reg
 
 x86-64 registers in Z80 core
 
-ax = AF
+ax = HL
 bx = BC
 cx = DE
-dx = HL
+dx = IX
+ebp = current cycle count
+rsi = context pointer
+edi = target cycle count
+rsp = native stack pointer
+r8 = IY
+r9 = SP
+r10 = A (maybe AF?)
+r11 = z80 ram address
+r12 = cartridge address if bank is pointed at ROM
+r13 = scratch1
+r14 = scratch2
+r15 = ?maybe z80 bank register?
 
-1. native stack pointer
-2. current cycle count
-3. target cycle count
+
