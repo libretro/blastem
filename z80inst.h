@@ -81,6 +81,8 @@ enum {
 	Z80_A=7,
 	Z80_IXH,
 	Z80_IXL,
+	Z80_IYH,
+	Z80_IYL,
 	Z80_I,
 	Z80_R,
 	Z80_BC,
