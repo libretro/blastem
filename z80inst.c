@@ -765,6 +765,86 @@ z80inst z80_tbl_ix[256] = {
 	NOP2
 };
 
+#define SHIFT_BLOCK_IX(op) \
+	{op, Z80_B, Z80_IX_DISPLACE | Z80_DIR, 0, 0},\
+	{op, Z80_C, Z80_IX_DISPLACE | Z80_DIR, 0, 0},\
+	{op, Z80_D, Z80_IX_DISPLACE | Z80_DIR, 0, 0},\
+	{op, Z80_E, Z80_IX_DISPLACE | Z80_DIR, 0, 0},\
+	{op, Z80_H, Z80_IX_DISPLACE | Z80_DIR, 0, 0},\
+	{op, Z80_L, Z80_IX_DISPLACE | Z80_DIR, 0, 0},\
+	{op, Z80_UNUSED, Z80_IX_DISPLACE | Z80_DIR, 0, 0},\
+	{op, Z80_A, Z80_IX_DISPLACE | Z80_DIR, 0, 0}
+
+#define BIT_BLOCK_IX(bit) \
+	{Z80_BIT, Z80_USE_IMMED, Z80_IX_DISPLACE, 0, bit},\
+	{Z80_BIT, Z80_USE_IMMED, Z80_IX_DISPLACE, 0, bit},\
+	{Z80_BIT, Z80_USE_IMMED, Z80_IX_DISPLACE, 0, bit},\
+	{Z80_BIT, Z80_USE_IMMED, Z80_IX_DISPLACE, 0, bit},\
+	{Z80_BIT, Z80_USE_IMMED, Z80_IX_DISPLACE, 0, bit},\
+	{Z80_BIT, Z80_USE_IMMED, Z80_IX_DISPLACE, 0, bit},\
+	{Z80_BIT, Z80_USE_IMMED, Z80_IX_DISPLACE, 0, bit},\
+	{Z80_BIT, Z80_USE_IMMED, Z80_IX_DISPLACE, 0, bit}
+
+#define BIT_BLOCK_IX_REG(op, bit) \
+	{op, Z80_B, Z80_IX_DISPLACE | Z80_DIR, 0, bit},\
+	{op, Z80_C, Z80_IX_DISPLACE | Z80_DIR, 0, bit},\
+	{op, Z80_D, Z80_IX_DISPLACE | Z80_DIR, 0, bit},\
+	{op, Z80_E, Z80_IX_DISPLACE | Z80_DIR, 0, bit},\
+	{op, Z80_H, Z80_IX_DISPLACE | Z80_DIR, 0, bit},\
+	{op, Z80_L, Z80_IX_DISPLACE | Z80_DIR, 0, bit},\
+	{op, Z80_USE_IMMED, Z80_IX_DISPLACE, 0, bit},\
+	{op, Z80_A, Z80_IX_DISPLACE | Z80_DIR, 0, bit}
+
+z80inst z80_tbl_ix_bit[256] = {
+	//0
+	SHIFT_BLOCK_IX(Z80_RLC),
+	SHIFT_BLOCK_IX(Z80_RRC),
+	//1
+	SHIFT_BLOCK_IX(Z80_RL),
+	SHIFT_BLOCK_IX(Z80_RR),
+	//2
+	SHIFT_BLOCK_IX(Z80_SLA),
+	SHIFT_BLOCK_IX(Z80_SRA),
+	//3
+	SHIFT_BLOCK_IX(Z80_SLL),
+	SHIFT_BLOCK_IX(Z80_SRL),
+	//4
+	BIT_BLOCK_IX(0),
+	BIT_BLOCK_IX(1),
+	//5
+	BIT_BLOCK_IX(2),
+	BIT_BLOCK_IX(3),
+	//6
+	BIT_BLOCK_IX(4),
+	BIT_BLOCK_IX(5),
+	//7
+	BIT_BLOCK_IX(6),
+	BIT_BLOCK_IX(7),
+	//8
+	BIT_BLOCK_IX_REG(Z80_RES, 0),
+	BIT_BLOCK_IX_REG(Z80_RES, 1),
+	//9
+	BIT_BLOCK_IX_REG(Z80_RES, 2),
+	BIT_BLOCK_IX_REG(Z80_RES, 3),
+	//A
+	BIT_BLOCK_IX_REG(Z80_RES, 4),
+	BIT_BLOCK_IX_REG(Z80_RES, 5),
+	//B
+	BIT_BLOCK_IX_REG(Z80_RES, 6),
+	BIT_BLOCK_IX_REG(Z80_RES, 7),
+	//C
+	BIT_BLOCK_IX_REG(Z80_SET, 0),
+	BIT_BLOCK_IX_REG(Z80_SET, 1),
+	//D
+	BIT_BLOCK_IX_REG(Z80_SET, 2),
+	BIT_BLOCK_IX_REG(Z80_SET, 3),
+	//E
+	BIT_BLOCK_IX_REG(Z80_SET, 4),
+	BIT_BLOCK_IX_REG(Z80_SET, 5),
+	//F
+	BIT_BLOCK_IX_REG(Z80_SET, 6),
+	BIT_BLOCK_IX_REG(Z80_SET, 7),
+};
 
 z80inst z80_tbl_iy[256] = {
 	//0
@@ -1043,14 +1123,22 @@ z80inst z80_tbl_iy[256] = {
 
 uint8_t * z80_decode(uint8_t * istream, z80inst * decoded)
 {
+	uint8_t tmp;
 	if (*istream == 0xCB) {
 		istream++;
 		memcpy(decoded, z80_tbl_bit + *istream, sizeof(z80inst));
 	} else if (*istream == 0xDD) {
 		istream++;
 		if (*istream == 0xCB) {
+			tmp = *(++istream);
+			istream++;
+			memcpy(decoded, z80_tbl_ix_bit + *istream, sizeof(z80inst));
+			decoded->ea_reg = tmp;
 		} else {
 			memcpy(decoded, z80_tbl_ix + *istream, sizeof(z80inst));
+			if ((decoded->addr_mode & 0x1F) == Z80_IX_DISPLACE) {
+				decoded->ea_reg = *(++istream);
+			}
 		}
 	} else if (*istream == 0xED) {
 		istream++;
@@ -1064,16 +1152,17 @@ uint8_t * z80_decode(uint8_t * istream, z80inst * decoded)
 		if (*istream == 0xCB) {
 		} else {
 			memcpy(decoded, z80_tbl_iy + *istream, sizeof(z80inst));
+			if ((decoded->addr_mode & 0x1F) == Z80_IY_DISPLACE) {
+				decoded->ea_reg = *(++istream);
+			}
 		}
 	} else {
 		memcpy(decoded, z80_tbl_a + *istream, sizeof(z80inst));
 		
 	}
-	if ((decoded->addr_mode & 0x1F) == Z80_IX_DISPLACE || (decoded->addr_mode & 0x1F) == Z80_IY_DISPLACE) {
-		decoded->ea_reg = *(++istream);
-	} else if ((decoded->addr_mode & 0x1F) == Z80_IMMED && decoded->op != Z80_RST && decoded->op != Z80_IM) {
+	if ((decoded->addr_mode & 0x1F) == Z80_IMMED && decoded->op != Z80_RST && decoded->op != Z80_IM) {
 		decoded->immed = *(++istream);
-		if (decoded->reg >= Z80_BC && decoded->reg < Z80_USE_IMMED) {
+		if (decoded->reg >= Z80_BC && decoded->reg < Z80_UNUSED) {
 			decoded->immed |= *(++istream) << 8;
 		} else if (decoded->immed & 0x80) {
 			decoded->immed |= 0xFF00;
@@ -1199,7 +1288,9 @@ char * z80_conditions[Z80_CC_M+1] = {
 int z80_disasm(z80inst * decoded, char * dst)
 {
 	int len = sprintf(dst, "%s", z80_mnemonics[decoded->op]);
+	uint8_t needcomma;
 	if (decoded->addr_mode & Z80_DIR) {
+		needcomma = 1;
 		switch (decoded->addr_mode & 0x1F)
 		{
 		case Z80_REG:
@@ -1220,45 +1311,52 @@ int z80_disasm(z80inst * decoded, char * dst)
 		case Z80_IY_DISPLACE:
 			len += sprintf(dst+len, " (iy+%d)", decoded->ea_reg);
 			break;
+		default:
+			needcomma = 0;
 		}
-		if (decoded->reg == Z80_USE_IMMED) {
-			len += sprintf(dst+len, " %d", decoded->immed);
-		} else if (decoded->reg != Z80_UNUSED) {
+		if (decoded->reg & Z80_IMMED_FLAG) {
+			len += sprintf(dst+len, "%s %d", needcomma ? "," : "", decoded->immed);
+		}
+		if ((decoded->reg & 0x1F) != Z80_UNUSED) {
 			if (decoded->op == Z80_JRCC || decoded->op == Z80_JPCC || decoded->op == Z80_CALLCC || decoded->op == Z80_RETCC) {
-				len += sprintf(dst+len,  "%s %s", decoded->reg == Z80_UNUSED ? "" : "," , z80_conditions[decoded->reg]);
+				len += sprintf(dst+len,  "%s %s", needcomma ? "," : "", z80_conditions[decoded->reg & 0x1F]);
 			} else {
-				len += sprintf(dst+len,  "%s %s", decoded->reg == Z80_UNUSED ? "" : "," , z80_regs[decoded->reg]);
+				len += sprintf(dst+len,  "%s %s", needcomma ? "," : "", z80_regs[decoded->reg & 0x1F]);
 			}
 		}
 	} else {
-		if (decoded->reg == Z80_USE_IMMED) {
+		needcomma = 0;
+		if (decoded->reg & Z80_IMMED_FLAG) {
 			len += sprintf(dst+len, " %d", decoded->immed);
-		} else if (decoded->reg != Z80_UNUSED) {
+			needcomma = 1;
+		}
+		if ((decoded->reg & 0x1F) != Z80_UNUSED) {
 			if (decoded->op == Z80_JRCC || decoded->op == Z80_JPCC || decoded->op == Z80_CALLCC || decoded->op == Z80_RETCC) {
-				len += sprintf(dst+len,  " %s", z80_conditions[decoded->reg]);
+				len += sprintf(dst+len,  " %s", z80_conditions[decoded->reg & 0x1F]);
 			} else {
-				len += sprintf(dst+len,  " %s", z80_regs[decoded->reg]);
+				len += sprintf(dst+len,  " %s", z80_regs[decoded->reg & 0x1F]);
 			}
+			needcomma = 1;
 		}
 		switch (decoded->addr_mode)
 		{
 		case Z80_REG:
-			len += sprintf(dst+len,  "%s %s", decoded->reg == Z80_UNUSED ? "" : "," , z80_regs[decoded->ea_reg]);
+			len += sprintf(dst+len,  "%s %s", needcomma ? "," : "" , z80_regs[decoded->ea_reg]);
 			break;
 		case Z80_REG_INDIRECT:
-			len += sprintf(dst+len,  "%s (%s)", decoded->reg == Z80_UNUSED ? "" : "," , z80_regs[decoded->ea_reg]);
+			len += sprintf(dst+len,  "%s (%s)", needcomma ? "," : "" , z80_regs[decoded->ea_reg]);
 			break;
 		case Z80_IMMED:
-			len += sprintf(dst+len, "%s %d", decoded->reg == Z80_UNUSED ? "" : "," , decoded->immed);
+			len += sprintf(dst+len, "%s %d", needcomma ? "," : "" , decoded->immed);
 			break;
 		case Z80_IMMED_INDIRECT:
-			len += sprintf(dst+len, "%s (%d)", decoded->reg == Z80_UNUSED ? "" : "," , decoded->immed);
+			len += sprintf(dst+len, "%s (%d)", needcomma ? "," : "" , decoded->immed);
 			break;
 		case Z80_IX_DISPLACE:
-			len += sprintf(dst+len, "%s (ix+%d)", decoded->reg == Z80_UNUSED ? "" : "," , decoded->ea_reg);
+			len += sprintf(dst+len, "%s (ix+%d)", needcomma ? "," : "" , decoded->ea_reg);
 			break;
 		case Z80_IY_DISPLACE:
-			len += sprintf(dst+len, "%s (iy+%d)", decoded->reg == Z80_UNUSED ? "" : "," , decoded->ea_reg);
+			len += sprintf(dst+len, "%s (iy+%d)", needcomma ? "," : "" , decoded->ea_reg);
 			break;
 		}
 	}

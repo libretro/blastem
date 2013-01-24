@@ -92,9 +92,11 @@ enum {
 	Z80_AF,
 	Z80_IX,
 	Z80_IY,
-	Z80_USE_IMMED,
 	Z80_UNUSED
 };
+
+#define Z80_IMMED_FLAG 0x80
+#define Z80_USE_IMMED (Z80_IMMED_FLAG|Z80_UNUSED)
 
 enum {
 	Z80_CC_NZ,
