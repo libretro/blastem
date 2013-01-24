@@ -1121,6 +1121,87 @@ z80inst z80_tbl_iy[256] = {
 	NOP2
 };
 
+#define SHIFT_BLOCK_IY(op) \
+	{op, Z80_B, Z80_IY_DISPLACE | Z80_DIR, 0, 0},\
+	{op, Z80_C, Z80_IY_DISPLACE | Z80_DIR, 0, 0},\
+	{op, Z80_D, Z80_IY_DISPLACE | Z80_DIR, 0, 0},\
+	{op, Z80_E, Z80_IY_DISPLACE | Z80_DIR, 0, 0},\
+	{op, Z80_H, Z80_IY_DISPLACE | Z80_DIR, 0, 0},\
+	{op, Z80_L, Z80_IY_DISPLACE | Z80_DIR, 0, 0},\
+	{op, Z80_UNUSED, Z80_IY_DISPLACE | Z80_DIR, 0, 0},\
+	{op, Z80_A, Z80_IY_DISPLACE | Z80_DIR, 0, 0}
+
+#define BIT_BLOCK_IY(bit) \
+	{Z80_BIT, Z80_USE_IMMED, Z80_IY_DISPLACE, 0, bit},\
+	{Z80_BIT, Z80_USE_IMMED, Z80_IY_DISPLACE, 0, bit},\
+	{Z80_BIT, Z80_USE_IMMED, Z80_IY_DISPLACE, 0, bit},\
+	{Z80_BIT, Z80_USE_IMMED, Z80_IY_DISPLACE, 0, bit},\
+	{Z80_BIT, Z80_USE_IMMED, Z80_IY_DISPLACE, 0, bit},\
+	{Z80_BIT, Z80_USE_IMMED, Z80_IY_DISPLACE, 0, bit},\
+	{Z80_BIT, Z80_USE_IMMED, Z80_IY_DISPLACE, 0, bit},\
+	{Z80_BIT, Z80_USE_IMMED, Z80_IY_DISPLACE, 0, bit}
+
+#define BIT_BLOCK_IY_REG(op, bit) \
+	{op, Z80_B, Z80_IY_DISPLACE | Z80_DIR, 0, bit},\
+	{op, Z80_C, Z80_IY_DISPLACE | Z80_DIR, 0, bit},\
+	{op, Z80_D, Z80_IY_DISPLACE | Z80_DIR, 0, bit},\
+	{op, Z80_E, Z80_IY_DISPLACE | Z80_DIR, 0, bit},\
+	{op, Z80_H, Z80_IY_DISPLACE | Z80_DIR, 0, bit},\
+	{op, Z80_L, Z80_IY_DISPLACE | Z80_DIR, 0, bit},\
+	{op, Z80_USE_IMMED, Z80_IY_DISPLACE, 0, bit},\
+	{op, Z80_A, Z80_IY_DISPLACE | Z80_DIR, 0, bit}
+
+z80inst z80_tbl_iy_bit[256] = {
+	//0
+	SHIFT_BLOCK_IY(Z80_RLC),
+	SHIFT_BLOCK_IY(Z80_RRC),
+	//1
+	SHIFT_BLOCK_IY(Z80_RL),
+	SHIFT_BLOCK_IY(Z80_RR),
+	//2
+	SHIFT_BLOCK_IY(Z80_SLA),
+	SHIFT_BLOCK_IY(Z80_SRA),
+	//3
+	SHIFT_BLOCK_IY(Z80_SLL),
+	SHIFT_BLOCK_IY(Z80_SRL),
+	//4
+	BIT_BLOCK_IY(0),
+	BIT_BLOCK_IY(1),
+	//5
+	BIT_BLOCK_IY(2),
+	BIT_BLOCK_IY(3),
+	//6
+	BIT_BLOCK_IY(4),
+	BIT_BLOCK_IY(5),
+	//7
+	BIT_BLOCK_IY(6),
+	BIT_BLOCK_IY(7),
+	//8
+	BIT_BLOCK_IY_REG(Z80_RES, 0),
+	BIT_BLOCK_IY_REG(Z80_RES, 1),
+	//9
+	BIT_BLOCK_IY_REG(Z80_RES, 2),
+	BIT_BLOCK_IY_REG(Z80_RES, 3),
+	//A
+	BIT_BLOCK_IY_REG(Z80_RES, 4),
+	BIT_BLOCK_IY_REG(Z80_RES, 5),
+	//B
+	BIT_BLOCK_IY_REG(Z80_RES, 6),
+	BIT_BLOCK_IY_REG(Z80_RES, 7),
+	//C
+	BIT_BLOCK_IY_REG(Z80_SET, 0),
+	BIT_BLOCK_IY_REG(Z80_SET, 1),
+	//D
+	BIT_BLOCK_IY_REG(Z80_SET, 2),
+	BIT_BLOCK_IY_REG(Z80_SET, 3),
+	//E
+	BIT_BLOCK_IY_REG(Z80_SET, 4),
+	BIT_BLOCK_IY_REG(Z80_SET, 5),
+	//F
+	BIT_BLOCK_IY_REG(Z80_SET, 6),
+	BIT_BLOCK_IY_REG(Z80_SET, 7),
+};
+
 uint8_t * z80_decode(uint8_t * istream, z80inst * decoded)
 {
 	uint8_t tmp;
@@ -1150,6 +1231,10 @@ uint8_t * z80_decode(uint8_t * istream, z80inst * decoded)
 	} else if (*istream == 0xFD) {
 		istream++;
 		if (*istream == 0xCB) {
+			tmp = *(++istream);
+			istream++;
+			memcpy(decoded, z80_tbl_iy_bit + *istream, sizeof(z80inst));
+			decoded->ea_reg = tmp;
 		} else {
 			memcpy(decoded, z80_tbl_iy + *istream, sizeof(z80inst));
 			if ((decoded->addr_mode & 0x1F) == Z80_IY_DISPLACE) {
