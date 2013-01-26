@@ -3126,10 +3126,10 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 			dst = shl_irdisp8(dst, 16, dst_op.base, dst_op.disp, SZ_D);
 			dst = mov_rrdisp8(dst, RAX, dst_op.base, dst_op.disp, SZ_W);
 		}
+		dst = cmp_ir(dst, 0, RAX, SZ_W);
 		dst = pop_r(dst, RAX);
 		dst = pop_r(dst, RDX);
 		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
-		dst = cmp_ir(dst, 0, RAX, SZ_W);
 		dst = setcc_r(dst, CC_Z, FLAG_Z);
 		dst = setcc_r(dst, CC_S, FLAG_N);
 		end_off = dst+1;
@@ -3364,8 +3364,8 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 			dst = mov_rrdisp8(dst, SCRATCH1, dst_op.base, dst_op.disp, inst->extra.size);
 		}
 		dst = setcc_r(dst, CC_C, FLAG_C);
-		dst = jcc(dst, CC_NZ, dst+4);
-		dst = mov_ir(dst, 1, FLAG_Z, SZ_B);
+		dst = jcc(dst, CC_Z, dst+4);
+		dst = mov_ir(dst, 0, FLAG_Z, SZ_B);
 		dst = setcc_r(dst, CC_S, FLAG_N);
 		dst = setcc_r(dst, CC_O, FLAG_V);
 		dst = mov_rrind(dst, FLAG_C, CONTEXT, SZ_B);
@@ -3378,9 +3378,12 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	case M68K_NOT:
 		if (dst_op.mode == MODE_REG_DIRECT) {
 			dst = not_r(dst, dst_op.base, inst->extra.size);
+			dst = cmp_ir(dst, 0, dst_op.base, inst->extra.size);
 		} else {
 			dst = not_rdisp8(dst, dst_op.base, dst_op.disp, inst->extra.size);
+			dst = cmp_irdisp8(dst, 0, dst_op.base, dst_op.disp, inst->extra.size);
 		}
+		
 		dst = mov_ir(dst, 0, FLAG_C, SZ_B);
 		dst = setcc_r(dst, CC_Z, FLAG_Z);
 		dst = setcc_r(dst, CC_S, FLAG_N);

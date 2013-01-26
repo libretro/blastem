@@ -638,6 +638,7 @@ m68k_start_context:
 	
 	call m68k_load_context
 	call *%rdi
+	call m68k_save_context
 	
 	pop %r15
 	pop %r14
