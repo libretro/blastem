@@ -11,6 +11,9 @@ dis : dis.o 68kinst.o
 zdis : zdis.o z80inst.o
 	$(CC) -o zdis zdis.o z80inst.o
 	
+libemu68k.a : 68kinst.o gen_x86.o m68k_to_x86.o runtime.o mem.o
+	ar rcs libemu68k.a 68kinst.o gen_x86.o m68k_to_x86.o runtime.o mem.o
+	
 trans : trans.o 68kinst.o gen_x86.o m68k_to_x86.o runtime.o mem.o
 	$(CC) -o trans trans.o 68kinst.o gen_x86.o m68k_to_x86.o runtime.o mem.o
 

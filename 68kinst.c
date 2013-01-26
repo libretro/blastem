@@ -854,6 +854,10 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 		decoded->src.params.immed = immed;
 		break;
 	case MOVEQ:
+		if (*istream & 0x100) {
+			decoded->op = M68K_INVALID;
+			return start+1;
+		}
 		decoded->op = M68K_MOVE;
 		decoded->variant = VAR_QUICK;
 		decoded->extra.size = OPSIZE_LONG;

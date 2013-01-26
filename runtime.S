@@ -630,5 +630,19 @@ m68k_load_context:
 
 	.global m68k_start_context
 m68k_start_context:
+	push %rbp
+	push %r12
+	push %r13
+	push %r14
+	push %r15
+	
 	call m68k_load_context
-	jmp *%rdi
+	call *%rdi
+	
+	pop %r15
+	pop %r14
+	pop %r13
+	pop %r12
+	pop %rbp
+	
+	ret

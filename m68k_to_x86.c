@@ -1,5 +1,6 @@
 #include "gen_x86.h"
 #include "m68k_to_x86.h"
+#include "68kinst.h"
 #include "mem.h"
 #include <stdio.h>
 #include <stddef.h>
@@ -2804,6 +2805,9 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	} else if(inst->op == M68K_MOVEP) {
 		return translate_m68k_movep(dst, inst, opts);
 	} else if(inst->op == M68K_INVALID) {
+		if (inst->src.params.immed == 0x7100) {
+			return retn(dst);
+		}
 		dst = mov_ir(dst, inst->address, SCRATCH1, SZ_D);
 		return call(dst, (uint8_t *)m68k_invalid);
 	} else if(inst->op == M68K_CMP) {
@@ -2962,7 +2966,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		break;
 	case M68K_ASL:
 	case M68K_LSL:
-		//TODO: Check overflow flag behavior
 		dst = translate_shift(dst, inst, &src_op, &dst_op, opts, shl_ir, shl_irdisp8, shl_clr, shl_clrdisp8, shr_ir, shr_irdisp8);
 		break;
 	case M68K_ASR:
@@ -3864,6 +3867,9 @@ uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context)
 				break;
 			}
 			next = m68k_decode(encoded, &instbuf, address);
+			if (instbuf.op == M68K_INVALID) {
+				instbuf.src.params.immed = *encoded;
+			}
 			uint16_t m68k_size = (next-encoded)*2;
 			address += m68k_size;
 			encoded = next;
