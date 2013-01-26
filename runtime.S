@@ -598,8 +598,8 @@ m68k_retrans_stub:
 	.global m68k_save_context
 m68k_save_context:
 	mov %bl, 1(%rsi) /* N Flag */
-	mov %bh, 2(%rsi) /* V flag */
-	mov %dl, 3(%rsi) /* Z flag */
+	mov %dl, 2(%rsi) /* Z flag */
+	mov %bh, 3(%rsi) /* V flag */
 	mov %dh, 4(%rsi) /* C flag */
 	mov %r10d, 8(%rsi) /* d0 */
 	mov %r11d, 12(%rsi) /* d1 */
@@ -613,8 +613,8 @@ m68k_save_context:
 	.global m68k_load_context
 m68k_load_context:
 	mov 1(%rsi), %bl /* N Flag */
-	mov 2(%rsi), %bh /* V flag */
-	mov 3(%rsi), %dl /* Z flag */
+	mov 2(%rsi), %dl /* Z flag */
+	mov 3(%rsi), %bh /* V flag */
 	mov 4(%rsi), %dh /* C flag */
 	mov 8(%rsi), %r10d /* d0 */
 	mov 12(%rsi), %r11d /* d1 */

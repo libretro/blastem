@@ -190,6 +190,7 @@ uint8_t * call(uint8_t * out, uint8_t * fun);
 uint8_t * call_r(uint8_t * out, uint8_t dst);
 uint8_t * retn(uint8_t * out);
 uint8_t * cdq(uint8_t * out);
+uint8_t * loop(uint8_t * out, uint8_t * dst);
 
 #endif //GEN_X86_H_
 
