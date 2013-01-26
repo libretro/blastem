@@ -2,7 +2,8 @@
 #define M68K_TO_X86_H_
 #include <stdint.h>
 #include <stdio.h>
-#include "68kinst.h"
+//#include "68kinst.h"
+struct m68kinst;
 
 #define NUM_MEM_AREAS 4
 #define NATIVE_MAP_CHUNKS (64*1024)
@@ -56,7 +57,7 @@ typedef struct {
 	uint8_t         ram_code_flags[32/8];
 } m68k_context;
 
-uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts);
+uint8_t * translate_m68k(uint8_t * dst, struct m68kinst * inst, x86_68k_options * opts);
 uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context);
 void start_68k_context(m68k_context * context, uint32_t address);
 void init_x86_68k_opts(x86_68k_options * opts);
@@ -64,6 +65,7 @@ void init_68k_context(m68k_context * context, native_map_slot * native_code_map,
 void m68k_reset(m68k_context * context);
 void insert_breakpoint(m68k_context * context, uint32_t address, uint8_t * bp_handler);
 void remove_breakpoint(m68k_context * context, uint32_t address);
+m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context);
 
 #endif //M68K_TO_X86_H_
 
