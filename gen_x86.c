@@ -35,6 +35,7 @@
 #define OP_MOV_IEA 0xC6
 #define OP_SHIFTROT_1 0xD0
 #define OP_SHIFTROT_CL 0xD2
+#define OP_LOOP 0xE2
 #define OP_CALL 0xE8
 #define OP_JMP 0xE9
 #define OP_JMP_BYTE 0xEB
@@ -1533,4 +1534,10 @@ uint8_t * cdq(uint8_t * out)
 	return out;
 }
 
-
+uint8_t * loop(uint8_t * out, uint8_t * dst)
+{
+	ptrdiff_t disp = dst-(out+2);
+	*(out++) = OP_LOOP;
+	*(out++) = disp;
+	return out;
+}

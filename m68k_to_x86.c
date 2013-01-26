@@ -92,7 +92,7 @@ size_t reg_offset(m68k_op_info *op)
 
 void print_regs_exit(m68k_context * context)
 {
-	printf("XNVZC\n%d%d%d%d%d\n", context->flags[0], context->flags[1], context->flags[2], context->flags[3], context->flags[4]);
+	printf("XNZVC\n%d%d%d%d%d\n", context->flags[0], context->flags[1], context->flags[2], context->flags[3], context->flags[4]);
 	for (int i = 0; i < 8; i++) {
 		printf("d%d: %X\n", i, context->dregs[i]);
 	}
@@ -2619,6 +2619,8 @@ typedef uint8_t * (*shift_clrdisp8_t)(uint8_t * out, uint8_t dst_base, int8_t di
 uint8_t * translate_shift(uint8_t * dst, m68kinst * inst, x86_ea *src_op, x86_ea * dst_op, x86_68k_options * opts, shift_ir_t shift_ir, shift_irdisp8_t shift_irdisp8, shift_clr_t shift_clr, shift_clrdisp8_t shift_clrdisp8, shift_ir_t special, shift_irdisp8_t special_disp8)
 {
 	uint8_t * end_off = NULL;
+	uint8_t * nz_off = NULL;
+	uint8_t * z_off = NULL;
 	if (inst->src.addr_mode == MODE_UNUSED) {
 		dst = cycles(dst, BUS);
 		//Memory shift
@@ -2626,10 +2628,24 @@ uint8_t * translate_shift(uint8_t * dst, m68kinst * inst, x86_ea *src_op, x86_ea
 	} else {
 		dst = cycles(dst, inst->extra.size == OPSIZE_LONG ? 8 : 6);
 		if (src_op->mode == MODE_IMMED) {
-			if (dst_op->mode == MODE_REG_DIRECT) {
-				dst = shift_ir(dst, src_op->disp, dst_op->base, inst->extra.size);
+			if (src_op->disp != 1 && inst->op == M68K_ASL) {
+				dst = mov_ir(dst, 0, FLAG_V, SZ_B);
+				for (int i = 0; i < src_op->disp; i++) {
+					if (dst_op->mode == MODE_REG_DIRECT) {
+						dst = shift_ir(dst, 1, dst_op->base, inst->extra.size);
+					} else {
+						dst = shift_irdisp8(dst, 1, dst_op->base, dst_op->disp, inst->extra.size);
+					}
+					//dst = setcc_r(dst, CC_O, FLAG_V);
+					dst = jcc(dst, CC_NO, dst+4);
+					dst = mov_ir(dst, 1, FLAG_V, SZ_B);
+				}
 			} else {
-				dst = shift_irdisp8(dst, src_op->disp, dst_op->base, dst_op->disp, inst->extra.size);
+				if (dst_op->mode == MODE_REG_DIRECT) {
+					dst = shift_ir(dst, src_op->disp, dst_op->base, inst->extra.size);
+				} else {
+					dst = shift_irdisp8(dst, src_op->disp, dst_op->base, dst_op->disp, inst->extra.size);
+				}
 			}
 		} else {
 			if (src_op->base != RCX) {
@@ -2638,58 +2654,92 @@ uint8_t * translate_shift(uint8_t * dst, m68kinst * inst, x86_ea *src_op, x86_ea
 				} else {
 					dst = mov_rdisp8r(dst, src_op->base, src_op->disp, RCX, SZ_B);
 				}
+				
 			}
 			dst = and_ir(dst, 63, RCX, SZ_D);
+			nz_off = dst+1;
+			dst = jcc(dst, CC_NZ, dst+2);
+			//Flag behavior for shift count of 0 is different for x86 than 68K
+			if (dst_op->mode == MODE_REG_DIRECT) {
+				dst = cmp_ir(dst, 0, dst_op->base, inst->extra.size);
+			} else {
+				dst = cmp_irdisp8(dst, 0, dst_op->base, dst_op->disp, inst->extra.size);
+			}
+			dst = setcc_r(dst, CC_Z, FLAG_Z);
+			dst = setcc_r(dst, CC_S, FLAG_N);
+			dst = mov_ir(dst, 0, FLAG_C, SZ_B);
+			//For other instructions, this flag will be set below
+			if (inst->op == M68K_ASL) {
+				dst = mov_ir(dst, 0, FLAG_V, SZ_B);
+			}
+			z_off = dst+1;
+			dst = jmp(dst, dst+2);
+			*nz_off = dst - (nz_off + 1);
 			//add 2 cycles for every bit shifted
 			dst = add_rr(dst, RCX, CYCLES, SZ_D);
 			dst = add_rr(dst, RCX, CYCLES, SZ_D);
-			//x86 shifts modulo 32 for operand sizes less than 64-bits
-			//but M68K shifts modulo 64, so we need to check for large shifts here
-			dst = cmp_ir(dst, 32, RCX, SZ_B);
-			uint8_t * norm_shift_off = dst + 1;
-			dst = jcc(dst, CC_L, dst+2);
-			if (special) {
-				if (inst->extra.size == OPSIZE_LONG) {
-					uint8_t * neq_32_off = dst + 1;
-					dst = jcc(dst, CC_NZ, dst+2);
-			
-					//set the carry bit to the lsb
-					if (dst_op->mode == MODE_REG_DIRECT) {
-						dst = special(dst, 1, dst_op->base, SZ_D);
-					} else {
-						dst = special_disp8(dst, 1, dst_op->base, dst_op->disp, SZ_D);
-					}
-					dst = setcc_r(dst, CC_C, FLAG_C);
-					dst = jmp(dst, dst+4);
-					*neq_32_off = dst - (neq_32_off+1);
-				}
-				dst = mov_ir(dst, 0, FLAG_C, SZ_B);
-				dst = mov_ir(dst, 1, FLAG_Z, SZ_B);
-				dst = mov_ir(dst, 0, FLAG_N, SZ_B);
+			if (inst->op == M68K_ASL) {
+				//ASL has Overflow flag behavior that depends on all of the bits shifted through the MSB
+				//Easiest way to deal with this is to shift one bit at a time
+				dst = mov_ir(dst, 0, FLAG_V, SZ_B);
+				uint8_t * loop_start = dst;
 				if (dst_op->mode == MODE_REG_DIRECT) {
-					dst = xor_rr(dst, dst_op->base, dst_op->base, inst->extra.size);
-				} else {
-					dst = mov_irdisp8(dst, 0, dst_op->base, dst_op->disp, inst->extra.size);
-				}
-			} else {
-				if (dst_op->mode == MODE_REG_DIRECT) {
-					dst = shift_ir(dst, 31, dst_op->base, inst->extra.size);
 					dst = shift_ir(dst, 1, dst_op->base, inst->extra.size);
 				} else {
-					dst = shift_irdisp8(dst, 31, dst_op->base, dst_op->disp, inst->extra.size);
 					dst = shift_irdisp8(dst, 1, dst_op->base, dst_op->disp, inst->extra.size);
 				}
-				
-			}
-			end_off = dst+1;
-			dst = jmp(dst, dst+2);
-			*norm_shift_off = dst - (norm_shift_off+1);
-			if (dst_op->mode == MODE_REG_DIRECT) {
-				dst = shift_clr(dst, dst_op->base, inst->extra.size);
+				//dst = setcc_r(dst, CC_O, FLAG_V);
+				dst = jcc(dst, CC_NO, dst+4);
+				dst = mov_ir(dst, 1, FLAG_V, SZ_B);
+				dst = loop(dst, loop_start);
 			} else {
-				dst = shift_clrdisp8(dst, dst_op->base, dst_op->disp, inst->extra.size);
-			}
+				//x86 shifts modulo 32 for operand sizes less than 64-bits
+				//but M68K shifts modulo 64, so we need to check for large shifts here
+				dst = cmp_ir(dst, 32, RCX, SZ_B);
+				uint8_t * norm_shift_off = dst + 1;
+				dst = jcc(dst, CC_L, dst+2);
+				if (special) {
+					if (inst->extra.size == OPSIZE_LONG) {
+						uint8_t * neq_32_off = dst + 1;
+						dst = jcc(dst, CC_NZ, dst+2);
 			
+						//set the carry bit to the lsb
+						if (dst_op->mode == MODE_REG_DIRECT) {
+							dst = special(dst, 1, dst_op->base, SZ_D);
+						} else {
+							dst = special_disp8(dst, 1, dst_op->base, dst_op->disp, SZ_D);
+						}
+						dst = setcc_r(dst, CC_C, FLAG_C);
+						dst = jmp(dst, dst+4);
+						*neq_32_off = dst - (neq_32_off+1);
+					}
+					dst = mov_ir(dst, 0, FLAG_C, SZ_B);
+					dst = mov_ir(dst, 1, FLAG_Z, SZ_B);
+					dst = mov_ir(dst, 0, FLAG_N, SZ_B);
+					if (dst_op->mode == MODE_REG_DIRECT) {
+						dst = xor_rr(dst, dst_op->base, dst_op->base, inst->extra.size);
+					} else {
+						dst = mov_irdisp8(dst, 0, dst_op->base, dst_op->disp, inst->extra.size);
+					}
+				} else {
+					if (dst_op->mode == MODE_REG_DIRECT) {
+						dst = shift_ir(dst, 31, dst_op->base, inst->extra.size);
+						dst = shift_ir(dst, 1, dst_op->base, inst->extra.size);
+					} else {
+						dst = shift_irdisp8(dst, 31, dst_op->base, dst_op->disp, inst->extra.size);
+						dst = shift_irdisp8(dst, 1, dst_op->base, dst_op->disp, inst->extra.size);
+					}
+				
+				}
+				end_off = dst+1;
+				dst = jmp(dst, dst+2);
+				*norm_shift_off = dst - (norm_shift_off+1);
+				if (dst_op->mode == MODE_REG_DIRECT) {
+					dst = shift_clr(dst, dst_op->base, inst->extra.size);
+				} else {
+					dst = shift_clrdisp8(dst, dst_op->base, dst_op->disp, inst->extra.size);
+				}
+			}
 		}
 		
 	}
@@ -2702,9 +2752,14 @@ uint8_t * translate_shift(uint8_t * dst, m68kinst * inst, x86_ea *src_op, x86_ea
 	if (special && end_off) {
 		*end_off = dst - (end_off + 1);
 	}
-	dst = mov_ir(dst, 0, FLAG_V, SZ_B);
 	//set X flag to same as C flag
 	dst = mov_rrind(dst, FLAG_C, CONTEXT, SZ_B);
+	if (z_off) {
+		*z_off = dst - (z_off + 1);
+	}
+	if (inst->op != M68K_ASL && inst->src.addr_mode != MODE_UNUSED && !(src_op->mode == MODE_IMMED && src_op->disp == 1)) {
+		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
+	}
 	if (inst->src.addr_mode == MODE_UNUSED) {
 		dst = m68k_save_result(inst, dst, opts);
 	}
