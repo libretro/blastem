@@ -170,7 +170,7 @@ typedef struct {
 	} params;
 } m68k_op_info;
 
-typedef struct {
+typedef struct m68kinst {
 	uint8_t op;
 	uint8_t variant;
 	union {
