@@ -1164,13 +1164,6 @@ uint8_t * translate_m68k_movem(uint8_t * dst, m68kinst * inst, x86_68k_options *
 		//reg to mem
 		early_cycles = 8;
 		int8_t dir;
-		if (inst->dst.addr_mode == MODE_AREG_PREDEC) {
-			reg = 15;
-			dir = -1;
-		} else {
-			reg = 0;
-			dir = 1;
-		}
 		switch (inst->dst.addr_mode)
 		{
 		case MODE_AREG_INDIRECT:
@@ -1285,6 +1278,13 @@ uint8_t * translate_m68k_movem(uint8_t * dst, m68kinst * inst, x86_68k_options *
 			m68k_disasm(inst, disasm_buf);
 			printf("%X: %s\naddress mode %d not implemented (movem dst)\n", inst->address, disasm_buf, inst->dst.addr_mode);
 			exit(1);
+		}
+		if (inst->dst.addr_mode == MODE_AREG_PREDEC) {
+			reg = 15;
+			dir = -1;
+		} else {
+			reg = 0;
+			dir = 1;
 		}
 		dst = cycles(dst, early_cycles);
 		for(bit=0; reg < 16 && reg >= 0; reg += dir, bit++) {
