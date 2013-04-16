@@ -2,6 +2,7 @@
 #include "m68k_to_x86.h"
 #include "68kinst.h"
 #include "mem.h"
+#include "x86_backend.h"
 #include <stdio.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -19,14 +20,6 @@
 #define FLAG_V BH
 #define FLAG_Z RDX
 #define FLAG_C DH
-
-typedef struct {
-	int32_t disp;
-	uint8_t mode;
-	uint8_t base;
-	uint8_t index;
-	uint8_t cycles;
-} x86_ea;
 
 char disasm_buf[1024];
 
