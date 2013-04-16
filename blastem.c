@@ -796,6 +796,35 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 	return context;
 }
 
+void init_run_cpu(vdp_context * vcontext, int debug, FILE * address_log)
+{
+	m68k_context context;
+	x86_68k_options opts;
+	init_x86_68k_opts(&opts);
+	opts.address_log = address_log;
+	init_68k_context(&context, opts.native_code_map, &opts);
+	
+	context.next_context = vcontext;
+	//cartridge ROM
+	context.mem_pointers[0] = cart;
+	context.target_cycle = context.sync_cycle = MCLKS_PER_FRAME/MCLKS_PER_68K;
+	//work RAM
+	context.mem_pointers[1] = ram;
+	uint32_t address;
+	/*address = cart[0x68/2] << 16 | cart[0x6A/2];
+	translate_m68k_stream(address, &context);
+	address = cart[0x70/2] << 16 | cart[0x72/2];
+	translate_m68k_stream(address, &context);
+	address = cart[0x78/2] << 16 | cart[0x7A/2];
+	translate_m68k_stream(address, &context);*/
+	address = cart[2] << 16 | cart[3];
+	translate_m68k_stream(address, &context);
+	if (debug) {
+		insert_breakpoint(&context, address, (uint8_t *)debugger);
+	}
+	m68k_reset(&context);
+}
+
 int main(int argc, char ** argv)
 {
 	if (argc < 2) {
@@ -832,33 +861,9 @@ int main(int argc, char ** argv)
 	width = width < 320 ? 320 : width;
 	height = height < 240 ? (width/320) * 240 : height;
 	render_init(width, height);
-	
-	x86_68k_options opts;
-	m68k_context context;
 	vdp_context v_context;
 	
-	init_x86_68k_opts(&opts);
-	opts.address_log = address_log;
-	init_68k_context(&context, opts.native_code_map, &opts);
 	init_vdp_context(&v_context);
-	context.next_context = &v_context;
-	//cartridge ROM
-	context.mem_pointers[0] = cart;
-	context.target_cycle = context.sync_cycle = MCLKS_PER_FRAME/MCLKS_PER_68K;
-	//work RAM
-	context.mem_pointers[1] = ram;
-	uint32_t address;
-	/*address = cart[0x68/2] << 16 | cart[0x6A/2];
-	translate_m68k_stream(address, &context);
-	address = cart[0x70/2] << 16 | cart[0x72/2];
-	translate_m68k_stream(address, &context);
-	address = cart[0x78/2] << 16 | cart[0x7A/2];
-	translate_m68k_stream(address, &context);*/
-	address = cart[2] << 16 | cart[3];
-	translate_m68k_stream(address, &context);
-	if (debug) {
-		insert_breakpoint(&context, address, (uint8_t *)debugger);
-	}
-	m68k_reset(&context);
+	init_run_cpu(&v_context, debug, address_log);
 	return 0;
 }
