@@ -1118,7 +1118,9 @@ z80inst z80_tbl_iy[256] = {
 	NOP2,
 	NOP2,
 	NOP2,
-	NOP2
+	//TODO: Enable this based on a define
+	{Z80_NOP, Z80_UNUSED, Z80_UNUSED, Z80_UNUSED, 42}
+	//NOP2
 };
 
 #define SHIFT_BLOCK_IY(op) \
@@ -1342,14 +1344,13 @@ char * z80_regs[Z80_USE_IMMED] = {
 	"e",
 	"h",
 	"l",
-	"",
-	"a",
 	"ixh",
 	"ixl",
 	"iyh",
 	"iyl",
 	"i",
 	"r",
+	"a",
 	"bc",
 	"de",
 	"hl",
