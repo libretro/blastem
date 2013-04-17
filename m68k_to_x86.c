@@ -2640,6 +2640,7 @@ uint8_t * translate_shift(uint8_t * dst, m68kinst * inst, x86_ea *src_op, x86_ea
 				} else {
 					dst = shift_irdisp8(dst, src_op->disp, dst_op->base, dst_op->disp, inst->extra.size);
 				}
+				dst = setcc_r(dst, CC_O, FLAG_V);
 			}
 		} else {
 			if (src_op->base != RCX) {
@@ -3432,7 +3433,11 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 			}
 		}
 		break;
-	/*case M68K_RESET:*/
+	case M68K_RESET:
+		dst = call(dst, (uint8_t *)m68k_save_context);
+		dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
+		dst = call(dst, (uint8_t *)print_regs_exit);
+		break;
 	case M68K_ROL:
 	case M68K_ROR:
 		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
