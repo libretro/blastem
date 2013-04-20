@@ -2757,7 +2757,7 @@ uint8_t * translate_shift(uint8_t * dst, m68kinst * inst, x86_ea *src_op, x86_ea
 	if (z_off) {
 		*z_off = dst - (z_off + 1);
 	}
-	if (inst->op != M68K_ASL && inst->src.addr_mode != MODE_UNUSED && !(src_op->mode == MODE_IMMED && src_op->disp == 1)) {
+	if (inst->op != M68K_ASL) {
 		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
 	}
 	if (inst->src.addr_mode == MODE_UNUSED) {
