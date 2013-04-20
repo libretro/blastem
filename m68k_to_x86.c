@@ -137,7 +137,7 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		}
 		break;
 	case MODE_AREG_PREDEC:
-		dec_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : 1);
+		dec_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (inst->src.params.regs.pri == 7 ? 2 :1));
 		out = cycles(out, PREDEC_PENALTY);
 		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
 			out = sub_ir(out, dec_amount, opts->aregs[inst->src.params.regs.pri], SZ_D);
@@ -354,6 +354,9 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		}
 		ea->mode = MODE_IMMED;
 		ea->disp = inst->src.params.immed;
+		if (inst->dst.addr_mode == MODE_AREG && inst->extra.size == OPSIZE_WORD && ea->disp & 0x8000) {
+			ea->disp |= 0xFFFF0000;
+		}
 		return out;
 	default:
 		m68k_disasm(inst, disasm_buf);
@@ -805,19 +808,21 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 		dst = mov_ir(dst, 0, FLAG_C, SZ_B);
 	}
 	
-	if (src.mode == MODE_REG_DIRECT) {
-		flags_reg = src.base;
-	} else {
-		if (reg >= 0) {
-			flags_reg = reg;
+	if (inst->dst.addr_mode != MODE_AREG) {
+		if (src.mode == MODE_REG_DIRECT) {
+			flags_reg = src.base;
 		} else {
-			if(src.mode == MODE_REG_DISPLACE8) {
-				dst = mov_rdisp8r(dst, src.base, src.disp, SCRATCH1, inst->extra.size);
+			if (reg >= 0) {
+				flags_reg = reg;
 			} else {
-				dst = mov_ir(dst, src.disp, SCRATCH1, inst->extra.size);
+				if(src.mode == MODE_REG_DISPLACE8) {
+					dst = mov_rdisp8r(dst, src.base, src.disp, SCRATCH1, inst->extra.size);
+				} else {
+					dst = mov_ir(dst, src.disp, SCRATCH1, inst->extra.size);
+				}
+				src.mode = MODE_REG_DIRECT;
+				flags_reg = src.base = SCRATCH1;
 			}
-			src.mode = MODE_REG_DIRECT;
-			flags_reg = src.base = SCRATCH1;
 		}
 	}
 	uint8_t size = inst->extra.size;
@@ -3879,7 +3884,7 @@ uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context)
 			uint8_t * after = translate_m68k(dst, &instbuf, opts);
 			map_native_address(context, instbuf.address, dst, m68k_size, after-dst);
 			dst = after;
-		} while(instbuf.op != M68K_ILLEGAL && instbuf.op != M68K_INVALID && instbuf.op != M68K_TRAP && instbuf.op != M68K_RTS && instbuf.op != M68K_RTR && instbuf.op != M68K_RTE && !(instbuf.op == M68K_BCC && instbuf.extra.cond == COND_TRUE) && instbuf.op != M68K_JMP);
+		} while(instbuf.op != M68K_ILLEGAL && instbuf.op != M68K_RESET && instbuf.op != M68K_INVALID && instbuf.op != M68K_TRAP && instbuf.op != M68K_RTS && instbuf.op != M68K_RTR && instbuf.op != M68K_RTE && !(instbuf.op == M68K_BCC && instbuf.extra.cond == COND_TRUE) && instbuf.op != M68K_JMP);
 		process_deferred(opts);
 		if (opts->deferred) {
 			address = opts->deferred->address;
