@@ -5,10 +5,10 @@ from sys import exit
 
 for path in glob('generated_tests/*.bin'):
 	try:
-		b = subprocess.check_output(['./blastem', path])
+		b = subprocess.check_output(['./blastem', path, '-v'])
 		try:
 			m = subprocess.check_output(['musashi/mustrans', path])
-			_,_,b = b.partition('\n')
+			#_,_,b = b.partition('\n')
 			if b != m:
 				print '-----------------------------'
 				print 'Mismatch in ' + path
