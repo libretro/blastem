@@ -23,6 +23,8 @@ uint8_t z80_ram[Z80_RAM_BYTES];
 io_port gamepad_1;
 io_port gamepad_2;
 
+int headless = 0;
+
 #ifndef MIN
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #endif
@@ -128,7 +130,9 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	if (mclks >= MCLKS_PER_FRAME) {
 		//printf("reached frame end | 68K Cycles: %d, MCLK Cycles: %d\n", context->current_cycle, mclks);
 		vdp_run_context(v_context, MCLKS_PER_FRAME);
-		break_on_sync |= wait_render_frame(v_context);
+		if (!headless) {
+			break_on_sync |= wait_render_frame(v_context);
+		}
 		mclks -= MCLKS_PER_FRAME;
 		vdp_adjust_cycles(v_context, MCLKS_PER_FRAME);
 		io_adjust_cycles(&gamepad_1, context->current_cycle, MCLKS_PER_FRAME/MCLKS_PER_68K);
@@ -161,7 +165,9 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 				while(v_context->flags & FLAG_DMA_RUN) {
 					vdp_run_dma_done(v_context, MCLKS_PER_FRAME);
 					if (v_context->cycles >= MCLKS_PER_FRAME) {
-						wait_render_frame(v_context);
+						if (!headless) {
+							wait_render_frame(v_context);
+						}
 						vdp_adjust_cycles(v_context, MCLKS_PER_FRAME);
 						io_adjust_cycles(&gamepad_1, v_context->cycles/MCLKS_PER_68K, MCLKS_PER_FRAME/MCLKS_PER_68K);
 						io_adjust_cycles(&gamepad_2, v_context->cycles/MCLKS_PER_68K, MCLKS_PER_FRAME/MCLKS_PER_68K);
@@ -176,7 +182,9 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 					while(v_context->flags & FLAG_DMA_RUN) {
 						vdp_run_dma_done(v_context, MCLKS_PER_FRAME);
 						if (v_context->cycles >= MCLKS_PER_FRAME) {
-							wait_render_frame(v_context);
+							if (!headless) {
+								wait_render_frame(v_context);
+							}
 							vdp_adjust_cycles(v_context, MCLKS_PER_FRAME);
 							io_adjust_cycles(&gamepad_1, v_context->cycles/MCLKS_PER_68K, MCLKS_PER_FRAME/MCLKS_PER_68K);
 							io_adjust_cycles(&gamepad_2, v_context->cycles/MCLKS_PER_68K, MCLKS_PER_FRAME/MCLKS_PER_68K);
@@ -848,6 +856,9 @@ int main(int argc, char ** argv)
 			case 'l':
 				address_log = fopen("address.log", "w");
 				break;
+			case 'v':
+				headless = 1;
+				break;
 			default:
 				fprintf(stderr, "Unrecognized switch %s\n", argv[i]);
 				return 1;
@@ -860,7 +871,9 @@ int main(int argc, char ** argv)
 	}
 	width = width < 320 ? 320 : width;
 	height = height < 240 ? (width/320) * 240 : height;
-	render_init(width, height);
+	if (!headless) {
+		render_init(width, height);
+	}
 	vdp_context v_context;
 	
 	init_vdp_context(&v_context);
