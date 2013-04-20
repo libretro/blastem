@@ -106,29 +106,41 @@ class Indexed(object):
 			already['label'] = num
 			address = 'lbl_' + str(num) + ' + 2 + ' + str(self.disp) + ' + ' + str(index)
 		else:
-			if str(self.base) in already:
-				if not valid_ram_address(already[str(self.base)]):
-					del already[str(self.base)]
-					self.write_init(outfile, size, already)
-					return
+			if self.base == self.index:
+				if str(self.base) in already:
+					if not valid_ram_address(already[str(self.base)]*2):
+						del already[str(self.base)]
+						self.write_init(outfile, size, already)
+						return
+					else:
+						base = index = already[str(self.base)]
 				else:
-					base = already[str(self.base)]
+					base = index = already[str(self.base)] = random_ram_address()/2
+					outfile.write('\tmove.l #' + str(base) + ', ' + str(self.base) + '\n')
 			else:
-				base = already[str(self.base)] = random_ram_address()
-				outfile.write('\tmove.l #' + str(base) + ', ' + str(self.base) + '\n')
-			if str(self.index) in already:
-				index = already[str(self.index)]
-				if self.index_size == 'w':
-					index = index & 0xFFFF
-					#sign extend index
-					if index & 0x8000:
-						index -= 65536
-				if not valid_ram_address(base + index):
+				if str(self.base) in already:
+					if not valid_ram_address(already[str(self.base)]):
+						del already[str(self.base)]
+						self.write_init(outfile, size, already)
+						return
+					else:
+						base = already[str(self.base)]
+				else:
+					base = already[str(self.base)] = random_ram_address()
+					outfile.write('\tmove.l #' + str(base) + ', ' + str(self.base) + '\n')
+				if str(self.index) in already:
+					index = already[str(self.index)]
+					if self.index_size == 'w':
+						index = index & 0xFFFF
+						#sign extend index
+						if index & 0x8000:
+							index -= 65536
+					if not valid_ram_address(base + index):
+						index = already[str(self.index)] = randint(-64, 63)
+						outfile.write('\tmove.l #' + str(index) + ', ' + str(self.index) + '\n')
+				else:
 					index = already[str(self.index)] = randint(-64, 63)
 					outfile.write('\tmove.l #' + str(index) + ', ' + str(self.index) + '\n')
-			else:
-				index = already[str(self.index)] = randint(-64, 63)
-				outfile.write('\tmove.l #' + str(index) + ', ' + str(self.index) + '\n')
 			address = base + index + self.disp
 			if (address & 0xFFFFFF) < 0xE00000:
 				if (address & 0xFFFFFF) < 128:
@@ -366,6 +378,9 @@ def get_variations(mode, size):
 		inner = mode[2:-1]
 		start,sep,end = inner.partition('-')
 		return [Immediate(num) for num in range(int(start), int(end))]
+	else:
+		print "Don't know what to do with source type", mode
+		return None
 		
 class Inst2Op(object):
 	def __init__(self, name, size, src, dst):
@@ -387,7 +402,13 @@ class Inst2Op(object):
 	
 	def save_result(self, reg, always):
 		if always or type(self.dst) != Register:
-			return 'move.' + self.size + ' ' + str(self.dst) + ', ' + str(reg)
+			if type(self.dst) == Decrement:
+				src = Increment(self.dst.reg)
+			elif type(self.dst) == Increment:
+				src = Decrement(self.dst.reg)
+			else:
+				src = self.dst
+			return 'move.' + self.size + ' ' + str(src) + ', ' + str(reg)
 		else:
 			return ''
 	
