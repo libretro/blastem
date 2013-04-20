@@ -3008,16 +3008,25 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 				}
 			}
 		} else {
-			if (src_op.mode == MODE_REG_DISPLACE8) {
+			if (src_op.mode == MODE_REG_DISPLACE8 || (inst->dst.addr_mode != MODE_REG && src_op.base != SCRATCH1 && src_op.base != SCRATCH2)) {
 				if (dst_op.base == SCRATCH1) {
 					dst = push_r(dst, SCRATCH2);
-					dst = mov_rdisp8r(dst, src_op.base, src_op.disp, SCRATCH2, SZ_B);
+					if (src_op.mode == MODE_REG_DIRECT) {
+						dst = mov_rr(dst, src_op.base, SCRATCH2, SZ_B);
+					} else {
+						dst = mov_rdisp8r(dst, src_op.base, src_op.disp, SCRATCH2, SZ_B);
+					}
 					src_op.base = SCRATCH2;
 				} else {
-					dst = mov_rdisp8r(dst, src_op.base, src_op.disp, SCRATCH1, SZ_B);
+					if (src_op.mode == MODE_REG_DIRECT) {
+						dst = mov_rr(dst, src_op.base, SCRATCH1, SZ_B);
+					} else {
+						dst = mov_rdisp8r(dst, src_op.base, src_op.disp, SCRATCH1, SZ_B);
+					}
 					src_op.base = SCRATCH1;
 				}
 			}
+			uint8_t size = inst->extra.size;
 			if (dst_op.mode == MODE_REG_DISPLACE8) {
 				if (src_op.base != SCRATCH1 && src_op.base != SCRATCH2) {
 					if (src_op.mode == MODE_REG_DIRECT) {
@@ -3028,31 +3037,40 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 					}
 					src_op.base = SCRATCH1;
 				}
+				//b### with register destination is modulo 32
+				//x86 with a memory destination isn't modulo anything
+				//so use an and here to force the value to be modulo 32
 				dst = and_ir(dst, 31, SCRATCH1, SZ_D);
+			} else if(inst->dst.addr_mode != MODE_REG) {
+				//b### with memory destination is modulo 8
+				//x86-64 doesn't support 8-bit bit operations
+				//so we fake it by forcing the bit number to be modulo 8
+				dst = and_ir(dst, 7, src_op.base, SZ_D);
+				size = SZ_D;
 			}
 			if (inst->op == M68K_BTST) {
 				if (dst_op.mode == MODE_REG_DIRECT) {
-					dst = bt_rr(dst, src_op.base, dst_op.base, inst->extra.size);
+					dst = bt_rr(dst, src_op.base, dst_op.base, size);
 				} else {
-					dst = bt_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
+					dst = bt_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, size);
 				}
 			} else if (inst->op == M68K_BSET) {
 				if (dst_op.mode == MODE_REG_DIRECT) {
-					dst = bts_rr(dst, src_op.base, dst_op.base, inst->extra.size);
+					dst = bts_rr(dst, src_op.base, dst_op.base, size);
 				} else {
-					dst = bts_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
+					dst = bts_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, size);
 				}
 			} else if (inst->op == M68K_BCLR) {
 				if (dst_op.mode == MODE_REG_DIRECT) {
-					dst = btr_rr(dst, src_op.base, dst_op.base, inst->extra.size);
+					dst = btr_rr(dst, src_op.base, dst_op.base, size);
 				} else {
-					dst = btr_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
+					dst = btr_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, size);
 				}
 			} else {
 				if (dst_op.mode == MODE_REG_DIRECT) {
-					dst = btc_rr(dst, src_op.base, dst_op.base, inst->extra.size);
+					dst = btc_rr(dst, src_op.base, dst_op.base, size);
 				} else {
-					dst = btc_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
+					dst = btc_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, size);
 				}
 			}
 			if (src_op.base == SCRATCH2) {
