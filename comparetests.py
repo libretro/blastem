@@ -1,9 +1,21 @@
 #!/usr/bin/env python
 from glob import glob
 import subprocess
-from sys import exit
+from sys import exit,argv
+
+prefixes = []
+for i in range(1, len(argv)):
+	prefixes.append(argv[i])
 
 for path in glob('generated_tests/*.bin'):
+	if prefixes:
+		good = False
+		for prefix in prefixes:
+			if path.startswith(prefix):
+				good = True
+				break
+		if not good:
+			continue
 	try:
 		b = subprocess.check_output(['./blastem', path, '-v'])
 		try:
