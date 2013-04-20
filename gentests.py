@@ -377,7 +377,11 @@ def get_variations(mode, size):
 	elif mode.startswith('#(') and mode.endswith(')'):
 		inner = mode[2:-1]
 		start,sep,end = inner.partition('-')
-		return [Immediate(num) for num in range(int(start), int(end))]
+		start,end = int(start),int(end)
+		if end-start > 16:
+			return [Immediate(randint(start, end)) for x in range(0,8)]
+		else:
+			return [Immediate(num) for num in range(start, end+1)]
 	else:
 		print "Don't know what to do with source type", mode
 		return None
