@@ -30,10 +30,15 @@ Name	Sizes	Src Modes														Dst Modes
 #btst	l		d;#(0-255)														d
 #rol		bwl		d;#(1-8)														d
 #ror		bwl		d;#(1-8)														d
-abcd	b		d																d
-abcd	b		-(a)															-(a)
-sbcd	b		d																d
-sbcd	b		-(a)															-(a)
-muls	w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
-mulu	w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
+#abcd	b		d																d
+#abcd	b		-(a)															-(a)
+#sbcd	b		d																d
+#sbcd	b		-(a)															-(a)
+#muls	w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
+#mulu	w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
+#move	bwl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+#movea	wl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	a
+moveq	l		#(-128-127)														d
+roxl	bwl		d;#(1-8)														d
+roxr	bwl		d;#(1-8)														d
 

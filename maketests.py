@@ -4,11 +4,11 @@ import subprocess
 from sys import exit
 
 sources = set()
-for path in glob('generated_tests/*.s68'):
+for path in glob('generated_tests/*/*.s68'):
 	sources.add(path)
 
 bins = set()
-for path in glob('generated_tests/*.bin'):
+for path in glob('generated_tests/*/*.bin'):
 	bins.add(path)
 
 for path in sources:
