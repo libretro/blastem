@@ -3126,8 +3126,10 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	}
 	case M68K_DIVS:
 	case M68K_DIVU:
-		//TODO: Trap on division by zero
+	{
+		//TODO: cycle exact division
 		dst = cycles(dst, inst->op == M68K_DIVS ? 158 : 140);
+		dst = mov_ir(dst, 0, FLAG_C, SZ_B);
 		dst = push_r(dst, RDX);
 		dst = push_r(dst, RAX);
 		if (dst_op.mode == MODE_REG_DIRECT) {
@@ -3136,7 +3138,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 			dst = mov_rdisp8r(dst, dst_op.base, dst_op.disp, RAX, SZ_D);
 		}
 		if (src_op.mode == MODE_IMMED) {
-			dst = mov_ir(dst, src_op.disp, SCRATCH2, SZ_D);
+			dst = mov_ir(dst, (src_op.disp & 0x8000) && inst->op == M68K_DIVS ? src_op.disp | 0xFFFF0000 : src_op.disp, SCRATCH2, SZ_D);
 		} else if (src_op.mode == MODE_REG_DIRECT) {
 			if (inst->op == M68K_DIVS) {
 				dst = movsx_rr(dst, src_op.base, SCRATCH2, SZ_W, SZ_D);
@@ -3150,6 +3152,15 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 				dst = movzx_rdisp8r(dst, src_op.base, src_op.disp, SCRATCH2, SZ_W, SZ_D);
 			}
 		}
+		dst = cmp_ir(dst, 0, SCRATCH2, SZ_D);
+		uint8_t * not_zero = dst+1;
+		dst = jcc(dst, CC_NZ, dst+2);
+		dst = pop_r(dst, RAX);
+		dst = pop_r(dst, RDX);
+		dst = mov_ir(dst, VECTOR_INT_DIV_ZERO, SCRATCH2, SZ_D);
+		dst = mov_ir(dst, inst->address+2, SCRATCH1, SZ_D);
+		dst = jmp(dst, (uint8_t *)m68k_trap);
+		*not_zero = dst - (not_zero+1);
 		if (inst->op == M68K_DIVS) {
 			dst = cdq(dst);
 		} else {
@@ -3160,15 +3171,16 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		} else {
 			dst = div_r(dst, SCRATCH2, SZ_D);
 		}
-		dst = cmp_ir(dst, 0x10000, RAX, SZ_D);
+		uint8_t * skip_sec_check;
 		if (inst->op == M68K_DIVS) {
-			uint8_t * skip_sec_check = dst + 1;
-			dst = jcc(dst, CC_C, dst+2);
-			dst = cmp_ir(dst, -0x10000, RAX, SZ_D);
+			dst = cmp_ir(dst, 0x8000, RAX, SZ_D);
+			skip_sec_check = dst + 1;
+			dst = jcc(dst, CC_GE, dst+2);
+			dst = cmp_ir(dst, -0x8000, RAX, SZ_D);
 			norm_off = dst+1;
-			dst = jcc(dst, CC_LE, dst+2);
-			*skip_sec_check = dst - (skip_sec_check+1);
+			dst = jcc(dst, CC_L, dst+2);
 		} else {
+			dst = cmp_ir(dst, 0x10000, RAX, SZ_D);
 			norm_off = dst+1;
 			dst = jcc(dst, CC_NC, dst+2);
 		}
@@ -3190,12 +3202,15 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		end_off = dst+1;
 		dst = jmp(dst, dst+2);
 		*norm_off = dst - (norm_off + 1);
+		if (inst->op == M68K_DIVS) {
+			*skip_sec_check = dst - (skip_sec_check+1);
+		}
 		dst = pop_r(dst, RAX);
 		dst = pop_r(dst, RDX);
 		dst = mov_ir(dst, 1, FLAG_V, SZ_B);
 		*end_off = dst - (end_off + 1);
-		dst = mov_ir(dst, 0, FLAG_C, SZ_B);
 		break;
+	}
 	case M68K_EOR:
 		dst = cycles(dst, BUS);
 		if (src_op.mode == MODE_REG_DIRECT) {
