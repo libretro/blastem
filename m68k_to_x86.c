@@ -3084,8 +3084,46 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 			dst = m68k_save_result(inst, dst, opts);
 		}
 		break;
-	/*case M68K_CHK:
-		break;*/
+	case M68K_CHK:
+	{
+		dst = cycles(dst, 6);
+		if (dst_op.mode == MODE_REG_DIRECT) {
+			dst = cmp_ir(dst, 0, dst_op.base, inst->extra.size);
+		} else {
+			dst = cmp_irdisp8(dst, 0, dst_op.base, dst_op.disp, inst->extra.size);
+		}
+		uint8_t * passed = dst+1;			
+		dst = jcc(dst, CC_GE, dst+2);
+		dst = mov_ir(dst, 1, FLAG_N, SZ_B);
+		dst = mov_ir(dst, VECTOR_CHK, SCRATCH2, SZ_D);
+		dst = mov_ir(dst, inst->address+2, SCRATCH1, SZ_D);
+		dst = jmp(dst, (uint8_t *)m68k_trap);
+		*passed = dst - (passed+1);
+		if (dst_op.mode == MODE_REG_DIRECT) {
+			if (src_op.mode == MODE_REG_DIRECT) {
+				dst = cmp_rr(dst, src_op.base, dst_op.base, inst->extra.size);
+			} else if(src_op.mode == MODE_REG_DISPLACE8) {
+				dst = cmp_rdisp8r(dst, src_op.base, src_op.disp, dst_op.base, inst->extra.size);
+			} else {
+				dst = cmp_ir(dst, src_op.disp, dst_op.base, inst->extra.size);
+			}
+		} else if(dst_op.mode == MODE_REG_DISPLACE8) {
+			if (src_op.mode == MODE_REG_DIRECT) {
+				dst = cmp_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
+			} else {
+				dst = cmp_irdisp8(dst, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
+			}
+		}
+		passed = dst+1;
+		dst = jcc(dst, CC_LE, dst+2);
+		dst = mov_ir(dst, 0, FLAG_N, SZ_B);
+		dst = mov_ir(dst, VECTOR_CHK, SCRATCH2, SZ_D);
+		dst = mov_ir(dst, inst->address+2, SCRATCH1, SZ_D);
+		dst = jmp(dst, (uint8_t *)m68k_trap);
+		*passed = dst - (passed+1);
+		dst = cycles(dst, 4);
+		break;
+	}
 	case M68K_DIVS:
 	case M68K_DIVU:
 		//TODO: Trap on division by zero
@@ -3802,7 +3840,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		break;
 	//case M68K_TAS:
 	case M68K_TRAP:
-		dst = mov_ir(dst, src_op.disp, SCRATCH2, SZ_D);
+		dst = mov_ir(dst, src_op.disp + VECTOR_TRAP_0, SCRATCH2, SZ_D);
 		dst = mov_ir(dst, inst->address+2, SCRATCH1, SZ_D);
 		dst = jmp(dst, (uint8_t *)m68k_trap);
 		break;
