@@ -16,6 +16,8 @@ class Program(object):
 		instruction.consume_regs(self)
 		self.inst = instruction
 	
+	def dirname(self):
+		return self.inst.name + '_' + self.inst.size
 	def name(self):
 		return str(self.inst).replace('.', '_').replace('#', '_').replace(',', '_').replace(' ', '_').replace('(', '[').replace(')', ']')
 	
@@ -376,7 +378,7 @@ def get_variations(mode, size):
 		return rand_immediate(size)
 	elif mode.startswith('#(') and mode.endswith(')'):
 		inner = mode[2:-1]
-		start,sep,end = inner.partition('-')
+		start,sep,end = inner.rpartition('-')
 		start,end = int(start),int(end)
 		if end-start > 16:
 			return [Immediate(randint(start, end)) for x in range(0,8)]
@@ -453,13 +455,16 @@ def process_entries(f):
 			entries.append(Entry(line))
 	return entries
 
-
+from os import path, mkdir
 def main(args):
 	entries = process_entries(open('testcases.txt'))
 	for entry in entries:
 		programs = entry.programs()
 		for program in programs:
-			f = open('generated_tests/' + program.name() + '.s68', 'w')
+			dname = program.dirname()
+			if not path.exists('generated_tests/' + dname):
+				mkdir('generated_tests/' + dname)
+			f = open('generated_tests/' + dname + '/' + program.name() + '.s68', 'w')
 			program.write_rom_test(f)
 			f.close()
 	
