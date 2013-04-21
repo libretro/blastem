@@ -3628,6 +3628,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 						dst = rcr_irdisp8(dst, 1, dst_op.base, dst_op.disp, inst->extra.size);
 					}
 				}
+				dst = setcc_rind(dst, CC_C, CONTEXT);
 				dst = sub_ir(dst, 32, SCRATCH1, SZ_B);
 				*norm_off = dst - (norm_off+1);
 				dst = bt_irdisp8(dst, 0, CONTEXT, 0, SZ_B);
@@ -3645,7 +3646,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 					}
 				}
 				dst = setcc_r(dst, CC_C, FLAG_C);
-				dst = mov_rr(dst, FLAG_C, CONTEXT, SZ_B);
+				dst = mov_rrind(dst, FLAG_C, CONTEXT, SZ_B);
 				end_off = dst + 1;
 				dst = jmp(dst, dst+2);
 				*zero_off = dst - (zero_off+1);
