@@ -3303,8 +3303,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	case M68K_MULU:
 		dst = cycles(dst, 70); //TODO: Calculate the actual value based on the value of the <ea> parameter
 		if (src_op.mode == MODE_IMMED) {
-			//immediate value should already be sign extended to 32-bits
-			dst = mov_ir(dst, inst->op == M68K_MULU ? (src_op.disp & 0xFFFF) : src_op.disp, SCRATCH1, SZ_D);
+			dst = mov_ir(dst, inst->op == M68K_MULU ? (src_op.disp & 0xFFFF) : ((src_op.disp & 0x8000) ? src_op.disp | 0xFFFF0000 : src_op.disp), SCRATCH1, SZ_D);
 		} else if (src_op.mode == MODE_REG_DIRECT) {
 			if (inst->op == M68K_MULS) {
 				dst = movsx_rr(dst, src_op.base, SCRATCH1, SZ_W, SZ_D);
