@@ -38,7 +38,9 @@ Name	Sizes	Src Modes														Dst Modes
 #mulu	w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
 #move	bwl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
 #movea	wl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	a
-moveq	l		#(-128-127)														d
-roxl	bwl		d;#(1-8)														d
-roxr	bwl		d;#(1-8)														d
+#moveq	l		#(-128-127)														d
+#roxl	bwl		d;#(1-8)														d
+#roxr	bwl		d;#(1-8)														d
+divs	w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
+divu	w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
 
