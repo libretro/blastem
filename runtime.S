@@ -91,10 +91,9 @@ already_supervisor_trap:
 	/* calculate interrupt vector address */
 	pop %rcx
 	shl $2, %ecx
-	add $0x80, %ecx
 	call m68k_read_long_scratch1
 	call m68k_native_addr_and_sync
-	add $24, %eax
+	add $18, %eax
 	jmp *%rcx
 
 invalid_msg:
