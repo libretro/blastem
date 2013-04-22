@@ -10,6 +10,11 @@ uint8_t debug_pal = 0;
 
 uint32_t last_frame = 0;
 
+int32_t color_map[1 << 12];
+uint8_t levels[] = {0, 27, 49, 71, 87, 103, 119, 130, 146, 157, 174, 190, 206, 228, 255};
+
+uint32_t min_delay;
+
 void render_init(int width, int height)
 {
 	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -27,6 +32,26 @@ void render_init(int width, int height)
     	fprintf(stderr, "BlastEm requires at least a 16-bit surface, SDL returned a %d-bit surface\n", screen->format->BytesPerPixel * 8);
     	exit(1);
     }
+    uint8_t b,g,r;
+    for (uint16_t color = 0; color < (1 << 12); color++) {
+    	b = levels[(color >> 8) & 0xE];
+		g = levels[(color >> 4) & 0xE];
+		r = levels[color & 0xE];
+		color_map[color] = SDL_MapRGB(screen->format, r, g, b);
+    }
+    min_delay = 0;
+    for (int i = 0; i < 20; i++) {
+    	uint32_t start = SDL_GetTicks();
+    	SDL_Delay(1);
+    	uint32_t delay = SDL_GetTicks()-start;
+    	if (delay > min_delay) {
+    		min_delay = delay;
+    	}
+    }
+    if (!min_delay) {
+    	min_delay = 1;
+    }
+    printf("minimum delay: %d\n", min_delay);
 }
 
 void render_context(vdp_context * context)
@@ -54,13 +79,11 @@ void render_context(vdp_context * context)
         for (int y = 0; y < 240; y++) {
         	for (int i = 0; i < repeat_y; i++,buf_16 += screen->pitch/2) {
         		uint16_t *line = buf_16;
+        		uint16_t *src_line = context->framebuf + y * 320;
 		    	for (int x = 0; x < 320; x++) {
-		    		uint16_t gen_color = context->framebuf[y * 320 + x];
-		    		b = ((gen_color >> 8) & 0xE) * 18;
-		    		g = ((gen_color >> 4) & 0xE) * 18;
-		    		r = (gen_color& 0xE) * 18;
+		    		uint16_t color = color_map[*(src_line++) & 0xFFF];
 		    		for (int j = 0; j < repeat_x; j++) {
-		    			*(line++) = SDL_MapRGB(screen->format, r, g, b);
+		    			*(line++) = color;
 		    		}
 		    	}
 		    }
@@ -92,9 +115,21 @@ void render_context(vdp_context * context)
 	    for (int y = 0; y < 240; y++) {
 	    	for (int i = 0; i < repeat_y; i++,buf_32 += screen->pitch/4) {
 	    		uint32_t *line = buf_32;
-				for (int x = 0; x < 320; x++) {
-					uint16_t gen_color = context->framebuf[y * 320 + x];
-					if (render_dbg == 1) {
+	    		uint16_t *src_line = context->framebuf + y * 320;
+		    	for (int x = 0; x < 320; x++) {
+		    		uint32_t color;
+		    		if (!render_dbg) {
+		    			color = color_map[*(src_line++) & 0xFFF];
+					} else if(render_dbg == 2) {
+						color = color_map[context->cram[(y/30)*8 + x/40]];
+					} else if(render_dbg == 3) {
+						if (x & 1) {
+							color = color_map[context->cram[ (debug_pal << 4) | (context->vdpmem[(x/8)*32 + (y/8)*32*40 + (x%8)/2 + (y%8)*4] & 0xF) ]];
+						} else {
+							color = color_map[context->cram[ (debug_pal << 4) | (context->vdpmem[(x/8)*32 + (y/8)*32*40 + (x%8)/2 + (y%8)*4] >> 4) ]];
+						}
+					}else {
+						uint16_t gen_color = context->framebuf[y * 320 + x];
 						r = g = b = 0;
 						switch(gen_color & FBUF_SRC_MASK)
 						{
@@ -120,22 +155,10 @@ void render_context(vdp_context * context)
 							g *= 2;
 							r *= 2;
 						}
-					} else {
-						if (render_dbg == 2) {
-							gen_color = context->cram[(y/30)*8 + x/40];
-						} else if(render_dbg == 3) {
-							if (x & 1) {
-								gen_color = context->cram[ (debug_pal << 4) | (context->vdpmem[(x/8)*32 + (y/8)*32*40 + (x%8)/2 + (y%8)*4] & 0xF) ];
-							} else {
-								gen_color = context->cram[ (debug_pal << 4) | (context->vdpmem[(x/8)*32 + (y/8)*32*40 + (x%8)/2 + (y%8)*4] >> 4) ];
-							}
-						}
-						b = ((gen_color >> 8) & 0xE) * 18;
-						g = ((gen_color >> 4) & 0xE) * 18;
-						r = (gen_color& 0xE) * 18;
+						color = SDL_MapRGB(screen->format, r, g, b);
 					}
 					for (int j = 0; j < repeat_x; j++) {
-						*(line++) = SDL_MapRGB(screen->format, r, g, b);
+						*(line++) = color;
 					}
 				}
 	    	}
@@ -187,7 +210,7 @@ void render_wait_quit(vdp_context * context)
 #define BUTTON_C     0x20
 
 #define FRAME_DELAY 16
-#define MIN_DELAY 10
+#define MIN_DELAY 5
 uint32_t frame_counter = 0;
 uint32_t start = 0;
 int wait_render_frame(vdp_context * context)
@@ -325,10 +348,11 @@ int wait_render_frame(vdp_context * context)
 		if (delay > MIN_DELAY) {
 			SDL_Delay((delay/MIN_DELAY)*MIN_DELAY);
 		}
-		while ((desired) < SDL_GetTicks()) {
+		while ((desired) >= SDL_GetTicks()) {
 		}
 	}
 	render_context(context);
+	
 	/*
 	//TODO: Figure out why this causes segfaults
 	frame_counter++;
