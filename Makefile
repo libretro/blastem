@@ -1,4 +1,9 @@
 LIBS=sdl
+ifdef DEBUG
+CFLAGS=-ggdb -std=gnu99 `pkg-config --cflags-only-I $(LIBS)` -Wreturn-type -Werror=return-type
+else
+CFLAGS=-O2 -std=gnu99 `pkg-config --cflags-only-I $(LIBS)` -Wreturn-type -Werror=return-type
+endif
 
 all : dis trans stateview blastem
 
@@ -30,7 +35,7 @@ gen_fib : gen_fib.o gen_x86.o mem.o
 	$(CC) -c -o $@ $<
 
 %.o : %.c
-	$(CC) -ggdb -std=gnu99 `pkg-config --cflags-only-I $(LIBS)` -c -Wreturn-type -Werror=return-type -o $@ $<
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 %.bin : %.s68
 	vasmm68k_mot -Fbin -m68000 -no-opt -spaces -o $@ $<
