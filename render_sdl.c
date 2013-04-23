@@ -165,6 +165,15 @@ void render_context(vdp_context * context)
 							g *= 2;
 							r *= 2;
 						}
+						if (gen_color & FBUF_SHADOW) {
+							b /= 2;
+							g /= 2;
+							r /= 2;
+						} else if(gen_color & FBUF_HILIGHT) {
+							b = b ? b : 64;
+							g = g ? g : 64;
+							r = r ? r : 64;
+						}
 						color = SDL_MapRGB(screen->format, r, g, b);
 					}
 					for (int j = 0; j < repeat_x; j++) {
