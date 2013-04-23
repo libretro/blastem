@@ -526,10 +526,10 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 				src = 0;
 				uint8_t sprite_color = *sprite_buf & 0x3F;
 				if (sprite_color == 0x3E || sprite_color == 0x3F) {
-					if (sprite_color == 0x3E) {
-						src |= FBUF_SHADOW;
+					if (sprite_color == 0x3F) {
+						src = FBUF_SHADOW;
 					} else {
-						src |= FBUF_HILIGHT;
+						src = FBUF_HILIGHT;
 					}
 					if (*plane_a & BUF_BIT_PRIORITY && *plane_a & 0xF) {
 						pixel = *plane_a;
