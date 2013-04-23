@@ -14,6 +14,8 @@
 #define BIT_DMA_ENABLE 0x4
 #define BIT_H40        0x1
 
+#define BIT_HILIGHT    0x8
+
 #define SCROLL_BUFFER_SIZE 32
 #define SCROLL_BUFFER_DRAW 16
 
@@ -516,31 +518,91 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		end = dst + 16;
 		uint16_t src;
 		//printf("A | tmp_buf offset: %d\n", 8 - (context->hscroll_a & 0x7));
-		for (; dst < end; ++plane_a, ++plane_b, ++sprite_buf, ++dst) {
-			uint8_t pixel;
-			if (*sprite_buf & BUF_BIT_PRIORITY && *sprite_buf & 0xF) {
-				pixel = *sprite_buf;
-				src = FBUF_SRC_S;
-			} else if (*plane_a & BUF_BIT_PRIORITY && *plane_a & 0xF) {
-				pixel = *plane_a;
-				src = a_src;
-			} else if (*plane_b & BUF_BIT_PRIORITY && *plane_b & 0xF) {
-				pixel = *plane_b;
-				src = FBUF_SRC_B;
-			} else if (*sprite_buf & 0xF) {
-				pixel = *sprite_buf;
-				src = FBUF_SRC_S;
-			} else if (*plane_a & 0xF) {
-				pixel = *plane_a;
-				src = a_src;
-			} else if (*plane_b & 0xF){
-				pixel = *plane_b;
-				src = FBUF_SRC_B;
-			} else {
-				pixel = context->regs[REG_BG_COLOR] & 0x3F;
-				src = FBUF_SRC_BG;
+		
+		if (context->regs[REG_MODE_4] & BIT_HILIGHT) {
+			for (; dst < end; ++plane_a, ++plane_b, ++sprite_buf, ++dst) {
+				uint8_t pixel;
+				
+				src = 0;
+				uint8_t sprite_color = *sprite_buf & 0x3F;
+				if (sprite_color == 0x3E || sprite_color == 0x3F) {
+					if (sprite_color == 0x3E) {
+						src |= FBUF_SHADOW;
+					} else {
+						src |= FBUF_HILIGHT;
+					}
+					if (*plane_a & BUF_BIT_PRIORITY && *plane_a & 0xF) {
+						pixel = *plane_a;
+						src |= a_src;
+					} else if (*plane_b & BUF_BIT_PRIORITY && *plane_b & 0xF) {
+						pixel = *plane_b;
+						src |= FBUF_SRC_B;
+					} else if (*plane_a & 0xF) {
+						pixel = *plane_a;
+						src |= a_src;
+					} else if (*plane_b & 0xF){
+						pixel = *plane_b;
+						src |= FBUF_SRC_B;
+					} else {
+						pixel = context->regs[REG_BG_COLOR] & 0x3F;
+						src |= FBUF_SRC_BG;
+					}
+				} else {
+					if (*sprite_buf & BUF_BIT_PRIORITY && *sprite_buf & 0xF) {
+						pixel = *sprite_buf;
+						src = FBUF_SRC_S;
+					} else if (*plane_a & BUF_BIT_PRIORITY && *plane_a & 0xF) {
+						pixel = *plane_a;
+						src = a_src;
+					} else if (*plane_b & BUF_BIT_PRIORITY && *plane_b & 0xF) {
+						pixel = *plane_b;
+						src = FBUF_SRC_B;
+					} else if (*sprite_buf & 0xF) {
+						pixel = *sprite_buf;
+						src = FBUF_SRC_S;
+						if (*sprite_buf & 0xF != 0xE) {
+							src |= FBUF_SHADOW;
+						}
+					} else if (*plane_a & 0xF) {
+						pixel = *plane_a;
+						src = a_src | FBUF_SHADOW;
+					} else if (*plane_b & 0xF){
+						pixel = *plane_b;
+						src = FBUF_SRC_B | FBUF_SHADOW;
+					} else {
+						pixel = context->regs[REG_BG_COLOR] & 0x3F;
+						src = FBUF_SRC_BG | FBUF_SHADOW;
+					}
+				}
+				*dst = (context->cram[pixel & 0x3F] & 0xEEE) | ((pixel & BUF_BIT_PRIORITY) ? FBUF_BIT_PRIORITY : 0) | src;
 			}
-			*dst = context->cram[pixel & 0x3F] | ((pixel & BUF_BIT_PRIORITY) ? FBUF_BIT_PRIORITY : 0) | src;
+		} else {
+			for (; dst < end; ++plane_a, ++plane_b, ++sprite_buf, ++dst) {
+				uint8_t pixel;
+				if (*sprite_buf & BUF_BIT_PRIORITY && *sprite_buf & 0xF) {
+					pixel = *sprite_buf;
+					src = FBUF_SRC_S;
+				} else if (*plane_a & BUF_BIT_PRIORITY && *plane_a & 0xF) {
+					pixel = *plane_a;
+					src = a_src;
+				} else if (*plane_b & BUF_BIT_PRIORITY && *plane_b & 0xF) {
+					pixel = *plane_b;
+					src = FBUF_SRC_B;
+				} else if (*sprite_buf & 0xF) {
+					pixel = *sprite_buf;
+					src = FBUF_SRC_S;
+				} else if (*plane_a & 0xF) {
+					pixel = *plane_a;
+					src = a_src;
+				} else if (*plane_b & 0xF){
+					pixel = *plane_b;
+					src = FBUF_SRC_B;
+				} else {
+					pixel = context->regs[REG_BG_COLOR] & 0x3F;
+					src = FBUF_SRC_BG;
+				}
+				*dst = context->cram[pixel & 0x3F] | ((pixel & BUF_BIT_PRIORITY) ? FBUF_BIT_PRIORITY : 0) | src;
+			}
 		}
 	} else {
 		//dst = context->framebuf + line * 320;
