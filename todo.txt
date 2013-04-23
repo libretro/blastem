@@ -1,0 +1,40 @@
+Feature			Status			Priority
+----------------------------------------
+Z80				in progress		10
+ |--Decoder		complete
+ |--Translator  in progress
+ |--Banked mem	not started
+ |--Test gen	not started
+
+PSG				not started		9
+YM-2612			not started		9
+H-Ints			not started		8
+Interlace		not started		7
+save states		partial			6
+mappers			not started		5
+save ram		not started		5
+basic UI		not started		5
+Sega CD			not started		4
+ |--Comm regs
+ |--CDC
+ |--CDD
+ |--PCM
+
+Laser Active	not started		4
+ARM backend		not started		4
+32X				not started		3
+ |--SH2
+ |--PWM
+ |--Framebuffer
+ |--Comm regs
+
+mega mouse		not started		1
+multitap		not started		1
+ligh gun(s)		not started		1
+SVP chip		not started		1
+cheat codes		not started		0
+VDP Mode 4		not started		0
+SMS/GG			not started		0
+
+Priority 6 and above items MUST be finished before release
+Priority 5 would be nice to have at least partial support for before release
