@@ -34,9 +34,19 @@ void render_init(int width, int height)
     }
     uint8_t b,g,r;
     for (uint16_t color = 0; color < (1 << 12); color++) {
-    	b = levels[(color >> 8) & 0xE];
-		g = levels[(color >> 4) & 0xE];
-		r = levels[color & 0xE];
+    	if (color & FBUF_SHADOW) {
+    		b = levels[(color >> 9) & 0x7];
+			g = levels[(color >> 5) & 0x7];
+			r = levels[(color >> 1) & 0x7];
+    	} else if(color & FBUF_HILIGHT) {
+    		b = levels[((color >> 9) & 0x7) + 7];
+			g = levels[((color >> 5) & 0x7) + 7];
+			r = levels[((color >> 1) & 0x7) + 7];
+    	} else {
+			b = levels[(color >> 8) & 0xE];
+			g = levels[(color >> 4) & 0xE];
+			r = levels[color & 0xE];
+		}
 		color_map[color] = SDL_MapRGB(screen->format, r, g, b);
     }
     min_delay = 0;
