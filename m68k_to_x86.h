@@ -9,17 +9,10 @@ struct m68kinst;
 #define NUM_MEM_AREAS 4
 #define NATIVE_MAP_CHUNKS (64*1024)
 #define NATIVE_CHUNK_SIZE ((16 * 1024 * 1024 / NATIVE_MAP_CHUNKS)/2)
-#define INVALID_OFFSET 0xFFFFFFFF
 #define EXTENSION_WORD 0xFFFFFFFE
 #define MAX_NATIVE_SIZE 255
 
 #define OPT_NATIVE_CALL_STACK 0x1
-
-typedef struct deferred_addr {
-	struct deferred_addr *next;
-	uint8_t              *dest;
-	uint32_t             address;
-} deferred_addr;
 
 typedef struct {
 	uint32_t        flags;
