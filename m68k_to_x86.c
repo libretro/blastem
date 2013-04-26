@@ -691,6 +691,11 @@ uint8_t * get_native_address(native_map_slot * native_code_map, uint32_t address
 	return native_code_map[chunk].base + native_code_map[chunk].offsets[offset];
 }
 
+uint8_t * get_native_from_context(m68k_context * context, uint32_t address)
+{
+	return get_native_address(context->native_code_map, address);
+}
+
 uint32_t get_instruction_start(native_map_slot * native_code_map, uint32_t address)
 {
 	address &= 0xFFFFFF;
@@ -709,42 +714,6 @@ uint32_t get_instruction_start(native_map_slot * native_code_map, uint32_t addre
 		offset = address % NATIVE_CHUNK_SIZE;
 	}
 	return address*2;
-}
-
-deferred_addr * defer_address(deferred_addr * old_head, uint32_t address, uint8_t *dest)
-{
-	deferred_addr * new_head = malloc(sizeof(deferred_addr));
-	new_head->next = old_head;
-	new_head->address = address & 0xFFFFFF;
-	new_head->dest = dest;
-	return new_head;
-}
-
-void process_deferred(x86_68k_options * opts)
-{
-	deferred_addr * cur = opts->deferred;
-	deferred_addr **last_next = &(opts->deferred);
-	while(cur)
-	{
-		uint8_t * native = get_native_address(opts->native_code_map, cur->address);
-		if (native) {
-			int32_t disp = native - (cur->dest + 4);
-			uint8_t * out = cur->dest;
-			*(out++) = disp;
-			disp >>= 8;
-			*(out++) = disp;
-			disp >>= 8;
-			*(out++) = disp;
-			disp >>= 8;
-			*out = disp;
-			*last_next = cur->next;
-			free(cur);
-			cur = *last_next;
-		} else {
-			last_next = &(cur->next);
-			cur = cur->next;
-		}
-	}
 }
 
 void map_native_address(m68k_context * context, uint32_t address, uint8_t * native_addr, uint8_t size, uint8_t native_size)
@@ -3956,7 +3925,7 @@ uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context)
 			map_native_address(context, instbuf.address, dst, m68k_size, after-dst);
 			dst = after;
 		} while(instbuf.op != M68K_ILLEGAL && instbuf.op != M68K_RESET && instbuf.op != M68K_INVALID && instbuf.op != M68K_TRAP && instbuf.op != M68K_RTS && instbuf.op != M68K_RTR && instbuf.op != M68K_RTE && !(instbuf.op == M68K_BCC && instbuf.extra.cond == COND_TRUE) && instbuf.op != M68K_JMP);
-		process_deferred(opts);
+		process_deferred(&opts->deferred, context, (native_addr_func)get_native_from_context);
 		if (opts->deferred) {
 			address = opts->deferred->address;
 			if ((address & 0xFFFFFF) < 0x400000) {

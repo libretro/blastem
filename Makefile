@@ -7,8 +7,8 @@ endif
 
 all : dis trans stateview blastem
 
-blastem : blastem.o 68kinst.o gen_x86.o m68k_to_x86.o runtime.o mem.o vdp.o render_sdl.o
-	$(CC) -o blastem blastem.o 68kinst.o gen_x86.o m68k_to_x86.o runtime.o mem.o vdp.o render_sdl.o `pkg-config --libs $(LIBS)`
+blastem : blastem.o 68kinst.o gen_x86.o m68k_to_x86.o x86_backend.o runtime.o mem.o vdp.o render_sdl.o
+	$(CC) -o blastem blastem.o 68kinst.o gen_x86.o m68k_to_x86.o x86_backend.o runtime.o mem.o vdp.o render_sdl.o `pkg-config --libs $(LIBS)`
 
 dis : dis.o 68kinst.o
 	$(CC) -o dis dis.o 68kinst.o
@@ -16,11 +16,14 @@ dis : dis.o 68kinst.o
 zdis : zdis.o z80inst.o
 	$(CC) -o zdis zdis.o z80inst.o
 	
-libemu68k.a : 68kinst.o gen_x86.o m68k_to_x86.o runtime.o mem.o
-	ar rcs libemu68k.a 68kinst.o gen_x86.o m68k_to_x86.o runtime.o mem.o
+libemu68k.a : 68kinst.o gen_x86.o m68k_to_x86.o x86_backend.o runtime.o mem.o
+	ar rcs libemu68k.a 68kinst.o gen_x86.o m68k_to_x86.o x86_backend.o runtime.o mem.o
 	
-trans : trans.o 68kinst.o gen_x86.o m68k_to_x86.o runtime.o mem.o
-	$(CC) -o trans trans.o 68kinst.o gen_x86.o m68k_to_x86.o runtime.o mem.o
+trans : trans.o 68kinst.o gen_x86.o m68k_to_x86.o x86_backend.o runtime.o mem.o
+	$(CC) -o trans trans.o 68kinst.o gen_x86.o m68k_to_x86.o x86_backend.o runtime.o mem.o
+
+transz80 : transz80.o z80inst.o gen_x86.o z80_to_x86.o x86_backend.o zruntime.o mem.o
+	$(CC) -o transz80 transz80.o z80inst.o gen_x86.o z80_to_x86.o x86_backend.o zruntime.o mem.o
 
 stateview : stateview.o vdp.o render_sdl.o
 	$(CC) -o stateview stateview.o vdp.o render_sdl.o `pkg-config --libs $(LIBS)`
