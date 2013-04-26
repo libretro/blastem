@@ -576,6 +576,15 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		case Z80_CC_C:
 			dst = cmp_irdisp8(dst, 0, CONTEXT, zf_off(ZF_C), SZ_B);
 			break;
+		case Z80_CC_PO:
+			cond = CC_NZ;
+		case Z80_CC_PE:
+			dst = cmp_irdisp8(dst, 0, CONTEXT, zf_off(ZF_PV), SZ_B);
+			break;
+		case Z80_CC_P:
+		case Z80_CC_M:
+			dst = cmp_irdisp8(dst, 0, CONTEXT, zf_off(ZF_S), SZ_B);
+			break;
 		}
 		uint8_t *no_jump_off = dst+1;
 		dst = jcc(dst, cond, dst+2);
@@ -673,7 +682,53 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		}
 		break;
 	}
-	//case Z80_CALLCC:
+	case Z80_CALLCC:
+		dst = zcycles(dst, 10);//T States: 4,3,3 (false case)
+		uint8_t cond = CC_Z;
+		switch (inst->reg)
+		{
+		case Z80_CC_NZ:
+			cond = CC_NZ;
+		case Z80_CC_Z:
+			dst = cmp_irdisp8(dst, 0, CONTEXT, zf_off(ZF_Z), SZ_B);
+			break;
+		case Z80_CC_NC:
+			cond = CC_NZ;
+		case Z80_CC_C:
+			dst = cmp_irdisp8(dst, 0, CONTEXT, zf_off(ZF_C), SZ_B);
+			break;
+		case Z80_CC_PO:
+			cond = CC_NZ;
+		case Z80_CC_PE:
+			dst = cmp_irdisp8(dst, 0, CONTEXT, zf_off(ZF_PV), SZ_B);
+			break;
+		case Z80_CC_P:
+		case Z80_CC_M:
+			dst = cmp_irdisp8(dst, 0, CONTEXT, zf_off(ZF_S), SZ_B);
+			break;
+		}
+		uint8_t *no_call_off = dst+1;
+		dst = jcc(dst, cond, dst+2);
+		dst = zcycles(dst, 1);//Last of the above T states takes an extra cycle in the true case
+		dst = sub_ir(dst, 2, opts->regs[Z80_SP], SZ_W);
+		dst = mov_ir(dst, address + 3, SCRATCH2, SZ_W);
+		dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH1, SZ_W);
+		dst = call(dst, (uint8_t *)z80_write_word_highfirst);//T States: 3, 3
+		if (inst->immed < 0x4000) {
+			uint8_t * call_dst = z80_get_native_address(context, inst->immed);
+			if (!call_dst) {
+				opts->deferred = defer_address(opts->deferred, inst->immed, dst + 1);
+				//fake address to force large displacement
+				call_dst = dst + 256;
+			}
+			dst = jmp(dst, call_dst);
+		} else {
+			dst = mov_ir(dst, inst->immed, SCRATCH1, SZ_W);
+			dst = call(dst, (uint8_t *)z80_native_addr);
+			dst = jmp_r(dst, SCRATCH1);
+		}
+		*no_call_off = dst - (no_call_off+1);
+		break;
 	case Z80_RET:
 		dst = zcycles(dst, 4);//T States: 4
 		dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH1, SZ_W);
