@@ -1,3 +1,6 @@
+#ifndef Z80INST_H_
+#define Z80INST_H_
+
 #include <stdint.h>
 
 enum {
@@ -72,16 +75,16 @@ enum {
 };
 
 enum {
-	Z80_B=0,
-	Z80_C,
-	Z80_D,
+	Z80_C=0,
+	Z80_B,
 	Z80_E,
-	Z80_H,
+	Z80_D,
 	Z80_L,
-	Z80_IXH,
+	Z80_H,
 	Z80_IXL,
-	Z80_IYH,
+	Z80_IXH,
 	Z80_IYL,
+	Z80_IYH,
 	Z80_I,
 	Z80_R,
 	Z80_A,
@@ -130,4 +133,5 @@ typedef struct {
 uint8_t * z80_decode(uint8_t * istream, z80inst * decoded);
 int z80_disasm(z80inst * decoded, char * dst);
 
+#endif //Z80INST_H_
 

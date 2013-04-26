@@ -1,31 +1,46 @@
+#include "z80inst.h"
 #include "z80_to_x86.h"
 #include "gen_x86.h"
+#include "mem.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <stddef.h>
+#include <string.h>
 
 #define MODE_UNUSED (MODE_IMMED-1)
 
 #define ZCYCLES RBP
 #define SCRATCH1 R13
 #define SCRATCH2 R14
+#define CONTEXT RSI
+
+//TODO: Find out the actual value for this
+#define MAX_NATIVE_SIZE 128
 
 void z80_read_byte();
 void z80_read_word();
+void z80_write_byte();
+void z80_write_word_highfirst();
+void z80_write_word_lowfirst();
+void z80_save_context();
+void z80_native_addr();
 
-uint8_t z80_size(z80_inst * inst)
+uint8_t z80_size(z80inst * inst)
 {
 	uint8_t reg = (inst->reg & 0x1F);
-	if (reg != Z80_UNUSED &&) {
+	if (reg != Z80_UNUSED && reg != Z80_USE_IMMED) {
 		return reg < Z80_BC ? SZ_B : SZ_W;
 	}
 	//TODO: Handle any necessary special cases
 	return SZ_B;
 }
 
-uint8_t * zcylces(dst, uint32_t num_cycles)
+uint8_t * zcycles(uint8_t * dst, uint32_t num_cycles)
 {
 	return add_ir(dst, num_cycles, ZCYCLES, SZ_D);
 }
 
-uint8_t * translate_z80_reg(z80_inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_options * opts)
+uint8_t * translate_z80_reg(z80inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_options * opts)
 {
 	if (inst->reg == Z80_USE_IMMED) {
 		ea->mode = MODE_IMMED;
@@ -33,18 +48,18 @@ uint8_t * translate_z80_reg(z80_inst * inst, x86_ea * ea, uint8_t * dst, x86_z80
 	} else if ((inst->reg & 0x1F) == Z80_UNUSED) {
 		ea->mode = MODE_UNUSED;
 	} else {
-		ea->mode = MODE_REG;
+		ea->mode = MODE_REG_DIRECT;
 		if (inst->reg == Z80_IYH) {
 			ea->base = opts->regs[Z80_IYL];
 			dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
 		} else {
-			ea->base = opts->regs[inst->reg]
+			ea->base = opts->regs[inst->reg];
 		}
 	}
 	return dst;
 }
 
-uint8_t * save_z80_reg(uint8_t * dst, z80_inst * inst, x86_z80_options * opts)
+uint8_t * z80_save_reg(uint8_t * dst, z80inst * inst, x86_z80_options * opts)
 {
 	if (inst->reg == Z80_IYH) {
 		dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
@@ -52,10 +67,10 @@ uint8_t * save_z80_reg(uint8_t * dst, z80_inst * inst, x86_z80_options * opts)
 	return dst;
 }
 
-uint8_t * translate_z80_ea(z80_inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_options * opts, uint8_t read, uint8_t modify)
+uint8_t * translate_z80_ea(z80inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_options * opts, uint8_t read, uint8_t modify)
 {
 	uint8_t size, reg, areg;
-	ea->mode = MODE_REG;
+	ea->mode = MODE_REG_DIRECT;
 	areg = read ? SCRATCH1 : SCRATCH2;
 	switch(inst->addr_mode & 0x1F)
 	{
@@ -107,9 +122,9 @@ uint8_t * translate_z80_ea(z80_inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_
 		}
 		ea->base = SCRATCH1;
 		break;
-	case Z80_IX_INDEXED:
-	case Z80_IY_INDEXED:
-		reg = opts->regs[inst->addr_mode == Z80_IX_INDEXED ? Z80_IX : Z80_IY];
+	case Z80_IX_DISPLACE:
+	case Z80_IY_DISPLACE:
+		reg = opts->regs[inst->addr_mode == Z80_IX_DISPLACE ? Z80_IX : Z80_IY];
 		dst = mov_rr(dst, reg, areg, SZ_W);
 		dst = add_ir(dst, inst->immed, areg, SZ_W);
 		size = z80_size(inst);
@@ -128,7 +143,7 @@ uint8_t * translate_z80_ea(z80_inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_
 		}
 		break;
 	case Z80_UNUSED:
-		ea->mode = MODE_UNUSED:
+		ea->mode = MODE_UNUSED;
 		break;
 	default:
 		fprintf(stderr, "Unrecognized Z80 addressing mode %d\n", inst->addr_mode);
@@ -137,20 +152,20 @@ uint8_t * translate_z80_ea(z80_inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_
 	return dst;
 }
 
-uint8_t * z80_save_ea(uint8_t * dst, z80_inst * inst, x86_z80_options * opts)
+uint8_t * z80_save_ea(uint8_t * dst, z80inst * inst, x86_z80_options * opts)
 {
-	if (inst->addr_mode == Z80_REG_DIRECT && inst->ea_reg == Z80_IYH) {
+	if (inst->addr_mode == Z80_REG && inst->ea_reg == Z80_IYH) {
 		dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
 	}
 	return dst;
 }
 
-uint8_t * z80_save_result(uint8_t * dst, z80_inst * inst)
+uint8_t * z80_save_result(uint8_t * dst, z80inst * inst)
 {
-	if (z80_size(inst). == SZ_B) {
+	if (z80_size(inst) == SZ_B) {
 		dst = call(dst, (uint8_t *)z80_write_byte);
 	} else {
-		dst = call(dst, (uint8_t *)z80_write_word);
+		dst = call(dst, (uint8_t *)z80_write_word_lowfirst);
 	}
 	return dst;
 }
@@ -170,44 +185,121 @@ uint8_t zf_off(uint8_t flag)
 	return offsetof(z80_context, flags) + flag;
 }
 
-uint8_t * translate_z80_inst(z80_inst * inst, uint8_t * dst, x86_z80_options * opts)
+void z80_print_regs_exit(z80_context * context)
+{
+	printf("A: %X\nB: %X\nC: %X\nD: %X\nE: %X\nHL: %X\nIX: %X\nIY: %X\nSP: %X\n", 
+		context->regs[Z80_A], context->regs[Z80_B], context->regs[Z80_C],
+		context->regs[Z80_D], context->regs[Z80_E], 
+		(context->regs[Z80_H] << 8) | context->regs[Z80_L], 
+		(context->regs[Z80_IXH] << 8) | context->regs[Z80_IXL], 
+		(context->regs[Z80_IYH] << 8) | context->regs[Z80_IYL], 
+		context->sp);
+	exit(0);
+}
+
+uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context, uint16_t address)
 {
 	uint32_t cycles;
 	x86_ea src_op, dst_op;
+	uint8_t size;
+	x86_z80_options *opts = context->options;
 	switch(inst->op)
 	{
 	case Z80_LD:
+		size = z80_size(inst);
+		switch (inst->addr_mode & 0x1F)
+		{
+		case Z80_REG:
+		case Z80_REG_INDIRECT:
+ 			cycles = size == SZ_B ? 4 : 6;
+			if (inst->ea_reg == Z80_IX || inst->ea_reg == Z80_IY) {
+				cycles += 4;
+			}
+			break;
+		case Z80_IMMED:
+			cycles = size == SZ_B ? 7 : 10;
+			break;
+		case Z80_IMMED_INDIRECT:
+			cycles = 10;
+			break;
+		case Z80_IX_DISPLACE:
+		case Z80_IY_DISPLACE:
+			cycles = 12;
+			break;
+		}
+		if ((inst->reg >= Z80_IXL && inst->reg <= Z80_IYH) || inst->reg == Z80_IX || inst->reg == Z80_IY) {
+			cycles += 4;
+		}
+		dst = zcycles(dst, cycles);
 		if (inst->addr_mode & Z80_DIR) {
-			dst = translate_z80_ea(inst, &src_op, dst, opts, READ, DONT_MODIFY);
-			dst = translate_z80_reg(inst, &dst_op, dst, opts);
-		} else {
 			dst = translate_z80_reg(inst, &src_op, dst, opts);
 			dst = translate_z80_ea(inst, &dst_op, dst, opts, DONT_READ, MODIFY);
-		}
-		if (ea_op.mode == MODE_REG_DIRECT) {
-			dst = mov_rr(dst, ea_op.base, reg_op.base, z80_size(inst));
 		} else {
-			dst = mov_ir(dst, ea_op.disp, reg_op.base, z80_size(inst));
+			dst = translate_z80_ea(inst, &src_op, dst, opts, READ, DONT_MODIFY);
+			dst = translate_z80_reg(inst, &dst_op, dst, opts);
+		}
+		if (src_op.mode == MODE_REG_DIRECT) {
+			dst = mov_rr(dst, src_op.base, dst_op.base, size);
+		} else {
+			dst = mov_ir(dst, src_op.disp, dst_op.base, size);
 		}
 		dst = z80_save_reg(dst, inst, opts);
 		dst = z80_save_ea(dst, inst, opts);
-		if (!(inst->addr_mode & Z80_DIR)) {
-			dst = z80_save_result(dst, inst, opts);
+		if (inst->addr_mode & Z80_DIR) {
+			dst = z80_save_result(dst, inst);
 		}
 		break;
 	case Z80_PUSH:
 		dst = zcycles(dst, (inst->reg == Z80_IX || inst->reg == Z80_IY) ? 9 : 5);
-		dst = sub_ir(dst, opts->regs[Z80_SP], SZ_W);
-		dst = translate_z80_reg(inst, &src_op, dst, opts);
-		dst = mov_rr(dst, src_op.base, SCRATCH1, SZ_W);
-		dst = call(dst, z80_write_word);
+		dst = sub_ir(dst, 2, opts->regs[Z80_SP], SZ_W);
+		if (inst->reg == Z80_AF) {
+			dst = mov_rdisp8r(dst, CONTEXT, zf_off(ZF_S), SCRATCH2, SZ_B);
+			dst = shl_ir(dst, 1, SCRATCH2, SZ_B);
+			dst = or_rdisp8r(dst, CONTEXT, zf_off(ZF_Z), SCRATCH2, SZ_B);
+			dst = shl_ir(dst, 2, SCRATCH2, SZ_B);
+			dst = or_rdisp8r(dst, CONTEXT, zf_off(ZF_H), SCRATCH2, SZ_B);
+			dst = shl_ir(dst, 2, SCRATCH2, SZ_B);
+			dst = or_rdisp8r(dst, CONTEXT, zf_off(ZF_PV), SCRATCH2, SZ_B);
+			dst = shl_ir(dst, 1, SCRATCH2, SZ_B);
+			dst = or_rdisp8r(dst, CONTEXT, zf_off(ZF_N), SCRATCH2, SZ_B);
+			dst = shl_ir(dst, 1, SCRATCH2, SZ_B);
+			dst = or_rdisp8r(dst, CONTEXT, zf_off(ZF_C), SCRATCH2, SZ_B);
+			dst = shl_ir(dst, 8, SCRATCH2, SZ_W);
+			dst = mov_rr(dst, opts->regs[Z80_A], SCRATCH2, SZ_B);
+		} else {
+			dst = translate_z80_reg(inst, &src_op, dst, opts);
+			dst = mov_rr(dst, src_op.base, SCRATCH2, SZ_W);
+		}
+		dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH1, SZ_W);
+		dst = call(dst, (uint8_t *)z80_write_word_highfirst);
+		//no call to save_z80_reg needed since there's no chance we'll use the only
+		//the upper half of a register pair
 		break;
 	case Z80_POP:
 		dst = zcycles(dst, (inst->reg == Z80_IX || inst->reg == Z80_IY) ? 8 : 4);
-		dst = sub_ir(dst, opts->regs[Z80_SP], SZ_W);
-		dst = translate_z80_reg(inst, &src_op, dst, opts);
-		dst = mov_rr(dst, src_op.base, SCRATCH1, SZ_W);
-		dst = call(dst, z80_write_word);
+		dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH1, SZ_W);
+		dst = call(dst, (uint8_t *)z80_read_word);
+		dst = add_ir(dst, 2, opts->regs[Z80_SP], SZ_W);
+		if (inst->reg == Z80_AF) {
+			dst = mov_rr(dst, SCRATCH1, opts->regs[Z80_A], SZ_B);
+			dst = bt_ir(dst, 8, SCRATCH1, SZ_W);
+			dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_C));
+			dst = bt_ir(dst, 9, SCRATCH1, SZ_W);
+			dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_N));
+			dst = bt_ir(dst, 10, SCRATCH1, SZ_W);
+			dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_PV));
+			dst = bt_ir(dst, 12, SCRATCH1, SZ_W);
+			dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_H));
+			dst = bt_ir(dst, 14, SCRATCH1, SZ_W);
+			dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_Z));
+			dst = bt_ir(dst, 15, SCRATCH1, SZ_W);
+			dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_S));
+		} else {
+			dst = translate_z80_reg(inst, &src_op, dst, opts);
+			dst = mov_rr(dst, SCRATCH1, src_op.base, SZ_W);
+		}
+		//no call to save_z80_reg needed since there's no chance we'll use the only
+		//the upper half of a register pair
 		break;
 	/*case Z80_EX:
 	case Z80_EXX:
@@ -222,7 +314,7 @@ uint8_t * translate_z80_inst(z80_inst * inst, uint8_t * dst, x86_z80_options * o
 		break;*/
 	case Z80_ADD:
 		cycles = 4;
-		if (inst->addr_mode == Z80_IX_INDIRECT || inst->addr_mdoe == Z80_IY_INDIRECT) {
+		if (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) {
 			cycles += 12;
 		} else if(inst->addr_mode == Z80_IMMED) {
 			cycles += 3;
@@ -238,12 +330,12 @@ uint8_t * translate_z80_inst(z80_inst * inst, uint8_t * dst, x86_z80_options * o
 			dst = add_ir(dst, src_op.disp, dst_op.base, z80_size(inst));
 		}
 		dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_C));
-		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N));
+		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
 		//TODO: Implement half-carry flag
 		if (z80_size(inst) == SZ_B) {
-			dst = setcc_rdisp8(dst, CC_O, zf_off(ZF_PV));
-			dst = setcc_rdisp8(dst, CC_Z, zf_off(ZF_Z));
-			dst = setcc_rdisp8(dst, CC_S, zf_off(ZF_S));
+			dst = setcc_rdisp8(dst, CC_O, CONTEXT, zf_off(ZF_PV));
+			dst = setcc_rdisp8(dst, CC_Z, CONTEXT, zf_off(ZF_Z));
+			dst = setcc_rdisp8(dst, CC_S, CONTEXT, zf_off(ZF_S));
 		}
 		dst = z80_save_reg(dst, inst, opts);
 		dst = z80_save_ea(dst, inst, opts);
@@ -252,7 +344,7 @@ uint8_t * translate_z80_inst(z80_inst * inst, uint8_t * dst, x86_z80_options * o
 		break;*/
 	case Z80_SUB:
 		cycles = 4;
-		if (inst->addr_mode == Z80_IX_INDIRECT || inst->addr_mdoe == Z80_IY_INDIRECT) {
+		if (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) {
 			cycles += 12;
 		} else if(inst->addr_mode == Z80_IMMED) {
 			cycles += 3;
@@ -266,11 +358,11 @@ uint8_t * translate_z80_inst(z80_inst * inst, uint8_t * dst, x86_z80_options * o
 			dst = sub_ir(dst, src_op.disp, dst_op.base, z80_size(inst));
 		}
 		dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_C));
-		dst = mov_irdisp8(dst, 1, CONTEXT, zf_off(ZF_N));
-		dst = setcc_rdisp8(dst, CC_O, zf_off(ZF_PV));
+		dst = mov_irdisp8(dst, 1, CONTEXT, zf_off(ZF_N), SZ_B);
+		dst = setcc_rdisp8(dst, CC_O, CONTEXT, zf_off(ZF_PV));
 		//TODO: Implement half-carry flag
-		dst = setcc_rdisp8(dst, CC_Z, zf_off(ZF_Z));
-		dst = setcc_rdisp8(dst, CC_S, zf_off(ZF_S)
+		dst = setcc_rdisp8(dst, CC_Z, CONTEXT, zf_off(ZF_Z));
+		dst = setcc_rdisp8(dst, CC_S, CONTEXT, zf_off(ZF_S));
 		dst = z80_save_reg(dst, inst, opts);
 		dst = z80_save_ea(dst, inst, opts);
 		break;
@@ -294,11 +386,11 @@ uint8_t * translate_z80_inst(z80_inst * inst, uint8_t * dst, x86_z80_options * o
 		}
 		dst = add_ir(dst, 1, dst_op.base, z80_size(inst));
 		if (z80_size(inst) == SZ_B) {
-			dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N));
+			dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
 			//TODO: Implement half-carry flag
-			dst = setcc_rdisp8(dst, CC_O, zf_off(ZF_PV));
-			dst = setcc_rdisp8(dst, CC_Z, zf_off(ZF_Z));
-			dst = setcc_rdisp8(dst, CC_S, zf_off(ZF_S));
+			dst = setcc_rdisp8(dst, CC_O, CONTEXT, zf_off(ZF_PV));
+			dst = setcc_rdisp8(dst, CC_Z, CONTEXT, zf_off(ZF_Z));
+			dst = setcc_rdisp8(dst, CC_S, CONTEXT, zf_off(ZF_S));
 		}
 		dst = z80_save_reg(dst, inst, opts);
 		dst = z80_save_ea(dst, inst, opts);
@@ -338,13 +430,75 @@ uint8_t * translate_z80_inst(z80_inst * inst, uint8_t * dst, x86_z80_options * o
 	case Z80_RES:
 	case Z80_JP:
 	case Z80_JPCC:
-	case Z80_JR:
-	case Z80_JRCC:
-	case Z80_DJNZ:
-	case Z80_CALL:
-	case Z80_CALLCC:
+	case Z80_JR:*/
+	case Z80_JRCC: {
+		dst = zcycles(dst, 7);//T States: 4,3
+		uint8_t cond = CC_Z;
+		switch (inst->reg)
+		{
+		case Z80_CC_NZ:
+			cond = CC_NZ;
+		case Z80_CC_Z:
+			dst = cmp_irdisp8(dst, 0, CONTEXT, zf_off(ZF_Z), SZ_B);
+			break;
+		case Z80_CC_NC:
+			cond = CC_NZ;
+		case Z80_CC_C:
+			dst = cmp_irdisp8(dst, 0, CONTEXT, zf_off(ZF_C), SZ_B);
+			break;
+		}
+		uint8_t *no_jump_off = dst+1;
+		dst = jcc(dst, cond, dst+2);
+		dst = zcycles(dst, 5);//T States: 5
+		uint16_t dest_addr = address + inst->immed + 2;
+		if (dest_addr < 0x4000) {
+			uint8_t * call_dst = z80_get_native_address(context, dest_addr);
+			if (!call_dst) {
+				opts->deferred = defer_address(opts->deferred, dest_addr, dst + 1);
+				//fake address to force large displacement
+				call_dst = dst + 256;
+			}
+			dst = jmp(dst, call_dst);
+		} else {
+			dst = mov_ir(dst, dest_addr, SCRATCH1, SZ_W);
+			dst = call(dst, (uint8_t *)z80_native_addr);
+			dst = jmp_r(dst, SCRATCH1);
+		}
+		*no_jump_off = dst - (no_jump_off+1);
+		break;
+	}
+	//case Z80_DJNZ:*/
+	case Z80_CALL: {
+		dst = zcycles(dst, 11);//T States: 4,3,4
+		dst = sub_ir(dst, 2, opts->regs[Z80_SP], SZ_W);
+		dst = mov_ir(dst, address + 3, SCRATCH2, SZ_W);
+		dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH1, SZ_W);
+		dst = call(dst, (uint8_t *)z80_write_word_highfirst);//T States: 3, 3
+		if (inst->immed < 0x4000) {
+			uint8_t * call_dst = z80_get_native_address(context, inst->immed);
+			if (!call_dst) {
+				opts->deferred = defer_address(opts->deferred, inst->immed, dst + 1);
+				//fake address to force large displacement
+				call_dst = dst + 256;
+			}
+			dst = jmp(dst, call_dst);
+		} else {
+			dst = mov_ir(dst, inst->immed, SCRATCH1, SZ_W);
+			dst = call(dst, (uint8_t *)z80_native_addr);
+			dst = jmp_r(dst, SCRATCH1);
+		}
+		break;
+	}
+	//case Z80_CALLCC:
 	case Z80_RET:
-	case Z80_RETCC:
+		dst = zcycles(dst, 4);//T States: 4
+		dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH1, SZ_W);
+		dst = call(dst, (uint8_t *)z80_read_word);//T STates: 3, 3
+		dst = add_ir(dst, 2, opts->regs[Z80_SP], SZ_W);
+		dst = call(dst, (uint8_t *)z80_native_addr);
+		dst = jmp_r(dst, SCRATCH1);
+		break;
+	/*case Z80_RETCC:
 	case Z80_RETI:
 	case Z80_RETN:
 	case Z80_RST:
@@ -358,12 +512,177 @@ uint8_t * translate_z80_inst(z80_inst * inst, uint8_t * dst, x86_z80_options * o
 	case Z80_OTIR:
 	case Z80_OUTD:
 	case Z80_OTDR:*/
-	default:
-		fprintf(stderr, "unimplemented instruction: %d\n", inst->op);
+	default: {
+		char disbuf[80];
+		z80_disasm(inst, disbuf);
+		fprintf(stderr, "unimplemented instruction: %s\n", disbuf);
 		exit(1);
+	}
+	}
+	return dst;
+}
+
+uint8_t * z80_get_native_address(z80_context * context, uint32_t address)
+{
+	native_map_slot *map;
+	if (address < 0x4000) {
+		address &= 0x1FFF;
+		map = context->static_code_map;
+	} else if (address >= 0x8000) {
+		address &= 0x7FFF;
+		map = context->banked_code_map + context->bank_reg;
+	} else {
+		return NULL;
+	}
+	if (!map->base || !map->offsets || map->offsets[address] == INVALID_OFFSET) {
+		return NULL;
+	}
+	return map->base + map->offsets[address];
+}
+
+//TODO: Record z80 instruction size and code size for addresses to support modification of translated code
+void z80_map_native_address(z80_context * context, uint32_t address, uint8_t * native_address)
+{
+	native_map_slot *map;
+	if (address < 0x4000) {
+		address &= 0x1FFF;
+		map = context->static_code_map;
+	} else if (address >= 0x8000) {
+		address &= 0x7FFF;
+		map = context->banked_code_map + context->bank_reg;
+		if (!map->offsets) {
+			map->offsets = malloc(sizeof(int32_t) * 0x8000);
+			memset(map->offsets, 0xFF, sizeof(int32_t) * 0x8000);
+		}
+	} else {
+		return;
+	}
+	if (!map->base) {
+		map->base = native_address;
+	}
+	map->offsets[address] = native_address - map->base;
+}
+
+uint8_t * z80_get_native_address_trans(z80_context * context, uint32_t address)
+{
+	uint8_t * addr = z80_get_native_address(context, address);
+	if (!addr) {
+		translate_z80_stream(context, address);
+		addr = z80_get_native_address(context, address);
+	}
+	return addr;
+}
+
+void translate_z80_stream(z80_context * context, uint32_t address)
+{
+	char disbuf[80];
+	if (z80_get_native_address(context, address)) {
+		return;
+	}
+	x86_z80_options * opts = context->options;
+	uint8_t * encoded = NULL, *next;
+	if (address < 0x4000) {
+		encoded = context->mem_pointers[0] + (address & 0x1FFF);
+	} else if(address >= 0x8000 && context->mem_pointers[1]) {
+		encoded = context->mem_pointers[1] + (address & 0x7FFF);
+	}
+	while (encoded != NULL)
+	{
+		z80inst inst;
+		printf("translating Z80 code at address %X\n", address);
+		do {
+			if (opts->code_end-opts->cur_code < MAX_NATIVE_SIZE) {
+				if (opts->code_end-opts->cur_code < 5) {
+					puts("out of code memory, not enough space for jmp to next chunk");
+					exit(1);
+				}
+				size_t size = 1024*1024;
+				opts->cur_code = alloc_code(&size);
+				opts->code_end = opts->cur_code + size;
+				jmp(opts->cur_code, opts->cur_code);
+			}
+			if (address > 0x4000 & address < 0x8000) {
+				opts->cur_code = xor_rr(opts->cur_code, RDI, RDI, SZ_D);
+				opts->cur_code = call(opts->cur_code, (uint8_t *)exit);
+				break;
+			}
+			uint8_t * existing = z80_get_native_address(context, address);
+			if (existing) {
+				opts->cur_code = jmp(opts->cur_code, existing);
+				break;
+			}
+			next = z80_decode(encoded, &inst);
+			z80_disasm(&inst, disbuf);
+			if (inst.op == Z80_NOP) {
+				printf("%X\t%s(%d)\n", address, disbuf, inst.immed);
+			} else {
+				printf("%X\t%s\n", address, disbuf);
+			}
+			z80_map_native_address(context, address, opts->cur_code);
+			opts->cur_code = translate_z80inst(&inst, opts->cur_code, context, address);
+			address += next-encoded;
+			encoded = next;
+		} while (!(inst.op == Z80_RET || inst.op == Z80_RETI || inst.op == Z80_RETN || (inst.op = Z80_NOP && inst.immed == 42)));
+		process_deferred(&opts->deferred, context, (native_addr_func)z80_get_native_address);
+		if (opts->deferred) {
+			address = opts->deferred->address;
+			printf("defferred address: %X\n", address);
+			if (address < 0x4000) {
+				encoded = context->mem_pointers[0] + (address & 0x1FFF);
+			} else if (address > 0x8000 && context->mem_pointers[1]) {
+				encoded = context->mem_pointers[1] + (address  & 0x7FFF);
+			} else {
+				printf("attempt to translate non-memory address: %X\n", address);
+				exit(1);
+			}
+		} else {
+			encoded = NULL;
+		}
 	}
 }
 
-void translate_z80_stream(z80_context * context, uint16_t address)
+void init_x86_z80_opts(x86_z80_options * options)
 {
+	options->flags = 0;
+	options->regs[Z80_B] = BH;
+	options->regs[Z80_C] = RBX;
+	options->regs[Z80_D] = CH;
+	options->regs[Z80_E] = RCX;
+	options->regs[Z80_H] = AH;
+	options->regs[Z80_L] = RAX;
+	options->regs[Z80_IXH] = DH;
+	options->regs[Z80_IXL] = RDX;
+	options->regs[Z80_IYH] = -1;
+	options->regs[Z80_IYL] = -1;
+	options->regs[Z80_I] = -1;
+	options->regs[Z80_R] = -1;
+	options->regs[Z80_A] = R10;
+	options->regs[Z80_BC] = RBX;
+	options->regs[Z80_DE] = RCX;
+	options->regs[Z80_HL] = RAX;
+	options->regs[Z80_SP] = R9;
+	options->regs[Z80_AF] = -1;
+	options->regs[Z80_IX] = RDX;
+	options->regs[Z80_IY] = R8;
+	size_t size = 1024 * 1024;
+	options->cur_code = alloc_code(&size);
+	options->code_end = options->cur_code + size;
+	options->deferred = NULL;
 }
+
+void init_z80_context(z80_context * context, x86_z80_options * options)
+{
+	memset(context, 0, sizeof(*context));
+	context->static_code_map = malloc(sizeof(context->static_code_map));
+	context->static_code_map->offsets = malloc(sizeof(int32_t) * 0x2000);
+	memset(context->static_code_map->offsets, 0xFF, sizeof(int32_t) * 0x2000);
+	context->banked_code_map = malloc(sizeof(native_map_slot) * (1 << 9));
+	context->options = options;
+}
+
+void z80_reset(z80_context * context)
+{
+	context->native_pc = z80_get_native_address_trans(context, 0);
+}
+
+

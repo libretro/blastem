@@ -1490,6 +1490,10 @@ uint8_t * jmp(uint8_t * out, uint8_t * dest)
 
 uint8_t * jmp_r(uint8_t * out, uint8_t dst)
 {
+	if (dst >= R8) {
+		dst -= R8 - X86_R8;
+		*(out++) = PRE_REX | REX_RM_FIELD;
+	}
 	*(out++) = OP_SINGLE_EA;
 	*(out++) = MODE_REG_DIRECT | dst | (OP_EX_JMP_EA << 3);
 	return out;
