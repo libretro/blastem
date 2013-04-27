@@ -530,19 +530,29 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 	case Z80_SLL:
 	case Z80_SRL:
 	case Z80_RLD:
-	case Z80_RRD:
+	case Z80_RRD:*/
 	case Z80_BIT:
-	case Z80_SET:
-	case Z80_RES:*/
+		cycles = (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) ? 8 : 16;
+		dst = zcycles(dst, cycles);
+		dst = translate_z80_ea(inst, &src_op, dst, opts, READ, DONT_MODIFY);
+		if (inst->addr_mode != Z80_REG) {
+			//Reads normally take 3 cycles, but the read at the end of a bit instruction takes 4
+			dst = zcycles(dst, 1);
+		}
+		dst = bt_ir(dst, inst->immed, src_op.base, SZ_B);
+		dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_Z));
+		break;
+	//case Z80_SET:
+	//case Z80_RES:
 	case Z80_JP: {
 		cycles = 4;
-		if (inst->addr_mode != MODE_REG_INDIRECT) {
+		if (inst->addr_mode != Z80_REG) {
 			cycles += 6;
 		} else if(inst->ea_reg == Z80_IX || inst->ea_reg == Z80_IY) {
 			cycles += 4;
 		}
 		dst = zcycles(dst, cycles);
-		if (inst->addr_mode != MODE_REG_INDIRECT && inst->immed < 0x4000) {
+		if (inst->addr_mode != Z80_REG_INDIRECT && inst->immed < 0x4000) {
 			uint8_t * call_dst = z80_get_native_address(context, inst->immed);
 			if (!call_dst) {
 				opts->deferred = defer_address(opts->deferred, inst->immed, dst + 1);
@@ -551,7 +561,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			}
 			dst = jmp(dst, call_dst);
 		} else {
-			if (inst->addr_mode == MODE_REG_INDIRECT) {
+			if (inst->addr_mode == Z80_REG_INDIRECT) {
 				dst = mov_rr(dst, opts->regs[inst->ea_reg], SCRATCH1, SZ_W);
 			} else {
 				dst = mov_ir(dst, inst->immed, SCRATCH1, SZ_W);
@@ -660,7 +670,28 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		*no_jump_off = dst - (no_jump_off+1);
 		break;
 	}
-	//case Z80_DJNZ:*/
+	case Z80_DJNZ:
+		dst = zcycles(dst, 8);//T States: 5,3
+		dst = sub_ir(dst, 1, opts->regs[Z80_B], SZ_B);
+		uint8_t *no_jump_off = dst+1;
+		dst = jcc(dst, CC_Z, dst+2);
+		dst = zcycles(dst, 5);//T States: 5
+		uint16_t dest_addr = address + inst->immed + 2;
+		if (dest_addr < 0x4000) {
+			uint8_t * call_dst = z80_get_native_address(context, dest_addr);
+			if (!call_dst) {
+				opts->deferred = defer_address(opts->deferred, dest_addr, dst + 1);
+				//fake address to force large displacement
+				call_dst = dst + 256;
+			}
+			dst = jmp(dst, call_dst);
+		} else {
+			dst = mov_ir(dst, dest_addr, SCRATCH1, SZ_W);
+			dst = call(dst, (uint8_t *)z80_native_addr);
+			dst = jmp_r(dst, SCRATCH1);
+		}
+		*no_jump_off = dst - (no_jump_off+1);
+		break;
 	case Z80_CALL: {
 		dst = zcycles(dst, 11);//T States: 4,3,4
 		dst = sub_ir(dst, 2, opts->regs[Z80_SP], SZ_W);
@@ -892,7 +923,7 @@ void init_x86_z80_opts(x86_z80_options * options)
 	options->regs[Z80_IXH] = DH;
 	options->regs[Z80_IXL] = RDX;
 	options->regs[Z80_IYH] = -1;
-	options->regs[Z80_IYL] = -1;
+	options->regs[Z80_IYL] = R8;
 	options->regs[Z80_I] = -1;
 	options->regs[Z80_R] = -1;
 	options->regs[Z80_A] = R10;
