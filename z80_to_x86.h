@@ -35,6 +35,8 @@ typedef struct {
 	uint32_t          current_cycle;
 	uint8_t           alt_flags[ZF_NUM];
 	uint8_t *         mem_pointers[ZNUM_MEM_AREAS];
+	uint8_t           iff1;
+	uint8_t           iff2;
 	native_map_slot * static_code_map;
 	native_map_slot * banked_code_map;
 	void *            options;
