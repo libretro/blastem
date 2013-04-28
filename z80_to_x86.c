@@ -35,6 +35,30 @@ uint8_t z80_size(z80inst * inst)
 	return SZ_B;
 }
 
+uint8_t z80_high_reg(uint8_t reg)
+{
+	switch(reg)
+	{
+	case Z80_C:
+	case Z80_BC:
+		return Z80_B;
+	case Z80_E:
+	case Z80_DE:
+		return Z80_D;
+	case Z80_L:
+	case Z80_HL:
+		return Z80_H;
+	case Z80_IXL:
+	case Z80_IX:
+		return Z80_IXH;
+	case Z80_IYL:
+	case Z80_IY:
+		return Z80_IYH;
+	default:
+		return Z80_UNUSED;
+	}
+}
+
 uint8_t * zcycles(uint8_t * dst, uint32_t num_cycles)
 {
 	return add_ir(dst, num_cycles, ZCYCLES, SZ_D);
@@ -185,6 +209,16 @@ uint8_t zf_off(uint8_t flag)
 	return offsetof(z80_context, flags) + flag;
 }
 
+uint8_t zaf_off(uint8_t flag)
+{
+	return offsetof(z80_context, alt_flags) + flag;
+}
+
+uint8_t zar_off(uint8_t reg)
+{
+	return offsetof(z80_context, alt_regs) + reg;
+}
+
 void z80_print_regs_exit(z80_context * context)
 {
 	printf("A: %X\nB: %X\nC: %X\nD: %X\nE: %X\nHL: %X\nIX: %X\nIY: %X\nSP: %X\n", 
@@ -194,6 +228,13 @@ void z80_print_regs_exit(z80_context * context)
 		(context->regs[Z80_IXH] << 8) | context->regs[Z80_IXL], 
 		(context->regs[Z80_IYH] << 8) | context->regs[Z80_IYL], 
 		context->sp);
+	puts("--Alternate Regs--");
+	printf("A: %X\nB: %X\nC: %X\nD: %X\nE: %X\nHL: %X\nIX: %X\nIY: %X\n", 
+		context->alt_regs[Z80_A], context->alt_regs[Z80_B], context->alt_regs[Z80_C],
+		context->alt_regs[Z80_D], context->alt_regs[Z80_E], 
+		(context->alt_regs[Z80_H] << 8) | context->alt_regs[Z80_L], 
+		(context->alt_regs[Z80_IXH] << 8) | context->alt_regs[Z80_IXL], 
+		(context->alt_regs[Z80_IYH] << 8) | context->alt_regs[Z80_IYL]);
 	exit(0);
 }
 
@@ -301,9 +342,71 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		//no call to save_z80_reg needed since there's no chance we'll use the only
 		//the upper half of a register pair
 		break;
-	/*case Z80_EX:
+	case Z80_EX:
+		if (inst->addr_mode == Z80_REG || inst->reg == Z80_HL) {
+			cycles = 4;
+		} else {
+			cycles = 8;
+		}
+		dst = zcycles(dst, cycles);
+		if (inst->addr_mode == Z80_REG) {
+			if(inst->reg == Z80_AF) {
+				dst = mov_rr(dst, opts->regs[Z80_A], SCRATCH1, SZ_B);
+				dst = mov_rdisp8r(dst, CONTEXT, zar_off(Z80_A), opts->regs[Z80_A], SZ_B);
+				dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, zar_off(Z80_A), SZ_B);
+		
+				//Flags are currently word aligned, so we can move
+				//them efficiently a word at a time
+				for (int f = ZF_C; f < ZF_NUM; f+=2) {
+					dst = mov_rdisp8r(dst, CONTEXT, zf_off(f), SCRATCH1, SZ_W);
+					dst = mov_rdisp8r(dst, CONTEXT, zaf_off(f), SCRATCH2, SZ_W);
+					dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, zaf_off(f), SZ_W);
+					dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, zf_off(f), SZ_W);
+				}
+			} else {
+				dst = xchg_rr(dst, opts->regs[Z80_DE], opts->regs[Z80_HL], SZ_W);
+			}
+		} else {
+			dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH1, SZ_W);
+			dst = call(dst, (uint8_t *)z80_read_byte);
+			dst = mov_rr(dst, opts->regs[inst->reg], SCRATCH2, SZ_B);
+			dst = mov_rr(dst, SCRATCH1, opts->regs[inst->reg], SZ_B);
+			dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH1, SZ_W);
+			dst = call(dst, (uint8_t *)z80_write_byte);
+			dst = zcycles(dst, 1);
+			uint8_t high_reg = z80_high_reg(inst->reg);
+			uint8_t use_reg;
+			//even though some of the upper halves can be used directly
+			//the limitations on mixing *H regs with the REX prefix
+			//prevent us from taking advantage of it
+			use_reg = opts->regs[inst->reg];
+			dst = ror_ir(dst, 8, use_reg, SZ_W);
+			dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH1, SZ_W);
+			dst = add_ir(dst, 1, SCRATCH1, SZ_W);
+			dst = call(dst, (uint8_t *)z80_read_byte);
+			dst = mov_rr(dst, use_reg, SCRATCH2, SZ_B);
+			dst = mov_rr(dst, SCRATCH1, use_reg, SZ_B);
+			dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH1, SZ_W);
+			dst = add_ir(dst, 1, SCRATCH1, SZ_W);
+			dst = call(dst, (uint8_t *)z80_write_byte);
+			//restore reg to normal rotation
+			dst = ror_ir(dst, 8, use_reg, SZ_W);
+			dst = zcycles(dst, 2);
+		}
+		break;
 	case Z80_EXX:
-	case Z80_LDI:
+		dst = zcycles(dst, 4);
+		dst = mov_rr(dst, opts->regs[Z80_BC], SCRATCH1, SZ_W);
+		dst = mov_rr(dst, opts->regs[Z80_HL], SCRATCH2, SZ_W);
+		dst = mov_rdisp8r(dst, CONTEXT, zar_off(Z80_C), opts->regs[Z80_BC], SZ_W);
+		dst = mov_rdisp8r(dst, CONTEXT, zar_off(Z80_L), opts->regs[Z80_HL], SZ_W);
+		dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, zar_off(Z80_C), SZ_W);
+		dst = mov_rrdisp8(dst, SCRATCH2, CONTEXT, zar_off(Z80_L), SZ_W);
+		dst = mov_rr(dst, opts->regs[Z80_DE], SCRATCH1, SZ_W);
+		dst = mov_rdisp8r(dst, CONTEXT, zar_off(Z80_E), opts->regs[Z80_DE], SZ_W);
+		dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, zar_off(Z80_E), SZ_W);
+		break;
+	/*case Z80_LDI:
 	case Z80_LDIR:
 	case Z80_LDD:
 	case Z80_LDDR:
@@ -770,9 +873,24 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		break;
 	/*case Z80_RETCC:
 	case Z80_RETI:
-	case Z80_RETN:
-	case Z80_RST:
-	case Z80_IN:
+	case Z80_RETN:*/
+	case Z80_RST: {
+		//RST is basically CALL to an address in page 0
+		dst = zcycles(dst, 5);//T States: 5
+		dst = sub_ir(dst, 2, opts->regs[Z80_SP], SZ_W);
+		dst = mov_ir(dst, address + 3, SCRATCH2, SZ_W);
+		dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH1, SZ_W);
+		dst = call(dst, (uint8_t *)z80_write_word_highfirst);//T States: 3, 3
+		uint8_t * call_dst = z80_get_native_address(context, inst->immed);
+		if (!call_dst) {
+			opts->deferred = defer_address(opts->deferred, inst->immed, dst + 1);
+			//fake address to force large displacement
+			call_dst = dst + 256;
+		}
+		dst = jmp(dst, call_dst);
+		break;
+	}
+	/*case Z80_IN:
 	case Z80_INI:
 	case Z80_INIR:
 	case Z80_IND:
