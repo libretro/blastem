@@ -33,6 +33,9 @@ test_x86 : test_x86.o gen_x86.o
 
 gen_fib : gen_fib.o gen_x86.o mem.o
 	$(CC) -o gen_fib gen_fib.o gen_x86.o mem.o
+
+offsets : offsets.c z80_to_x86.h m68k_to_x86.h
+	$(CC) -o offsets offsets.c
 	
 %.o : %.S
 	$(CC) -c -o $@ $<
