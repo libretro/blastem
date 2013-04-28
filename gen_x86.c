@@ -24,7 +24,9 @@
 #define PRE_SIZE 0x66
 #define OP_JCC 0x70
 #define OP_IMMED_ARITH 0x80
+#define OP_XCHG 0x86
 #define OP_MOV 0x88
+#define OP_XCHG_AX 0x90
 #define OP_CDQ 0x99
 #define OP_PUSHF 0x9C
 #define OP_POPF 0x9D
@@ -120,7 +122,6 @@ enum {
 
 uint8_t * x86_rr_sizedir(uint8_t * out, uint16_t opcode, uint8_t src, uint8_t dst, uint8_t size)
 {
-	//TODO: Deal with the fact that AH, BH, CH and DH can only be in the R/M param when there's a REX prefix
 	uint8_t tmp;
 	if (size == SZ_W) {
 		*(out++) = PRE_SIZE;
@@ -1181,6 +1182,49 @@ uint8_t * movzx_rdisp8r(uint8_t * out, uint8_t src, int8_t disp, uint8_t dst, ui
 	*(out++) = OP2_MOVZX | (src_size == SZ_B ? 0 : BIT_SIZE);
 	*(out++) = MODE_REG_DISPLACE8 | src | (dst << 3);
 	*(out++) = disp;
+	return out;
+}
+
+uint8_t * xchg_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
+{
+	//TODO: Use OP_XCHG_AX when one of the registers is AX, EAX or RAX
+	uint8_t tmp;
+	if (size == SZ_W) {
+		*(out++) = PRE_SIZE;
+	}
+	if (size == SZ_B && dst >= RSP && dst <= RDI) {
+		tmp = dst;
+		dst = src;
+		src = tmp;
+	}
+	if (size == SZ_Q || src >= R8 || dst >= R8 || (size == SZ_B && src >= RSP && src <= RDI)) {
+		*out = PRE_REX;
+		if (size == SZ_Q) {
+			*out |= REX_QUAD;
+		}
+		if (src >= R8) {
+			*out |= REX_REG_FIELD;
+			src -= (R8 - X86_R8);
+		}
+		if (dst >= R8) {
+			*out |= REX_RM_FIELD;
+			dst -= (R8 - X86_R8);
+		}
+		out++;
+	}
+	uint8_t opcode = OP_XCHG;
+	if (size == SZ_B) {
+		if (src >= AH && src <= BH) {
+			src -= (AH-X86_AH);
+		}
+		if (dst >= AH && dst <= BH) {
+			dst -= (AH-X86_AH);
+		}
+	} else {
+		opcode |= BIT_SIZE;
+	}
+	*(out++) = opcode;
+	*(out++) = MODE_REG_DIRECT | dst | (src << 3);
 	return out;
 }
 
