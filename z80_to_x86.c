@@ -221,13 +221,13 @@ uint8_t zar_off(uint8_t reg)
 
 void z80_print_regs_exit(z80_context * context)
 {
-	printf("A: %X\nB: %X\nC: %X\nD: %X\nE: %X\nHL: %X\nIX: %X\nIY: %X\nSP: %X\n", 
+	printf("A: %X\nB: %X\nC: %X\nD: %X\nE: %X\nHL: %X\nIX: %X\nIY: %X\nSP: %X\n\nIM: %d, IFF1: %d, IFF2: %d\n", 
 		context->regs[Z80_A], context->regs[Z80_B], context->regs[Z80_C],
 		context->regs[Z80_D], context->regs[Z80_E], 
 		(context->regs[Z80_H] << 8) | context->regs[Z80_L], 
 		(context->regs[Z80_IXH] << 8) | context->regs[Z80_IXL], 
 		(context->regs[Z80_IYH] << 8) | context->regs[Z80_IYL], 
-		context->sp);
+		context->sp, context->im, context->iff1, context->iff2);
 	puts("--Alternate Regs--");
 	printf("A: %X\nB: %X\nC: %X\nD: %X\nE: %X\nHL: %X\nIX: %X\nIY: %X\n", 
 		context->alt_regs[Z80_A], context->alt_regs[Z80_B], context->alt_regs[Z80_C],
@@ -643,11 +643,23 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			dst = zcycles(dst, 4 * inst->immed);
 		}
 		break;
-	/*case Z80_HALT:
+	//case Z80_HALT:
 	case Z80_DI:
+		dst = zcycles(dst, 4);
+		dst = mov_irdisp8(dst, 0, CONTEXT, offsetof(z80_context, iff1), SZ_B);
+		dst = mov_irdisp8(dst, 0, CONTEXT, offsetof(z80_context, iff2), SZ_B);
+		break;
 	case Z80_EI:
+		//TODO: Implement interrupt enable latency of 1 instruction afer EI
+		dst = zcycles(dst, 4);
+		dst = mov_irdisp8(dst, 1, CONTEXT, offsetof(z80_context, iff1), SZ_B);
+		dst = mov_irdisp8(dst, 1, CONTEXT, offsetof(z80_context, iff2), SZ_B);
+		break;
 	case Z80_IM:
-	case Z80_RLC:
+		dst = zcycles(dst, 4);
+		dst = mov_irdisp8(dst, inst->immed, CONTEXT, offsetof(z80_context, im), SZ_B);
+		break;
+	/*case Z80_RLC:
 	case Z80_RL:
 	case Z80_RRC:
 	case Z80_RR:
