@@ -160,6 +160,7 @@ uint8_t * movsx_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t src_size, ui
 uint8_t * movsx_rdisp8r(uint8_t * out, uint8_t src, int8_t disp, uint8_t dst, uint8_t src_size, uint8_t size);
 uint8_t * movzx_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t src_size, uint8_t size);
 uint8_t * movzx_rdisp8r(uint8_t * out, uint8_t src, int8_t disp, uint8_t dst, uint8_t src_size, uint8_t size);
+uint8_t * xchg_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size);
 uint8_t * pushf(uint8_t * out);
 uint8_t * popf(uint8_t * out);
 uint8_t * push_r(uint8_t * out, uint8_t reg);

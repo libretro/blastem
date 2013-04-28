@@ -29,9 +29,11 @@ typedef struct {
 	uint8_t           flags[ZF_NUM];
 	uint16_t          bank_reg;
 	uint8_t           regs[Z80_A+1];
+	uint8_t           im;
 	uint8_t           alt_regs[Z80_A+1];
 	uint32_t          target_cycle;
 	uint32_t          current_cycle;
+	uint8_t           alt_flags[ZF_NUM];
 	uint8_t *         mem_pointers[ZNUM_MEM_AREAS];
 	native_map_slot * static_code_map;
 	native_map_slot * banked_code_map;
