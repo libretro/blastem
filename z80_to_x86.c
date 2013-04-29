@@ -443,8 +443,32 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = z80_save_reg(dst, inst, opts);
 		dst = z80_save_ea(dst, inst, opts);
 		break;
-	/*case Z80_ADC:
-		break;*/
+	case Z80_ADC:
+		cycles = 4;
+		if (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) {
+			cycles += 12;
+		} else if(inst->addr_mode == Z80_IMMED) {
+			cycles += 3;
+		} else if(z80_size(inst) == SZ_W) {
+			cycles += 4;
+		}
+		dst = zcycles(dst, cycles);
+		dst = translate_z80_reg(inst, &dst_op, dst, opts);
+		dst = translate_z80_ea(inst, &src_op, dst, opts, READ, DONT_MODIFY);
+		if (src_op.mode == MODE_REG_DIRECT) {
+			dst = adc_rr(dst, src_op.base, dst_op.base, z80_size(inst));
+		} else {
+			dst = adc_ir(dst, src_op.disp, dst_op.base, z80_size(inst));
+		}
+		dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_C));
+		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
+		//TODO: Implement half-carry flag
+		dst = setcc_rdisp8(dst, CC_O, CONTEXT, zf_off(ZF_PV));
+		dst = setcc_rdisp8(dst, CC_Z, CONTEXT, zf_off(ZF_Z));
+		dst = setcc_rdisp8(dst, CC_S, CONTEXT, zf_off(ZF_S));
+		dst = z80_save_reg(dst, inst, opts);
+		dst = z80_save_ea(dst, inst, opts);
+		break;
 	case Z80_SUB:
 		cycles = 4;
 		if (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) {
@@ -469,7 +493,32 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = z80_save_reg(dst, inst, opts);
 		dst = z80_save_ea(dst, inst, opts);
 		break;
-	//case Z80_SBC:
+	case Z80_SBC:
+		cycles = 4;
+		if (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) {
+			cycles += 12;
+		} else if(inst->addr_mode == Z80_IMMED) {
+			cycles += 3;
+		} else if(z80_size(inst) == SZ_W) {
+			cycles += 4;
+		}
+		dst = zcycles(dst, cycles);
+		dst = translate_z80_reg(inst, &dst_op, dst, opts);
+		dst = translate_z80_ea(inst, &src_op, dst, opts, READ, DONT_MODIFY);
+		if (src_op.mode == MODE_REG_DIRECT) {
+			dst = sbb_rr(dst, src_op.base, dst_op.base, z80_size(inst));
+		} else {
+			dst = sbb_ir(dst, src_op.disp, dst_op.base, z80_size(inst));
+		}
+		dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_C));
+		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
+		//TODO: Implement half-carry flag
+		dst = setcc_rdisp8(dst, CC_O, CONTEXT, zf_off(ZF_PV));
+		dst = setcc_rdisp8(dst, CC_Z, CONTEXT, zf_off(ZF_Z));
+		dst = setcc_rdisp8(dst, CC_S, CONTEXT, zf_off(ZF_S));
+		dst = z80_save_reg(dst, inst, opts);
+		dst = z80_save_ea(dst, inst, opts);
+		break;
 	case Z80_AND:
 		cycles = 4;
 		if (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) {
@@ -1144,6 +1193,8 @@ uint8_t * z80_get_native_address_trans(z80_context * context, uint32_t address)
 	return addr;
 }
 
+//uint32_t max_size = 0;
+
 void translate_z80_stream(z80_context * context, uint32_t address)
 {
 	char disbuf[80];
@@ -1190,7 +1241,9 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 				printf("%X\t%s\n", address, disbuf);
 			}
 			z80_map_native_address(context, address, opts->cur_code);
-			opts->cur_code = translate_z80inst(&inst, opts->cur_code, context, address);
+			uint8_t *after = translate_z80inst(&inst, opts->cur_code, context, address);
+			//max_size = (after - opts->cur_code) > max_size ? (after - opts->cur_code) : max_size;
+			opts->cur_code = after;
 			address += next-encoded;
 			encoded = next;
 		} while (!(inst.op == Z80_RET || inst.op == Z80_RETI || inst.op == Z80_RETN || inst.op == Z80_JP || (inst.op = Z80_NOP && inst.immed == 42)));
