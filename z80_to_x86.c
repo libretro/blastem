@@ -10,6 +10,7 @@
 #define MODE_UNUSED (MODE_IMMED-1)
 
 #define ZCYCLES RBP
+#define ZLIMIT RDI
 #define SCRATCH1 R13
 #define SCRATCH2 R14
 #define CONTEXT RSI
@@ -24,6 +25,8 @@ void z80_write_word_highfirst();
 void z80_write_word_lowfirst();
 void z80_save_context();
 void z80_native_addr();
+void z80_do_sync();
+void z80_handle_cycle_limit_int();
 
 uint8_t z80_size(z80inst * inst)
 {
@@ -62,6 +65,17 @@ uint8_t z80_high_reg(uint8_t reg)
 uint8_t * zcycles(uint8_t * dst, uint32_t num_cycles)
 {
 	return add_ir(dst, num_cycles, ZCYCLES, SZ_D);
+}
+
+uint8_t * z80_check_cycles_int(uint8_t * dst, uint16_t address)
+{
+	dst = cmp_rr(dst, ZCYCLES, ZLIMIT, SZ_D);
+	uint8_t * jmp_off = dst+1;
+	dst = jcc(dst, CC_NC, dst + 7);
+	dst = mov_ir(dst, address, SCRATCH2, SZ_W);
+	dst = call(dst, (uint8_t *)z80_handle_cycle_limit_int);
+	*jmp_off = dst - (jmp_off+1);
+	return dst;
 }
 
 uint8_t * translate_z80_reg(z80inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_options * opts)
@@ -244,6 +258,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 	x86_ea src_op, dst_op;
 	uint8_t size;
 	x86_z80_options *opts = context->options;
+	dst = z80_check_cycles_int(dst, address);
 	switch(inst->op)
 	{
 	case Z80_LD:
@@ -697,12 +712,14 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = zcycles(dst, 4);
 		dst = mov_irdisp8(dst, 0, CONTEXT, offsetof(z80_context, iff1), SZ_B);
 		dst = mov_irdisp8(dst, 0, CONTEXT, offsetof(z80_context, iff2), SZ_B);
+		dst = mov_rdisp8r(dst, CONTEXT, offsetof(z80_context, sync_cycle), ZLIMIT, SZ_D);
 		break;
 	case Z80_EI:
 		//TODO: Implement interrupt enable latency of 1 instruction afer EI
 		dst = zcycles(dst, 4);
 		dst = mov_irdisp8(dst, 1, CONTEXT, offsetof(z80_context, iff1), SZ_B);
 		dst = mov_irdisp8(dst, 1, CONTEXT, offsetof(z80_context, iff2), SZ_B);
+		dst = call(dst, (uint8_t *)z80_do_sync);
 		break;
 	case Z80_IM:
 		dst = zcycles(dst, 4);
@@ -1189,6 +1206,9 @@ uint8_t * z80_get_native_address_trans(z80_context * context, uint32_t address)
 	if (!addr) {
 		translate_z80_stream(context, address);
 		addr = z80_get_native_address(context, address);
+		if (!addr) {
+			printf("Failed to translate %X to native code\n", address);
+		}
 	}
 	return addr;
 }
