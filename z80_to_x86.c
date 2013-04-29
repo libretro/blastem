@@ -659,11 +659,101 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = zcycles(dst, 4);
 		dst = mov_irdisp8(dst, inst->immed, CONTEXT, offsetof(z80_context, im), SZ_B);
 		break;
-	/*case Z80_RLC:
+	case Z80_RLC:
+		cycles = inst->immed == 1 ? 4 : (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE ? 16 : 8);
+		dst = zcycles(dst, cycles);
+		if (inst->reg == Z80_UNUSED) {
+			dst = translate_z80_ea(inst, &dst_op, dst, opts, READ, MODIFY);
+			dst = zcycles(dst, 1);
+		} else {
+			dst = translate_z80_reg(inst, &dst_op, dst, opts);
+		}
+		dst = rol_ir(dst, 1, dst_op.base, SZ_B);
+		dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_C));
+		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
+		//TODO: Implement half-carry flag
+		dst = cmp_ir(dst, 0, dst_op.base, SZ_B);
+		dst = setcc_rdisp8(dst, CC_P, CONTEXT, zf_off(ZF_PV));
+		dst = setcc_rdisp8(dst, CC_Z, CONTEXT, zf_off(ZF_Z));
+		dst = setcc_rdisp8(dst, CC_S, CONTEXT, zf_off(ZF_S));
+		if (inst->reg == Z80_UNUSED) {
+			dst = z80_save_result(dst, inst);
+		} else {
+			dst = z80_save_reg(dst, inst, opts);
+		}
+		break;
 	case Z80_RL:
+		cycles = inst->immed == 1 ? 4 : (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE ? 16 : 8);
+		dst = zcycles(dst, cycles);
+		if (inst->reg == Z80_UNUSED) {
+			dst = translate_z80_ea(inst, &dst_op, dst, opts, READ, MODIFY);
+			dst = zcycles(dst, 1);
+		} else {
+			dst = translate_z80_reg(inst, &dst_op, dst, opts);
+		}
+		dst = bt_irdisp8(dst, 0, CONTEXT, zf_off(ZF_C), SZ_B);
+		dst = rcl_ir(dst, 1, dst_op.base, SZ_B);
+		dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_C));
+		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
+		//TODO: Implement half-carry flag
+		dst = cmp_ir(dst, 0, dst_op.base, SZ_B);
+		dst = setcc_rdisp8(dst, CC_P, CONTEXT, zf_off(ZF_PV));
+		dst = setcc_rdisp8(dst, CC_Z, CONTEXT, zf_off(ZF_Z));
+		dst = setcc_rdisp8(dst, CC_S, CONTEXT, zf_off(ZF_S));
+		if (inst->reg == Z80_UNUSED) {
+			dst = z80_save_result(dst, inst);
+		} else {
+			dst = z80_save_reg(dst, inst, opts);
+		}
+		break;
 	case Z80_RRC:
+		cycles = inst->immed == 1 ? 4 : (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE ? 16 : 8);
+		dst = zcycles(dst, cycles);
+		if (inst->reg == Z80_UNUSED) {
+			dst = translate_z80_ea(inst, &dst_op, dst, opts, READ, MODIFY);
+			dst = zcycles(dst, 1);
+		} else {
+			dst = translate_z80_reg(inst, &dst_op, dst, opts);
+		}
+		dst = ror_ir(dst, 1, dst_op.base, SZ_B);
+		dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_C));
+		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
+		//TODO: Implement half-carry flag
+		dst = cmp_ir(dst, 0, dst_op.base, SZ_B);
+		dst = setcc_rdisp8(dst, CC_P, CONTEXT, zf_off(ZF_PV));
+		dst = setcc_rdisp8(dst, CC_Z, CONTEXT, zf_off(ZF_Z));
+		dst = setcc_rdisp8(dst, CC_S, CONTEXT, zf_off(ZF_S));
+		if (inst->reg == Z80_UNUSED) {
+			dst = z80_save_result(dst, inst);
+		} else {
+			dst = z80_save_reg(dst, inst, opts);
+		}
+		break;
 	case Z80_RR:
-	case Z80_SLA:
+		cycles = inst->immed == 1 ? 4 : (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE ? 16 : 8);
+		dst = zcycles(dst, cycles);
+		if (inst->reg == Z80_UNUSED) {
+			dst = translate_z80_ea(inst, &dst_op, dst, opts, READ, MODIFY);
+			dst = zcycles(dst, 1);
+		} else {
+			dst = translate_z80_reg(inst, &dst_op, dst, opts);
+		}
+		dst = bt_irdisp8(dst, 0, CONTEXT, zf_off(ZF_C), SZ_B);
+		dst = rcr_ir(dst, 1, dst_op.base, SZ_B);
+		dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_C));
+		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
+		//TODO: Implement half-carry flag
+		dst = cmp_ir(dst, 0, dst_op.base, SZ_B);
+		dst = setcc_rdisp8(dst, CC_P, CONTEXT, zf_off(ZF_PV));
+		dst = setcc_rdisp8(dst, CC_Z, CONTEXT, zf_off(ZF_Z));
+		dst = setcc_rdisp8(dst, CC_S, CONTEXT, zf_off(ZF_S));
+		if (inst->reg == Z80_UNUSED) {
+			dst = z80_save_result(dst, inst);
+		} else {
+			dst = z80_save_reg(dst, inst, opts);
+		}
+		break;
+	/*case Z80_SLA:
 	case Z80_SRA:
 	case Z80_SLL:
 	case Z80_SRL:
@@ -680,8 +770,32 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = bt_ir(dst, inst->immed, src_op.base, SZ_B);
 		dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_Z));
 		break;
-	//case Z80_SET:
-	//case Z80_RES:
+	case Z80_SET:
+		cycles = (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) ? 8 : 16;
+		dst = zcycles(dst, cycles);
+		dst = translate_z80_ea(inst, &src_op, dst, opts, READ, DONT_MODIFY);
+		if (inst->addr_mode != Z80_REG) {
+			//Reads normally take 3 cycles, but the read in the middle of a set instruction takes 4
+			dst = zcycles(dst, 1);
+		}
+		dst = bts_ir(dst, inst->immed, src_op.base, SZ_B);
+		if (inst->addr_mode != Z80_REG) {
+			dst = z80_save_result(dst, inst);
+		}
+		break;
+	case Z80_RES:
+		cycles = (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) ? 8 : 16;
+		dst = zcycles(dst, cycles);
+		dst = translate_z80_ea(inst, &src_op, dst, opts, READ, DONT_MODIFY);
+		if (inst->addr_mode != Z80_REG) {
+			//Reads normally take 3 cycles, but the read in the middle of a set instruction takes 4
+			dst = zcycles(dst, 1);
+		}
+		dst = btr_ir(dst, inst->immed, src_op.base, SZ_B);
+		if (inst->addr_mode != Z80_REG) {
+			dst = z80_save_result(dst, inst);
+		}
+		break;
 	case Z80_JP: {
 		cycles = 4;
 		if (inst->addr_mode != Z80_REG) {
