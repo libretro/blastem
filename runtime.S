@@ -18,6 +18,7 @@ skip_sync:
 handle_cycle_limit_int:
 	cmp 88(%rsi), %eax
 	jb skip_int
+	mov 84(%rsi), %ebp
 	/* swap USP and SSP if not already in supervisor mode */
 	bt $5, 5(%rsi)
 	jc already_supervisor
@@ -444,9 +445,9 @@ m68k_write_long_highfirst:
 	jmp m68k_write_word
 	
 inccycles:
-	cmp %rbp, %rax
+	cmp %ebp, %eax
 	jnb do_limit
-	add $4, %rax
+	add $4, %eax
 	ret
 do_limit:
 	push %rcx
@@ -454,7 +455,7 @@ do_limit:
 	call handle_cycle_limit
 	pop %rdi
 	pop %rcx
-	add $4, %rax
+	add $4, %eax
 	ret
 
 	.global m68k_read_word_scratch1
