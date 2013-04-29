@@ -37,6 +37,11 @@ typedef struct {
 	uint8_t *         mem_pointers[ZNUM_MEM_AREAS];
 	uint8_t           iff1;
 	uint8_t           iff2;
+	uint16_t          scratch1;
+	uint16_t          scratch2;
+	void *            extra_pc;
+	uint32_t          sync_cycle;
+	uint32_t          int_cycle;
 	native_map_slot * static_code_map;
 	native_map_slot * banked_code_map;
 	void *            options;
