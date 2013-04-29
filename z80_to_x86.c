@@ -906,8 +906,42 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = call(dst, (uint8_t *)z80_native_addr);
 		dst = jmp_r(dst, SCRATCH1);
 		break;
-	/*case Z80_RETCC:
-	case Z80_RETI:
+	case Z80_RETCC: {
+		dst = zcycles(dst, 5);//T States: 5
+		uint8_t cond = CC_Z;
+		switch (inst->reg)
+		{
+		case Z80_CC_NZ:
+			cond = CC_NZ;
+		case Z80_CC_Z:
+			dst = cmp_irdisp8(dst, 0, CONTEXT, zf_off(ZF_Z), SZ_B);
+			break;
+		case Z80_CC_NC:
+			cond = CC_NZ;
+		case Z80_CC_C:
+			dst = cmp_irdisp8(dst, 0, CONTEXT, zf_off(ZF_C), SZ_B);
+			break;
+		case Z80_CC_PO:
+			cond = CC_NZ;
+		case Z80_CC_PE:
+			dst = cmp_irdisp8(dst, 0, CONTEXT, zf_off(ZF_PV), SZ_B);
+			break;
+		case Z80_CC_P:
+		case Z80_CC_M:
+			dst = cmp_irdisp8(dst, 0, CONTEXT, zf_off(ZF_S), SZ_B);
+			break;
+		}
+		uint8_t *no_call_off = dst+1;
+		dst = jcc(dst, cond, dst+2);
+		dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH1, SZ_W);
+		dst = call(dst, (uint8_t *)z80_read_word);//T STates: 3, 3
+		dst = add_ir(dst, 2, opts->regs[Z80_SP], SZ_W);
+		dst = call(dst, (uint8_t *)z80_native_addr);
+		dst = jmp_r(dst, SCRATCH1);
+		*no_call_off = dst - (no_call_off+1);
+		break;
+	}
+	/*case Z80_RETI:
 	case Z80_RETN:*/
 	case Z80_RST: {
 		//RST is basically CALL to an address in page 0
@@ -1045,7 +1079,7 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 			opts->cur_code = translate_z80inst(&inst, opts->cur_code, context, address);
 			address += next-encoded;
 			encoded = next;
-		} while (!(inst.op == Z80_RET || inst.op == Z80_RETI || inst.op == Z80_RETN || (inst.op = Z80_NOP && inst.immed == 42)));
+		} while (!(inst.op == Z80_RET || inst.op == Z80_RETI || inst.op == Z80_RETN || inst.op == Z80_JP || (inst.op = Z80_NOP && inst.immed == 42)));
 		process_deferred(&opts->deferred, context, (native_addr_func)z80_get_native_address);
 		if (opts->deferred) {
 			address = opts->deferred->address;
