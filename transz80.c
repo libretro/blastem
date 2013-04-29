@@ -22,10 +22,13 @@ int main(int argc, char ** argv)
 	init_z80_context(&context, &opts);
 	//cartridge ROM
 	context.mem_pointers[0] = z80_ram;
-	context.target_cycle = 0x7FFFFFFF;
+	context.sync_cycle = context.target_cycle = 0x7FFFFFFF;
 	//work RAM
 	context.mem_pointers[1] = context.mem_pointers[2] = NULL;
 	z80_reset(&context);
-	z80_run(&context);
+	for(;;)
+	{
+		z80_run(&context);
+	}
 	return 0;
 }
