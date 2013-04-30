@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #define INVALID_OFFSET 0xFFFFFFFF
+#define EXTENSION_WORD 0xFFFFFFFE
 
 typedef struct {
 	int32_t disp;

@@ -15,9 +15,6 @@
 #define SCRATCH2 R14
 #define CONTEXT RSI
 
-//TODO: Find out the actual value for this
-#define MAX_NATIVE_SIZE 128
-
 void z80_read_byte();
 void z80_read_word();
 void z80_write_byte();
@@ -27,6 +24,7 @@ void z80_save_context();
 void z80_native_addr();
 void z80_do_sync();
 void z80_handle_cycle_limit_int();
+void z80_retrans_stub();
 
 uint8_t z80_size(z80inst * inst)
 {
@@ -1167,7 +1165,7 @@ uint8_t * z80_get_native_address(z80_context * context, uint32_t address)
 		map = context->static_code_map;
 	} else if (address >= 0x8000) {
 		address &= 0x7FFF;
-		map = context->banked_code_map + context->bank_reg;
+		map = context->banked_code_map + (context->bank_reg << 15);
 	} else {
 		return NULL;
 	}
@@ -1177,16 +1175,28 @@ uint8_t * z80_get_native_address(z80_context * context, uint32_t address)
 	return map->base + map->offsets[address];
 }
 
-//TODO: Record z80 instruction size and code size for addresses to support modification of translated code
-void z80_map_native_address(z80_context * context, uint32_t address, uint8_t * native_address)
+uint8_t z80_get_native_inst_size(x86_z80_options * opts, uint32_t address)
 {
+	if (address >= 0x4000) {
+		return 0;
+	}
+	return opts->ram_inst_sizes[address & 0x1FFF];
+}
+
+void z80_map_native_address(z80_context * context, uint32_t address, uint8_t * native_address, uint8_t size, uint8_t native_size)
+{
+	uint32_t orig_address = address;
 	native_map_slot *map;
+	x86_z80_options * opts = context->options;
 	if (address < 0x4000) {
 		address &= 0x1FFF;
 		map = context->static_code_map;
+		opts->ram_inst_sizes[address] = native_size;
+		context->ram_code_flags[(address & 0x1C00) >> 10] |= 1 << ((address & 0x380) >> 7);
+		context->ram_code_flags[((address + size) & 0x1C00) >> 10] |= 1 << (((address + size) & 0x380) >> 7);
 	} else if (address >= 0x8000) {
 		address &= 0x7FFF;
-		map = context->banked_code_map + context->bank_reg;
+		map = context->banked_code_map + (context->bank_reg << 15);
 		if (!map->offsets) {
 			map->offsets = malloc(sizeof(int32_t) * 0x8000);
 			memset(map->offsets, 0xFF, sizeof(int32_t) * 0x8000);
@@ -1198,6 +1208,95 @@ void z80_map_native_address(z80_context * context, uint32_t address, uint8_t * n
 		map->base = native_address;
 	}
 	map->offsets[address] = native_address - map->base;
+	for(--size; size; --size, orig_address++) {
+		address = orig_address;
+		if (address < 0x4000) {
+			address &= 0x1FFF;
+			map = context->static_code_map;
+		} else if (address >= 0x8000) {
+			address &= 0x7FFF;
+			map = context->banked_code_map + (context->bank_reg << 15);
+		} else {
+			return;
+		}
+		if (!map->offsets) {
+			map->offsets = malloc(sizeof(int32_t) * 0x8000);
+			memset(map->offsets, 0xFF, sizeof(int32_t) * 0x8000);
+		}
+		map->offsets[address] = EXTENSION_WORD;
+	}
+}
+
+#define INVALID_INSTRUCTION_START 0xFEEDFEED
+
+uint32_t z80_get_instruction_start(native_map_slot * static_code_map, uint32_t address)
+{
+	if (!static_code_map->base || address >= 0x4000) {
+		return INVALID_INSTRUCTION_START;
+	}
+	address &= 0x1FFF;
+	if (static_code_map->offsets[address] == INVALID_OFFSET) {
+		return INVALID_INSTRUCTION_START;
+	}
+	while (static_code_map->offsets[address] == EXTENSION_WORD) {
+		--address;
+		address &= 0x1FFF;
+	}
+	return address;
+}
+
+z80_context * z80_handle_code_write(uint32_t address, z80_context * context)
+{
+	uint32_t inst_start = z80_get_instruction_start(context->static_code_map, address);
+	if (inst_start != INVALID_INSTRUCTION_START) {
+		uint8_t * dst = z80_get_native_address(context, inst_start);
+		dst = mov_ir(dst, inst_start, SCRATCH1, SZ_D);
+		dst = jmp(dst, (uint8_t *)z80_retrans_stub);
+	}
+	return context;
+}
+
+void * z80_retranslate_inst(uint32_t address, z80_context * context)
+{
+	x86_z80_options * opts = context->options;
+	uint8_t orig_size = z80_get_native_inst_size(opts, address);
+	uint8_t * orig_start = z80_get_native_address(context, address);
+	uint32_t orig = address;
+	address &= 0x1FFF;
+	uint8_t * dst = opts->cur_code;
+	uint8_t * dst_end = opts->code_end;
+	uint8_t *after, *inst = context->mem_pointers[0] + address;
+	z80inst instbuf;
+	after = z80_decode(inst, &instbuf);
+	if (orig_size != ZMAX_NATIVE_SIZE) {
+		if (dst_end - dst < ZMAX_NATIVE_SIZE) {
+			size_t size = 1024*1024;
+			dst = alloc_code(&size);
+			opts->code_end = dst_end = dst + size;
+			opts->cur_code = dst;
+		}
+		uint8_t * native_end = translate_z80inst(&instbuf, dst, context, address);
+		if ((native_end - dst) <= orig_size) {
+			native_end = translate_z80inst(&instbuf, orig_start, context, address);
+			while (native_end < orig_start + orig_size) {
+				*(native_end++) = 0x90; //NOP
+			}
+			return orig_start;
+		} else {
+			z80_map_native_address(context, address, dst, after-inst, ZMAX_NATIVE_SIZE);
+			opts->code_end = dst+ZMAX_NATIVE_SIZE;
+			if(!(instbuf.op == Z80_RET || instbuf.op == Z80_RETI || instbuf.op == Z80_RETN || instbuf.op == Z80_JP || (instbuf.op = Z80_NOP && instbuf.immed == 42))) {
+				jmp(native_end, z80_get_native_address(context, address + after-inst));
+			}
+			return dst;
+		}
+	} else {
+		dst = translate_z80inst(&instbuf, orig_start, context, address);
+		if(!(instbuf.op == Z80_RET || instbuf.op == Z80_RETI || instbuf.op == Z80_RETN || instbuf.op == Z80_JP || (instbuf.op = Z80_NOP && instbuf.immed == 42))) {
+			dst = jmp(dst, z80_get_native_address(context, address + after-inst));
+		}
+		return orig_start;
+	}
 }
 
 uint8_t * z80_get_native_address_trans(z80_context * context, uint32_t address)
@@ -1212,8 +1311,6 @@ uint8_t * z80_get_native_address_trans(z80_context * context, uint32_t address)
 	}
 	return addr;
 }
-
-//uint32_t max_size = 0;
 
 void translate_z80_stream(z80_context * context, uint32_t address)
 {
@@ -1233,7 +1330,7 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 		z80inst inst;
 		printf("translating Z80 code at address %X\n", address);
 		do {
-			if (opts->code_end-opts->cur_code < MAX_NATIVE_SIZE) {
+			if (opts->code_end-opts->cur_code < ZMAX_NATIVE_SIZE) {
 				if (opts->code_end-opts->cur_code < 5) {
 					puts("out of code memory, not enough space for jmp to next chunk");
 					exit(1);
@@ -1260,9 +1357,8 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 			} else {
 				printf("%X\t%s\n", address, disbuf);
 			}
-			z80_map_native_address(context, address, opts->cur_code);
 			uint8_t *after = translate_z80inst(&inst, opts->cur_code, context, address);
-			//max_size = (after - opts->cur_code) > max_size ? (after - opts->cur_code) : max_size;
+			z80_map_native_address(context, address, opts->cur_code, next-encoded, after - opts->cur_code);
 			opts->cur_code = after;
 			address += next-encoded;
 			encoded = next;
@@ -1311,6 +1407,8 @@ void init_x86_z80_opts(x86_z80_options * options)
 	size_t size = 1024 * 1024;
 	options->cur_code = alloc_code(&size);
 	options->code_end = options->cur_code + size;
+	options->ram_inst_sizes = malloc(sizeof(uint8_t) * 0x2000);
+	memset(options->ram_inst_sizes, 0, sizeof(uint8_t) * 0x2000);
 	options->deferred = NULL;
 }
 

@@ -4,6 +4,7 @@
 #include "x86_backend.h"
 
 #define ZNUM_MEM_AREAS 4
+#define ZMAX_NATIVE_SIZE 128
 
 enum {
 	ZF_C = 0,
@@ -18,6 +19,7 @@ enum {
 typedef struct {
 	uint8_t *       cur_code;
 	uint8_t *       code_end;
+	uint8_t         *ram_inst_sizes;
 	deferred_addr * deferred;
 	uint32_t        flags;
 	int8_t          regs[Z80_UNUSED];
@@ -46,6 +48,7 @@ typedef struct {
 	native_map_slot * banked_code_map;
 	void *            options;
 	void *            next_context;
+	uint8_t           ram_code_flags[(8 * 1024)/128/8];
 } z80_context;
 
 void translate_z80_stream(z80_context * context, uint32_t address);
