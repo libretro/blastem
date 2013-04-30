@@ -698,9 +698,19 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		break;
 	/*case Z80_DAA:
 	case Z80_CPL:
-	case Z80_NEG:
+	case Z80_NEG:*/
 	case Z80_CCF:
-	case Z80_SCF:*/
+		dst = zcycles(dst, 4);
+		dst = xor_irdisp8(dst, 1, CONTEXT, zf_off(ZF_C), SZ_B);
+		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
+		//TODO: Implement half-carry flag
+		break;
+	case Z80_SCF:
+		dst = zcycles(dst, 4);
+		dst = mov_irdisp8(dst, 1, CONTEXT, zf_off(ZF_C), SZ_B);
+		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
+		//TODO: Implement half-carry flag
+		break;
 	case Z80_NOP:
 		if (inst->immed == 42) {
 			dst = call(dst, (uint8_t *)z80_save_context);
