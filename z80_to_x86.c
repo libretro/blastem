@@ -70,7 +70,7 @@ uint8_t * z80_check_cycles_int(uint8_t * dst, uint16_t address)
 	dst = cmp_rr(dst, ZCYCLES, ZLIMIT, SZ_D);
 	uint8_t * jmp_off = dst+1;
 	dst = jcc(dst, CC_NC, dst + 7);
-	dst = mov_ir(dst, address, SCRATCH2, SZ_W);
+	dst = mov_ir(dst, address, SCRATCH1, SZ_W);
 	dst = call(dst, (uint8_t *)z80_handle_cycle_limit_int);
 	*jmp_off = dst - (jmp_off+1);
 	return dst;
@@ -1166,6 +1166,9 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		char disbuf[80];
 		z80_disasm(inst, disbuf);
 		fprintf(stderr, "unimplemented instruction: %s\n", disbuf);
+		FILE * f = fopen("zram.bin", "wb");
+		fwrite(context->mem_pointers[0], 1, 8 * 1024, f);
+		fclose(f);
 		exit(1);
 	}
 	}
@@ -1436,14 +1439,18 @@ void init_z80_context(z80_context * context, x86_z80_options * options)
 {
 	memset(context, 0, sizeof(*context));
 	context->static_code_map = malloc(sizeof(context->static_code_map));
+	context->static_code_map->base = NULL;
 	context->static_code_map->offsets = malloc(sizeof(int32_t) * 0x2000);
 	memset(context->static_code_map->offsets, 0xFF, sizeof(int32_t) * 0x2000);
 	context->banked_code_map = malloc(sizeof(native_map_slot) * (1 << 9));
+	memset(context->banked_code_map, 0, sizeof(native_map_slot) * (1 << 9));
 	context->options = options;
 }
 
 void z80_reset(z80_context * context)
 {
+	context->im = 0;
+	context->iff1 = context->iff2 = 0;
 	context->native_pc = z80_get_native_address_trans(context, 0);
 }
 
