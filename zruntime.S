@@ -107,6 +107,7 @@ z80_write_ram:
 	mov %r14d, %edi
 	call z80_handle_code_write
 	mov %rax, %rsi
+	call z80_load_context
 not_code:
 	ret
 z80_write_bank:
