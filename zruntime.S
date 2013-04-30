@@ -99,6 +99,15 @@ z80_write_byte_noinc:
 z80_write_ram:
 	and $0x1FFF, %r13
 	mov %r14b, (%r11, %r13)
+	mov %r13d, %r14d
+	shr $7, %r14d
+	bt %r14d, 152(%rsi)
+	jnc not_code
+	call z80_save_context
+	mov %r13d, %edi
+	call z80_handle_code_write
+	mov %rax, %rsi
+not_code:
 	ret
 z80_write_bank:
 	and $0x7FFF, %r13
@@ -167,6 +176,17 @@ z80_write_word_lowfirst:
 	call z_inccycles
 	call z80_write_byte_noinc
 	ret
+	
+	.global z80_retrans_stub
+z80_retrans_stub:
+	call z80_save_context
+	mov %r13d, %edi
+	push %rsi
+	call z80_retranslate_inst
+	pop %rsi
+	mov %rax, %r13
+	call z80_load_context
+	jmp *%r13
 
 	.global z80_native_addr
 z80_native_addr:
