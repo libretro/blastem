@@ -125,7 +125,7 @@ int main(int argc, char ** argv)
 			break;
 		}
 		for(;;) {
-			if (address > filesize) {
+			if (address > filesize || is_visited(address)) {
 				break;
 			}
 			visit(address);
@@ -133,8 +133,8 @@ int main(int argc, char ** argv)
 			address += (next-encoded);
 			encoded = next;
 			
-			//m68k_disasm(&instbuf, disbuf);
-			//printf("%X: %s\n", instbuf.address, disbuf);
+			//z80_disasm(&instbuf, disbuf);
+			//printf("%X: %s\n", address, disbuf);
 			if (instbuf.op == Z80_HALT || instbuf.op == Z80_RET || instbuf.op == Z80_RETI || instbuf.op == Z80_RETN || instbuf.op == Z80_RST) {
 				break;
 			}
