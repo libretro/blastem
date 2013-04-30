@@ -263,6 +263,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 	x86_ea src_op, dst_op;
 	uint8_t size;
 	x86_z80_options *opts = context->options;
+	uint8_t * start = dst;
 	dst = z80_check_cycles_int(dst, address);
 	switch(inst->op)
 	{
@@ -424,9 +425,31 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = mov_rdisp8r(dst, CONTEXT, zar_off(Z80_E), opts->regs[Z80_DE], SZ_W);
 		dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, zar_off(Z80_E), SZ_W);
 		break;
-	/*case Z80_LDI:
-	case Z80_LDIR:
-	case Z80_LDD:
+	//case Z80_LDI:
+	case Z80_LDIR: {
+		dst = zcycles(dst, 8);
+		dst = mov_rr(dst, opts->regs[Z80_HL], SCRATCH1, SZ_W);
+		dst = call(dst, (uint8_t *)z80_read_byte);
+		dst = mov_rr(dst, opts->regs[Z80_DE], SCRATCH2, SZ_W);
+		dst = call(dst, (uint8_t *)z80_read_byte);
+		dst = add_ir(dst, 1, opts->regs[Z80_DE], SZ_W);
+		dst = add_ir(dst, 1, opts->regs[Z80_HL], SZ_W);
+		
+		dst = sub_ir(dst, 1, opts->regs[Z80_BC], SZ_W);
+		uint8_t * cont = dst+1;
+		dst = jcc(dst, CC_Z, dst+2);
+		dst = zcycles(dst, 7);
+		//TODO: Figure out what the flag state should be here
+		//TODO: Figure out whether an interrupt can interrupt this
+		dst = jmp(dst, start);
+		*cont = dst - (cont + 1);
+		dst = zcycles(dst, 2);
+		//TODO: Implement half-carry
+		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
+		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_PV), SZ_B);
+		break;
+	}
+	/*case Z80_LDD:
 	case Z80_LDDR:
 	case Z80_CPI:
 	case Z80_CPIR:
