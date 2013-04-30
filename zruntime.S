@@ -88,42 +88,42 @@ slow_bank_read:
 z80_write_byte:
 	call z_inccycles
 z80_write_byte_noinc:
-	cmp $0x4000, %r13w
+	cmp $0x4000, %r14w
 	jb z80_write_ram
-	cmp $0x8000, %r13w
+	cmp $0x8000, %r14w
 	jae z80_write_bank
-	cmp $0x6000, %r13w
+	cmp $0x6000, %r14w
 	je z80_write_bank_reg
 	/* TODO: YM-2612, PSG/VDP */
 	ret
 z80_write_ram:
-	and $0x1FFF, %r13
-	mov %r14b, (%r11, %r13)
-	mov %r13d, %r14d
-	shr $7, %r14d
-	bt %r14d, 152(%rsi)
+	and $0x1FFF, %r14
+	mov %r13b, (%r11, %r14)
+	mov %r14d, %r13d
+	shr $7, %r13d
+	bt %r13d, 152(%rsi)
 	jnc not_code
 	call z80_save_context
-	mov %r13d, %edi
+	mov %r14d, %edi
 	call z80_handle_code_write
 	mov %rax, %rsi
 not_code:
 	ret
 z80_write_bank:
-	and $0x7FFF, %r13
+	and $0x7FFF, %r14
 	cmp $0, %r12
 	je slow_bank_write
 	/* 68K memory is byte swapped */
-	xor $1, %r13
-	mov %r14b, (%r12, %r13)
+	xor $1, %r14
+	mov %r13b, (%r12, %r14)
 	ret
 slow_bank_write:
 	/* TODO: Call into C to implement this */
 	ret
 z80_write_bank_reg:
-	and $1, %r14w
+	and $1, %r13w
 	shl %r15w
-	or %r14w, %r15w
+	or %r13w, %r15w
 	and $0x1FF, %r15w
 	xor %r12, %r12
 	cmp $0x80, %r15w
@@ -154,8 +154,8 @@ z80_write_word_highfirst:
 	call z_inccycles
 	push %r14
 	push %r13
-	add $1, %r13w
-	shr $8, %r14w
+	add $1, %r14w
+	shr $8, %r13w
 	call z80_write_byte_noinc
 	pop %r13
 	pop %r14
@@ -171,8 +171,8 @@ z80_write_word_lowfirst:
 	call z80_write_byte_noinc
 	pop %r13
 	pop %r14
-	add $1, %r13w
-	shr $8, %r14w
+	add $1, %r14w
+	shr $8, %r13w
 	call z_inccycles
 	call z80_write_byte_noinc
 	ret
