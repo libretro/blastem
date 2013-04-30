@@ -1249,7 +1249,7 @@ uint8_t * z80_decode(uint8_t * istream, z80inst * decoded)
 	}
 	if ((decoded->addr_mode & 0x1F) == Z80_IMMED && decoded->op != Z80_RST && decoded->op != Z80_IM) {
 		decoded->immed = *(++istream);
-		if ((decoded->reg >= Z80_BC && decoded->reg < Z80_UNUSED) || decoded->op == Z80_CALL || decoded->op == Z80_CALLCC) {
+		if ((decoded->reg >= Z80_BC && decoded->reg < Z80_UNUSED) || decoded->op == Z80_CALL || decoded->op == Z80_CALLCC || decoded->op == Z80_JP || decoded->op == Z80_JPCC) {
 			decoded->immed |= *(++istream) << 8;
 		} else if (decoded->immed & 0x80) {
 			decoded->immed |= 0xFF00;
