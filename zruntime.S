@@ -28,14 +28,14 @@ z80_handle_cycle_limit_int:
 	mov 112(%rsi), %ebp /* set cycle limit to sync cycle */
 	add $7, %ebp
 	sub $2, %r9w
-	mov %r9w, %r13w
+	mov %r9w, %r14w
 	call z_inccycles
-	push %r14
+	push %r13
 	call z80_write_byte_noinc
-	pop %r14
-	mov %r9w, %r13w
-	add $1, %r13w
-	shr $8, %r14w
+	pop %r13
+	mov %r9w, %r14w
+	add $1, %r14w
+	shr $8, %r13w
 	call z_inccycles
 	call z80_write_byte_noinc
 	/* TODO: Support interrupt mode 0 and 2 */
