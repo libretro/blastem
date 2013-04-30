@@ -1290,14 +1290,14 @@ void * z80_retranslate_inst(uint32_t address, z80_context * context)
 		} else {
 			z80_map_native_address(context, address, dst, after-inst, ZMAX_NATIVE_SIZE);
 			opts->code_end = dst+ZMAX_NATIVE_SIZE;
-			if(!(instbuf.op == Z80_RET || instbuf.op == Z80_RETI || instbuf.op == Z80_RETN || instbuf.op == Z80_JP || (instbuf.op = Z80_NOP && instbuf.immed == 42))) {
+			if(!(instbuf.op == Z80_RET || instbuf.op == Z80_RETI || instbuf.op == Z80_RETN || instbuf.op == Z80_JP || (instbuf.op == Z80_NOP && instbuf.immed == 42))) {
 				jmp(native_end, z80_get_native_address(context, address + after-inst));
 			}
 			return dst;
 		}
 	} else {
 		dst = translate_z80inst(&instbuf, orig_start, context, address);
-		if(!(instbuf.op == Z80_RET || instbuf.op == Z80_RETI || instbuf.op == Z80_RETN || instbuf.op == Z80_JP || (instbuf.op = Z80_NOP && instbuf.immed == 42))) {
+		if(!(instbuf.op == Z80_RET || instbuf.op == Z80_RETI || instbuf.op == Z80_RETN || instbuf.op == Z80_JP || (instbuf.op == Z80_NOP && instbuf.immed == 42))) {
 			dst = jmp(dst, z80_get_native_address(context, address + after-inst));
 		}
 		return orig_start;
@@ -1367,7 +1367,7 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 			opts->cur_code = after;
 			address += next-encoded;
 			encoded = next;
-		} while (!(inst.op == Z80_RET || inst.op == Z80_RETI || inst.op == Z80_RETN || inst.op == Z80_JP || (inst.op = Z80_NOP && inst.immed == 42)));
+		} while (!(inst.op == Z80_RET || inst.op == Z80_RETI || inst.op == Z80_RETN || inst.op == Z80_JP || (inst.op == Z80_NOP && inst.immed == 42)));
 		process_deferred(&opts->deferred, context, (native_addr_func)z80_get_native_address);
 		if (opts->deferred) {
 			address = opts->deferred->address;
