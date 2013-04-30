@@ -198,10 +198,17 @@ uint8_t * z80_save_ea(uint8_t * dst, z80inst * inst, x86_z80_options * opts)
 
 uint8_t * z80_save_result(uint8_t * dst, z80inst * inst)
 {
-	if (z80_size(inst) == SZ_B) {
-		dst = call(dst, (uint8_t *)z80_write_byte);
-	} else {
-		dst = call(dst, (uint8_t *)z80_write_word_lowfirst);
+	switch(inst->addr_mode & 0x1f)
+	{
+	case Z80_REG_INDIRECT:
+	case Z80_IMMED_INDIRECT:
+	case Z80_IX_DISPLACE:
+	case Z80_IY_DISPLACE:
+		if (z80_size(inst) == SZ_B) {
+			dst = call(dst, (uint8_t *)z80_write_byte);
+		} else {
+			dst = call(dst, (uint8_t *)z80_write_word_lowfirst);
+		}
 	}
 	return dst;
 }
@@ -307,24 +314,24 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = zcycles(dst, (inst->reg == Z80_IX || inst->reg == Z80_IY) ? 9 : 5);
 		dst = sub_ir(dst, 2, opts->regs[Z80_SP], SZ_W);
 		if (inst->reg == Z80_AF) {
-			dst = mov_rdisp8r(dst, CONTEXT, zf_off(ZF_S), SCRATCH2, SZ_B);
-			dst = shl_ir(dst, 1, SCRATCH2, SZ_B);
-			dst = or_rdisp8r(dst, CONTEXT, zf_off(ZF_Z), SCRATCH2, SZ_B);
-			dst = shl_ir(dst, 2, SCRATCH2, SZ_B);
-			dst = or_rdisp8r(dst, CONTEXT, zf_off(ZF_H), SCRATCH2, SZ_B);
-			dst = shl_ir(dst, 2, SCRATCH2, SZ_B);
-			dst = or_rdisp8r(dst, CONTEXT, zf_off(ZF_PV), SCRATCH2, SZ_B);
-			dst = shl_ir(dst, 1, SCRATCH2, SZ_B);
-			dst = or_rdisp8r(dst, CONTEXT, zf_off(ZF_N), SCRATCH2, SZ_B);
-			dst = shl_ir(dst, 1, SCRATCH2, SZ_B);
-			dst = or_rdisp8r(dst, CONTEXT, zf_off(ZF_C), SCRATCH2, SZ_B);
-			dst = shl_ir(dst, 8, SCRATCH2, SZ_W);
-			dst = mov_rr(dst, opts->regs[Z80_A], SCRATCH2, SZ_B);
+			dst = mov_rdisp8r(dst, CONTEXT, zf_off(ZF_S), SCRATCH1, SZ_B);
+			dst = shl_ir(dst, 1, SCRATCH1, SZ_B);
+			dst = or_rdisp8r(dst, CONTEXT, zf_off(ZF_Z), SCRATCH1, SZ_B);
+			dst = shl_ir(dst, 2, SCRATCH1, SZ_B);
+			dst = or_rdisp8r(dst, CONTEXT, zf_off(ZF_H), SCRATCH1, SZ_B);
+			dst = shl_ir(dst, 2, SCRATCH1, SZ_B);
+			dst = or_rdisp8r(dst, CONTEXT, zf_off(ZF_PV), SCRATCH1, SZ_B);
+			dst = shl_ir(dst, 1, SCRATCH1, SZ_B);
+			dst = or_rdisp8r(dst, CONTEXT, zf_off(ZF_N), SCRATCH1, SZ_B);
+			dst = shl_ir(dst, 1, SCRATCH1, SZ_B);
+			dst = or_rdisp8r(dst, CONTEXT, zf_off(ZF_C), SCRATCH1, SZ_B);
+			dst = shl_ir(dst, 8, SCRATCH1, SZ_W);
+			dst = mov_rr(dst, opts->regs[Z80_A], SCRATCH1, SZ_B);
 		} else {
 			dst = translate_z80_reg(inst, &src_op, dst, opts);
-			dst = mov_rr(dst, src_op.base, SCRATCH2, SZ_W);
+			dst = mov_rr(dst, src_op.base, SCRATCH1, SZ_W);
 		}
-		dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH1, SZ_W);
+		dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH2, SZ_W);
 		dst = call(dst, (uint8_t *)z80_write_word_highfirst);
 		//no call to save_z80_reg needed since there's no chance we'll use the only
 		//the upper half of a register pair
@@ -374,7 +381,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 					dst = mov_rdisp8r(dst, CONTEXT, zf_off(f), SCRATCH1, SZ_W);
 					dst = mov_rdisp8r(dst, CONTEXT, zaf_off(f), SCRATCH2, SZ_W);
 					dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, zaf_off(f), SZ_W);
-					dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, zf_off(f), SZ_W);
+					dst = mov_rrdisp8(dst, SCRATCH2, CONTEXT, zf_off(f), SZ_W);
 				}
 			} else {
 				dst = xchg_rr(dst, opts->regs[Z80_DE], opts->regs[Z80_HL], SZ_W);
@@ -382,9 +389,8 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		} else {
 			dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH1, SZ_W);
 			dst = call(dst, (uint8_t *)z80_read_byte);
-			dst = mov_rr(dst, opts->regs[inst->reg], SCRATCH2, SZ_B);
-			dst = mov_rr(dst, SCRATCH1, opts->regs[inst->reg], SZ_B);
-			dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH1, SZ_W);
+			dst = xchg_rr(dst, opts->regs[inst->reg], SCRATCH1, SZ_B);
+			dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH2, SZ_W);
 			dst = call(dst, (uint8_t *)z80_write_byte);
 			dst = zcycles(dst, 1);
 			uint8_t high_reg = z80_high_reg(inst->reg);
@@ -397,10 +403,9 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH1, SZ_W);
 			dst = add_ir(dst, 1, SCRATCH1, SZ_W);
 			dst = call(dst, (uint8_t *)z80_read_byte);
-			dst = mov_rr(dst, use_reg, SCRATCH2, SZ_B);
-			dst = mov_rr(dst, SCRATCH1, use_reg, SZ_B);
-			dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH1, SZ_W);
-			dst = add_ir(dst, 1, SCRATCH1, SZ_W);
+			dst = xchg_rr(dst, use_reg, SCRATCH1, SZ_B);
+			dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH2, SZ_W);
+			dst = add_ir(dst, 1, SCRATCH2, SZ_W);
 			dst = call(dst, (uint8_t *)z80_write_byte);
 			//restore reg to normal rotation
 			dst = ror_ir(dst, 8, use_reg, SZ_W);
@@ -1011,8 +1016,8 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 	case Z80_CALL: {
 		dst = zcycles(dst, 11);//T States: 4,3,4
 		dst = sub_ir(dst, 2, opts->regs[Z80_SP], SZ_W);
-		dst = mov_ir(dst, address + 3, SCRATCH2, SZ_W);
-		dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH1, SZ_W);
+		dst = mov_ir(dst, address + 3, SCRATCH1, SZ_W);
+		dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH2, SZ_W);
 		dst = call(dst, (uint8_t *)z80_write_word_highfirst);//T States: 3, 3
 		if (inst->immed < 0x4000) {
 			uint8_t * call_dst = z80_get_native_address(context, inst->immed);
@@ -1058,8 +1063,8 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = jcc(dst, cond, dst+2);
 		dst = zcycles(dst, 1);//Last of the above T states takes an extra cycle in the true case
 		dst = sub_ir(dst, 2, opts->regs[Z80_SP], SZ_W);
-		dst = mov_ir(dst, address + 3, SCRATCH2, SZ_W);
-		dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH1, SZ_W);
+		dst = mov_ir(dst, address + 3, SCRATCH1, SZ_W);
+		dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH2, SZ_W);
 		dst = call(dst, (uint8_t *)z80_write_word_highfirst);//T States: 3, 3
 		if (inst->immed < 0x4000) {
 			uint8_t * call_dst = z80_get_native_address(context, inst->immed);
@@ -1125,8 +1130,8 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		//RST is basically CALL to an address in page 0
 		dst = zcycles(dst, 5);//T States: 5
 		dst = sub_ir(dst, 2, opts->regs[Z80_SP], SZ_W);
-		dst = mov_ir(dst, address + 3, SCRATCH2, SZ_W);
-		dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH1, SZ_W);
+		dst = mov_ir(dst, address + 3, SCRATCH1, SZ_W);
+		dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH2, SZ_W);
 		dst = call(dst, (uint8_t *)z80_write_word_highfirst);//T States: 3, 3
 		uint8_t * call_dst = z80_get_native_address(context, inst->immed);
 		if (!call_dst) {
@@ -1208,7 +1213,7 @@ void z80_map_native_address(z80_context * context, uint32_t address, uint8_t * n
 		map->base = native_address;
 	}
 	map->offsets[address] = native_address - map->base;
-	for(--size; size; --size, orig_address++) {
+	for(--size, orig_address++; size; --size, orig_address++) {
 		address = orig_address;
 		if (address < 0x4000) {
 			address &= 0x1FFF;
