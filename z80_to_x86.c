@@ -1345,7 +1345,7 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 				opts->code_end = opts->cur_code + size;
 				jmp(opts->cur_code, opts->cur_code);
 			}
-			if (address > 0x4000 & address < 0x8000) {
+			if (address > 0x4000 && address < 0x8000) {
 				opts->cur_code = xor_rr(opts->cur_code, RDI, RDI, SZ_D);
 				opts->cur_code = call(opts->cur_code, (uint8_t *)exit);
 				break;
@@ -1366,7 +1366,12 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 			z80_map_native_address(context, address, opts->cur_code, next-encoded, after - opts->cur_code);
 			opts->cur_code = after;
 			address += next-encoded;
-			encoded = next;
+			if (address > 0xFFFF) {
+				address &= 0xFFFF;
+				
+			} else {
+				encoded = next;
+			}
 		} while (!(inst.op == Z80_RET || inst.op == Z80_RETI || inst.op == Z80_RETN || inst.op == Z80_JP || (inst.op == Z80_NOP && inst.immed == 42)));
 		process_deferred(&opts->deferred, context, (native_addr_func)z80_get_native_address);
 		if (opts->deferred) {
