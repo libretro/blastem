@@ -88,8 +88,12 @@ uint8_t * translate_z80_reg(z80inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_
 		if (inst->reg == Z80_IYH) {
 			ea->base = opts->regs[Z80_IYL];
 			dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
-		} else {
+		} else if(opts->regs[inst->reg] >= 0) {
 			ea->base = opts->regs[inst->reg];
+		} else {
+			ea->mode = MODE_REG_DISPLACE8;
+			ea->base = CONTEXT;
+			ea->disp = offsetof(z80_context, regs) + inst->reg;
 		}
 	}
 	return dst;
@@ -301,9 +305,15 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			dst = translate_z80_reg(inst, &dst_op, dst, opts);
 		}
 		if (src_op.mode == MODE_REG_DIRECT) {
-			dst = mov_rr(dst, src_op.base, dst_op.base, size);
-		} else {
+			if(dst_op.mode == MODE_REG_DISPLACE8) {
+				dst = mov_rrdisp8(dst, src_op.base, dst_op.base, dst_op.disp, size);
+			} else {
+				dst = mov_rr(dst, src_op.base, dst_op.base, size);
+			}
+		} else if(src_op.mode == MODE_IMMED) {
 			dst = mov_ir(dst, src_op.disp, dst_op.base, size);
+		} else {
+			dst = mov_rdisp8r(dst, src_op.base, src_op.disp, dst_op.base, size);
 		}
 		dst = z80_save_reg(dst, inst, opts);
 		dst = z80_save_ea(dst, inst, opts);
