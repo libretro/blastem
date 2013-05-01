@@ -136,8 +136,8 @@ uint8_t new_busack = 0;
 m68k_context * sync_components(m68k_context * context, uint32_t address)
 {
 	//TODO: Handle sync targets smaller than a single frame
-	z80_context * z_context = context->next_context;
-	vdp_context * v_context = z_context->next_context;
+	z80_context * z_context = context->next_cpu;
+	vdp_context * v_context = context->video_context;
 	uint32_t mclks = context->current_cycle * MCLKS_PER_68K;
 	if (!reset && !busreq) {
 		if (need_reset) {
@@ -150,7 +150,10 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 				z_context->int_cycle = ZVINT_CYCLE;
 			}
 			z_context->target_cycle = z_context->sync_cycle < z_context->int_cycle ? z_context->sync_cycle : z_context->int_cycle;
+			printf("Running Z80 from cycle %d to cycle %d\n", z_context->current_cycle, z_context->sync_cycle);
+			printf("HL: %X, Native PC: %p\n", (z_context->regs[Z80_H] << 8) | z_context->regs[Z80_L], z_context->native_pc);
 			z80_run(z_context);
+			printf("Z80 returned at cycle %d\n", z_context->current_cycle);
 		}
 	}
 	if (mclks >= MCLKS_PER_FRAME) {
@@ -188,8 +191,7 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 {
 	//printf("vdp_port write: %X, value: %X, cycle: %d\n", vdp_port, value, context->current_cycle);
 	sync_components(context, 0);
-	z80_context * z_context = context->next_context;
-	vdp_context * v_context = z_context->next_context;
+	vdp_context * v_context = context->video_context;
 	if (vdp_port < 0x10) {
 		int blocked;
 		if (vdp_port < 4) {
@@ -248,8 +250,7 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 m68k_context * vdp_port_read(uint32_t vdp_port, m68k_context * context)
 {
 	sync_components(context, 0);
-	z80_context * z_context = context->next_context;
-	vdp_context * v_context = z_context->next_context;
+	vdp_context * v_context = context->video_context;
 	if (vdp_port < 0x10) {
 		if (vdp_port < 4) {
 			context->value = vdp_data_port_read(v_context);
@@ -347,6 +348,7 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 			location &= 0x7FFF;
 			if (location < 0x4000) {
 				z80_ram[location & 0x1FFF] = value;
+				z80_handle_code_write(location & 0x1FFF, context->next_cpu);
 			}
 		}
 	} else {
@@ -383,7 +385,7 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 					}
 				} else {
 					if (busreq) {
-						z80_context * z_context = context->next_context;
+						z80_context * z_context = context->next_cpu;
 						//TODO: Add necessary delay between release of busreq and resumption of execution
 						z_context->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
 					}
@@ -399,7 +401,7 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 					}
 					//TODO: Deal with the scenario in which reset is not asserted long enough
 					if (reset) {
-						z80_context * z_context = context->next_context;
+						z80_context * z_context = context->next_cpu;
 						need_reset = 1;
 						//TODO: Add necessary delay between release of reset and start of execution
 						z_context->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
@@ -425,6 +427,7 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 			location &= 0x7FFF;
 			if (location < 0x4000) {
 				z80_ram[location & 0x1FFE] = value >> 8;
+				z80_handle_code_write(location & 0x1FFE, context->next_cpu);
 			}
 		}
 	} else {
@@ -462,7 +465,7 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 					}
 				} else {
 					if (busreq) {
-						z80_context * z_context = context->next_context;
+						z80_context * z_context = context->next_cpu;
 						//TODO: Add necessary delay between release of busreq and resumption of execution
 						z_context->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
 					}
@@ -478,7 +481,7 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 					}
 					//TODO: Deal with the scenario in which reset is not asserted long enough
 					if (reset) {
-						z80_context * z_context = context->next_context;
+						z80_context * z_context = context->next_cpu;
 						need_reset = 1;
 						//TODO: Add necessary delay between release of reset and start of execution
 						z_context->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
@@ -854,7 +857,7 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 	return context;
 }
 
-void init_run_cpu(z80_context * zcontext, int debug, FILE * address_log)
+void init_run_cpu(vdp_context * vcontext, z80_context * zcontext, int debug, FILE * address_log)
 {
 	m68k_context context;
 	x86_68k_options opts;
@@ -862,7 +865,8 @@ void init_run_cpu(z80_context * zcontext, int debug, FILE * address_log)
 	opts.address_log = address_log;
 	init_68k_context(&context, opts.native_code_map, &opts);
 	
-	context.next_context = zcontext;
+	context.video_context = vcontext;
+	context.next_cpu = zcontext;
 	//cartridge ROM
 	context.mem_pointers[0] = cart;
 	context.target_cycle = context.sync_cycle = MCLKS_PER_FRAME/MCLKS_PER_68K;
@@ -938,6 +942,6 @@ int main(int argc, char ** argv)
 	z_context.int_cycle = CYCLE_NEVER;
 	z_context.mem_pointers[1] = z_context.mem_pointers[2] = (uint8_t *)cart;
 	
-	init_run_cpu(&z_context, debug, address_log);
+	init_run_cpu(&v_context, &z_context, debug, address_log);
 	return 0;
 }
