@@ -37,12 +37,13 @@ typedef struct {
 	uint32_t        int_cycle;
 	uint32_t        int_num;
 	uint16_t        *mem_pointers[NUM_MEM_AREAS];
-	void            *next_context;
+	void            *video_context;
 	uint16_t        value;
 	
 	native_map_slot *native_code_map;
 	void            *options;
 	uint8_t         ram_code_flags[32/8];
+	void            *next_cpu;
 } m68k_context;
 
 uint8_t * translate_m68k(uint8_t * dst, struct m68kinst * inst, x86_68k_options * opts);
