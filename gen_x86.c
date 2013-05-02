@@ -134,6 +134,10 @@ uint8_t * x86_rr_sizedir(uint8_t * out, uint16_t opcode, uint8_t src, uint8_t ds
 	}
 	if (size == SZ_Q || src >= R8 || dst >= R8 || (size == SZ_B && src >= RSP && src <= RDI)) {
 		*out = PRE_REX;
+		if (src >= AH && src <= BH || dst >= AH && dst <= BH) {
+			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
+			exit(1);
+		}
 		if (size == SZ_Q) {
 			*out |= REX_QUAD;
 		}
@@ -176,6 +180,10 @@ uint8_t * x86_rrdisp8_sizedir(uint8_t * out, uint16_t opcode, uint8_t reg, uint8
 	}
 	if (size == SZ_Q || reg >= R8 || base >= R8 || (size == SZ_B && reg >= RSP && reg <= RDI)) {
 		*out = PRE_REX;
+		if (reg >= AH && reg <= BH) {
+			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
+			exit(1);
+		}
 		if (size == SZ_Q) {
 			*out |= REX_QUAD;
 		}
@@ -221,6 +229,10 @@ uint8_t * x86_rrind_sizedir(uint8_t * out, uint8_t opcode, uint8_t reg, uint8_t 
 	}
 	if (size == SZ_Q || reg >= R8 || base >= R8 || (size == SZ_B && reg >= RSP && reg <= RDI)) {
 		*out = PRE_REX;
+		if (reg >= AH && reg <= BH) {
+			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
+			exit(1);
+		}
 		if (size == SZ_Q) {
 			*out |= REX_QUAD;
 		}
@@ -258,6 +270,10 @@ uint8_t * x86_r_size(uint8_t * out, uint8_t opcode, uint8_t opex, uint8_t dst, u
 	}
 	if (size == SZ_Q || dst >= R8) {
 		*out = PRE_REX;
+		if (dst >= AH && dst <= BH) {
+			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
+			exit(1);
+		}
 		if (size == SZ_Q) {
 			*out |= REX_QUAD;
 		}
