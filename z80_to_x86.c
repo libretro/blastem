@@ -60,6 +60,30 @@ uint8_t z80_high_reg(uint8_t reg)
 	}
 }
 
+uint8_t z80_low_reg(uint8_t reg)
+{
+	switch(reg)
+	{
+	case Z80_B:
+	case Z80_BC:
+		return Z80_C;
+	case Z80_D:
+	case Z80_DE:
+		return Z80_E;
+	case Z80_H:
+	case Z80_HL:
+		return Z80_L;
+	case Z80_IXH:
+	case Z80_IX:
+		return Z80_IXL;
+	case Z80_IYH:
+	case Z80_IY:
+		return Z80_IYL;
+	default:
+		return Z80_UNUSED;
+	}
+}
+
 uint8_t * zcycles(uint8_t * dst, uint32_t num_cycles)
 {
 	return add_ir(dst, num_cycles, ZCYCLES, SZ_D);
@@ -90,6 +114,14 @@ uint8_t * translate_z80_reg(z80inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_
 			dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
 		} else if(opts->regs[inst->reg] >= 0) {
 			ea->base = opts->regs[inst->reg];
+			if (ea->base >= AH && ea->base <= BH && (inst->addr_mode & 0x1F) == Z80_REG) {
+				uint8_t other_reg = opts->regs[inst->ea_reg];
+				if (other_reg > R8 || (other_reg >= RSP && other_reg <= RDI)) {
+					//we can't mix an *H reg with a register that requires the REX prefix
+					ea->base = opts->regs[z80_low_reg(inst->reg)];
+					dst = ror_ir(dst, 8, ea->base, SZ_W);
+				}
+			}
 		} else {
 			ea->mode = MODE_REG_DISPLACE8;
 			ea->base = CONTEXT;
@@ -103,6 +135,12 @@ uint8_t * z80_save_reg(uint8_t * dst, z80inst * inst, x86_z80_options * opts)
 {
 	if (inst->reg == Z80_IYH) {
 		dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
+	} else if ((inst->addr_mode & 0x1F) == Z80_REG && opts->regs[inst->reg] >= AH && opts->regs[inst->reg] <= BH) {
+		uint8_t other_reg = opts->regs[inst->ea_reg];
+		if (other_reg > R8 || (other_reg >= RSP && other_reg <= RDI)) {
+			//we can't mix an *H reg with a register that requires the REX prefix
+			dst = ror_ir(dst, 8, opts->regs[z80_low_reg(inst->reg)], SZ_W);
+		}
 	}
 	return dst;
 }
@@ -120,6 +158,14 @@ uint8_t * translate_z80_ea(z80inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_o
 			dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
 		} else {
 			ea->base = opts->regs[inst->ea_reg];
+			if (ea->base >= AH && ea->base <= BH && inst->reg != Z80_UNUSED && inst->reg != Z80_USE_IMMED) {
+				uint8_t other_reg = opts->regs[inst->reg];
+				if (other_reg > R8 || (other_reg >= RSP && other_reg <= RDI)) {
+					//we can't mix an *H reg with a register that requires the REX prefix
+					ea->base = opts->regs[z80_low_reg(inst->ea_reg)];
+					dst = ror_ir(dst, 8, ea->base, SZ_W);
+				}
+			}
 		}
 		break;
 	case Z80_REG_INDIRECT:
@@ -194,8 +240,16 @@ uint8_t * translate_z80_ea(z80inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_o
 
 uint8_t * z80_save_ea(uint8_t * dst, z80inst * inst, x86_z80_options * opts)
 {
-	if (inst->addr_mode == Z80_REG && inst->ea_reg == Z80_IYH) {
-		dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
+	if ((inst->addr_mode & 0x1F) == Z80_REG) {
+		if (inst->ea_reg == Z80_IYH) {
+			dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
+		} else if (inst->reg != Z80_UNUSED && inst->reg != Z80_USE_IMMED && opts->regs[inst->ea_reg] >= AH && opts->regs[inst->ea_reg] <= BH) {
+			uint8_t other_reg = opts->regs[inst->reg];
+			if (other_reg > R8 || (other_reg >= RSP && other_reg <= RDI)) {
+				//we can't mix an *H reg with a register that requires the REX prefix
+				dst = ror_ir(dst, 8, opts->regs[z80_low_reg(inst->ea_reg)], SZ_W);
+			}
+		}
 	}
 	return dst;
 }
@@ -1218,12 +1272,14 @@ uint8_t * z80_get_native_address(z80_context * context, uint32_t address)
 		address &= 0x7FFF;
 		map = context->banked_code_map + (context->bank_reg << 15);
 	} else {
+		printf("z80_get_native_address: %X NULL\n", address);
 		return NULL;
 	}
 	if (!map->base || !map->offsets || map->offsets[address] == INVALID_OFFSET) {
+		printf("z80_get_native_address: %X NULL\n", address);
 		return NULL;
 	}
-	//printf("z80_get_native_address: %X %p\n", address, map->base + map->offsets[address]);
+	printf("z80_get_native_address: %X %p\n", address, map->base + map->offsets[address]);
 	return map->base + map->offsets[address];
 }
 
@@ -1302,7 +1358,7 @@ z80_context * z80_handle_code_write(uint32_t address, z80_context * context)
 	uint32_t inst_start = z80_get_instruction_start(context->static_code_map, address);
 	if (inst_start != INVALID_INSTRUCTION_START) {
 		uint8_t * dst = z80_get_native_address(context, inst_start);
-		//printf("patching code at %p for Z80 instruction at %X due to write to %X\n", dst, inst_start, address);
+		printf("patching code at %p for Z80 instruction at %X due to write to %X\n", dst, inst_start, address);
 		dst = mov_ir(dst, inst_start, SCRATCH1, SZ_D);
 		dst = jmp(dst, (uint8_t *)z80_retrans_stub);
 	}
@@ -1343,14 +1399,14 @@ void * z80_retranslate_inst(uint32_t address, z80_context * context)
 	uint8_t * dst_end = opts->code_end;
 	uint8_t *after, *inst = context->mem_pointers[0] + address;
 	z80inst instbuf;
-	//printf("Retranslating code at Z80 address %X, native address %p\n", address, orig_start);
+	printf("Retranslating code at Z80 address %X, native address %p\n", address, orig_start);
 	after = z80_decode(inst, &instbuf);
-	/*z80_disasm(&instbuf, disbuf);
+	z80_disasm(&instbuf, disbuf);
 	if (instbuf.op == Z80_NOP) {
 		printf("%X\t%s(%d)\n", address, disbuf, instbuf.immed);
 	} else {
 		printf("%X\t%s\n", address, disbuf);
-	}*/
+	}
 	if (orig_size != ZMAX_NATIVE_SIZE) {
 		if (dst_end - dst < ZMAX_NATIVE_SIZE) {
 			size_t size = 1024*1024;
@@ -1408,7 +1464,7 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 	while (encoded != NULL)
 	{
 		z80inst inst;
-		//printf("translating Z80 code at address %X\n", address);
+		printf("translating Z80 code at address %X\n", address);
 		do {
 			if (opts->code_end-opts->cur_code < ZMAX_NATIVE_SIZE) {
 				if (opts->code_end-opts->cur_code < 5) {
