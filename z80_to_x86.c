@@ -1322,8 +1322,18 @@ uint8_t * z80_get_native_address_trans(z80_context * context, uint32_t address)
 	return addr;
 }
 
+void z80_handle_deferred(z80_context * context)
+{
+	x86_z80_options * opts = context->options;
+	process_deferred(&opts->deferred, context, (native_addr_func)z80_get_native_address);
+	if (opts->deferred) {
+		translate_z80_stream(context, opts->deferred->address);
+	}
+}
+
 void * z80_retranslate_inst(uint32_t address, z80_context * context)
 {
+	char disbuf[80];
 	x86_z80_options * opts = context->options;
 	uint8_t orig_size = z80_get_native_inst_size(opts, address);
 	uint8_t * orig_start = z80_get_native_address(context, address);
@@ -1333,7 +1343,14 @@ void * z80_retranslate_inst(uint32_t address, z80_context * context)
 	uint8_t * dst_end = opts->code_end;
 	uint8_t *after, *inst = context->mem_pointers[0] + address;
 	z80inst instbuf;
+	//printf("Retranslating code at Z80 address %X, native address %p\n", address, orig_start);
 	after = z80_decode(inst, &instbuf);
+	/*z80_disasm(&instbuf, disbuf);
+	if (instbuf.op == Z80_NOP) {
+		printf("%X\t%s(%d)\n", address, disbuf, instbuf.immed);
+	} else {
+		printf("%X\t%s\n", address, disbuf);
+	}*/
 	if (orig_size != ZMAX_NATIVE_SIZE) {
 		if (dst_end - dst < ZMAX_NATIVE_SIZE) {
 			size_t size = 1024*1024;
@@ -1346,27 +1363,31 @@ void * z80_retranslate_inst(uint32_t address, z80_context * context)
 			uint8_t * native_next = z80_get_native_address(context, address + after-inst);
 			if (native_next && ((native_next == orig_start + orig_size) || (orig_size - (native_end - dst)) > 5)) {
 				native_end = translate_z80inst(&instbuf, orig_start, context, address);
-				if (native_next == orig_start + orig_size) {
+				if (native_next == orig_start + orig_size && (native_next-native_end) < 2) {
 					while (native_end < orig_start + orig_size) {
 						*(native_end++) = 0x90; //NOP
 					}
 				} else {
 					jmp(native_end, native_next);
 				}
+				z80_handle_deferred(context);
 				return orig_start;
 			}
 		}
 		z80_map_native_address(context, address, dst, after-inst, ZMAX_NATIVE_SIZE);
-		opts->code_end = dst+ZMAX_NATIVE_SIZE;
+		opts->cur_code = dst+ZMAX_NATIVE_SIZE;
+		jmp(orig_start, dst);
 		if(!(instbuf.op == Z80_RET || instbuf.op == Z80_RETI || instbuf.op == Z80_RETN || instbuf.op == Z80_JP || (instbuf.op == Z80_NOP && instbuf.immed == 42))) {
 			jmp(native_end, z80_get_native_address_trans(context, address + after-inst));
 		}
+		z80_handle_deferred(context);
 		return dst;
 	} else {
 		dst = translate_z80inst(&instbuf, orig_start, context, address);
 		if(!(instbuf.op == Z80_RET || instbuf.op == Z80_RETI || instbuf.op == Z80_RETN || instbuf.op == Z80_JP || (instbuf.op == Z80_NOP && instbuf.immed == 42))) {
 			dst = jmp(dst, z80_get_native_address_trans(context, address + after-inst));
 		}
+		z80_handle_deferred(context);
 		return orig_start;
 	}
 }
