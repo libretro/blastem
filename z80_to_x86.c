@@ -1223,6 +1223,7 @@ uint8_t * z80_get_native_address(z80_context * context, uint32_t address)
 	if (!map->base || !map->offsets || map->offsets[address] == INVALID_OFFSET) {
 		return NULL;
 	}
+	//printf("z80_get_native_address: %X %p\n", address, map->base + map->offsets[address]);
 	return map->base + map->offsets[address];
 }
 
@@ -1301,10 +1302,24 @@ z80_context * z80_handle_code_write(uint32_t address, z80_context * context)
 	uint32_t inst_start = z80_get_instruction_start(context->static_code_map, address);
 	if (inst_start != INVALID_INSTRUCTION_START) {
 		uint8_t * dst = z80_get_native_address(context, inst_start);
+		//printf("patching code at %p for Z80 instruction at %X due to write to %X\n", dst, inst_start, address);
 		dst = mov_ir(dst, inst_start, SCRATCH1, SZ_D);
 		dst = jmp(dst, (uint8_t *)z80_retrans_stub);
 	}
 	return context;
+}
+
+uint8_t * z80_get_native_address_trans(z80_context * context, uint32_t address)
+{
+	uint8_t * addr = z80_get_native_address(context, address);
+	if (!addr) {
+		translate_z80_stream(context, address);
+		addr = z80_get_native_address(context, address);
+		if (!addr) {
+			printf("Failed to translate %X to native code\n", address);
+		}
+	}
+	return addr;
 }
 
 void * z80_retranslate_inst(uint32_t address, z80_context * context)
@@ -1328,39 +1343,32 @@ void * z80_retranslate_inst(uint32_t address, z80_context * context)
 		}
 		uint8_t * native_end = translate_z80inst(&instbuf, dst, context, address);
 		if ((native_end - dst) <= orig_size) {
-			native_end = translate_z80inst(&instbuf, orig_start, context, address);
-			while (native_end < orig_start + orig_size) {
-				*(native_end++) = 0x90; //NOP
+			uint8_t * native_next = z80_get_native_address(context, address + after-inst);
+			if (native_next && ((native_next == orig_start + orig_size) || (orig_size - (native_end - dst)) > 5)) {
+				native_end = translate_z80inst(&instbuf, orig_start, context, address);
+				if (native_next == orig_start + orig_size) {
+					while (native_end < orig_start + orig_size) {
+						*(native_end++) = 0x90; //NOP
+					}
+				} else {
+					jmp(native_end, native_next);
+				}
+				return orig_start;
 			}
-			return orig_start;
-		} else {
-			z80_map_native_address(context, address, dst, after-inst, ZMAX_NATIVE_SIZE);
-			opts->code_end = dst+ZMAX_NATIVE_SIZE;
-			if(!(instbuf.op == Z80_RET || instbuf.op == Z80_RETI || instbuf.op == Z80_RETN || instbuf.op == Z80_JP || (instbuf.op == Z80_NOP && instbuf.immed == 42))) {
-				jmp(native_end, z80_get_native_address(context, address + after-inst));
-			}
-			return dst;
 		}
+		z80_map_native_address(context, address, dst, after-inst, ZMAX_NATIVE_SIZE);
+		opts->code_end = dst+ZMAX_NATIVE_SIZE;
+		if(!(instbuf.op == Z80_RET || instbuf.op == Z80_RETI || instbuf.op == Z80_RETN || instbuf.op == Z80_JP || (instbuf.op == Z80_NOP && instbuf.immed == 42))) {
+			jmp(native_end, z80_get_native_address_trans(context, address + after-inst));
+		}
+		return dst;
 	} else {
 		dst = translate_z80inst(&instbuf, orig_start, context, address);
 		if(!(instbuf.op == Z80_RET || instbuf.op == Z80_RETI || instbuf.op == Z80_RETN || instbuf.op == Z80_JP || (instbuf.op == Z80_NOP && instbuf.immed == 42))) {
-			dst = jmp(dst, z80_get_native_address(context, address + after-inst));
+			dst = jmp(dst, z80_get_native_address_trans(context, address + after-inst));
 		}
 		return orig_start;
 	}
-}
-
-uint8_t * z80_get_native_address_trans(z80_context * context, uint32_t address)
-{
-	uint8_t * addr = z80_get_native_address(context, address);
-	if (!addr) {
-		translate_z80_stream(context, address);
-		addr = z80_get_native_address(context, address);
-		if (!addr) {
-			printf("Failed to translate %X to native code\n", address);
-		}
-	}
-	return addr;
 }
 
 void translate_z80_stream(z80_context * context, uint32_t address)
@@ -1379,7 +1387,7 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 	while (encoded != NULL)
 	{
 		z80inst inst;
-		printf("translating Z80 code at address %X\n", address);
+		//printf("translating Z80 code at address %X\n", address);
 		do {
 			if (opts->code_end-opts->cur_code < ZMAX_NATIVE_SIZE) {
 				if (opts->code_end-opts->cur_code < 5) {
