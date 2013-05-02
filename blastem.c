@@ -150,10 +150,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 				z_context->int_cycle = ZVINT_CYCLE;
 			}
 			z_context->target_cycle = z_context->sync_cycle < z_context->int_cycle ? z_context->sync_cycle : z_context->int_cycle;
-			printf("Running Z80 from cycle %d to cycle %d\n", z_context->current_cycle, z_context->sync_cycle);
-			printf("HL: %X, Native PC: %p\n", (z_context->regs[Z80_H] << 8) | z_context->regs[Z80_L], z_context->native_pc);
 			z80_run(z_context);
-			printf("Z80 returned at cycle %d\n", z_context->current_cycle);
 		}
 	}
 	if (mclks >= MCLKS_PER_FRAME) {
