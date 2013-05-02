@@ -26,6 +26,7 @@ io_port gamepad_1;
 io_port gamepad_2;
 
 int headless = 0;
+int z80_enabled = 1;
 
 #ifndef MIN
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
@@ -139,7 +140,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	z80_context * z_context = context->next_cpu;
 	vdp_context * v_context = context->video_context;
 	uint32_t mclks = context->current_cycle * MCLKS_PER_68K;
-	if (!reset && !busreq) {
+	if (z80_enabled && !reset && !busreq) {
 		if (need_reset) {
 			z80_reset(z_context);
 			need_reset = 0;
@@ -909,6 +910,9 @@ int main(int argc, char ** argv)
 				break;
 			case 'v':
 				headless = 1;
+				break;
+			case 'n':
+				z80_enabled = 0;
 				break;
 			default:
 				fprintf(stderr, "Unrecognized switch %s\n", argv[i]);
