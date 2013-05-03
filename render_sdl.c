@@ -366,7 +366,7 @@ int wait_render_frame(vdp_context * context)
 		}
 	}
 	//TODO: Adjust frame delay so we actually get 60 FPS rather than 62.5 FPS
-	uint32_t current = SDL_GetTicks();
+	/*uint32_t current = SDL_GetTicks();
 	uint32_t desired = last_frame + FRAME_DELAY;
 	if (current < desired) {
 		uint32_t delay = last_frame + FRAME_DELAY - current;
@@ -376,14 +376,14 @@ int wait_render_frame(vdp_context * context)
 		}
 		while ((desired) >= SDL_GetTicks()) {
 		}
-	}
+	}*/
 	render_context(context);
 	
-	/*
+	
 	//TODO: Figure out why this causes segfaults
-	frame_counter++;
+	/*frame_counter++;
 	if ((last_frame - start) > 1000) {
-		if (start) {
+		if (start && (last_frame-start)) {
 			printf("\r%f fps", ((float)frame_counter) / (((float)(last_frame-start)) / 1000.0));
 			fflush(stdout);
 		}
