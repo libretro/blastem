@@ -134,12 +134,14 @@ uint8_t busack = 0;
 uint32_t busack_cycle = CYCLE_NEVER;
 uint8_t new_busack = 0;
 
-m68k_context * sync_components(m68k_context * context, uint32_t address)
+#ifdef DO_DEBUG_PRINT
+#define dprintf printf
+#else
+#define dprintf
+#endif
+
+void sync_z80(z80_context * z_context, uint32_t mclks)
 {
-	//TODO: Handle sync targets smaller than a single frame
-	z80_context * z_context = context->next_cpu;
-	vdp_context * v_context = context->video_context;
-	uint32_t mclks = context->current_cycle * MCLKS_PER_68K;
 	if (z80_enabled && !reset && !busreq) {
 		if (need_reset) {
 			z80_reset(z_context);
@@ -151,11 +153,20 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 				z_context->int_cycle = ZVINT_CYCLE;
 			}
 			z_context->target_cycle = z_context->sync_cycle < z_context->int_cycle ? z_context->sync_cycle : z_context->int_cycle;
-			//printf("Running Z80 from cycle %d to cycle %d. Native PC: %p\n", z_context->current_cycle, z_context->sync_cycle, z_context->native_pc);
+			dprintf("Running Z80 from cycle %d to cycle %d. Native PC: %p\n", z_context->current_cycle, z_context->sync_cycle, z_context->native_pc);
 			z80_run(z_context);
-			//printf("Z80 ran to cycle %d\n", z_context->current_cycle);
+			dprintf("Z80 ran to cycle %d\n", z_context->current_cycle);
 		}
 	}
+}
+
+m68k_context * sync_components(m68k_context * context, uint32_t address)
+{
+	//TODO: Handle sync targets smaller than a single frame
+	vdp_context * v_context = context->video_context;
+	z80_context * z_context = context->next_cpu;
+	uint32_t mclks = context->current_cycle * MCLKS_PER_68K;
+	sync_z80(z_context, mclks);
 	if (mclks >= MCLKS_PER_FRAME) {
 		//printf("reached frame end | 68K Cycles: %d, MCLK Cycles: %d\n", context->current_cycle, mclks);
 		vdp_run_context(v_context, MCLKS_PER_FRAME);
@@ -373,11 +384,13 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 			}
 		} else {
 			if (location == 0x1100) {
+				sync_z80(context->next_cpu, context->current_cycle * MCLKS_PER_68K);
 				if (busack_cycle > context->current_cycle) {
 					busack = new_busack;
 					busack_cycle = CYCLE_NEVER;
 				}
 				if (value & 1) {
+					puts("bus requesting Z80");
 					busreq = 1;
 					if(!reset) {
 						busack_cycle = context->current_cycle + Z80_ACK_DELAY;
@@ -385,6 +398,7 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 					}
 				} else {
 					if (busreq) {
+						puts("releasing z80 bus");
 						z80_context * z_context = context->next_cpu;
 						//TODO: Add necessary delay between release of busreq and resumption of execution
 						z_context->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
@@ -394,6 +408,7 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 					busack = 1;
 				}
 			} else if (location == 0x1200) {
+				sync_z80(context->next_cpu, context->current_cycle * MCLKS_PER_68K);
 				if (value & 1) {
 					if (reset && busreq) {
 						new_busack = 0;
@@ -453,11 +468,13 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 		} else {
 			//printf("IO Write of %X to %X @ %d\n", value, location, context->current_cycle);
 			if (location == 0x1100) {
+				sync_z80(context->next_cpu, context->current_cycle * MCLKS_PER_68K);
 				if (busack_cycle > context->current_cycle) {
 					busack = new_busack;
 					busack_cycle = CYCLE_NEVER;
 				}
 				if (value & 0x100) {
+					printf("bus requesting Z80 @ %d\n", (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80);
 					busreq = 1;
 					if(!reset) {
 						busack_cycle = context->current_cycle + Z80_ACK_DELAY;
@@ -465,6 +482,7 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 					}
 				} else {
 					if (busreq) {
+						printf("releasing Z80 bus @ %d\n", (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80);
 						z80_context * z_context = context->next_cpu;
 						//TODO: Add necessary delay between release of busreq and resumption of execution
 						z_context->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
@@ -474,6 +492,7 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 					busack = 1;
 				}
 			} else if (location == 0x1200) {
+				sync_z80(context->next_cpu, context->current_cycle * MCLKS_PER_68K);
 				if (value & 0x100) {
 					if (reset && busreq) {
 						new_busack = 0;

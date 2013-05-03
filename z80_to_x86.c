@@ -15,6 +15,12 @@
 #define SCRATCH2 R14
 #define CONTEXT RSI
 
+#ifdef DO_DEBUG_PRINT
+#define dprintf printf
+#else
+#define dprintf
+#endif
+
 void z80_read_byte();
 void z80_read_word();
 void z80_write_byte();
@@ -114,10 +120,16 @@ uint8_t * translate_z80_reg(z80inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_
 			dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
 		} else if(opts->regs[inst->reg] >= 0) {
 			ea->base = opts->regs[inst->reg];
-			if (ea->base >= AH && ea->base <= BH && (inst->addr_mode & 0x1F) == Z80_REG) {
-				uint8_t other_reg = opts->regs[inst->ea_reg];
-				if (other_reg > R8 || (other_reg >= RSP && other_reg <= RDI)) {
-					//we can't mix an *H reg with a register that requires the REX prefix
+			if (ea->base >= AH && ea->base <= BH) {
+				if ((inst->addr_mode & 0x1F) == Z80_REG) {
+					uint8_t other_reg = opts->regs[inst->ea_reg];
+					if (other_reg > R8 || (other_reg >= RSP && other_reg <= RDI)) {
+						//we can't mix an *H reg with a register that requires the REX prefix
+						ea->base = opts->regs[z80_low_reg(inst->reg)];
+						dst = ror_ir(dst, 8, ea->base, SZ_W);
+					}
+				} else if((inst->addr_mode & 0x1F) != Z80_UNUSED && (inst->addr_mode & 0x1F) != Z80_IMMED) {
+					//temp regs require REX prefix too
 					ea->base = opts->regs[z80_low_reg(inst->reg)];
 					dst = ror_ir(dst, 8, ea->base, SZ_W);
 				}
@@ -135,10 +147,15 @@ uint8_t * z80_save_reg(uint8_t * dst, z80inst * inst, x86_z80_options * opts)
 {
 	if (inst->reg == Z80_IYH) {
 		dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
-	} else if ((inst->addr_mode & 0x1F) == Z80_REG && opts->regs[inst->reg] >= AH && opts->regs[inst->reg] <= BH) {
-		uint8_t other_reg = opts->regs[inst->ea_reg];
-		if (other_reg > R8 || (other_reg >= RSP && other_reg <= RDI)) {
-			//we can't mix an *H reg with a register that requires the REX prefix
+	} else if (opts->regs[inst->reg] >= AH && opts->regs[inst->reg] <= BH) {
+		if ((inst->addr_mode & 0x1F) == Z80_REG) {
+			uint8_t other_reg = opts->regs[inst->ea_reg];
+			if (other_reg > R8 || (other_reg >= RSP && other_reg <= RDI)) {
+				//we can't mix an *H reg with a register that requires the REX prefix
+				dst = ror_ir(dst, 8, opts->regs[z80_low_reg(inst->reg)], SZ_W);
+			}
+		} else if((inst->addr_mode & 0x1F) != Z80_UNUSED && (inst->addr_mode & 0x1F) != Z80_IMMED) {
+			//temp regs require REX prefix too
 			dst = ror_ir(dst, 8, opts->regs[z80_low_reg(inst->reg)], SZ_W);
 		}
 	}
@@ -1272,14 +1289,14 @@ uint8_t * z80_get_native_address(z80_context * context, uint32_t address)
 		address &= 0x7FFF;
 		map = context->banked_code_map + (context->bank_reg << 15);
 	} else {
-		printf("z80_get_native_address: %X NULL\n", address);
+		dprintf("z80_get_native_address: %X NULL\n", address);
 		return NULL;
 	}
-	if (!map->base || !map->offsets || map->offsets[address] == INVALID_OFFSET) {
-		printf("z80_get_native_address: %X NULL\n", address);
+	if (!map->base || !map->offsets || map->offsets[address] == INVALID_OFFSET || map->offsets[address] == EXTENSION_WORD) {
+		dprintf("z80_get_native_address: %X NULL\n", address);
 		return NULL;
 	}
-	printf("z80_get_native_address: %X %p\n", address, map->base + map->offsets[address]);
+	dprintf("z80_get_native_address: %X %p\n", address, map->base + map->offsets[address]);
 	return map->base + map->offsets[address];
 }
 
@@ -1358,7 +1375,7 @@ z80_context * z80_handle_code_write(uint32_t address, z80_context * context)
 	uint32_t inst_start = z80_get_instruction_start(context->static_code_map, address);
 	if (inst_start != INVALID_INSTRUCTION_START) {
 		uint8_t * dst = z80_get_native_address(context, inst_start);
-		printf("patching code at %p for Z80 instruction at %X due to write to %X\n", dst, inst_start, address);
+		dprintf("patching code at %p for Z80 instruction at %X due to write to %X\n", dst, inst_start, address);
 		dst = mov_ir(dst, inst_start, SCRATCH1, SZ_D);
 		dst = jmp(dst, (uint8_t *)z80_retrans_stub);
 	}
@@ -1399,14 +1416,16 @@ void * z80_retranslate_inst(uint32_t address, z80_context * context)
 	uint8_t * dst_end = opts->code_end;
 	uint8_t *after, *inst = context->mem_pointers[0] + address;
 	z80inst instbuf;
-	printf("Retranslating code at Z80 address %X, native address %p\n", address, orig_start);
+	dprintf("Retranslating code at Z80 address %X, native address %p\n", address, orig_start);
 	after = z80_decode(inst, &instbuf);
+	#ifdef DO_DEBUG_PRINT
 	z80_disasm(&instbuf, disbuf);
 	if (instbuf.op == Z80_NOP) {
 		printf("%X\t%s(%d)\n", address, disbuf, instbuf.immed);
 	} else {
 		printf("%X\t%s\n", address, disbuf);
 	}
+	#endif
 	if (orig_size != ZMAX_NATIVE_SIZE) {
 		if (dst_end - dst < ZMAX_NATIVE_SIZE) {
 			size_t size = 1024*1024;
@@ -1464,7 +1483,7 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 	while (encoded != NULL)
 	{
 		z80inst inst;
-		printf("translating Z80 code at address %X\n", address);
+		dprintf("translating Z80 code at address %X\n", address);
 		do {
 			if (opts->code_end-opts->cur_code < ZMAX_NATIVE_SIZE) {
 				if (opts->code_end-opts->cur_code < 5) {
@@ -1487,12 +1506,14 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 				break;
 			}
 			next = z80_decode(encoded, &inst);
+			#ifdef DO_DEBUG_PRINT
 			z80_disasm(&inst, disbuf);
 			if (inst.op == Z80_NOP) {
 				printf("%X\t%s(%d)\n", address, disbuf, inst.immed);
 			} else {
 				printf("%X\t%s\n", address, disbuf);
 			}
+			#endif
 			uint8_t *after = translate_z80inst(&inst, opts->cur_code, context, address);
 			z80_map_native_address(context, address, opts->cur_code, next-encoded, after - opts->cur_code);
 			opts->cur_code = after;
@@ -1507,7 +1528,7 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 		process_deferred(&opts->deferred, context, (native_addr_func)z80_get_native_address);
 		if (opts->deferred) {
 			address = opts->deferred->address;
-			printf("defferred address: %X\n", address);
+			dprintf("defferred address: %X\n", address);
 			if (address < 0x4000) {
 				encoded = context->mem_pointers[0] + (address & 0x1FFF);
 			} else if (address > 0x8000 && context->mem_pointers[1]) {
@@ -1570,6 +1591,7 @@ void z80_reset(z80_context * context)
 	context->im = 0;
 	context->iff1 = context->iff2 = 0;
 	context->native_pc = z80_get_native_address_trans(context, 0);
+	context->extra_pc = NULL;
 }
 
 
