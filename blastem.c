@@ -136,8 +136,10 @@ uint8_t new_busack = 0;
 
 #ifdef DO_DEBUG_PRINT
 #define dprintf printf
+#define dputs puts
 #else
 #define dprintf
+#define dputs
 #endif
 
 void sync_z80(z80_context * z_context, uint32_t mclks)
@@ -390,7 +392,7 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 					busack_cycle = CYCLE_NEVER;
 				}
 				if (value & 1) {
-					puts("bus requesting Z80");
+					dputs("bus requesting Z80");
 					busreq = 1;
 					if(!reset) {
 						busack_cycle = context->current_cycle + Z80_ACK_DELAY;
@@ -398,7 +400,7 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 					}
 				} else {
 					if (busreq) {
-						puts("releasing z80 bus");
+						dputs("releasing z80 bus");
 						z80_context * z_context = context->next_cpu;
 						//TODO: Add necessary delay between release of busreq and resumption of execution
 						z_context->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
@@ -474,7 +476,7 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 					busack_cycle = CYCLE_NEVER;
 				}
 				if (value & 0x100) {
-					printf("bus requesting Z80 @ %d\n", (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80);
+					dprintf("bus requesting Z80 @ %d\n", (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80);
 					busreq = 1;
 					if(!reset) {
 						busack_cycle = context->current_cycle + Z80_ACK_DELAY;
@@ -482,7 +484,7 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 					}
 				} else {
 					if (busreq) {
-						printf("releasing Z80 bus @ %d\n", (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80);
+						dprintf("releasing Z80 bus @ %d\n", (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80);
 						z80_context * z_context = context->next_cpu;
 						//TODO: Add necessary delay between release of busreq and resumption of execution
 						z_context->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
