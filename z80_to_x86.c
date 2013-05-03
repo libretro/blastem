@@ -507,7 +507,21 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = mov_rdisp8r(dst, CONTEXT, zar_off(Z80_E), opts->regs[Z80_DE], SZ_W);
 		dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, zar_off(Z80_E), SZ_W);
 		break;
-	//case Z80_LDI:
+	case Z80_LDI: {
+		dst = zcycles(dst, 8);
+		dst = mov_rr(dst, opts->regs[Z80_HL], SCRATCH1, SZ_W);
+		dst = call(dst, (uint8_t *)z80_read_byte);
+		dst = mov_rr(dst, opts->regs[Z80_DE], SCRATCH2, SZ_W);
+		dst = call(dst, (uint8_t *)z80_read_byte);
+		dst = zcycles(dst, 2);
+		dst = add_ir(dst, 1, opts->regs[Z80_DE], SZ_W);
+		dst = add_ir(dst, 1, opts->regs[Z80_HL], SZ_W);
+		dst = sub_ir(dst, 1, opts->regs[Z80_BC], SZ_W);
+		//TODO: Implement half-carry
+		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
+		dst = setcc_rdisp8(dst, CC_NZ, CONTEXT, zf_off(ZF_PV));
+		break;
+	}
 	case Z80_LDIR: {
 		dst = zcycles(dst, 8);
 		dst = mov_rr(dst, opts->regs[Z80_HL], SCRATCH1, SZ_W);
