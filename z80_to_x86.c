@@ -123,7 +123,7 @@ uint8_t * translate_z80_reg(z80inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_
 			if (ea->base >= AH && ea->base <= BH) {
 				if ((inst->addr_mode & 0x1F) == Z80_REG) {
 					uint8_t other_reg = opts->regs[inst->ea_reg];
-					if (other_reg > R8 || (other_reg >= RSP && other_reg <= RDI)) {
+					if (other_reg >= R8 || (other_reg >= RSP && other_reg <= RDI)) {
 						//we can't mix an *H reg with a register that requires the REX prefix
 						ea->base = opts->regs[z80_low_reg(inst->reg)];
 						dst = ror_ir(dst, 8, ea->base, SZ_W);
@@ -150,7 +150,7 @@ uint8_t * z80_save_reg(uint8_t * dst, z80inst * inst, x86_z80_options * opts)
 	} else if (opts->regs[inst->reg] >= AH && opts->regs[inst->reg] <= BH) {
 		if ((inst->addr_mode & 0x1F) == Z80_REG) {
 			uint8_t other_reg = opts->regs[inst->ea_reg];
-			if (other_reg > R8 || (other_reg >= RSP && other_reg <= RDI)) {
+			if (other_reg >= R8 || (other_reg >= RSP && other_reg <= RDI)) {
 				//we can't mix an *H reg with a register that requires the REX prefix
 				dst = ror_ir(dst, 8, opts->regs[z80_low_reg(inst->reg)], SZ_W);
 			}
@@ -177,7 +177,7 @@ uint8_t * translate_z80_ea(z80inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_o
 			ea->base = opts->regs[inst->ea_reg];
 			if (ea->base >= AH && ea->base <= BH && inst->reg != Z80_UNUSED && inst->reg != Z80_USE_IMMED) {
 				uint8_t other_reg = opts->regs[inst->reg];
-				if (other_reg > R8 || (other_reg >= RSP && other_reg <= RDI)) {
+				if (other_reg >= R8 || (other_reg >= RSP && other_reg <= RDI)) {
 					//we can't mix an *H reg with a register that requires the REX prefix
 					ea->base = opts->regs[z80_low_reg(inst->ea_reg)];
 					dst = ror_ir(dst, 8, ea->base, SZ_W);
@@ -244,6 +244,7 @@ uint8_t * translate_z80_ea(z80inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_o
 				dst = pop_r(dst, SCRATCH2);
 			}
 		}
+		ea->base = SCRATCH1;
 		break;
 	case Z80_UNUSED:
 		ea->mode = MODE_UNUSED;
@@ -262,7 +263,7 @@ uint8_t * z80_save_ea(uint8_t * dst, z80inst * inst, x86_z80_options * opts)
 			dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
 		} else if (inst->reg != Z80_UNUSED && inst->reg != Z80_USE_IMMED && opts->regs[inst->ea_reg] >= AH && opts->regs[inst->ea_reg] <= BH) {
 			uint8_t other_reg = opts->regs[inst->reg];
-			if (other_reg > R8 || (other_reg >= RSP && other_reg <= RDI)) {
+			if (other_reg >= R8 || (other_reg >= RSP && other_reg <= RDI)) {
 				//we can't mix an *H reg with a register that requires the REX prefix
 				dst = ror_ir(dst, 8, opts->regs[z80_low_reg(inst->ea_reg)], SZ_W);
 			}
