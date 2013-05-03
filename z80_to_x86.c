@@ -851,9 +851,23 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = z80_save_reg(dst, inst, opts);
 		dst = z80_save_ea(dst, inst, opts);
 		break;
-	/*case Z80_DAA:
+	//case Z80_DAA:
 	case Z80_CPL:
-	case Z80_NEG:*/
+		dst = zcycles(dst, 4);
+		dst = not_r(dst, opts->regs[Z80_A], SZ_B);
+		//TODO: Implement half-carry flag
+		dst = mov_irdisp8(dst, 1, CONTEXT, zf_off(ZF_N), SZ_B);
+		break;
+	case Z80_NEG:
+		dst = zcycles(dst, 8);
+		dst = neg_r(dst, opts->regs[Z80_A], SZ_B);
+		//TODO: Implement half-carry flag
+		dst = setcc_rdisp8(dst, CC_Z, CONTEXT, zf_off(ZF_Z));
+		dst = setcc_rdisp8(dst, CC_S, CONTEXT, zf_off(ZF_S));
+		dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_C));
+		dst = setcc_rdisp8(dst, CC_O, CONTEXT, zf_off(ZF_PV));
+		dst = mov_irdisp8(dst, 1, CONTEXT, zf_off(ZF_N), SZ_B);
+		break;
 	case Z80_CCF:
 		dst = zcycles(dst, 4);
 		dst = xor_irdisp8(dst, 1, CONTEXT, zf_off(ZF_C), SZ_B);
