@@ -38,6 +38,7 @@ z80_handle_cycle_limit_int:
 	shr $8, %r13w
 	call z_inccycles
 	call z80_write_byte_noinc
+	pop %r14 /*dispose of return address */
 	/* TODO: Support interrupt mode 0 and 2 */
 	mov $0x38, %r13w
 	call z80_native_addr
