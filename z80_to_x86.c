@@ -192,7 +192,8 @@ uint8_t * translate_z80_ea(z80inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_o
 		size = z80_size(inst);
 		if (read) {
 			if (modify) {
-				dst = push_r(dst, SCRATCH1);
+				//dst = push_r(dst, SCRATCH1);
+				dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(z80_context, scratch1), SZ_W);
 			}
 			if (size == SZ_B) {
 				dst = call(dst, (uint8_t *)z80_read_byte);
@@ -200,7 +201,8 @@ uint8_t * translate_z80_ea(z80inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_o
 				dst = call(dst, (uint8_t *)z80_read_word);
 			}
 			if (modify) {
-				dst = pop_r(dst, SCRATCH2);
+				//dst = pop_r(dst, SCRATCH2);
+				dst = mov_rdisp8r(dst, CONTEXT, offsetof(z80_context, scratch1), SCRATCH2, SZ_W);
 			}
 		}
 		ea->base = SCRATCH1;
@@ -213,16 +215,17 @@ uint8_t * translate_z80_ea(z80inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_o
 		dst = mov_ir(dst, inst->immed, areg, SZ_W);
 		size = z80_size(inst);
 		if (read) {
-			if (modify) {
+			/*if (modify) {
 				dst = push_r(dst, SCRATCH1);
-			}
+			}*/
 			if (size == SZ_B) {
 				dst = call(dst, (uint8_t *)z80_read_byte);
 			} else {
 				dst = call(dst, (uint8_t *)z80_read_word);
 			}
 			if (modify) {
-				dst = pop_r(dst, SCRATCH2);
+				//dst = pop_r(dst, SCRATCH2);
+				dst = mov_ir(dst, inst->immed, SCRATCH2, SZ_W);
 			}
 		}
 		ea->base = SCRATCH1;
@@ -235,7 +238,8 @@ uint8_t * translate_z80_ea(z80inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_o
 		size = z80_size(inst);
 		if (read) {
 			if (modify) {
-				dst = push_r(dst, SCRATCH1);
+				//dst = push_r(dst, SCRATCH1);
+				dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(z80_context, scratch1), SZ_W);
 			}
 			if (size == SZ_B) {
 				dst = call(dst, (uint8_t *)z80_read_byte);
@@ -243,7 +247,8 @@ uint8_t * translate_z80_ea(z80inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_o
 				dst = call(dst, (uint8_t *)z80_read_word);
 			}
 			if (modify) {
-				dst = pop_r(dst, SCRATCH2);
+				//dst = pop_r(dst, SCRATCH2);
+				dst = mov_rdisp8r(dst, CONTEXT, offsetof(z80_context, scratch1), SCRATCH2, SZ_W);
 			}
 		}
 		ea->base = SCRATCH1;
