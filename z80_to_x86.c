@@ -35,6 +35,7 @@ void z80_handle_cycle_limit_int();
 void z80_retrans_stub();
 void z80_io_read();
 void z80_io_write();
+void z80_halt();
 
 uint8_t z80_size(z80inst * inst)
 {
@@ -898,7 +899,13 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			dst = zcycles(dst, 4 * inst->immed);
 		}
 		break;
-	//case Z80_HALT:
+	case Z80_HALT:
+		dst = zcycles(dst, 4);
+		dst = mov_ir(dst, address, SCRATCH1, SZ_W);
+		uint8_t * call_inst = dst;
+		dst = call(dst, (uint8_t *)z80_halt);
+		dst = jmp(dst, call_inst);
+		break;
 	case Z80_DI:
 		dst = zcycles(dst, 4);
 		dst = mov_irdisp8(dst, 0, CONTEXT, offsetof(z80_context, iff1), SZ_B);
