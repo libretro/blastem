@@ -133,7 +133,7 @@ uint8_t busreq = 0;
 uint8_t busack = 0;
 uint32_t busack_cycle = CYCLE_NEVER;
 uint8_t new_busack = 0;
-#define DO_DEBUG_PRINT
+//#define DO_DEBUG_PRINT
 #ifdef DO_DEBUG_PRINT
 #define dprintf printf
 #define dputs puts
@@ -403,11 +403,13 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 				} else {
 					if (busreq) {
 						dputs("releasing z80 bus");
+						#ifdef DO_DEBUG_PRINT
 						char fname[20];
 						sprintf(fname, "zram-%d", zram_counter++);
 						FILE * f = fopen(fname, "wb");
 						fwrite(z80_ram, 1, sizeof(z80_ram), f);
 						fclose(f);
+						#endif
 						z80_context * z_context = context->next_cpu;
 						//TODO: Add necessary delay between release of busreq and resumption of execution
 						z_context->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
@@ -492,11 +494,13 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 				} else {
 					if (busreq) {
 						dprintf("releasing Z80 bus @ %d\n", (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80);
+						#ifdef DO_DEBUG_PRINT
 						char fname[20];
 						sprintf(fname, "zram-%d", zram_counter++);
 						FILE * f = fopen(fname, "wb");
 						fwrite(z80_ram, 1, sizeof(z80_ram), f);
 						fclose(f);
+						#endif
 						z80_context * z_context = context->next_cpu;
 						//TODO: Add necessary delay between release of busreq and resumption of execution
 						z_context->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;

@@ -68,7 +68,7 @@ z80_read_byte_noinc:
 	cmp $0x8000, %r13w
 	jae z80_read_bank
 	/* TODO: Bank reg, YM-2612, PSG/VDP */
-	mov $FF, $r13b
+	mov $0xFF, %r13b
 	ret
 z80_read_ram:
 	and $0x1FFF, %r13
@@ -125,10 +125,11 @@ slow_bank_write:
 	ret
 z80_write_bank_reg:
 	and $1, %r13w
-	shl %r15w
+	shr %r15w
+	shl $8, %r13w
+	xor %r12, %r12
 	or %r13w, %r15w
 	and $0x1FF, %r15w
-	xor %r12, %r12
 	cmp $0x80, %r15w
 	jb update_bank_ptr
 	ret
