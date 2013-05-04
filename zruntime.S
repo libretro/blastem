@@ -68,6 +68,7 @@ z80_read_byte_noinc:
 	cmp $0x8000, %r13w
 	jae z80_read_bank
 	/* TODO: Bank reg, YM-2612, PSG/VDP */
+	mov $FF, $r13b
 	ret
 z80_read_ram:
 	and $0x1FFF, %r13
