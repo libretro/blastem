@@ -33,6 +33,8 @@ void z80_native_addr();
 void z80_do_sync();
 void z80_handle_cycle_limit_int();
 void z80_retrans_stub();
+void z80_io_read();
+void z80_io_write();
 
 uint8_t z80_size(z80inst * inst)
 {
@@ -1407,13 +1409,35 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = jmp(dst, call_dst);
 		break;
 	}
-	/*case Z80_IN:
-	case Z80_INI:
+	case Z80_IN:
+		dst = zcycles(dst, inst->reg == Z80_A ? 7 : 8);//T States: 4 3/4
+		if (inst->addr_mode == Z80_IMMED_INDIRECT) {
+			dst = mov_ir(dst, inst->immed, SCRATCH1, SZ_B);
+		} else {
+			dst = mov_rr(dst, opts->regs[Z80_C], SCRATCH1, SZ_B);
+		}
+		dst = call(dst, (uint8_t *)z80_io_read);
+		translate_z80_reg(inst, &dst_op, dst, opts);
+		dst = mov_rr(dst, SCRATCH1, dst_op.base, SZ_B);
+		dst = z80_save_reg(dst, inst, opts);
+		break;
+	/*case Z80_INI:
 	case Z80_INIR:
 	case Z80_IND:
-	case Z80_INDR:
+	case Z80_INDR:*/
 	case Z80_OUT:
-	case Z80_OUTI:
+		dst = zcycles(dst, inst->reg == Z80_A ? 7 : 8);//T States: 4 3/4
+		if ((inst->addr_mode & 0x1F) == Z80_IMMED_INDIRECT) {
+			dst = mov_ir(dst, inst->immed, SCRATCH2, SZ_B);
+		} else {
+			dst = mov_rr(dst, opts->regs[Z80_C], SCRATCH2, SZ_B);
+		}
+		translate_z80_reg(inst, &src_op, dst, opts);
+		dst = mov_rr(dst, dst_op.base, SCRATCH1, SZ_B);
+		dst = call(dst, (uint8_t *)z80_io_write);
+		dst = z80_save_reg(dst, inst, opts);
+		break;
+	/*case Z80_OUTI:
 	case Z80_OTIR:
 	case Z80_OUTD:
 	case Z80_OTDR:*/
