@@ -71,6 +71,17 @@ z80_do_sync:
 zskip_sync:
 	ret
 
+	.global z80_halt
+z80_halt:
+	mov %edi, %r14d
+	sub %ebp, %r14d
+	and $0xFFFFFFFC, %r14d
+	add %r14d, %ebp
+	cmp %edi, %ebp
+	jnb z80_handle_cycle_limit_int
+	add $4, %ebp
+	jmp z80_handle_cycle_limit_int
+
 	.global z80_read_byte
 z80_read_byte:
 	call z_inccycles
