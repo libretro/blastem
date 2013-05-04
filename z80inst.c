@@ -1386,10 +1386,15 @@ int z80_disasm(z80inst * decoded, char * dst)
 			len += sprintf(dst+len,  " (%s)", z80_regs[decoded->ea_reg]);
 			break;
 		case Z80_IMMED:
-			len += sprintf(dst+len, " %d", decoded->immed);
+			if (decoded->immed >= 63 || decoded->op == Z80_JP || decoded->op == Z80_JPCC || decoded->op == Z80_CALL || decoded->op == Z80_CALLCC || decoded->op == Z80_RST)
+			{
+				len += sprintf(dst+len, " $%X", decoded->immed);
+			} else {
+				len += sprintf(dst+len, " %d", decoded->immed);
+			}
 			break;
 		case Z80_IMMED_INDIRECT:
-			len += sprintf(dst+len, " (%d)", decoded->immed);
+			len += sprintf(dst+len, " ($%X)", decoded->immed);
 			break;
 		case Z80_IX_DISPLACE:
 			len += sprintf(dst+len, " (ix+%d)", decoded->ea_reg);
@@ -1433,10 +1438,15 @@ int z80_disasm(z80inst * decoded, char * dst)
 			len += sprintf(dst+len,  "%s (%s)", needcomma ? "," : "" , z80_regs[decoded->ea_reg]);
 			break;
 		case Z80_IMMED:
-			len += sprintf(dst+len, "%s %d", needcomma ? "," : "" , decoded->immed);
+			if (decoded->immed >= 63 || decoded->op == Z80_JP || decoded->op == Z80_JPCC || decoded->op == Z80_CALL || decoded->op == Z80_CALLCC || decoded->op == Z80_RST)
+			{
+				len += sprintf(dst+len, "%s $%X", needcomma ? "," : "" , decoded->immed);
+			} else {
+				len += sprintf(dst+len, "%s %d", needcomma ? "," : "" , decoded->immed);
+			}
 			break;
 		case Z80_IMMED_INDIRECT:
-			len += sprintf(dst+len, "%s (%d)", needcomma ? "," : "" , decoded->immed);
+			len += sprintf(dst+len, "%s ($%X)", needcomma ? "," : "" , decoded->immed);
 			break;
 		case Z80_IX_DISPLACE:
 			len += sprintf(dst+len, "%s (ix+%d)", needcomma ? "," : "" , decoded->ea_reg);
