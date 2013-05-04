@@ -10,6 +10,15 @@ deferred_addr * defer_address(deferred_addr * old_head, uint32_t address, uint8_
 	return new_head;
 }
 
+void remove_deferred_until(deferred_addr **head_ptr, deferred_addr * remove_to)
+{
+	for(deferred_addr *cur = *head_ptr; cur && cur != remove_to; cur = *head_ptr)
+	{
+		*head_ptr = cur->next;
+		free(cur);
+	}
+}
+
 void process_deferred(deferred_addr ** head_ptr, void * context, native_addr_func get_native)
 {
 	deferred_addr * cur = *head_ptr;

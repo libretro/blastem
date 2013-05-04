@@ -28,6 +28,7 @@ typedef struct deferred_addr {
 typedef uint8_t * (*native_addr_func)(void * context, uint32_t address);
 
 deferred_addr * defer_address(deferred_addr * old_head, uint32_t address, uint8_t *dest);
+void remove_deferred_until(deferred_addr **head_ptr, deferred_addr * remove_to);
 void process_deferred(deferred_addr ** head_ptr, void * context, native_addr_func get_native);
 
 #endif //X86_BACKEND_H_
