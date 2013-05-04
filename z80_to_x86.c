@@ -1421,7 +1421,7 @@ uint8_t * z80_get_native_address(z80_context * context, uint32_t address)
 		map = context->static_code_map;
 	} else if (address >= 0x8000) {
 		address &= 0x7FFF;
-		map = context->banked_code_map + (context->bank_reg << 15);
+		map = context->banked_code_map + context->bank_reg;
 	} else {
 		dprintf("z80_get_native_address: %X NULL\n", address);
 		return NULL;
@@ -1455,7 +1455,7 @@ void z80_map_native_address(z80_context * context, uint32_t address, uint8_t * n
 		context->ram_code_flags[((address + size) & 0x1C00) >> 10] |= 1 << (((address + size) & 0x380) >> 7);
 	} else if (address >= 0x8000) {
 		address &= 0x7FFF;
-		map = context->banked_code_map + (context->bank_reg << 15);
+		map = context->banked_code_map + context->bank_reg;
 		if (!map->offsets) {
 			map->offsets = malloc(sizeof(int32_t) * 0x8000);
 			memset(map->offsets, 0xFF, sizeof(int32_t) * 0x8000);
@@ -1474,7 +1474,7 @@ void z80_map_native_address(z80_context * context, uint32_t address, uint8_t * n
 			map = context->static_code_map;
 		} else if (address >= 0x8000) {
 			address &= 0x7FFF;
-			map = context->banked_code_map + (context->bank_reg << 15);
+			map = context->banked_code_map + context->bank_reg;
 		} else {
 			return;
 		}
