@@ -15,6 +15,8 @@
 #define SCRATCH2 R14
 #define CONTEXT RSI
 
+//#define DO_DEBUG_PRINT
+
 #ifdef DO_DEBUG_PRINT
 #define dprintf printf
 #else
@@ -908,7 +910,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = mov_irdisp8(dst, inst->immed, CONTEXT, offsetof(z80_context, im), SZ_B);
 		break;
 	case Z80_RLC:
-		cycles = inst->immed == 1 ? 4 : (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE ? 16 : 8);
+		cycles = inst->immed == 0 ? 4 : (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE ? 16 : 8);
 		dst = zcycles(dst, cycles);
 		if (inst->reg == Z80_UNUSED) {
 			dst = translate_z80_ea(inst, &dst_op, dst, opts, READ, MODIFY);
@@ -931,7 +933,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		}
 		break;
 	case Z80_RL:
-		cycles = inst->immed == 1 ? 4 : (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE ? 16 : 8);
+		cycles = inst->immed == 0 ? 4 : (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE ? 16 : 8);
 		dst = zcycles(dst, cycles);
 		if (inst->reg == Z80_UNUSED) {
 			dst = translate_z80_ea(inst, &dst_op, dst, opts, READ, MODIFY);
@@ -955,7 +957,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		}
 		break;
 	case Z80_RRC:
-		cycles = inst->immed == 1 ? 4 : (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE ? 16 : 8);
+		cycles = inst->immed == 0 ? 4 : (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE ? 16 : 8);
 		dst = zcycles(dst, cycles);
 		if (inst->reg == Z80_UNUSED) {
 			dst = translate_z80_ea(inst, &dst_op, dst, opts, READ, MODIFY);
@@ -978,7 +980,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		}
 		break;
 	case Z80_RR:
-		cycles = inst->immed == 1 ? 4 : (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE ? 16 : 8);
+		cycles = inst->immed == 0 ? 4 : (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE ? 16 : 8);
 		dst = zcycles(dst, cycles);
 		if (inst->reg == Z80_UNUSED) {
 			dst = translate_z80_ea(inst, &dst_op, dst, opts, READ, MODIFY);
@@ -1001,11 +1003,73 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			dst = z80_save_reg(dst, inst, opts);
 		}
 		break;
-	/*case Z80_SLA:
-	case Z80_SRA:
+	case Z80_SLA:
 	case Z80_SLL:
+		cycles = inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE ? 16 : 8;
+		dst = zcycles(dst, cycles);
+		if (inst->reg == Z80_UNUSED) {
+			dst = translate_z80_ea(inst, &dst_op, dst, opts, READ, MODIFY);
+			dst = zcycles(dst, 1);
+		} else {
+			dst = translate_z80_reg(inst, &dst_op, dst, opts);
+		}
+		dst = shl_ir(dst, 1, dst_op.base, SZ_B);
+		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
+		//TODO: Implement half-carry flag
+		dst = cmp_ir(dst, 0, dst_op.base, SZ_B);
+		dst = setcc_rdisp8(dst, CC_P, CONTEXT, zf_off(ZF_PV));
+		dst = setcc_rdisp8(dst, CC_Z, CONTEXT, zf_off(ZF_Z));
+		dst = setcc_rdisp8(dst, CC_S, CONTEXT, zf_off(ZF_S));
+		if (inst->reg == Z80_UNUSED) {
+			dst = z80_save_result(dst, inst);
+		} else {
+			dst = z80_save_reg(dst, inst, opts);
+		}
+		break;
+	case Z80_SRA:
+		cycles = inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE ? 16 : 8;
+		dst = zcycles(dst, cycles);
+		if (inst->reg == Z80_UNUSED) {
+			dst = translate_z80_ea(inst, &dst_op, dst, opts, READ, MODIFY);
+			dst = zcycles(dst, 1);
+		} else {
+			dst = translate_z80_reg(inst, &dst_op, dst, opts);
+		}
+		dst = sar_ir(dst, 1, dst_op.base, SZ_B);
+		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
+		//TODO: Implement half-carry flag
+		dst = cmp_ir(dst, 0, dst_op.base, SZ_B);
+		dst = setcc_rdisp8(dst, CC_P, CONTEXT, zf_off(ZF_PV));
+		dst = setcc_rdisp8(dst, CC_Z, CONTEXT, zf_off(ZF_Z));
+		dst = setcc_rdisp8(dst, CC_S, CONTEXT, zf_off(ZF_S));
+		if (inst->reg == Z80_UNUSED) {
+			dst = z80_save_result(dst, inst);
+		} else {
+			dst = z80_save_reg(dst, inst, opts);
+		}
+		break;
 	case Z80_SRL:
-	case Z80_RLD:
+		cycles = inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE ? 16 : 8;
+		dst = zcycles(dst, cycles);
+		if (inst->reg == Z80_UNUSED) {
+			dst = translate_z80_ea(inst, &dst_op, dst, opts, READ, MODIFY);
+			dst = zcycles(dst, 1);
+		} else {
+			dst = translate_z80_reg(inst, &dst_op, dst, opts);
+		}
+		dst = shr_ir(dst, 1, dst_op.base, SZ_B);
+		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
+		//TODO: Implement half-carry flag
+		dst = cmp_ir(dst, 0, dst_op.base, SZ_B);
+		dst = setcc_rdisp8(dst, CC_P, CONTEXT, zf_off(ZF_PV));
+		dst = setcc_rdisp8(dst, CC_Z, CONTEXT, zf_off(ZF_Z));
+		dst = setcc_rdisp8(dst, CC_S, CONTEXT, zf_off(ZF_S));
+		if (inst->reg == Z80_UNUSED) {
+			dst = z80_save_result(dst, inst);
+		} else {
+			dst = z80_save_reg(dst, inst, opts);
+		}
+	/*case Z80_RLD:
 	case Z80_RRD:*/
 	case Z80_BIT:
 		cycles = (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) ? 8 : 16;
