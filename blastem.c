@@ -133,7 +133,7 @@ uint8_t busreq = 0;
 uint8_t busack = 0;
 uint32_t busack_cycle = CYCLE_NEVER;
 uint8_t new_busack = 0;
-
+//#define DO_DEBUG_PRINT
 #ifdef DO_DEBUG_PRINT
 #define dprintf printf
 #define dputs puts
