@@ -46,9 +46,9 @@ z80_handle_cycle_limit_int:
 zskip_int:
 	cmp 112(%rsi), %ebp
 	jb zskip_sync
-	call z80_save_context
 	.global z80_do_sync
 z80_do_sync:
+	call z80_save_context
 	pop (%rsi) /*return address in native code*/
 	pop %r15 /* restore callee saved regsiters */
 	pop %r14
