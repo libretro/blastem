@@ -1,3 +1,14 @@
+z_inccycles_io:
+	cmp %edi, %ebp
+	jnb do_limit
+no_sync_io:
+	add $4, %ebp
+	ret
+do_limit_io:
+	cmp 112(%rsi), %ebp
+	jb no_sync_io
+	jmp sync_io
+
 z_inccycles:
 	cmp %edi, %ebp
 	jnb do_limit
@@ -7,6 +18,7 @@ no_sync:
 do_limit:
 	cmp 112(%rsi), %ebp
 	jb no_sync
+sync_io:
 	call z80_save_context_scratch
 	pop %rax /*return address in read/write func*/
 	pop 104(%rsi) /*return address in native code*/
@@ -179,6 +191,19 @@ z80_write_word_lowfirst:
 	shr $8, %r13w
 	call z_inccycles
 	call z80_write_byte_noinc
+	ret
+
+	.global z80_io_read
+z80_io_read:
+	call z_inccycles_io
+	/* genesis Z80 has no IO port hardware and always returns FF */
+	mov $0xFF, %r13
+	ret
+
+	.global z80_io_write
+z80_io_write:
+	call z_inccycles_io
+	/* genesis Z80 has no IO port hardware and writes have no effect */
 	ret
 	
 	.global z80_retrans_stub
