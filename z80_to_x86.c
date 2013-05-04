@@ -1567,10 +1567,12 @@ void * z80_retranslate_inst(uint32_t address, z80_context * context)
 			opts->code_end = dst_end = dst + size;
 			opts->cur_code = dst;
 		}
+		deferred_addr * orig_deferred = opts->deferred;
 		uint8_t * native_end = translate_z80inst(&instbuf, dst, context, address);
 		if ((native_end - dst) <= orig_size) {
 			uint8_t * native_next = z80_get_native_address(context, address + after-inst);
 			if (native_next && ((native_next == orig_start + orig_size) || (orig_size - (native_end - dst)) > 5)) {
+				remove_deferred_until(&opts->deferred, orig_deferred);
 				native_end = translate_z80inst(&instbuf, orig_start, context, address);
 				if (native_next == orig_start + orig_size && (native_next-native_end) < 2) {
 					while (native_end < orig_start + orig_size) {
