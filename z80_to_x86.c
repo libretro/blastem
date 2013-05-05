@@ -1083,8 +1083,27 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		} else {
 			dst = z80_save_reg(dst, inst, opts);
 		}
-	/*case Z80_RLD:
-	case Z80_RRD:*/
+	case Z80_RLD:
+		dst = zcycles(dst, 8);
+		dst = mov_rr(dst, opts->regs[Z80_HL], SCRATCH1, SZ_W);
+		dst = call(dst, (uint8_t *)z80_read_byte);
+		//Before: (HL) = 0x12, A = 0x34
+		//After: (HL) = 0x24, A = 0x31
+		dst = mov_rr(dst, opts->regs[Z80_A], SCRATCH2, SZ_B);
+		dst = shl_ir(dst, 4, SCRATCH1, SZ_W);
+		dst = and_ir(dst, 0xF, SCRATCH2, SZ_W);
+		dst = and_ir(dst, 0xFFF, SCRATCH1, SZ_W);
+		dst = and_ir(dst, 0xF0, opts->regs[Z80_A], SZ_B);
+		dst = or_rr(dst, SCRATCH2, SCRATCH1, SZ_W);
+		//SCRATCH1 = 0x0124
+		dst = ror_ir(dst, 8, SCRATCH1, SZ_W);
+		dst = zcycles(dst, 4);
+		dst = or_rr(dst, SCRATCH1, opts->regs[Z80_A], SZ_B);
+		dst = mov_rr(dst, opts->regs[Z80_HL], SCRATCH2, SZ_W);
+		dst = ror_ir(dst, 8, SCRATCH1, SZ_W);
+		dst = call(dst, (uint8_t *)z80_write_byte);
+		break;
+	//case Z80_RRD:*/
 	case Z80_BIT:
 		cycles = (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) ? 8 : 16;
 		dst = zcycles(dst, cycles);
