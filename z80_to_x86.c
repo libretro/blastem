@@ -1099,11 +1099,47 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = ror_ir(dst, 8, SCRATCH1, SZ_W);
 		dst = zcycles(dst, 4);
 		dst = or_rr(dst, SCRATCH1, opts->regs[Z80_A], SZ_B);
+		//set flags
+		//TODO: Implement half-carry flag
+		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
+		dst = setcc_rdisp8(dst, CC_P, CONTEXT, zf_off(ZF_PV));
+		dst = setcc_rdisp8(dst, CC_Z, CONTEXT, zf_off(ZF_Z));
+		dst = setcc_rdisp8(dst, CC_S, CONTEXT, zf_off(ZF_S));
+		
 		dst = mov_rr(dst, opts->regs[Z80_HL], SCRATCH2, SZ_W);
 		dst = ror_ir(dst, 8, SCRATCH1, SZ_W);
 		dst = call(dst, (uint8_t *)z80_write_byte);
 		break;
-	//case Z80_RRD:*/
+	case Z80_RRD:
+		dst = zcycles(dst, 8);
+		dst = mov_rr(dst, opts->regs[Z80_HL], SCRATCH1, SZ_W);
+		dst = call(dst, (uint8_t *)z80_read_byte);
+		//Before: (HL) = 0x12, A = 0x34
+		//After: (HL) = 0x41, A = 0x32
+		dst = movzx_rr(dst, opts->regs[Z80_A], SCRATCH2, SZ_B, SZ_W);
+		dst = ror_ir(dst, 4, SCRATCH1, SZ_W);
+		dst = shl_ir(dst, 4, SCRATCH2, SZ_W);
+		dst = and_ir(dst, 0xF00F, SCRATCH1, SZ_W);
+		dst = and_ir(dst, 0xF0, opts->regs[Z80_A], SZ_B);
+		//SCRATCH1 = 0x2001
+		//SCRATCH2 = 0x0040
+		dst = or_rr(dst, SCRATCH2, SCRATCH1, SZ_W);
+		//SCRATCH1 = 0x2041
+		dst = ror_ir(dst, 8, SCRATCH1, SZ_W);
+		dst = zcycles(dst, 4);
+		dst = shr_ir(dst, 4, SCRATCH1, SZ_B);
+		dst = or_rr(dst, SCRATCH1, opts->regs[Z80_A], SZ_B);
+		//set flags
+		//TODO: Implement half-carry flag
+		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
+		dst = setcc_rdisp8(dst, CC_P, CONTEXT, zf_off(ZF_PV));
+		dst = setcc_rdisp8(dst, CC_Z, CONTEXT, zf_off(ZF_Z));
+		dst = setcc_rdisp8(dst, CC_S, CONTEXT, zf_off(ZF_S));
+		
+		dst = mov_rr(dst, opts->regs[Z80_HL], SCRATCH2, SZ_W);
+		dst = ror_ir(dst, 8, SCRATCH1, SZ_W);
+		dst = call(dst, (uint8_t *)z80_write_byte);
+		break;
 	case Z80_BIT:
 		cycles = (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) ? 8 : 16;
 		dst = zcycles(dst, cycles);
