@@ -43,7 +43,7 @@ typedef struct {
 	native_map_slot *native_code_map;
 	void            *options;
 	uint8_t         ram_code_flags[32/8];
-	void            *next_cpu;
+	void            *system;
 } m68k_context;
 
 uint8_t * translate_m68k(uint8_t * dst, struct m68kinst * inst, x86_68k_options * opts);
