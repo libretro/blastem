@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 #include "m68k_to_x86.h"
+#include "z80_to_x86.h"
+#include "ym2612.h"
+#include "vdp.h"
 
 typedef struct {
 	uint32_t th_counter;
@@ -11,6 +14,13 @@ typedef struct {
 	uint8_t control;
 	uint8_t input[3];
 } io_port;
+
+typedef struct {
+	m68k_context   *m68k;
+	z80_context    *z80;
+	vdp_context    *vdp;
+	ym2612_context *ym;
+} genesis_context;
 
 #define GAMEPAD_TH0 0
 #define GAMEPAD_TH1 1

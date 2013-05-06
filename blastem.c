@@ -165,11 +165,14 @@ void sync_z80(z80_context * z_context, uint32_t mclks)
 m68k_context * sync_components(m68k_context * context, uint32_t address)
 {
 	//TODO: Handle sync targets smaller than a single frame
-	vdp_context * v_context = context->video_context;
-	z80_context * z_context = context->next_cpu;
+	genesis_context * gen = context->system;
+	vdp_context * v_context = gen->vdp;
+	z80_context * z_context = gen->z80;
 	uint32_t mclks = context->current_cycle * MCLKS_PER_68K;
 	sync_z80(z_context, mclks);
 	if (mclks >= MCLKS_PER_FRAME) {
+		ym_run(gen->ym, context->current_cycle);
+		gen->ym->current_cycle -= MCLKS_PER_FRAME/MCLKS_PER_68K;
 		//printf("reached frame end | 68K Cycles: %d, MCLK Cycles: %d\n", context->current_cycle, mclks);
 		vdp_run_context(v_context, MCLKS_PER_FRAME);
 		if (!headless) {
@@ -354,6 +357,7 @@ uint32_t zram_counter = 0;
 
 m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value)
 {
+	genesis_context * gen = context->system;
 	if (location < 0x10000) {
 		if (busack_cycle > context->current_cycle) {
 			busack = new_busack;
@@ -363,7 +367,16 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 			location &= 0x7FFF;
 			if (location < 0x4000) {
 				z80_ram[location & 0x1FFF] = value;
-				z80_handle_code_write(location & 0x1FFF, context->next_cpu);
+				z80_handle_code_write(location & 0x1FFF, gen->z80);
+			} else if (location < 0x6000) {
+				ym_run(gen->ym, context->current_cycle);
+				if (location & 1) {
+					ym_data_write(gen->ym, value);
+				} else if(location & 2) {
+					ym_address_write_part2(gen->ym, value);
+				} else {
+					ym_address_write_part1(gen->ym, value);
+				}
 			}
 		}
 	} else {
@@ -388,7 +401,7 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 			}
 		} else {
 			if (location == 0x1100) {
-				sync_z80(context->next_cpu, context->current_cycle * MCLKS_PER_68K);
+				sync_z80(gen->z80, context->current_cycle * MCLKS_PER_68K);
 				if (busack_cycle > context->current_cycle) {
 					busack = new_busack;
 					busack_cycle = CYCLE_NEVER;
@@ -410,16 +423,15 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 						fwrite(z80_ram, 1, sizeof(z80_ram), f);
 						fclose(f);
 						#endif
-						z80_context * z_context = context->next_cpu;
 						//TODO: Add necessary delay between release of busreq and resumption of execution
-						z_context->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
+						gen->z80->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
 					}
 					busreq = 0;
 					busack_cycle = CYCLE_NEVER;
 					busack = 1;
 				}
 			} else if (location == 0x1200) {
-				sync_z80(context->next_cpu, context->current_cycle * MCLKS_PER_68K);
+				sync_z80(gen->z80, context->current_cycle * MCLKS_PER_68K);
 				if (value & 1) {
 					if (reset && busreq) {
 						new_busack = 0;
@@ -427,10 +439,9 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 					}
 					//TODO: Deal with the scenario in which reset is not asserted long enough
 					if (reset) {
-						z80_context * z_context = context->next_cpu;
 						need_reset = 1;
 						//TODO: Add necessary delay between release of reset and start of execution
-						z_context->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
+						gen->z80->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
 					}
 					reset = 0;
 				} else {
@@ -444,6 +455,7 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 
 m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t value)
 {
+	genesis_context * gen = context->system;
 	if (location < 0x10000) {
 		if (busack_cycle > context->current_cycle) {
 			busack = new_busack;
@@ -453,7 +465,16 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 			location &= 0x7FFF;
 			if (location < 0x4000) {
 				z80_ram[location & 0x1FFE] = value >> 8;
-				z80_handle_code_write(location & 0x1FFE, context->next_cpu);
+				z80_handle_code_write(location & 0x1FFE, gen->z80);
+			} else if (location < 0x6000) {
+				ym_run(gen->ym, context->current_cycle);
+				if (location & 1) {
+					ym_data_write(gen->ym, value >> 8);
+				} else if(location & 2) {
+					ym_address_write_part2(gen->ym, value >> 8);
+				} else {
+					ym_address_write_part1(gen->ym, value >> 8);
+				}
 			}
 		}
 	} else {
@@ -479,7 +500,7 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 		} else {
 			//printf("IO Write of %X to %X @ %d\n", value, location, context->current_cycle);
 			if (location == 0x1100) {
-				sync_z80(context->next_cpu, context->current_cycle * MCLKS_PER_68K);
+				sync_z80(gen->z80, context->current_cycle * MCLKS_PER_68K);
 				if (busack_cycle > context->current_cycle) {
 					busack = new_busack;
 					busack_cycle = CYCLE_NEVER;
@@ -501,16 +522,15 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 						fwrite(z80_ram, 1, sizeof(z80_ram), f);
 						fclose(f);
 						#endif
-						z80_context * z_context = context->next_cpu;
 						//TODO: Add necessary delay between release of busreq and resumption of execution
-						z_context->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
+						gen->z80->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
 					}
 					busreq = 0;
 					busack_cycle = CYCLE_NEVER;
 					busack = 1;
 				}
 			} else if (location == 0x1200) {
-				sync_z80(context->next_cpu, context->current_cycle * MCLKS_PER_68K);
+				sync_z80(gen->z80, context->current_cycle * MCLKS_PER_68K);
 				if (value & 0x100) {
 					if (reset && busreq) {
 						new_busack = 0;
@@ -518,10 +538,9 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 					}
 					//TODO: Deal with the scenario in which reset is not asserted long enough
 					if (reset) {
-						z80_context * z_context = context->next_cpu;
 						need_reset = 1;
 						//TODO: Add necessary delay between release of reset and start of execution
-						z_context->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
+						gen->z80->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
 					}
 					reset = 0;
 				} else {
@@ -541,6 +560,7 @@ uint8_t version_reg = NO_DISK | USA;
 
 m68k_context * io_read(uint32_t location, m68k_context * context)
 {
+	genesis_context *gen = context->system;
 	if (location < 0x10000) {
 		if (busack_cycle > context->current_cycle) {
 			busack = new_busack;
@@ -550,6 +570,9 @@ m68k_context * io_read(uint32_t location, m68k_context * context)
 			location &= 0x7FFF;
 			if (location < 0x4000) {
 				context->value = z80_ram[location & 0x1FFF];
+			} else if (location < 0x6000) {
+				ym_run(gen->ym, context->current_cycle);
+				context->value = ym_read_status(gen->ym);
 			} else {
 				context->value = 0xFF;
 			}
@@ -601,6 +624,7 @@ m68k_context * io_read(uint32_t location, m68k_context * context)
 
 m68k_context * io_read_w(uint32_t location, m68k_context * context)
 {
+	genesis_context * gen = context->system;
 	if (location < 0x10000) {
 		if (busack_cycle > context->current_cycle) {
 			busack = new_busack;
@@ -608,12 +632,16 @@ m68k_context * io_read_w(uint32_t location, m68k_context * context)
 		}
 		if (!(busack || reset)) {
 			location &= 0x7FFF;
+			uint16_t value;
 			if (location < 0x4000) {
-				context->value = z80_ram[location & 0x1FFE];
-				context->value |= context->value << 8;
+				value = z80_ram[location & 0x1FFE];
+			} else if (location < 0x6000) {
+				ym_run(gen->ym, context->current_cycle);
+				value = ym_read_status(gen->ym);	
 			} else {
-				context->value = 0xFFFF;
+				value = 0xFF;
 			}
+			context->value = value | (value << 8);
 		} else {
 			context->value = 0xFFFF;
 		}
@@ -894,16 +922,17 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 	return context;
 }
 
-void init_run_cpu(vdp_context * vcontext, z80_context * zcontext, int debug, FILE * address_log)
+void init_run_cpu(genesis_context * gen, int debug, FILE * address_log)
 {
 	m68k_context context;
 	x86_68k_options opts;
+	gen->m68k = &context;
 	init_x86_68k_opts(&opts);
 	opts.address_log = address_log;
 	init_68k_context(&context, opts.native_code_map, &opts);
 	
-	context.video_context = vcontext;
-	context.next_cpu = zcontext;
+	context.video_context = gen->vdp;
+	context.system = gen;
 	//cartridge ROM
 	context.mem_pointers[0] = cart;
 	context.target_cycle = context.sync_cycle = MCLKS_PER_FRAME/MCLKS_PER_68K;
@@ -972,6 +1001,9 @@ int main(int argc, char ** argv)
 	
 	init_vdp_context(&v_context);
 	
+	ym2612_context y_context;
+	ym_init(&y_context);
+	
 	z80_context z_context;
 	x86_z80_options z_opts;
 	init_x86_z80_opts(&z_opts);
@@ -982,6 +1014,11 @@ int main(int argc, char ** argv)
 	z_context.int_cycle = CYCLE_NEVER;
 	z_context.mem_pointers[1] = z_context.mem_pointers[2] = (uint8_t *)cart;
 	
-	init_run_cpu(&v_context, &z_context, debug, address_log);
+	genesis_context gen;
+	gen.z80 = &z_context;
+	gen.vdp = &v_context;
+	gen.ym = &y_context;
+	
+	init_run_cpu(&gen, debug, address_log);
 	return 0;
 }
