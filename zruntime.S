@@ -90,6 +90,8 @@ z80_read_byte_noinc:
 	jb z80_read_ram
 	cmp $0x8000, %r13w
 	jae z80_read_bank
+	cmp $0x6000, %r13w
+	jb z80_read_ym2612
 	/* TODO: Bank reg, YM-2612, PSG/VDP */
 	mov $0xFF, %r13b
 	ret
@@ -108,6 +110,15 @@ z80_read_bank:
 slow_bank_read:
 	/* TODO: Call into C to implement this */
 	ret
+z80_read_ym2612:
+	call z80_save_context
+	mov %r13w, %di
+	push %rsi
+	call z80_read_ym
+	pop %rsi
+	mov %al, %r13b
+	call z80_load_context
+	ret
 
 	.global z80_write_byte
 z80_write_byte:
@@ -118,7 +129,9 @@ z80_write_byte_noinc:
 	cmp $0x8000, %r14w
 	jae z80_write_bank
 	cmp $0x6000, %r14w
-	je z80_write_bank_reg
+	jb z80_write_ym2612
+	cmp $0x6100, %r14w
+	jb z80_write_bank_reg
 	/* TODO: YM-2612, PSG/VDP */
 	ret
 z80_write_ram:
@@ -145,6 +158,15 @@ z80_write_bank:
 	ret
 slow_bank_write:
 	/* TODO: Call into C to implement this */
+	ret
+z80_write_ym2612:
+	and $0x3, %r14w
+	call z80_save_context
+	mov %r14w, %di
+	mov %r13b, %dl
+	call z80_write_ym
+	mov %rax, %rsi
+	call z80_load_context
 	ret
 z80_write_bank_reg:
 	and $1, %r13w

@@ -701,6 +701,27 @@ m68k_context * io_read_w(uint32_t location, m68k_context * context)
 	return context;
 }
 
+z80_context * z80_write_ym(uint16_t location, z80_context * context, uint8_t value)
+{
+	genesis_context * gen = context->system;
+	ym_run(gen->ym, (context->current_cycle * MCLKS_PER_Z80) / MCLKS_PER_68K);
+	if (location & 1) {
+		ym_data_write(gen->ym, value);
+	} else if (location & 2) {
+		ym_address_write_part2(gen->ym, value);
+	} else {
+		ym_address_write_part1(gen->ym, value);
+	}
+	return context;
+}
+
+uint8_t z80_read_ym(uint16_t location, z80_context * context)
+{
+	genesis_context * gen = context->system;
+	ym_run(gen->ym, (context->current_cycle * MCLKS_PER_Z80) / MCLKS_PER_68K);
+	return ym_read_status(gen->ym);
+}
+
 typedef struct bp_def {
 	struct bp_def * next;
 	uint32_t address;
@@ -1015,13 +1036,15 @@ int main(int argc, char ** argv)
 	x86_z80_options z_opts;
 	init_x86_z80_opts(&z_opts);
 	init_z80_context(&z_context, &z_opts);
-	z_context.next_context = &v_context;
+
+	genesis_context gen;	
+
+	z_context.system = &gen;
 	z_context.mem_pointers[0] = z80_ram;
 	z_context.sync_cycle = z_context.target_cycle = MCLKS_PER_FRAME/MCLKS_PER_Z80;
 	z_context.int_cycle = CYCLE_NEVER;
 	z_context.mem_pointers[1] = z_context.mem_pointers[2] = (uint8_t *)cart;
 	
-	genesis_context gen;
 	gen.z80 = &z_context;
 	gen.vdp = &v_context;
 	gen.ym = &y_context;
