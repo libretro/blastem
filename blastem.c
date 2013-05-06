@@ -125,7 +125,6 @@ void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 }
 
 int break_on_sync = 0;
-#define Z80_ACK_DELAY 3 //TODO: Calculate this on the fly based on how synced up the Z80 and 68K clocks are
 
 uint8_t reset = 1;
 uint8_t need_reset = 0;
@@ -159,6 +158,8 @@ void sync_z80(z80_context * z_context, uint32_t mclks)
 			z80_run(z_context);
 			dprintf("Z80 ran to cycle %d\n", z_context->current_cycle);
 		}
+	} else {
+		z_context->current_cycle = mclks / MCLKS_PER_Z80;
 	}
 }
 
@@ -354,6 +355,11 @@ void io_data_read(io_port * pad, m68k_context * context)
 }
 
 uint32_t zram_counter = 0;
+#define Z80_ACK_DELAY 3
+#define Z80_BUSY_DELAY 2//TODO: Find the actual value for this
+#define Z80_REQ_BUSY 1
+#define Z80_REQ_ACK 0
+#define Z80_RES_BUSACK reset
 
 m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value)
 {
@@ -410,8 +416,8 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 					dputs("bus requesting Z80");
 					busreq = 1;
 					if(!reset) {
-						busack_cycle = context->current_cycle + Z80_ACK_DELAY;
-						new_busack = 0;
+						busack_cycle = ((gen->z80->current_cycle + Z80_ACK_DELAY) * MCLKS_PER_Z80) / MCLKS_PER_68K;//context->current_cycle + Z80_ACK_DELAY;
+						new_busack = Z80_REQ_ACK;
 					}
 				} else {
 					if (busreq) {
@@ -424,18 +430,19 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 						fclose(f);
 						#endif
 						//TODO: Add necessary delay between release of busreq and resumption of execution
-						gen->z80->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
 					}
 					busreq = 0;
-					busack_cycle = CYCLE_NEVER;
-					busack = 1;
+					//busack_cycle = CYCLE_NEVER;
+					//busack = Z80_REQ_BUSY;
+					busack_cycle = ((gen->z80->current_cycle + Z80_BUSY_DELAY) * MCLKS_PER_Z80) / MCLKS_PER_68K;
+					new_busack = Z80_REQ_BUSY;
 				}
 			} else if (location == 0x1200) {
 				sync_z80(gen->z80, context->current_cycle * MCLKS_PER_68K);
 				if (value & 1) {
 					if (reset && busreq) {
 						new_busack = 0;
-						busack_cycle = context->current_cycle + Z80_ACK_DELAY;
+						busack_cycle = ((gen->z80->current_cycle + Z80_ACK_DELAY) * MCLKS_PER_Z80) / MCLKS_PER_68K;//context->current_cycle + Z80_ACK_DELAY;
 					}
 					//TODO: Deal with the scenario in which reset is not asserted long enough
 					if (reset) {
@@ -509,8 +516,8 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 					dprintf("bus requesting Z80 @ %d\n", (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80);
 					busreq = 1;
 					if(!reset) {
-						busack_cycle = context->current_cycle + Z80_ACK_DELAY;
-						new_busack = 0;
+						busack_cycle = ((gen->z80->current_cycle + Z80_ACK_DELAY) * MCLKS_PER_Z80) / MCLKS_PER_68K;//context->current_cycle + Z80_ACK_DELAY;
+						new_busack = Z80_REQ_ACK;
 					}
 				} else {
 					if (busreq) {
@@ -523,24 +530,24 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 						fclose(f);
 						#endif
 						//TODO: Add necessary delay between release of busreq and resumption of execution
-						gen->z80->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
 					}
 					busreq = 0;
-					busack_cycle = CYCLE_NEVER;
-					busack = 1;
+					//busack_cycle = CYCLE_NEVER;
+					//busack = Z80_REQ_BUSY;
+					busack_cycle = ((gen->z80->current_cycle + Z80_BUSY_DELAY) * MCLKS_PER_Z80) / MCLKS_PER_68K;
+					new_busack = Z80_REQ_BUSY;
 				}
 			} else if (location == 0x1200) {
 				sync_z80(gen->z80, context->current_cycle * MCLKS_PER_68K);
 				if (value & 0x100) {
 					if (reset && busreq) {
 						new_busack = 0;
-						busack_cycle = context->current_cycle + Z80_ACK_DELAY;
+						busack_cycle = ((gen->z80->current_cycle + Z80_ACK_DELAY) * MCLKS_PER_Z80) / MCLKS_PER_68K;//context->current_cycle + Z80_ACK_DELAY;
 					}
 					//TODO: Deal with the scenario in which reset is not asserted long enough
 					if (reset) {
 						need_reset = 1;
 						//TODO: Add necessary delay between release of reset and start of execution
-						gen->z80->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
 					}
 					reset = 0;
 				} else {
@@ -566,7 +573,7 @@ m68k_context * io_read(uint32_t location, m68k_context * context)
 			busack = new_busack;
 			busack_cycle = CYCLE_NEVER;
 		}
-		if (!(busack || reset)) {
+		if (!(busack==Z80_REQ_BUSY || reset)) {
 			location &= 0x7FFF;
 			if (location < 0x4000) {
 				context->value = z80_ram[location & 0x1FFF];
@@ -610,7 +617,7 @@ m68k_context * io_read(uint32_t location, m68k_context * context)
 					busack = new_busack;
 					busack_cycle = CYCLE_NEVER;
 				}
-				context->value = reset || busack;
+				context->value = Z80_RES_BUSACK || busack;
 				//printf("Byte read of BUSREQ returned %d @ %d (reset: %d, busack: %d)\n", context->value, context->current_cycle, reset, busack);
 			} else if (location == 0x1200) {
 				context->value = !reset;
@@ -630,7 +637,7 @@ m68k_context * io_read_w(uint32_t location, m68k_context * context)
 			busack = new_busack;
 			busack_cycle = CYCLE_NEVER;
 		}
-		if (!(busack || reset)) {
+		if (!(busack==Z80_REQ_BUSY || reset)) {
 			location &= 0x7FFF;
 			uint16_t value;
 			if (location < 0x4000) {
@@ -682,7 +689,7 @@ m68k_context * io_read_w(uint32_t location, m68k_context * context)
 					busack = new_busack;
 					busack_cycle = CYCLE_NEVER;
 				}
-				context->value = (reset || busack) << 8;
+				context->value = (Z80_RES_BUSACK || busack) << 8;
 				//printf("Word read of BUSREQ returned %d\n", context->value);
 			} else if (location == 0x1200) {
 				context->value = (!reset) << 8;
