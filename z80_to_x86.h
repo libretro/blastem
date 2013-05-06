@@ -47,7 +47,7 @@ typedef struct {
 	native_map_slot * static_code_map;
 	native_map_slot * banked_code_map;
 	void *            options;
-	void *            next_context;
+	void *            system;
 	uint8_t           ram_code_flags[(8 * 1024)/128/8];
 } z80_context;
 
