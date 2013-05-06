@@ -607,7 +607,7 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 					pixel = context->regs[REG_BG_COLOR] & 0x3F;
 					src = FBUF_SRC_BG;
 				}
-				*dst = context->cram[pixel & 0x3F] | ((pixel & BUF_BIT_PRIORITY) ? FBUF_BIT_PRIORITY : 0) | src;
+				*dst = (context->cram[pixel & 0x3F] & 0xEEE) | ((pixel & BUF_BIT_PRIORITY) ? FBUF_BIT_PRIORITY : 0) | src;
 			}
 		}
 	} else {
@@ -1011,7 +1011,7 @@ void check_render_bg(vdp_context * context, int32_t line)
 				end = start + 2;
 			}
 		}
-		uint16_t color = context->cram[context->regs[REG_BG_COLOR] & 0x3F];
+		uint16_t color = (context->cram[context->regs[REG_BG_COLOR] & 0x3F] & 0xEEE);
 		while (start != end) {
 			*start = color;
 			++start;
