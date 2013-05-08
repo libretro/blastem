@@ -1459,3 +1459,76 @@ int z80_disasm(z80inst * decoded, char * dst)
 	return len;
 }
 
+uint8_t z80_high_reg(uint8_t reg)
+{
+	switch(reg)
+	{
+	case Z80_C:
+	case Z80_BC:
+		return Z80_B;
+	case Z80_E:
+	case Z80_DE:
+		return Z80_D;
+	case Z80_L:
+	case Z80_HL:
+		return Z80_H;
+	case Z80_IXL:
+	case Z80_IX:
+		return Z80_IXH;
+	case Z80_IYL:
+	case Z80_IY:
+		return Z80_IYH;
+	default:
+		return Z80_UNUSED;
+	}
+}
+
+uint8_t z80_low_reg(uint8_t reg)
+{
+	switch(reg)
+	{
+	case Z80_B:
+	case Z80_BC:
+		return Z80_C;
+	case Z80_D:
+	case Z80_DE:
+		return Z80_E;
+	case Z80_H:
+	case Z80_HL:
+		return Z80_L;
+	case Z80_IXH:
+	case Z80_IX:
+		return Z80_IXL;
+	case Z80_IYH:
+	case Z80_IY:
+		return Z80_IYL;
+	default:
+		return Z80_UNUSED;
+	}
+}
+
+uint8_t z80_word_reg(uint8_t reg)
+{
+	switch(reg)
+	{
+	case Z80_B:
+	case Z80_C:
+		return Z80_BC;
+	case Z80_D:
+	case Z80_E:
+		return Z80_DE;
+	case Z80_H:
+	case Z80_L:
+		return Z80_HL;
+	case Z80_IXH:
+	case Z80_IXL:
+		return Z80_IX;
+	case Z80_IYH:
+	case Z80_IYL:
+		return Z80_IY;
+	default:
+		return Z80_UNUSED;
+	}
+}
+
+

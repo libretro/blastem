@@ -25,6 +25,12 @@ trans : trans.o 68kinst.o gen_x86.o m68k_to_x86.o x86_backend.o runtime.o mem.o
 transz80 : transz80.o z80inst.o gen_x86.o z80_to_x86.o x86_backend.o zruntime.o mem.o
 	$(CC) -o transz80 transz80.o z80inst.o gen_x86.o z80_to_x86.o x86_backend.o zruntime.o mem.o
 
+ztestrun : ztestrun.o z80inst.o gen_x86.o z80_to_x86.o x86_backend.o zruntime.o mem.o
+	$(CC) -o ztestrun ztestrun.o z80inst.o gen_x86.o z80_to_x86.o x86_backend.o zruntime.o mem.o
+
+ztestgen : ztestgen.o z80inst.o
+	$(CC) -o ztestgen ztestgen.o z80inst.o
+
 stateview : stateview.o vdp.o render_sdl.o
 	$(CC) -o stateview stateview.o vdp.o render_sdl.o `pkg-config --libs $(LIBS)`
 
