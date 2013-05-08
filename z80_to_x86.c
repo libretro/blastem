@@ -47,54 +47,6 @@ uint8_t z80_size(z80inst * inst)
 	return SZ_B;
 }
 
-uint8_t z80_high_reg(uint8_t reg)
-{
-	switch(reg)
-	{
-	case Z80_C:
-	case Z80_BC:
-		return Z80_B;
-	case Z80_E:
-	case Z80_DE:
-		return Z80_D;
-	case Z80_L:
-	case Z80_HL:
-		return Z80_H;
-	case Z80_IXL:
-	case Z80_IX:
-		return Z80_IXH;
-	case Z80_IYL:
-	case Z80_IY:
-		return Z80_IYH;
-	default:
-		return Z80_UNUSED;
-	}
-}
-
-uint8_t z80_low_reg(uint8_t reg)
-{
-	switch(reg)
-	{
-	case Z80_B:
-	case Z80_BC:
-		return Z80_C;
-	case Z80_D:
-	case Z80_DE:
-		return Z80_E;
-	case Z80_H:
-	case Z80_HL:
-		return Z80_L;
-	case Z80_IXH:
-	case Z80_IX:
-		return Z80_IXL;
-	case Z80_IYH:
-	case Z80_IY:
-		return Z80_IYL;
-	default:
-		return Z80_UNUSED;
-	}
-}
-
 uint8_t * zcycles(uint8_t * dst, uint32_t num_cycles)
 {
 	return add_ir(dst, num_cycles, ZCYCLES, SZ_D);
