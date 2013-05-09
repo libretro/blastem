@@ -82,11 +82,9 @@ int main(int argc, char ** argv)
 	printf("Flags: SZVNC\n"
 	       "       %d%d%d%d%d\n", context.flags[ZF_S], context.flags[ZF_Z], context.flags[ZF_PV], context.flags[ZF_N], context.flags[ZF_C]);
 	puts("--Alternate Regs--");
-	printf("A: %X\nB: %X\nC: %X\nD: %X\nE: %X\nHL: %X\nIX: %X\nIY: %X\n", 
+	printf("A: %X\nB: %X\nC: %X\nD: %X\nE: %X\nHL: %X\n", 
 		context.alt_regs[Z80_A], context.alt_regs[Z80_B], context.alt_regs[Z80_C],
 		context.alt_regs[Z80_D], context.alt_regs[Z80_E], 
-		(context.alt_regs[Z80_H] << 8) | context.alt_regs[Z80_L], 
-		(context.alt_regs[Z80_IXH] << 8) | context.alt_regs[Z80_IXL], 
-		(context.alt_regs[Z80_IYH] << 8) | context.alt_regs[Z80_IYL]);
+		(context.alt_regs[Z80_H] << 8) | context.alt_regs[Z80_L]);
 	return 0;
 }
