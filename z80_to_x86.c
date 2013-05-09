@@ -189,7 +189,7 @@ uint8_t * translate_z80_ea(z80inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_o
 	case Z80_IY_DISPLACE:
 		reg = opts->regs[(inst->addr_mode & 0x1F) == Z80_IX_DISPLACE ? Z80_IX : Z80_IY];
 		dst = mov_rr(dst, reg, areg, SZ_W);
-		dst = add_ir(dst, inst->ea_reg, areg, SZ_W);
+		dst = add_ir(dst, inst->ea_reg & 0x80 ? inst->ea_reg - 256 : inst->ea_reg, areg, SZ_W);
 		size = z80_size(inst);
 		if (read) {
 			if (modify) {
