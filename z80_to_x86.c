@@ -1150,29 +1150,48 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = ror_ir(dst, 8, SCRATCH1, SZ_W);
 		dst = call(dst, (uint8_t *)z80_write_byte);
 		break;
-	case Z80_BIT:
+	case Z80_BIT: {
 		cycles = (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) ? 8 : 16;
 		dst = zcycles(dst, cycles);
-		dst = translate_z80_ea(inst, &src_op, dst, opts, READ, DONT_MODIFY);
+		uint8_t bit;
+		if ((inst->addr_mode & 0x1F) == Z80_REG && opts->regs[inst->ea_reg] >= AH && opts->regs[inst->ea_reg] <= BH) {
+			src_op.base = opts->regs[z80_word_reg(inst->ea_reg)];
+			size = SZ_W;
+			bit = inst->immed + 8;
+		} else {
+			size = SZ_B;
+			bit = inst->immed;
+			dst = translate_z80_ea(inst, &src_op, dst, opts, READ, DONT_MODIFY);
+		}
 		if (inst->addr_mode != Z80_REG) {
 			//Reads normally take 3 cycles, but the read at the end of a bit instruction takes 4
 			dst = zcycles(dst, 1);
 		}
-		dst = bt_ir(dst, inst->immed, src_op.base, SZ_B);
+		dst = bt_ir(dst, bit, src_op.base, size);
 		dst = setcc_rdisp8(dst, CC_NC, CONTEXT, zf_off(ZF_Z));
 		dst = setcc_rdisp8(dst, CC_NC, CONTEXT, zf_off(ZF_PV));
 		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
 		if (inst->immed == 7) {
-			dst = cmp_ir(dst, 0, src_op.base, SZ_B);
+			dst = cmp_ir(dst, 0, src_op.base, size);
 			dst = setcc_rdisp8(dst, CC_S, CONTEXT, zf_off(ZF_S));
 		} else {
 			dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_S), SZ_B);
 		}
 		break;
-	case Z80_SET:
+	}
+	case Z80_SET: {
 		cycles = (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) ? 8 : 16;
 		dst = zcycles(dst, cycles);
-		dst = translate_z80_ea(inst, &src_op, dst, opts, READ, MODIFY);
+		uint8_t bit;
+		if ((inst->addr_mode & 0x1F) == Z80_REG && opts->regs[inst->ea_reg] >= AH && opts->regs[inst->ea_reg] <= BH) {
+			src_op.base = opts->regs[z80_word_reg(inst->ea_reg)];
+			size = SZ_W;
+			bit = inst->immed + 8;
+		} else {
+			size = SZ_B;
+			bit = inst->immed;
+			dst = translate_z80_ea(inst, &src_op, dst, opts, READ, DONT_MODIFY);
+		}
 		if (inst->reg != Z80_USE_IMMED) {
 			dst = translate_z80_reg(inst, &dst_op, dst, opts);
 		}
@@ -1180,9 +1199,61 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			//Reads normally take 3 cycles, but the read in the middle of a set instruction takes 4
 			dst = zcycles(dst, 1);
 		}
-		dst = bts_ir(dst, inst->immed, src_op.base, SZ_B);
+		dst = bts_ir(dst, bit, src_op.base, size);
 		if (inst->reg != Z80_USE_IMMED) {
-			dst = mov_rr(dst, src_op.base, dst_op.base, SZ_B);
+			if (size == SZ_W) {
+				if (dst_op.base >= R8) {
+					dst = ror_ir(dst, 8, src_op.base, SZ_W);
+					dst = mov_rr(dst, opts->regs[z80_low_reg(inst->ea_reg)], dst_op.base, SZ_B);
+					dst = ror_ir(dst, 8, src_op.base, SZ_W);
+				} else {
+					dst = mov_rr(dst, opts->regs[inst->ea_reg], dst_op.base, SZ_B);
+				}	
+			} else {
+				dst = mov_rr(dst, src_op.base, dst_op.base, SZ_B);
+			}
+		}
+		if ((inst->addr_mode & 0x1F) != Z80_REG) {
+			dst = z80_save_result(dst, inst);
+			if (inst->reg != Z80_USE_IMMED) {
+				dst = z80_save_reg(dst, inst, opts);
+			}
+		}
+		break;
+	}
+	case Z80_RES: {
+		cycles = (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) ? 8 : 16;
+		dst = zcycles(dst, cycles);
+		uint8_t bit;
+		if ((inst->addr_mode & 0x1F) == Z80_REG && opts->regs[inst->ea_reg] >= AH && opts->regs[inst->ea_reg] <= BH) {
+			src_op.base = opts->regs[z80_word_reg(inst->ea_reg)];
+			size = SZ_W;
+			bit = inst->immed + 8;
+		} else {
+			size = SZ_B;
+			bit = inst->immed;
+			dst = translate_z80_ea(inst, &src_op, dst, opts, READ, DONT_MODIFY);
+		}
+		if (inst->reg != Z80_USE_IMMED) {
+			dst = translate_z80_reg(inst, &dst_op, dst, opts);
+		}
+		if (inst->addr_mode != Z80_REG) {
+			//Reads normally take 3 cycles, but the read in the middle of a set instruction takes 4
+			dst = zcycles(dst, 1);
+		}
+		dst = btr_ir(dst, bit, src_op.base, size);
+		if (inst->reg != Z80_USE_IMMED) {
+			if (size == SZ_W) {
+				if (dst_op.base >= R8) {
+					dst = ror_ir(dst, 8, src_op.base, SZ_W);
+					dst = mov_rr(dst, opts->regs[z80_low_reg(inst->ea_reg)], dst_op.base, SZ_B);
+					dst = ror_ir(dst, 8, src_op.base, SZ_W);
+				} else {
+					dst = mov_rr(dst, opts->regs[inst->ea_reg], dst_op.base, SZ_B);
+				}	
+			} else {
+				dst = mov_rr(dst, src_op.base, dst_op.base, SZ_B);
+			}
 		}
 		if (inst->addr_mode != Z80_REG) {
 			dst = z80_save_result(dst, inst);
@@ -1191,28 +1262,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			}
 		}
 		break;
-	case Z80_RES:
-		cycles = (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) ? 8 : 16;
-		dst = zcycles(dst, cycles);
-		dst = translate_z80_ea(inst, &src_op, dst, opts, READ, MODIFY);
-		if (inst->reg != Z80_USE_IMMED) {
-			dst = translate_z80_reg(inst, &dst_op, dst, opts);
-		}
-		if (inst->addr_mode != Z80_REG) {
-			//Reads normally take 3 cycles, but the read in the middle of a set instruction takes 4
-			dst = zcycles(dst, 1);
-		}
-		dst = btr_ir(dst, inst->immed, src_op.base, SZ_B);
-		if (inst->reg != Z80_USE_IMMED) {
-			dst = mov_rr(dst, src_op.base, dst_op.base, SZ_B);
-		}
-		if (inst->addr_mode != Z80_REG) {
-			dst = z80_save_result(dst, inst);
-			if (inst->reg != Z80_USE_IMMED) {
-				dst = z80_save_reg(dst, inst, opts);
-			}
-		}
-		break;
+	}
 	case Z80_JP: {
 		cycles = 4;
 		if (inst->addr_mode != Z80_REG) {
