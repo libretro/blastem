@@ -226,8 +226,13 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 	}
 	
 	//copy instruction
-	memcpy(cur, instbuf, instlen);
-	cur += instlen;
+	if (instlen == 3) {
+		memcpy(cur, instbuf, 2);
+		cur += 2;
+	} else {
+		memcpy(cur, instbuf, instlen);
+		cur += instlen;
+	}
 	
 	//immed/displacement byte(s)
 	if (addr_mode == Z80_IX_DISPLACE || addr_mode == Z80_IY_DISPLACE) {
@@ -243,6 +248,9 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 	}
 	if (inst->reg == Z80_USE_IMMED && inst->op != Z80_BIT && inst->op != Z80_RES && inst->op != Z80_SET) {
 		*(cur++) = inst->immed & 0xFF;
+	}
+	if (instlen == 3) {
+		*(cur++) = instbuf[2];
 	}
 
 	for (char * cur = disbuf; *cur != 0; cur++) {
