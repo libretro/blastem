@@ -387,19 +387,21 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = call(dst, (uint8_t *)z80_read_word);
 		dst = add_ir(dst, 2, opts->regs[Z80_SP], SZ_W);
 		if (inst->reg == Z80_AF) {
-			dst = mov_rr(dst, SCRATCH1, opts->regs[Z80_A], SZ_B);
-			dst = bt_ir(dst, 8, SCRATCH1, SZ_W);
+			
+			dst = bt_ir(dst, 0, SCRATCH1, SZ_W);
 			dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_C));
-			dst = bt_ir(dst, 9, SCRATCH1, SZ_W);
+			dst = bt_ir(dst, 1, SCRATCH1, SZ_W);
 			dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_N));
-			dst = bt_ir(dst, 10, SCRATCH1, SZ_W);
+			dst = bt_ir(dst, 2, SCRATCH1, SZ_W);
 			dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_PV));
-			dst = bt_ir(dst, 12, SCRATCH1, SZ_W);
+			dst = bt_ir(dst, 4, SCRATCH1, SZ_W);
 			dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_H));
-			dst = bt_ir(dst, 14, SCRATCH1, SZ_W);
+			dst = bt_ir(dst, 6, SCRATCH1, SZ_W);
 			dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_Z));
-			dst = bt_ir(dst, 15, SCRATCH1, SZ_W);
+			dst = bt_ir(dst, 7, SCRATCH1, SZ_W);
 			dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_S));
+			dst = shr_ir(dst, 8, SCRATCH1, SZ_W);
+			dst = mov_rr(dst, SCRATCH1, opts->regs[Z80_A], SZ_B);
 		} else {
 			dst = translate_z80_reg(inst, &src_op, dst, opts);
 			dst = mov_rr(dst, SCRATCH1, src_op.base, SZ_W);
