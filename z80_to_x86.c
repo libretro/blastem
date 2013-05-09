@@ -885,7 +885,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			dst = translate_z80_reg(inst, &src_op, dst, opts); //For IX/IY variants that also write to a register
 			dst = zcycles(dst, 1);
 		} else {
-			src_op.mode = Z80_UNUSED;
+			src_op.mode = MODE_UNUSED;
 			dst = translate_z80_reg(inst, &dst_op, dst, opts);
 		}
 		dst = rol_ir(dst, 1, dst_op.base, SZ_B);
@@ -916,7 +916,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			dst = translate_z80_reg(inst, &src_op, dst, opts); //For IX/IY variants that also write to a register
 			dst = zcycles(dst, 1);
 		} else {
-			src_op.mode = Z80_UNUSED;
+			src_op.mode = MODE_UNUSED;
 			dst = translate_z80_reg(inst, &dst_op, dst, opts);
 		}
 		dst = bt_irdisp8(dst, 0, CONTEXT, zf_off(ZF_C), SZ_B);
@@ -948,7 +948,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			dst = translate_z80_reg(inst, &src_op, dst, opts); //For IX/IY variants that also write to a register
 			dst = zcycles(dst, 1);
 		} else {
-			src_op.mode = Z80_UNUSED;
+			src_op.mode = MODE_UNUSED;
 			dst = translate_z80_reg(inst, &dst_op, dst, opts);
 		}
 		dst = ror_ir(dst, 1, dst_op.base, SZ_B);
@@ -979,7 +979,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			dst = translate_z80_reg(inst, &src_op, dst, opts); //For IX/IY variants that also write to a register
 			dst = zcycles(dst, 1);
 		} else {
-			src_op.mode = Z80_UNUSED;
+			src_op.mode = MODE_UNUSED;
 			dst = translate_z80_reg(inst, &dst_op, dst, opts);
 		}
 		dst = bt_irdisp8(dst, 0, CONTEXT, zf_off(ZF_C), SZ_B);
@@ -1012,7 +1012,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			dst = translate_z80_reg(inst, &src_op, dst, opts); //For IX/IY variants that also write to a register
 			dst = zcycles(dst, 1);
 		} else {
-			src_op.mode = Z80_UNUSED;
+			src_op.mode = MODE_UNUSED;
 			dst = translate_z80_reg(inst, &dst_op, dst, opts);
 		}
 		dst = shl_ir(dst, 1, dst_op.base, SZ_B);
@@ -1042,7 +1042,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			dst = translate_z80_reg(inst, &src_op, dst, opts); //For IX/IY variants that also write to a register
 			dst = zcycles(dst, 1);
 		} else {
-			src_op.mode = Z80_UNUSED;
+			src_op.mode = MODE_UNUSED;
 			dst = translate_z80_reg(inst, &dst_op, dst, opts);
 		}
 		dst = sar_ir(dst, 1, dst_op.base, SZ_B);
@@ -1072,7 +1072,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			dst = translate_z80_reg(inst, &src_op, dst, opts); //For IX/IY variants that also write to a register
 			dst = zcycles(dst, 1);
 		} else {
-			src_op.mode = Z80_UNUSED;
+			src_op.mode = MODE_UNUSED;
 			dst = translate_z80_reg(inst, &dst_op, dst, opts);
 		}
 		dst = shr_ir(dst, 1, dst_op.base, SZ_B);
