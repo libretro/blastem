@@ -1397,10 +1397,10 @@ int z80_disasm(z80inst * decoded, char * dst)
 			len += sprintf(dst+len, " ($%X)", decoded->immed);
 			break;
 		case Z80_IX_DISPLACE:
-			len += sprintf(dst+len, " (ix+%d)", decoded->ea_reg);
+			len += sprintf(dst+len, " (ix+%d)", decoded->ea_reg & 0x80 ? decoded->ea_reg - 256 : decoded->ea_reg);
 			break;
 		case Z80_IY_DISPLACE:
-			len += sprintf(dst+len, " (iy+%d)", decoded->ea_reg);
+			len += sprintf(dst+len, " (iy+%d)", decoded->ea_reg & 0x80 ? decoded->ea_reg - 256 : decoded->ea_reg);
 			break;
 		default:
 			needcomma = 0;
@@ -1449,10 +1449,10 @@ int z80_disasm(z80inst * decoded, char * dst)
 			len += sprintf(dst+len, "%s ($%X)", needcomma ? "," : "" , decoded->immed);
 			break;
 		case Z80_IX_DISPLACE:
-			len += sprintf(dst+len, "%s (ix+%d)", needcomma ? "," : "" , decoded->ea_reg);
+			len += sprintf(dst+len, "%s (ix+%d)", needcomma ? "," : "" , decoded->ea_reg & 0x80 ? decoded->ea_reg - 256 : decoded->ea_reg);
 			break;
 		case Z80_IY_DISPLACE:
-			len += sprintf(dst+len, "%s (iy+%d)", needcomma ? "," : "" , decoded->ea_reg);
+			len += sprintf(dst+len, "%s (iy+%d)", needcomma ? "," : "" , decoded->ea_reg & 0x80 ? decoded->ea_reg - 256 : decoded->ea_reg);
 			break;
 		}
 	}
