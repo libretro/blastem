@@ -727,9 +727,9 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = translate_z80_reg(inst, &dst_op, dst, opts);
 		dst = translate_z80_ea(inst, &src_op, dst, opts, READ, DONT_MODIFY);
 		if (src_op.mode == MODE_REG_DIRECT) {
-			dst = add_rr(dst, src_op.base, dst_op.base, z80_size(inst));
+			dst = xor_rr(dst, src_op.base, dst_op.base, z80_size(inst));
 		} else {
-			dst = add_ir(dst, src_op.disp, dst_op.base, z80_size(inst));
+			dst = xor_ir(dst, src_op.disp, dst_op.base, z80_size(inst));
 		}
 		//TODO: Cleanup flags
 		dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_C));
