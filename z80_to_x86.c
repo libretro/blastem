@@ -806,7 +806,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		}
 		dst = sub_ir(dst, 1, dst_op.base, z80_size(inst));
 		if (z80_size(inst) == SZ_B) {
-			dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
+			dst = mov_irdisp8(dst, 1, CONTEXT, zf_off(ZF_N), SZ_B);
 			//TODO: Implement half-carry flag
 			dst = setcc_rdisp8(dst, CC_O, CONTEXT, zf_off(ZF_PV));
 			dst = setcc_rdisp8(dst, CC_Z, CONTEXT, zf_off(ZF_Z));
