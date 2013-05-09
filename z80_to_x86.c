@@ -1160,6 +1160,14 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		}
 		dst = bt_ir(dst, inst->immed, src_op.base, SZ_B);
 		dst = setcc_rdisp8(dst, CC_NC, CONTEXT, zf_off(ZF_Z));
+		dst = setcc_rdisp8(dst, CC_NC, CONTEXT, zf_off(ZF_PV));
+		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
+		if (inst->immed == 7) {
+			dst = cmp_ir(dst, 0, src_op.base, SZ_B);
+			dst = setcc_rdisp8(dst, CC_S, CONTEXT, zf_off(ZF_S));
+		} else {
+			dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_S), SZ_B);
+		}
 		break;
 	case Z80_SET:
 		cycles = (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) ? 8 : 16;
