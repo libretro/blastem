@@ -297,7 +297,7 @@ void z80_gen_all()
 		} else if(op == 0xED) {
 			for (int subop = 0; subop < sizeof(z80_tbl_extd)/sizeof(z80inst); subop++) {
 				if (!should_skip(z80_tbl_extd + subop)) {
-					inst[1] = subop;
+					inst[1] = subop + 0x40;
 					z80_gen_test(z80_tbl_extd + subop, inst, 2);
 				}
 			}
