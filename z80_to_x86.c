@@ -1016,6 +1016,10 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			dst = translate_z80_reg(inst, &dst_op, dst, opts);
 		}
 		dst = shl_ir(dst, 1, dst_op.base, SZ_B);
+		dst  = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_C));
+		if (inst->op == Z80_SLL) {
+			dst = or_ir(dst, 1, dst_op.base, SZ_B);
+		}
 		if (src_op.mode != MODE_UNUSED) {
 			dst = mov_rr(dst, dst_op.base, src_op.base, SZ_B);
 		}
@@ -1049,6 +1053,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		if (src_op.mode != MODE_UNUSED) {
 			dst = mov_rr(dst, dst_op.base, src_op.base, SZ_B);
 		}
+		dst  = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_C));
 		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
 		//TODO: Implement half-carry flag
 		dst = cmp_ir(dst, 0, dst_op.base, SZ_B);
@@ -1079,6 +1084,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		if (src_op.mode != MODE_UNUSED) {
 			dst = mov_rr(dst, dst_op.base, src_op.base, SZ_B);
 		}
+		dst  = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_C));
 		dst = mov_irdisp8(dst, 0, CONTEXT, zf_off(ZF_N), SZ_B);
 		//TODO: Implement half-carry flag
 		dst = cmp_ir(dst, 0, dst_op.base, SZ_B);
@@ -1093,6 +1099,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		} else {
 			dst = z80_save_reg(dst, inst, opts);
 		}
+		break;
 	case Z80_RLD:
 		dst = zcycles(dst, 8);
 		dst = mov_rr(dst, opts->regs[Z80_HL], SCRATCH1, SZ_W);
