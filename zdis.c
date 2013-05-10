@@ -186,7 +186,7 @@ int main(int argc, char ** argv)
 					printf("\t%s\n", disbuf);
 				}*/
 			} else {
-				z80_disasm(&instbuf, disbuf);
+				z80_disasm(&instbuf, disbuf, address);
 				printf("%X: %s\n", address, disbuf);
 			}
 		}
