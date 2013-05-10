@@ -73,8 +73,14 @@ uint8_t * translate_z80_reg(z80inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_
 	} else {
 		ea->mode = MODE_REG_DIRECT;
 		if (inst->reg == Z80_IYH) {
-			ea->base = opts->regs[Z80_IYL];
-			dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
+			if ((inst->addr_mode & 0x1F) == Z80_REG && inst->ea_reg == Z80_IYL) {
+				dst = mov_rr(dst, opts->regs[Z80_IY], SCRATCH1, SZ_W);
+				dst = ror_ir(dst, 8, SCRATCH1, SZ_W);
+				ea->base = SCRATCH1;
+			} else {
+				ea->base = opts->regs[Z80_IYL];
+				dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
+			}
 		} else if(opts->regs[inst->reg] >= 0) {
 			ea->base = opts->regs[inst->reg];
 			if (ea->base >= AH && ea->base <= BH) {
@@ -103,7 +109,13 @@ uint8_t * translate_z80_reg(z80inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_
 uint8_t * z80_save_reg(uint8_t * dst, z80inst * inst, x86_z80_options * opts)
 {
 	if (inst->reg == Z80_IYH) {
-		dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
+		if ((inst->addr_mode & 0x1F) == Z80_REG && inst->ea_reg == Z80_IYL) {
+			dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
+			dst = mov_rr(dst, SCRATCH1, opts->regs[Z80_IYL], SZ_B);
+			dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
+		} else {
+			dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
+		}
 	} else if (opts->regs[inst->reg] >= AH && opts->regs[inst->reg] <= BH) {
 		if ((inst->addr_mode & 0x1F) == Z80_REG) {
 			uint8_t other_reg = opts->regs[inst->ea_reg];
@@ -128,8 +140,14 @@ uint8_t * translate_z80_ea(z80inst * inst, x86_ea * ea, uint8_t * dst, x86_z80_o
 	{
 	case Z80_REG:
 		if (inst->ea_reg == Z80_IYH) {
-			ea->base = opts->regs[Z80_IYL];
-			dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
+			if (inst->reg == Z80_IYL) {
+				dst = mov_rr(dst, opts->regs[Z80_IY], SCRATCH1, SZ_W);
+				dst = ror_ir(dst, 8, SCRATCH1, SZ_W);
+				ea->base = SCRATCH1;
+			} else {
+				ea->base = opts->regs[Z80_IYL];
+				dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
+			}
 		} else {
 			ea->base = opts->regs[inst->ea_reg];
 			if (ea->base >= AH && ea->base <= BH && inst->reg != Z80_UNUSED && inst->reg != Z80_USE_IMMED) {
@@ -222,7 +240,13 @@ uint8_t * z80_save_ea(uint8_t * dst, z80inst * inst, x86_z80_options * opts)
 {
 	if ((inst->addr_mode & 0x1F) == Z80_REG) {
 		if (inst->ea_reg == Z80_IYH) {
-			dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
+			if (inst->reg == Z80_IYL) {
+				dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
+				dst = mov_rr(dst, SCRATCH1, opts->regs[Z80_IYL], SZ_B);
+				dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
+			} else {
+				dst = ror_ir(dst, 8, opts->regs[Z80_IY], SZ_W);
+			}
 		} else if (inst->reg != Z80_UNUSED && inst->reg != Z80_USE_IMMED && opts->regs[inst->ea_reg] >= AH && opts->regs[inst->ea_reg] <= BH) {
 			uint8_t other_reg = opts->regs[inst->reg];
 			if (other_reg >= R8 || (other_reg >= RSP && other_reg <= RDI)) {
