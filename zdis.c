@@ -135,9 +135,6 @@ int main(int argc, char ** argv)
 			
 			//z80_disasm(&instbuf, disbuf);
 			//printf("%X: %s\n", address, disbuf);
-			if (instbuf.op == Z80_HALT || instbuf.op == Z80_RET || instbuf.op == Z80_RETI || instbuf.op == Z80_RETN || instbuf.op == Z80_RST) {
-				break;
-			}
 			switch (instbuf.op)
 			{
 			case Z80_JR:
@@ -155,9 +152,14 @@ int main(int argc, char ** argv)
 			case Z80_JPCC:
 			case Z80_CALL:
 			case Z80_CALLCC:
+			case Z80_RST:
 				reference(instbuf.immed);
 				def = defer(instbuf.immed, def);
 				break;
+			default:
+				if (z80_is_terminal(&instbuf)) {
+					address = filesize + 1;
+				}
 			}
 		}
 	}
