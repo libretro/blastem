@@ -15,7 +15,7 @@
 #define SCRATCH2 R14
 #define CONTEXT RSI
 
-#define DO_DEBUG_PRINT
+//#define DO_DEBUG_PRINT
 
 #ifdef DO_DEBUG_PRINT
 #define dprintf printf
@@ -1576,7 +1576,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		//RST is basically CALL to an address in page 0
 		dst = zcycles(dst, 5);//T States: 5
 		dst = sub_ir(dst, 2, opts->regs[Z80_SP], SZ_W);
-		dst = mov_ir(dst, address + 3, SCRATCH1, SZ_W);
+		dst = mov_ir(dst, address + 1, SCRATCH1, SZ_W);
 		dst = mov_rr(dst, opts->regs[Z80_SP], SCRATCH2, SZ_W);
 		dst = call(dst, (uint8_t *)z80_write_word_highfirst);//T States: 3, 3
 		uint8_t * call_dst = z80_get_native_address(context, inst->immed);
