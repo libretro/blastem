@@ -14,6 +14,16 @@ uint16_t cart[0x200000];
 #define VINT_CYCLE ((MCLKS_LINE * 226)/MCLKS_PER_Z80)
 #define CYCLE_NEVER 0xFFFFFFFF
 
+uint8_t z80_read_ym(uint16_t location, z80_context * context)
+{
+	return 0xFF;
+}
+
+z80_context * z80_write_ym(uint16_t location, z80_context * context, uint8_t value)
+{
+	return context;
+}
+
 int main(int argc, char ** argv)
 {
 	long filesize;
