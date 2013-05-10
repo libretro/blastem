@@ -1371,7 +1371,7 @@ char * z80_conditions[Z80_CC_M+1] = {
 	"m"
 };
 
-int z80_disasm(z80inst * decoded, char * dst)
+int z80_disasm(z80inst * decoded, char * dst, uint16_t address)
 {
 	int len = sprintf(dst, "%s", z80_mnemonics[decoded->op]);
 	uint8_t needcomma;
@@ -1438,7 +1438,10 @@ int z80_disasm(z80inst * decoded, char * dst)
 			len += sprintf(dst+len,  "%s (%s)", needcomma ? "," : "" , z80_regs[decoded->ea_reg]);
 			break;
 		case Z80_IMMED:
-			if (decoded->immed >= 63 || decoded->op == Z80_JP || decoded->op == Z80_JPCC || decoded->op == Z80_CALL || decoded->op == Z80_CALLCC || decoded->op == Z80_RST)
+			if (decoded->op == Z80_JR || decoded->op == Z80_JRCC || decoded->op == Z80_DJNZ) {
+					address += 2 + decoded->immed;
+					len += sprintf(dst+len, "%s %X", needcomma ? "," : "" , address);
+			} else if (decoded->immed >= 63 || decoded->op == Z80_JP || decoded->op == Z80_JPCC || decoded->op == Z80_CALL || decoded->op == Z80_CALLCC || decoded->op == Z80_RST)
 			{
 				len += sprintf(dst+len, "%s $%X", needcomma ? "," : "" , decoded->immed);
 			} else {
