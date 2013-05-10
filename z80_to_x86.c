@@ -15,7 +15,7 @@
 #define SCRATCH2 R14
 #define CONTEXT RSI
 
-//#define DO_DEBUG_PRINT
+#define DO_DEBUG_PRINT
 
 #ifdef DO_DEBUG_PRINT
 #define dprintf printf
@@ -1633,12 +1633,6 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 	return dst;
 }
 
-uint8_t z80_is_terminal(z80inst * inst)
-{
-	return inst->op == Z80_RET || inst->op == Z80_RETI || inst->op == Z80_RETN || inst->op == Z80_JP
-		|| inst->op == Z80_JR || inst->op == Z80_HALT || (inst->op == Z80_NOP && inst->immed == 42);
-}
-
 uint8_t * z80_get_native_address(z80_context * context, uint32_t address)
 {
 	native_map_slot *map;
@@ -1649,14 +1643,14 @@ uint8_t * z80_get_native_address(z80_context * context, uint32_t address)
 		address &= 0x7FFF;
 		map = context->banked_code_map + context->bank_reg;
 	} else {
-		dprintf("z80_get_native_address: %X NULL\n", address);
+		//dprintf("z80_get_native_address: %X NULL\n", address);
 		return NULL;
 	}
 	if (!map->base || !map->offsets || map->offsets[address] == INVALID_OFFSET || map->offsets[address] == EXTENSION_WORD) {
-		dprintf("z80_get_native_address: %X NULL\n", address);
+		//dprintf("z80_get_native_address: %X NULL\n", address);
 		return NULL;
 	}
-	dprintf("z80_get_native_address: %X %p\n", address, map->base + map->offsets[address]);
+	//dprintf("z80_get_native_address: %X %p\n", address, map->base + map->offsets[address]);
 	return map->base + map->offsets[address];
 }
 
