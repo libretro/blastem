@@ -1622,7 +1622,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 	case Z80_OTDR:*/
 	default: {
 		char disbuf[80];
-		z80_disasm(inst, disbuf);
+		z80_disasm(inst, disbuf, address);
 		fprintf(stderr, "unimplemented instruction: %s\n", disbuf);
 		FILE * f = fopen("zram.bin", "wb");
 		fwrite(context->mem_pointers[0], 1, 8 * 1024, f);
@@ -1773,7 +1773,7 @@ void * z80_retranslate_inst(uint32_t address, z80_context * context)
 	dprintf("Retranslating code at Z80 address %X, native address %p\n", address, orig_start);
 	after = z80_decode(inst, &instbuf);
 	#ifdef DO_DEBUG_PRINT
-	z80_disasm(&instbuf, disbuf);
+	z80_disasm(&instbuf, disbuf, address);
 	if (instbuf.op == Z80_NOP) {
 		printf("%X\t%s(%d)\n", address, disbuf, instbuf.immed);
 	} else {
@@ -1863,7 +1863,7 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 			}
 			next = z80_decode(encoded, &inst);
 			#ifdef DO_DEBUG_PRINT
-			z80_disasm(&inst, disbuf);
+			z80_disasm(&inst, disbuf, address);
 			if (inst.op == Z80_NOP) {
 				printf("%X\t%s(%d)\n", address, disbuf, inst.immed);
 			} else {

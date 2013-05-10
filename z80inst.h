@@ -131,7 +131,7 @@ typedef struct {
 } z80inst;
 
 uint8_t * z80_decode(uint8_t * istream, z80inst * decoded);
-int z80_disasm(z80inst * decoded, char * dst);
+int z80_disasm(z80inst * decoded, char * dst, uint16_t address);
 uint8_t z80_high_reg(uint8_t reg);
 uint8_t z80_low_reg(uint8_t reg);
 uint8_t z80_word_reg(uint8_t reg);
