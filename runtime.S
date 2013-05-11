@@ -310,7 +310,7 @@ workram_w:
 	and $0xFFFF, %edi
 	mov %cx, (%r9, %rdi)
 	mov %edi, %ecx
-	shr $10, %ecx
+	shr $11, %ecx
 	bt %ecx, 160(%rsi)
 	jnc not_code
 	call m68k_save_context
@@ -399,7 +399,7 @@ workram_wb:
 	and $0xFFFF, %rdi
 	mov %cl, (%r9, %rdi)
 	mov %edi, %ecx
-	shr $10, %ecx
+	shr $11, %ecx
 	bt %ecx, 160(%rsi)
 	jnc not_code_b
 	xor $1, %edi
