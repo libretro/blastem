@@ -3865,6 +3865,22 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	return dst;
 }
 
+uint8_t m68k_is_terminal(m68kinst * inst)
+{
+	return inst->op == M68K_RTS || inst->op == M68K_RTE || inst->op == M68K_RTR || inst->op == M68K_JMP
+		|| inst->op == M68K_TRAP || inst->op == M68K_ILLEGAL || inst->op == M68K_INVALID || inst->op == M68K_RESET
+		|| (inst->op == M68K_BCC && inst->extra.cond == COND_TRUE);
+}
+
+void m68k_handle_deferred(m68k_context * context)
+{
+	x86_68k_options * opts = context->options;
+	process_deferred(&opts->deferred, context, (native_addr_func)get_native_from_context);
+	if (opts->deferred) {
+		translate_m68k_stream(opts->deferred->address, context);
+	}
+}
+
 uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context)
 {
 	m68kinst instbuf;
@@ -3924,7 +3940,7 @@ uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context)
 			uint8_t * after = translate_m68k(dst, &instbuf, opts);
 			map_native_address(context, instbuf.address, dst, m68k_size, after-dst);
 			dst = after;
-		} while(instbuf.op != M68K_ILLEGAL && instbuf.op != M68K_RESET && instbuf.op != M68K_INVALID && instbuf.op != M68K_TRAP && instbuf.op != M68K_RTS && instbuf.op != M68K_RTR && instbuf.op != M68K_RTE && !(instbuf.op == M68K_BCC && instbuf.extra.cond == COND_TRUE) && instbuf.op != M68K_JMP);
+		} while(!m68k_is_terminal(&instbuf));
 		process_deferred(&opts->deferred, context, (native_addr_func)get_native_from_context);
 		if (opts->deferred) {
 			address = opts->deferred->address;
@@ -3974,26 +3990,45 @@ void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
 			opts->code_end = dst_end = dst + size;
 			opts->cur_code = dst;
 		}
+		deferred_addr * orig_deferred = opts->deferred;
 		uint8_t * native_end = translate_m68k(dst, &instbuf, opts);
+		uint8_t is_terminal = m68k_is_terminal(&instbuf);
 		if ((native_end - dst) <= orig_size) {
-			native_end = translate_m68k(orig_start, &instbuf, opts);
-			while (native_end < orig_start + orig_size) {
-				*(native_end++) = 0x90; //NOP
+			uint8_t * native_next;
+			if (!is_terminal) {
+				native_next = get_native_address(context->native_code_map, orig + (after-inst)*2);
 			}
-			return orig_start;
-		} else {
-			map_native_address(context, instbuf.address, dst, (after-inst)*2, MAX_NATIVE_SIZE);
-			opts->code_end = dst+MAX_NATIVE_SIZE;
-			if (instbuf.op != M68K_RTS && instbuf.op != M68K_RTE && instbuf.op != M68K_RTR && instbuf.op != M68K_JMP && (instbuf.op != M68K_BCC || instbuf.extra.cond != COND_TRUE)) {
-				jmp(native_end, get_native_address(context->native_code_map, address + (after-inst)*2));
+			if (is_terminal || (native_next && ((native_next == orig_start + orig_size) || (orig_size - (native_end - dst)) > 5))) {
+				remove_deferred_until(&opts->deferred, orig_deferred);
+				native_end = translate_m68k(orig_start, &instbuf, opts);
+				if (!is_terminal) {
+					if (native_next == orig_start + orig_size && (native_next-native_end) < 2) {
+						while (native_end < orig_start + orig_size) {
+							*(native_end++) = 0x90; //NOP
+						}
+					} else {
+						jmp(native_end, native_next);
+					}
+				}
+				m68k_handle_deferred(context);
+				return orig_start;
 			}
-			return dst;
 		}
+		
+		map_native_address(context, instbuf.address, dst, (after-inst)*2, MAX_NATIVE_SIZE);
+		opts->cur_code = dst+MAX_NATIVE_SIZE;
+		jmp(orig_start, dst);
+		if (!m68k_is_terminal(&instbuf)) {
+			jmp(native_end, get_native_address_trans(context, orig + (after-inst)*2));
+		}
+		m68k_handle_deferred(context);
+		return dst;
 	} else {
 		dst = translate_m68k(orig_start, &instbuf, opts);
-		if (instbuf.op != M68K_RTS && instbuf.op != M68K_RTE && instbuf.op != M68K_RTR && instbuf.op != M68K_JMP && (instbuf.op != M68K_BCC || instbuf.extra.cond != COND_TRUE)) {
-			dst = jmp(dst, get_native_address(context->native_code_map, address + (after-inst)*2));
+		if (!m68k_is_terminal(&instbuf)) {
+			dst = jmp(dst, get_native_address_trans(context, orig + (after-inst)*2));
 		}
+		m68k_handle_deferred(context);
 		return orig_start;
 	}
 }
