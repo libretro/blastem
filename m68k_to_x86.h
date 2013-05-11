@@ -28,7 +28,7 @@ typedef struct {
 typedef struct {
 	uint8_t         flags[5];
 	uint8_t         status;
-	uint16_t        reserved;
+	uint16_t        int_ack;
 	uint32_t        dregs[8];
 	uint32_t        aregs[9];
 	uint32_t		target_cycle; //cycle at which the next synchronization or interrupt occurs

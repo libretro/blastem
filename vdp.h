@@ -30,14 +30,17 @@
 
 #define MCLKS_LINE 3420
 
-#define FLAG_DOT_OFLOW 0x1
-#define FLAG_CAN_MASK  0x2
-#define FLAG_MASKED    0x4
-#define FLAG_WINDOW    0x8
-#define FLAG_PENDING   0x10
-#define FLAG_UNUSED_SLOT 0x20
-#define FLAG_DMA_RUN   0x40
-#define FLAG_DMA_PROG  0x80
+#define FLAG_DOT_OFLOW     0x01
+#define FLAG_CAN_MASK      0x02
+#define FLAG_MASKED        0x04
+#define FLAG_WINDOW        0x08
+#define FLAG_PENDING       0x10
+#define FLAG_UNUSED_SLOT   0x20
+#define FLAG_DMA_RUN       0x40
+#define FLAG_DMA_PROG      0x80
+
+#define FLAG2_VINT_PENDING 0x01
+#define FLAG2_HINT_PENDING 0x02
 
 #define DISPLAY_ENABLE 0x40
 
@@ -115,6 +118,8 @@ typedef struct {
 	uint16_t    dma_val;
 	uint8_t     v_offset;
 	uint8_t     dma_cd;
+	uint8_t     hint_counter;
+	uint8_t     flags2;
 	uint8_t     *tmp_buf_a;
 	uint8_t     *tmp_buf_b;
 } vdp_context;
@@ -133,5 +138,8 @@ uint16_t vdp_control_port_read(vdp_context * context);
 uint16_t vdp_data_port_read(vdp_context * context);
 uint16_t vdp_hv_counter_read(vdp_context * context);
 void vdp_adjust_cycles(vdp_context * context, uint32_t deduction);
+uint32_t vdp_next_hint(vdp_context * context);
+uint32_t vdp_next_vint(vdp_context * context);
+void vdp_int_ack(vdp_context * context, uint16_t int_num);
 
 #endif //VDP_H_
