@@ -42,6 +42,7 @@ already_supervisor:
 	or %cl, 5(%rsi)
 	/* calculate interrupt vector address */
 	mov 92(%rsi), %ecx
+	mov %cx, 6(%rsi) /* interrupt acknowlege */
 	shl $2, %ecx
 	add $0x60, %ecx
 	call m68k_read_long_scratch1
