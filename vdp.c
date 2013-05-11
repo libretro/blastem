@@ -1193,17 +1193,21 @@ uint16_t vdp_control_port_read(vdp_context * context)
 	if (context->flags2 & FLAG2_VINT_PENDING) {
 		value |- 0x80;
 	}
-	if (context->flags & FLAG_DMA_RUN) {
-		value |= 0x2;
-	}
 	uint32_t line= context->cycles / MCLKS_LINE;
+	uint32_t linecyc = context->cycles % MCLKS_LINE;
 	if (line >= (context->latched_mode & BIT_PAL ? PAL_ACTIVE : NTSC_ACTIVE)) {
 		value |= 0x8;
+	}
+	if (linecyc < (context->latched_mode & BIT_H40 ? (148 + 61) * 4 : ( + 46) * 5)) {
+		value |= 0x4;
+	}
+	if (context->flags & FLAG_DMA_RUN) {
+		value |= 0x2;
 	}
 	if (context->latched_mode & BIT_PAL) {//Not sure about this, need to verify
 		value |= 0x1;
 	}
-	//TODO: Lots of other bits in status port
+	//TODO: Sprite overflow, sprite collision, odd frame flag
 	return value;
 }
 
