@@ -1028,18 +1028,34 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 		if (!line) {
 			latch_mode(context);
 		}
+		uint32_t linecyc = context->cycles % MCLKS_LINE;
+		if (linecyc == 0) {
+			if (line <= 1 || line >= active_lines) {
+				context->hint_counter = context->regs[REG_HINT];
+			} else if (context->hint_counter) {
+				context->hint_counter--;
+			} else {
+				context->flags2 |= FLAG2_HINT_PENDING;
+				context->hint_counter = context->regs[REG_HINT];
+			}
+		} else if(line == active_lines) {
+			uint32_t intcyc = context->latched_mode & BIT_H40 ? (148 + 40) * 4 :  (132 + 28) * 5;;
+			if (linecyc == intcyc) {
+				context->flags2 |= FLAG2_VINT_PENDING;
+			}
+		}
 		if (line < active_lines && context->regs[REG_MODE_2] & DISPLAY_ENABLE) {
 			//first sort-of active line is treated as 255 internally
 			//it's used for gathering sprite info for line 
 			line = (line - 1) & 0xFF;
-			uint32_t linecyc = context->cycles % MCLKS_LINE;
 			
 			//Convert to slot number
 			if (context->latched_mode & BIT_H40){
 				//TODO: Deal with nasty clock switching during HBLANK
+				uint32_t clock_inc = MCLKS_LINE-linecyc < 16 ? MCLKS_LINE-linecyc : 16;
 				linecyc = linecyc/16;
 				vdp_h40(line, linecyc, context);
-				context->cycles += 16;
+				context->cycles += clock_inc;
 			} else {
 				linecyc = linecyc/20;
 				vdp_h32(line, linecyc, context);
@@ -1053,8 +1069,9 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 				check_render_bg(context, line);
 			}
 			if (context->latched_mode & BIT_H40){
+				uint32_t clock_inc = MCLKS_LINE-linecyc < 16 ? MCLKS_LINE-linecyc : 16;
 				//TODO: Deal with nasty clock switching during HBLANK
-				context->cycles += 16;
+				context->cycles += clock_inc;
 			} else {
 				context->cycles += 20;
 			}
@@ -1173,12 +1190,18 @@ uint16_t vdp_control_port_read(vdp_context * context)
 	if (context->fifo_cur == context->fifo_end) {
 		value |= 0x100;
 	}
+	if (context->flags2 & FLAG2_VINT_PENDING) {
+		value |- 0x80;
+	}
 	if (context->flags & FLAG_DMA_RUN) {
 		value |= 0x2;
 	}
 	uint32_t line= context->cycles / MCLKS_LINE;
 	if (line >= (context->latched_mode & BIT_PAL ? PAL_ACTIVE : NTSC_ACTIVE)) {
 		value |= 0x8;
+	}
+	if (context->latched_mode & BIT_PAL) {//Not sure about this, need to verify
+		value |= 0x1;
 	}
 	//TODO: Lots of other bits in status port
 	return value;
@@ -1265,6 +1288,57 @@ void vdp_adjust_cycles(vdp_context * context, uint32_t deduction)
 		} else {
 			start->cycle = 0;
 		}
+	}
+}
+
+uint32_t vdp_next_hint(vdp_context * context)
+{
+	if (!(context->regs[REG_MODE_1] & 0x10)) {
+		return 0xFFFFFFFF;
+	}
+	if (context->flags2 & FLAG2_HINT_PENDING) {
+		return context->cycles;
+	}
+	uint32_t active_lines = context->latched_mode & BIT_PAL ? PAL_ACTIVE : NTSC_ACTIVE;
+	uint32_t line = context->cycles / MCLKS_LINE;
+	if (line >= active_lines) {
+		return 0xFFFFFFFF;
+	}
+	uint32_t linecyc = context->cycles % MCLKS_LINE;
+	uint32_t hcycle = context->cycles + context->hint_counter * MCLKS_LINE + MCLKS_LINE - linecyc;
+	if (!line) {
+		hcycle += MCLKS_LINE;
+	}
+	return hcycle;
+}
+
+uint32_t vdp_next_vint(vdp_context * context)
+{
+	if (!(context->regs[REG_MODE_2] & 0x20)) {
+		return 0xFFFFFFFF;
+	}
+	if (context->flags2 & FLAG2_VINT_PENDING) {
+		return context->cycles;
+	}
+	uint32_t active_lines = context->latched_mode & BIT_PAL ? PAL_ACTIVE : NTSC_ACTIVE;
+	uint32_t vcycle =  MCLKS_LINE * active_lines;
+	if (context->latched_mode & BIT_H40) {
+		vcycle += (148 + 40) * 4;
+	} else {
+		vcycle += (132 + 28) * 5;
+	}
+	if (vcycle < context->cycles) {
+		return 0xFFFFFFFF;
+	}
+	return vcycle;
+}
+
+void vdp_int_ack(vdp_context * context, uint16_t int_num)
+{
+	if (int_num == 6) {
+		context->flags2 &= ~FLAG2_VINT_PENDING;
+	} else if(int_num ==4) {
+		context->flags2 &= ~FLAG2_HINT_PENDING;
 	}
 }
 

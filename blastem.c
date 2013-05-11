@@ -107,21 +107,39 @@ uint16_t read_dma_value(uint32_t address)
 	return 0;
 }
 
-#define VINT_CYCLE ((MCLKS_LINE * 226)/MCLKS_PER_68K)
-#define ZVINT_CYCLE ((MCLKS_LINE * 226)/MCLKS_PER_Z80)
+//TODO: Make these dependent on the video mode
+//#define VINT_CYCLE ((MCLKS_LINE * 225 + (148 + 40) * 4)/MCLKS_PER_68K)
+#define ZVINT_CYCLE ((MCLKS_LINE * 225 + (148 + 40) * 4)/MCLKS_PER_Z80)
+//#define VINT_CYCLE ((MCLKS_LINE * 226)/MCLKS_PER_68K)
+//#define ZVINT_CYCLE ((MCLKS_LINE * 226)/MCLKS_PER_Z80)
 
 void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 {
-	if (!(v_context->regs[REG_MODE_2] & 0x20 && ((context->status & 0x7) < 6)) || context->current_cycle >= VINT_CYCLE) {
-		context->int_cycle = CYCLE_NEVER;
-		context->target_cycle = context->sync_cycle;
-	} else if (context->int_cycle > VINT_CYCLE) {
-		context->int_cycle = VINT_CYCLE;
-		context->int_num = 6;
-		if (context->int_cycle < context->sync_cycle) {
-			context->target_cycle = context->int_cycle;
+	context->int_cycle = CYCLE_NEVER;
+	if ((context->status & 0x7) < 6) {
+		uint32_t next_vint = vdp_next_vint(v_context);
+		if (next_vint != CYCLE_NEVER) {
+			next_vint /= MCLKS_PER_68K;
+			context->int_cycle = next_vint;
+			context->int_num = 6;
+		}
+		if ((context->status & 0x7) < 4) {
+			uint32_t next_hint = vdp_next_hint(v_context);
+			if (next_hint != CYCLE_NEVER) {
+				next_hint /= MCLKS_PER_68K;
+				if (next_hint < context->int_cycle) {
+					context->int_cycle = next_hint;
+					context->int_num = 4;
+			
+				}
+			}
 		}
 	}
+
+	context->target_cycle = context->int_cycle < context->sync_cycle ? context->int_cycle : context->sync_cycle;
+	/*printf("Cyc: %d, Trgt: %d, Int Cyc: %d, Int: %d, Mask: %X, V: %d, H: %d, HICount: %d, HReg: %d, Line: %d\n", 
+		context->current_cycle, context->target_cycle, context->int_cycle, context->int_num, (context->status & 0x7), 
+		v_context->regs[REG_MODE_2] & 0x20, v_context->regs[REG_MODE_1] & 0x10, v_context->hint_counter, v_context->regs[REG_HINT], v_context->cycles / MCLKS_LINE);*/
 }
 
 int break_on_sync = 0;
@@ -195,6 +213,10 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	} else {
 		//printf("running VDP for %d cycles\n", mclks - v_context->cycles);
 		vdp_run_context(v_context, mclks);
+	}
+	if (context->int_ack) {
+		vdp_int_ack(v_context, context->int_ack);
+		context->int_ack = 0;
 	}
 	adjust_int_cycle(context, v_context);
 	if (break_on_sync && address) {
