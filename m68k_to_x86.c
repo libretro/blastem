@@ -46,6 +46,7 @@ void do_sync();
 void bcd_add();
 void bcd_sub();
 void m68k_start_context(uint8_t * addr, m68k_context * context);
+void debug_print_sr();
 
 uint8_t * cycles(uint8_t * dst, uint32_t num)
 {
@@ -2927,6 +2928,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 				dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, opts->aregs[7], SZ_B);
 				dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SZ_B);
 			}
+			//dst = call(dst, (uint8_t *)debug_print_sr);
 			if (inst->src.params.immed & 0x700) {
 				dst = call(dst, (uint8_t *)do_sync);
 			}
@@ -3224,6 +3226,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		}
 		if (inst->op == M68K_ORI_SR) {
 			dst = xor_irdisp8(dst, inst->src.params.immed >> 8, CONTEXT, offsetof(m68k_context, status), SZ_B);
+			//dst = call(dst, (uint8_t *)debug_print_sr);
 			if (inst->src.params.immed & 0x700) {
 				dst = call(dst, (uint8_t *)do_sync);
 			}
@@ -3284,6 +3287,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 					dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, opts->aregs[7], SZ_D);
 					dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SZ_D);
 				}
+				//dst = call(dst, (uint8_t *)debug_print_sr);
 				dst = call(dst, (uint8_t *)do_sync);
 			}
 			dst = cycles(dst, 12);
@@ -3472,6 +3476,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		}
 		if (inst->op == M68K_ORI_SR) {
 			dst = or_irdisp8(dst, inst->src.params.immed >> 8, CONTEXT, offsetof(m68k_context, status), SZ_B);
+			//dst = call(dst, (uint8_t *)debug_print_sr);
 			if (inst->src.params.immed & 0x700) {
 				dst = call(dst, (uint8_t *)do_sync);
 			}

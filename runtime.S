@@ -45,6 +45,9 @@ already_supervisor:
 	mov %cx, 6(%rsi) /* interrupt acknowlege */
 	shl $2, %ecx
 	add $0x60, %ecx
+	/* push %rcx
+	call debug_print_sr_int
+	pop %rcx */
 	call m68k_read_long_scratch1
 	call m68k_native_addr_and_sync
 	add $24, %eax
@@ -62,6 +65,33 @@ skip_int:
 	mov %rax, %rsi
 	call m68k_load_context
 skip_sync_int:
+	ret
+	
+sr_msg_int:
+	.asciz "SR set to $%X due to interrupt\n"
+debug_print_sr_int:
+	call m68k_save_context
+	push %rsi
+	lea sr_msg_int(%rip), %rdi
+	movzxb 5(%rsi), %rsi
+	xor %rax, %rax
+	call printf
+	pop %rsi
+	call m68k_load_context
+	ret
+
+sr_msg:
+	.asciz "SR set to $%X\n"
+	.global debug_print_sr
+debug_print_sr:
+	call m68k_save_context
+	push %rsi
+	lea sr_msg(%rip), %rdi
+	movzxb 5(%rsi), %rsi
+	xor %rax, %rax
+	call printf
+	pop %rsi
+	call m68k_load_context
 	ret
 	
 	.global m68k_trap
@@ -85,11 +115,8 @@ already_supervisor_trap:
 	mov %r15d, %edi
 	call get_sr
 	call m68k_write_word
-	/* update status register */
-	andb $0xF8, 5(%rsi)
-	mov 92(%rsi), %cl
-	or $0x20, %cl
-	or %cl, 5(%rsi)
+	/* set supervisor bit */
+	or $0x20, 5(%rsi)
 	/* calculate interrupt vector address */
 	pop %rcx
 	shl $2, %ecx
@@ -212,6 +239,7 @@ set_sr:
 	mov %cl, (%rsi)
 	shr $8, %cx
 	mov %cl, 5(%rsi)
+	/* call debug_print_sr */
 	ret
 
 	.global set_ccr

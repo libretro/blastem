@@ -180,7 +180,7 @@ void sync_z80(z80_context * z_context, uint32_t mclks)
 		z_context->current_cycle = mclks / MCLKS_PER_Z80;
 	}
 }
-
+uint32_t frame=0;
 m68k_context * sync_components(m68k_context * context, uint32_t address)
 {
 	//TODO: Handle sync targets smaller than a single frame
@@ -197,6 +197,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 		if (!headless) {
 			break_on_sync |= wait_render_frame(v_context);
 		}
+		frame++;
 		mclks -= MCLKS_PER_FRAME;
 		vdp_adjust_cycles(v_context, MCLKS_PER_FRAME);
 		io_adjust_cycles(&gamepad_1, context->current_cycle, MCLKS_PER_FRAME/MCLKS_PER_68K);
