@@ -3063,11 +3063,28 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		} else {
 			dst = cmp_irdisp8(dst, 0, dst_op.base, dst_op.disp, inst->extra.size);
 		}
+		uint32_t isize;
+		switch(inst->src.addr_mode)
+		{
+		case MODE_AREG_DISPLACE:
+		case MODE_AREG_INDEX_DISP8:
+		case MODE_ABSOLUTE_SHORT:
+		case MODE_PC_INDEX_DISP8:
+		case MODE_PC_DISPLACE:
+		case MODE_IMMEDIATE:
+			isize = 4;
+			break;
+		case MODE_ABSOLUTE:
+			isize = 6;
+			break;
+		default:
+			isize = 2;
+		}
 		uint8_t * passed = dst+1;			
 		dst = jcc(dst, CC_GE, dst+2);
 		dst = mov_ir(dst, 1, FLAG_N, SZ_B);
 		dst = mov_ir(dst, VECTOR_CHK, SCRATCH2, SZ_D);
-		dst = mov_ir(dst, inst->address+2, SCRATCH1, SZ_D);
+		dst = mov_ir(dst, inst->address+isize, SCRATCH1, SZ_D);
 		dst = jmp(dst, (uint8_t *)m68k_trap);
 		*passed = dst - (passed+1);
 		if (dst_op.mode == MODE_REG_DIRECT) {
@@ -3089,7 +3106,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = jcc(dst, CC_LE, dst+2);
 		dst = mov_ir(dst, 0, FLAG_N, SZ_B);
 		dst = mov_ir(dst, VECTOR_CHK, SCRATCH2, SZ_D);
-		dst = mov_ir(dst, inst->address+2, SCRATCH1, SZ_D);
+		dst = mov_ir(dst, inst->address+isize, SCRATCH1, SZ_D);
 		dst = jmp(dst, (uint8_t *)m68k_trap);
 		*passed = dst - (passed+1);
 		dst = cycles(dst, 4);
