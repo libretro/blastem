@@ -66,6 +66,24 @@ void render_sprite_cells(vdp_context * context)
 	}
 }
 
+void vdp_print_sprite_table(vdp_context * context)
+{
+	uint16_t sat_address = (context->regs[REG_SAT] & 0x7F) << 9;
+	uint16_t current_index = 0;
+	uint8_t count = 0;
+	do {
+		uint16_t address = current_index * 8 + sat_address;
+		uint8_t height = ((context->vdpmem[address+2] & 0x3) + 1) * 8;
+		uint8_t width = (((context->vdpmem[address+2]  >> 2) & 0x3) + 1) * 8;
+		int16_t y = ((context->vdpmem[address] & 0x3) << 8 | context->vdpmem[address+1]) & 0x1FF;
+		int16_t x = ((context->vdpmem[address+ 2] & 0x3) << 8 | context->vdpmem[address + 3]) & 0x1FF;
+		uint16_t link = context->vdpmem[address+3] & 0x7F;
+		printf("Sprite %d: X=%d, Y=%d, Width=%u, Height=%u, Link=%u\n", current_index, x, y, width, height, link);
+		current_index = link;
+		count++;
+	} while (current_index != 0 && count < 80);
+}
+
 void scan_sprite_table(uint32_t line, vdp_context * context)
 {
 	if (context->sprite_index && context->slot_counter) {
