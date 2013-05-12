@@ -41,6 +41,11 @@ Name	Sizes	Src Modes														Dst Modes
 #moveq	l		#(-128-127)														d
 #roxl	bwl		d;#(1-8)														d
 #roxr	bwl		d;#(1-8)														d
-divs	w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
-divu	w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
+#divs	w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
+#divu	w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
+chk		w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
+cmp		bwl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
+cmpa	wl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	a
+cmpi	bwl		#n																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+cmpm	bwl		(a)+															(a)+
 

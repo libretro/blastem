@@ -24,9 +24,12 @@ class Program(object):
 	def write_rom_test(self, outfile):
 		outfile.write('\tdc.l $0, start\n')
 		needdivzero = self.inst.name.startswith('div')
+		needchk = self.inst.name.startswith('chk')
 		for i in xrange(0x8, 0x100, 0x4):
 			if needdivzero and i == 0x14:
 				outfile.write('\tdc.l div_zero_handler\n')
+			elif needchk and i == 0x18:
+				outfile.write('\tdc.l chk_handler\n')
 			else:
 				outfile.write('\tdc.l empty_handler\n')
 		outfile.write('\tdc.b "SEGA"\nempty_handler:\n\trte\n')
@@ -34,6 +37,11 @@ class Program(object):
 			outfile.write('div_zero_handler:\n')
 			div_zero_count = self.get_dreg()
 			outfile.write('\taddq #1, ' + str(div_zero_count) + '\n')
+			outfile.write('\trte\n')
+		if needchk:
+			outfile.write('chk_handler:\n')
+			chk_count = self.get_dreg()
+			outfile.write('\taddq #1, ' + str(chk_count) + '\n')
 			outfile.write('\trte\n')
 		outfile.write('start:\n\tmove #0, CCR\n')
 		if needdivzero:
