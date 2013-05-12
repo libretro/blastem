@@ -141,5 +141,6 @@ void vdp_adjust_cycles(vdp_context * context, uint32_t deduction);
 uint32_t vdp_next_hint(vdp_context * context);
 uint32_t vdp_next_vint(vdp_context * context);
 void vdp_int_ack(vdp_context * context, uint16_t int_num);
+void vdp_print_sprite_table(vdp_context * context);
 
 #endif //VDP_H_

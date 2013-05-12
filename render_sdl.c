@@ -232,7 +232,6 @@ void render_wait_quit(vdp_context * context)
 #define MIN_DELAY 5
 uint32_t frame_counter = 0;
 uint32_t start = 0;
-extern uint8_t z80_ram[];
 int wait_render_frame(vdp_context * context)
 {
 	FILE * outfile;
@@ -352,12 +351,6 @@ int wait_render_frame(vdp_context * context)
 			case SDLK_f:
 				gamepad_1.input[GAMEPAD_EXTRA] &= ~BUTTON_MODE;
 				break;
-			case SDLK_z:{
-				FILE * f = fopen("zram.bin", "wb");
-				fwrite(z80_ram, 1, 8 * 1024, f);
-				fclose(f);
-				break;
-				}
 			}
 			break;
 		case SDL_QUIT:

@@ -38,6 +38,7 @@ int main(int argc, char ** argv)
 	init_vdp_context(&context);
 	vdp_load_savestate(&context, state_file);
 	vdp_run_to_vblank(&context);
+	vdp_print_sprite_table(&context);
 	printf("Display %s\n", (context.regs[REG_MODE_2] & DISPLAY_ENABLE) ? "enabled" : "disabled");
     render_init(width, height);
     render_context(&context);
