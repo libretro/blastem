@@ -1572,6 +1572,18 @@ uint32_t vdp_next_vint(vdp_context * context)
 	return vcycle;
 }
 
+uint32_t vdp_next_vint_z80(vdp_context * context)
+{
+	uint32_t active_lines = context->latched_mode & BIT_PAL ? PAL_ACTIVE : NTSC_ACTIVE;
+	uint32_t vcycle =  MCLKS_LINE * active_lines;
+	if (context->latched_mode & BIT_H40) {
+		vcycle += VINT_CYCLE_H40;
+	} else {
+		vcycle += VINT_CYCLE_H32;
+	}
+	return vcycle;
+}
+
 void vdp_int_ack(vdp_context * context, uint16_t int_num)
 {
 	if (int_num == 6) {

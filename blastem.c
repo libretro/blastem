@@ -162,14 +162,16 @@ uint8_t new_busack = 0;
 void sync_z80(z80_context * z_context, uint32_t mclks)
 {
 	if (z80_enabled && !reset && !busreq) {
+		genesis_context * gen = z_context->system;
 		if (need_reset) {
 			z80_reset(z_context);
 			need_reset = 0;
 		}
 		z_context->sync_cycle = mclks / MCLKS_PER_Z80;
+		uint32_t vint_cycle = vdp_next_vint_z80(gen->vdp) / MCLKS_PER_Z80;
 		while (z_context->current_cycle < z_context->sync_cycle) {
 			if (z_context->iff1 && z_context->current_cycle < ZVINT_CYCLE) {
-				z_context->int_cycle = ZVINT_CYCLE;
+				z_context->int_cycle = vint_cycle;
 			}
 			z_context->target_cycle = z_context->sync_cycle < z_context->int_cycle ? z_context->sync_cycle : z_context->int_cycle;
 			dprintf("Running Z80 from cycle %d to cycle %d. Native PC: %p\n", z_context->current_cycle, z_context->sync_cycle, z_context->native_pc);
