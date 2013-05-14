@@ -961,6 +961,20 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 				insert_breakpoint(context, after, (uint8_t *)debugger);
 				debugging = 0;
 				break;
+			case 'v': {
+				genesis_context * gen = context->system;
+				//VDP debug commands
+				switch(input_buf[1])
+				{
+				case 's':
+					vdp_print_sprite_table(gen->vdp);
+					break;
+				case 'r':
+					vdp_print_reg_explain(gen->vdp);
+					break;
+				}
+				break;
+			}
 			case 'q':
 				puts("Quitting");
 				exit(0);
