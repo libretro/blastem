@@ -10,10 +10,25 @@
 #define MAP_BIT_H_FLIP 0x800
 #define MAP_BIT_V_FLIP 0x1000
 
-#define BIT_PAL        0x8
-#define BIT_DMA_ENABLE 0x4
-#define BIT_H40        0x1
+//Mode reg 1
+#define BIT_HINT_EN    0x10
+#define BIT_PAL_SEL    0x04
+#define BIT_HVC_LATCH  0x02
+#define BIT_DISP_DIS   0x01
 
+//Mode reg 2
+#define BIT_DISP_EN    0x40
+#define BIT_VINT_EN    0x20
+#define BIT_DMA_ENABLE 0x10
+#define BIT_PAL        0x08
+#define BIT_MODE_5     0x04
+
+//Mode reg 3
+#define BIT_EINT_EN    0x10
+#define BIT_VSCROLL    0x04
+
+//Mode reg 4
+#define BIT_H40        0x01
 #define BIT_HILIGHT    0x8
 
 #define SCROLL_BUFFER_SIZE 32
@@ -85,6 +100,46 @@ void vdp_print_sprite_table(vdp_context * context)
 		current_index = link;
 		count++;
 	} while (current_index != 0 && count < 80);
+}
+
+void vdp_print_reg_explain(vdp_context * context)
+{
+	char * hscroll[] = {"full", "7-line", "cell", "line"};
+	printf("**Mode Group**\n"
+	       "00: %.2X | H-ints %s, Pal Select %d, HVC latch %s, Display gen %s\n"
+	       "01: %.2X | Display %s, V-ints %s, Height: %d, Mode %d\n"
+	       "0B: %.2X | E-ints %s, V-Scroll: %s, H-Scroll: %s\n"
+	       "0C: %.2X | Width: %d, Shadow/Highlight: %s\n",
+	       context->regs[REG_MODE_1], context->regs[REG_MODE_1] & BIT_HINT_EN ? "enabled" : "disabled", context->regs[REG_MODE_1] & BIT_PAL_SEL != 0, 
+	           context->regs[REG_MODE_1] & BIT_HVC_LATCH ? "enabled" : "disabled", context->regs[REG_MODE_1] & BIT_DISP_DIS ? "disabled" : "enabled",
+	       context->regs[REG_MODE_2], context->regs[REG_MODE_2] & BIT_DISP_EN ? "enabled" : "disabled", context->regs[REG_MODE_2] & BIT_VINT_EN ? "enabled" : "disabled", 
+	           context->regs[REG_MODE_2] & BIT_PAL ? 30 : 28, context->regs[REG_MODE_2] & BIT_MODE_5 ? 5 : 4,
+	       context->regs[REG_MODE_3], context->regs[REG_MODE_3] & BIT_EINT_EN ? "enabled" : "disabled", context->regs[REG_MODE_3] & BIT_VSCROLL ? "2 cell" : "full",
+	           hscroll[context->regs[REG_MODE_3] & 0x3],
+	       context->regs[REG_MODE_4], context->regs[REG_MODE_4] & BIT_H40 ? 40 : 32, context->regs[REG_MODE_4] & BIT_HILIGHT ? "enabled" : "disabled");
+	printf("\n**Table Group**\n"
+	       "02: %.2X | Scroll A Name Table:    $%.4X\n"
+	       "03: %.2X | Window Name Table:      $%.4X\n"
+	       "04: %.2X | Scroll B Name Table:    $%.4X\n"
+	       "05: %.2X | Sprite Attribute Table: $%.4X\n"
+	       "0D: %.2X | HScroll Data Table:     $%.4X\n",
+	       context->regs[REG_SCROLL_A], (context->regs[REG_SCROLL_A] & 0x38) << 10,
+	       context->regs[REG_WINDOW], (context->regs[REG_WINDOW] & (context->regs[REG_MODE_4] & BIT_H40 ? 0x3C : 0x3E)) << 10,
+	       context->regs[REG_SCROLL_B], (context->regs[REG_SCROLL_B] & 0x7) << 13,
+	       context->regs[REG_SAT], (context->regs[REG_SAT] & (context->regs[REG_MODE_4] & BIT_H40 ? 0x3E : 0x3F)) << 9,
+	       context->regs[REG_HSCROLL], (context->regs[REG_HSCROLL] & 0x1F) << 10);
+	char * sizes[] = {"32", "64", "invalid", "128"};
+	printf("\n**Misc Group**\n"
+	       "07: %.2X | Backdrop Color: $%X\n"
+	       "0A: %.2X | H-Int Counter: %u\n"
+	       "0F: %.2X | Auto-increment: $%X\n"
+	       "10: %.2X | Scroll A/B Size: %sx%s\n",
+	       context->regs[REG_BG_COLOR], context->regs[REG_BG_COLOR] & 0x3F, 
+	       context->regs[REG_HINT], context->regs[REG_HINT], 
+	       context->regs[REG_AUTOINC], context->regs[REG_AUTOINC],
+	       context->regs[REG_SCROLL], sizes[context->regs[REG_SCROLL] & 0x3], sizes[context->regs[REG_SCROLL] >> 4 & 0x3]);
+	       
+	//TODO: Window Group, DMA Group      
 }
 
 void scan_sprite_table(uint32_t line, vdp_context * context)
@@ -425,7 +480,7 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 		vscroll = 0x3FF;
 		break;
 	}
-	vscroll &= (context->vsram[(context->regs[REG_MODE_3] & 0x4 ? column : 0) + vsram_off] + line);
+	vscroll &= (context->vsram[(context->regs[REG_MODE_3] & BIT_VSCROLL ? column : 0) + vsram_off] + line);
 	context->v_offset = vscroll & 0x7;
 	//printf("%s | line %d, vsram: %d, vscroll: %d, v_offset: %d\n",(vsram_off ? "B" : "A"), line, context->vsram[context->regs[REG_MODE_3] & 0x4 ? column : 0], vscroll, context->v_offset);
 	vscroll /= 8;
@@ -1145,14 +1200,20 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 		context->cd = (context->cd & 0x3) | ((value >> 2) & 0x3C);
 		context->flags &= ~FLAG_PENDING;
 		//printf("New Address: %X, New CD: %X\n", context->address, context->cd);
-		if (context->cd & 0x20) {
+		if (context->cd & 0x20 && (context->regs[REG_MODE_2] & BIT_DMA_ENABLE)) {
+			//
 			if((context->regs[REG_DMASRC_H] & 0xC0) != 0x80) {
 				//DMA copy or 68K -> VDP, transfer starts immediately
 				context->flags |= FLAG_DMA_RUN;
 				context->dma_cd = context->cd;
 				if (!(context->regs[REG_DMASRC_H] & 0x80)) {
+					//printf("DMA Address: %X, New CD: %X, Source: %X, Length: %X\n", context->address, context->cd, (context->regs[REG_DMASRC_H] << 17) | (context->regs[REG_DMASRC_M] << 9) | (context->regs[REG_DMASRC_L] << 1), context->regs[REG_DMALEN_H] << 8 | context->regs[REG_DMALEN_L]);
 					return 1;
+				} else {
+					//printf("DMA Copy Address: %X, New CD: %X, Source: %X\n", context->address, context->cd, (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]);
 				}
+			} else {
+				//printf("DMA Fill Address: %X, New CD: %X\n", context->address, context->cd);
 			}
 		}
 	} else {
@@ -1319,7 +1380,7 @@ void vdp_adjust_cycles(vdp_context * context, uint32_t deduction)
 
 uint32_t vdp_next_hint(vdp_context * context)
 {
-	if (!(context->regs[REG_MODE_1] & 0x10)) {
+	if (!(context->regs[REG_MODE_1] & BIT_HINT_EN)) {
 		return 0xFFFFFFFF;
 	}
 	if (context->flags2 & FLAG2_HINT_PENDING) {
@@ -1340,7 +1401,7 @@ uint32_t vdp_next_hint(vdp_context * context)
 
 uint32_t vdp_next_vint(vdp_context * context)
 {
-	if (!(context->regs[REG_MODE_2] & 0x20)) {
+	if (!(context->regs[REG_MODE_2] & BIT_VINT_EN)) {
 		return 0xFFFFFFFF;
 	}
 	if (context->flags2 & FLAG2_VINT_PENDING) {
