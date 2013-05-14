@@ -1111,7 +1111,7 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 	{
 		uint32_t line = context->cycles / MCLKS_LINE;
 		uint32_t active_lines = context->latched_mode & BIT_PAL ? PAL_ACTIVE : NTSC_ACTIVE;
-		if (!line) {
+		if (!context->cycles) {
 			latch_mode(context);
 		}
 		uint32_t linecyc = context->cycles % MCLKS_LINE;
