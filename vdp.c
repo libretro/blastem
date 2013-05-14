@@ -1151,35 +1151,35 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 					inccycles = 20;
 					break;
 				case 59:
-					slot = 2;
+					slot = 3;
 					inccycles = 20;
 					break;
 				case 79:
-					slot = 3;
+					slot = 4;
 					inccycles = 18;
 					break;
 				case 97:
-					slot = 4;
-					inccycles = 20;
-					break;
-				case 117:
 					slot = 5;
 					inccycles = 20;
 					break;
-				case 137:
+				case 117:
 					slot = 6;
 					inccycles = 20;
 					break;
-				case 157:
+				case 137:
 					slot = 7;
+					inccycles = 20;
+					break;
+				case 157:
+					slot = 8;
 					inccycles = 18;
 					break;
 				case 175:
-					slot = 8;
+					slot = 9;
 					inccycles = 20;
 					break;
 				case 195:
-					slot = 9;
+					slot = 10;
 					inccycles = 20;
 					break;
 				case 215:
@@ -1429,7 +1429,72 @@ uint16_t vdp_hv_counter_read(vdp_context * context)
 	}
 	uint32_t linecyc = context->cycles % MCLKS_LINE;
 	if (context->latched_mode & BIT_H40) {
-		linecyc /= 8;
+		uint32_t slot;
+		if (linecyc < MCLKS_SLOT_H40*HSYNC_SLOT_H40) {
+			slot = linecyc/MCLKS_SLOT_H40;
+		} else if(linecyc < MCLK_WEIRD_END) {
+			switch(linecyc-(MCLKS_SLOT_H40*HSYNC_SLOT_H40))
+			{
+			case 0:
+				slot = 0;
+				break;
+			case 19:
+				slot = 1;
+				break;
+			case 39:
+				slot = 2;
+				break;
+			case 59:
+				slot = 2;
+				break;
+			case 79:
+				slot = 3;
+				break;
+			case 97:
+				slot = 4;
+				break;
+			case 117:
+				slot = 5;
+				break;
+			case 137:
+				slot = 6;
+				break;
+			case 157:
+				slot = 7;
+				break;
+			case 175:
+				slot = 8;
+				break;
+			case 195:
+				slot = 9;
+				break;
+			case 215:
+				slot = 11;
+				break;
+			case 235:
+				slot = 12;
+				break;
+			case 253:
+				slot = 13;
+				break;
+			case 273:
+				slot = 14;
+				break;
+			case 293:
+				slot = 15;
+				break;
+			case 313:
+				slot = 16;
+				break;
+			default:
+				fprintf(stderr, "cycles after weirdness %d\n", linecyc-(MCLKS_SLOT_H40*HSYNC_SLOT_H40));
+				exit(1);
+			}
+			slot += HSYNC_SLOT_H40;
+		} else {
+			slot = (linecyc-MCLK_WEIRD_END)/MCLKS_SLOT_H40 + SLOT_WEIRD_END;
+		}
+		linecyc = slot * 2;
 		if (linecyc >= 86) {
 			linecyc -= 86;
 		} else {
