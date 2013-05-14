@@ -36,13 +36,16 @@
 
 #define FIFO_SIZE 4
 
-#define VINT_SLOTS_H40  (21+16+10) //21 slots before HSYNC, 16 during, 10 after TODO: deal with clock switching during HSYNC
-#define VINT_SLOTS_H32  (33+20+7)  //33 slots before HSYNC, 20 during, 7 after  TODO: confirm final number
 #define MCLKS_SLOT_H40  16
 #define MCLKS_SLOT_H32  20
+#define VINT_CYCLE_H40  (21*MCLKS_SLOT_H40+332+9*MCLKS_SLOT_H40) //21 slots before HSYNC, 16 during, 10 after
+#define VINT_CYCLE_H32  ((33+20+7)*MCLKS_SLOT_H32)  //33 slots before HSYNC, 20 during, 7 after  TODO: confirm final number
 #define HSYNC_SLOT_H40  21
 #define MCLK_WEIRD_END  (HSYNC_SLOT_H40*MCLKS_SLOT_H40 + 332)
 #define SLOT_WEIRD_END  (HSYNC_SLOT_H40+17)
+#define HSYNC_END_H32   (33 * MCLKS_SLOT_H32)
+#define HBLANK_CLEAR_H40 (MCLK_WEIRD_END+61*4)
+#define HBLANK_CLEAR_H32 (HSYNC_END_H32 + 46*5)
 
 void init_vdp_context(vdp_context * context)
 {
@@ -1122,7 +1125,7 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 				context->hint_counter = context->regs[REG_HINT];
 			}
 		} else if(line == active_lines) {
-			uint32_t intcyc = context->latched_mode & BIT_H40 ? VINT_SLOTS_H40 * MCLKS_SLOT_H40 :  VINT_SLOTS_H32 * MCLKS_SLOT_H32;
+			uint32_t intcyc = context->latched_mode & BIT_H40 ? VINT_CYCLE_H40 :  VINT_CYCLE_H32;
 			if (linecyc == intcyc) {
 				context->flags2 |= FLAG2_VINT_PENDING;
 			}
@@ -1364,7 +1367,7 @@ uint16_t vdp_control_port_read(vdp_context * context)
 	if (line >= (context->latched_mode & BIT_PAL ? PAL_ACTIVE : NTSC_ACTIVE)) {
 		value |= 0x8;
 	}
-	if (linecyc < (context->latched_mode & BIT_H40 ? (148 + 61) * 4 : ( + 46) * 5)) {
+	if (linecyc < (context->latched_mode & BIT_H40 ? HBLANK_CLEAR_H40 : HBLANK_CLEAR_H32)) {
 		value |= 0x4;
 	}
 	if (context->flags & FLAG_DMA_RUN) {
@@ -1485,7 +1488,6 @@ uint32_t vdp_next_hint(vdp_context * context)
 
 uint32_t vdp_next_vint(vdp_context * context)
 {
-	//TODO: deal with clock adjustemnts handled in vdp_run_context
 	if (!(context->regs[REG_MODE_2] & BIT_VINT_EN)) {
 		return 0xFFFFFFFF;
 	}
@@ -1495,9 +1497,9 @@ uint32_t vdp_next_vint(vdp_context * context)
 	uint32_t active_lines = context->latched_mode & BIT_PAL ? PAL_ACTIVE : NTSC_ACTIVE;
 	uint32_t vcycle =  MCLKS_LINE * active_lines;
 	if (context->latched_mode & BIT_H40) {
-		vcycle += VINT_SLOTS_H40 * MCLKS_SLOT_H40;
+		vcycle += VINT_CYCLE_H40;
 	} else {
-		vcycle += VINT_SLOTS_H32 * MCLKS_SLOT_H32;
+		vcycle += VINT_CYCLE_H32;
 	}
 	if (vcycle < context->cycles) {
 		return 0xFFFFFFFF;
