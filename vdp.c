@@ -770,12 +770,14 @@ void vdp_h40(uint32_t line, uint32_t linecyc, vdp_context * context)
 	case 0:
 		context->cur_slot = MAX_DRAWS-1;
 		memset(context->linebuf, 0, LINEBUF_SIZE);
-		render_sprite_cells(context);
-		break;
 	case 1:
 	case 2:
 	case 3:
-		render_sprite_cells(context);
+		if (line == 0xFF) {
+			external_slot(context);
+		} else {
+			render_sprite_cells(context);
+		}
 		break;
 	//sprite attribute table scan starts
 	case 4:
@@ -922,12 +924,14 @@ void vdp_h32(uint32_t line, uint32_t linecyc, vdp_context * context)
 	case 0:
 		context->cur_slot = MAX_DRAWS_H32-1;
 		memset(context->linebuf, 0, LINEBUF_SIZE);
-		render_sprite_cells(context);
-		break;
 	case 1:
 	case 2:
 	case 3:
-		render_sprite_cells(context);
+		if (line == 0xFF) {
+			external_slot(context);
+		} else {
+			render_sprite_cells(context);
+		}
 		break;
 	//sprite attribute table scan starts
 	case 4:
@@ -1126,7 +1130,7 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 				context->flags2 |= FLAG2_VINT_PENDING;
 			}
 		}
-		if (line < active_lines && context->regs[REG_MODE_2] & DISPLAY_ENABLE) {
+		if ((line < active_lines || (line == active_lines && linecyc < (context->latched_mode & BIT_H40 ? 64 : 80))) && context->regs[REG_MODE_2] & DISPLAY_ENABLE) {
 			//first sort-of active line is treated as 255 internally
 			//it's used for gathering sprite info for line 
 			line = (line - 1) & 0xFF;
