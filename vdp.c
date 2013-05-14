@@ -40,6 +40,9 @@
 #define VINT_SLOTS_H32  (33+20+7)  //33 slots before HSYNC, 20 during, 7 after  TODO: confirm final number
 #define MCLKS_SLOT_H40  16
 #define MCLKS_SLOT_H32  20
+#define HSYNC_SLOT_H40  21
+#define MCLK_WEIRD_END  (HSYNC_SLOT_H40*MCLKS_SLOT_H40 + 332)
+#define SLOT_WEIRD_END  (HSYNC_SLOT_H40+17)
 
 void init_vdp_context(vdp_context * context)
 {
@@ -1059,40 +1062,34 @@ void latch_mode(vdp_context * context)
 	context->latched_mode = (context->regs[REG_MODE_4] & 0x81) | (context->regs[REG_MODE_2] & BIT_PAL);
 }
 
-int is_refresh(vdp_context * context)
+int is_refresh(vdp_context * context, uint32_t slot)
 {
-	uint32_t linecyc = context->cycles % MCLKS_LINE;
 	if (context->latched_mode & BIT_H40) {
-		linecyc = linecyc/16;
 		//TODO: Figure out the exact behavior that reduces DMA slots for direct color DMA demos
-		return (linecyc == 37 || linecyc == 69 || linecyc == 102 || linecyc == 133 || linecyc == 165 || linecyc == 197 || linecyc >= 210 || (linecyc < 6 && (context->flags & FLAG_DMA_RUN) && ((context->dma_cd & 0xF) == CRAM_WRITE)));
+		return (slot == 37 || slot == 69 || slot == 102 || slot == 133 || slot == 165 || slot == 197 || slot >= 210 || (slot < 6 && (context->flags & FLAG_DMA_RUN) && ((context->dma_cd & 0xF) == CRAM_WRITE)));
 	} else {
-		linecyc = linecyc/20;
 		//TODO: Figure out which slots are refresh when display is off in 32-cell mode
 		//These numbers are guesses based on H40 numbers
-		return (linecyc == 24 || linecyc == 56 || linecyc == 88 || linecyc == 120 || linecyc == 152 || (linecyc < 5 && (context->flags & FLAG_DMA_RUN) && ((context->dma_cd & 0xF) == CRAM_WRITE)));
+		return (slot == 24 || slot == 56 || slot == 88 || slot == 120 || slot == 152 || (slot < 5 && (context->flags & FLAG_DMA_RUN) && ((context->dma_cd & 0xF) == CRAM_WRITE)));
 		//The numbers below are the refresh slots during active display
-		//return (linecyc == 66 || linecyc == 98 || linecyc == 130 || linecyc == 162);
+		//return (slot == 66 || slot == 98 || slot == 130 || slot == 162);
 	}
 }
 
-void check_render_bg(vdp_context * context, int32_t line)
+void check_render_bg(vdp_context * context, int32_t line, uint32_t slot)
 {
 	if (line > 0) {
 		line -= 1;
 		uint16_t * start = NULL, *end = NULL;
-		uint32_t linecyc = (context->cycles % MCLKS_LINE);
 		if (context->latched_mode & BIT_H40) {
-			linecyc /= 16;
-			if (linecyc >= 50 && linecyc < 210) {
-				uint32_t x = (linecyc-50)*2;
+			if (slot >= 50 && slot < 210) {
+				uint32_t x = (slot-50)*2;
 				start = context->framebuf + line * 320 + x;
 				end = start + 2;
 			}
 		} else {
-			linecyc /= 20;
-			if (linecyc >= 43 && linecyc < 171) {
-				uint32_t x = (linecyc-43)*2;
+			if (slot >= 43 && slot < 171) {
+				uint32_t x = (slot-43)*2;
 				start = context->framebuf + line * 320 + x;
 				end = start + 2;
 			}
@@ -1130,6 +1127,95 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 				context->flags2 |= FLAG2_VINT_PENDING;
 			}
 		}
+		uint32_t inccycles, slot;
+		if (context->latched_mode & BIT_H40){
+			if (linecyc < MCLKS_SLOT_H40*HSYNC_SLOT_H40) {
+				slot = linecyc/MCLKS_SLOT_H40;
+				inccycles = MCLKS_SLOT_H40;
+			} else if(linecyc < MCLK_WEIRD_END) {
+				switch(linecyc-(MCLKS_SLOT_H40*HSYNC_SLOT_H40))
+				{
+				case 0:
+					inccycles = 19;
+					slot = 0;
+					break;
+				case 19:
+					slot = 1;
+					inccycles = 20;
+					break;
+				case 39:
+					slot = 2;
+					inccycles = 20;
+					break;
+				case 59:
+					slot = 2;
+					inccycles = 20;
+					break;
+				case 79:
+					slot = 3;
+					inccycles = 18;
+					break;
+				case 97:
+					slot = 4;
+					inccycles = 20;
+					break;
+				case 117:
+					slot = 5;
+					inccycles = 20;
+					break;
+				case 137:
+					slot = 6;
+					inccycles = 20;
+					break;
+				case 157:
+					slot = 7;
+					inccycles = 18;
+					break;
+				case 175:
+					slot = 8;
+					inccycles = 20;
+					break;
+				case 195:
+					slot = 9;
+					inccycles = 20;
+					break;
+				case 215:
+					slot = 11;
+					inccycles = 20;
+					break;
+				case 235:
+					slot = 12;
+					inccycles = 18;
+					break;
+				case 253:
+					slot = 13;
+					inccycles = 20;
+					break;
+				case 273:
+					slot = 14;
+					inccycles = 20;
+					break;
+				case 293:
+					slot = 15;
+					inccycles = 20;
+					break;
+				case 313:
+					slot = 16;
+					inccycles = 19;
+					break;
+				default:
+					fprintf(stderr, "cycles after weirdness %d\n", linecyc-(MCLKS_SLOT_H40*HSYNC_SLOT_H40));
+					exit(1);
+				}
+				slot += HSYNC_SLOT_H40;
+			} else {
+				slot = (linecyc-MCLK_WEIRD_END)/MCLKS_SLOT_H40 + SLOT_WEIRD_END;
+				inccycles = MCLKS_SLOT_H40;
+			}
+		} else {
+			inccycles = MCLKS_SLOT_H32;
+			slot = linecyc/MCLKS_SLOT_H32;
+		}
 		if ((line < active_lines || (line == active_lines && linecyc < (context->latched_mode & BIT_H40 ? 64 : 80))) && context->regs[REG_MODE_2] & DISPLAY_ENABLE) {
 			//first sort-of active line is treated as 255 internally
 			//it's used for gathering sprite info for line 
@@ -1137,31 +1223,19 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 			
 			//Convert to slot number
 			if (context->latched_mode & BIT_H40){
-				//TODO: Deal with nasty clock switching during HBLANK
-				uint32_t clock_inc = MCLKS_LINE-linecyc < MCLKS_SLOT_H40 ? MCLKS_LINE-linecyc : MCLKS_SLOT_H40;
-				linecyc = linecyc/MCLKS_SLOT_H40;
-				vdp_h40(line, linecyc, context);
-				context->cycles += clock_inc;
+				vdp_h40(line, slot, context);
 			} else {
-				linecyc = linecyc/MCLKS_SLOT_H32;
-				vdp_h32(line, linecyc, context);
-				context->cycles += MCLKS_SLOT_H32;
+				vdp_h32(line, slot, context);
 			}
 		} else {
-			if (!is_refresh(context)) {
+			if (!is_refresh(context, slot)) {
 				external_slot(context);
 			}
 			if (line < active_lines) {
-				check_render_bg(context, line);
-			}
-			if (context->latched_mode & BIT_H40){
-				uint32_t clock_inc = MCLKS_LINE-linecyc < MCLKS_SLOT_H40 ? MCLKS_LINE-linecyc : MCLKS_SLOT_H40;
-				//TODO: Deal with nasty clock switching during HBLANK
-				context->cycles += clock_inc;
-			} else {
-				context->cycles += MCLKS_SLOT_H32;
+				check_render_bg(context, line, slot);
 			}
 		}
+		context->cycles += inccycles;
 	}
 }
 
@@ -1340,6 +1414,7 @@ uint16_t vdp_data_port_read(vdp_context * context)
 
 uint16_t vdp_hv_counter_read(vdp_context * context)
 {
+	//TODO: deal with clock adjustemnts handled in vdp_run_context
 	uint32_t line= context->cycles / MCLKS_LINE;
 	if (!line) {
 		line = 0xFF;
@@ -1410,6 +1485,7 @@ uint32_t vdp_next_hint(vdp_context * context)
 
 uint32_t vdp_next_vint(vdp_context * context)
 {
+	//TODO: deal with clock adjustemnts handled in vdp_run_context
 	if (!(context->regs[REG_MODE_2] & BIT_VINT_EN)) {
 		return 0xFFFFFFFF;
 	}
