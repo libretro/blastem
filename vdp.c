@@ -36,6 +36,11 @@
 
 #define FIFO_SIZE 4
 
+#define VINT_SLOTS_H40  (21+16+10) //21 slots before HSYNC, 16 during, 10 after TODO: deal with clock switching during HSYNC
+#define VINT_SLOTS_H32  (33+20+7)  //33 slots before HSYNC, 20 during, 7 after  TODO: confirm final number
+#define MCLKS_SLOT_H40  16
+#define MCLKS_SLOT_H32  20
+
 void init_vdp_context(vdp_context * context)
 {
 	memset(context, 0, sizeof(*context));
@@ -1116,7 +1121,7 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 				context->hint_counter = context->regs[REG_HINT];
 			}
 		} else if(line == active_lines) {
-			uint32_t intcyc = context->latched_mode & BIT_H40 ? (148 + 40) * 4 :  (132 + 28) * 5;;
+			uint32_t intcyc = context->latched_mode & BIT_H40 ? VINT_SLOTS_H40 * MCLKS_SLOT_H40 :  VINT_SLOTS_H32 * MCLKS_SLOT_H32;
 			if (linecyc == intcyc) {
 				context->flags2 |= FLAG2_VINT_PENDING;
 			}
@@ -1129,14 +1134,14 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 			//Convert to slot number
 			if (context->latched_mode & BIT_H40){
 				//TODO: Deal with nasty clock switching during HBLANK
-				uint32_t clock_inc = MCLKS_LINE-linecyc < 16 ? MCLKS_LINE-linecyc : 16;
-				linecyc = linecyc/16;
+				uint32_t clock_inc = MCLKS_LINE-linecyc < MCLKS_SLOT_H40 ? MCLKS_LINE-linecyc : MCLKS_SLOT_H40;
+				linecyc = linecyc/MCLKS_SLOT_H40;
 				vdp_h40(line, linecyc, context);
 				context->cycles += clock_inc;
 			} else {
-				linecyc = linecyc/20;
+				linecyc = linecyc/MCLKS_SLOT_H32;
 				vdp_h32(line, linecyc, context);
-				context->cycles += 20;
+				context->cycles += MCLKS_SLOT_H32;
 			}
 		} else {
 			if (!is_refresh(context)) {
@@ -1146,11 +1151,11 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 				check_render_bg(context, line);
 			}
 			if (context->latched_mode & BIT_H40){
-				uint32_t clock_inc = MCLKS_LINE-linecyc < 16 ? MCLKS_LINE-linecyc : 16;
+				uint32_t clock_inc = MCLKS_LINE-linecyc < MCLKS_SLOT_H40 ? MCLKS_LINE-linecyc : MCLKS_SLOT_H40;
 				//TODO: Deal with nasty clock switching during HBLANK
 				context->cycles += clock_inc;
 			} else {
-				context->cycles += 20;
+				context->cycles += MCLKS_SLOT_H32;
 			}
 		}
 	}
@@ -1410,9 +1415,9 @@ uint32_t vdp_next_vint(vdp_context * context)
 	uint32_t active_lines = context->latched_mode & BIT_PAL ? PAL_ACTIVE : NTSC_ACTIVE;
 	uint32_t vcycle =  MCLKS_LINE * active_lines;
 	if (context->latched_mode & BIT_H40) {
-		vcycle += (148 + 40) * 4;
+		vcycle += VINT_SLOTS_H40 * MCLKS_SLOT_H40;
 	} else {
-		vcycle += (132 + 28) * 5;
+		vcycle += VINT_SLOTS_H32 * MCLKS_SLOT_H32;
 	}
 	if (vcycle < context->cycles) {
 		return 0xFFFFFFFF;
