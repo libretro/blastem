@@ -38,6 +38,7 @@ z80_handle_cycle_limit_int:
 	cmp 116(%rsi), %ebp
 	jb zskip_int
 	mov 112(%rsi), %ebp /* set cycle limit to sync cycle */
+	movl $0xFFFFFFFF, 116(%rsi) /* make sure the interrupt doesn't fire more than once */
 	add $7, %ebp
 	sub $2, %r9w
 	mov %r9w, %r14w

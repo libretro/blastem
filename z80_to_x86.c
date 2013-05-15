@@ -893,8 +893,11 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 	case Z80_EI:
 		//TODO: Implement interrupt enable latency of 1 instruction afer EI
 		dst = zcycles(dst, 4);
+		dst = mov_rrdisp8(dst, ZCYCLES, CONTEXT, offsetof(z80_context, int_enable_cycle), SZ_D);
 		dst = mov_irdisp8(dst, 1, CONTEXT, offsetof(z80_context, iff1), SZ_B);
 		dst = mov_irdisp8(dst, 1, CONTEXT, offsetof(z80_context, iff2), SZ_B);
+		//interrupt enable has a one-instruction latency, minimum instruction duration is 4 cycles
+		dst = add_irdisp8(dst, 4, CONTEXT, offsetof(z80_context, int_enable_cycle), SZ_D);
 		dst = call(dst, (uint8_t *)z80_do_sync);
 		break;
 	case Z80_IM:
