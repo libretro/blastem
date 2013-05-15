@@ -49,6 +49,7 @@ typedef struct {
 	void *            options;
 	void *            system;
 	uint8_t           ram_code_flags[(8 * 1024)/128/8];
+	uint32_t          int_enable_cycle;
 } z80_context;
 
 void translate_z80_stream(z80_context * context, uint32_t address);
