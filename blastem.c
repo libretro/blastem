@@ -1056,6 +1056,24 @@ void update_title()
 	strcpy(cur, " - BlastEm");
 }
 
+#define REGION_START 0x1F0
+
+int detect_specific_region(char region)
+{
+	return cart[REGION_START/2] & 0xFF == region || (cart[REGION_START/2]) >> 8 == region || cart[REGION_START/2+1] & 0xFF == region;
+}
+
+void detect_region()
+{
+	if (detect_specific_region('U')) {
+		version_reg = NO_DISK | USA;
+	} else if (detect_specific_region('J')) {
+		version_reg = NO_DISK | JAP;
+	} if (detect_specific_region('E') || detect_specific_region('A') || detect_specific_region('B') || detect_specific_region('4')) {
+		version_reg = NO_DISK | EUR;
+	}
+}
+
 int main(int argc, char ** argv)
 {
 	if (argc < 2) {
@@ -1066,6 +1084,7 @@ int main(int argc, char ** argv)
 		fprintf(stderr, "Failed to open %s for reading\n", argv[1]);
 		return 1;
 	}
+	detect_region();
 	int width = -1;
 	int height = -1;
 	int debug = 0;
@@ -1087,6 +1106,31 @@ int main(int argc, char ** argv)
 				break;
 			case 'n':
 				z80_enabled = 0;
+				break;
+			case 'r':
+				i++;
+				if (i >= argc) {
+					fputs("-r must be followed by region (J, U or E)\n", stderr);
+					return 1;
+				}
+				switch (argv[i][0])
+				{
+				case 'j':
+				case 'J':
+					version_reg = NO_DISK | JAP;
+					break;
+				case 'u':
+				case 'U':
+					version_reg = NO_DISK | USA;
+					break;
+				case 'e':
+				case 'E':
+					version_reg = NO_DISK | EUR;
+					break;
+				default:
+					fprintf(stderr, "'%c' is not a valid region character for the -r option\n", argv[i][0]);
+					return 1;
+				}
 				break;
 			default:
 				fprintf(stderr, "Unrecognized switch %s\n", argv[i]);
