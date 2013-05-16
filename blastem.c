@@ -1023,6 +1023,39 @@ void init_run_cpu(genesis_context * gen, int debug, FILE * address_log)
 	m68k_reset(&context);
 }
 
+char title[64];
+
+#define TITLE_START 0x150
+#define TITLE_END (TITLE_START+48)
+
+void update_title()
+{
+	uint16_t *last = cart + TITLE_END/2 - 1;
+	while(last > cart + TITLE_START/2 && *last == 0x2020)
+	{
+		last--;
+	}
+	uint16_t *start = cart + TITLE_START/2;
+	char *cur = title;
+	char last_char = ' ';
+	for (; start != last; start++)
+	{
+		if ((last_char != ' ' || (*start >> 8) != ' ') && (*start >> 8) < 0x80) {
+			*(cur++) = *start >> 8;
+			last_char = *start >> 8;
+		}
+		if (last_char != ' ' || (*start & 0xFF) != ' ' && (*start & 0xFF) < 0x80) {
+			*(cur++) = *start;
+			last_char = *start & 0xFF;
+		}
+	}
+	*(cur++) = *start >> 8;
+	if ((*start & 0xFF) != ' ') {
+		*(cur++) = *start;
+	}
+	strcpy(cur, " - BlastEm");
+}
+
 int main(int argc, char ** argv)
 {
 	if (argc < 2) {
@@ -1065,10 +1098,11 @@ int main(int argc, char ** argv)
 			height = atoi(argv[i]);
 		}
 	}
+	update_title();
 	width = width < 320 ? 320 : width;
 	height = height < 240 ? (width/320) * 240 : height;
 	if (!headless) {
-		render_init(width, height);
+		render_init(width, height, title);
 	}
 	vdp_context v_context;
 	
