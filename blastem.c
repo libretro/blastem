@@ -27,6 +27,7 @@ io_port gamepad_2;
 
 int headless = 0;
 int z80_enabled = 1;
+int frame_limit = 1;
 
 #ifndef MIN
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
@@ -197,7 +198,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 		//printf("reached frame end | 68K Cycles: %d, MCLK Cycles: %d\n", context->current_cycle, mclks);
 		vdp_run_context(v_context, MCLKS_PER_FRAME);
 		if (!headless) {
-			break_on_sync |= wait_render_frame(v_context);
+			break_on_sync |= wait_render_frame(v_context, frame_limit);
 		}
 		frame++;
 		mclks -= MCLKS_PER_FRAME;
@@ -242,7 +243,7 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 					vdp_run_dma_done(v_context, MCLKS_PER_FRAME);
 					if (v_context->cycles >= MCLKS_PER_FRAME) {
 						if (!headless) {
-							wait_render_frame(v_context);
+							wait_render_frame(v_context, frame_limit);
 						}
 						vdp_adjust_cycles(v_context, MCLKS_PER_FRAME);
 						io_adjust_cycles(&gamepad_1, v_context->cycles/MCLKS_PER_68K, MCLKS_PER_FRAME/MCLKS_PER_68K);
@@ -259,7 +260,7 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 						vdp_run_dma_done(v_context, MCLKS_PER_FRAME);
 						if (v_context->cycles >= MCLKS_PER_FRAME) {
 							if (!headless) {
-								wait_render_frame(v_context);
+								wait_render_frame(v_context, frame_limit);
 							}
 							vdp_adjust_cycles(v_context, MCLKS_PER_FRAME);
 							io_adjust_cycles(&gamepad_1, v_context->cycles/MCLKS_PER_68K, MCLKS_PER_FRAME/MCLKS_PER_68K);
@@ -1041,6 +1042,9 @@ int main(int argc, char ** argv)
 			switch(argv[i][1]) {
 			case 'd':
 				debug = 1;
+				break;
+			case 'f':
+				frame_limit = 0;
 				break;
 			case 'l':
 				address_log = fopen("address.log", "w");
