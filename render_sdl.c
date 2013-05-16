@@ -50,7 +50,7 @@ void render_init(int width, int height)
 		color_map[color] = SDL_MapRGB(screen->format, r, g, b);
     }
     min_delay = 0;
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < 100; i++) {
     	uint32_t start = SDL_GetTicks();
     	SDL_Delay(1);
     	uint32_t delay = SDL_GetTicks()-start;
