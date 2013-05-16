@@ -15,7 +15,7 @@ uint8_t levels[] = {0, 27, 49, 71, 87, 103, 119, 130, 146, 157, 174, 190, 206, 2
 
 uint32_t min_delay;
 
-void render_init(int width, int height)
+void render_init(int width, int height, char * title)
 {
 	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         fprintf(stderr, "Unable to init SDL: %s\n", SDL_GetError());
@@ -32,6 +32,7 @@ void render_init(int width, int height)
     	fprintf(stderr, "BlastEm requires at least a 16-bit surface, SDL returned a %d-bit surface\n", screen->format->BytesPerPixel * 8);
     	exit(1);
     }
+    SDL_WM_SetCaption(title, title);
     uint8_t b,g,r;
     for (uint16_t color = 0; color < (1 << 12); color++) {
     	if (color & FBUF_SHADOW) {
