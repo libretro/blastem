@@ -15,8 +15,11 @@
 #define MCLKS_PER_68K 7
 #define MCLKS_PER_Z80 15
 //TODO: Figure out the exact value for this
-#define MCLKS_PER_FRAME (MCLKS_LINE*262)
 #define CYCLE_NEVER 0xFFFFFFFF
+#define LINES_NTSC 262
+#define LINES_PAL 312
+
+uint32_t mclks_per_frame = MCLKS_LINE*LINES_NTSC;
 
 uint16_t cart[CARTRIDGE_WORDS];
 uint16_t ram[RAM_WORDS];
@@ -192,22 +195,22 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	z80_context * z_context = gen->z80;
 	uint32_t mclks = context->current_cycle * MCLKS_PER_68K;
 	sync_z80(z_context, mclks);
-	if (mclks >= MCLKS_PER_FRAME) {
+	if (mclks >= mclks_per_frame) {
 		ym_run(gen->ym, context->current_cycle);
-		gen->ym->current_cycle -= MCLKS_PER_FRAME/MCLKS_PER_68K;
+		gen->ym->current_cycle -= mclks_per_frame/MCLKS_PER_68K;
 		//printf("reached frame end | 68K Cycles: %d, MCLK Cycles: %d\n", context->current_cycle, mclks);
-		vdp_run_context(v_context, MCLKS_PER_FRAME);
+		vdp_run_context(v_context, mclks_per_frame);
 		if (!headless) {
 			break_on_sync |= wait_render_frame(v_context, frame_limit);
 		}
 		frame++;
-		mclks -= MCLKS_PER_FRAME;
-		vdp_adjust_cycles(v_context, MCLKS_PER_FRAME);
-		io_adjust_cycles(&gamepad_1, context->current_cycle, MCLKS_PER_FRAME/MCLKS_PER_68K);
-		io_adjust_cycles(&gamepad_2, context->current_cycle, MCLKS_PER_FRAME/MCLKS_PER_68K);
-		context->current_cycle -= MCLKS_PER_FRAME/MCLKS_PER_68K;
-		if (z_context->current_cycle >= MCLKS_PER_FRAME/MCLKS_PER_Z80) {
-			z_context->current_cycle -= MCLKS_PER_FRAME/MCLKS_PER_Z80;
+		mclks -= mclks_per_frame;
+		vdp_adjust_cycles(v_context, mclks_per_frame);
+		io_adjust_cycles(&gamepad_1, context->current_cycle, mclks_per_frame/MCLKS_PER_68K);
+		io_adjust_cycles(&gamepad_2, context->current_cycle, mclks_per_frame/MCLKS_PER_68K);
+		context->current_cycle -= mclks_per_frame/MCLKS_PER_68K;
+		if (z_context->current_cycle >= mclks_per_frame/MCLKS_PER_Z80) {
+			z_context->current_cycle -= mclks_per_frame/MCLKS_PER_Z80;
 		} else {
 			z_context->current_cycle = 0;
 		}
@@ -240,14 +243,14 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 		if (vdp_port < 4) {
 			while (vdp_data_port_write(v_context, value) < 0) {
 				while(v_context->flags & FLAG_DMA_RUN) {
-					vdp_run_dma_done(v_context, MCLKS_PER_FRAME);
-					if (v_context->cycles >= MCLKS_PER_FRAME) {
+					vdp_run_dma_done(v_context, mclks_per_frame);
+					if (v_context->cycles >= mclks_per_frame) {
 						if (!headless) {
 							wait_render_frame(v_context, frame_limit);
 						}
-						vdp_adjust_cycles(v_context, MCLKS_PER_FRAME);
-						io_adjust_cycles(&gamepad_1, v_context->cycles/MCLKS_PER_68K, MCLKS_PER_FRAME/MCLKS_PER_68K);
-						io_adjust_cycles(&gamepad_2, v_context->cycles/MCLKS_PER_68K, MCLKS_PER_FRAME/MCLKS_PER_68K);
+						vdp_adjust_cycles(v_context, mclks_per_frame);
+						io_adjust_cycles(&gamepad_1, v_context->cycles/MCLKS_PER_68K, mclks_per_frame/MCLKS_PER_68K);
+						io_adjust_cycles(&gamepad_2, v_context->cycles/MCLKS_PER_68K, mclks_per_frame/MCLKS_PER_68K);
 					}
 				}
 				context->current_cycle = v_context->cycles / MCLKS_PER_68K;
@@ -257,14 +260,14 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 			if (blocked) {
 				while (blocked) {
 					while(v_context->flags & FLAG_DMA_RUN) {
-						vdp_run_dma_done(v_context, MCLKS_PER_FRAME);
-						if (v_context->cycles >= MCLKS_PER_FRAME) {
+						vdp_run_dma_done(v_context, mclks_per_frame);
+						if (v_context->cycles >= mclks_per_frame) {
 							if (!headless) {
 								wait_render_frame(v_context, frame_limit);
 							}
-							vdp_adjust_cycles(v_context, MCLKS_PER_FRAME);
-							io_adjust_cycles(&gamepad_1, v_context->cycles/MCLKS_PER_68K, MCLKS_PER_FRAME/MCLKS_PER_68K);
-							io_adjust_cycles(&gamepad_2, v_context->cycles/MCLKS_PER_68K, MCLKS_PER_FRAME/MCLKS_PER_68K);
+							vdp_adjust_cycles(v_context, mclks_per_frame);
+							io_adjust_cycles(&gamepad_1, v_context->cycles/MCLKS_PER_68K, mclks_per_frame/MCLKS_PER_68K);
+							io_adjust_cycles(&gamepad_2, v_context->cycles/MCLKS_PER_68K, mclks_per_frame/MCLKS_PER_68K);
 						}
 					}
 					if (blocked < 0) {
@@ -1005,7 +1008,7 @@ void init_run_cpu(genesis_context * gen, int debug, FILE * address_log)
 	context.system = gen;
 	//cartridge ROM
 	context.mem_pointers[0] = cart;
-	context.target_cycle = context.sync_cycle = MCLKS_PER_FRAME/MCLKS_PER_68K;
+	context.target_cycle = context.sync_cycle = mclks_per_frame/MCLKS_PER_68K;
 	//work RAM
 	context.mem_pointers[1] = ram;
 	uint32_t address;
@@ -1148,6 +1151,10 @@ int main(int argc, char ** argv)
 	if (!headless) {
 		render_init(width, height, title);
 	}
+	if (version_reg & 0x40) {
+		mclks_per_frame = MCLKS_LINE * LINES_PAL;
+		render_fps(50);
+	}
 	vdp_context v_context;
 	
 	init_vdp_context(&v_context);
@@ -1164,7 +1171,7 @@ int main(int argc, char ** argv)
 
 	z_context.system = &gen;
 	z_context.mem_pointers[0] = z80_ram;
-	z_context.sync_cycle = z_context.target_cycle = MCLKS_PER_FRAME/MCLKS_PER_Z80;
+	z_context.sync_cycle = z_context.target_cycle = mclks_per_frame/MCLKS_PER_Z80;
 	z_context.int_cycle = CYCLE_NEVER;
 	z_context.mem_pointers[1] = z_context.mem_pointers[2] = (uint8_t *)cart;
 	
