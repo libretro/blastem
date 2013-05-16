@@ -316,6 +316,7 @@ void external_slot(vdp_context * context)
 				break;
 			case CRAM_WRITE:
 				context->cram[(context->address/2) & (CRAM_SIZE-1)] = context->dma_val;
+				//printf("CRAM DMA Fill | %X set to %X at %d\n", (context->address/2) & (CRAM_SIZE-1), context->cram[(context->address/2) & (CRAM_SIZE-1)], context->cycles);
 				break;
 			case VSRAM_WRITE:
 				if (((context->address/2) & 63) < VSRAM_SIZE) {
@@ -334,6 +335,7 @@ void external_slot(vdp_context * context)
 					break;
 				case CRAM_WRITE:
 					context->cram[(context->address/2) & (CRAM_SIZE-1)] = context->dma_val;
+					//printf("CRAM DMA Copy | %X set to %X from %X at %d\n", (context->address/2) & (CRAM_SIZE-1), context->cram[(context->address/2) & (CRAM_SIZE-1)], context->regs[REG_DMASRC_L] & (CRAM_SIZE-1), context->cycles);
 					break;
 				case VSRAM_WRITE:
 					if (((context->address/2) & 63) < VSRAM_SIZE) {
