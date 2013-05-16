@@ -232,7 +232,7 @@ void render_wait_quit(vdp_context * context)
 #define MIN_DELAY 5
 uint32_t frame_counter = 0;
 uint32_t start = 0;
-int wait_render_frame(vdp_context * context)
+int wait_render_frame(vdp_context * context, int frame_limit)
 {
 	FILE * outfile;
 	SDL_Event event;
@@ -358,18 +358,20 @@ int wait_render_frame(vdp_context * context)
 			exit(0);
 		}
 	}
-	//TODO: Adjust frame delay so we actually get 60 FPS rather than 62.5 FPS
-	/*uint32_t current = SDL_GetTicks();
-	uint32_t desired = last_frame + FRAME_DELAY;
-	if (current < desired) {
-		uint32_t delay = last_frame + FRAME_DELAY - current;
-		//TODO: Calculate MIN_DELAY at runtime
-		if (delay > MIN_DELAY) {
-			SDL_Delay((delay/MIN_DELAY)*MIN_DELAY);
+	if (frame_limit) {
+		//TODO: Adjust frame delay so we actually get 60 FPS rather than 62.5 FPS
+		uint32_t current = SDL_GetTicks();
+		uint32_t desired = last_frame + FRAME_DELAY;
+		if (current < desired) {
+			uint32_t delay = last_frame + FRAME_DELAY - current;
+			//TODO: Calculate MIN_DELAY at runtime
+			if (delay > MIN_DELAY) {
+				SDL_Delay((delay/MIN_DELAY)*MIN_DELAY);
+			}
+			while ((desired) >= SDL_GetTicks()) {
+			}
 		}
-		while ((desired) >= SDL_GetTicks()) {
-		}
-	}*/
+	}
 	render_context(context);
 	
 	
