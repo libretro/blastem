@@ -14,6 +14,7 @@ int32_t color_map[1 << 12];
 uint8_t levels[] = {0, 27, 49, 71, 87, 103, 119, 130, 146, 157, 174, 190, 206, 228, 255};
 
 uint32_t min_delay;
+uint32_t frame_delay = 1000/60;
 
 void render_init(int width, int height, char * title)
 {
@@ -229,8 +230,6 @@ void render_wait_quit(vdp_context * context)
 #define BUTTON_START 0x20
 #define BUTTON_C     0x20
 
-#define FRAME_DELAY 16
-#define MIN_DELAY 5
 uint32_t frame_counter = 0;
 uint32_t start = 0;
 int wait_render_frame(vdp_context * context, int frame_limit)
@@ -362,12 +361,11 @@ int wait_render_frame(vdp_context * context, int frame_limit)
 	if (frame_limit) {
 		//TODO: Adjust frame delay so we actually get 60 FPS rather than 62.5 FPS
 		uint32_t current = SDL_GetTicks();
-		uint32_t desired = last_frame + FRAME_DELAY;
+		uint32_t desired = last_frame + frame_delay;
 		if (current < desired) {
-			uint32_t delay = last_frame + FRAME_DELAY - current;
-			//TODO: Calculate MIN_DELAY at runtime
-			if (delay > MIN_DELAY) {
-				SDL_Delay((delay/MIN_DELAY)*MIN_DELAY);
+			uint32_t delay = last_frame + frame_delay - current;
+			if (delay > min_delay) {
+				SDL_Delay((delay/min_delay)*min_delay);
 			}
 			while ((desired) >= SDL_GetTicks()) {
 			}
@@ -387,6 +385,11 @@ int wait_render_frame(vdp_context * context, int frame_limit)
 		frame_counter = 0;
 	}*/
 	return ret;
+}
+
+void render_fps(uint32_t fps)
+{
+	frame_delay = 1000/fps;
 }
 
 
