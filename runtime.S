@@ -5,12 +5,16 @@ handle_cycle_limit:
 	cmp 84(%rsi), %eax
 	jb skip_sync
 do_sync:
+	push %rcx
+	push %rdi
 	call m68k_save_context
 	mov %rsi, %rdi
 	xor %esi, %esi
 	call sync_components
 	mov %rax, %rsi
 	call m68k_load_context
+	pop %rdi
+	pop %rcx
 skip_sync:
 	ret
 
@@ -271,10 +275,11 @@ do_vdp_port_write:
 do_vdp_port_read:
 	mov %ecx, %edi
 	call m68k_save_context
+	push %rsi
 	call vdp_port_read
-	mov %rax, %rsi
+	pop %rsi
+	mov %ax, %cx
 	call m68k_load_context
-	mov 136(%rsi), %cx
 	ret
 	
 do_io_write:
@@ -289,10 +294,11 @@ do_io_read:
 	mov %ecx, %edi
 	and $0x1FFFF, %edi
 	call m68k_save_context
+	push %rsi
 	call io_read
-	mov %rax, %rsi
+	pop %rsi
+	mov %al, %cl
 	call m68k_load_context
-	mov 136(%rsi), %cl
 	ret
 
 do_io_write_w:
@@ -307,10 +313,11 @@ do_io_read_w:
 	mov %ecx, %edi
 	and $0x1FFFF, %edi
 	call m68k_save_context
+	push %rsi
 	call io_read_w
-	mov %rax, %rsi
+	pop %rsi
+	mov %ax, %cx
 	call m68k_load_context
-	mov 136(%rsi), %cx
 	ret
 	
 bad_access_msg:
@@ -479,8 +486,7 @@ inccycles:
 	add $4, %eax
 	ret
 do_limit:
-	push %rcx
-	push %rdi
+	
 	call handle_cycle_limit
 	pop %rdi
 	pop %rcx
