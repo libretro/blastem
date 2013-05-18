@@ -235,12 +235,18 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 
 m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_t value)
 {
+	if (vdp_port & 0x2700E0) {
+		printf("machine freeze due to write to address %X\n", 0xC00000 | vdp_port);
+		exit(1);
+	}
+	vdp_port &= 0x1F;
 	//printf("vdp_port write: %X, value: %X, cycle: %d\n", vdp_port, value, context->current_cycle);
 	sync_components(context, 0);
 	vdp_context * v_context = context->video_context;
 	if (vdp_port < 0x10) {
 		int blocked;
 		if (vdp_port < 4) {
+			uint32_t before_cycle = v_context->cycles;
 			while (vdp_data_port_write(v_context, value) < 0) {
 				while(v_context->flags & FLAG_DMA_RUN) {
 					vdp_run_dma_done(v_context, mclks_per_frame);
@@ -293,25 +299,46 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 	return context;
 }
 
-m68k_context * vdp_port_read(uint32_t vdp_port, m68k_context * context)
+m68k_context * vdp_port_write_b(uint32_t vdp_port, m68k_context * context, uint8_t value)
 {
+	return vdp_port_write(vdp_port, context, value | value << 8);
+}
+
+uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
+{
+	if (vdp_port & 0x2700E0) {
+		printf("machine freeze due to read from address %X\n", 0xC00000 | vdp_port);
+		exit(1);
+	}
+	vdp_port &= 0x1F;
+	uint16_t value;
 	sync_components(context, 0);
 	vdp_context * v_context = context->video_context;
 	if (vdp_port < 0x10) {
 		if (vdp_port < 4) {
-			context->value = vdp_data_port_read(v_context);
+			value = vdp_data_port_read(v_context);
 		} else if(vdp_port < 8) {
-			context->value = vdp_control_port_read(v_context);
+			value = vdp_control_port_read(v_context);
 		} else {
-			context->value = vdp_hv_counter_read(v_context);
-			//printf("HV Counter: %X at cycle %d\n", context->value, v_context->cycles);
+			value = vdp_hv_counter_read(v_context);
+			//printf("HV Counter: %X at cycle %d\n", value, v_context->cycles);
 		}
 		context->current_cycle = v_context->cycles/MCLKS_PER_68K;
 	} else {
 		printf("Illegal read from PSG or test register port %X\n", vdp_port);
 		exit(1);
 	}
-	return context;
+	return value;
+}
+
+uint8_t vdp_port_read_b(uint32_t vdp_port, m68k_context * context)
+{
+	uint16_t value = vdp_port_read(vdp_port, context);
+	if (vdp_port & 1) {
+		return value;
+	} else {
+		return value >> 8;
+	}
 }
 
 #define TH 0x40
@@ -351,7 +378,7 @@ void io_data_write(io_port * pad, m68k_context * context, uint8_t value)
 	pad->output = value;
 }
 
-void io_data_read(io_port * pad, m68k_context * context)
+uint8_t io_data_read(io_port * pad, m68k_context * context)
 {
 	uint8_t control = pad->control | 0x80;
 	uint8_t th = control & pad->output;
@@ -377,10 +404,11 @@ void io_data_read(io_port * pad, m68k_context * context)
 			input = pad->input[GAMEPAD_TH0] | 0xC;
 		}
 	}
-	context->value = ((~input) & (~control)) | (pad->output & control);
+	uint8_t value = ((~input) & (~control)) | (pad->output & control);
 	/*if (pad->input[GAMEPAD_TH0] || pad->input[GAMEPAD_TH1]) {
-		printf ("value: %X\n", context->value);
+		printf ("value: %X\n", value);
 	}*/
+	return value;
 }
 
 uint32_t zram_counter = 0;
@@ -596,8 +624,9 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 #define NO_DISK 0x20
 uint8_t version_reg = NO_DISK | USA;
 
-m68k_context * io_read(uint32_t location, m68k_context * context)
+uint8_t io_read(uint32_t location, m68k_context * context)
 {
+	uint8_t value;
 	genesis_context *gen = context->system;
 	if (location < 0x10000) {
 		if (busack_cycle <= context->current_cycle) {
@@ -607,15 +636,15 @@ m68k_context * io_read(uint32_t location, m68k_context * context)
 		if (!(busack==Z80_REQ_BUSY || reset)) {
 			location &= 0x7FFF;
 			if (location < 0x4000) {
-				context->value = z80_ram[location & 0x1FFF];
+				value = z80_ram[location & 0x1FFF];
 			} else if (location < 0x6000) {
 				ym_run(gen->ym, context->current_cycle);
-				context->value = ym_read_status(gen->ym);
+				value = ym_read_status(gen->ym);
 			} else {
-				context->value = 0xFF;
+				value = 0xFF;
 			}
 		} else {
-			context->value = 0xFF;
+			value = 0xFF;
 		}
 	} else {
 		location &= 0x1FFF;
@@ -624,23 +653,24 @@ m68k_context * io_read(uint32_t location, m68k_context * context)
 			{
 			case 0x0:
 				//version bits should be 0 for now since we're not emulating TMSS
-				//Not sure about the other bits
-				context->value = version_reg;
+				value = version_reg;
 				break;
 			case 0x1:
-				io_data_read(&gamepad_1, context);
+				value = io_data_read(&gamepad_1, context);
 				break;
 			case 0x2:
-				io_data_read(&gamepad_2, context);
+				value = io_data_read(&gamepad_2, context);
 				break;
 			case 0x3://PORT C Data
 				break;
 			case 0x4:
-				context->value = gamepad_1.control;
+				value = gamepad_1.control;
 				break;
 			case 0x5:
-				context->value = gamepad_2.control;
+				value = gamepad_2.control;
 				break;
+			default:
+				value = 0xFF;
 			}
 		} else {
 			if (location == 0x1100) {
@@ -648,20 +678,22 @@ m68k_context * io_read(uint32_t location, m68k_context * context)
 					busack = new_busack;
 					busack_cycle = CYCLE_NEVER;
 				}
-				context->value = Z80_RES_BUSACK || busack;
-				dprintf("Byte read of BUSREQ returned %d @ %d (reset: %d, busack: %d, busack_cycle %d)\n", context->value, context->current_cycle, reset, busack, busack_cycle);
+				value = Z80_RES_BUSACK || busack;
+				dprintf("Byte read of BUSREQ returned %d @ %d (reset: %d, busack: %d, busack_cycle %d)\n", value, context->current_cycle, reset, busack, busack_cycle);
 			} else if (location == 0x1200) {
-				context->value = !reset;
+				value = !reset;
 			} else {
+				value = 0xFF;
 				printf("Byte read of unknown IO location: %X\n", location);
 			}
 		}
 	}
-	return context;
+	return value;
 }
 
-m68k_context * io_read_w(uint32_t location, m68k_context * context)
+uint16_t io_read_w(uint32_t location, m68k_context * context)
 {
+	uint16_t value;
 	genesis_context * gen = context->system;
 	if (location < 0x10000) {
 		if (busack_cycle <= context->current_cycle) {
@@ -670,7 +702,6 @@ m68k_context * io_read_w(uint32_t location, m68k_context * context)
 		}
 		if (!(busack==Z80_REQ_BUSY || reset)) {
 			location &= 0x7FFF;
-			uint16_t value;
 			if (location < 0x4000) {
 				value = z80_ram[location & 0x1FFE];
 			} else if (location < 0x6000) {
@@ -679,9 +710,9 @@ m68k_context * io_read_w(uint32_t location, m68k_context * context)
 			} else {
 				value = 0xFF;
 			}
-			context->value = value | (value << 8);
+			value = value | (value << 8);
 		} else {
-			context->value = 0xFFFF;
+			value = 0xFFFF;
 		}
 	} else {
 		location &= 0x1FFF;
@@ -691,45 +722,47 @@ m68k_context * io_read_w(uint32_t location, m68k_context * context)
 			case 0x0:
 				//version bits should be 0 for now since we're not emulating TMSS
 				//Not sure about the other bits
-				context->value = 0;
+				value = version_reg;
 				break;
 			case 0x1:
-				io_data_read(&gamepad_1, context);
+				value = io_data_read(&gamepad_1, context);
 				break;
 			case 0x2:
-				io_data_read(&gamepad_2, context);
+				value = io_data_read(&gamepad_2, context);
 				break;
 			case 0x3://PORT C Data
 				break;
 			case 0x4:
-				context->value = gamepad_1.control;
+				value = gamepad_1.control;
 				break;
 			case 0x5:
-				context->value = gamepad_2.control;
+				value = gamepad_2.control;
 				break;
 			case 0x6:
 				//PORT C Control
-				context->value = 0;
+				value = 0;
 				break;
+			default:
+				value = 0;
 			}
-			context->value = context->value | (context->value << 8);
-			//printf("Word read to %X returned %d\n", location, context->value);
+			value = value | (value << 8);
+			//printf("Word read to %X returned %d\n", location, value);
 		} else {
 			if (location == 0x1100) {
 				if (busack_cycle <= context->current_cycle) {
 					busack = new_busack;
 					busack_cycle = CYCLE_NEVER;
 				}
-				context->value = (Z80_RES_BUSACK || busack) << 8;
-				//printf("Word read of BUSREQ returned %d\n", context->value);
+				value = (Z80_RES_BUSACK || busack) << 8;
+				//printf("Word read of BUSREQ returned %d\n", value);
 			} else if (location == 0x1200) {
-				context->value = (!reset) << 8;
+				value = (!reset) << 8;
 			} else {
 				printf("Word read of unknown IO location: %X\n", location);
 			}
 		}
 	}
-	return context;
+	return value;
 }
 
 z80_context * z80_write_ym(uint16_t location, z80_context * context, uint8_t value)
@@ -1000,7 +1033,19 @@ void init_run_cpu(genesis_context * gen, int debug, FILE * address_log)
 	m68k_context context;
 	x86_68k_options opts;
 	gen->m68k = &context;
-	init_x86_68k_opts(&opts);
+	memmap_chunk memmap[] = {
+		{0,        0x400000,  0xFFFFFF, 0, MMAP_READ | MMAP_WRITE,             cart,
+		           NULL,          NULL,         NULL,            NULL},
+		{0xE00000, 0x1000000, 0xFFFF,   0, MMAP_READ | MMAP_WRITE | MMAP_CODE, ram, 
+		           NULL,          NULL,         NULL,            NULL},
+		{0xC00000, 0xE00000,  0x1FFFFF, 0, 0,                                  NULL,
+		           (read_16_fun)vdp_port_read,  (write_16_fun)vdp_port_write,
+		           (read_8_fun)vdp_port_read_b, (write_8_fun)vdp_port_write_b},
+		{0xA00000, 0xA12000,  0x1FFFF,  0, 0,                                  NULL,
+		           (read_16_fun)io_read_w,      (write_16_fun)io_write_w,
+		           (read_8_fun)io_read,         (write_8_fun)io_write}
+	};
+	init_x86_68k_opts(&opts, memmap, sizeof(memmap)/sizeof(memmap_chunk));
 	opts.address_log = address_log;
 	init_68k_context(&context, opts.native_code_map, &opts);
 	
@@ -1068,11 +1113,11 @@ int detect_specific_region(char region)
 
 void detect_region()
 {
-	if (detect_specific_region('U')) {
+	if (detect_specific_region('U')|| detect_specific_region('B') || detect_specific_region('4')) {
 		version_reg = NO_DISK | USA;
 	} else if (detect_specific_region('J')) {
 		version_reg = NO_DISK | JAP;
-	} if (detect_specific_region('E') || detect_specific_region('A') || detect_specific_region('B') || detect_specific_region('4')) {
+	} else if (detect_specific_region('E') || detect_specific_region('A')) {
 		version_reg = NO_DISK | EUR;
 	}
 }

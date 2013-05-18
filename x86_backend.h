@@ -25,6 +25,30 @@ typedef struct deferred_addr {
 	uint32_t             address;
 } deferred_addr;
 
+
+#define MMAP_READ    0x1
+#define MMAP_WRITE   0x2
+#define MMAP_CODE    0x4
+#define MMAP_PTR_IDX 0x8
+
+typedef uint16_t (*read_16_fun)(uint32_t address, void * context);
+typedef uint8_t (*read_8_fun)(uint32_t address, void * context);
+typedef void * (*write_16_fun)(uint32_t address, void * context, uint16_t value);
+typedef void * (*write_8_fun)(uint32_t address, void * context, uint8_t value);
+
+typedef struct {
+	uint32_t     start;
+	uint32_t     end;
+	uint32_t     mask;
+	uint16_t     ptr_index;
+	uint16_t     flags;
+	void *       buffer;
+	read_16_fun  read_16;
+	write_16_fun write_16;
+	read_8_fun   read_8;
+	write_8_fun  write_8;
+} memmap_chunk;
+
 typedef uint8_t * (*native_addr_func)(void * context, uint32_t address);
 
 deferred_addr * defer_address(deferred_addr * old_head, uint32_t address, uint8_t *dest);

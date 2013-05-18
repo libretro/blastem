@@ -2,6 +2,7 @@
 #include "68kinst.h"
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #define REX_RM_FIELD 0x1
 #define REX_SIB_FIELD 0x2
@@ -220,6 +221,58 @@ uint8_t * x86_rrdisp8_sizedir(uint8_t * out, uint16_t opcode, uint8_t reg, uint8
 	return out;
 }
 
+uint8_t * x86_rrdisp32_sizedir(uint8_t * out, uint16_t opcode, uint8_t reg, uint8_t base, int32_t disp, uint8_t size, uint8_t dir)
+{
+	//TODO: Deal with the fact that AH, BH, CH and DH can only be in the R/M param when there's a REX prefix
+	uint8_t tmp;
+	if (size == SZ_W) {
+		*(out++) = PRE_SIZE;
+	}
+	if (size == SZ_Q || reg >= R8 || base >= R8 || (size == SZ_B && reg >= RSP && reg <= RDI)) {
+		*out = PRE_REX;
+		if (reg >= AH && reg <= BH) {
+			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
+			exit(1);
+		}
+		if (size == SZ_Q) {
+			*out |= REX_QUAD;
+		}
+		if (reg >= R8) {
+			*out |= REX_REG_FIELD;
+			reg -= (R8 - X86_R8);
+		}
+		if (base >= R8) {
+			*out |= REX_RM_FIELD;
+			base -= (R8 - X86_R8);
+		}
+		out++;
+	}
+	if (size == SZ_B) {
+		if (reg >= AH && reg <= BH) {
+			reg -= (AH-X86_AH);
+		}
+	} else {
+		opcode |= BIT_SIZE;
+	}
+	opcode |= dir;
+	if (opcode >= 0x100) {
+		*(out++) = opcode >> 8;
+		*(out++) = opcode;
+	} else {
+		*(out++) = opcode;
+	}
+	*(out++) = MODE_REG_DISPLACE32 | base | (reg << 3);
+	if (base == RSP) {
+		//add SIB byte, with no index and RSP as base
+		*(out++) = (RSP << 3) | RSP;
+	}
+	*(out++) = disp;
+	*(out++) = disp >> 8;
+	*(out++) = disp >> 16;
+	*(out++) = disp >> 24;
+	return out;
+}
+
 uint8_t * x86_rrind_sizedir(uint8_t * out, uint8_t opcode, uint8_t reg, uint8_t base, uint8_t size, uint8_t dir)
 {
 	//TODO: Deal with the fact that AH, BH, CH and DH can only be in the R/M param when there's a REX prefix
@@ -258,6 +311,54 @@ uint8_t * x86_rrind_sizedir(uint8_t * out, uint8_t opcode, uint8_t reg, uint8_t 
 	if (base == RSP) {
 		//add SIB byte, with no index and RSP as base
 		*(out++) = (RSP << 3) | RSP;
+	}
+	return out;
+}
+
+uint8_t * x86_rrindex_sizedir(uint8_t * out, uint8_t opcode, uint8_t reg, uint8_t base, uint8_t index, uint8_t scale, uint8_t size, uint8_t dir)
+{
+	//TODO: Deal with the fact that AH, BH, CH and DH can only be in the R/M param when there's a REX prefix
+	uint8_t tmp;
+	if (size == SZ_W) {
+		*(out++) = PRE_SIZE;
+	}
+	if (size == SZ_Q || reg >= R8 || base >= R8 || (size == SZ_B && reg >= RSP && reg <= RDI)) {
+		*out = PRE_REX;
+		if (reg >= AH && reg <= BH) {
+			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
+			exit(1);
+		}
+		if (size == SZ_Q) {
+			*out |= REX_QUAD;
+		}
+		if (reg >= R8) {
+			*out |= REX_REG_FIELD;
+			reg -= (R8 - X86_R8);
+		}
+		if (base >= R8) {
+			*out |= REX_RM_FIELD;
+			base -= (R8 - X86_R8);
+		}
+		if (index >= R8) {
+			*out |= REX_SIB_FIELD;
+			index -= (R8 - X86_R8);
+		}
+		out++;
+	}
+	if (size == SZ_B) {
+		if (reg >= AH && reg <= BH) {
+			reg -= (AH-X86_AH);
+		}
+	} else {
+		opcode |= BIT_SIZE;
+	}
+	*(out++) = opcode | dir;
+	*(out++) = MODE_REG_INDIRECT | base | (RSP << 3);
+	if (base == RSP) {
+		if (scale == 4) {
+			scale = 3;
+		}
+		*(out++) = scale << 6 | (index << 3) | base;
 	}
 	return out;
 }
@@ -949,6 +1050,16 @@ uint8_t * mov_rdisp8r(uint8_t * out, uint8_t src_base, int8_t disp, uint8_t dst,
 	return x86_rrdisp8_sizedir(out, OP_MOV, dst, src_base, disp, size, BIT_DIR);
 }
 
+uint8_t * mov_rrdisp32(uint8_t * out, uint8_t src, uint8_t dst_base, int32_t disp, uint8_t size)
+{
+	return x86_rrdisp32_sizedir(out, OP_MOV, src, dst_base, disp, size, 0);
+}
+
+uint8_t * mov_rdisp32r(uint8_t * out, uint8_t src_base, int32_t disp, uint8_t dst, uint8_t size)
+{
+	return x86_rrdisp32_sizedir(out, OP_MOV, dst, src_base, disp, size, BIT_DIR);
+}
+
 uint8_t * mov_rrind(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
 {
 	return x86_rrind_sizedir(out, OP_MOV, src, dst, size, 0);
@@ -957,6 +1068,16 @@ uint8_t * mov_rrind(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
 uint8_t * mov_rindr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
 {
 	return x86_rrind_sizedir(out, OP_MOV, dst, src, size, BIT_DIR);
+}
+
+uint8_t * mov_rrindex(uint8_t * out, uint8_t src, uint8_t dst_base, uint8_t dst_index, uint8_t scale, uint8_t size)
+{
+	return x86_rrindex_sizedir(out, OP_MOV, src, dst_base, dst_index, scale, size, 0);
+}
+
+uint8_t * mov_rindexr(uint8_t * out, uint8_t src_base, uint8_t src_index, uint8_t scale, uint8_t dst, uint8_t size)
+{
+	return x86_rrindex_sizedir(out, OP_MOV, dst, src_base, src_index, scale, size, BIT_DIR);
 }
 
 uint8_t * mov_ir(uint8_t * out, int64_t val, uint8_t dst, uint8_t size)
@@ -1370,6 +1491,36 @@ uint8_t * bit_rrdisp8(uint8_t * out, uint8_t op2, uint8_t src, uint8_t dst_base,
 	return out;
 }
 
+uint8_t * bit_rrdisp32(uint8_t * out, uint8_t op2, uint8_t src, uint8_t dst_base, int32_t dst_disp, uint8_t size)
+{
+	if (size == SZ_W) {
+		*(out++) = PRE_SIZE;
+	}
+	if (size == SZ_Q || src >= R8 || dst_base >= R8) {
+		*out = PRE_REX;
+		if (size == SZ_Q) {
+			*out |= REX_QUAD;
+		}
+		if (src >= R8) {
+			*out |= REX_REG_FIELD;
+			src -= (R8 - X86_R8);
+		}
+		if (dst_base >= R8) {
+			*out |= REX_RM_FIELD;
+			dst_base -= (R8 - X86_R8);
+		}
+		out++;
+	}
+	*(out++) = PRE_2BYTE;
+	*(out++) = op2;
+	*(out++) = MODE_REG_DISPLACE32 | dst_base | (src << 3);
+	*(out++) = dst_disp;
+	*(out++) = dst_disp >> 8;
+	*(out++) = dst_disp >> 16;
+	*(out++) = dst_disp >> 24;
+	return out;
+}
+
 uint8_t * bit_ir(uint8_t * out, uint8_t op_ex, uint8_t val, uint8_t dst, uint8_t size)
 {
 	if (size == SZ_W) {
@@ -1425,6 +1576,11 @@ uint8_t * bt_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
 uint8_t * bt_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t dst_disp, uint8_t size)
 {
 	return bit_rrdisp8(out, OP2_BT, src, dst_base, dst_disp, size);
+}
+
+uint8_t * bt_rrdisp32(uint8_t * out, uint8_t src, uint8_t dst_base, int32_t dst_disp, uint8_t size)
+{
+	return bit_rrdisp32(out, OP2_BT, src, dst_base, dst_disp, size);
 }
 
 uint8_t * bt_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size)

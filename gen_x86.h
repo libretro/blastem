@@ -57,7 +57,7 @@ enum {
 	MODE_REG_INDEXED = 4,
 	MODE_REG_DISPLACE8 = 0x40,
 	MODE_REG_INDEXED_DISPLACE8 = 0x44,
-	MODE_REG_DIPSLACE32 = 0x80,
+	MODE_REG_DISPLACE32 = 0x80,
 	MODE_REG_INDEXED_DIPSLACE32 = 0x84,
 	MODE_REG_DIRECT = 0xC0,
 //"phony" mode
@@ -151,6 +151,10 @@ uint8_t * idiv_rdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size
 uint8_t * mov_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size);
 uint8_t * mov_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t disp, uint8_t size);
 uint8_t * mov_rdisp8r(uint8_t * out, uint8_t src_base, int8_t disp, uint8_t dst, uint8_t size);
+uint8_t * mov_rrdisp32(uint8_t * out, uint8_t src, uint8_t dst_base, int32_t disp, uint8_t size);
+uint8_t * mov_rdisp32r(uint8_t * out, uint8_t src_base, int32_t disp, uint8_t dst, uint8_t size);
+uint8_t * mov_rrindex(uint8_t * out, uint8_t src, uint8_t dst_base, uint8_t dst_index, uint8_t scale, uint8_t size);
+uint8_t * mov_rindexr(uint8_t * out, uint8_t src_base, uint8_t src_index, uint8_t scale, uint8_t dst, uint8_t size);
 uint8_t * mov_rrind(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size);
 uint8_t * mov_rindr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size);
 uint8_t * mov_ir(uint8_t * out, int64_t val, uint8_t dst, uint8_t size);
@@ -170,6 +174,7 @@ uint8_t * setcc_rind(uint8_t * out, uint8_t cc, uint8_t dst);
 uint8_t * setcc_rdisp8(uint8_t * out, uint8_t cc, uint8_t dst, int8_t disp);
 uint8_t * bt_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size);
 uint8_t * bt_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t dst_disp, uint8_t size);
+uint8_t * bt_rrdisp32(uint8_t * out, uint8_t src, uint8_t dst_base, int32_t dst_disp, uint8_t size);
 uint8_t * bt_ir(uint8_t * out, uint8_t val, uint8_t dst, uint8_t size);
 uint8_t * bt_irdisp8(uint8_t * out, uint8_t val, uint8_t dst_base, int8_t dst_disp, uint8_t size);
 uint8_t * bts_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size);
