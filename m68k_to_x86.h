@@ -23,6 +23,13 @@ typedef struct {
 	uint8_t         *code_end;
 	uint8_t         **ram_inst_sizes;
 	FILE            *address_log;
+	uint8_t         *read_16;
+	uint8_t         *write_16;
+	uint8_t         *read_8;
+	uint8_t         *write_8;
+	uint8_t         *read_32;
+	uint8_t         *write_32_lowfirst;
+	uint8_t         *write_32_highfirst;
 } x86_68k_options;
 
 typedef struct {
@@ -38,7 +45,7 @@ typedef struct {
 	uint32_t        int_num;
 	uint16_t        *mem_pointers[NUM_MEM_AREAS];
 	void            *video_context;
-	uint16_t        value;
+	uint16_t        reserved;
 	
 	native_map_slot *native_code_map;
 	void            *options;
@@ -49,7 +56,7 @@ typedef struct {
 uint8_t * translate_m68k(uint8_t * dst, struct m68kinst * inst, x86_68k_options * opts);
 uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context);
 void start_68k_context(m68k_context * context, uint32_t address);
-void init_x86_68k_opts(x86_68k_options * opts);
+void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks);
 void init_68k_context(m68k_context * context, native_map_slot * native_code_map, void * opts);
 void m68k_reset(m68k_context * context);
 void insert_breakpoint(m68k_context * context, uint32_t address, uint8_t * bp_handler);
