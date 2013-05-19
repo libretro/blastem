@@ -485,11 +485,8 @@ inccycles:
 	jnb do_limit
 	add $4, %eax
 	ret
-do_limit:
-	
+do_limit:	
 	call handle_cycle_limit
-	pop %rdi
-	pop %rcx
 	add $4, %eax
 	ret
 
