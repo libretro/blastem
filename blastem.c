@@ -208,6 +208,14 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 		vdp_adjust_cycles(v_context, mclks_per_frame);
 		io_adjust_cycles(&gamepad_1, context->current_cycle, mclks_per_frame/MCLKS_PER_68K);
 		io_adjust_cycles(&gamepad_2, context->current_cycle, mclks_per_frame/MCLKS_PER_68K);
+		if (busack_cycle != CYCLE_NEVER) {
+			if (busack_cycle > mclks_per_frame/MCLKS_PER_68K) {
+				busack_cycle -= mclks_per_frame/MCLKS_PER_68K;
+			} else {
+				busack_cycle = CYCLE_NEVER;
+				busack = new_busack;
+			}
+		}
 		context->current_cycle -= mclks_per_frame/MCLKS_PER_68K;
 		if (z_context->current_cycle >= mclks_per_frame/MCLKS_PER_Z80) {
 			z_context->current_cycle -= mclks_per_frame/MCLKS_PER_Z80;
@@ -257,6 +265,14 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 						vdp_adjust_cycles(v_context, mclks_per_frame);
 						io_adjust_cycles(&gamepad_1, v_context->cycles/MCLKS_PER_68K, mclks_per_frame/MCLKS_PER_68K);
 						io_adjust_cycles(&gamepad_2, v_context->cycles/MCLKS_PER_68K, mclks_per_frame/MCLKS_PER_68K);
+						if (busack_cycle != CYCLE_NEVER) {
+							if (busack_cycle > mclks_per_frame/MCLKS_PER_68K) {
+								busack_cycle -= mclks_per_frame/MCLKS_PER_68K;
+							} else {
+								busack_cycle = CYCLE_NEVER;
+								busack = new_busack;
+							}
+						}
 					}
 				}
 				context->current_cycle = v_context->cycles / MCLKS_PER_68K;
@@ -274,6 +290,14 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 							vdp_adjust_cycles(v_context, mclks_per_frame);
 							io_adjust_cycles(&gamepad_1, v_context->cycles/MCLKS_PER_68K, mclks_per_frame/MCLKS_PER_68K);
 							io_adjust_cycles(&gamepad_2, v_context->cycles/MCLKS_PER_68K, mclks_per_frame/MCLKS_PER_68K);
+							if (busack_cycle != CYCLE_NEVER) {
+								if (busack_cycle > mclks_per_frame/MCLKS_PER_68K) {
+									busack_cycle -= mclks_per_frame/MCLKS_PER_68K;
+								} else {
+									busack_cycle = CYCLE_NEVER;
+									busack = new_busack;
+								}
+							}
 						}
 					}
 					if (blocked < 0) {
