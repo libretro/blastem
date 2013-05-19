@@ -253,8 +253,8 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 	vdp_context * v_context = context->video_context;
 	if (vdp_port < 0x10) {
 		int blocked;
+		uint32_t before_cycle = v_context->cycles;
 		if (vdp_port < 4) {
-			uint32_t before_cycle = v_context->cycles;
 			while (vdp_data_port_write(v_context, value) < 0) {
 				while(v_context->flags & FLAG_DMA_RUN) {
 					vdp_run_dma_done(v_context, mclks_per_frame);
@@ -314,7 +314,9 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 			printf("Illegal write to HV Counter port %X\n", vdp_port);
 			exit(1);
 		}
-		context->current_cycle = v_context->cycles/MCLKS_PER_68K;
+		if (v_context->cycles != before_cycle) {
+			context->current_cycle = v_context->cycles / MCLKS_PER_68K;
+		}
 	} else if (vdp_port < 0x18) {
 		//TODO: Implement PSG
 	} else {
