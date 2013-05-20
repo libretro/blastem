@@ -1134,7 +1134,7 @@ void update_title()
 
 int detect_specific_region(char region)
 {
-	return cart[REGION_START/2] & 0xFF == region || (cart[REGION_START/2]) >> 8 == region || cart[REGION_START/2+1] & 0xFF == region;
+	return (cart[REGION_START/2] & 0xFF) == region || (cart[REGION_START/2] >> 8) == region || (cart[REGION_START/2+1] & 0xFF) == region;
 }
 
 void detect_region()
