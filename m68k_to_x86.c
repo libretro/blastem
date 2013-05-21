@@ -23,7 +23,8 @@
 
 char disasm_buf[1024];
 
-void handle_cycle_limit_int();
+m68k_context * sync_components(m68k_context * context, uint32_t address);
+
 void handle_cycle_limit();
 void m68k_save_context();
 void m68k_load_context();
@@ -48,13 +49,13 @@ uint8_t * cycles(uint8_t * dst, uint32_t num)
 	return dst;
 }
 
-uint8_t * check_cycles_int(uint8_t * dst, uint32_t address)
+uint8_t * check_cycles_int(uint8_t * dst, uint32_t address, x86_68k_options * opts)
 {
 	dst = cmp_rr(dst, CYCLES, LIMIT, SZ_D);
 	uint8_t * jmp_off = dst+1;
 	dst = jcc(dst, CC_NC, dst + 7);
 	dst = mov_ir(dst, address, SCRATCH1, SZ_D);
-	dst = call(dst, (uint8_t *)handle_cycle_limit_int);
+	dst = call(dst, opts->handle_cycle_limit_int);
 	*jmp_off = dst - (jmp_off+1);
 	return dst;
 }
@@ -2746,7 +2747,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 {
 	uint8_t * end_off, *zero_off, *norm_off;
 	uint8_t dst_reg;
-	dst = check_cycles_int(dst, inst->address);
+	dst = check_cycles_int(dst, inst->address, opts);
 	if (inst->op == M68K_MOVE) {
 		return translate_m68k_move(dst, inst, opts);
 	} else if(inst->op == M68K_LEA) {
@@ -4089,7 +4090,7 @@ void insert_breakpoint(m68k_context * context, uint32_t address, uint8_t * bp_ha
 		native = call(native, bp_stub);
 		
 		//Calculate length of prologue
-		dst = check_cycles_int(dst, address);
+		dst = check_cycles_int(dst, address, opts);
 		int check_int_size = dst-bp_stub;
 		dst = bp_stub;
 		
@@ -4107,7 +4108,7 @@ void insert_breakpoint(m68k_context * context, uint32_t address, uint8_t * bp_ha
 		dst = cmp_rr(dst, CYCLES, LIMIT, SZ_D);
 		uint8_t * jmp_off = dst+1;
 		dst = jcc(dst, CC_NC, dst + 7);
-		dst = call(dst, (uint8_t *)handle_cycle_limit_int);
+		dst = call(dst, opts->handle_cycle_limit_int);
 		*jmp_off = dst - (jmp_off+1);
 		//jump back to body of translated instruction
 		dst = pop_r(dst, SCRATCH1);
@@ -4122,7 +4123,7 @@ void insert_breakpoint(m68k_context * context, uint32_t address, uint8_t * bp_ha
 void remove_breakpoint(m68k_context * context, uint32_t address)
 {
 	uint8_t * native = get_native_address(context->native_code_map, address);
-	check_cycles_int(native, address);
+	check_cycles_int(native, address, context->options);
 }
 
 void start_68k_context(m68k_context * context, uint32_t address)
@@ -4467,6 +4468,58 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = pop_r(dst, SCRATCH1);
 	dst = add_ir(dst, 2, SCRATCH2, SZ_D);
 	dst = jmp(dst, opts->write_16);
+	
+	opts->handle_cycle_limit_int = dst;
+	dst = cmp_rdisp8r(dst, CONTEXT, offsetof(m68k_context, int_cycle), CYCLES, SZ_D);
+	uint8_t * do_int = dst+1;
+	dst = jcc(dst, CC_NC, dst+2);
+	dst = cmp_rdisp8r(dst, CONTEXT, offsetof(m68k_context, sync_cycle), CYCLES, SZ_D);
+	uint8_t * skip_sync = dst+1;
+	dst = jcc(dst, CC_C, dst+2);
+	dst = call(dst, (uint8_t *)m68k_save_context);
+	dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
+	dst = mov_rr(dst, SCRATCH1, RSI, SZ_D);
+	dst = call(dst, (uint8_t *)sync_components);
+	dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
+	dst = jmp(dst, (uint8_t *)m68k_load_context);
+	*skip_sync = dst - (skip_sync+1);
+	dst = retn(dst);
+	*do_int = dst - (do_int+1);
+	//set target cycle to sync cycle
+	dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, sync_cycle), LIMIT, SZ_D);
+	//swap USP and SSP if not already in supervisor mode
+	dst = bt_irdisp8(dst, 5, CONTEXT, offsetof(m68k_context, status), SZ_B);
+	uint8_t *already_supervisor = dst+1;
+	dst = jcc(dst, CC_C, dst+2);
+	dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SCRATCH2, SZ_D);
+	dst = mov_rrdisp8(dst, opts->aregs[7], CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SZ_D);
+	dst = mov_rr(dst, SCRATCH2, opts->aregs[7], SZ_D);
+	*already_supervisor = dst - (already_supervisor+1);
+	//save PC
+	dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
+	dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
+	dst = call(dst, opts->write_32_lowfirst);
+	//save status register
+	dst = sub_ir(dst, 2, opts->aregs[7], SZ_D);
+	dst = call(dst, (uint8_t *)get_sr);
+	dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
+	dst = call(dst, opts->write_16);
+	//update status register
+	dst = and_irdisp8(dst, 0xF8, CONTEXT, offsetof(m68k_context, status), SZ_B);
+	dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, int_num), SCRATCH1, SZ_B);
+	dst = or_ir(dst, 0x20, SCRATCH1, SZ_B);
+	dst = or_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, status), SZ_B);
+	//calculate interrupt vector address
+	dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, int_num), SCRATCH1, SZ_D);
+	dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, int_ack), SZ_W);
+	dst = shl_ir(dst, 2, SCRATCH1, SZ_D);
+	dst = add_ir(dst, 0x60, SCRATCH1, SZ_D);
+	dst = call(dst, opts->read_32);
+	dst = call(dst, (uint8_t *)m68k_native_addr_and_sync);
+	dst = cycles(dst, 24);
+	//discard function return address
+	dst = pop_r(dst, SCRATCH2);
+	dst = jmp_r(dst, SCRATCH1);
 	
 	opts->cur_code = dst;
 }
