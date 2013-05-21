@@ -31,6 +31,7 @@ typedef struct {
 	uint8_t         *write_32_lowfirst;
 	uint8_t         *write_32_highfirst;
 	uint8_t         *handle_cycle_limit_int;
+	uint8_t         *trap;
 } x86_68k_options;
 
 typedef struct {

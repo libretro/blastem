@@ -31,7 +31,6 @@ void m68k_load_context();
 void m68k_modified_ret_addr();
 void m68k_native_addr();
 void m68k_native_addr_and_sync();
-void m68k_trap();
 void m68k_invalid();
 void m68k_retrans_stub();
 void set_sr();
@@ -3090,7 +3089,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = mov_ir(dst, 1, FLAG_N, SZ_B);
 		dst = mov_ir(dst, VECTOR_CHK, SCRATCH2, SZ_D);
 		dst = mov_ir(dst, inst->address+isize, SCRATCH1, SZ_D);
-		dst = jmp(dst, (uint8_t *)m68k_trap);
+		dst = jmp(dst, opts->trap);
 		*passed = dst - (passed+1);
 		if (dst_op.mode == MODE_REG_DIRECT) {
 			if (src_op.mode == MODE_REG_DIRECT) {
@@ -3112,7 +3111,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = mov_ir(dst, 0, FLAG_N, SZ_B);
 		dst = mov_ir(dst, VECTOR_CHK, SCRATCH2, SZ_D);
 		dst = mov_ir(dst, inst->address+isize, SCRATCH1, SZ_D);
-		dst = jmp(dst, (uint8_t *)m68k_trap);
+		dst = jmp(dst, opts->trap);
 		*passed = dst - (passed+1);
 		dst = cycles(dst, 4);
 		break;
@@ -3152,7 +3151,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = pop_r(dst, RDX);
 		dst = mov_ir(dst, VECTOR_INT_DIV_ZERO, SCRATCH2, SZ_D);
 		dst = mov_ir(dst, inst->address+2, SCRATCH1, SZ_D);
-		dst = jmp(dst, (uint8_t *)m68k_trap);
+		dst = jmp(dst, opts->trap);
 		*not_zero = dst - (not_zero+1);
 		if (inst->op == M68K_DIVS) {
 			dst = cdq(dst);
@@ -3853,7 +3852,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	case M68K_TRAP:
 		dst = mov_ir(dst, src_op.disp + VECTOR_TRAP_0, SCRATCH2, SZ_D);
 		dst = mov_ir(dst, inst->address+2, SCRATCH1, SZ_D);
-		dst = jmp(dst, (uint8_t *)m68k_trap);
+		dst = jmp(dst, opts->trap);
 		break;
 	//case M68K_TRAPV:
 	case M68K_TST:
@@ -4519,6 +4518,35 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = cycles(dst, 24);
 	//discard function return address
 	dst = pop_r(dst, SCRATCH2);
+	dst = jmp_r(dst, SCRATCH1);
+	
+	opts->trap = dst;
+	dst = push_r(dst, SCRATCH2);
+	//swap USP and SSP if not already in supervisor mode
+	dst = bt_irdisp8(dst, 5, CONTEXT, offsetof(m68k_context, status), SZ_B);
+	already_supervisor = dst+1;
+	dst = jcc(dst, CC_C, dst+2);
+	dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SCRATCH2, SZ_D);
+	dst = mov_rrdisp8(dst, opts->aregs[7], CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SZ_D);
+	dst = mov_rr(dst, SCRATCH2, opts->aregs[7], SZ_D);
+	*already_supervisor = dst - (already_supervisor+1);
+	//save PC
+	dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
+	dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
+	dst = call(dst, opts->write_32_lowfirst);
+	//save status register
+	dst = sub_ir(dst, 2, opts->aregs[7], SZ_D);
+	dst = call(dst, (uint8_t *)get_sr);
+	dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
+	dst = call(dst, opts->write_16);
+	//set supervisor bit
+	dst = or_irdisp8(dst, 0x20, CONTEXT, offsetof(m68k_context, status), SZ_B);
+	//calculate vector address
+	dst = pop_r(dst, SCRATCH1);
+	dst = shl_ir(dst, 2, SCRATCH1, SZ_D);
+	dst = call(dst, opts->read_32);
+	dst = call(dst, (uint8_t *)m68k_native_addr_and_sync);
+	dst = cycles(dst, 18);
 	dst = jmp_r(dst, SCRATCH1);
 	
 	opts->cur_code = dst;
