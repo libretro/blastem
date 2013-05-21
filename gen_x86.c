@@ -486,7 +486,7 @@ uint8_t * x86_irdisp8(uint8_t * out, uint8_t opcode, uint8_t op_ex, int32_t val,
 		*(out++) = PRE_SIZE;
 	}
 
-	if (size == SZ_Q || dst >= R8 || (size == SZ_B && dst >= RSP && dst <= RDI)) {
+	if (size == SZ_Q || dst >= R8) {
 		*out = PRE_REX;
 		if (size == SZ_Q) {
 			*out |= REX_QUAD;
@@ -551,7 +551,7 @@ uint8_t * x86_shiftrot_irdisp8(uint8_t * out, uint8_t op_ex, uint8_t val, uint8_
 	if (size == SZ_W) {
 		*(out++) = PRE_SIZE;
 	}
-	if (size == SZ_Q || dst >= R8 || (size == SZ_B && dst >= RSP && dst <= RDI)) {
+	if (size == SZ_Q || dst >= R8) {
 		*out = PRE_REX;
 		if (size == SZ_Q) {
 			*out |= REX_QUAD;
@@ -605,7 +605,7 @@ uint8_t * x86_shiftrot_clrdisp8(uint8_t * out, uint8_t op_ex, uint8_t dst, int8_
 	if (size == SZ_W) {
 		*(out++) = PRE_SIZE;
 	}
-	if (size == SZ_Q || dst >= R8 || (size == SZ_B && dst >= RSP && dst <= RDI)) {
+	if (size == SZ_Q || dst >= R8) {
 		*out = PRE_REX;
 		if (size == SZ_Q) {
 			*out |= REX_QUAD;
@@ -1140,7 +1140,7 @@ uint8_t * mov_irdisp8(uint8_t * out, int32_t val, uint8_t dst, int8_t disp, uint
 	if (size == SZ_W) {
 		*(out++) = PRE_SIZE;
 	}
-	if (size == SZ_Q || dst >= R8 || (size == SZ_B && dst >= RSP && dst <= RDI)) {
+	if (size == SZ_Q || dst >= R8) {
 		*out = PRE_REX;
 		if (size == SZ_Q) {
 			*out |= REX_QUAD;
