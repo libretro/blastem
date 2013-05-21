@@ -17,59 +17,6 @@ do_sync:
 	pop %rcx
 skip_sync:
 	ret
-
-	.global handle_cycle_limit_int
-handle_cycle_limit_int:
-	cmp 88(%rsi), %eax
-	jb skip_int
-	mov 84(%rsi), %ebp
-	/* swap USP and SSP if not already in supervisor mode */
-	bt $5, 5(%rsi)
-	jc already_supervisor
-	mov 72(%rsi), %edi
-	mov %r15d, 72(%rsi)
-	mov %edi, %r15d
-already_supervisor:
-	/* save PC */
-	sub $4, %r15d
-	mov %r15d, %edi
-	call m68k_write_long_lowfirst
-	/* save status register on stack */
-	sub $2, %r15d
-	mov %r15d, %edi
-	call get_sr
-	call m68k_write_word
-	/* update status register */
-	andb $0xF8, 5(%rsi)
-	mov 92(%rsi), %cl
-	or $0x20, %cl
-	or %cl, 5(%rsi)
-	/* calculate interrupt vector address */
-	mov 92(%rsi), %ecx
-	mov %cx, 6(%rsi) /* interrupt acknowlege */
-	shl $2, %ecx
-	add $0x60, %ecx
-	/* push %rcx
-	call debug_print_sr_int
-	pop %rcx */
-	call m68k_read_long_scratch1
-	call m68k_native_addr_and_sync
-	add $24, %eax
-	/* discard function return address */
-	pop %rdi
-	jmp *%rcx
-	ret
-skip_int:
-	cmp 84(%rsi), %eax
-	jb skip_sync_int
-	call m68k_save_context
-	mov %rsi, %rdi
-	mov %ecx, %esi
-	call sync_components
-	mov %rax, %rsi
-	call m68k_load_context
-skip_sync_int:
-	ret
 	
 sr_msg_int:
 	.asciz "SR set to $%X due to interrupt\n"
