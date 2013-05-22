@@ -812,6 +812,127 @@ uint8_t z80_read_ym(uint16_t location, z80_context * context)
 	return ym_read_status(gen->ym);
 }
 
+uint16_t read_sram_w(uint32_t address, m68k_context * context)
+{
+	genesis_context * gen = context->system;
+	address &= gen->save_ram_mask;
+	switch(gen->save_flags)
+	{
+	case RAM_FLAG_BOTH:
+		return gen->save_ram[address] << 8 | gen->save_ram[address+1];
+	case RAM_FLAG_EVEN:
+		return gen->save_ram[address >> 1] << 8 | 0xFF;
+	case RAM_FLAG_ODD:
+		return gen->save_ram[address >> 1] | 0xFF00;
+	}
+	return 0xFFFF;//We should never get here
+}
+
+uint8_t read_sram_b(uint32_t address, m68k_context * context)
+{
+	genesis_context * gen = context->system;
+	address &= gen->save_ram_mask;
+	switch(gen->save_flags)
+	{
+	case RAM_FLAG_BOTH:
+		return gen->save_ram[address];
+	case RAM_FLAG_EVEN:
+		if (address & 1) {
+			return 0xFF;
+		} else {
+			return gen->save_ram[address >> 1];
+		}
+	case RAM_FLAG_ODD:
+		if (address & 1) {
+			return gen->save_ram[address >> 1];
+		} else {
+			return 0xFF;
+		}
+	}
+	return 0xFF;//We should never get here
+}
+
+m68k_context * write_sram_area_w(uint32_t address, m68k_context * context, uint16_t value)
+{
+	genesis_context * gen = context->system;
+	if ((gen->bank_regs[0] & 0x3) == 1) {
+		address &= gen->save_ram_mask;
+		switch(gen->save_flags)
+		{
+		case RAM_FLAG_BOTH:
+			gen->save_ram[address] = value >> 8;
+			gen->save_ram[address+1] = value;
+			break;
+		case RAM_FLAG_EVEN:
+			gen->save_ram[address >> 1] = value >> 8;
+			break;
+		case RAM_FLAG_ODD:
+			gen->save_ram[address >> 1] = value;
+			break;
+		}
+	}
+	return context;
+}
+
+m68k_context * write_sram_area_b(uint32_t address, m68k_context * context, uint8_t value)
+{
+	genesis_context * gen = context->system;
+	if ((gen->bank_regs[0] & 0x3) == 1) {
+		address &= gen->save_ram_mask;
+		switch(gen->save_flags)
+		{
+		case RAM_FLAG_BOTH:
+			gen->save_ram[address] = value;
+			break;
+		case RAM_FLAG_EVEN:
+			if (!(address & 1)) {
+				gen->save_ram[address >> 1] = value;
+			}
+			break;
+		case RAM_FLAG_ODD:
+			if (address & 1) {
+				gen->save_ram[address >> 1] = value;
+			}
+			break;
+		}
+	}
+	return context;
+}
+
+m68k_context * write_bank_reg_w(uint32_t address, m68k_context * context, uint16_t value)
+{
+	genesis_context * gen = context->system;
+	address &= 0xE;
+	address >>= 1;
+	gen->bank_regs[address] = value;
+	if (!address) {
+		if (value & 1) {
+			context->mem_pointers[2] = NULL;
+		} else {
+			context->mem_pointers[2] = cart + 0x200000/2;
+		}
+	}
+	return context;
+}
+
+m68k_context * write_bank_reg_b(uint32_t address, m68k_context * context, uint8_t value)
+{
+	if (address & 1) {
+		genesis_context * gen = context->system;
+		address &= 0xE;
+		address >>= 1;
+		gen->bank_regs[address] = value;
+		if (!address) {
+			if (value & 1) {
+				context->mem_pointers[2] = NULL;
+			} else {
+				context->mem_pointers[2] = cart + 0x200000/2;
+			}
+		}
+	}
+	return context;
+}
+
 typedef struct bp_def {
 	struct bp_def * next;
 	uint32_t address;
@@ -1054,13 +1175,16 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 	return context;
 }
 
-void init_run_cpu(genesis_context * gen, int debug, FILE * address_log)
-{
-	m68k_context context;
-	x86_68k_options opts;
-	gen->m68k = &context;
-	memmap_chunk memmap[] = {
-		{0,        0x400000,  0xFFFFFF, 0, MMAP_READ | MMAP_WRITE,             cart,
+#define ROM_END   0x1A4
+#define RAM_ID    0x1B0
+#define RAM_FLAGS 0x1B2
+#define RAM_START 0x1B4
+#define RAM_END   0x1B8
+#define MAX_MAP_CHUNKS (4+7+1)
+#define RAM_FLAG_MASK 0x1800
+
+const memmap_chunk static_map[] = {
+		{0,        0x400000,  0xFFFFFF, 0, MMAP_READ,                          cart,
 		           NULL,          NULL,         NULL,            NULL},
 		{0xE00000, 0x1000000, 0xFFFF,   0, MMAP_READ | MMAP_WRITE | MMAP_CODE, ram, 
 		           NULL,          NULL,         NULL,            NULL},
@@ -1071,7 +1195,123 @@ void init_run_cpu(genesis_context * gen, int debug, FILE * address_log)
 		           (read_16_fun)io_read_w,      (write_16_fun)io_write_w,
 		           (read_8_fun)io_read,         (write_8_fun)io_write}
 	};
-	init_x86_68k_opts(&opts, memmap, sizeof(memmap)/sizeof(memmap_chunk));
+
+char * sram_filename;
+genesis_context * genesis;
+void save_sram()
+{
+	FILE * f = fopen(sram_filename, "wb");
+	if (!f) {
+		fprintf(stderr, "Failed to open SRAM file %s for writing\n", sram_filename);
+		return;
+	}
+	uint32_t size = genesis->save_ram_mask+1;
+	if (genesis->save_flags != RAM_FLAG_BOTH) {
+		size/= 2;
+	}
+	fwrite(genesis->save_ram, 1, size, f);
+	fclose(f);
+	printf("Saved SRAM to %s\n", sram_filename);
+}
+
+void init_run_cpu(genesis_context * gen, int debug, FILE * address_log)
+{
+	m68k_context context;
+	x86_68k_options opts;
+	gen->m68k = &context;
+	memmap_chunk memmap[MAX_MAP_CHUNKS];
+	uint32_t num_chunks;
+	void * initial_mapped = NULL;
+	gen->save_ram = NULL;
+	//TODO: Handle carts larger than 4MB
+	//TODO: Handle non-standard mappers
+	uint32_t size;
+	if ((cart[RAM_ID/2] & 0xFF) == 'A' && (cart[RAM_ID/2] >> 8) == 'R') {
+		//Cart has save RAM
+		uint32_t rom_end = ((cart[ROM_END/2] << 16) | cart[ROM_END/2+1]) + 1;
+		uint32_t ram_start = (cart[RAM_START/2] << 16) | cart[RAM_START/2+1];
+		uint32_t ram_end = (cart[RAM_END/2] << 16) | cart[RAM_END/2+1];
+		uint16_t ram_flags = cart[RAM_FLAGS/2];
+		gen->save_flags = ram_flags & RAM_FLAG_MASK;
+		memset(memmap, 0, sizeof(memmap_chunk)*2);
+		if (ram_start >= rom_end) {
+			memmap[0].end = rom_end;
+			memmap[0].mask = 0xFFFFFF;
+			memmap[0].flags = MMAP_READ;
+			memmap[0].buffer = cart;
+			
+			ram_start &= 0xFFFFFE;
+			ram_end |= 1;
+			memmap[1].start = ram_start;
+			gen->save_ram_mask = memmap[1].mask = ram_end-ram_start;
+			ram_end += 1;
+			memmap[1].end = ram_end;
+			memmap[1].flags = MMAP_READ | MMAP_WRITE;
+			size = ram_end-ram_start;
+			if ((ram_flags & RAM_FLAG_MASK) == RAM_FLAG_ODD) {
+				memmap[1].flags |= MMAP_ONLY_ODD;
+				size /= 2;
+			} else if((ram_flags & RAM_FLAG_MASK) == RAM_FLAG_EVEN) {
+				memmap[1].flags |= MMAP_ONLY_EVEN;
+				size /= 2;
+			}
+			memmap[1].buffer = gen->save_ram = malloc(size);
+			
+			memcpy(memmap+2, static_map+1, sizeof(static_map)-sizeof(static_map[0]));
+			num_chunks = sizeof(static_map)/sizeof(memmap_chunk)+1;
+		} else {
+			//Assume the standard Sega mapper for now
+			memmap[0].end = 0x200000;
+			memmap[0].mask = 0xFFFFFF;
+			memmap[0].flags = MMAP_READ;
+			memmap[0].buffer = cart;
+			
+			memmap[1].start = 0x200000;
+			memmap[1].end = 0x400000;
+			memmap[1].mask = 0x1FFFFF;
+			ram_start &= 0xFFFFFE;
+			ram_end |= 1;
+			gen->save_ram_mask = ram_end-ram_start;
+			memmap[1].flags = MMAP_READ | MMAP_PTR_IDX | MMAP_FUNC_NULL;
+			memmap[1].ptr_index = 2;
+			memmap[1].read_16 = (read_16_fun)read_sram_w;//these will only be called when mem_pointers[2] == NULL
+			memmap[1].read_8 = (read_8_fun)read_sram_b;
+			memmap[1].write_16 = (write_16_fun)write_sram_area_w;//these will be called all writes to the area
+			memmap[1].write_8 = (write_8_fun)write_sram_area_b;
+			memcpy(memmap+2, static_map+1, sizeof(static_map)-sizeof(static_map[0]));
+			num_chunks = sizeof(static_map)/sizeof(memmap_chunk)+1;
+			memset(memmap+num_chunks, 0, sizeof(memmap[num_chunks]));
+			memmap[num_chunks].start = 0xA13000;
+			memmap[num_chunks].end = 0xA13100;
+			memmap[num_chunks].mask = 0xFF;
+			memmap[num_chunks].write_16 = (write_16_fun)write_bank_reg_w;
+			memmap[num_chunks].write_8 = (write_8_fun)write_bank_reg_b; 
+			num_chunks++;
+			ram_end++;
+			size = ram_end-ram_start;
+			if ((ram_flags & RAM_FLAG_MASK) != RAM_FLAG_BOTH) {
+				size /= 2;
+			}
+			gen->save_ram = malloc(size);
+			memmap[1].buffer = initial_mapped = cart + 0x200000/2;
+		}
+	} else {
+		memcpy(memmap, static_map, sizeof(static_map));
+		num_chunks = sizeof(static_map)/sizeof(memmap_chunk);
+	}
+	if (gen->save_ram) {
+		memset(gen->save_ram, 0, size);
+		FILE * f = fopen(sram_filename, "rb");
+		if (f) {
+			uint32_t read = fread(gen->save_ram, 1, size, f);
+			fclose(f);
+			if (read > 0) {
+				printf("Loaded SRAM from %s\n", sram_filename);
+			}
+		}
+		atexit(save_sram);
+	}
+	init_x86_68k_opts(&opts, memmap, num_chunks);
 	opts.address_log = address_log;
 	init_68k_context(&context, opts.native_code_map, &opts);
 	
@@ -1082,13 +1322,10 @@ void init_run_cpu(genesis_context * gen, int debug, FILE * address_log)
 	context.target_cycle = context.sync_cycle = mclks_per_frame/MCLKS_PER_68K;
 	//work RAM
 	context.mem_pointers[1] = ram;
+	//save RAM/map
+	context.mem_pointers[2] = initial_mapped;
+	context.mem_pointers[3] = (uint16_t *)gen->save_ram;
 	uint32_t address;
-	/*address = cart[0x68/2] << 16 | cart[0x6A/2];
-	translate_m68k_stream(address, &context);
-	address = cart[0x70/2] << 16 | cart[0x72/2];
-	translate_m68k_stream(address, &context);
-	address = cart[0x78/2] << 16 | cart[0x7A/2];
-	translate_m68k_stream(address, &context);*/
 	address = cart[2] << 16 | cart[3];
 	translate_m68k_stream(address, &context);
 	if (debug) {
@@ -1249,6 +1486,21 @@ int main(int argc, char ** argv)
 	gen.z80 = &z_context;
 	gen.vdp = &v_context;
 	gen.ym = &y_context;
+	genesis = &gen;
+	
+	int fname_size = strlen(argv[1]);
+	sram_filename = malloc(fname_size+6);
+	memcpy(sram_filename, argv[1], fname_size);
+	int i;
+	for (i = fname_size-1; fname_size >= 0; --i) {
+		if (sram_filename[i] == '.') {
+			strcpy(sram_filename + i + 1, "sram");
+			break;
+		}
+	}
+	if (i < 0) {
+		strcpy(sram_filename + fname_size, ".sram");
+	}
 	
 	init_run_cpu(&gen, debug, address_log);
 	return 0;
