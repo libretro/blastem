@@ -4192,7 +4192,78 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 		default:
 			cfun = NULL;
 		}
-		if (cfun) {
+		if(memmap[chunk].buffer && memmap[chunk].flags & access_flag) {
+			if (memmap[chunk].flags & MMAP_PTR_IDX) {
+				if (memmap[chunk].flags & MMAP_FUNC_NULL) {
+					dst = cmp_irdisp8(dst, 0, CONTEXT, offsetof(m68k_context, mem_pointers) + sizeof(void*) * memmap[chunk].ptr_index, SZ_Q);
+					uint8_t * not_null = dst+1;
+					dst = jcc(dst, CC_NZ, dst+2);
+					dst = call(dst, (uint8_t *)m68k_save_context);
+					if (is_write) {
+						//SCRATCH2 is RDI, so no need to move it there
+						dst = mov_rr(dst, SCRATCH1, RDX, size);
+					} else {
+						dst = push_r(dst, CONTEXT);
+						dst = mov_rr(dst, SCRATCH1, RDI, SZ_D);
+					}
+					dst = call(dst, cfun);
+					if (is_write) {
+						dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
+					} else {
+						dst = pop_r(dst, CONTEXT);
+						dst = mov_rr(dst, RAX, SCRATCH1, size);
+					}
+					dst = jmp(dst, (uint8_t *)m68k_load_context);
+					
+					*not_null = dst - (not_null + 1);
+				}
+				if (size == SZ_B) {
+					dst = xor_ir(dst, 1, adr_reg, SZ_D);
+				}
+				dst = add_rdisp8r(dst, CONTEXT, offsetof(m68k_context, mem_pointers) + sizeof(void*) * memmap[chunk].ptr_index, adr_reg, SZ_Q);
+				if (is_write) {
+					dst = mov_rrind(dst, SCRATCH1, SCRATCH2, size);
+					
+				} else {
+					dst = mov_rindr(dst, SCRATCH1, SCRATCH1, size);
+				}
+			} else {
+				if (size == SZ_B) {
+					dst = xor_ir(dst, 1, adr_reg, SZ_D);
+				}
+				if ((int64_t)memmap[chunk].buffer <= 0x7FFFFFFF && (int64_t)memmap[chunk].buffer >= -2147483648) {
+					if (is_write) {
+						dst = mov_rrdisp32(dst, SCRATCH1, SCRATCH2, (int64_t)memmap[chunk].buffer, size);
+					} else {
+						dst = mov_rdisp32r(dst, SCRATCH1, (int64_t)memmap[chunk].buffer, SCRATCH1, size);
+					}
+				} else {
+					if (is_write) {
+						dst = push_r(dst, SCRATCH1);
+						dst = mov_ir(dst, (int64_t)memmap[chunk].buffer, SCRATCH1, SZ_Q);
+						dst = add_rr(dst, SCRATCH1, SCRATCH2, SZ_Q);
+						dst = pop_r(dst, SCRATCH1);
+						dst = mov_rrind(dst, SCRATCH1, SCRATCH2, size);
+					} else {
+						dst = mov_ir(dst, (int64_t)memmap[chunk].buffer, SCRATCH2, SZ_Q);
+						dst = mov_rindexr(dst, SCRATCH2, SCRATCH1, 1, SCRATCH1, size);
+					}
+				}
+			}
+			if (is_write && (memmap[chunk].flags & MMAP_CODE)) {
+				dst = mov_rr(dst, SCRATCH2, SCRATCH1, SZ_D);
+				dst = shr_ir(dst, 11, SCRATCH1, SZ_D);
+				dst = bt_rrdisp32(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, ram_code_flags), SZ_D);
+				uint8_t * not_code = dst+1;
+				dst = jcc(dst, CC_NC, dst+2);
+				dst = call(dst, (uint8_t *)m68k_save_context);
+				dst = call(dst, (uint8_t *)m68k_handle_code_write);
+				dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
+				dst = call(dst, (uint8_t *)m68k_load_context);
+				*not_code = dst - (not_code+1);
+			}
+			dst = retn(dst);
+		} else if (cfun) {
 			dst = call(dst, (uint8_t *)m68k_save_context);
 			if (is_write) {
 				//SCRATCH2 is RDI, so no need to move it there
@@ -4209,41 +4280,6 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 				dst = mov_rr(dst, RAX, SCRATCH1, size);
 			}
 			dst = jmp(dst, (uint8_t *)m68k_load_context);
-		} else if(memmap[chunk].buffer && memmap[chunk].flags & access_flag) {
-			if (size == SZ_B) {
-				dst = xor_ir(dst, 1, adr_reg, SZ_D);
-			}
-			if ((int64_t)memmap[chunk].buffer <= 0x7FFFFFFF && (int64_t)memmap[chunk].buffer >= -2147483648) {
-				if (is_write) {
-					dst = mov_rrdisp32(dst, SCRATCH1, SCRATCH2, (int64_t)memmap[chunk].buffer, size);
-				} else {
-					dst = mov_rdisp32r(dst, SCRATCH1, (int64_t)memmap[chunk].buffer, SCRATCH1, size);
-				}
-			} else {
-				if (is_write) {
-					dst = push_r(dst, SCRATCH1);
-					dst = mov_ir(dst, (int64_t)memmap[chunk].buffer, SCRATCH1, SZ_Q);
-					dst = add_rr(dst, SCRATCH1, SCRATCH2, SZ_Q);
-					dst = pop_r(dst, SCRATCH1);
-					dst = mov_rrind(dst, SCRATCH1, SCRATCH2, size);
-				} else {
-					dst = mov_ir(dst, (int64_t)memmap[chunk].buffer, SCRATCH2, SZ_Q);
-					dst = mov_rindexr(dst, SCRATCH2, SCRATCH1, 1, SCRATCH1, size);
-				}
-			}
-			if (is_write && (memmap[chunk].flags & MMAP_CODE)) {
-				dst = mov_rr(dst, SCRATCH2, SCRATCH1, SZ_D);
-				dst = shr_ir(dst, 11, SCRATCH1, SZ_D);
-				dst = bt_rrdisp32(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, ram_code_flags), SZ_D);
-				uint8_t * not_code = dst+1;
-				dst = jcc(dst, CC_NC, dst+2);
-				dst = call(dst, (uint8_t *)m68k_save_context);
-				dst = call(dst, (uint8_t *)m68k_handle_code_write);
-				dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
-				dst = call(dst, (uint8_t *)m68k_load_context);
-				*not_code = dst - (not_code+1);
-			}
-			dst = retn(dst);
 		} else {
 			//Not sure the best course of action here
 			if (!is_write) {

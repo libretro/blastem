@@ -15,11 +15,19 @@ typedef struct {
 	uint8_t input[3];
 } io_port;
 
+#define RAM_FLAG_ODD  0x1800
+#define RAM_FLAG_EVEN 0x1000
+#define RAM_FLAG_BOTH 0x0000
+
 typedef struct {
 	m68k_context   *m68k;
 	z80_context    *z80;
 	vdp_context    *vdp;
 	ym2612_context *ym;
+	uint8_t        *save_ram;
+	uint32_t       save_ram_mask;
+	uint32_t       save_flags;
+	uint8_t        bank_regs[8];
 } genesis_context;
 
 #define GAMEPAD_TH0 0
