@@ -26,10 +26,13 @@ typedef struct deferred_addr {
 } deferred_addr;
 
 
-#define MMAP_READ    0x1
-#define MMAP_WRITE   0x2
-#define MMAP_CODE    0x4
-#define MMAP_PTR_IDX 0x8
+#define MMAP_READ      0x01
+#define MMAP_WRITE     0x02
+#define MMAP_CODE      0x04
+#define MMAP_PTR_IDX   0x08
+#define MMAP_ONLY_ODD  0x10
+#define MMAP_ONLY_EVEN 0x20
+#define MMAP_FUNC_NULL 0x40
 
 typedef uint16_t (*read_16_fun)(uint32_t address, void * context);
 typedef uint8_t (*read_8_fun)(uint32_t address, void * context);
