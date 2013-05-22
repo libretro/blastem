@@ -1,19 +1,20 @@
 Feature			Status			Priority
 ----------------------------------------
-Z80				in progress		10
+Z80				mostly done		10
  |--Decoder		complete
- |--Translator  in progress
- |--Banked mem	not started
- |--Test gen	not started
+ |--Translator  mostly done
+ |--Banked mem	complete
+ |--Test gen	complete
 
 PSG				not started		9
 YM-2612			not started		9
-H-Ints			not started		8
+H-Ints			complete		8
 Interlace		not started		7
 save states		partial			6
-mappers			not started		5
-save ram		not started		5
+mappers			partial			5
+save ram		complete		5
 basic UI		not started		5
+x86-32 backend	not started		5
 Sega CD			not started		4
  |--Comm regs
  |--CDC
