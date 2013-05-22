@@ -4228,14 +4228,33 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 					dst = mov_rindr(dst, SCRATCH1, SCRATCH1, size);
 				}
 			} else {
+				uint8_t tmp_size = size;
 				if (size == SZ_B) {
-					dst = xor_ir(dst, 1, adr_reg, SZ_D);
+					if ((memmap[chunk].flags & MMAP_ONLY_ODD) || (memmap[chunk].flags & MMAP_ONLY_EVEN)) {
+						dst = bt_ir(dst, 0, adr_reg, SZ_D);
+						uint8_t * good_addr = dst + 1;
+						dst = jcc(dst, (memmap[chunk].flags & MMAP_ONLY_ODD) ? CC_C : CC_NC, dst+2);
+						if (!is_write) {
+							dst = mov_ir(dst, 0xFF, SCRATCH1, SZ_B);
+						}
+						dst = retn(dst);
+						*good_addr = dst - (good_addr + 1);
+						dst = shr_ir(dst, 1, adr_reg, SZ_D);
+					} else {
+						dst = xor_ir(dst, 1, adr_reg, SZ_D);
+					}
+				} else if ((memmap[chunk].flags & MMAP_ONLY_ODD) || (memmap[chunk].flags & MMAP_ONLY_EVEN)) {
+					tmp_size = SZ_B;
+					dst = shr_ir(dst, 1, adr_reg, SZ_D);
+					if ((memmap[chunk].flags & MMAP_ONLY_EVEN) && is_write) {
+						dst = shr_ir(dst, 8, SCRATCH1, SZ_W);
+					}
 				}
 				if ((int64_t)memmap[chunk].buffer <= 0x7FFFFFFF && (int64_t)memmap[chunk].buffer >= -2147483648) {
 					if (is_write) {
-						dst = mov_rrdisp32(dst, SCRATCH1, SCRATCH2, (int64_t)memmap[chunk].buffer, size);
+						dst = mov_rrdisp32(dst, SCRATCH1, SCRATCH2, (int64_t)memmap[chunk].buffer, tmp_size);
 					} else {
-						dst = mov_rdisp32r(dst, SCRATCH1, (int64_t)memmap[chunk].buffer, SCRATCH1, size);
+						dst = mov_rdisp32r(dst, SCRATCH1, (int64_t)memmap[chunk].buffer, SCRATCH1, tmp_size);
 					}
 				} else {
 					if (is_write) {
@@ -4243,10 +4262,18 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 						dst = mov_ir(dst, (int64_t)memmap[chunk].buffer, SCRATCH1, SZ_Q);
 						dst = add_rr(dst, SCRATCH1, SCRATCH2, SZ_Q);
 						dst = pop_r(dst, SCRATCH1);
-						dst = mov_rrind(dst, SCRATCH1, SCRATCH2, size);
+						dst = mov_rrind(dst, SCRATCH1, SCRATCH2, tmp_size);
 					} else {
 						dst = mov_ir(dst, (int64_t)memmap[chunk].buffer, SCRATCH2, SZ_Q);
-						dst = mov_rindexr(dst, SCRATCH2, SCRATCH1, 1, SCRATCH1, size);
+						dst = mov_rindexr(dst, SCRATCH2, SCRATCH1, 1, SCRATCH1, tmp_size);
+					}
+				}
+				if (size != tmp_size && !is_write) {
+					if (memmap[chunk].flags & MMAP_ONLY_EVEN) {
+						dst = shl_ir(dst, 8, SCRATCH1, SZ_W);
+						dst = mov_ir(dst, 0xFF, SCRATCH1, SZ_B);
+					} else {
+						dst = or_ir(dst, 0xFF00, SCRATCH1, SZ_W);
 					}
 				}
 			}
