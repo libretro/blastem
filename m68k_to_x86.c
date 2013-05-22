@@ -4139,6 +4139,135 @@ void m68k_reset(m68k_context * context)
 	start_68k_context(context, address);
 }
 
+typedef enum {
+	READ_16,
+	READ_8,
+	WRITE_16,
+	WRITE_8
+} ftype;
+
+uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks, ftype fun_type)
+{
+	uint8_t * dst = opts->cur_code;
+	uint8_t * start = dst;
+	dst = check_cycles(dst);
+	dst = cycles(dst, BUS);
+	dst = and_ir(dst, 0xFFFFFF, SCRATCH1, SZ_D);
+	uint8_t *lb_jcc = NULL, *ub_jcc = NULL;
+	uint8_t is_write = fun_type == WRITE_16 || fun_type == WRITE_8;
+	uint8_t adr_reg = is_write ? SCRATCH2 : SCRATCH1;
+	uint16_t access_flag = is_write ? MMAP_WRITE : MMAP_READ;
+	uint8_t size =  (fun_type == READ_16 || fun_type == WRITE_16) ? SZ_W : SZ_B;
+	for (uint32_t chunk = 0; chunk < num_chunks; chunk++)
+	{
+		if (memmap[chunk].start > 0) {
+			dst = cmp_ir(dst, memmap[chunk].start, adr_reg, SZ_D);
+			lb_jcc = dst + 1;
+			dst = jcc(dst, CC_C, dst+2);
+		}
+		if (memmap[chunk].end < 0x1000000) {
+			dst = cmp_ir(dst, memmap[chunk].end, adr_reg, SZ_D);
+			ub_jcc = dst + 1;
+			dst = jcc(dst, CC_NC, dst+2);
+		}
+		
+		if (memmap[chunk].mask != 0xFFFFFF) {
+			dst = and_ir(dst, memmap[chunk].mask, adr_reg, SZ_D);
+		}
+		void * cfun;
+		switch (fun_type)
+		{
+		case READ_16:
+			cfun = memmap[chunk].read_16;
+			break;
+		case READ_8:
+			cfun = memmap[chunk].read_8;
+			break;
+		case WRITE_16:
+			cfun = memmap[chunk].write_16;
+			break;
+		case WRITE_8:
+			cfun = memmap[chunk].write_8;
+			break;
+		default:
+			cfun = NULL;
+		}
+		if (cfun) {
+			dst = call(dst, (uint8_t *)m68k_save_context);
+			if (is_write) {
+				//SCRATCH2 is RDI, so no need to move it there
+				dst = mov_rr(dst, SCRATCH1, RDX, size);
+			} else {
+				dst = push_r(dst, CONTEXT);
+				dst = mov_rr(dst, SCRATCH1, RDI, SZ_D);
+			}
+			dst = call(dst, cfun);
+			if (is_write) {
+				dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
+			} else {
+				dst = pop_r(dst, CONTEXT);
+				dst = mov_rr(dst, RAX, SCRATCH1, size);
+			}
+			dst = jmp(dst, (uint8_t *)m68k_load_context);
+		} else if(memmap[chunk].buffer && memmap[chunk].flags & access_flag) {
+			if (size == SZ_B) {
+				dst = xor_ir(dst, 1, adr_reg, SZ_D);
+			}
+			if ((int64_t)memmap[chunk].buffer <= 0x7FFFFFFF && (int64_t)memmap[chunk].buffer >= -2147483648) {
+				if (is_write) {
+					dst = mov_rrdisp32(dst, SCRATCH1, SCRATCH2, (int64_t)memmap[chunk].buffer, size);
+				} else {
+					dst = mov_rdisp32r(dst, SCRATCH1, (int64_t)memmap[chunk].buffer, SCRATCH1, size);
+				}
+			} else {
+				if (is_write) {
+					dst = push_r(dst, SCRATCH1);
+					dst = mov_ir(dst, (int64_t)memmap[chunk].buffer, SCRATCH1, SZ_Q);
+					dst = add_rr(dst, SCRATCH1, SCRATCH2, SZ_Q);
+					dst = pop_r(dst, SCRATCH1);
+					dst = mov_rrind(dst, SCRATCH1, SCRATCH2, size);
+				} else {
+					dst = mov_ir(dst, (int64_t)memmap[chunk].buffer, SCRATCH2, SZ_Q);
+					dst = mov_rindexr(dst, SCRATCH2, SCRATCH1, 1, SCRATCH1, size);
+				}
+			}
+			if (is_write && (memmap[chunk].flags & MMAP_CODE)) {
+				dst = mov_rr(dst, SCRATCH2, SCRATCH1, SZ_D);
+				dst = shr_ir(dst, 11, SCRATCH1, SZ_D);
+				dst = bt_rrdisp32(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, ram_code_flags), SZ_D);
+				uint8_t * not_code = dst+1;
+				dst = jcc(dst, CC_NC, dst+2);
+				dst = call(dst, (uint8_t *)m68k_save_context);
+				dst = call(dst, (uint8_t *)m68k_handle_code_write);
+				dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
+				dst = call(dst, (uint8_t *)m68k_load_context);
+				*not_code = dst - (not_code+1);
+			}
+			dst = retn(dst);
+		} else {
+			//Not sure the best course of action here
+			if (!is_write) {
+				dst = mov_ir(dst, size == SZ_B ? 0xFF : 0xFFFF, SCRATCH1, size);
+			}
+			dst = retn(dst);
+		}
+		if (lb_jcc) {
+			*lb_jcc = dst - (lb_jcc+1);
+			lb_jcc = NULL;
+		}
+		if (ub_jcc) {
+			*ub_jcc = dst - (ub_jcc+1);
+			ub_jcc = NULL;
+		}
+	}
+	if (!is_write) {
+		dst = mov_ir(dst, size == SZ_B ? 0xFF : 0xFFFF, SCRATCH1, size);
+	}
+	dst = retn(dst);
+	opts->cur_code = dst;
+	return start;
+}
+
 void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks)
 {
 	opts->flags = 0;
@@ -4158,281 +4287,13 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	opts->code_end = opts->cur_code + size;
 	opts->ram_inst_sizes = malloc(sizeof(uint8_t *) * 64);
 	memset(opts->ram_inst_sizes, 0, sizeof(uint8_t *) * 64);
-	uint8_t * dst = opts->read_16 = opts->cur_code;
-	dst = check_cycles(dst);
-	dst = cycles(dst, BUS);
-	dst = and_ir(dst, 0xFFFFFF, SCRATCH1, SZ_D);
-	uint8_t *lb_jcc = NULL, *ub_jcc = NULL;
-	for (uint32_t chunk = 0; chunk < num_chunks; chunk++)
-	{
-		if (lb_jcc) {
-			*lb_jcc = dst - (lb_jcc+1);
-			lb_jcc = NULL;
-		}
-		if (ub_jcc) {
-			*ub_jcc = dst - (ub_jcc+1);
-			ub_jcc = NULL;
-		}
-		if (memmap[chunk].start > 0) {
-			dst = cmp_ir(dst, memmap[chunk].start, SCRATCH1, SZ_D);
-			lb_jcc = dst + 1;
-			dst = jcc(dst, CC_C, dst+2);
-		}
-		if (memmap[chunk].end < 0x1000000) {
-			dst = cmp_ir(dst, memmap[chunk].end, SCRATCH1, SZ_D);
-			ub_jcc = dst + 1;
-			dst = jcc(dst, CC_NC, dst+2);
-		}
-		
-		if (memmap[chunk].mask != 0xFFFFFF) {
-			dst = and_ir(dst, memmap[chunk].mask, SCRATCH1, SZ_D);
-		}
-		
-		if (memmap[chunk].read_16) {
-			dst = call(dst, (uint8_t *)m68k_save_context);
-			dst = push_r(dst, CONTEXT);
-			dst = mov_rr(dst, SCRATCH1, RDI, SZ_D);
-			dst = call(dst, (uint8_t *)memmap[chunk].read_16);
-			dst = pop_r(dst, CONTEXT);
-			dst = mov_rr(dst, RAX, SCRATCH1, SZ_W);
-			dst = jmp(dst, (uint8_t *)m68k_load_context);
-		} else if(memmap[chunk].buffer && memmap[chunk].flags & MMAP_READ) {
-			if ((int64_t)memmap[chunk].buffer <= 0x7FFFFFFF && (int64_t)memmap[chunk].buffer >= -2147483648) {
-				dst = mov_rdisp32r(dst, SCRATCH1, (int64_t)memmap[chunk].buffer, SCRATCH1, SZ_W);
-			} else {
-				dst = mov_ir(dst, (int64_t)memmap[chunk].buffer, SCRATCH2, SZ_Q);
-				dst = mov_rindexr(dst, SCRATCH2, SCRATCH1, 1, SCRATCH1, SZ_W);
-			}
-			dst = retn(dst);
-		} else {
-			//Not sure the best course of action here
-			dst = mov_ir(dst, 0xFFFF, SCRATCH1, SZ_W);
-			dst = retn(dst);
-		}
-	}
-	if (lb_jcc) {
-		*lb_jcc = dst - (lb_jcc+1);
-		lb_jcc = NULL;
-	}
-	if (ub_jcc) {
-		*ub_jcc = dst - (ub_jcc+1);
-		ub_jcc = NULL;
-	}
-	dst = mov_ir(dst, 0xFFFF, SCRATCH1, SZ_W);
-	dst = retn(dst);
 	
-	opts->write_16 = dst;
-	dst = check_cycles(dst);
-	dst = cycles(dst, BUS);
-	dst = and_ir(dst, 0xFFFFFF, SCRATCH2, SZ_D);
-	for (uint32_t chunk = 0; chunk < num_chunks; chunk++)
-	{
-		if (lb_jcc) {
-			*lb_jcc = dst - (lb_jcc+1);
-			lb_jcc = NULL;
-		}
-		if (ub_jcc) {
-			*ub_jcc = dst - (ub_jcc+1);
-			ub_jcc = NULL;
-		}
-		if (memmap[chunk].start > 0) {
-			dst = cmp_ir(dst, memmap[chunk].start, SCRATCH2, SZ_D);
-			lb_jcc = dst + 1;
-			dst = jcc(dst, CC_C, dst+2);
-		}
-		if (memmap[chunk].end < 0x1000000) {
-			dst = cmp_ir(dst, memmap[chunk].end, SCRATCH2, SZ_D);
-			ub_jcc = dst + 1;
-			dst = jcc(dst, CC_NC, dst+2);
-		}
-		
-		if (memmap[chunk].mask != 0xFFFFFF) {
-			dst = and_ir(dst, memmap[chunk].mask, SCRATCH2, SZ_D);
-		}
-		
-		if (memmap[chunk].write_16) {
-			dst = call(dst, (uint8_t *)m68k_save_context);
-			//SCRATCH2 is RDI, so no need to move it there
-			dst = mov_rr(dst, SCRATCH1, RDX, SZ_W);
-			dst = call(dst, (uint8_t *)memmap[chunk].write_16);
-			dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
-			dst = jmp(dst, (uint8_t *)m68k_load_context);
-		} else if(memmap[chunk].buffer && memmap[chunk].flags & MMAP_WRITE) {
-			if ((int64_t)memmap[chunk].buffer <= 0x7FFFFFFF && (int64_t)memmap[chunk].buffer >= -2147483648) {
-				dst = mov_rrdisp32(dst, SCRATCH1, SCRATCH2, (int64_t)memmap[chunk].buffer, SZ_W);
-			} else {
-				dst = push_r(dst, SCRATCH1);
-				dst = mov_ir(dst, (int64_t)memmap[chunk].buffer, SCRATCH1, SZ_Q);
-				dst = add_rr(dst, SCRATCH1, SCRATCH2, SZ_Q);
-				dst = pop_r(dst, SCRATCH1);
-				dst = mov_rrind(dst, SCRATCH1, SCRATCH2, SZ_W);
-			}
-			if (memmap[chunk].flags & MMAP_CODE) {
-				dst = mov_rr(dst, SCRATCH2, SCRATCH1, SZ_D);
-				dst = shr_ir(dst, 11, SCRATCH1, SZ_D);
-				dst = bt_rrdisp32(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, ram_code_flags), SZ_D);
-				uint8_t * not_code = dst+1;
-				dst = jcc(dst, CC_NC, dst+2);
-				dst = call(dst, (uint8_t *)m68k_save_context);
-				dst = call(dst, (uint8_t *)m68k_handle_code_write);
-				dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
-				dst = call(dst, (uint8_t *)m68k_load_context);
-				*not_code = dst - (not_code+1);
-			}
-			dst = retn(dst);
-		} else {
-			//Not sure the best course of action here
-			dst = retn(dst);
-		}
-	}
-	if (lb_jcc) {
-		*lb_jcc = dst - (lb_jcc+1);
-		lb_jcc = NULL;
-	}
-	if (ub_jcc) {
-		*ub_jcc = dst - (ub_jcc+1);
-		ub_jcc = NULL;
-	}
-	dst = retn(dst);
+	opts->read_16 = gen_mem_fun(opts, memmap, num_chunks, READ_16);
+	opts->read_8 = gen_mem_fun(opts, memmap, num_chunks, READ_8);
+	opts->write_16 = gen_mem_fun(opts, memmap, num_chunks, WRITE_16);
+	opts->write_8 = gen_mem_fun(opts, memmap, num_chunks, WRITE_8);
 	
-	opts->read_8 = dst;
-	dst = check_cycles(dst);
-	dst = cycles(dst, BUS);
-	dst = and_ir(dst, 0xFFFFFF, SCRATCH1, SZ_D);
-	for (uint32_t chunk = 0; chunk < num_chunks; chunk++)
-	{
-		if (lb_jcc) {
-			*lb_jcc = dst - (lb_jcc+1);
-			lb_jcc = NULL;
-		}
-		if (ub_jcc) {
-			*ub_jcc = dst - (ub_jcc+1);
-			ub_jcc = NULL;
-		}
-		if (memmap[chunk].start > 0) {
-			dst = cmp_ir(dst, memmap[chunk].start, SCRATCH1, SZ_D);
-			lb_jcc = dst + 1;
-			dst = jcc(dst, CC_C, dst+2);
-		}
-		if (memmap[chunk].end < 0x1000000) {
-			dst = cmp_ir(dst, memmap[chunk].end, SCRATCH1, SZ_D);
-			ub_jcc = dst + 1;
-			dst = jcc(dst, CC_NC, dst+2);
-		}
-		
-		if (memmap[chunk].mask != 0xFFFFFF) {
-			dst = and_ir(dst, memmap[chunk].mask, SCRATCH1, SZ_D);
-		}
-		
-		if (memmap[chunk].read_8) {
-			dst = call(dst, (uint8_t *)m68k_save_context);
-			dst = push_r(dst, CONTEXT);
-			dst = mov_rr(dst, SCRATCH1, RDI, SZ_D);
-			dst = call(dst, (uint8_t *)memmap[chunk].read_8);
-			dst = pop_r(dst, CONTEXT);
-			dst = mov_rr(dst, RAX, SCRATCH1, SZ_B);
-			dst = jmp(dst, (uint8_t *)m68k_load_context);
-		} else if(memmap[chunk].buffer && memmap[chunk].flags & MMAP_READ) {
-			dst = xor_ir(dst, 1, SCRATCH1, SZ_D);
-			if ((int64_t)memmap[chunk].buffer <= 0x7FFFFFFF && (int64_t)memmap[chunk].buffer >= -2147483648) {
-				dst = mov_rdisp32r(dst, SCRATCH1, (int64_t)memmap[chunk].buffer, SCRATCH1, SZ_B);
-			} else {
-				dst = mov_ir(dst, (int64_t)memmap[chunk].buffer, SCRATCH2, SZ_Q);
-				dst = mov_rindexr(dst, SCRATCH2, SCRATCH1, 1, SCRATCH1, SZ_B);
-			}
-			dst = retn(dst);
-		} else {
-			//Not sure the best course of action here
-			dst = mov_ir(dst, 0xFF, SCRATCH1, SZ_B);
-			dst = retn(dst);
-		}
-	}
-	if (lb_jcc) {
-		*lb_jcc = dst - (lb_jcc+1);
-		lb_jcc = NULL;
-	}
-	if (ub_jcc) {
-		*ub_jcc = dst - (ub_jcc+1);
-		ub_jcc = NULL;
-	}
-	dst = mov_ir(dst, 0xFFFF, SCRATCH1, SZ_W);
-	dst = retn(dst);
-	
-	opts->write_8 = dst;
-	dst = check_cycles(dst);
-	dst = cycles(dst, BUS);
-	dst = and_ir(dst, 0xFFFFFF, SCRATCH2, SZ_D);
-	for (uint32_t chunk = 0; chunk < num_chunks; chunk++)
-	{
-		if (lb_jcc) {
-			*lb_jcc = dst - (lb_jcc+1);
-			lb_jcc = NULL;
-		}
-		if (ub_jcc) {
-			*ub_jcc = dst - (ub_jcc+1);
-			ub_jcc = NULL;
-		}
-		if (memmap[chunk].start > 0) {
-			dst = cmp_ir(dst, memmap[chunk].start, SCRATCH2, SZ_D);
-			lb_jcc = dst + 1;
-			dst = jcc(dst, CC_C, dst+2);
-		}
-		if (memmap[chunk].end < 0x1000000) {
-			dst = cmp_ir(dst, memmap[chunk].end, SCRATCH2, SZ_D);
-			ub_jcc = dst + 1;
-			dst = jcc(dst, CC_NC, dst+2);
-		}
-		
-		if (memmap[chunk].mask != 0xFFFFFF) {
-			dst = and_ir(dst, memmap[chunk].mask, SCRATCH2, SZ_D);
-		}
-		
-		if (memmap[chunk].write_8) {
-			dst = call(dst, (uint8_t *)m68k_save_context);
-			//SCRATCH2 is RDI, so no need to move it there
-			dst = mov_rr(dst, SCRATCH1, RDX, SZ_B);
-			dst = call(dst, (uint8_t *)memmap[chunk].write_8);
-			dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
-			dst = jmp(dst, (uint8_t *)m68k_load_context);
-		} else if(memmap[chunk].buffer && memmap[chunk].flags & MMAP_WRITE) {
-			dst = xor_ir(dst, 1, SCRATCH2, SZ_D);
-			if ((int64_t)memmap[chunk].buffer <= 0x7FFFFFFF && (int64_t)memmap[chunk].buffer >= -2147483648) {
-				dst = mov_rrdisp32(dst, SCRATCH1, SCRATCH2, (int64_t)memmap[chunk].buffer, SZ_B);
-			} else {
-				dst = push_r(dst, SCRATCH1);
-				dst = mov_ir(dst, (int64_t)memmap[chunk].buffer, SCRATCH1, SZ_Q);
-				dst = add_rr(dst, SCRATCH1, SCRATCH2, SZ_Q);
-				dst = pop_r(dst, SCRATCH1);
-				dst = mov_rrind(dst, SCRATCH1, SCRATCH2, SZ_B);
-			}
-			if (memmap[chunk].flags & MMAP_CODE) {
-				dst = mov_rr(dst, SCRATCH2, SCRATCH1, SZ_D);
-				dst = shr_ir(dst, 11, SCRATCH1, SZ_D);
-				dst = bt_rrdisp32(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, ram_code_flags), SZ_D);
-				uint8_t * not_code = dst+1;
-				dst = jcc(dst, CC_NC, dst+2);
-				dst = xor_ir(dst, 1, SCRATCH2, SZ_D);
-				dst = call(dst, (uint8_t *)m68k_save_context);
-				dst = call(dst, (uint8_t *)m68k_handle_code_write);
-				dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
-				dst = call(dst, (uint8_t *)m68k_load_context);
-				*not_code = dst - (not_code+1);
-			}
-			dst = retn(dst);
-		} else {
-			//Not sure the best course of action here
-			dst = retn(dst);
-		}
-	}
-	if (lb_jcc) {
-		*lb_jcc = dst - (lb_jcc+1);
-		lb_jcc = NULL;
-	}
-	if (ub_jcc) {
-		*ub_jcc = dst - (ub_jcc+1);
-		ub_jcc = NULL;
-	}
-	dst = retn(dst);
+	uint8_t * dst = opts->cur_code;
 	
 	opts->read_32 = dst;
 	dst = push_r(dst, SCRATCH1);
