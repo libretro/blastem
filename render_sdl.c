@@ -16,9 +16,41 @@ uint8_t levels[] = {0, 27, 49, 71, 87, 103, 119, 130, 146, 157, 174, 190, 206, 2
 uint32_t min_delay;
 uint32_t frame_delay = 1000/60;
 
-void render_init(int width, int height, char * title)
+int16_t * current_audio = NULL;
+int16_t * next_audio = NULL;
+
+uint32_t buffer_samples, sample_rate;
+uint32_t missing_count;
+
+SDL_mutex * audio_mutex;
+SDL_cond * audio_ready;
+SDL_cond * audio_cond;
+
+void audio_callback(void * userdata, uint8_t *byte_stream, int len)
 {
-	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+	//puts("audio_callback");
+	int16_t * stream = (int16_t *)byte_stream;
+	int samples = len/(sizeof(int16_t)*2);
+	int16_t * source_buf;
+	
+	SDL_LockMutex(audio_mutex);
+		while (!current_audio) {
+			SDL_CondWait(audio_ready, audio_mutex);
+		}
+		source_buf = current_audio;
+		current_audio = NULL;
+		SDL_CondSignal(audio_cond);
+	SDL_UnlockMutex(audio_mutex);
+	
+	for (int i = 0; i < samples; i++) {
+		*(stream++) = source_buf[i];
+		*(stream++) = source_buf[i];
+	}
+}
+
+void render_init(int width, int height, char * title, uint32_t fps)
+{
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         fprintf(stderr, "Unable to init SDL: %s\n", SDL_GetError());
         exit(1);
     }
@@ -64,6 +96,29 @@ void render_init(int width, int height, char * title)
     	min_delay = 1;
     }
     printf("minimum delay: %d\n", min_delay);
+    
+    frame_delay = 1000/fps;
+    
+    audio_mutex = SDL_CreateMutex();
+    audio_cond = SDL_CreateCond();
+    audio_ready = SDL_CreateCond();
+    
+    SDL_AudioSpec desired, actual;
+    desired.freq = 48000;
+    desired.format = AUDIO_S16SYS;
+    desired.channels = 2;
+    desired.samples = 1024;
+    desired.callback = audio_callback;
+    desired.userdata = NULL;
+    
+    if (SDL_OpenAudio(&desired, &actual) < 0) {
+    	fprintf(stderr, "Unable to open SDL audio: %s\n", SDL_GetError());
+    	exit(1);
+    }
+    buffer_samples = actual.samples;
+    sample_rate = actual.freq;
+    printf("Initialized audio at frequency %d with a %d sample buffer\n", actual.freq, actual.samples);
+    SDL_PauseAudio(0);
 }
 
 void render_context(vdp_context * context)
@@ -230,135 +285,141 @@ void render_wait_quit(vdp_context * context)
 #define BUTTON_START 0x20
 #define BUTTON_C     0x20
 
+int32_t handle_event(SDL_Event *event)
+{
+	FILE * outfile;
+	switch (event->type) {
+	case SDL_KEYDOWN:
+		switch(event->key.keysym.sym)
+		{
+		case SDLK_LEFTBRACKET:
+			render_dbg++;
+			if (render_dbg == 4) {
+				render_dbg = 0;
+			}
+			break;
+		case SDLK_RIGHTBRACKET:
+			debug_pal++;
+			if (debug_pal == 4) {
+				debug_pal = 0;
+			}
+			break;
+		case SDLK_t:
+			/*outfile = fopen("state.gst", "wb");
+			fwrite("GST\0\0\0\xE0\x40", 1, 8, outfile);
+			vdp_save_state(context, outfile);
+			fclose(outfile);
+			puts("state saved to state.gst");*/
+			break;
+		case SDLK_u:
+			return 1;
+		case SDLK_RETURN:
+			gamepad_1.input[GAMEPAD_TH0] |= BUTTON_START;
+			break;
+		case SDLK_UP:
+			gamepad_1.input[GAMEPAD_TH0] |= DPAD_UP;
+			gamepad_1.input[GAMEPAD_TH1] |= DPAD_UP;
+			break;
+		case SDLK_DOWN:
+			gamepad_1.input[GAMEPAD_TH0] |= DPAD_DOWN;
+			gamepad_1.input[GAMEPAD_TH1] |= DPAD_DOWN;
+			break;
+		case SDLK_LEFT:
+			gamepad_1.input[GAMEPAD_TH1] |= DPAD_LEFT;
+			break;
+		case SDLK_RIGHT:
+			gamepad_1.input[GAMEPAD_TH1] |= DPAD_RIGHT;
+			break;
+		case SDLK_a:
+			gamepad_1.input[GAMEPAD_TH0] |= BUTTON_A;
+			//printf("BUTTON_A Dn | GAMEPAD_TH0: %X\n", gamepad_1.input[GAMEPAD_TH0]);
+			break;
+		case SDLK_s:
+			gamepad_1.input[GAMEPAD_TH1] |= BUTTON_B;
+			gamepad_1.input[GAMEPAD_EXTRA] |= BUTTON_B;
+			break;
+		case SDLK_d:
+			gamepad_1.input[GAMEPAD_TH1] |= BUTTON_C;
+			gamepad_1.input[GAMEPAD_EXTRA] |= BUTTON_C;
+			break;
+		case SDLK_q:
+			gamepad_1.input[GAMEPAD_EXTRA] |= BUTTON_X;
+			break;
+		case SDLK_w:
+			gamepad_1.input[GAMEPAD_EXTRA] |= BUTTON_Y;
+			break;
+		case SDLK_e:
+			gamepad_1.input[GAMEPAD_EXTRA] |= BUTTON_Z;
+			break;
+		case SDLK_f:
+			gamepad_1.input[GAMEPAD_EXTRA] |= BUTTON_MODE;
+			break;
+		}
+		break;
+	case SDL_KEYUP:
+		switch(event->key.keysym.sym)
+		{
+		case SDLK_RETURN:
+			gamepad_1.input[GAMEPAD_TH0] &= ~BUTTON_START;
+			break;
+		case SDLK_UP:
+			gamepad_1.input[GAMEPAD_TH0] &= ~DPAD_UP;
+			gamepad_1.input[GAMEPAD_TH1] &= ~DPAD_UP;
+			break;
+		case SDLK_DOWN:
+			gamepad_1.input[GAMEPAD_TH0] &= ~DPAD_DOWN;
+			gamepad_1.input[GAMEPAD_TH1] &= ~DPAD_DOWN;
+			break;
+		case SDLK_LEFT:
+			gamepad_1.input[GAMEPAD_TH1] &= ~DPAD_LEFT;
+			break;
+		case SDLK_RIGHT:
+			gamepad_1.input[GAMEPAD_TH1] &= ~DPAD_RIGHT;
+			break;
+		case SDLK_a:
+			gamepad_1.input[GAMEPAD_TH0] &= ~BUTTON_A;
+			//printf("BUTTON_A Up | GAMEPAD_TH0: %X\n", gamepad_1.input[GAMEPAD_TH0]);
+			break;
+		case SDLK_s:
+			gamepad_1.input[GAMEPAD_TH1] &= ~BUTTON_B;
+			gamepad_1.input[GAMEPAD_EXTRA] &= ~BUTTON_B;
+			break;
+		case SDLK_d:
+			gamepad_1.input[GAMEPAD_TH1] &= ~BUTTON_C;
+			gamepad_1.input[GAMEPAD_EXTRA] &= ~BUTTON_C;
+			break;
+		case SDLK_q:
+			gamepad_1.input[GAMEPAD_EXTRA] &= ~BUTTON_X;
+			break;
+		case SDLK_w:
+			gamepad_1.input[GAMEPAD_EXTRA] &= ~BUTTON_Y;
+			break;
+		case SDLK_e:
+			gamepad_1.input[GAMEPAD_EXTRA] &= ~BUTTON_Z;
+			break;
+		case SDLK_f:
+			gamepad_1.input[GAMEPAD_EXTRA] &= ~BUTTON_MODE;
+			break;
+		}
+		break;
+	case SDL_QUIT:
+		puts("");
+		exit(0);
+	}
+	return 0;
+}
+
 uint32_t frame_counter = 0;
 uint32_t start = 0;
 int wait_render_frame(vdp_context * context, int frame_limit)
 {
-	FILE * outfile;
 	SDL_Event event;
 	int ret = 0;
 	while(SDL_PollEvent(&event)) {
-		switch (event.type) {
-		case SDL_KEYDOWN:
-			switch(event.key.keysym.sym)
-			{
-			case SDLK_LEFTBRACKET:
-				render_dbg++;
-				if (render_dbg == 4) {
-					render_dbg = 0;
-				}
-				break;
-			case SDLK_RIGHTBRACKET:
-				debug_pal++;
-				if (debug_pal == 4) {
-					debug_pal = 0;
-				}
-				break;
-			case SDLK_t:
-				outfile = fopen("state.gst", "wb");
-				fwrite("GST\0\0\0\xE0\x40", 1, 8, outfile);
-				vdp_save_state(context, outfile);
-				fclose(outfile);
-				puts("state saved to state.gst");
-				break;
-			case SDLK_u:
-				ret = 1;
-				break;
-			case SDLK_RETURN:
-				gamepad_1.input[GAMEPAD_TH0] |= BUTTON_START;
-				break;
-			case SDLK_UP:
-				gamepad_1.input[GAMEPAD_TH0] |= DPAD_UP;
-				gamepad_1.input[GAMEPAD_TH1] |= DPAD_UP;
-				break;
-			case SDLK_DOWN:
-				gamepad_1.input[GAMEPAD_TH0] |= DPAD_DOWN;
-				gamepad_1.input[GAMEPAD_TH1] |= DPAD_DOWN;
-				break;
-			case SDLK_LEFT:
-				gamepad_1.input[GAMEPAD_TH1] |= DPAD_LEFT;
-				break;
-			case SDLK_RIGHT:
-				gamepad_1.input[GAMEPAD_TH1] |= DPAD_RIGHT;
-				break;
-			case SDLK_a:
-				gamepad_1.input[GAMEPAD_TH0] |= BUTTON_A;
-				//printf("BUTTON_A Dn | GAMEPAD_TH0: %X\n", gamepad_1.input[GAMEPAD_TH0]);
-				break;
-			case SDLK_s:
-				gamepad_1.input[GAMEPAD_TH1] |= BUTTON_B;
-				gamepad_1.input[GAMEPAD_EXTRA] |= BUTTON_B;
-				break;
-			case SDLK_d:
-				gamepad_1.input[GAMEPAD_TH1] |= BUTTON_C;
-				gamepad_1.input[GAMEPAD_EXTRA] |= BUTTON_C;
-				break;
-			case SDLK_q:
-				gamepad_1.input[GAMEPAD_EXTRA] |= BUTTON_X;
-				break;
-			case SDLK_w:
-				gamepad_1.input[GAMEPAD_EXTRA] |= BUTTON_Y;
-				break;
-			case SDLK_e:
-				gamepad_1.input[GAMEPAD_EXTRA] |= BUTTON_Z;
-				break;
-			case SDLK_f:
-				gamepad_1.input[GAMEPAD_EXTRA] |= BUTTON_MODE;
-				break;
-			}
-			break;
-		case SDL_KEYUP:
-			switch(event.key.keysym.sym)
-			{
-			case SDLK_RETURN:
-				gamepad_1.input[GAMEPAD_TH0] &= ~BUTTON_START;
-				break;
-			case SDLK_UP:
-				gamepad_1.input[GAMEPAD_TH0] &= ~DPAD_UP;
-				gamepad_1.input[GAMEPAD_TH1] &= ~DPAD_UP;
-				break;
-			case SDLK_DOWN:
-				gamepad_1.input[GAMEPAD_TH0] &= ~DPAD_DOWN;
-				gamepad_1.input[GAMEPAD_TH1] &= ~DPAD_DOWN;
-				break;
-			case SDLK_LEFT:
-				gamepad_1.input[GAMEPAD_TH1] &= ~DPAD_LEFT;
-				break;
-			case SDLK_RIGHT:
-				gamepad_1.input[GAMEPAD_TH1] &= ~DPAD_RIGHT;
-				break;
-			case SDLK_a:
-				gamepad_1.input[GAMEPAD_TH0] &= ~BUTTON_A;
-				//printf("BUTTON_A Up | GAMEPAD_TH0: %X\n", gamepad_1.input[GAMEPAD_TH0]);
-				break;
-			case SDLK_s:
-				gamepad_1.input[GAMEPAD_TH1] &= ~BUTTON_B;
-				gamepad_1.input[GAMEPAD_EXTRA] &= ~BUTTON_B;
-				break;
-			case SDLK_d:
-				gamepad_1.input[GAMEPAD_TH1] &= ~BUTTON_C;
-				gamepad_1.input[GAMEPAD_EXTRA] &= ~BUTTON_C;
-				break;
-			case SDLK_q:
-				gamepad_1.input[GAMEPAD_EXTRA] &= ~BUTTON_X;
-				break;
-			case SDLK_w:
-				gamepad_1.input[GAMEPAD_EXTRA] &= ~BUTTON_Y;
-				break;
-			case SDLK_e:
-				gamepad_1.input[GAMEPAD_EXTRA] &= ~BUTTON_Z;
-				break;
-			case SDLK_f:
-				gamepad_1.input[GAMEPAD_EXTRA] &= ~BUTTON_MODE;
-				break;
-			}
-			break;
-		case SDL_QUIT:
-			puts("");
-			exit(0);
-		}
+		ret = handle_event(&event);
 	}
 	if (frame_limit) {
+		puts("evil frame limit");
 		//TODO: Adjust frame delay so we actually get 60 FPS rather than 62.5 FPS
 		uint32_t current = SDL_GetTicks();
 		uint32_t desired = last_frame + frame_delay;
@@ -387,9 +448,34 @@ int wait_render_frame(vdp_context * context, int frame_limit)
 	return ret;
 }
 
+void render_wait_audio(psg_context * context)
+{
+	SDL_LockMutex(audio_mutex);
+		while (current_audio != NULL) {
+			SDL_CondWait(audio_cond, audio_mutex);
+		}
+		current_audio = context->audio_buffer;
+		SDL_CondSignal(audio_ready);
+
+		context->audio_buffer = context->back_buffer;
+		context->back_buffer = current_audio;
+	SDL_UnlockMutex(audio_mutex);
+	context->buffer_pos = 0;
+}
+
 void render_fps(uint32_t fps)
 {
 	frame_delay = 1000/fps;
+}
+
+uint32_t render_audio_buffer()
+{
+	return buffer_samples;
+}
+
+uint32_t render_sample_rate()
+{
+	return sample_rate;
 }
 
 

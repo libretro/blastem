@@ -14,6 +14,7 @@
 #define Z80_RAM_BYTES 8 * 1024
 #define MCLKS_PER_68K 7
 #define MCLKS_PER_Z80 15
+#define MCLKS_PER_PSG (MCLKS_PER_Z80*16)
 //TODO: Figure out the exact value for this
 #define CYCLE_NEVER 0xFFFFFFFF
 #define LINES_NTSC 262
@@ -200,6 +201,8 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 		gen->ym->current_cycle -= mclks_per_frame/MCLKS_PER_68K;
 		//printf("reached frame end | 68K Cycles: %d, MCLK Cycles: %d\n", context->current_cycle, mclks);
 		vdp_run_context(v_context, mclks_per_frame);
+		psg_run(gen->psg, mclks/MCLKS_PER_PSG);
+		gen->psg->cycles -= mclks_per_frame/MCLKS_PER_PSG;
 		if (!headless) {
 			break_on_sync |= wait_render_frame(v_context, frame_limit);
 		}
@@ -228,6 +231,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	} else {
 		//printf("running VDP for %d cycles\n", mclks - v_context->cycles);
 		vdp_run_context(v_context, mclks);
+		psg_run(gen->psg, mclks/MCLKS_PER_PSG);
 	}
 	if (context->int_ack) {
 		vdp_int_ack(v_context, context->int_ack);
@@ -318,7 +322,9 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 			context->current_cycle = v_context->cycles / MCLKS_PER_68K;
 		}
 	} else if (vdp_port < 0x18) {
-		//TODO: Implement PSG
+		genesis_context * gen = context->system;
+		psg_run(gen->psg, (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_PSG);
+		psg_write(gen->psg, value);
 	} else {
 		//TODO: Implement undocumented test register(s)
 	}
@@ -327,7 +333,7 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 
 m68k_context * vdp_port_write_b(uint32_t vdp_port, m68k_context * context, uint8_t value)
 {
-	return vdp_port_write(vdp_port, context, value | value << 8);
+	return vdp_port_write(vdp_port, context, vdp_port < 0x10 ? value | value << 8 : value);
 }
 
 uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
@@ -1385,6 +1391,9 @@ void detect_region()
 	}
 }
 
+#define PSG_CLKS_NTSC (3579545/16)
+#define PSG_CLKS_PAL (3546893/16)
+
 int main(int argc, char ** argv)
 {
 	if (argc < 2) {
@@ -1456,12 +1465,13 @@ int main(int argc, char ** argv)
 	update_title();
 	width = width < 320 ? 320 : width;
 	height = height < 240 ? (width/320) * 240 : height;
-	if (!headless) {
-		render_init(width, height, title);
-	}
+	uint32_t fps = 60;
 	if (version_reg & 0x40) {
 		mclks_per_frame = MCLKS_LINE * LINES_PAL;
-		render_fps(50);
+		fps = 50;
+	}
+	if (!headless) {
+		render_init(width, height, title, fps);
 	}
 	vdp_context v_context;
 	
@@ -1469,6 +1479,9 @@ int main(int argc, char ** argv)
 	
 	ym2612_context y_context;
 	ym_init(&y_context);
+	
+	psg_context p_context;
+	psg_init(&p_context, render_sample_rate(), fps == 60 ? PSG_CLKS_NTSC : PSG_CLKS_PAL, render_audio_buffer());
 	
 	z80_context z_context;
 	x86_z80_options z_opts;
@@ -1486,6 +1499,7 @@ int main(int argc, char ** argv)
 	gen.z80 = &z_context;
 	gen.vdp = &v_context;
 	gen.ym = &y_context;
+	gen.psg = &p_context;
 	genesis = &gen;
 	
 	int fname_size = strlen(argv[1]);
