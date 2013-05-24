@@ -1,0 +1,112 @@
+#include "psg.h"
+#include "render.h"
+#include <string.h>
+#include <stdlib.h>
+
+void psg_init(psg_context * context, uint32_t sample_rate, uint32_t clock_rate, uint32_t samples_frame)
+{
+	memset(context, 0, sizeof(*context));
+	context->audio_buffer = malloc(sizeof(*context->audio_buffer) * samples_frame);
+	context->back_buffer = malloc(sizeof(*context->audio_buffer) * samples_frame);
+	context->buffer_inc = (double)sample_rate / (double)clock_rate;
+	context->samples_frame = samples_frame;
+	for (int i = 0; i < 4; i++) {
+		context->volume[i] = 0xF;
+	}
+}
+
+void psg_write(psg_context * context, uint8_t value)
+{
+	if (value & 0x80) {
+		context->latch = value & 0x70;
+		uint8_t channel = value >> 5 & 0x3;
+		if (value & 0x10) {
+			context->volume[channel] = value & 0xF;
+		} else {
+			if (channel == 3) {
+				switch(value & 0x3)
+				{
+				case 0:
+				case 1:
+				case 2:
+					context->counter_load[3] = 0x10 << (value & 0x3);
+					context->noise_use_tone = 0;
+					break;
+				default:
+					context->counter_load[3] = context->counter_load[2];
+					context->noise_use_tone = 1;
+				}
+				context->noise_type = value & 0x4;
+				context->lsfr = 0x8000;
+			} else {
+				context->counter_load[channel] = (context->counter_load[channel] & 0x3F0) | (value & 0xF);
+				if (channel == 2 && context->noise_use_tone) {
+					context->counter_load[3] = context->counter_load[2];
+				}
+			}
+		}
+	} else {
+		if (!(context->latch & 0x10)) {
+			uint8_t channel = context->latch >> 5 & 0x3;
+			if (channel != 3) {
+				context->counter_load[channel] = (value << 4 & 0x3F0) | (context->counter_load[channel] & 0xF);
+				if (channel == 2 && context->noise_use_tone) {
+					context->counter_load[3] = context->counter_load[2];
+				}
+			}
+		}
+	}
+}
+
+#define PSG_VOL_DIV 2
+
+//table shamelessly swiped from PSG doc from smspower.org
+int16_t volume_table[16] = {
+	32767/PSG_VOL_DIV, 26028/PSG_VOL_DIV, 20675/PSG_VOL_DIV, 16422/PSG_VOL_DIV, 13045/PSG_VOL_DIV, 10362/PSG_VOL_DIV,
+	8231/PSG_VOL_DIV, 6568/PSG_VOL_DIV, 5193/PSG_VOL_DIV, 4125/PSG_VOL_DIV, 3277/PSG_VOL_DIV, 2603/PSG_VOL_DIV, 
+	2067/PSG_VOL_DIV, 1642/PSG_VOL_DIV, 1304/PSG_VOL_DIV, 0
+};
+
+void psg_run(psg_context * context, uint32_t cycles)
+{
+	while (context->cycles < cycles) {
+		for (int i = 0; i < 4; i++) {
+			if (context->counters[i]) {
+				context->counters[i] -= 1;
+			}
+			if (!context->counters[i]) {
+				context->counters[i] = context->counter_load[i];
+				context->output_state[i] = !context->output_state[i];
+				if (i == 3 && context->output_state[i]) {
+					context->noise_out = context->lsfr & 1;
+					context->lsfr = (context->lsfr >> 1) | (context->lsfr << 15);
+					if (context->noise_type) {
+						//white noise
+						if (context->lsfr & 0x40) {
+							context->lsfr ^= 0x8000;
+						}
+					}
+				}
+			}
+		}
+		context->buffer_fraction += context->buffer_inc;
+		if (context->buffer_fraction >= 1.0) {
+			context->buffer_fraction -= 1.0;
+			int16_t acc = 0;
+			for (int i = 0; i < 3; i++) {
+				if (context->output_state[i]) {
+					acc += volume_table[context->volume[i]];
+				}
+			}
+			if (context->noise_out) {
+				acc += volume_table[context->volume[3]];
+			}
+			context->audio_buffer[context->buffer_pos++] = acc;
+			if (context->buffer_pos == context->samples_frame) {
+				render_wait_audio(context);
+			}
+		}
+		context->cycles++;
+	}
+}
+
