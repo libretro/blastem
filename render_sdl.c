@@ -419,7 +419,6 @@ int wait_render_frame(vdp_context * context, int frame_limit)
 		ret = handle_event(&event);
 	}
 	if (frame_limit) {
-		puts("evil frame limit");
 		//TODO: Adjust frame delay so we actually get 60 FPS rather than 62.5 FPS
 		uint32_t current = SDL_GetTicks();
 		uint32_t desired = last_frame + frame_delay;
