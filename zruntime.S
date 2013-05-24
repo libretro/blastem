@@ -133,7 +133,8 @@ z80_write_byte_noinc:
 	jb z80_write_ym2612
 	cmp $0x6100, %r14w
 	jb z80_write_bank_reg
-	/* TODO: YM-2612, PSG/VDP */
+	cmp $0x7F00, %r14w
+	jae z80_write_vdp
 	ret
 z80_write_ram:
 	and $0x1FFF, %r14
@@ -150,13 +151,6 @@ z80_write_ram:
 not_code:
 	ret
 z80_write_bank:
-	and $0x7FFF, %r14
-	cmp $0, %r12
-	je slow_bank_write
-	/* 68K memory is byte swapped */
-	xor $1, %r14
-	mov %r13b, (%r12, %r14)
-	ret
 slow_bank_write:
 	/* TODO: Call into C to implement this */
 	ret
@@ -167,8 +161,7 @@ z80_write_ym2612:
 	mov %r13b, %dl
 	call z80_write_ym
 	mov %rax, %rsi
-	call z80_load_context
-	ret
+	jmp z80_load_context
 z80_write_bank_reg:
 	and $1, %r13w
 	shr %r15w
@@ -184,6 +177,14 @@ update_bank_ptr:
 	shl $15, %r12
 	add 80(%rsi), %r12
 	ret
+z80_write_vdp:
+	and $0xFF, %r14w
+	call z80_save_context
+	mov %r14w, %di
+	mov %r13b, %dl
+	call z80_vdp_port_write
+	mov %rax, %rsi
+	jmp z80_load_context
 
 	.global z80_read_word
 z80_read_word:
