@@ -339,7 +339,27 @@ m68k_context * vdp_port_write_b(uint32_t vdp_port, m68k_context * context, uint8
 z80_context * z80_vdp_port_write(uint16_t vdp_port, z80_context * context, uint8_t value)
 {
 	genesis_context * gen = context->system;
-	vdp_port_write_b(vdp_port, gen->m68k, value);
+	if (vdp_port & 0xE0) {
+		printf("machine freeze due to write to Z80 address %X\n", 0x7F00 | vdp_port);
+		exit(1);
+	}
+	if (vdp_port < 0x10) {
+		//These probably won't currently interact well with the 68K accessing the VDP
+		vdp_run_context(gen->vdp, context->current_cycle * MCLKS_PER_Z80);
+		if (vdp_port < 4) {
+			vdp_data_port_write(gen->vdp, value << 8 | value);
+		} else if (vdp_port < 8) {
+			vdp_control_port_write(gen->vdp, value << 8 | value);
+		} else {
+			printf("Illegal write to HV Counter port %X\n", vdp_port);
+			exit(1);
+		}
+	} else if (vdp_port < 0x18) {
+		psg_run(gen->psg, (context->current_cycle * MCLKS_PER_Z80) / MCLKS_PER_PSG);
+		psg_write(gen->psg, value);
+	} else {
+		//TODO: Implement undocumented test register(s)
+	}
 	return context;
 }
 
