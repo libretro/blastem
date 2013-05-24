@@ -6,6 +6,7 @@
 #include "z80_to_x86.h"
 #include "ym2612.h"
 #include "vdp.h"
+#include "psg.h"
 
 typedef struct {
 	uint32_t th_counter;
@@ -24,6 +25,7 @@ typedef struct {
 	z80_context    *z80;
 	vdp_context    *vdp;
 	ym2612_context *ym;
+	psg_context    *psg;
 	uint8_t        *save_ram;
 	uint32_t       save_ram_mask;
 	uint32_t       save_flags;
