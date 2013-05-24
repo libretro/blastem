@@ -31,7 +31,7 @@ io_port gamepad_2;
 
 int headless = 0;
 int z80_enabled = 1;
-int frame_limit = 1;
+int frame_limit = 0;
 
 #ifndef MIN
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
@@ -1416,7 +1416,7 @@ int main(int argc, char ** argv)
 				debug = 1;
 				break;
 			case 'f':
-				frame_limit = 0;
+				frame_limit = 1;
 				break;
 			case 'l':
 				address_log = fopen("address.log", "w");
