@@ -333,7 +333,14 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 
 m68k_context * vdp_port_write_b(uint32_t vdp_port, m68k_context * context, uint8_t value)
 {
-	return vdp_port_write(vdp_port, context, vdp_port < 0x10 ? value | value << 8 : value);
+	return vdp_port_write(vdp_port, context, vdp_port < 0x10 ? value | value << 8 : ((vdp_port & 1) ? value : 0));
+}
+
+z80_context * z80_vdp_port_write(uint16_t vdp_port, z80_context * context, uint8_t value)
+{
+	genesis_context * gen = context->system;
+	vdp_port_write_b(vdp_port, gen->m68k, value);
+	return context;
 }
 
 uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
