@@ -5,12 +5,20 @@
 
 #define NUM_SHARED_REGS (0x30-0x21)
 #define NUM_PART_REGS (0xB7-0x30)
+#define NUM_OPERATORS (4*6)
 
 typedef struct {
 	uint32_t current_cycle;
 	uint32_t write_cycle;
 	uint8_t  *selected_reg;
+	uint32_t phase_inc[NUM_OPERATORS];
+	uint32_t phase_counter[NUM_OPERATORS];
+	uint16_t envelope[NUM_OPERATORS];
+	uint16_t op_out[NUM_OPERATORS];
+	uint16_t channel_out[6];
 	uint16_t timer_a;
+	uint8_t  env_phase[NUM_OPERATORS];
+	uint8_t  keycode[NUM_OPERATORS];
 	uint8_t  timer_b;
 	uint8_t  reg_num;
 	uint8_t  status;
