@@ -8,7 +8,7 @@ endif
 all : dis trans stateview blastem
 
 blastem : blastem.o 68kinst.o gen_x86.o m68k_to_x86.o z80inst.o z80_to_x86.o x86_backend.o runtime.o zruntime.o mem.o vdp.o ym2612.o psg.o render_sdl.o
-	$(CC) -o blastem blastem.o 68kinst.o gen_x86.o m68k_to_x86.o z80inst.o z80_to_x86.o x86_backend.o runtime.o zruntime.o mem.o vdp.o ym2612.o psg.o render_sdl.o `pkg-config --libs $(LIBS)`
+	$(CC) -ggdb -o blastem blastem.o 68kinst.o gen_x86.o m68k_to_x86.o z80inst.o z80_to_x86.o x86_backend.o runtime.o zruntime.o mem.o vdp.o ym2612.o psg.o render_sdl.o `pkg-config --libs $(LIBS)`
 
 dis : dis.o 68kinst.o
 	$(CC) -o dis dis.o 68kinst.o
