@@ -25,6 +25,7 @@ uint32_t missing_count;
 SDL_mutex * audio_mutex;
 SDL_cond * audio_ready;
 SDL_cond * audio_cond;
+uint8_t quitting = 0;
 
 void audio_callback(void * userdata, uint8_t *byte_stream, int len)
 {
@@ -32,20 +33,31 @@ void audio_callback(void * userdata, uint8_t *byte_stream, int len)
 	int16_t * stream = (int16_t *)byte_stream;
 	int samples = len/(sizeof(int16_t)*2);
 	int16_t * source_buf;
-	
+	uint8_t local_quit;
 	SDL_LockMutex(audio_mutex);
-		while (!current_audio) {
+		while (!current_audio && !quitting) {
 			SDL_CondWait(audio_ready, audio_mutex);
 		}
+		local_quit = quitting;
 		source_buf = current_audio;
 		current_audio = NULL;
 		SDL_CondSignal(audio_cond);
 	SDL_UnlockMutex(audio_mutex);
-	
-	for (int i = 0; i < samples; i++) {
-		*(stream++) = source_buf[i];
-		*(stream++) = source_buf[i];
+	if (!local_quit) {
+		for (int i = 0; i < samples; i++) {
+			*(stream++) = source_buf[i];
+			*(stream++) = source_buf[i];
+		}
 	}
+}
+
+void render_close_audio()
+{
+	SDL_LockMutex(audio_mutex);
+		quitting = 1;
+		SDL_CondSignal(audio_ready);
+	SDL_UnlockMutex(audio_mutex);
+	SDL_CloseAudio();
 }
 
 void render_init(int width, int height, char * title, uint32_t fps)
@@ -55,6 +67,7 @@ void render_init(int width, int height, char * title, uint32_t fps)
         exit(1);
     }
     atexit(SDL_Quit);
+    atexit(render_close_audio);
     printf("width: %d, height: %d\n", width, height);
     screen = SDL_SetVideoMode(width, height, 32, SDL_SWSURFACE | SDL_ANYFORMAT);
     if (!screen) {
