@@ -1936,7 +1936,7 @@ void init_x86_z80_opts(x86_z80_options * options)
 void init_z80_context(z80_context * context, x86_z80_options * options)
 {
 	memset(context, 0, sizeof(*context));
-	context->static_code_map = malloc(sizeof(context->static_code_map));
+	context->static_code_map = malloc(sizeof(*context->static_code_map));
 	context->static_code_map->base = NULL;
 	context->static_code_map->offsets = malloc(sizeof(int32_t) * 0x2000);
 	memset(context->static_code_map->offsets, 0xFF, sizeof(int32_t) * 0x2000);
