@@ -198,7 +198,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	sync_z80(z_context, mclks);
 	if (mclks >= mclks_per_frame) {
 		ym_run(gen->ym, context->current_cycle);
-		gen->ym->current_cycle -= mclks_per_frame/MCLKS_PER_68K;
+		gen->ym->current_cycle -= ((mclks_per_frame/MCLKS_PER_68K) / 6) * 6;
 		//printf("reached frame end | 68K Cycles: %d, MCLK Cycles: %d\n", context->current_cycle, mclks);
 		vdp_run_context(v_context, mclks_per_frame);
 		psg_run(gen->psg, mclks/MCLKS_PER_PSG);
