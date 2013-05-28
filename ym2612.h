@@ -3,27 +3,51 @@
 
 #include <stdint.h>
 
-#define NUM_SHARED_REGS (0x30-0x21)
 #define NUM_PART_REGS (0xB7-0x30)
-#define NUM_OPERATORS (4*6)
+#define NUM_CHANNELS 6
+#define NUM_OPERATORS (4*NUM_CHANNELS)
 
 typedef struct {
-	uint32_t current_cycle;
-	uint32_t write_cycle;
-	uint8_t  *selected_reg;
-	uint32_t phase_inc[NUM_OPERATORS];
-	uint32_t phase_counter[NUM_OPERATORS];
-	uint16_t envelope[NUM_OPERATORS];
-	uint16_t op_out[NUM_OPERATORS];
-	uint16_t channel_out[6];
-	uint16_t timer_a;
-	uint8_t  env_phase[NUM_OPERATORS];
-	uint8_t  keycode[NUM_OPERATORS];
-	uint8_t  timer_b;
-	uint8_t  reg_num;
-	uint8_t  status;
-	uint8_t  part1_regs[NUM_SHARED_REGS+NUM_PART_REGS];
-	uint8_t  part2_regs[NUM_PART_REGS];
+	uint32_t phase_inc;
+	uint32_t phase_counter;
+	uint16_t envelope;
+	uint16_t output;
+	uint16_t total_level;
+	uint16_t sustain_level;
+	uint8_t  rates[4];
+	uint8_t  key_scaling;
+	uint8_t  multiple;
+	uint8_t  detune;
+	uint8_t  env_phase;
+} ym_operator;
+
+typedef struct {
+	uint16_t fnum;
+	int16_t  output;
+	uint8_t  block_fnum_latch;
+	uint8_t  block;
+	uint8_t  keycode;
+	uint8_t  algorithm;
+	uint8_t  feedback;
+	uint8_t  ams;
+	uint8_t  pms;
+	uint8_t  lr;
+} ym_channel;
+
+typedef struct {
+	uint32_t    current_cycle;
+	uint32_t    write_cycle;
+	ym_operator operators[NUM_OPERATORS];
+	ym_channel  channels[NUM_CHANNELS];
+	uint16_t    timer_a;
+	uint16_t    timer_a_load;
+	uint8_t     timer_b;
+	uint8_t     timer_b_load;
+	uint8_t     timer_control;
+	uint8_t     dac_enable;
+	uint8_t     status;
+	uint8_t     selected_reg;
+	uint8_t     selected_part;
 } ym2612_context;
 
 void ym_init(ym2612_context * context);
