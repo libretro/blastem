@@ -9,7 +9,6 @@ typedef struct {
 	double   buffer_fraction;
 	double   buffer_inc;
 	uint32_t buffer_pos;
-	uint32_t back_pos;
 	uint32_t cycles;
 	uint32_t samples_frame;
 	uint16_t lsfr;

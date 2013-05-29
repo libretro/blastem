@@ -16,15 +16,16 @@ uint8_t levels[] = {0, 27, 49, 71, 87, 103, 119, 130, 146, 157, 174, 190, 206, 2
 uint32_t min_delay;
 uint32_t frame_delay = 1000/60;
 
-int16_t * current_audio = NULL;
-int16_t * next_audio = NULL;
+int16_t * current_psg = NULL;
+int16_t * current_ym = NULL;
 
 uint32_t buffer_samples, sample_rate;
 uint32_t missing_count;
 
 SDL_mutex * audio_mutex;
 SDL_cond * audio_ready;
-SDL_cond * audio_cond;
+SDL_cond * psg_cond;
+SDL_cond * ym_cond;
 uint8_t quitting = 0;
 
 void audio_callback(void * userdata, uint8_t *byte_stream, int len)
@@ -32,21 +33,33 @@ void audio_callback(void * userdata, uint8_t *byte_stream, int len)
 	//puts("audio_callback");
 	int16_t * stream = (int16_t *)byte_stream;
 	int samples = len/(sizeof(int16_t)*2);
-	int16_t * source_buf;
+	int16_t * psg_buf, * ym_buf;
 	uint8_t local_quit;
 	SDL_LockMutex(audio_mutex);
-		while (!current_audio && !quitting) {
-			SDL_CondWait(audio_ready, audio_mutex);
-		}
+		psg_buf = NULL;
+		ym_buf = NULL;
+		do {
+			if (!psg_buf) {
+				psg_buf = current_psg;
+				current_psg = NULL;
+				SDL_CondSignal(psg_cond);
+			}
+			if (!ym_buf) {
+				ym_buf = current_ym;
+				current_ym = NULL;
+				SDL_CondSignal(ym_cond);
+			}
+			if (!quitting && (!psg_buf || !ym_buf)) {
+				SDL_CondWait(audio_ready, audio_mutex);
+			}
+		} while(!quitting && (!psg_buf || !ym_buf));
+
 		local_quit = quitting;
-		source_buf = current_audio;
-		current_audio = NULL;
-		SDL_CondSignal(audio_cond);
 	SDL_UnlockMutex(audio_mutex);
 	if (!local_quit) {
 		for (int i = 0; i < samples; i++) {
-			*(stream++) = source_buf[i];
-			*(stream++) = source_buf[i];
+			*(stream++) = psg_buf[i] + *(ym_buf++);
+			*(stream++) = psg_buf[i] + *(ym_buf++);
 		}
 	}
 }
@@ -113,7 +126,8 @@ void render_init(int width, int height, char * title, uint32_t fps)
     frame_delay = 1000/fps;
     
     audio_mutex = SDL_CreateMutex();
-    audio_cond = SDL_CreateCond();
+    psg_cond = SDL_CreateCond();
+    ym_cond = SDL_CreateCond();
     audio_ready = SDL_CreateCond();
     
     SDL_AudioSpec desired, actual;
@@ -460,17 +474,32 @@ int wait_render_frame(vdp_context * context, int frame_limit)
 	return ret;
 }
 
-void render_wait_audio(psg_context * context)
+void render_wait_psg(psg_context * context)
 {
 	SDL_LockMutex(audio_mutex);
-		while (current_audio != NULL) {
-			SDL_CondWait(audio_cond, audio_mutex);
+		while (current_psg != NULL) {
+			SDL_CondWait(psg_cond, audio_mutex);
 		}
-		current_audio = context->audio_buffer;
+		current_psg = context->audio_buffer;
 		SDL_CondSignal(audio_ready);
 
 		context->audio_buffer = context->back_buffer;
-		context->back_buffer = current_audio;
+		context->back_buffer = current_psg;
+	SDL_UnlockMutex(audio_mutex);
+	context->buffer_pos = 0;
+}
+
+void render_wait_ym(ym2612_context * context)
+{
+	SDL_LockMutex(audio_mutex);
+		while (current_ym != NULL) {
+			SDL_CondWait(ym_cond, audio_mutex);
+		}
+		current_ym = context->audio_buffer;
+		SDL_CondSignal(audio_ready);
+
+		context->audio_buffer = context->back_buffer;
+		context->back_buffer = current_ym;
 	SDL_UnlockMutex(audio_mutex);
 	context->buffer_pos = 0;
 }

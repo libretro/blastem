@@ -24,6 +24,11 @@ z80_context * z80_write_ym(uint16_t location, z80_context * context, uint8_t val
 	return context;
 }
 
+z80_context * z80_vdp_port_write(uint16_t location, z80_context * context, uint8_t value)
+{
+	return context;
+}
+
 int main(int argc, char ** argv)
 {
 	long filesize;
