@@ -383,6 +383,8 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = zcycles(dst, (inst->reg == Z80_IX || inst->reg == Z80_IY) ? 9 : 5);
 		dst = sub_ir(dst, 2, opts->regs[Z80_SP], SZ_W);
 		if (inst->reg == Z80_AF) {
+			dst = mov_rr(dst, opts->regs[Z80_A], SCRATCH1, SZ_B);
+			dst = shl_ir(dst, 8, SCRATCH1, SZ_W);
 			dst = mov_rdisp8r(dst, CONTEXT, zf_off(ZF_S), SCRATCH1, SZ_B);
 			dst = shl_ir(dst, 1, SCRATCH1, SZ_B);
 			dst = or_rdisp8r(dst, CONTEXT, zf_off(ZF_Z), SCRATCH1, SZ_B);
@@ -394,8 +396,6 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			dst = or_rdisp8r(dst, CONTEXT, zf_off(ZF_N), SCRATCH1, SZ_B);
 			dst = shl_ir(dst, 1, SCRATCH1, SZ_B);
 			dst = or_rdisp8r(dst, CONTEXT, zf_off(ZF_C), SCRATCH1, SZ_B);
-			dst = shl_ir(dst, 8, SCRATCH1, SZ_W);
-			dst = mov_rr(dst, opts->regs[Z80_A], SCRATCH1, SZ_B);
 		} else {
 			dst = translate_z80_reg(inst, &src_op, dst, opts);
 			dst = mov_rr(dst, src_op.base, SCRATCH1, SZ_W);
