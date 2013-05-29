@@ -35,12 +35,21 @@ typedef struct {
 } ym_channel;
 
 typedef struct {
+    int16_t     *audio_buffer;
+    int16_t     *back_buffer;
+    double      buffer_fraction;
+    double      buffer_inc;
+    uint32_t    buffer_pos;
+    uint32_t    sample_limit;
 	uint32_t    current_cycle;
 	uint32_t    write_cycle;
 	ym_operator operators[NUM_OPERATORS];
 	ym_channel  channels[NUM_CHANNELS];
 	uint16_t    timer_a;
 	uint16_t    timer_a_load;
+	uint16_t    env_counter;
+	uint8_t     current_op;
+	uint8_t     current_env_op;
 	uint8_t     timer_b;
 	uint8_t     timer_b_load;
 	uint8_t     timer_control;
@@ -50,7 +59,7 @@ typedef struct {
 	uint8_t     selected_part;
 } ym2612_context;
 
-void ym_init(ym2612_context * context);
+void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t clock_rate, uint32_t sample_limit);
 void ym_run(ym2612_context * context, uint32_t to_cycle);
 void ym_address_write_part1(ym2612_context * context, uint8_t address);
 void ym_address_write_part2(ym2612_context * context, uint8_t address);

@@ -198,7 +198,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	sync_z80(z_context, mclks);
 	if (mclks >= mclks_per_frame) {
 		ym_run(gen->ym, context->current_cycle);
-		gen->ym->current_cycle -= ((mclks_per_frame/MCLKS_PER_68K) / 6) * 6;
+		gen->ym->current_cycle -= mclks_per_frame/MCLKS_PER_68K;
 		//printf("reached frame end | 68K Cycles: %d, MCLK Cycles: %d\n", context->current_cycle, mclks);
 		vdp_run_context(v_context, mclks_per_frame);
 		psg_run(gen->psg, mclks/MCLKS_PER_PSG);
@@ -534,8 +534,8 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 					if(!reset && !busreq) {
 						busack_cycle = ((gen->z80->current_cycle + Z80_ACK_DELAY) * MCLKS_PER_Z80) / MCLKS_PER_68K;//context->current_cycle + Z80_ACK_DELAY;
 						new_busack = Z80_REQ_ACK;
-						busreq = 1;
 					}
+					busreq = 1;
 				} else {
 					if (busreq) {
 						dputs("releasing z80 bus");
@@ -635,8 +635,8 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 					if(!reset && !busreq) {
 						busack_cycle = ((gen->z80->current_cycle + Z80_ACK_DELAY) * MCLKS_PER_Z80) / MCLKS_PER_68K;//context->current_cycle + Z80_ACK_DELAY;
 						new_busack = Z80_REQ_ACK;
-						busreq = 1;
 					}
+					busreq = 1;
 				} else {
 					if (busreq) {
 						dprintf("releasing Z80 bus @ %d\n", (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80);
@@ -1420,6 +1420,8 @@ void detect_region()
 
 #define PSG_CLKS_NTSC (3579545/16)
 #define PSG_CLKS_PAL (3546893/16)
+#define YM_CLKS_NTSC 7670454
+#define YM_CLKS_PAL 7600485
 
 int main(int argc, char ** argv)
 {
@@ -1505,7 +1507,7 @@ int main(int argc, char ** argv)
 	init_vdp_context(&v_context);
 	
 	ym2612_context y_context;
-	ym_init(&y_context);
+	ym_init(&y_context, render_sample_rate(), fps == 60 ? YM_CLKS_NTSC : YM_CLKS_PAL, render_audio_buffer());
 	
 	psg_context p_context;
 	psg_init(&p_context, render_sample_rate(), fps == 60 ? PSG_CLKS_NTSC : PSG_CLKS_PAL, render_audio_buffer());
