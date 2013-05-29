@@ -103,7 +103,7 @@ void psg_run(psg_context * context, uint32_t cycles)
 			}
 			context->audio_buffer[context->buffer_pos++] = acc;
 			if (context->buffer_pos == context->samples_frame) {
-				render_wait_audio(context);
+				render_wait_psg(context);
 			}
 		}
 		context->cycles++;

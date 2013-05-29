@@ -1,10 +1,12 @@
 #include <string.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "ym2612.h"
+#include "render.h"
 
 #define BUSY_CYCLES 17
-#define TIMERA_UPDATE_PERIOD 144
+#define OP_UPDATE_PERIOD 144
 
 enum {
 	REG_TIMERA_HIGH  = 0x24,
@@ -75,16 +77,20 @@ uint16_t rate_table_base[] = {
 uint16_t rate_table[64];
 
 #define MAX_ENVELOPE 0xFFC
-
+#define YM_DIVIDER 2
 
 uint16_t round_fixed_point(double value, int dec_bits)
 {
 	return value * (1 << dec_bits) + 0.5;
 }
 
-void ym_init(ym2612_context * context)
+void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t clock_rate, uint32_t sample_limit)
 {
 	memset(context, 0, sizeof(*context));
+	context->audio_buffer = malloc(sizeof(*context->audio_buffer) * sample_limit*2);
+	context->back_buffer = malloc(sizeof(*context->audio_buffer) * sample_limit*2);
+	context->buffer_inc = (double)sample_rate / (double)(clock_rate/OP_UPDATE_PERIOD);
+	context->sample_limit = sample_limit*2;
 	for (int i = 0; i < NUM_OPERATORS; i++) {
 		context->operators[i].envelope = MAX_ENVELOPE;
 		context->operators[i].env_phase = PHASE_RELEASE;
@@ -134,9 +140,8 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 	//printf("Running YM2612 from cycle %d to cycle %d\n", context->current_cycle, to_cycle);
 	//TODO: Fix channel update order OR remap channels in register write
 	for (; context->current_cycle < to_cycle; context->current_cycle += 6) {
-		uint32_t update_cyc = context->current_cycle % 144;
 		//Update timers at beginning of 144 cycle period
-		if (!update_cyc && context->timer_control & BIT_TIMERA_ENABLE) {
+		if (!context->current_op && context->timer_control & BIT_TIMERA_ENABLE) {
 			if (context->timer_a) {
 				context->timer_a--;
 			} else {
@@ -146,7 +151,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				context->timer_a = context->timer_a_load;
 			}
 			if (context->timer_control & BIT_TIMERB_ENABLE) {
-				uint32_t b_cyc = (context->current_cycle / 144) % 16;
+				uint32_t b_cyc = (context->current_cycle / OP_UPDATE_PERIOD) % 16;
 				if (!b_cyc) {
 					if (context->timer_b) {
 						context->timer_b--;
@@ -160,10 +165,9 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			}
 		}
 		//Update Envelope Generator
-		if (update_cyc == 0 || update_cyc == 72) {
-			uint32_t env_cyc = context->current_cycle / 72;
-			uint32_t op = env_cyc % 24;
-			env_cyc /= 24;
+		if (!(context->current_op % 3)) {
+			uint32_t env_cyc = context->env_counter;
+			uint32_t op = context->current_env_op;
 			ym_operator * operator = context->operators + op;
 			ym_channel * channel = context->channels + op/4;
 			uint8_t rate;
@@ -214,15 +218,18 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 						operator->env_phase = PHASE_SUSTAIN;
 					}
 				}
-				
-				
+			}
+			context->current_env_op++;
+			if (context->current_env_op == NUM_OPERATORS) {
+				context->current_env_op = 0;
+				context->env_counter++;
 			}
 		}
 		
 		//Update Phase Generator
-		uint32_t channel = update_cyc / 24;
+		uint32_t channel = context->current_op / 4;
 		if (channel != 5 || !context->dac_enable) {
-			uint32_t op = (update_cyc) / 6;
+			uint32_t op = context->current_op;
 			//printf("updating operator %d of channel %d\n", op, channel);
 			ym_operator * operator = context->operators + op;
 			ym_channel * chan = context->channels + channel;
@@ -303,6 +310,32 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			}
 			//puts("operator update done");
 		}
+		context->current_op++;
+		if (context->current_op == NUM_OPERATORS) {
+			context->current_op = 0;
+			context->buffer_fraction += context->buffer_inc;
+			if (context->buffer_fraction > 1.0) {
+				context->buffer_fraction -= 1.0;
+				context->audio_buffer[context->buffer_pos] = 0;
+				context->audio_buffer[context->buffer_pos + 1] = 0;
+				for (int i = 0; i < NUM_CHANNELS; i++) {
+					uint16_t value = context->channels[i].output & 0x3FE0;
+					if (value & 0x2000) {
+						value |= 0xC000;
+					}
+					if (context->channels[i].lr & 0x80) {
+						context->audio_buffer[context->buffer_pos] += value / 2;
+					}
+					if (context->channels[i].lr & 0x40) {
+						context->audio_buffer[context->buffer_pos+1] += value / 2;
+					}
+				}
+				context->buffer_pos += 2;
+				if (context->buffer_pos == context->sample_limit) {
+					render_wait_ym(context);
+				}
+			}
+		}
 	}
 	if (context->current_cycle >= context->write_cycle + BUSY_CYCLES) {
 		context->status &= 0x7F;
@@ -312,12 +345,14 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 
 void ym_address_write_part1(ym2612_context * context, uint8_t address)
 {
+	//printf("address_write_part1: %X\n", address);
 	context->selected_reg = address;
 	context->selected_part = 0;
 }
 
 void ym_address_write_part2(ym2612_context * context, uint8_t address)
 {
+	//printf("address_write_part2: %X\n", address);
 	context->selected_reg = address;
 	context->selected_part = 1;
 }
@@ -393,6 +428,7 @@ void ym_update_phase_inc(ym2612_context * context, ym_operator * operator, uint3
 		//0.5
 		inc >>= 1;
 	}
+	operator->phase_inc = inc;
 }
 
 void ym_data_write(ym2612_context * context, uint8_t value)
@@ -440,9 +476,11 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 		case REG_DAC:
 			if (context->dac_enable) {
 				context->channels[5].output = (((int16_t)value) - 0x80) << 6;
+				//printf("DAC Write %X(%d)\n", context->channels[5].output, context->channels[5].output);
 			}
 			break;
 		case REG_DAC_ENABLE:
+			//printf("DAC Enable: %X\n", value);
 			context->dac_enable = value & 0x80;
 			break;
 		}
