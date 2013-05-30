@@ -74,7 +74,7 @@ uint16_t rate_table_base[] = {
 	1,2,2,2,1,2,2,2,
 };
 
-uint16_t rate_table[64];
+uint16_t rate_table[64*8];
 
 #define MAX_ENVELOPE 0xFFC
 #define YM_DIVIDER 2
@@ -121,15 +121,16 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t clock_rate
 				uint16_t value;
 				if (rate < 3) {
 					value = 0;
-				} else if (value >= 60) {
+				} else if (rate >= 60) {
 					value = 8;
-				} else if (value < 8) {
+				} else if (rate < 8) {
 					value = rate_table_base[((rate & 6) == 6 ? 16 : 8) + cycle];
-				} else if (value < 48) {
+				} else if (rate < 48) {
 					value = rate_table_base[(rate & 0x3) * 8 + cycle];
 				} else {
 					value = rate_table_base[32 + (rate & 0x3) * 8 + cycle] << (rate >> 2);
 				}
+				rate_table[rate * 8 + cycle] = value;
 			}
 		}
 	}
@@ -408,9 +409,9 @@ void ym_update_phase_inc(ym2612_context * context, ym_operator * operator, uint3
 	ym_channel * channel = context->channels + chan_num;
 	uint32_t inc = channel->fnum;
 	if (!channel->block) {
-		inc >> 1;
+		inc >>= 1;
 	} else {
-		inc << (channel->block-1);
+		inc <<= (channel->block-1);
 	}
 	//detune
 	uint32_t detune = detune_table[channel->keycode][operator->detune & 0x3];
@@ -428,6 +429,7 @@ void ym_update_phase_inc(ym2612_context * context, ym_operator * operator, uint3
 		//0.5
 		inc >>= 1;
 	}
+	//printf("phase_inc for operator %d: %d, block: %d, fnum: %d, detune: %d, multiple: %d\n", op, inc, channel->block, channel->fnum, detune, operator->multiple);
 	operator->phase_inc = inc;
 }
 
