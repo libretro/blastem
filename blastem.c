@@ -973,7 +973,9 @@ typedef struct bp_def {
 } bp_def;
 
 bp_def * breakpoints = NULL;
+bp_def * zbreakpoints = NULL;
 uint32_t bp_index = 0;
+uint32_t zbp_index = 0;
 
 bp_def ** find_breakpoint(bp_def ** cur, uint32_t address)
 {
@@ -1019,6 +1021,267 @@ void strip_nl(char * buf)
 	}
 }
 
+z80_context * zdebugger(z80_context * context, uint16_t address)
+{
+	static char last_cmd[1024];
+	char input_buf[1024];
+	static uint16_t branch_t;
+	static uint16_t branch_f;
+	z80inst inst;
+	//Check if this is a user set breakpoint, or just a temporary one
+	bp_def ** this_bp = find_breakpoint(&zbreakpoints, address);
+	if (*this_bp) {
+		printf("Z80 Breakpoint %d hit\n", (*this_bp)->index);
+	} else {
+		zremove_breakpoint(context, address);
+	}
+	uint8_t * pc;
+	if (address < 0x4000) {
+		pc = z80_ram + (address & 0x1FFF);
+	} else if (address >= 0x8000) {
+		if (context->bank_reg < (0x400000 >> 15)) {
+			fprintf(stderr, "Entered Z80 debugger in banked memory address %X, which is not yet supported\n", address);
+			exit(1);
+		} else {
+			fprintf(stderr, "Entered Z80 debugger in banked memory address %X, but the bank is not pointed to a cartridge address\n", address);
+			exit(1);
+		}
+	} else {
+		fprintf(stderr, "Entered Z80 debugger at address %X\n", address);
+		exit(1);
+	}
+	uint8_t * after_pc = z80_decode(pc, &inst);
+	z80_disasm(&inst, input_buf, address);
+	printf("%X:\t%s\n", address, input_buf);
+	uint16_t after = address + (after_pc-pc);
+	int debugging = 1;
+	while(debugging) {
+		fputs(">", stdout);
+		if (!fgets(input_buf, sizeof(input_buf), stdin)) {
+			fputs("fgets failed", stderr);
+			break;
+		}
+		strip_nl(input_buf);
+		//hitting enter repeats last command
+		if (input_buf[0]) {
+			strcpy(last_cmd, input_buf);
+		} else {
+			strcpy(input_buf, last_cmd);
+		}
+		char * param;
+		char format[8];
+		uint32_t value;
+		bp_def * new_bp;
+		switch(input_buf[0])
+		{
+			case 'a':
+				param = find_param(input_buf);
+				if (!param) {
+					fputs("a command requires a parameter\n", stderr);
+					break;
+				}
+				value = strtol(param, NULL, 16);
+				zinsert_breakpoint(context, value, (uint8_t *)zdebugger);
+				break;
+			case 'b':
+				param = find_param(input_buf);
+				if (!param) {
+					fputs("b command requires a parameter\n", stderr);
+					break;
+				}
+				value = strtol(param, NULL, 16);
+				zinsert_breakpoint(context, value, (uint8_t *)zdebugger);
+				new_bp = malloc(sizeof(bp_def));
+				new_bp->next = zbreakpoints;
+				new_bp->address = value;
+				new_bp->index = zbp_index++;
+				zbreakpoints = new_bp;
+				printf("Z80 Breakpoint %d set at %X\n", new_bp->index, value);
+				break;
+			case 'c':
+				puts("Continuing");
+				debugging = 0;
+				break;
+			case 'n':
+				//TODO: Handle branch instructions
+				zinsert_breakpoint(context, after, (uint8_t *)zdebugger);
+				break;
+			case 'p':
+				strcpy(format, "%s: %d\n");
+				if (input_buf[1] == '/') {
+					switch (input_buf[2])
+					{
+					case 'x':
+					case 'X':
+					case 'd':
+					case 'c':
+						format[5] = input_buf[2];
+						break;
+					default:
+						fprintf(stderr, "Unrecognized format character: %c\n", input_buf[2]);
+					}
+				}
+				param = find_param(input_buf);
+				if (!param) {
+					fputs("p command requires a parameter\n", stderr);
+					break;
+				}
+				switch (param[0])
+				{
+				case 'a':
+					if (param[1] == 'f') {
+						if(param[2] == '\'') {
+							value = context->alt_regs[Z80_A] << 8;
+							value |= context->alt_flags[ZF_S] << 7;
+							value |= context->alt_flags[ZF_Z] << 6;
+							value |= context->alt_flags[ZF_H] << 4;
+							value |= context->alt_flags[ZF_PV] << 2;
+							value |= context->alt_flags[ZF_N] << 1;
+							value |= context->alt_flags[ZF_C];
+						} else {
+							value = context->regs[Z80_A] << 8;
+							value |= context->flags[ZF_S] << 7;
+							value |= context->flags[ZF_Z] << 6;
+							value |= context->flags[ZF_H] << 4;
+							value |= context->flags[ZF_PV] << 2;
+							value |= context->flags[ZF_N] << 1;
+							value |= context->flags[ZF_C];
+						}
+					} else if(param[1] == '\'') {
+						value = context->alt_regs[Z80_A];
+					} else {
+						value = context->regs[Z80_A];
+					}
+					break;
+				case 'b':
+					if (param[1] == 'c') {
+						if(param[2] == '\'') {
+							value = context->alt_regs[Z80_B] << 8;
+							value |= context->alt_regs[Z80_C];
+						} else {
+							value = context->regs[Z80_B] << 8;
+							value |= context->regs[Z80_C];
+						}
+					} else if(param[1] == '\'') {
+						value = context->alt_regs[Z80_B];
+					} else {
+						value = context->regs[Z80_B];
+					}
+					break;
+				case 'c':
+					if(param[1] == '\'') {
+						value = context->alt_regs[Z80_C];
+					} else {
+						value = context->regs[Z80_C];
+					}
+					break;
+				case 'd':
+					if (param[1] == 'e') {
+						if(param[2] == '\'') {
+							value = context->alt_regs[Z80_D] << 8;
+							value |= context->alt_regs[Z80_E];
+						} else {
+							value = context->regs[Z80_D] << 8;
+							value |= context->regs[Z80_E];
+						}
+					} else if(param[1] == '\'') {
+						value = context->alt_regs[Z80_D];
+					} else {
+						value = context->regs[Z80_D];
+					}
+					break;
+				case 'e':
+					if(param[1] == '\'') {
+						value = context->alt_regs[Z80_E];
+					} else {
+						value = context->regs[Z80_E];
+					}
+					break;
+				case 'f':
+					if(param[2] == '\'') {
+						value = context->alt_flags[ZF_S] << 7;
+						value |= context->alt_flags[ZF_Z] << 6;
+						value |= context->alt_flags[ZF_H] << 4;
+						value |= context->alt_flags[ZF_PV] << 2;
+						value |= context->alt_flags[ZF_N] << 1;
+						value |= context->alt_flags[ZF_C];
+					} else {
+						value = context->flags[ZF_S] << 7;
+						value |= context->flags[ZF_Z] << 6;
+						value |= context->flags[ZF_H] << 4;
+						value |= context->flags[ZF_PV] << 2;
+						value |= context->flags[ZF_N] << 1;
+						value |= context->flags[ZF_C];
+					}
+					break;
+				case 'h':
+					if (param[1] == 'l') {
+						if(param[2] == '\'') {
+							value = context->alt_regs[Z80_H] << 8;
+							value |= context->alt_regs[Z80_L];
+						} else {
+							value = context->regs[Z80_H] << 8;
+							value |= context->regs[Z80_L];
+						}
+					} else if(param[1] == '\'') {
+						value = context->alt_regs[Z80_H];
+					} else {
+						value = context->regs[Z80_H];
+					}
+					break;
+				case 'l':
+					if(param[1] == '\'') {
+						value = context->alt_regs[Z80_L];
+					} else {
+						value = context->regs[Z80_L];
+					}
+					break;
+				case 'i':
+					if(param[1] == 'x') {
+						if (param[2] == 'h') {
+							value = context->regs[Z80_IXH];
+						} else if(param[2] == 'l') {
+							value = context->regs[Z80_IXL];
+						} else {
+							value = context->regs[Z80_IXH] << 8;
+							value |= context->regs[Z80_IXL];
+						}
+					} else if(param[1] == 'y') {
+						if (param[2] == 'h') {
+							value = context->regs[Z80_IYH];
+						} else if(param[2] == 'l') {
+							value = context->regs[Z80_IYL];
+						} else {
+							value = context->regs[Z80_IYH] << 8;
+							value |= context->regs[Z80_IYL];
+						}
+					} else {
+						value = context->im;
+					}
+					break;
+				case '0':
+					if (param[1] == 'x') {
+						uint16_t p_addr = strtol(param+2, NULL, 16);
+						if (p_addr < 0x4000) {
+							value = z80_ram[p_addr & 0x1FFF];
+						}
+					}
+					break;
+				}
+				printf(format, param, value);
+				break;
+			case 'q':
+				puts("Quitting");
+				exit(0);
+				break;
+			default:
+				fprintf(stderr, "Unrecognized debugger command %s\n", input_buf);
+				break;
+		}
+	}
+	return context;
+}
+
 m68k_context * debugger(m68k_context * context, uint32_t address)
 {
 	static char last_cmd[1024];
@@ -1044,7 +1307,7 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 	//Check if this is a user set breakpoint, or just a temporary one
 	bp_def ** this_bp = find_breakpoint(&breakpoints, address);
 	if (*this_bp) {
-		printf("Breakpoint %d hit\n", (*this_bp)->index);
+		printf("68K Breakpoint %d hit\n", (*this_bp)->index);
 	} else {
 		remove_breakpoint(context, address);
 	}
@@ -1054,7 +1317,7 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 	} else if(address > 0xE00000) {
 		pc = ram + (address & 0xFFFF)/2;
 	} else {
-		fprintf(stderr, "Entered debugger at address %X\n", address);
+		fprintf(stderr, "Entered 68K debugger at address %X\n", address);
 		exit(1);
 	}
 	uint16_t * after_pc = m68k_decode(pc, &inst, address);
@@ -1098,7 +1361,7 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 				new_bp->address = value;
 				new_bp->index = bp_index++;
 				breakpoints = new_bp;
-				printf("Breakpoint %d set at %X\n", new_bp->index, value);
+				printf("68K Breakpoint %d set at %X\n", new_bp->index, value);
 				break;
 			case 'a':
 				param = find_param(input_buf);
@@ -1192,6 +1455,29 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 					break;
 				case 'r':
 					vdp_print_reg_explain(gen->vdp);
+					break;
+				}
+				break;
+			}
+			case 'z': {
+				genesis_context * gen = context->system;
+				//Z80 debug commands
+				switch(input_buf[1])
+				{
+				case 'b': 
+					param = find_param(input_buf);
+					if (!param) {
+						fputs("zb command requires a parameter\n", stderr);
+						break;
+					}
+					value = strtol(param, NULL, 16);
+					zinsert_breakpoint(gen->z80, value, (uint8_t *)zdebugger);
+					new_bp = malloc(sizeof(bp_def));
+					new_bp->next = zbreakpoints;
+					new_bp->address = value;
+					new_bp->index = zbp_index++;
+					zbreakpoints = new_bp;
+					printf("Z80 Breakpoint %d set at %X\n", new_bp->index, value);
 					break;
 				}
 				break;

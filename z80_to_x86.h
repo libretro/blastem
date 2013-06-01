@@ -59,6 +59,8 @@ uint8_t * z80_get_native_address(z80_context * context, uint32_t address);
 z80_context * z80_handle_code_write(uint32_t address, z80_context * context);
 void z80_run(z80_context * context);
 void z80_reset(z80_context * context);
+void zinsert_breakpoint(z80_context * context, uint16_t address, uint8_t * bp_handler);
+void zremove_breakpoint(z80_context * context, uint16_t address);
 
 #endif //Z80_TO_X86_H_
 
