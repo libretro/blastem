@@ -95,6 +95,10 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t clock_rate
 		context->operators[i].envelope = MAX_ENVELOPE;
 		context->operators[i].env_phase = PHASE_RELEASE;
 	}
+	//some games seem to expect that the LR flags start out as 1
+	for (int i = 0; i < NUM_CHANNELS; i++) {
+		context->channels[i].lr = 0xC0;
+	}
 	if (!did_tbl_init) {
 		//populate sine table
 		for (int32_t i = 0; i < 512; i++) {
@@ -478,7 +482,7 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 		case REG_DAC:
 			if (context->dac_enable) {
 				context->channels[5].output = (((int16_t)value) - 0x80) << 6;
-				//printf("DAC Write %X(%d)\n", context->channels[5].output, context->channels[5].output);
+				//printf("DAC Write %X(%d)\n", value, context->channels[5].output);
 			}
 			break;
 		case REG_DAC_ENABLE:
@@ -567,13 +571,13 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 				context->channels[channel].pms = value & 0x7;
 				context->channels[channel].ams = value >> 4 & 0x3;
 				context->channels[channel].lr = value & 0xC0;
+				//printf("Write of %X to LR_AMS_PMS reg for channel %d\n", value, channel);
 				break;
 			}
 		}
 	}
 	
 	context->write_cycle = context->current_cycle;
-	context->selected_reg = 0;//TODO: Verify this
 }
 
 uint8_t ym_read_status(ym2612_context * context)
