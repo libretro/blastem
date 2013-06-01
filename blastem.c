@@ -1105,6 +1105,7 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 			case 'n':
 				//TODO: Handle branch instructions
 				zinsert_breakpoint(context, after, (uint8_t *)zdebugger);
+				debugging = 0;
 				break;
 			case 'p':
 				strcpy(format, "%s: %d\n");
