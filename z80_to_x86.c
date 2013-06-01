@@ -1347,6 +1347,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			dst = cmp_irdisp8(dst, 0, CONTEXT, zf_off(ZF_PV), SZ_B);
 			break;
 		case Z80_CC_P:
+			cond = CC_NZ;
 		case Z80_CC_M:
 			dst = cmp_irdisp8(dst, 0, CONTEXT, zf_off(ZF_S), SZ_B);
 			break;
@@ -1489,6 +1490,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			dst = cmp_irdisp8(dst, 0, CONTEXT, zf_off(ZF_PV), SZ_B);
 			break;
 		case Z80_CC_P:
+			cond = CC_NZ;
 		case Z80_CC_M:
 			dst = cmp_irdisp8(dst, 0, CONTEXT, zf_off(ZF_S), SZ_B);
 			break;
@@ -1544,6 +1546,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			dst = cmp_irdisp8(dst, 0, CONTEXT, zf_off(ZF_PV), SZ_B);
 			break;
 		case Z80_CC_P:
+			cond = CC_NZ;
 		case Z80_CC_M:
 			dst = cmp_irdisp8(dst, 0, CONTEXT, zf_off(ZF_S), SZ_B);
 			break;
