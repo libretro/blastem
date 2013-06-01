@@ -36,6 +36,8 @@ void z80_retrans_stub();
 void z80_io_read();
 void z80_io_write();
 void z80_halt();
+void z80_save_context();
+void z80_load_context();
 
 uint8_t z80_size(z80inst * inst)
 {
@@ -1951,6 +1953,61 @@ void z80_reset(z80_context * context)
 	context->iff1 = context->iff2 = 0;
 	context->native_pc = z80_get_native_address_trans(context, 0);
 	context->extra_pc = NULL;
+}
+
+void zinsert_breakpoint(z80_context * context, uint16_t address, uint8_t * bp_handler)
+{
+	static uint8_t * bp_stub = NULL;
+	uint8_t * native = z80_get_native_address_trans(context, address);
+	uint8_t * start_native = native;
+	native = mov_ir(native, address, SCRATCH1, SZ_W);
+	if (!bp_stub) {
+		x86_z80_options * opts = context->options;
+		uint8_t * dst = opts->cur_code;
+		uint8_t * dst_end = opts->code_end;
+		if (dst_end - dst < 128) {
+			size_t size = 1024*1024;
+			dst = alloc_code(&size);
+			opts->code_end = dst_end = dst + size;
+		}
+		bp_stub = dst;
+		native = call(native, bp_stub);
+		
+		//Calculate length of prologue
+		dst = z80_check_cycles_int(dst, address);
+		int check_int_size = dst-bp_stub;
+		dst = bp_stub;
+		
+		//Save context and call breakpoint handler
+		dst = call(dst, (uint8_t *)z80_save_context);
+		dst = push_r(dst, SCRATCH1);
+		dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
+		dst = mov_rr(dst, SCRATCH1, RSI, SZ_W);
+		dst = call(dst, bp_handler);
+		dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
+		//Restore context
+		dst = call(dst, (uint8_t *)z80_load_context);
+		dst = pop_r(dst, SCRATCH1);
+		//do prologue stuff
+		dst = cmp_rr(dst, ZCYCLES, ZLIMIT, SZ_D);
+		uint8_t * jmp_off = dst+1;
+		dst = jcc(dst, CC_NC, dst + 7);
+		dst = call(dst, (uint8_t *)z80_handle_cycle_limit_int);
+		*jmp_off = dst - (jmp_off+1);
+		//jump back to body of translated instruction
+		dst = pop_r(dst, SCRATCH1);
+		dst = add_ir(dst, check_int_size - (native-start_native), SCRATCH1, SZ_Q);
+		dst = jmp_r(dst, SCRATCH1);
+		opts->cur_code = dst;
+	} else {
+		native = call(native, bp_stub);
+	}
+}
+
+void zremove_breakpoint(z80_context * context, uint16_t address)
+{
+	uint8_t * native = z80_get_native_address(context, address);
+	z80_check_cycles_int(native, address);
 }
 
 
