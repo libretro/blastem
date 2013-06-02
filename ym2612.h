@@ -11,7 +11,7 @@ typedef struct {
 	uint32_t phase_inc;
 	uint32_t phase_counter;
 	uint16_t envelope;
-	uint16_t output;
+	int16_t  output;
 	uint16_t total_level;
 	uint16_t sustain_level;
 	uint8_t  rates[4];
