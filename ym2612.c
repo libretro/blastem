@@ -5,6 +5,15 @@
 #include "ym2612.h"
 #include "render.h"
 
+//#define DO_DEBUG_PRINT
+#ifdef DO_DEBUG_PRINT
+#define dfprintf fprintf
+#define dfopen(var, fname, mode) var=fopen(fname, mode)
+#else
+#define dfprintf
+#define dfopen(var, fname, mode)
+#endif
+
 #define BUSY_CYCLES 17
 #define OP_UPDATE_PERIOD 144
 
@@ -84,8 +93,12 @@ uint16_t round_fixed_point(double value, int dec_bits)
 	return value * (1 << dec_bits) + 0.5;
 }
 
+FILE * debug_file = NULL;
+uint32_t first_key_on=0;
+
 void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t clock_rate, uint32_t sample_limit)
 {
+	dfopen(debug_file, "ym_debug.txt", "w");
 	memset(context, 0, sizeof(*context));
 	context->audio_buffer = malloc(sizeof(*context->audio_buffer) * sample_limit*2);
 	context->back_buffer = malloc(sizeof(*context->audio_buffer) * sample_limit*2);
@@ -121,24 +134,26 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t clock_rate
 		}
 		//populate envelope generator rate table, from small base table
 		for (int rate = 0; rate < 64; rate++) {
-			for (int cycle = 0; cycle < 7; cycle++) {
+			for (int cycle = 0; cycle < 8; cycle++) {
 				uint16_t value;
-				if (rate < 3) {
+				if (rate < 2) {
 					value = 0;
 				} else if (rate >= 60) {
 					value = 8;
 				} else if (rate < 8) {
-					value = rate_table_base[((rate & 6) == 6 ? 16 : 8) + cycle];
+					value = rate_table_base[((rate & 6) == 6 ? 16 : 0) + cycle];
 				} else if (rate < 48) {
 					value = rate_table_base[(rate & 0x3) * 8 + cycle];
 				} else {
-					value = rate_table_base[32 + (rate & 0x3) * 8 + cycle] << (rate >> 2);
+					value = rate_table_base[32 + (rate & 0x3) * 8 + cycle] << ((rate - 48) >> 2);
 				}
 				rate_table[rate * 8 + cycle] = value;
 			}
 		}
 	}
 }
+
+#define YM_VOLUME_DIVIDER 1
 
 void ym_run(ym2612_context * context, uint32_t to_cycle)
 {
@@ -186,40 +201,45 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 					}
 				}
 				//Deal with "infinite" rates
-				//It's possible this should be handled in key-on as well
-				if (rate == 63 && operator->env_phase < PHASE_SUSTAIN) {
-					if (operator->env_phase == PHASE_ATTACK) {
-						operator->env_phase = PHASE_DECAY;
-						operator->envelope = operator->total_level;
-					} else {
-						operator->env_phase = PHASE_SUSTAIN;
-						operator->envelope = operator->sustain_level;
-					}
+				//According to Nemesis this should be handled in key-on instead
+				if (rate >= 62 && operator->env_phase == PHASE_ATTACK) {
+					operator->env_phase = PHASE_DECAY;
+					operator->envelope = 0;
 				} else {
 					break;
 				}
 			}
 			uint32_t cycle_shift = rate < 0x30 ? ((0x2F - rate) >> 2) : 0;
+			if (first_key_on) {
+				dfprintf(debug_file, "Operator: %d, env rate: %d (2*%d+%d), env_cyc: %d, cycle_shift: %d, env_cyc & ((1 << cycle_shift) - 1): %d\n", op, rate, operator->rates[operator->env_phase], channel->keycode >> operator->key_scaling,env_cyc, cycle_shift, env_cyc & ((1 << cycle_shift) - 1));
+			}
 			if (!(env_cyc & ((1 << cycle_shift) - 1))) {
 				uint32_t update_cycle = env_cyc >> cycle_shift & 0x7;
 				//envelope value is 10-bits, but it will be used as a 4.8 value
 				uint16_t envelope_inc = rate_table[rate * 8 + update_cycle] << 2;
 				if (operator->env_phase == PHASE_ATTACK) {
 					//this can probably be optimized to a single shift rather than a multiply + shift
+					if (first_key_on) {
+						dfprintf(debug_file, "Changing op %d envelope %d by %d(%d * %d) in attack phase\n", op, operator->envelope, (~operator->envelope * envelope_inc) >> 4, ~operator->envelope, envelope_inc);
+					}
 					operator->envelope += (~operator->envelope * envelope_inc) >> 4;
 					operator->envelope &= MAX_ENVELOPE;
-					if (operator->envelope <= operator->total_level) {
-						operator->envelope = operator->total_level;
+					if (!operator->envelope) {
+						operator->envelope = 0;
 						operator->env_phase = PHASE_DECAY;
 					}
 				} else {
+					if (first_key_on) {
+						dfprintf(debug_file, "Changing op %d envelope %d by %d in %s phase\n", op, operator->envelope, envelope_inc, 
+							operator->env_phase == PHASE_SUSTAIN ? "sustain" : (operator->env_phase == PHASE_DECAY ? "decay": "release"));
+					}
 					operator->envelope += envelope_inc;
 					//clamp to max attenuation value
 					if (operator->envelope > MAX_ENVELOPE) {
 						operator->envelope = MAX_ENVELOPE;
 					}
 					if (operator->env_phase == PHASE_DECAY && operator->envelope >= operator->sustain_level) {
-						operator->envelope = operator->sustain_level;
+						//operator->envelope = operator->sustain_level;
 						operator->env_phase = PHASE_SUSTAIN;
 					}
 				}
@@ -241,6 +261,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			//TODO: Modulate phase by LFO if necessary
 			operator->phase_counter += operator->phase_inc;
 			uint16_t phase = operator->phase_counter >> 10 & 0x3FF;
+			uint16_t mod = 0;
 			switch (op % 4)
 			{
 			case 0://Operator 1
@@ -252,21 +273,21 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				case 0:
 				case 2:
 					//modulate by operator 2
-					phase += context->operators[op+1].output >> 4;
+					mod = context->operators[op+1].output >> 4;
 					break;
 				case 1:
 					//modulate by operator 1+2
-					phase += (context->operators[op-1].output + context->operators[op+1].output) >> 4;
+					mod = (context->operators[op-1].output + context->operators[op+1].output) >> 4;
 					break;
 				case 5:
 					//modulate by operator 1
-					phase += context->operators[op-1].output >> 4;
+					mod = context->operators[op-1].output >> 4;
 				}
 				break;
 			case 2://Operator 2
 				if (chan->algorithm != 1 && chan->algorithm != 2 || chan->algorithm != 7) {
 					//modulate by Operator 1
-					phase += context->operators[op-2].output >> 4;
+					mod = context->operators[op-2].output >> 4;
 				}
 				break;
 			case 3://Operator 4
@@ -276,25 +297,33 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				case 1:
 				case 4:
 					//modulate by operator 3
-					phase += context->operators[op-2].output >> 4;
+					mod = context->operators[op-2].output >> 4;
 					break;
 				case 2:
 					//modulate by operator 1+3
-					phase += (context->operators[op-3].output + context->operators[op-2].output) >> 4;
+					mod = (context->operators[op-3].output + context->operators[op-2].output) >> 4;
 					break;
 				case 3:
 					//modulate by operator 2+3
-					phase += (context->operators[op-1].output + context->operators[op-2].output) >> 4;
+					mod = (context->operators[op-1].output + context->operators[op-2].output) >> 4;
 					break;
 				case 5:
 					//modulate by operator 1
-					phase += context->operators[op-3].output >> 4;
+					mod = context->operators[op-3].output >> 4;
 					break;
 				}
 				break;
 			}
-			//printf("sine_table[%X] + %X = %X, sizeof(pow_table)/sizeof(*pow_table) = %X\n", phase & 0x1FF, operator->envelope, sine_table[phase & 0x1FF] + operator->envelope, sizeof(pow_table)/ sizeof(*pow_table));
-			uint16_t output = pow_table[sine_table[phase & 0x1FF] + operator->envelope];
+			uint16_t env = operator->envelope + operator->total_level;
+			if (env > MAX_ENVELOPE) {
+				env = MAX_ENVELOPE;
+			}
+			if (first_key_on) {
+				dfprintf(debug_file, "op %d, base phase: %d, mod: %d, sine: %d, out: %d\n", op, phase, mod, sine_table[(phase+mod) & 0x1FF], pow_table[sine_table[phase & 0x1FF] + env]);
+			}
+			phase += mod;
+			
+			uint16_t output = pow_table[sine_table[phase & 0x1FF] + env];
 			if (phase & 0x200) {
 				output = -output;
 			}
@@ -312,6 +341,13 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 					}
 					chan->output = output;
 				}
+				int16_t value = context->channels[channel].output & 0x3FE0;
+				if (value & 0x2000) {
+					value |= 0xC000;
+				}
+				if (first_key_on) {
+					dfprintf(debug_file, "channel %d output: %d\n", channel, value / 2);
+				}
 			}
 			//puts("operator update done");
 		}
@@ -324,15 +360,15 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				context->audio_buffer[context->buffer_pos] = 0;
 				context->audio_buffer[context->buffer_pos + 1] = 0;
 				for (int i = 0; i < NUM_CHANNELS; i++) {
-					uint16_t value = context->channels[i].output & 0x3FE0;
+					int16_t value = context->channels[i].output & 0x3FE0;
 					if (value & 0x2000) {
 						value |= 0xC000;
 					}
 					if (context->channels[i].lr & 0x80) {
-						context->audio_buffer[context->buffer_pos] += value / 2;
+						context->audio_buffer[context->buffer_pos] += value / YM_VOLUME_DIVIDER;
 					}
 					if (context->channels[i].lr & 0x40) {
-						context->audio_buffer[context->buffer_pos+1] += value / 2;
+						context->audio_buffer[context->buffer_pos+1] += value / YM_VOLUME_DIVIDER;
 					}
 				}
 				context->buffer_pos += 2;
@@ -442,7 +478,7 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 	if (context->selected_reg < 0x21 || context->selected_reg > 0xB6 || (context->selected_reg < 0x30 && context->selected_part)) {
 		return;
 	}
-	//printf("write to reg %X in part %d\n", context->selected_reg, context->selected_part+1);
+	dfprintf(debug_file, "write of %X to reg %X in part %d\n", value, context->selected_reg, context->selected_part+1);
 	if (context->selected_reg < 0x30) {
 		//Shared regs
 		switch (context->selected_reg)
@@ -467,6 +503,7 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 			if (channel < NUM_CHANNELS) {
 				for (uint8_t op = channel * 4, bit = 0x10; op < (channel + 1) * 4; op++, bit <<= 1) {
 					if (value & bit) {
+						first_key_on = 1;
 						//printf("Key On for operator %d in channel %d\n", op, channel);
 						context->operators[op].phase_counter = 0;
 						context->operators[op].env_phase = PHASE_ATTACK;
@@ -495,22 +532,7 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 		uint8_t op = context->selected_part ? (NUM_OPERATORS/2) : 0;
 		//channel in part
 		if ((context->selected_reg & 0x3) != 0x3) {
-			op += 4 * (context->selected_reg & 0x3);
-			//operator in channel
-			switch (context->selected_reg & 0xC)
-			{
-			case 0:
-				break;
-			case 4:
-				op += 2;
-				break;
-			case 8:
-				op += 1;
-				break;
-			case 0xC:
-				op += 3;
-				break;
-			}
+			op += 4 * (context->selected_reg & 0x3) + ((context->selected_reg & 0xC) / 4);
 			//printf("write targets operator %d (%d of channel %d)\n", op, op % 4, op / 4);
 			ym_operator * operator = context->operators + op;
 			switch (context->selected_reg & 0xF0)
