@@ -261,7 +261,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			//TODO: Modulate phase by LFO if necessary
 			operator->phase_counter += operator->phase_inc;
 			uint16_t phase = operator->phase_counter >> 10 & 0x3FF;
-			uint16_t mod = 0;
+			int16_t mod = 0;
 			switch (op % 4)
 			{
 			case 0://Operator 1
@@ -323,7 +323,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			}
 			phase += mod;
 			
-			uint16_t output = pow_table[sine_table[phase & 0x1FF] + env];
+			int16_t output = pow_table[sine_table[phase & 0x1FF] + env];
 			if (phase & 0x200) {
 				output = -output;
 			}
@@ -341,12 +341,12 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 					}
 					chan->output = output;
 				}
-				int16_t value = context->channels[channel].output & 0x3FE0;
-				if (value & 0x2000) {
-					value |= 0xC000;
-				}
 				if (first_key_on) {
-					dfprintf(debug_file, "channel %d output: %d\n", channel, value / 2);
+					int16_t value = context->channels[channel].output & 0x3FE0;
+					if (value & 0x2000) {
+						value |= 0xC000;
+					}
+					dfprintf(debug_file, "channel %d output: %d\n", channel, value / YM_VOLUME_DIVIDER);
 				}
 			}
 			//puts("operator update done");
