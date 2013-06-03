@@ -1995,7 +1995,10 @@ void zinsert_breakpoint(z80_context * context, uint16_t address, uint8_t * bp_ha
 		dst = cmp_rr(dst, ZCYCLES, ZLIMIT, SZ_D);
 		uint8_t * jmp_off = dst+1;
 		dst = jcc(dst, CC_NC, dst + 7);
-		dst = call(dst, (uint8_t *)z80_handle_cycle_limit_int);
+		dst = pop_r(dst, SCRATCH1);
+		dst = add_ir(dst, check_int_size - (native-start_native), SCRATCH1, SZ_Q);
+		dst = push_r(dst, SCRATCH1);
+		dst = jmp(dst, (uint8_t *)z80_handle_cycle_limit_int);
 		*jmp_off = dst - (jmp_off+1);
 		//jump back to body of translated instruction
 		dst = pop_r(dst, SCRATCH1);
