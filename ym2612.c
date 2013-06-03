@@ -549,7 +549,7 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 				operator->total_level = (value & 0x7F) << 5;
 				break;
 			case REG_ATTACK_KS:
-				operator->key_scaling = value >> 6;
+				operator->key_scaling = 3 - (value >> 6);
 				operator->rates[PHASE_ATTACK] = value & 0x1F;
 				break;
 			case REG_DECAY_AM:
