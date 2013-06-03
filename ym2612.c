@@ -87,6 +87,7 @@ uint16_t rate_table[64*8];
 
 #define MAX_ENVELOPE 0xFFC
 #define YM_DIVIDER 2
+#define CYCLE_NEVER 0xFFFFFFFF
 
 uint16_t round_fixed_point(double value, int dec_bits)
 {
@@ -104,6 +105,7 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t clock_rate
 	context->back_buffer = malloc(sizeof(*context->audio_buffer) * sample_limit*2);
 	context->buffer_inc = (double)sample_rate / (double)(clock_rate/OP_UPDATE_PERIOD);
 	context->sample_limit = sample_limit*2;
+	context->write_cycle = CYCLE_NEVER;
 	for (int i = 0; i < NUM_OPERATORS; i++) {
 		context->operators[i].envelope = MAX_ENVELOPE;
 		context->operators[i].env_phase = PHASE_RELEASE;
@@ -380,6 +382,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 	}
 	if (context->current_cycle >= context->write_cycle + BUSY_CYCLES) {
 		context->status &= 0x7F;
+		context->write_cycle = CYCLE_NEVER;
 	}
 	//printf("Done running YM2612 at cycle %d\n", context->current_cycle, to_cycle);
 }
@@ -600,6 +603,7 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 	}
 	
 	context->write_cycle = context->current_cycle;
+	context->status |= 0x80;
 }
 
 uint8_t ym_read_status(ym2612_context * context)
