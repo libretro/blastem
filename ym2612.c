@@ -155,7 +155,7 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t clock_rate
 	}
 }
 
-#define YM_VOLUME_DIVIDER 1
+#define YM_VOLUME_DIVIDER 2
 
 void ym_run(ym2612_context * context, uint32_t to_cycle)
 {
@@ -267,7 +267,9 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			switch (op % 4)
 			{
 			case 0://Operator 1
-				//TODO: Feedback
+				if (chan->feedback) {
+					mod = operator->output >> (10-chan->feedback);
+				}
 				break;
 			case 1://Operator 3
 				switch(chan->algorithm)
