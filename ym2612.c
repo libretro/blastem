@@ -156,6 +156,7 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t clock_rate
 }
 
 #define YM_VOLUME_DIVIDER 2
+#define YM_MOD_SHIFT 4
 
 void ym_run(ym2612_context * context, uint32_t to_cycle)
 {
@@ -277,21 +278,21 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				case 0:
 				case 2:
 					//modulate by operator 2
-					mod = context->operators[op+1].output >> 4;
+					mod = context->operators[op+1].output >> YM_MOD_SHIFT;
 					break;
 				case 1:
 					//modulate by operator 1+2
-					mod = (context->operators[op-1].output + context->operators[op+1].output) >> 4;
+					mod = (context->operators[op-1].output + context->operators[op+1].output) >> YM_MOD_SHIFT;
 					break;
 				case 5:
 					//modulate by operator 1
-					mod = context->operators[op-1].output >> 4;
+					mod = context->operators[op-1].output >> YM_MOD_SHIFT;
 				}
 				break;
 			case 2://Operator 2
 				if (chan->algorithm != 1 && chan->algorithm != 2 || chan->algorithm != 7) {
 					//modulate by Operator 1
-					mod = context->operators[op-2].output >> 4;
+					mod = context->operators[op-2].output >> YM_MOD_SHIFT;
 				}
 				break;
 			case 3://Operator 4
@@ -301,19 +302,19 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				case 1:
 				case 4:
 					//modulate by operator 3
-					mod = context->operators[op-2].output >> 4;
+					mod = context->operators[op-2].output >> YM_MOD_SHIFT;
 					break;
 				case 2:
 					//modulate by operator 1+3
-					mod = (context->operators[op-3].output + context->operators[op-2].output) >> 4;
+					mod = (context->operators[op-3].output + context->operators[op-2].output) >> YM_MOD_SHIFT;
 					break;
 				case 3:
 					//modulate by operator 2+3
-					mod = (context->operators[op-1].output + context->operators[op-2].output) >> 4;
+					mod = (context->operators[op-1].output + context->operators[op-2].output) >> YM_MOD_SHIFT;
 					break;
 				case 5:
 					//modulate by operator 1
-					mod = context->operators[op-3].output >> 4;
+					mod = context->operators[op-3].output >> YM_MOD_SHIFT;
 					break;
 				}
 				break;
