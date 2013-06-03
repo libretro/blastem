@@ -38,7 +38,11 @@ z80_handle_cycle_limit_int:
 	cmp 116(%rsi), %ebp
 	jb zskip_int
 	mov 112(%rsi), %ebp /* set cycle limit to sync cycle */
+	/* not sure this is really necessary now that IFF1 and IFF2 are geting cleared */
 	movl $0xFFFFFFFF, 116(%rsi) /* make sure the interrupt doesn't fire more than once */
+	/* disable interrupts */
+	movb $0, 96(%rsi)
+	movb $0, 97(%rsi)
 	add $7, %ebp
 	sub $2, %r9w
 	mov %r9w, %r14w
