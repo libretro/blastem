@@ -802,6 +802,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		} else if(inst->reg == Z80_IXH || inst->reg == Z80_IXL || inst->reg == Z80_IYH || inst->reg == Z80_IYL || inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) {
 			cycles += 4;
 		}
+		dst = zcycles(dst, cycles);
 		dst = translate_z80_reg(inst, &dst_op, dst, opts);
 		if (dst_op.mode == MODE_UNUSED) {
 			dst = translate_z80_ea(inst, &dst_op, dst, opts, READ, MODIFY);
@@ -826,6 +827,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		} else if(inst->reg == Z80_IXH || inst->reg == Z80_IXL || inst->reg == Z80_IYH || inst->reg == Z80_IYL || inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) {
 			cycles += 4;
 		}
+		dst = zcycles(dst, cycles);
 		dst = translate_z80_reg(inst, &dst_op, dst, opts);
 		if (dst_op.mode == MODE_UNUSED) {
 			dst = translate_z80_ea(inst, &dst_op, dst, opts, READ, MODIFY);
