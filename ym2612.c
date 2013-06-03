@@ -268,7 +268,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			{
 			case 0://Operator 1
 				if (chan->feedback) {
-					mod = operator->output >> (10-chan->feedback);
+					mod = operator->output >> (9-chan->feedback);
 				}
 				break;
 			case 1://Operator 3
