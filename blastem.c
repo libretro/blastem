@@ -999,6 +999,42 @@ bp_def ** find_breakpoint_idx(bp_def ** cur, uint32_t index)
 	return cur;
 }
 
+typedef struct disp_def {
+	struct disp_def * next;
+	char *            param;
+	uint32_t          index;
+	char              format_char;
+} disp_def;
+
+disp_def * displays = NULL;
+disp_def * zdisplays = NULL;
+uint32_t disp_index = 0;
+uint32_t zdisp_index = 0;
+
+void add_display(disp_def ** head, uint32_t *index, char format_char, char * param)
+{
+	disp_def * ndisp = malloc(sizeof(*ndisp));
+	ndisp->format_char = format_char;
+	ndisp->param = strdup(param);
+	ndisp->next = *head;
+	ndisp->index = *index++;
+	*head = ndisp;
+}
+
+void remove_display(disp_def ** head, uint32_t index)
+{
+	while (*head) {
+		if ((*head)->index == index) {
+			disp_def * del_disp = *head;
+			*head = del_disp->next;
+			free(del_disp->param);
+			free(del_disp);
+		} else {
+			head = &(*head)->next;
+		}
+	}
+}
+
 char * find_param(char * buf)
 {
 	for (; *buf; buf++) {
@@ -1019,6 +1055,182 @@ void strip_nl(char * buf)
 			return;
 		}
 	}
+}
+
+void zdebugger_print(z80_context * context, char format_char, char * param)
+{
+	uint32_t value;
+	char format[8];
+	strcpy(format, "%s: %d\n");
+	switch (format_char)
+	{
+	case 'x':
+	case 'X':
+	case 'd':
+	case 'c':
+		format[5] = format_char;
+		break;
+	case '\0':
+		break;
+	default:
+		fprintf(stderr, "Unrecognized format character: %c\n", format_char);
+	}
+	switch (param[0])
+	{
+	case 'a':
+		if (param[1] == 'f') {
+			if(param[2] == '\'') {
+				value = context->alt_regs[Z80_A] << 8;
+				value |= context->alt_flags[ZF_S] << 7;
+				value |= context->alt_flags[ZF_Z] << 6;
+				value |= context->alt_flags[ZF_H] << 4;
+				value |= context->alt_flags[ZF_PV] << 2;
+				value |= context->alt_flags[ZF_N] << 1;
+				value |= context->alt_flags[ZF_C];
+			} else {
+				value = context->regs[Z80_A] << 8;
+				value |= context->flags[ZF_S] << 7;
+				value |= context->flags[ZF_Z] << 6;
+				value |= context->flags[ZF_H] << 4;
+				value |= context->flags[ZF_PV] << 2;
+				value |= context->flags[ZF_N] << 1;
+				value |= context->flags[ZF_C];
+			}
+		} else if(param[1] == '\'') {
+			value = context->alt_regs[Z80_A];
+		} else {
+			value = context->regs[Z80_A];
+		}
+		break;
+	case 'b':
+		if (param[1] == 'c') {
+			if(param[2] == '\'') {
+				value = context->alt_regs[Z80_B] << 8;
+				value |= context->alt_regs[Z80_C];
+			} else {
+				value = context->regs[Z80_B] << 8;
+				value |= context->regs[Z80_C];
+			}
+		} else if(param[1] == '\'') {
+			value = context->alt_regs[Z80_B];
+		} else {
+			value = context->regs[Z80_B];
+		}
+		break;
+	case 'c':
+		if(param[1] == '\'') {
+			value = context->alt_regs[Z80_C];
+		} else if(param[1] == 'y') {
+			value = context->current_cycle;
+		} else {
+			value = context->regs[Z80_C];
+		}
+		break;
+	case 'd':
+		if (param[1] == 'e') {
+			if(param[2] == '\'') {
+				value = context->alt_regs[Z80_D] << 8;
+				value |= context->alt_regs[Z80_E];
+			} else {
+				value = context->regs[Z80_D] << 8;
+				value |= context->regs[Z80_E];
+			}
+		} else if(param[1] == '\'') {
+			value = context->alt_regs[Z80_D];
+		} else {
+			value = context->regs[Z80_D];
+		}
+		break;
+	case 'e':
+		if(param[1] == '\'') {
+			value = context->alt_regs[Z80_E];
+		} else {
+			value = context->regs[Z80_E];
+		}
+		break;
+	case 'f':
+		if(param[2] == '\'') {
+			value = context->alt_flags[ZF_S] << 7;
+			value |= context->alt_flags[ZF_Z] << 6;
+			value |= context->alt_flags[ZF_H] << 4;
+			value |= context->alt_flags[ZF_PV] << 2;
+			value |= context->alt_flags[ZF_N] << 1;
+			value |= context->alt_flags[ZF_C];
+		} else {
+			value = context->flags[ZF_S] << 7;
+			value |= context->flags[ZF_Z] << 6;
+			value |= context->flags[ZF_H] << 4;
+			value |= context->flags[ZF_PV] << 2;
+			value |= context->flags[ZF_N] << 1;
+			value |= context->flags[ZF_C];
+		}
+		break;
+	case 'h':
+		if (param[1] == 'l') {
+			if(param[2] == '\'') {
+				value = context->alt_regs[Z80_H] << 8;
+				value |= context->alt_regs[Z80_L];
+			} else {
+				value = context->regs[Z80_H] << 8;
+				value |= context->regs[Z80_L];
+			}
+		} else if(param[1] == '\'') {
+			value = context->alt_regs[Z80_H];
+		} else {
+			value = context->regs[Z80_H];
+		}
+		break;
+	case 'l':
+		if(param[1] == '\'') {
+			value = context->alt_regs[Z80_L];
+		} else {
+			value = context->regs[Z80_L];
+		}
+		break;
+	case 'i':
+		if(param[1] == 'x') {
+			if (param[2] == 'h') {
+				value = context->regs[Z80_IXH];
+			} else if(param[2] == 'l') {
+				value = context->regs[Z80_IXL];
+			} else {
+				value = context->regs[Z80_IXH] << 8;
+				value |= context->regs[Z80_IXL];
+			}
+		} else if(param[1] == 'y') {
+			if (param[2] == 'h') {
+				value = context->regs[Z80_IYH];
+			} else if(param[2] == 'l') {
+				value = context->regs[Z80_IYL];
+			} else {
+				value = context->regs[Z80_IYH] << 8;
+				value |= context->regs[Z80_IYL];
+			}
+		} else if(param[1] == 'n') {
+			value = context->int_cycle;
+		} else if(param[1] == 'f' && param[2] == 'f' && param[3] == '1') {
+			value = context->iff1;
+		} else if(param[1] == 'f' && param[2] == 'f' && param[3] == '2') {
+			value = context->iff2;
+		} else {
+			value = context->im;
+		}
+		break;
+	case 's':
+		if (param[1] == 'p') {
+			value = context->sp;
+		}
+		break;
+	case '0':
+		if (param[1] == 'x') {
+			uint16_t p_addr = strtol(param+2, NULL, 16);
+			if (p_addr < 0x4000) {
+				value = z80_ram[p_addr & 0x1FFF];
+			}
+		}
+		break;
+	}
+	printf(format, param, value);
 }
 
 z80_context * zdebugger(z80_context * context, uint16_t address)
@@ -1049,6 +1261,9 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 	} else {
 		fprintf(stderr, "Entered Z80 debugger at address %X\n", address);
 		exit(1);
+	}
+	for (disp_def * cur = zdisplays; cur; cur = cur->next) {
+		zdebugger_print(context, cur->format_char, cur->param);
 	}
 	uint8_t * after_pc = z80_decode(pc, &inst);
 	z80_disasm(&inst, input_buf, address);
@@ -1102,174 +1317,61 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 				puts("Continuing");
 				debugging = 0;
 				break;
+			case 'd':
+				if (input_buf[1] == 'i') {
+					char format_char = 0;
+					for(int i = 2; input_buf[i] != 0 && input_buf[i] != ' '; i++) {
+						if (input_buf[i] == '/') {
+							format_char = input_buf[i+1];
+							break;
+						}
+					}
+					param = find_param(input_buf);
+					if (!param) {
+						fputs("display command requires a parameter\n", stderr);
+						break;
+					}
+					zdebugger_print(context, format_char, param);
+					add_display(&zdisplays, &zdisp_index, format_char, param);
+				} else if (input_buf[1] == 'e' || input_buf[1] == ' ') {
+					param = find_param(input_buf);
+					if (!param) {
+						fputs("delete command requires a parameter\n", stderr);
+						break;
+					}
+					if (param[0] >= '0' && param[0] <= '9') {
+						value = atoi(param);
+						this_bp = find_breakpoint_idx(&zbreakpoints, value);
+						if (!*this_bp) {
+							fprintf(stderr, "Breakpoint %d does not exist\n", value);
+							break;
+						}
+						new_bp = *this_bp;
+						zremove_breakpoint(context, new_bp->address);
+						*this_bp = new_bp->next;
+						free(new_bp);
+					} else if (param[0] == 'd') {
+						param = find_param(param);
+						if (!param) {
+							fputs("delete display command requires a parameter\n", stderr);
+							break;
+						}
+						remove_display(&zdisplays, atoi(param));
+					}
+				}
+				break;
 			case 'n':
 				//TODO: Handle branch instructions
 				zinsert_breakpoint(context, after, (uint8_t *)zdebugger);
 				debugging = 0;
 				break;
 			case 'p':
-				strcpy(format, "%s: %d\n");
-				if (input_buf[1] == '/') {
-					switch (input_buf[2])
-					{
-					case 'x':
-					case 'X':
-					case 'd':
-					case 'c':
-						format[5] = input_buf[2];
-						break;
-					default:
-						fprintf(stderr, "Unrecognized format character: %c\n", input_buf[2]);
-					}
-				}
 				param = find_param(input_buf);
 				if (!param) {
 					fputs("p command requires a parameter\n", stderr);
 					break;
 				}
-				switch (param[0])
-				{
-				case 'a':
-					if (param[1] == 'f') {
-						if(param[2] == '\'') {
-							value = context->alt_regs[Z80_A] << 8;
-							value |= context->alt_flags[ZF_S] << 7;
-							value |= context->alt_flags[ZF_Z] << 6;
-							value |= context->alt_flags[ZF_H] << 4;
-							value |= context->alt_flags[ZF_PV] << 2;
-							value |= context->alt_flags[ZF_N] << 1;
-							value |= context->alt_flags[ZF_C];
-						} else {
-							value = context->regs[Z80_A] << 8;
-							value |= context->flags[ZF_S] << 7;
-							value |= context->flags[ZF_Z] << 6;
-							value |= context->flags[ZF_H] << 4;
-							value |= context->flags[ZF_PV] << 2;
-							value |= context->flags[ZF_N] << 1;
-							value |= context->flags[ZF_C];
-						}
-					} else if(param[1] == '\'') {
-						value = context->alt_regs[Z80_A];
-					} else {
-						value = context->regs[Z80_A];
-					}
-					break;
-				case 'b':
-					if (param[1] == 'c') {
-						if(param[2] == '\'') {
-							value = context->alt_regs[Z80_B] << 8;
-							value |= context->alt_regs[Z80_C];
-						} else {
-							value = context->regs[Z80_B] << 8;
-							value |= context->regs[Z80_C];
-						}
-					} else if(param[1] == '\'') {
-						value = context->alt_regs[Z80_B];
-					} else {
-						value = context->regs[Z80_B];
-					}
-					break;
-				case 'c':
-					if(param[1] == '\'') {
-						value = context->alt_regs[Z80_C];
-					} else {
-						value = context->regs[Z80_C];
-					}
-					break;
-				case 'd':
-					if (param[1] == 'e') {
-						if(param[2] == '\'') {
-							value = context->alt_regs[Z80_D] << 8;
-							value |= context->alt_regs[Z80_E];
-						} else {
-							value = context->regs[Z80_D] << 8;
-							value |= context->regs[Z80_E];
-						}
-					} else if(param[1] == '\'') {
-						value = context->alt_regs[Z80_D];
-					} else {
-						value = context->regs[Z80_D];
-					}
-					break;
-				case 'e':
-					if(param[1] == '\'') {
-						value = context->alt_regs[Z80_E];
-					} else {
-						value = context->regs[Z80_E];
-					}
-					break;
-				case 'f':
-					if(param[2] == '\'') {
-						value = context->alt_flags[ZF_S] << 7;
-						value |= context->alt_flags[ZF_Z] << 6;
-						value |= context->alt_flags[ZF_H] << 4;
-						value |= context->alt_flags[ZF_PV] << 2;
-						value |= context->alt_flags[ZF_N] << 1;
-						value |= context->alt_flags[ZF_C];
-					} else {
-						value = context->flags[ZF_S] << 7;
-						value |= context->flags[ZF_Z] << 6;
-						value |= context->flags[ZF_H] << 4;
-						value |= context->flags[ZF_PV] << 2;
-						value |= context->flags[ZF_N] << 1;
-						value |= context->flags[ZF_C];
-					}
-					break;
-				case 'h':
-					if (param[1] == 'l') {
-						if(param[2] == '\'') {
-							value = context->alt_regs[Z80_H] << 8;
-							value |= context->alt_regs[Z80_L];
-						} else {
-							value = context->regs[Z80_H] << 8;
-							value |= context->regs[Z80_L];
-						}
-					} else if(param[1] == '\'') {
-						value = context->alt_regs[Z80_H];
-					} else {
-						value = context->regs[Z80_H];
-					}
-					break;
-				case 'l':
-					if(param[1] == '\'') {
-						value = context->alt_regs[Z80_L];
-					} else {
-						value = context->regs[Z80_L];
-					}
-					break;
-				case 'i':
-					if(param[1] == 'x') {
-						if (param[2] == 'h') {
-							value = context->regs[Z80_IXH];
-						} else if(param[2] == 'l') {
-							value = context->regs[Z80_IXL];
-						} else {
-							value = context->regs[Z80_IXH] << 8;
-							value |= context->regs[Z80_IXL];
-						}
-					} else if(param[1] == 'y') {
-						if (param[2] == 'h') {
-							value = context->regs[Z80_IYH];
-						} else if(param[2] == 'l') {
-							value = context->regs[Z80_IYL];
-						} else {
-							value = context->regs[Z80_IYH] << 8;
-							value |= context->regs[Z80_IYL];
-						}
-					} else {
-						value = context->im;
-					}
-					break;
-				case '0':
-					if (param[1] == 'x') {
-						uint16_t p_addr = strtol(param+2, NULL, 16);
-						if (p_addr < 0x4000) {
-							value = z80_ram[p_addr & 0x1FFF];
-						}
-					}
-					break;
-				}
-				printf(format, param, value);
+				zdebugger_print(context, input_buf[1] == '/' ? input_buf[2] : 0, param);
 				break;
 			case 'q':
 				puts("Quitting");
