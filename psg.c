@@ -3,12 +3,14 @@
 #include <string.h>
 #include <stdlib.h>
 
-void psg_init(psg_context * context, uint32_t sample_rate, uint32_t clock_rate, uint32_t samples_frame)
+void psg_init(psg_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t samples_frame)
 {
 	memset(context, 0, sizeof(*context));
 	context->audio_buffer = malloc(sizeof(*context->audio_buffer) * samples_frame);
 	context->back_buffer = malloc(sizeof(*context->audio_buffer) * samples_frame);
-	context->buffer_inc = (double)sample_rate / (double)clock_rate;
+	double clock_rate = (double)master_clock / (double)clock_div;
+	context->buffer_inc = ((double)sample_rate / (double)master_clock) * clock_div;
+	context->clock_inc = clock_div;
 	context->samples_frame = samples_frame;
 	for (int i = 0; i < 4; i++) {
 		context->volume[i] = 0xF;
@@ -106,7 +108,7 @@ void psg_run(psg_context * context, uint32_t cycles)
 				render_wait_psg(context);
 			}
 		}
-		context->cycles++;
+		context->cycles += context->clock_inc;
 	}
 }
 

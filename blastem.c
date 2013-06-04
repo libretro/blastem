@@ -12,9 +12,15 @@
 #define CARTRIDGE_WORDS 0x200000
 #define RAM_WORDS 32 * 1024
 #define Z80_RAM_BYTES 8 * 1024
+
+#define MCLKS_NTSC 53693175
+#define MCLKS_PAL  53203395
+
 #define MCLKS_PER_68K 7
+#define MCLKS_PER_YM  MCLKS_PER_68K
 #define MCLKS_PER_Z80 15
 #define MCLKS_PER_PSG (MCLKS_PER_Z80*16)
+
 //TODO: Figure out the exact value for this
 #define CYCLE_NEVER 0xFFFFFFFF
 #define LINES_NTSC 262
@@ -187,6 +193,16 @@ void sync_z80(z80_context * z_context, uint32_t mclks)
 		z_context->current_cycle = mclks / MCLKS_PER_Z80;
 	}
 }
+
+void sync_sound(genesis_context * gen, uint32_t target)
+{
+	//printf("YM | Cycle: %d, bpos: %d, PSG | Cycle: %d, bpos: %d\n", gen->ym->current_cycle, gen->ym->buffer_pos, gen->psg->cycles, gen->psg->buffer_pos * 2);
+	psg_run(gen->psg, target);
+	ym_run(gen->ym, target);
+	
+	//printf("Target: %d, YM bufferpos: %d, PSG bufferpos: %d\n", target, gen->ym->buffer_pos, gen->psg->buffer_pos * 2);
+}
+
 uint32_t frame=0;
 m68k_context * sync_components(m68k_context * context, uint32_t address)
 {
@@ -197,15 +213,15 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	uint32_t mclks = context->current_cycle * MCLKS_PER_68K;
 	sync_z80(z_context, mclks);
 	if (mclks >= mclks_per_frame) {
-		ym_run(gen->ym, context->current_cycle);
-		gen->ym->current_cycle -= mclks_per_frame/MCLKS_PER_68K;
+		sync_sound(gen, mclks);
+		gen->ym->current_cycle -= mclks_per_frame;
+		gen->psg->cycles -= mclks_per_frame;
 		if (gen->ym->write_cycle != CYCLE_NEVER) {
 			gen->ym->write_cycle = gen->ym->write_cycle >= mclks_per_frame/MCLKS_PER_68K ? gen->ym->write_cycle - mclks_per_frame/MCLKS_PER_68K : 0;
 		}
 		//printf("reached frame end | 68K Cycles: %d, MCLK Cycles: %d\n", context->current_cycle, mclks);
 		vdp_run_context(v_context, mclks_per_frame);
-		psg_run(gen->psg, mclks/MCLKS_PER_PSG);
-		gen->psg->cycles -= mclks_per_frame/MCLKS_PER_PSG;
+		
 		if (!headless) {
 			break_on_sync |= wait_render_frame(v_context, frame_limit);
 		}
@@ -234,7 +250,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	} else {
 		//printf("running VDP for %d cycles\n", mclks - v_context->cycles);
 		vdp_run_context(v_context, mclks);
-		psg_run(gen->psg, mclks/MCLKS_PER_PSG);
+		sync_sound(gen, mclks);
 	}
 	if (context->int_ack) {
 		vdp_int_ack(v_context, context->int_ack);
@@ -326,7 +342,7 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 		}
 	} else if (vdp_port < 0x18) {
 		genesis_context * gen = context->system;
-		psg_run(gen->psg, (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_PSG);
+		sync_sound(gen, context->current_cycle * MCLKS_PER_68K);
 		psg_write(gen->psg, value);
 	} else {
 		//TODO: Implement undocumented test register(s)
@@ -358,7 +374,7 @@ z80_context * z80_vdp_port_write(uint16_t vdp_port, z80_context * context, uint8
 			exit(1);
 		}
 	} else if (vdp_port < 0x18) {
-		psg_run(gen->psg, (context->current_cycle * MCLKS_PER_Z80) / MCLKS_PER_PSG);
+		sync_sound(gen, context->current_cycle * MCLKS_PER_Z80);
 		psg_write(gen->psg, value);
 	} else {
 		//TODO: Implement undocumented test register(s)
@@ -494,7 +510,7 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 				z80_ram[location & 0x1FFF] = value;
 				z80_handle_code_write(location & 0x1FFF, gen->z80);
 			} else if (location < 0x6000) {
-				ym_run(gen->ym, context->current_cycle);
+				sync_sound(gen, context->current_cycle * MCLKS_PER_68K);
 				if (location & 1) {
 					ym_data_write(gen->ym, value);
 				} else if(location & 2) {
@@ -594,7 +610,7 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 				z80_ram[location & 0x1FFE] = value >> 8;
 				z80_handle_code_write(location & 0x1FFE, gen->z80);
 			} else if (location < 0x6000) {
-				ym_run(gen->ym, context->current_cycle);
+				sync_sound(gen, context->current_cycle * MCLKS_PER_68K);
 				if (location & 1) {
 					ym_data_write(gen->ym, value >> 8);
 				} else if(location & 2) {
@@ -700,7 +716,7 @@ uint8_t io_read(uint32_t location, m68k_context * context)
 			if (location < 0x4000) {
 				value = z80_ram[location & 0x1FFF];
 			} else if (location < 0x6000) {
-				ym_run(gen->ym, context->current_cycle);
+				sync_sound(gen, context->current_cycle * MCLKS_PER_68K);
 				value = ym_read_status(gen->ym);
 			} else {
 				value = 0xFF;
@@ -767,7 +783,7 @@ uint16_t io_read_w(uint32_t location, m68k_context * context)
 			if (location < 0x4000) {
 				value = z80_ram[location & 0x1FFE];
 			} else if (location < 0x6000) {
-				ym_run(gen->ym, context->current_cycle);
+				sync_sound(gen, context->current_cycle * MCLKS_PER_68K);
 				value = ym_read_status(gen->ym);	
 			} else {
 				value = 0xFF;
@@ -830,7 +846,7 @@ uint16_t io_read_w(uint32_t location, m68k_context * context)
 z80_context * z80_write_ym(uint16_t location, z80_context * context, uint8_t value)
 {
 	genesis_context * gen = context->system;
-	ym_run(gen->ym, (context->current_cycle * MCLKS_PER_Z80) / MCLKS_PER_68K);
+	sync_sound(gen, context->current_cycle * MCLKS_PER_Z80);
 	if (location & 1) {
 		ym_data_write(gen->ym, value);
 	} else if (location & 2) {
@@ -844,7 +860,7 @@ z80_context * z80_write_ym(uint16_t location, z80_context * context, uint8_t val
 uint8_t z80_read_ym(uint16_t location, z80_context * context)
 {
 	genesis_context * gen = context->system;
-	ym_run(gen->ym, (context->current_cycle * MCLKS_PER_Z80) / MCLKS_PER_68K);
+	sync_sound(gen, context->current_cycle * MCLKS_PER_Z80);
 	return ym_read_status(gen->ym);
 }
 
@@ -1810,11 +1826,6 @@ void detect_region()
 	}
 }
 
-#define PSG_CLKS_NTSC (3579545/16)
-#define PSG_CLKS_PAL (3546893/16)
-#define YM_CLKS_NTSC 7670454
-#define YM_CLKS_PAL 7600485
-
 int main(int argc, char ** argv)
 {
 	if (argc < 2) {
@@ -1899,10 +1910,10 @@ int main(int argc, char ** argv)
 	init_vdp_context(&v_context);
 	
 	ym2612_context y_context;
-	ym_init(&y_context, render_sample_rate(), fps == 60 ? YM_CLKS_NTSC : YM_CLKS_PAL, render_audio_buffer());
+	ym_init(&y_context, render_sample_rate(), fps == 60 ? MCLKS_NTSC : MCLKS_PAL, MCLKS_PER_YM, render_audio_buffer());
 	
 	psg_context p_context;
-	psg_init(&p_context, render_sample_rate(), fps == 60 ? PSG_CLKS_NTSC : PSG_CLKS_PAL, render_audio_buffer());
+	psg_init(&p_context, render_sample_rate(), fps == 60 ? MCLKS_NTSC : MCLKS_PAL, MCLKS_PER_PSG, render_audio_buffer());
 	
 	z80_context z_context;
 	x86_z80_options z_opts;
