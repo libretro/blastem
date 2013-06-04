@@ -565,7 +565,7 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 				break;
 			case REG_S_LVL_R_RATE:
 				operator->rates[PHASE_RELEASE] = (value & 0xF) << 1 | 1;
-				operator->sustain_level = value & 0xF0 << 4;
+				operator->sustain_level = (value & 0xF0) << 4;
 				break;
 			}
 		}
