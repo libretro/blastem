@@ -97,13 +97,14 @@ uint16_t round_fixed_point(double value, int dec_bits)
 FILE * debug_file = NULL;
 uint32_t first_key_on=0;
 
-void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t clock_rate, uint32_t sample_limit)
+void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t sample_limit)
 {
 	dfopen(debug_file, "ym_debug.txt", "w");
 	memset(context, 0, sizeof(*context));
 	context->audio_buffer = malloc(sizeof(*context->audio_buffer) * sample_limit*2);
 	context->back_buffer = malloc(sizeof(*context->audio_buffer) * sample_limit*2);
-	context->buffer_inc = (double)sample_rate / (double)(clock_rate/OP_UPDATE_PERIOD);
+	context->buffer_inc = ((double)sample_rate / (double)master_clock) * clock_div * 6;
+	context->clock_inc = clock_div * 6;
 	context->sample_limit = sample_limit*2;
 	context->write_cycle = CYCLE_NEVER;
 	for (int i = 0; i < NUM_OPERATORS; i++) {
@@ -162,7 +163,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 {
 	//printf("Running YM2612 from cycle %d to cycle %d\n", context->current_cycle, to_cycle);
 	//TODO: Fix channel update order OR remap channels in register write
-	for (; context->current_cycle < to_cycle; context->current_cycle += 6) {
+	for (; context->current_cycle < to_cycle; context->current_cycle += context->clock_inc) {
 		//Update timers at beginning of 144 cycle period
 		if (!context->current_op && context->timer_control & BIT_TIMERA_ENABLE) {
 			if (context->timer_a) {
@@ -357,33 +358,33 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			//puts("operator update done");
 		}
 		context->current_op++;
-		if (context->current_op == NUM_OPERATORS) {
-			context->current_op = 0;
-			context->buffer_fraction += context->buffer_inc;
-			if (context->buffer_fraction > 1.0) {
-				context->buffer_fraction -= 1.0;
-				context->audio_buffer[context->buffer_pos] = 0;
-				context->audio_buffer[context->buffer_pos + 1] = 0;
-				for (int i = 0; i < NUM_CHANNELS; i++) {
-					int16_t value = context->channels[i].output & 0x3FE0;
-					if (value & 0x2000) {
-						value |= 0xC000;
-					}
-					if (context->channels[i].lr & 0x80) {
-						context->audio_buffer[context->buffer_pos] += value / YM_VOLUME_DIVIDER;
-					}
-					if (context->channels[i].lr & 0x40) {
-						context->audio_buffer[context->buffer_pos+1] += value / YM_VOLUME_DIVIDER;
-					}
+		context->buffer_fraction += context->buffer_inc;
+		if (context->buffer_fraction > 1.0) {
+			context->buffer_fraction -= 1.0;
+			context->audio_buffer[context->buffer_pos] = 0;
+			context->audio_buffer[context->buffer_pos + 1] = 0;
+			for (int i = 0; i < NUM_CHANNELS; i++) {
+				int16_t value = context->channels[i].output & 0x3FE0;
+				if (value & 0x2000) {
+					value |= 0xC000;
 				}
-				context->buffer_pos += 2;
-				if (context->buffer_pos == context->sample_limit) {
-					render_wait_ym(context);
+				if (context->channels[i].lr & 0x80) {
+					context->audio_buffer[context->buffer_pos] += value / YM_VOLUME_DIVIDER;
+				}
+				if (context->channels[i].lr & 0x40) {
+					context->audio_buffer[context->buffer_pos+1] += value / YM_VOLUME_DIVIDER;
 				}
 			}
+			context->buffer_pos += 2;
+			if (context->buffer_pos == context->sample_limit) {
+				render_wait_ym(context);
+			}
+		}
+		if (context->current_op == NUM_OPERATORS) {
+			context->current_op = 0;
 		}
 	}
-	if (context->current_cycle >= context->write_cycle + BUSY_CYCLES) {
+	if (context->current_cycle >= context->write_cycle + (BUSY_CYCLES * context->clock_inc / 6)) {
 		context->status &= 0x7F;
 		context->write_cycle = CYCLE_NEVER;
 	}

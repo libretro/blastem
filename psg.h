@@ -9,6 +9,7 @@ typedef struct {
 	double   buffer_fraction;
 	double   buffer_inc;
 	uint32_t buffer_pos;
+	uint32_t clock_inc;
 	uint32_t cycles;
 	uint32_t samples_frame;
 	uint16_t lsfr;
@@ -23,7 +24,7 @@ typedef struct {
 } psg_context;
 
 
-void psg_init(psg_context * context, uint32_t sample_rate, uint32_t clock_rate, uint32_t samples_frame);
+void psg_init(psg_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t samples_frame);
 void psg_write(psg_context * context, uint8_t value);
 void psg_run(psg_context * context, uint32_t cycles);
 
