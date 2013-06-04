@@ -157,7 +157,7 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clo
 }
 
 #define YM_VOLUME_DIVIDER 2
-#define YM_MOD_SHIFT 4
+#define YM_MOD_SHIFT 1
 
 void ym_run(ym2612_context * context, uint32_t to_cycle)
 {
