@@ -454,14 +454,26 @@ void ym_update_phase_inc(ym2612_context * context, ym_operator * operator, uint3
 	//printf("ym_update_phase_inc | channel: %d, op: %d\n", chan_num, op);
 	//base frequency
 	ym_channel * channel = context->channels + chan_num;
-	uint32_t inc = channel->fnum;
-	if (!channel->block) {
-		inc >>= 1;
+	uint32_t inc, detune;
+	if (chan_num == 2 && context->ch3_mode && (op < (2*4 + 3))) {
+		inc = context->ch3_supp[op-2*4].fnum;
+		if (!context->ch3_supp[op-2*4].block) {
+			inc >>= 1;
+		} else {
+			inc <<= (context->ch3_supp[op-2*4].block-1);
+		}
+		//detune
+		detune = detune_table[context->ch3_supp[op-2*4].keycode][operator->detune & 0x3];
 	} else {
-		inc <<= (channel->block-1);
-	}
-	//detune
-	uint32_t detune = detune_table[channel->keycode][operator->detune & 0x3];
+		inc = channel->fnum;
+		if (!channel->block) {
+			inc >>= 1;
+		} else {
+			inc <<= (channel->block-1);
+		}
+		//detune
+		detune = detune_table[channel->keycode][operator->detune & 0x3];
+	} 
 	if (operator->detune & 0x40) {
 		inc -= detune;
 		//this can underflow, mask to 17-bit result
@@ -502,9 +514,17 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 		case REG_TIMERB:
 			context->timer_b_load = value;
 			break;
-		case REG_TIME_CTRL:
-			context->timer_control = value;
+		case REG_TIME_CTRL: {
+			context->timer_control = value & 0x3F;
+			uint8_t old_mode = context->ch3_mode;
+			context->ch3_mode = value & 0xC0;
+			if (context->ch3_mode != old_mode) {
+				ym_update_phase_inc(context, context->operators + 2*4, 2*4);
+				ym_update_phase_inc(context, context->operators + 2*4+1, 2*4+1);
+				ym_update_phase_inc(context, context->operators + 2*4+2, 2*4+2);
+			}
 			break;
+		}
 		case REG_KEY_ONOFF: {
 			uint8_t channel = value & 0x7;
 			if (channel < NUM_CHANNELS) {
@@ -591,7 +611,21 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 				context->channels[channel].block_fnum_latch = value;
 				break;
 			}
-			//TODO: Channel 3 special/CSM modes
+			case REG_FNUM_LOW_CH3:
+				if (channel < 3) {
+					context->ch3_supp[channel].block = context->ch3_supp[channel].block_fnum_latch >> 3 & 0x7;
+					context->ch3_supp[channel].fnum = (context->ch3_supp[channel].block_fnum_latch & 0x7) << 8 | value;
+					context->ch3_supp[channel].keycode = context->ch3_supp[channel].block << 2 | fnum_to_keycode[context->ch3_supp[channel].fnum >> 7];
+					if (context->ch3_mode) {
+						ym_update_phase_inc(context, context->operators + 2*4 + channel, 2*4);
+					}
+				}
+				break;
+			case REG_BLOCK_FN_CH3:
+				if (channel < 3) {
+					context->ch3_supp[channel].block_fnum_latch = value;
+				}
+				break;
 			case REG_ALG_FEEDBACK:
 				context->channels[channel].algorithm = value & 0x7;
 				context->channels[channel].feedback = value >> 3 & 0x7;

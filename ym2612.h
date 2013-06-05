@@ -35,6 +35,13 @@ typedef struct {
 } ym_channel;
 
 typedef struct {
+	uint16_t fnum;
+	uint8_t  block;
+	uint8_t  block_fnum_latch;
+	uint8_t  keycode;
+} ym_supp;
+
+typedef struct {
     int16_t     *audio_buffer;
     int16_t     *back_buffer;
     double      buffer_fraction;
@@ -49,6 +56,8 @@ typedef struct {
 	uint16_t    timer_a;
 	uint16_t    timer_a_load;
 	uint16_t    env_counter;
+	ym_supp     ch3_supp[3];
+	uint8_t     ch3_mode;
 	uint8_t     current_op;
 	uint8_t     current_env_op;
 	uint8_t     timer_b;
