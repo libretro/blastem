@@ -1228,7 +1228,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		} else {
 			size = SZ_B;
 			bit = inst->immed;
-			dst = translate_z80_ea(inst, &src_op, dst, opts, READ, DONT_MODIFY);
+			dst = translate_z80_ea(inst, &src_op, dst, opts, READ, MODIFY);
 		}
 		if (inst->reg != Z80_USE_IMMED) {
 			dst = translate_z80_reg(inst, &dst_op, dst, opts);
@@ -1270,7 +1270,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		} else {
 			size = SZ_B;
 			bit = inst->immed;
-			dst = translate_z80_ea(inst, &src_op, dst, opts, READ, DONT_MODIFY);
+			dst = translate_z80_ea(inst, &src_op, dst, opts, READ, MODIFY);
 		}
 		if (inst->reg != Z80_USE_IMMED) {
 			dst = translate_z80_reg(inst, &dst_op, dst, opts);
