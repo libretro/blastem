@@ -817,6 +817,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		}
 		dst = z80_save_reg(dst, inst, opts);
 		dst = z80_save_ea(dst, inst, opts);
+		dst = z80_save_result(dst, inst);
 		break;
 	case Z80_DEC:
 		cycles = 4;
@@ -842,6 +843,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		}
 		dst = z80_save_reg(dst, inst, opts);
 		dst = z80_save_ea(dst, inst, opts);
+		dst = z80_save_result(dst, inst);
 		break;
 	//case Z80_DAA:
 	case Z80_CPL:
