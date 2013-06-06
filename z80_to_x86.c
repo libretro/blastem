@@ -897,7 +897,6 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = mov_rdisp8r(dst, CONTEXT, offsetof(z80_context, sync_cycle), ZLIMIT, SZ_D);
 		break;
 	case Z80_EI:
-		//TODO: Implement interrupt enable latency of 1 instruction afer EI
 		dst = zcycles(dst, 4);
 		dst = mov_rrdisp8(dst, ZCYCLES, CONTEXT, offsetof(z80_context, int_enable_cycle), SZ_D);
 		dst = mov_irdisp8(dst, 1, CONTEXT, offsetof(z80_context, iff1), SZ_B);
