@@ -527,7 +527,10 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 		}
 		case REG_KEY_ONOFF: {
 			uint8_t channel = value & 0x7;
-			if (channel < NUM_CHANNELS) {
+			if (channel != 3 && channel != 7) {
+				if (channel > 2) {
+					channel--;
+				}
 				for (uint8_t op = channel * 4, bit = 0x10; op < (channel + 1) * 4; op++, bit <<= 1) {
 					if (value & bit) {
 						first_key_on = 1;
