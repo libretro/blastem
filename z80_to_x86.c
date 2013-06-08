@@ -1742,7 +1742,7 @@ z80_context * z80_handle_code_write(uint32_t address, z80_context * context)
 		uint8_t * dst = z80_get_native_address(context, inst_start);
 		dprintf("patching code at %p for Z80 instruction at %X due to write to %X\n", dst, inst_start, address);
 		dst = mov_ir(dst, inst_start, SCRATCH1, SZ_D);
-		dst = jmp(dst, (uint8_t *)z80_retrans_stub);
+		dst = call(dst, (uint8_t *)z80_retrans_stub);
 	}
 	return context;
 }
@@ -1769,12 +1769,11 @@ void z80_handle_deferred(z80_context * context)
 	}
 }
 
-void * z80_retranslate_inst(uint32_t address, z80_context * context)
+void * z80_retranslate_inst(uint32_t address, z80_context * context, uint8_t * orig_start)
 {
 	char disbuf[80];
 	x86_z80_options * opts = context->options;
 	uint8_t orig_size = z80_get_native_inst_size(opts, address);
-	uint8_t * orig_start = z80_get_native_address(context, address);
 	uint32_t orig = address;
 	address &= 0x1FFF;
 	uint8_t * dst = opts->cur_code;
