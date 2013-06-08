@@ -20,6 +20,7 @@ extern char * z80_regs[Z80_USE_IMMED];
 #define PRE_IY  0xFD
 #define LD_IR16 0x01
 #define LD_IR8  0x06
+#define LD_RR8  0x40
 #define PUSH    0xC5
 #define POP     0xC1
 
@@ -51,9 +52,33 @@ uint8_t * ld_ir8(uint8_t * dst, uint8_t reg, uint8_t val)
 	return dst;
 }
 
+uint8_t * ld_rr8(uint8_t * dst, uint8_t src, uint8_t dstr)
+{
+	if (src <= Z80_H) {
+		src = (src - Z80_C) ^ 1;
+	} else {
+		src = 0x7;
+	}
+	if (dstr <= Z80_H) {
+		dstr = (dstr - Z80_C) ^ 1;
+	} else {
+		dstr = 0x7;
+	}
+	*(dst++) = LD_RR8 | (dstr << 3) | src;
+	return dst;
+}
+
 uint8_t * ld_amem(uint8_t * dst, uint16_t address)
 {
 	*(dst++) = 0x32;
+	*(dst++) = address & 0xFF;
+	*(dst++) = address >> 8;
+	return dst;
+}
+
+uint8_t * ld_mema(uint8_t * dst, uint16_t address)
+{
+	*(dst++) = 0x3A;
 	*(dst++) = address & 0xFF;
 	*(dst++) = address >> 8;
 	return dst;
@@ -97,7 +122,9 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 {
 	z80inst copy;
 	uint16_t reg_values[Z80_UNUSED];
+	uint8_t reg_usage[Z80_UNUSED];
 	memset(reg_values, 0, sizeof(reg_values));
+	memset(reg_usage, 0, sizeof(reg_usage));
 	uint8_t addr_mode = inst->addr_mode & 0x1F;
 	uint8_t word_sized = ((inst->reg != Z80_USE_IMMED && inst->reg != Z80_UNUSED && inst->reg >= Z80_BC) || (addr_mode == Z80_REG && inst->ea_reg >= Z80_BC)) ? 1 : 0;
 
@@ -124,14 +151,18 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 	switch(addr_mode)
 	{
 	case Z80_REG:
+		reg_usage[inst->ea_reg] = 1;
 		if (word_sized) {
 			reg_values[inst->ea_reg] = rand() % 65536;
 			reg_values[z80_high_reg(inst->ea_reg)] = reg_values[inst->ea_reg] >> 8;
+			reg_usage[z80_high_reg(inst->ea_reg)] = 1;
 			reg_values[z80_low_reg(inst->ea_reg)] = reg_values[inst->ea_reg] & 0xFF;
+			reg_usage[z80_low_reg(inst->ea_reg)] = 1;
 		} else {
 			reg_values[inst->ea_reg] = rand() % 256;
 			uint8_t word_reg = z80_word_reg(inst->ea_reg);
 			if (word_reg != Z80_UNUSED) {
+				reg_usage[word_reg] = 1;
 				reg_values[word_reg] = (reg_values[z80_high_reg(word_reg)] << 8) | (reg_values[z80_low_reg(word_reg)] & 0xFF);
 			}
 		}
@@ -139,8 +170,11 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 	case Z80_REG_INDIRECT:
 		is_mem = 1;
 		reg_values[inst->ea_reg] = 0x1000 + (rand() % 256 - 128);
+		reg_usage[inst->ea_reg] = 1;
 		address = reg_values[inst->ea_reg];
+		reg_usage[z80_high_reg(inst->ea_reg)] = 1;
 		reg_values[z80_high_reg(inst->ea_reg)] = reg_values[inst->ea_reg] >> 8;
+		reg_usage[z80_low_reg(inst->ea_reg)] = 1;
 		reg_values[z80_low_reg(inst->ea_reg)] = reg_values[inst->ea_reg] & 0xFF;
 		break;
 	case Z80_IMMED_INDIRECT:
@@ -149,8 +183,11 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 		break;
 	case Z80_IX_DISPLACE:
 		reg_values[Z80_IX] = 0x1000;
+		reg_usage[Z80_IX] = 1;
 		reg_values[Z80_IXH] = 0x10;
+		reg_usage[Z80_IXH] = 1;
 		reg_values[Z80_IXL] = 0;
+		reg_usage[Z80_IXL] = 1;
 		is_mem = 1;
 		offset = inst->ea_reg;
 		if (offset > 0x7F) {
@@ -160,8 +197,11 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 		break;
 	case Z80_IY_DISPLACE:
 		reg_values[Z80_IY] = 0x1000;
+		reg_usage[Z80_IY] = 1;
 		reg_values[Z80_IYH] = 0x10;
+		reg_usage[Z80_IYH] = 1;
 		reg_values[Z80_IYL] = 0;
+		reg_usage[Z80_IYL] = 1;
 		is_mem = 1;
 		offset = inst->ea_reg;
 		if (offset > 0x7F) {
@@ -171,14 +211,18 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 		break;
 	}
 	if (inst->reg != Z80_UNUSED && inst->reg != Z80_USE_IMMED) {
+		reg_usage[inst->reg] = 1;
 		if (word_sized) {
 			reg_values[inst->reg] = rand() % 65536;
+			reg_usage[z80_high_reg(inst->reg)] = 1;
 			reg_values[z80_high_reg(inst->reg)] = reg_values[inst->reg] >> 8;
+			reg_usage[z80_low_reg(inst->reg)] = 1;
 			reg_values[z80_low_reg(inst->reg)] = reg_values[inst->reg] & 0xFF;
 		} else {
 			reg_values[inst->reg] = rand() % 255;
 			uint8_t word_reg = z80_word_reg(inst->reg);
 			if (word_reg != Z80_UNUSED) {
+				reg_usage[word_reg] = 1;
 				reg_values[word_reg] = (reg_values[z80_high_reg(word_reg)] << 8) | (reg_values[z80_low_reg(word_reg)] & 0xFF);
 			}
 		}
@@ -190,7 +234,7 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 		}
 	}
 	char disbuf[80];
-	z80_disasm(inst, disbuf);
+	z80_disasm(inst, disbuf, 0);
 	puts(disbuf);
 	char pathbuf[128];
 	sprintf(pathbuf, "ztests/%s", z80_mnemonics[inst->op]);
@@ -258,6 +302,23 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 			*cur = '_';
 		}
 	}
+	//save memory result
+	if (is_mem) {
+		if (reg_usage[Z80_A]) {
+			cur = push(cur, Z80_AF);
+		}
+		cur = ld_mema(cur, address);
+		if (reg_usage[Z80_A]) {
+			for (int reg = 0; reg < Z80_I; reg++) {
+				if (!reg_usage[reg]) {
+					cur = ld_rr8(cur, Z80_A, reg);
+					break;
+				}
+			}
+			cur = pop(cur, Z80_AF);
+		}
+	}
+	
 	//halt
 	*(cur++) = 0x76;
 	sprintf(pathbuf + strlen(pathbuf), "/%s.bin", disbuf);
