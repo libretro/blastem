@@ -1132,6 +1132,8 @@ void zdebugger_print(z80_context * context, char format_char, char * param)
 			}
 		} else if(param[1] == '\'') {
 			value = context->alt_regs[Z80_B];
+		} else if(param[1] == 'a') {
+			value = context->bank_reg << 15;
 		} else {
 			value = context->regs[Z80_B];
 		}
@@ -1245,6 +1247,19 @@ void zdebugger_print(z80_context * context, char format_char, char * param)
 			uint16_t p_addr = strtol(param+2, NULL, 16);
 			if (p_addr < 0x4000) {
 				value = z80_ram[p_addr & 0x1FFF];
+			} else if(p_addr >= 0x8000) {
+				uint32_t v_addr = context->bank_reg << 15;
+				v_addr += p_addr & 0x7FFF;
+				if (v_addr < 0x400000) {
+					value = cart[v_addr/2];
+				} else if(v_addr > 0xE00000) {
+					value = ram[(v_addr & 0xFFFF)/2];
+				}
+				if (v_addr & 1) {
+					value &= 0xFF;
+				} else {
+					value >>= 8;
+				}
 			}
 		}
 		break;
@@ -1316,6 +1331,7 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 				}
 				value = strtol(param, NULL, 16);
 				zinsert_breakpoint(context, value, (uint8_t *)zdebugger);
+				debugging = 0;
 				break;
 			case 'b':
 				param = find_param(input_buf);
@@ -1380,7 +1396,24 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 				}
 				break;
 			case 'n':
-				//TODO: Handle branch instructions
+				//TODO: Handle conditional branch instructions
+				if (inst.op == Z80_JP) {
+					if (inst.addr_mode == Z80_IMMED) {
+						after = inst.immed;
+					} else if (inst.ea_reg == Z80_HL) {
+						after = context->regs[Z80_H] << 8 | context->regs[Z80_L];
+					} else if (inst.ea_reg == Z80_IX) {
+						after = context->regs[Z80_IXH] << 8 | context->regs[Z80_IXL];
+					} else if (inst.ea_reg == Z80_IY) {
+						after = context->regs[Z80_IYH] << 8 | context->regs[Z80_IYL];
+					}
+				} else if(inst.op == Z80_JR) {
+					after += inst.immed;
+				} else if(inst.op == Z80_RET) {
+					if (context->sp < 0x4000) {
+						after = z80_ram[context->sp & 0x1FFF] | z80_ram[(context->sp+1) & 0x1FFF] << 8;
+					}
+				}
 				zinsert_breakpoint(context, after, (uint8_t *)zdebugger);
 				debugging = 0;
 				break;
