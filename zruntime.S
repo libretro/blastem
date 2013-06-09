@@ -250,7 +250,7 @@ z80_retrans_stub:
 	pop %r14
 	call z80_save_context
 	/* adjust for mov and call instructions */
-	sub $10, %r14
+	sub $11, %r14
 	mov %r13d, %edi
 	mov %r14, %rdx
 	push %rsi
