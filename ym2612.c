@@ -263,8 +263,8 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			ym_operator * operator = context->operators + op;
 			ym_channel * chan = context->channels + channel;
 			//TODO: Modulate phase by LFO if necessary
-			operator->phase_counter += operator->phase_inc;
 			uint16_t phase = operator->phase_counter >> 10 & 0x3FF;
+			operator->phase_counter += operator->phase_inc;
 			int16_t mod = 0;
 			switch (op % 4)
 			{
@@ -339,7 +339,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				if (chan->algorithm < 4) {
 					chan->output = operator->output;
 				} else if(chan->algorithm == 4) {
-					chan->output = operator->output + context->operators[channel * 4 + 1].output;
+					chan->output = operator->output + context->operators[channel * 4 + 2].output;
 				} else {
 					output = 0;
 					for (uint32_t op = ((chan->algorithm == 7) ? 0 : 1) + channel*4; op < (channel+1)*4; op++) {
@@ -359,29 +359,29 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 		}
 		context->current_op++;
 		context->buffer_fraction += context->buffer_inc;
-		if (context->buffer_fraction > 1.0) {
-			context->buffer_fraction -= 1.0;
-			context->audio_buffer[context->buffer_pos] = 0;
-			context->audio_buffer[context->buffer_pos + 1] = 0;
-			for (int i = 0; i < NUM_CHANNELS; i++) {
-				int16_t value = context->channels[i].output & 0x3FE0;
-				if (value & 0x2000) {
-					value |= 0xC000;
-				}
-				if (context->channels[i].lr & 0x80) {
-					context->audio_buffer[context->buffer_pos] += value / YM_VOLUME_DIVIDER;
-				}
-				if (context->channels[i].lr & 0x40) {
-					context->audio_buffer[context->buffer_pos+1] += value / YM_VOLUME_DIVIDER;
-				}
-			}
-			context->buffer_pos += 2;
-			if (context->buffer_pos == context->sample_limit) {
-				render_wait_ym(context);
-			}
-		}
 		if (context->current_op == NUM_OPERATORS) {
 			context->current_op = 0;
+			if (context->buffer_fraction > 1.0) {
+				context->buffer_fraction -= 1.0;
+				context->audio_buffer[context->buffer_pos] = 0;
+				context->audio_buffer[context->buffer_pos + 1] = 0;
+				for (int i = 0; i < NUM_CHANNELS; i++) {
+					int16_t value = context->channels[i].output & 0x3FE0;
+					if (value & 0x2000) {
+						value |= 0xC000;
+					}
+					if (context->channels[i].lr & 0x80) {
+						context->audio_buffer[context->buffer_pos] += value / YM_VOLUME_DIVIDER;
+					}
+					if (context->channels[i].lr & 0x40) {
+						context->audio_buffer[context->buffer_pos+1] += value / YM_VOLUME_DIVIDER;
+					}
+				}
+				context->buffer_pos += 2;
+				if (context->buffer_pos == context->sample_limit) {
+					render_wait_ym(context);
+				}
+			}
 		}
 	}
 	if (context->current_cycle >= context->write_cycle + (BUSY_CYCLES * context->clock_inc / 6)) {
@@ -549,7 +549,7 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 		case REG_DAC:
 			if (context->dac_enable) {
 				context->channels[5].output = (((int16_t)value) - 0x80) << 6;
-				//printf("DAC Write %X(%d)\n", value, context->channels[5].output);
+				//printf("DAC Write %X(%d) @ %d\n", value, context->channels[5].output, context->current_cycle);
 			}
 			break;
 		case REG_DAC_ENABLE:
