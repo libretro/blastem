@@ -1844,7 +1844,9 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 	if (address < 0x4000) {
 		encoded = context->mem_pointers[0] + (address & 0x1FFF);
 	} else if(address >= 0x8000 && context->mem_pointers[1]) {
-		encoded = context->mem_pointers[1] + (address & 0x7FFF);
+		printf("attempt to translate Z80 code from banked area at address %X\n", address);
+		exit(1);
+		//encoded = context->mem_pointers[1] + (address & 0x7FFF);
 	}
 	while (encoded != NULL)
 	{
