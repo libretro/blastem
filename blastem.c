@@ -518,6 +518,9 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 				} else {
 					ym_address_write_part1(gen->ym, value);
 				}
+			} else {
+				printf("68K write to unhandled Z80 address %X\n", location);
+				exit(1);
 			}
 		}
 	} else {
@@ -1429,6 +1432,23 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 				puts("Quitting");
 				exit(0);
 				break;
+			case 's': {
+				param = find_param(input_buf);
+				if (!param) {
+					fputs("s command requires a file name\n", stderr);
+					break;
+				}
+				FILE * f = fopen(param, "wb");
+				if (f) {
+					if(fwrite(z80_ram, 1, sizeof(z80_ram), f) != sizeof(z80_ram)) {
+						fputs("Error writing file\n", stderr);
+					}
+					fclose(f);
+				} else {
+					fprintf(stderr, "Could not open %s for writing\n", param);
+				}
+				break;
+			}
 			default:
 				fprintf(stderr, "Unrecognized debugger command %s\n", input_buf);
 				break;
