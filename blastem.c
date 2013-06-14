@@ -988,6 +988,174 @@ m68k_context * write_bank_reg_b(uint32_t address, m68k_context * context, uint8_
 	return context;
 }
 
+enum {
+	BIND_NONE,
+	BIND_GAMEPAD1,
+	BIND_GAMEPAD2,
+	BIND_UI
+};
+
+typedef enum {
+	UI_DEBUG_MODE_INC,
+	UI_DEBUG_PAL_INC,
+	UI_ENTER_DEBUGGER
+} ui_action;
+
+typedef struct {
+	uint8_t bind_type;
+	uint8_t subtype_a;
+	uint8_t subtype_b;
+	uint8_t value;
+} keybinding;
+
+keybinding * bindings[256];
+
+void bind_key(int keycode, uint8_t bind_type, uint8_t subtype_a, uint8_t subtype_b, uint8_t value)
+{
+	int bucket = keycode >> 8 & 0xFF;
+	if (!bindings[bucket]) {
+		bindings[bucket] = malloc(sizeof(keybinding) * 256);
+		memset(bindings[bucket], 0, sizeof(keybinding) * 256);
+	}
+	int idx = keycode & 0xFF;
+	bindings[bucket][idx].bind_type = bind_type;
+	bindings[bucket][idx].subtype_a = subtype_a;
+	bindings[bucket][idx].subtype_b = subtype_b;
+	bindings[bucket][idx].value = value;
+}
+
+#define GAMEPAD_BUTTON(PRI_SLOT, SEC_SLOT, VALUE)  (PRI_SLOT << 12 | SEC_SLOT << 8 | VALUE)
+
+#define DPAD_UP      GAMEPAD_BUTTON(GAMEPAD_TH0, GAMEPAD_TH1, 0x01)
+#define BUTTON_Z     GAMEPAD_BUTTON(GAMEPAD_EXTRA, GAMEPAD_NONE, 0x01)
+#define DPAD_DOWN    GAMEPAD_BUTTON(GAMEPAD_TH0, GAMEPAD_TH1, 0x02)
+#define BUTTON_Y     GAMEPAD_BUTTON(GAMEPAD_EXTRA, GAMEPAD_NONE, 0x02)
+#define DPAD_LEFT    GAMEPAD_BUTTON(GAMEPAD_TH1, GAMEPAD_NONE, 0x04)
+#define BUTTON_X     GAMEPAD_BUTTON(GAMEPAD_EXTRA, GAMEPAD_NONE, 0x04)
+#define DPAD_RIGHT   GAMEPAD_BUTTON(GAMEPAD_TH1, GAMEPAD_NONE, 0x08)
+#define BUTTON_MODE  GAMEPAD_BUTTON(GAMEPAD_EXTRA, GAMEPAD_NONE, 0x08)
+#define BUTTON_A     GAMEPAD_BUTTON(GAMEPAD_TH0, GAMEPAD_NONE, 0x10)
+#define BUTTON_B     GAMEPAD_BUTTON(GAMEPAD_TH1, GAMEPAD_NONE, 0x10)
+#define BUTTON_START GAMEPAD_BUTTON(GAMEPAD_TH0, GAMEPAD_NONE, 0x20)
+#define BUTTON_C     GAMEPAD_BUTTON(GAMEPAD_TH1, GAMEPAD_NONE, 0x20)
+
+void bind_gamepad(int keycode, int gamepadnum, int button)
+{
+	
+	if (gamepadnum < 1 || gamepadnum > 2) {
+		return;
+	}
+	uint8_t bind_type = gamepadnum - 1 + BIND_GAMEPAD1;
+	bind_key(keycode, bind_type, button >> 12, button >> 8 & 0xF, button & 0xFF);
+}
+
+void bind_ui(int keycode, ui_action action)
+{
+	bind_key(keycode, BIND_UI, action, 0, 0);
+}
+
+void handle_keydown(int keycode)
+{
+	int bucket = keycode >> 8 & 0xFF;
+	if (!bindings[bucket]) {
+		return;
+	}
+	int idx = keycode & 0xFF;
+	keybinding * binding = bindings[bucket] + idx;
+	switch(binding->bind_type)
+	{
+	case BIND_GAMEPAD1:
+		if (binding->subtype_a <= GAMEPAD_EXTRA) {
+			gamepad_1.input[binding->subtype_a] |= binding->value;
+		}
+		if (binding->subtype_b <= GAMEPAD_EXTRA) {
+			gamepad_1.input[binding->subtype_b] |= binding->value;
+		}
+		break;
+	case BIND_GAMEPAD2:
+		if (binding->subtype_a <= GAMEPAD_EXTRA) {
+			gamepad_2.input[binding->subtype_a] |= binding->value;
+		}
+		if (binding->subtype_b <= GAMEPAD_EXTRA) {
+			gamepad_2.input[binding->subtype_b] |= binding->value;
+		}
+		break;
+	}
+}
+
+uint8_t ui_debug_mode = 0;
+uint8_t ui_debug_pal = 0;
+
+void handle_keyup(int keycode)
+{
+	int bucket = keycode >> 8 & 0xFF;
+	if (!bindings[bucket]) {
+		return;
+	}
+	int idx = keycode & 0xFF;
+	keybinding * binding = bindings[bucket] + idx;
+	switch(binding->bind_type)
+	{
+	case BIND_GAMEPAD1:
+		if (binding->subtype_a <= GAMEPAD_EXTRA) {
+			gamepad_1.input[binding->subtype_a] &= ~binding->value;
+		}
+		if (binding->subtype_b <= GAMEPAD_EXTRA) {
+			gamepad_1.input[binding->subtype_b] &= ~binding->value;
+		}
+		break;
+	case BIND_GAMEPAD2:
+		if (binding->subtype_a <= GAMEPAD_EXTRA) {
+			gamepad_2.input[binding->subtype_a] &= ~binding->value;
+		}
+		if (binding->subtype_b <= GAMEPAD_EXTRA) {
+			gamepad_2.input[binding->subtype_b] &= ~binding->value;
+		}
+		break;
+	case BIND_UI:
+		switch (binding->subtype_a)
+		{
+		case UI_DEBUG_MODE_INC:
+			ui_debug_mode++;
+			if (ui_debug_mode == 4) {
+				ui_debug_mode = 0;
+			}
+			render_debug_mode(ui_debug_mode);
+			break;
+		case UI_DEBUG_PAL_INC:
+			ui_debug_pal++;
+			if (ui_debug_pal == 4) {
+				ui_debug_pal = 0;
+			}
+			render_debug_pal(ui_debug_pal);
+			break;
+		case UI_ENTER_DEBUGGER:
+			break_on_sync = 1;
+			break;
+		}
+		break;
+	}
+}
+
+void set_keybindings()
+{
+	bind_gamepad(RENDERKEY_UP, 1, DPAD_UP);
+	bind_gamepad(RENDERKEY_DOWN, 1, DPAD_DOWN);
+	bind_gamepad(RENDERKEY_LEFT, 1, DPAD_LEFT);
+	bind_gamepad(RENDERKEY_RIGHT, 1, DPAD_RIGHT);
+	bind_gamepad('a', 1, BUTTON_A);
+	bind_gamepad('s', 1, BUTTON_B);
+	bind_gamepad('d', 1, BUTTON_C);
+	bind_gamepad('q', 1, BUTTON_X);
+	bind_gamepad('w', 1, BUTTON_Y);
+	bind_gamepad('e', 1, BUTTON_Z);
+	bind_gamepad('\r', 1, BUTTON_START);
+	bind_gamepad('f', 1, BUTTON_MODE);
+	bind_ui('[', UI_DEBUG_MODE_INC);
+	bind_ui(']', UI_DEBUG_PAL_INC);
+	bind_ui('u', UI_ENTER_DEBUGGER);
+}
+
 typedef struct bp_def {
 	struct bp_def * next;
 	uint32_t address;
@@ -2000,6 +2168,7 @@ int main(int argc, char ** argv)
 	if (i < 0) {
 		strcpy(sram_filename + fname_size, ".sram");
 	}
+	set_keybindings();
 	
 	init_run_cpu(&gen, debug, address_log);
 	return 0;
