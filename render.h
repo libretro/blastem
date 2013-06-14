@@ -1,5 +1,5 @@
-#ifndef RENDER_SDL_H_
-#define RENDER_SDL_H_
+#ifndef RENDER_H_
+#define RENDER_H_
 
 #include "vdp.h"
 #include "psg.h"
@@ -13,6 +13,15 @@ int wait_render_frame(vdp_context * context, int frame_limit);
 void render_fps(uint32_t fps);
 uint32_t render_audio_buffer();
 uint32_t render_sample_rate();
+void render_debug_mode(uint8_t mode);
+void render_debug_pal(uint8_t pal);
 
-#endif //RENDER_SDL_H_
+//TODO: Throw an ifdef in here once there's more than one renderer
+#include <SDL.h>
+#define RENDERKEY_UP    SDLK_UP
+#define RENDERKEY_DOWN  SDLK_DOWN
+#define RENDERKEY_LEFT  SDLK_LEFT
+#define RENDERKEY_RIGHT SDLK_RIGHT
+
+#endif //RENDER_H_
 
