@@ -618,6 +618,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = zcycles(dst, cycles);
 		dst = translate_z80_reg(inst, &dst_op, dst, opts);
 		dst = translate_z80_ea(inst, &src_op, dst, opts, READ, DONT_MODIFY);
+		dst = bt_irdisp8(dst, 0, CONTEXT, zf_off(ZF_C), SZ_B);
 		if (src_op.mode == MODE_REG_DIRECT) {
 			dst = adc_rr(dst, src_op.base, dst_op.base, z80_size(inst));
 		} else {
@@ -668,6 +669,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = zcycles(dst, cycles);
 		dst = translate_z80_reg(inst, &dst_op, dst, opts);
 		dst = translate_z80_ea(inst, &src_op, dst, opts, READ, DONT_MODIFY);
+		dst = bt_irdisp8(dst, 0, CONTEXT, zf_off(ZF_C), SZ_B);
 		if (src_op.mode == MODE_REG_DIRECT) {
 			dst = sbb_rr(dst, src_op.base, dst_op.base, z80_size(inst));
 		} else {
