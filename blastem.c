@@ -520,6 +520,13 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 				} else {
 					ym_address_write_part1(gen->ym, value);
 				}
+			} else if (location == 0x6000) {
+				gen->z80->bank_reg = (gen->z80->bank_reg >> 1 | value << 8) & 0x1FF;
+				if (gen->z80->bank_reg < 0x80) {
+					gen->z80->mem_pointers[1] = (gen->z80->bank_reg << 15) + ((char *)gen->z80->mem_pointers[2]);
+				} else {
+					gen->z80->mem_pointers[1] = NULL;
+				}
 			} else {
 				printf("68K write to unhandled Z80 address %X\n", location);
 				exit(1);
@@ -660,6 +667,9 @@ uint8_t io_read(uint32_t location, m68k_context * context)
 				break;
 			case 0x5:
 				value = gamepad_2.control;
+				break;
+			case 0x6://PORT C control
+				value = 0;
 				break;
 			default:
 				value = 0xFF;
