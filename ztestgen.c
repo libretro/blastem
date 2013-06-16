@@ -21,6 +21,7 @@ extern char * z80_regs[Z80_USE_IMMED];
 #define LD_IR16 0x01
 #define LD_IR8  0x06
 #define LD_RR8  0x40
+#define AND_R   0xA0
 #define PUSH    0xC5
 #define POP     0xC1
 
@@ -114,6 +115,25 @@ uint8_t * pop(uint8_t * dst, uint8_t reg)
 			reg--;
 		}
 		*(dst++) = POP | ((reg - Z80_BC) << 4);
+		return dst;
+	}
+}
+
+uint8_t * and_r(uint8_t * dst, uint8_t reg)
+{
+	if (reg == Z80_IXH || reg == Z80_IXL) {
+		*(dst++) = PRE_IX;
+		return and_r(dst, reg - (Z80_IXL - Z80_L));
+	} else if(reg == Z80_IYH || reg == Z80_IYL) {
+		*(dst++) = PRE_IY;
+		return and_r(dst, reg - (Z80_IYL - Z80_L));
+	} else {
+		if (reg == Z80_A) {
+			reg = 7;
+		} else {
+			reg = (reg - Z80_C) ^ 1;
+		}
+		*(dst++) = AND_R | reg;
 		return dst;
 	}
 }
@@ -251,50 +271,71 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 	*(cur++) = 0xF3;
 	//setup SP
 	cur = ld_ir16(cur, Z80_SP, 0x2000);
-	//setup memory
-	if (is_mem) {
-		mem_val = rand() % 256;
-		cur = ld_ir8(cur, Z80_A, mem_val);
-		cur = ld_amem(cur, address);
-	}
-	//setup AF
-	cur = ld_ir16(cur, Z80_BC, reg_values[Z80_A] << 8);
-	cur = push(cur, Z80_BC);
-	cur = pop(cur, Z80_AF);
-	
-	//setup other regs
-	for (uint8_t reg = Z80_BC; reg <= Z80_IY; reg++) {
-		if (reg != Z80_AF && reg != Z80_SP) {
-			cur = ld_ir16(cur, reg, reg_values[reg]);
+	for (int i = 0; i < 2; i ++) {
+		//setup memory
+		if (is_mem) {
+			mem_val = rand() % 256;
+			cur = ld_ir8(cur, Z80_A, mem_val);
+			cur = ld_amem(cur, address);
 		}
-	}
+		//setup AF
+		cur = ld_ir16(cur, Z80_BC, reg_values[Z80_A] << 8 | (i ? 0xFF : 0));
+		cur = push(cur, Z80_BC);
+		cur = pop(cur, Z80_AF);
 	
-	//copy instruction
-	if (instlen == 3) {
-		memcpy(cur, instbuf, 2);
-		cur += 2;
-	} else {
-		memcpy(cur, instbuf, instlen);
-		cur += instlen;
-	}
+		//setup other regs
+		for (uint8_t reg = Z80_BC; reg <= Z80_IY; reg++) {
+			if (reg != Z80_AF && reg != Z80_SP) {
+				cur = ld_ir16(cur, reg, reg_values[reg]);
+			}
+		}
 	
-	//immed/displacement byte(s)
-	if (addr_mode == Z80_IX_DISPLACE || addr_mode == Z80_IY_DISPLACE) {
-		*(cur++) = inst->ea_reg;
-	} else if (addr_mode == Z80_IMMED & inst->op != Z80_IM) {
-		*(cur++) = inst->immed & 0xFF;
-		if (word_sized) {
+		//copy instruction
+		if (instlen == 3) {
+			memcpy(cur, instbuf, 2);
+			cur += 2;
+		} else {
+			memcpy(cur, instbuf, instlen);
+			cur += instlen;
+		}
+	
+		//immed/displacement byte(s)
+		if (addr_mode == Z80_IX_DISPLACE || addr_mode == Z80_IY_DISPLACE) {
+			*(cur++) = inst->ea_reg;
+		} else if (addr_mode == Z80_IMMED & inst->op != Z80_IM) {
+			*(cur++) = inst->immed & 0xFF;
+			if (word_sized) {
+				*(cur++) = inst->immed >> 8;
+			}
+		} else if (addr_mode == Z80_IMMED_INDIRECT) {
+			*(cur++) = inst->immed & 0xFF;
 			*(cur++) = inst->immed >> 8;
 		}
-	} else if (addr_mode == Z80_IMMED_INDIRECT) {
-		*(cur++) = inst->immed & 0xFF;
-		*(cur++) = inst->immed >> 8;
-	}
-	if (inst->reg == Z80_USE_IMMED && inst->op != Z80_BIT && inst->op != Z80_RES && inst->op != Z80_SET) {
-		*(cur++) = inst->immed & 0xFF;
-	}
-	if (instlen == 3) {
-		*(cur++) = instbuf[2];
+		if (inst->reg == Z80_USE_IMMED && inst->op != Z80_BIT && inst->op != Z80_RES && inst->op != Z80_SET) {
+			*(cur++) = inst->immed & 0xFF;
+		}
+		if (instlen == 3) {
+			*(cur++) = instbuf[2];
+		}
+		if (!i) {
+			//Save AF from first run
+			cur = push(cur, Z80_AF);
+		} else {
+			//Pop AF from first run for final result
+			for (int reg = Z80_BC; reg <= Z80_IY; reg++) {
+				if (reg != Z80_AF && !reg_usage[reg]) {
+					cur = pop(cur, reg);
+					cur = push(cur, Z80_AF);
+					cur = ld_ir8(cur, Z80_A, 0xC7);
+					cur = and_r(cur, z80_low_reg(reg));
+					cur = ld_rr8(cur, Z80_A, z80_low_reg(reg));
+					cur = pop(cur, Z80_AF);
+					reg_usage[reg] = 1;
+					reg_usage[z80_low_reg(reg)] = 1;
+					break;
+				}
+			}
+		}
 	}
 
 	for (char * cur = disbuf; *cur != 0; cur++) {
