@@ -293,7 +293,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				}
 				break;
 			case 2://Operator 2
-				if (chan->algorithm != 1 && chan->algorithm != 2 || chan->algorithm != 7) {
+				if (chan->algorithm != 1 && chan->algorithm != 2 && chan->algorithm != 7) {
 					//modulate by Operator 1
 					mod = context->operators[op-2].output >> YM_MOD_SHIFT;
 				}
