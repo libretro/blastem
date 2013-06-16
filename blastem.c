@@ -170,6 +170,8 @@ uint8_t new_busack = 0;
 #define dputs
 #endif
 
+#define Z80_VINT_DURATION 128
+
 void sync_z80(z80_context * z_context, uint32_t mclks)
 {
 	if (z80_enabled && !reset && !busreq) {
@@ -181,7 +183,7 @@ void sync_z80(z80_context * z_context, uint32_t mclks)
 		z_context->sync_cycle = mclks / MCLKS_PER_Z80;
 		uint32_t vint_cycle = vdp_next_vint_z80(gen->vdp) / MCLKS_PER_Z80;
 		while (z_context->current_cycle < z_context->sync_cycle) {
-			if (z_context->iff1 && z_context->current_cycle < vint_cycle) {
+			if (z_context->iff1 && z_context->current_cycle < (vint_cycle + Z80_VINT_DURATION)) {
 				z_context->int_cycle = vint_cycle < z_context->int_enable_cycle ? z_context->int_enable_cycle : vint_cycle;
 			}
 			z_context->target_cycle = z_context->sync_cycle < z_context->int_cycle ? z_context->sync_cycle : z_context->int_cycle;
