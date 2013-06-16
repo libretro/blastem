@@ -603,102 +603,11 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 
 m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t value)
 {
-	genesis_context * gen = context->system;
-	if (location < 0x10000) {
-		if (busack_cycle <= context->current_cycle) {
-			busack = new_busack;
-			busack_cycle = CYCLE_NEVER;
-		}
-		if (!(busack || reset)) {
-			location &= 0x7FFF;
-			if (location < 0x4000) {
-				z80_ram[location & 0x1FFE] = value >> 8;
-				z80_handle_code_write(location & 0x1FFE, gen->z80);
-			} else if (location < 0x6000) {
-				sync_sound(gen, context->current_cycle * MCLKS_PER_68K);
-				if (location & 1) {
-					ym_data_write(gen->ym, value >> 8);
-				} else if(location & 2) {
-					ym_address_write_part2(gen->ym, value >> 8);
-				} else {
-					ym_address_write_part1(gen->ym, value >> 8);
-				}
-			}
-		}
+	if (location < 0x10000 || (location & 0x1FFF) >= 0x100) {
+		return io_write(location, context, value >> 8);
 	} else {
-		location &= 0x1FFF;
-		if (location < 0x100) {
-			switch(location/2)
-			{
-			case 0x1:
-				io_data_write(&gamepad_1, context, value);
-				break;
-			case 0x2:
-				io_data_write(&gamepad_2, context, value);
-				break;
-			case 0x3://PORT C Data
-				break;
-			case 0x4:
-				gamepad_1.control = value;
-				break;
-			case 0x5:
-				gamepad_2.control = value;
-				break;
-			}
-		} else {
-			//printf("IO Write of %X to %X @ %d\n", value, location, context->current_cycle);
-			if (location == 0x1100) {
-				sync_z80(gen->z80, context->current_cycle * MCLKS_PER_68K);
-				if (busack_cycle <= context->current_cycle) {
-					busack = new_busack;
-					busack_cycle = CYCLE_NEVER;
-				}
-				if (value & 0x100) {
-					dprintf("bus requesting Z80 @ %d\n", (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80);
-					
-					if(!reset && !busreq) {
-						busack_cycle = ((gen->z80->current_cycle + Z80_ACK_DELAY) * MCLKS_PER_Z80) / MCLKS_PER_68K;//context->current_cycle + Z80_ACK_DELAY;
-						new_busack = Z80_REQ_ACK;
-					}
-					busreq = 1;
-				} else {
-					if (busreq) {
-						dprintf("releasing Z80 bus @ %d\n", (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80);
-						#ifdef DO_DEBUG_PRINT
-						char fname[20];
-						sprintf(fname, "zram-%d", zram_counter++);
-						FILE * f = fopen(fname, "wb");
-						fwrite(z80_ram, 1, sizeof(z80_ram), f);
-						fclose(f);
-						#endif
-						busack_cycle = ((gen->z80->current_cycle + Z80_BUSY_DELAY) * MCLKS_PER_Z80) / MCLKS_PER_68K;
-						new_busack = Z80_REQ_BUSY;
-						busreq = 0;
-					}
-					//busack_cycle = CYCLE_NEVER;
-					//busack = Z80_REQ_BUSY;
-				}
-			} else if (location == 0x1200) {
-				sync_z80(gen->z80, context->current_cycle * MCLKS_PER_68K);
-				if (value & 0x100) {
-					if (reset && busreq) {
-						new_busack = 0;
-						busack_cycle = ((gen->z80->current_cycle + Z80_ACK_DELAY) * MCLKS_PER_Z80) / MCLKS_PER_68K;//context->current_cycle + Z80_ACK_DELAY;
-					}
-					//TODO: Deal with the scenario in which reset is not asserted long enough
-					if (reset) {
-						need_reset = 1;
-						//TODO: Add necessary delay between release of reset and start of execution
-						gen->z80->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
-					}
-					reset = 0;
-				} else {
-					reset = 1;
-				}
-			}
-		}
+		return io_write(location, context, value);
 	}
-	return context;
 }
 
 #define USA 0x80
@@ -776,74 +685,11 @@ uint8_t io_read(uint32_t location, m68k_context * context)
 
 uint16_t io_read_w(uint32_t location, m68k_context * context)
 {
-	uint16_t value;
-	genesis_context * gen = context->system;
-	if (location < 0x10000) {
-		if (busack_cycle <= context->current_cycle) {
-			busack = new_busack;
-			busack_cycle = CYCLE_NEVER;
-		}
-		if (!(busack==Z80_REQ_BUSY || reset)) {
-			location &= 0x7FFF;
-			if (location < 0x4000) {
-				value = z80_ram[location & 0x1FFE];
-			} else if (location < 0x6000) {
-				sync_sound(gen, context->current_cycle * MCLKS_PER_68K);
-				value = ym_read_status(gen->ym);	
-			} else {
-				value = 0xFF;
-			}
-			value = value | (value << 8);
-		} else {
-			value = 0xFFFF;
-		}
+	uint16_t value = io_read(location, context);
+	if (location < 0x10000 || (location & 0x1FFF) < 0x100) {
+		value = value | (value << 8);
 	} else {
-		location &= 0x1FFF;
-		if (location < 0x100) {
-			switch(location/2)
-			{
-			case 0x0:
-				//version bits should be 0 for now since we're not emulating TMSS
-				//Not sure about the other bits
-				value = version_reg;
-				break;
-			case 0x1:
-				value = io_data_read(&gamepad_1, context);
-				break;
-			case 0x2:
-				value = io_data_read(&gamepad_2, context);
-				break;
-			case 0x3://PORT C Data
-				break;
-			case 0x4:
-				value = gamepad_1.control;
-				break;
-			case 0x5:
-				value = gamepad_2.control;
-				break;
-			case 0x6:
-				//PORT C Control
-				value = 0;
-				break;
-			default:
-				value = 0;
-			}
-			value = value | (value << 8);
-			//printf("Word read to %X returned %d\n", location, value);
-		} else {
-			if (location == 0x1100) {
-				if (busack_cycle <= context->current_cycle) {
-					busack = new_busack;
-					busack_cycle = CYCLE_NEVER;
-				}
-				value = (Z80_RES_BUSACK || busack) << 8;
-				//printf("Word read of BUSREQ returned %d\n", value);
-			} else if (location == 0x1200) {
-				value = (!reset) << 8;
-			} else {
-				printf("Word read of unknown IO location: %X\n", location);
-			}
-		}
+		value <<= 8;
 	}
 	return value;
 }
