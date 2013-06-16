@@ -159,32 +159,34 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clo
 #define YM_VOLUME_DIVIDER 2
 #define YM_MOD_SHIFT 1
 
+#define TIMER_A_MAX 1023
+#define TIMER_B_MAX (255*16)
+
 void ym_run(ym2612_context * context, uint32_t to_cycle)
 {
 	//printf("Running YM2612 from cycle %d to cycle %d\n", context->current_cycle, to_cycle);
 	//TODO: Fix channel update order OR remap channels in register write
 	for (; context->current_cycle < to_cycle; context->current_cycle += context->clock_inc) {
 		//Update timers at beginning of 144 cycle period
-		if (!context->current_op && context->timer_control & BIT_TIMERA_ENABLE) {
-			if (context->timer_a) {
-				context->timer_a--;
-			} else {
-				if (context->timer_control & BIT_TIMERA_OVEREN) {
-					context->status |= BIT_STATUS_TIMERA;
+		if (!context->current_op) {
+			if (context->timer_control & BIT_TIMERA_ENABLE) {
+				if (context->timer_a != TIMER_A_MAX) {
+					context->timer_a++;
+				} else {
+					if (context->timer_control & BIT_TIMERA_OVEREN) {
+						context->status |= BIT_STATUS_TIMERA;
+					}
+					context->timer_a = context->timer_a_load;
 				}
-				context->timer_a = context->timer_a_load;
 			}
 			if (context->timer_control & BIT_TIMERB_ENABLE) {
-				uint32_t b_cyc = (context->current_cycle / OP_UPDATE_PERIOD) % 16;
-				if (!b_cyc) {
-					if (context->timer_b) {
-						context->timer_b--;
-					} else {
-						if (context->timer_control & BIT_TIMERB_OVEREN) {
-							context->status |= BIT_STATUS_TIMERB;
-						}
-						context->timer_b = context->timer_b_load;
+				if (context->timer_b != TIMER_B_MAX) {
+					context->timer_b++;
+				} else {
+					if (context->timer_control & BIT_TIMERB_OVEREN) {
+						context->status |= BIT_STATUS_TIMERB;
 					}
+					context->timer_b = context->timer_b_load;
 				}
 			}
 		}
@@ -512,10 +514,22 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 			context->timer_a_load |= value & 0x3;
 			break;
 		case REG_TIMERB:
-			context->timer_b_load = value;
+			context->timer_b_load = value * 16;
 			break;
 		case REG_TIME_CTRL: {
-			context->timer_control = value & 0x3F;
+			if (value & BIT_TIMERA_ENABLE && !(context->timer_control & BIT_TIMERA_ENABLE)) {
+				context->timer_a = context->timer_a_load;
+			}
+			if (value & BIT_TIMERB_ENABLE && !(context->timer_control & BIT_TIMERB_ENABLE)) {
+				context->timer_b = context->timer_b_load;
+			}
+			context->timer_control = value & 0xF;
+			if (value & BIT_TIMERA_RESET) {
+				context->status &= ~BIT_STATUS_TIMERA;
+			}
+			if (value & BIT_TIMERB_RESET) {
+				context->status &= ~BIT_STATUS_TIMERB;
+			}
 			uint8_t old_mode = context->ch3_mode;
 			context->ch3_mode = value & 0xC0;
 			if (context->ch3_mode != old_mode) {
