@@ -897,6 +897,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = mov_irdisp8(dst, 0, CONTEXT, offsetof(z80_context, iff1), SZ_B);
 		dst = mov_irdisp8(dst, 0, CONTEXT, offsetof(z80_context, iff2), SZ_B);
 		dst = mov_rdisp8r(dst, CONTEXT, offsetof(z80_context, sync_cycle), ZLIMIT, SZ_D);
+		dst = mov_irdisp8(dst, 0xFFFFFFFF, CONTEXT, offsetof(z80_context, int_cycle), SZ_D);
 		break;
 	case Z80_EI:
 		dst = zcycles(dst, 4);
