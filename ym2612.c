@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include "ym2612.h"
 #include "render.h"
+#include "wave.h"
 
 //#define DO_DEBUG_PRINT
 #ifdef DO_DEBUG_PRINT
@@ -97,7 +98,18 @@ uint16_t round_fixed_point(double value, int dec_bits)
 FILE * debug_file = NULL;
 uint32_t first_key_on=0;
 
-void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t sample_limit)
+ym2612_context * log_context = NULL;
+
+void ym_finalize_log()
+{
+	for (int i = 0; i < NUM_CHANNELS; i++) {
+		if (log_context->channels[i].logfile) {
+			wave_finalize(log_context->channels[i].logfile);
+		}
+	}
+}
+
+void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t sample_limit, uint32_t options)
 {
 	dfopen(debug_file, "ym_debug.txt", "w");
 	memset(context, 0, sizeof(*context));
@@ -114,6 +126,23 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clo
 	//some games seem to expect that the LR flags start out as 1
 	for (int i = 0; i < NUM_CHANNELS; i++) {
 		context->channels[i].lr = 0xC0;
+		if (options & YM_OPT_WAVE_LOG) {
+			char fname[64];
+			sprintf(fname, "ym_channel_%d.wav", i);
+			FILE * f = context->channels[i].logfile = fopen(fname, "wb");
+			if (!f) {
+				fprintf(stderr, "Failed to open WAVE log file %s for writing\n", fname);
+				continue;
+			}
+			if (!wave_init(f, sample_rate, 16, 1)) {
+				fclose(f);
+				context->channels[i].logfile = NULL;
+			}
+		}
+	}
+	if (options & YM_OPT_WAVE_LOG) {
+		log_context = context;
+		atexit(ym_finalize_log);
 	}
 	if (!did_tbl_init) {
 		//populate sine table
@@ -371,6 +400,9 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 					int16_t value = context->channels[i].output & 0x3FE0;
 					if (value & 0x2000) {
 						value |= 0xC000;
+					}
+					if (context->channels[i].logfile) {
+						fwrite(&value, sizeof(value), 1, context->channels[i].logfile);
 					}
 					if (context->channels[i].lr & 0x80) {
 						context->audio_buffer[context->buffer_pos] += value / YM_VOLUME_DIVIDER;
