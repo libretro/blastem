@@ -34,6 +34,9 @@ ztestgen : ztestgen.o z80inst.o
 stateview : stateview.o vdp.o render_sdl.o
 	$(CC) -o stateview stateview.o vdp.o render_sdl.o `pkg-config --libs $(LIBS)`
 
+vgmplay : vgmplay.o ym2612.o psg.o render_sdl.o wave.o
+	$(CC) -o vgmplay vgmplay.o ym2612.o psg.o render_sdl.o wave.o `pkg-config --libs $(LIBS)`
+
 test_x86 : test_x86.o gen_x86.o
 	$(CC) -o test_x86 test_x86.o gen_x86.o
 
