@@ -2,10 +2,13 @@
 #define YM2612_H_
 
 #include <stdint.h>
+#include <stdio.h>
 
 #define NUM_PART_REGS (0xB7-0x30)
 #define NUM_CHANNELS 6
 #define NUM_OPERATORS (4*NUM_CHANNELS)
+
+#define YM_OPT_WAVE_LOG 1
 
 typedef struct {
 	uint32_t phase_inc;
@@ -22,6 +25,7 @@ typedef struct {
 } ym_operator;
 
 typedef struct {
+	FILE *   logfile;
 	uint16_t fnum;
 	int16_t  output;
 	uint8_t  block_fnum_latch;
@@ -70,7 +74,7 @@ typedef struct {
 	uint8_t     selected_part;
 } ym2612_context;
 
-void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t sample_limit);
+void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t sample_limit, uint32_t options);
 void ym_run(ym2612_context * context, uint32_t to_cycle);
 void ym_address_write_part1(ym2612_context * context, uint8_t address);
 void ym_address_write_part2(ym2612_context * context, uint8_t address);

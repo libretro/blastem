@@ -1919,6 +1919,7 @@ int main(int argc, char ** argv)
 	int width = -1;
 	int height = -1;
 	int debug = 0;
+	int ym_log = 0;
 	FILE *address_log = NULL;
 	for (int i = 2; i < argc; i++) {
 		if (argv[i][0] == '-') {
@@ -1963,6 +1964,9 @@ int main(int argc, char ** argv)
 					return 1;
 				}
 				break;
+			case 'y':
+				ym_log = 1;
+				break;
 			default:
 				fprintf(stderr, "Unrecognized switch %s\n", argv[i]);
 				return 1;
@@ -1989,7 +1993,7 @@ int main(int argc, char ** argv)
 	init_vdp_context(&v_context);
 	
 	ym2612_context y_context;
-	ym_init(&y_context, render_sample_rate(), fps == 60 ? MCLKS_NTSC : MCLKS_PAL, MCLKS_PER_YM, render_audio_buffer());
+	ym_init(&y_context, render_sample_rate(), fps == 60 ? MCLKS_NTSC : MCLKS_PAL, MCLKS_PER_YM, render_audio_buffer(), ym_log ? YM_OPT_WAVE_LOG : 0);
 	
 	psg_context p_context;
 	psg_init(&p_context, render_sample_rate(), fps == 60 ? MCLKS_NTSC : MCLKS_PAL, MCLKS_PER_PSG, render_audio_buffer());
