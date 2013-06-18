@@ -72,16 +72,19 @@ void handle_keyup(int keycode)
 {
 }
 
+#define CYCLE_LIMIT MCLKS_NTSC/60
+
 void wait(ym2612_context * y_context, psg_context * p_context, uint32_t * current_cycle, uint32_t cycles)
 {
 	*current_cycle += cycles;
 	psg_run(p_context, *current_cycle);
 	ym_run(y_context, *current_cycle);
 	
-	if (*current_cycle > 0x1FFFFFFF) {
-		*current_cycle -= 0x1FFFFFFF;
-		p_context->cycles -= 0x1FFFFFFF;
-		y_context->current_cycle -= 0x1FFFFFFF;
+	if (*current_cycle > CYCLE_LIMIT) {
+		*current_cycle -= CYCLE_LIMIT;
+		p_context->cycles -= CYCLE_LIMIT;
+		y_context->current_cycle -= CYCLE_LIMIT;
+		process_events();
 	}
 }
 
