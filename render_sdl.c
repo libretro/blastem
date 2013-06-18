@@ -366,6 +366,14 @@ int wait_render_frame(vdp_context * context, int frame_limit)
 	return ret;
 }
 
+void process_events()
+{
+	SDL_Event event;
+	while(SDL_PollEvent(&event)) {
+		handle_event(&event);
+	}
+}
+
 void render_wait_psg(psg_context * context)
 {
 	SDL_LockMutex(audio_mutex);

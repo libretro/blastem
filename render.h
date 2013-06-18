@@ -15,6 +15,7 @@ uint32_t render_audio_buffer();
 uint32_t render_sample_rate();
 void render_debug_mode(uint8_t mode);
 void render_debug_pal(uint8_t pal);
+void process_events();
 
 //TODO: Throw an ifdef in here once there's more than one renderer
 #include <SDL.h>
