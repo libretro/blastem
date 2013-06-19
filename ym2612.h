@@ -69,6 +69,11 @@ typedef struct {
 	
 	uint8_t     timer_control;
 	uint8_t     dac_enable;
+	uint8_t     lfo_enable;
+	uint8_t     lfo_freq;
+	uint8_t     lfo_counter;
+	uint8_t     lfo_am_step;
+	uint8_t     lfo_pm_step;
 	uint8_t     status;
 	uint8_t     selected_reg;
 	uint8_t     selected_part;
