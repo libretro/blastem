@@ -19,6 +19,7 @@
 #define OP_UPDATE_PERIOD 144
 
 enum {
+	REG_LFO          = 0x22,
 	REG_TIMERA_HIGH  = 0x24,
 	REG_TIMERA_LOW,
 	REG_TIMERB,
@@ -85,6 +86,19 @@ uint16_t rate_table_base[] = {
 };
 
 uint16_t rate_table[64*8];
+
+uint8_t lfo_timer_values[] = {108, 77, 71, 67, 62, 44, 8, 5};
+uint8_t lfo_pm_base[][8] = {
+	{0,   0,   0,   0,   0,   0,   0,   0},
+	{0,   0,   0,   0,   4,   4,   4,   4},
+	{0,   0,   0,   4,   4,   4,   8,   8},
+	{0,   0,   4,   4,   8,   8, 0xc, 0xc},
+	{0,   0,   4,   8,   8,   8, 0xc,0x10},
+	{0,   0,   8, 0xc,0x10,0x10,0x14,0x18},
+	{0,   0,0x10,0x18,0x20,0x20,0x28,0x30},
+	{0,   0,0x20,0x30,0x40,0x40,0x50,0x60}
+};
+int16_t lfo_pm_table[128 * 32 * 8];
 
 #define MAX_ENVELOPE 0xFFC
 #define YM_DIVIDER 2
@@ -182,6 +196,24 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clo
 				rate_table[rate * 8 + cycle] = value;
 			}
 		}
+		//populate LFO PM table from small base table
+		//seems like there must be a better way to derive this
+		for (int freq = 0; freq < 128; freq++) {
+			for (int pms = 0; pms < 8; pms++) {
+				for (int step = 0; step < 32; step++) {
+					int16_t value = 0;
+					for (int bit = 0x40, shift = 0; bit > 0; bit >>= 1, shift++) {
+						if (freq & bit) {
+							value += lfo_pm_base[pms][(step & 0x8) ? 7-step & 7 : step & 7] >> shift;
+						}
+					}
+					if (step & 0x10) {
+						value = -value;
+					}
+					lfo_pm_table[freq * 256 + pms * 32 + step] = value;
+				}
+			}
+		}
 	}
 }
 
@@ -217,6 +249,17 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 					}
 					context->timer_b = context->timer_b_load;
 				}
+			}
+		}
+		//Update LFO
+		if (context->lfo_enable) {
+			if (context->lfo_counter) {
+				context->lfo_counter--;
+			} else {
+				context->lfo_counter = lfo_timer_values[context->lfo_freq];
+				context->lfo_am_step += 2;
+				context->lfo_am_step &= 0xFE;
+				context->lfo_pm_step = context->lfo_am_step / 8;
 			}
 		}
 		//Update Envelope Generator
@@ -296,6 +339,17 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			//TODO: Modulate phase by LFO if necessary
 			uint16_t phase = operator->phase_counter >> 10 & 0x3FF;
 			operator->phase_counter += operator->phase_inc;
+			if (chan->pms) {
+				//not entirely sure this will get the precision correct, but I'd like to avoid recalculating phase
+				//increment every update when LFO phase modulation is enabled
+				int16_t lfo_mod = lfo_pm_table[(chan->fnum & 0x7F0) * 16 + chan->pms + context->lfo_pm_step];
+				if (operator->multiple) {
+					lfo_mod *= operator->multiple;
+				} else {
+					lfo_mod >>= 1;
+				}
+				operator->phase_counter += lfo_mod;	
+			}
 			int16_t mod = 0;
 			switch (op % 4)
 			{
@@ -536,7 +590,18 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 		//Shared regs
 		switch (context->selected_reg)
 		{
-		//TODO: Test reg and LFO
+		//TODO: Test reg
+		case REG_LFO:
+			if ((value & 0x8) && !context->lfo_enable) {
+				printf("LFO Enabled, Freq: %d\n", value & 0x7);
+			}
+			context->lfo_enable = value & 0x8;
+			if (!context->lfo_enable) {
+				context->lfo_am_step = context->lfo_pm_step = 0;
+			}
+			context->lfo_freq = value & 0x7;
+			
+			break;
 		case REG_TIMERA_HIGH:
 			context->timer_a_load &= 0x3;
 			context->timer_a_load |= value << 2;
@@ -680,7 +745,7 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 				context->channels[channel].feedback = value >> 3 & 0x7;
 				break;
 			case REG_LR_AMS_PMS:
-				context->channels[channel].pms = value & 0x7;
+				context->channels[channel].pms = (value & 0x7) * 32;
 				context->channels[channel].ams = value >> 4 & 0x3;
 				context->channels[channel].lr = value & 0xC0;
 				//printf("Write of %X to LR_AMS_PMS reg for channel %d\n", value, channel);
