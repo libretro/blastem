@@ -501,6 +501,10 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 							decoded->op = M68K_INVALID;
 							return start+1;
 						}
+						if (decoded->src.addr_mode == MODE_PC_DISPLACE || decoded->src.addr_mode == MODE_PC_INDEX_DISP8) {
+							//adjust displacement to account for extra instruction word
+							decoded->src.params.regs.displacement += 2;
+						}
 					} else {
 						decoded->src.addr_mode = MODE_REG;
 						decoded->src.params.immed = *(++istream);
