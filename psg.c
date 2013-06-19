@@ -60,7 +60,7 @@ void psg_write(psg_context * context, uint8_t value)
 	}
 }
 
-#define PSG_VOL_DIV 4
+#define PSG_VOL_DIV 6
 
 //table shamelessly swiped from PSG doc from smspower.org
 int16_t volume_table[16] = {
