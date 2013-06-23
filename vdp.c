@@ -10,27 +10,6 @@
 #define MAP_BIT_H_FLIP 0x800
 #define MAP_BIT_V_FLIP 0x1000
 
-//Mode reg 1
-#define BIT_HINT_EN    0x10
-#define BIT_PAL_SEL    0x04
-#define BIT_HVC_LATCH  0x02
-#define BIT_DISP_DIS   0x01
-
-//Mode reg 2
-#define BIT_DISP_EN    0x40
-#define BIT_VINT_EN    0x20
-#define BIT_DMA_ENABLE 0x10
-#define BIT_PAL        0x08
-#define BIT_MODE_5     0x04
-
-//Mode reg 3
-#define BIT_EINT_EN    0x10
-#define BIT_VSCROLL    0x04
-
-//Mode reg 4
-#define BIT_H40        0x01
-#define BIT_HILIGHT    0x8
-
 #define SCROLL_BUFFER_SIZE 32
 #define SCROLL_BUFFER_DRAW 16
 
@@ -52,8 +31,10 @@ void init_vdp_context(vdp_context * context)
 	memset(context, 0, sizeof(*context));
 	context->vdpmem = malloc(VRAM_SIZE);
 	memset(context->vdpmem, 0, VRAM_SIZE);
-	context->framebuf = malloc(FRAMEBUF_SIZE);
+	context->oddbuf = context->framebuf = malloc(FRAMEBUF_SIZE);
 	memset(context->framebuf, 0, FRAMEBUF_SIZE);
+	context->evenbuf = malloc(FRAMEBUF_SIZE);
+	memset(context->evenbuf, 0, FRAMEBUF_SIZE);
 	context->linebuf = malloc(LINEBUF_SIZE + SCROLL_BUFFER_SIZE*2);
 	memset(context->linebuf, 0, LINEBUF_SIZE + SCROLL_BUFFER_SIZE*2);
 	context->tmp_buf_a = context->linebuf + LINEBUF_SIZE;
@@ -158,6 +139,21 @@ void scan_sprite_table(uint32_t line, vdp_context * context)
 	if (context->sprite_index && context->slot_counter) {
 		line += 1;
 		line &= 0xFF;
+		uint16_t ymask, ymin;
+		uint8_t height_mult;
+		if (context->double_res) {
+			line *= 2;
+			if (context->framebuf != context->oddbuf) {
+				line++;
+			}
+			ymask = 0x3FF;
+			ymin = 256;
+			height_mult = 16;
+		} else {
+			ymask = 0x1FF;
+			ymin = 128;
+			height_mult = 8;
+		}
 		context->sprite_index &= 0x7F;
 		if (context->latched_mode & BIT_H40) {
 			if (context->sprite_index >= MAX_SPRITES_FRAME) {
@@ -171,28 +167,28 @@ void scan_sprite_table(uint32_t line, vdp_context * context)
 		//TODO: Read from SAT cache rather than from VRAM
 		uint16_t sat_address = (context->regs[REG_SAT] & 0x7F) << 9;
 		uint16_t address = context->sprite_index * 8 + sat_address;
-		line += 128;
+		line += ymin;
 		uint16_t y = ((context->vdpmem[address] & 0x3) << 8 | context->vdpmem[address+1]) & 0x1FF;
-		uint8_t height = ((context->vdpmem[address+2] & 0x3) + 1) * 8;
+		uint8_t height = ((context->vdpmem[address+2] & 0x3) + 1) * height_mult;
 		//printf("Sprite %d | y: %d, height: %d\n", context->sprite_index, y, height);
 		if (y <= line && line < (y + height)) {
 			//printf("Sprite %d at y: %d with height %d is on line %d\n", context->sprite_index, y, height, line);
 			context->sprite_info_list[--(context->slot_counter)].size = context->vdpmem[address+2];
 			context->sprite_info_list[context->slot_counter].index = context->sprite_index;
-			context->sprite_info_list[context->slot_counter].y = y-128;
+			context->sprite_info_list[context->slot_counter].y = y-ymin;
 		}
 		context->sprite_index = context->vdpmem[address+3] & 0x7F;
 		if (context->sprite_index && context->slot_counter)
 		{
 			address = context->sprite_index * 8 + sat_address;
 			y = ((context->vdpmem[address] & 0x3) << 8 | context->vdpmem[address+1]) & 0x1FF;
-			height = ((context->vdpmem[address+2] & 0x3) + 1) * 8;
+			height = ((context->vdpmem[address+2] & 0x3) + 1) * height_mult;
 			//printf("Sprite %d | y: %d, height: %d\n", context->sprite_index, y, height);
 			if (y <= line && line < (y + height)) {
 				//printf("Sprite %d at y: %d with height %d is on line %d\n", context->sprite_index, y, height, line);
 				context->sprite_info_list[--(context->slot_counter)].size = context->vdpmem[address+2];
 				context->sprite_info_list[context->slot_counter].index = context->sprite_index;
-				context->sprite_info_list[context->slot_counter].y = y-128;
+				context->sprite_info_list[context->slot_counter].y = y-ymin;
 			}
 			context->sprite_index = context->vdpmem[address+3] & 0x7F;
 		}
@@ -209,6 +205,13 @@ void read_sprite_x(uint32_t line, vdp_context * context)
 			uint8_t width = ((context->sprite_info_list[context->cur_slot].size >> 2) & 0x3) + 1;
 			//in pixels
 			uint8_t height = ((context->sprite_info_list[context->cur_slot].size & 0x3) + 1) * 8;
+			if (context->double_res) {
+				line *= 2;
+				if (context->framebuf != context->oddbuf) {
+					line++;
+				}
+				height *= 2;
+			}
 			uint16_t att_addr = ((context->regs[REG_SAT] & 0x7F) << 9) + context->sprite_info_list[context->cur_slot].index * 8 + 4;
 			uint16_t tileinfo = (context->vdpmem[att_addr] << 8) | context->vdpmem[att_addr+1];		
 			uint8_t pal_priority = (tileinfo >> 9) & 0x70;
@@ -218,7 +221,12 @@ void read_sprite_x(uint32_t line, vdp_context * context)
 			} else {
 				row = line-context->sprite_info_list[context->cur_slot].y;
 			}
-			uint16_t address = ((tileinfo & 0x7FF) << 5) + row * 4;
+			uint16_t address;
+			if (context->double_res) {
+				address = ((tileinfo & 0x3FF) << 6) + row * 4;
+			} else {
+				address = ((tileinfo & 0x7FF) << 5) + row * 4;
+			}
 			int16_t x = ((context->vdpmem[att_addr+ 2] & 0x3) << 8 | context->vdpmem[att_addr + 3]) & 0x1FF;
 			if (x) {
 				context->flags |= FLAG_CAN_MASK;
@@ -432,6 +440,12 @@ void external_slot(vdp_context * context)
 
 void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_t address, uint16_t hscroll_val, vdp_context * context)
 {
+	/*if (context->double_res) {
+		line *= 2;
+		if (context->framebuf != context->oddbuf) {
+			line++;
+		}
+	}*/
 	if (!vsram_off) {
 		uint16_t left_col, right_col;
 		if (context->regs[REG_WINDOW_H] & WINDOW_RIGHT) {
@@ -493,6 +507,10 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 		vscroll = 0x3FF;
 		break;
 	}
+	/*if (context->double_res) {
+		vscroll <<= 1;
+		vscroll |= 1;
+	}*/
 	vscroll &= (context->vsram[(context->regs[REG_MODE_3] & BIT_VSCROLL ? column : 0) + vsram_off] + line);
 	context->v_offset = vscroll & 0x7;
 	//printf("%s | line %d, vsram: %d, vscroll: %d, v_offset: %d\n",(vsram_off ? "B" : "A"), line, context->vsram[context->regs[REG_MODE_3] & 0x4 ? column : 0], vscroll, context->v_offset);
@@ -545,11 +563,21 @@ void read_map_scroll_b(uint16_t column, uint32_t line, vdp_context * context)
 
 void render_map(uint16_t col, uint8_t * tmp_buf, vdp_context * context)
 {
-	uint16_t address = ((col & 0x7FF) << 5);
-	if (col & MAP_BIT_V_FLIP) {
-		address +=  28 - 4 * context->v_offset;
+	uint16_t address;
+	uint8_t shift, add;
+	if (context->double_res) {
+		address = ((col & 0x3FF) << 6);
+		shift = 1;
+		add = context->framebuf != context->oddbuf ? 1 : 0;
 	} else {
-		address += 4 * context->v_offset;
+		address = ((col & 0x7FF) << 5);
+		shift = 0;
+		add = 0;
+	}
+	if (col & MAP_BIT_V_FLIP) {
+		address +=  28 - 4 * ((context->v_offset << shift) + add);
+	} else {
+		address += 4 * ((context->v_offset << shift) + add);
 	}
 	uint16_t pal_priority = (col >> 9) & 0x70;
 	int32_t dir;
@@ -1314,6 +1342,9 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 				if (reg == REG_MODE_2) {
 					//printf("Display is now %s\n", (context->regs[REG_MODE_2] & DISPLAY_ENABLE) ? "enabled" : "disabled");
 				}
+				if (reg == REG_MODE_4) {
+					context->double_res = (value & (BIT_INTERLACE | BIT_DOUBLE_RES)) == (BIT_INTERLACE | BIT_DOUBLE_RES);
+				}
 			}
 		} else {
 			context->flags |= FLAG_PENDING;
@@ -1362,7 +1393,10 @@ uint16_t vdp_control_port_read(vdp_context * context)
 		value |= 0x100;
 	}
 	if (context->flags2 & FLAG2_VINT_PENDING) {
-		value |- 0x80;
+		value |= 0x80;
+	}
+	if ((context->regs[REG_MODE_4] & BIT_INTERLACE) && context->framebuf == context->oddbuf) {
+		value |= 0x10;
 	}
 	uint32_t line= context->cycles / MCLKS_LINE;
 	uint32_t linecyc = context->cycles % MCLKS_LINE;
@@ -1517,6 +1551,12 @@ uint16_t vdp_hv_counter_read(vdp_context * context)
 		}
 	}
 	linecyc &= 0xFF;
+	if (context->double_res) {
+		line <<= 1;
+		if (line & 0x100) {
+			line |= 1;
+		}
+	}
 	return (line << 8) | linecyc;
 }
 

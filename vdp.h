@@ -67,6 +67,29 @@ enum {
 	REG_DMASRC_H
 } vdp_regs;
 
+//Mode reg 1
+#define BIT_HINT_EN    0x10
+#define BIT_PAL_SEL    0x04
+#define BIT_HVC_LATCH  0x02
+#define BIT_DISP_DIS   0x01
+
+//Mode reg 2
+#define BIT_DISP_EN    0x40
+#define BIT_VINT_EN    0x20
+#define BIT_DMA_ENABLE 0x10
+#define BIT_PAL        0x08
+#define BIT_MODE_5     0x04
+
+//Mode reg 3
+#define BIT_EINT_EN    0x10
+#define BIT_VSCROLL    0x04
+
+//Mode reg 4
+#define BIT_H40        0x01
+#define BIT_HILIGHT    0x8
+#define BIT_DOUBLE_RES 0x4
+#define BIT_INTERLACE  0x2
+
 typedef struct {
 	uint16_t address;
 	int16_t x_pos;
@@ -102,6 +125,8 @@ typedef struct {
 	uint8_t     *linebuf;
 	//stores 12-bit color + shadow/highlight bits
 	uint16_t    *framebuf;
+	uint16_t    *oddbuf;
+	uint16_t    *evenbuf;
 	uint16_t    cram[CRAM_SIZE];
 	uint16_t    vsram[VSRAM_SIZE];
 	uint8_t     latched_mode;
@@ -120,6 +145,7 @@ typedef struct {
 	uint8_t     dma_cd;
 	uint8_t     hint_counter;
 	uint8_t     flags2;
+	uint8_t     double_res;
 	uint8_t     *tmp_buf_a;
 	uint8_t     *tmp_buf_b;
 } vdp_context;

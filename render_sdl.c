@@ -147,6 +147,8 @@ void render_init(int width, int height, char * title, uint32_t fps)
     SDL_PauseAudio(0);
 }
 
+uint16_t blankbuf[320*240];
+
 void render_context(vdp_context * context)
 {
 	uint8_t *buf_8;
@@ -166,13 +168,15 @@ void render_context(vdp_context * context)
     } else {
     	repeat_y = repeat_x;
     }
+    int othermask = repeat_y >> 1;
+    uint16_t *otherbuf = (context->regs[REG_MODE_4] & BIT_INTERLACE) ? context->evenbuf : blankbuf;
     switch (screen->format->BytesPerPixel) {
     case 2:
         buf_16 = (uint16_t *)screen->pixels;
         for (int y = 0; y < 240; y++) {
         	for (int i = 0; i < repeat_y; i++,buf_16 += screen->pitch/2) {
         		uint16_t *line = buf_16;
-        		uint16_t *src_line = context->framebuf + y * 320;
+        		uint16_t *src_line = (i & othermask ? otherbuf : context->oddbuf) + y * 320;
 		    	for (int x = 0; x < 320; x++) {
 		    		uint16_t color = color_map[*(src_line++) & 0xFFF];
 		    		for (int j = 0; j < repeat_x; j++) {
@@ -188,7 +192,7 @@ void render_context(vdp_context * context)
         	for (int i = 0; i < repeat_y; i++,buf_8 += screen->pitch) {
         		uint8_t *line = buf_8;
 		    	for (int x = 0; x < 320; x++) {
-		    		uint16_t gen_color = context->framebuf[y * 320 + x];
+		    		uint16_t gen_color = context->oddbuf[y * 320 + x];
 		    		b = ((gen_color >> 8) & 0xE) * 18;
 		    		g = ((gen_color >> 4) & 0xE) * 18;
 		    		r = (gen_color& 0xE) * 18;
@@ -208,7 +212,7 @@ void render_context(vdp_context * context)
 	    for (int y = 0; y < 240; y++) {
 	    	for (int i = 0; i < repeat_y; i++,buf_32 += screen->pitch/4) {
 	    		uint32_t *line = buf_32;
-	    		uint16_t *src_line = context->framebuf + y * 320;
+	    		uint16_t *src_line = (i & othermask ? otherbuf : context->oddbuf) + y * 320;
 		    	for (int x = 0; x < 320; x++) {
 		    		uint32_t color;
 		    		if (!render_dbg) {
@@ -222,7 +226,7 @@ void render_context(vdp_context * context)
 							color = color_map[context->cram[ (debug_pal << 4) | (context->vdpmem[(x/8)*32 + (y/8)*32*40 + (x%8)/2 + (y%8)*4] >> 4) ]];
 						}
 					}else {
-						uint16_t gen_color = context->framebuf[y * 320 + x];
+						uint16_t gen_color = context->oddbuf[y * 320 + x];
 						r = g = b = 0;
 						switch(gen_color & FBUF_SRC_MASK)
 						{
@@ -271,6 +275,10 @@ void render_context(vdp_context * context)
         SDL_UnlockSurface(screen);
     }
     SDL_UpdateRect(screen, 0, 0, screen->clip_rect.w, screen->clip_rect.h);
+    if (context->regs[REG_MODE_4] & BIT_INTERLACE)
+    {
+    	context->framebuf = context->framebuf == context->oddbuf ? context->evenbuf : context->oddbuf;
+    }
 }
 
 void render_wait_quit(vdp_context * context)
