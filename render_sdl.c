@@ -231,20 +231,20 @@ void render_context(vdp_context * context)
 						switch(gen_color & FBUF_SRC_MASK)
 						{
 						case FBUF_SRC_A:
-							g = 127;
+							g = 127;//plane a = green
 							break;
 						case FBUF_SRC_W:
-							g = 127;
+							g = 127;//window = cyan
 							b = 127;
 							break;
 						case FBUF_SRC_B:
-							b = 127;
+							b = 127;//plane b = blue
 							break;
 						case FBUF_SRC_S:
-							r = 127;
+							r = 127;//sprite = red
 							break;
 						case FBUF_SRC_BG:
-							r = 127;
+							r = 127;//BG = purple
 							b = 127;
 						}
 						if (gen_color & FBUF_BIT_PRIORITY) {
