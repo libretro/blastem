@@ -440,11 +440,19 @@ void external_slot(vdp_context * context)
 
 void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_t address, uint16_t hscroll_val, vdp_context * context)
 {
+	uint16_t window_line_shift, v_offset_mask, vscroll_shift;
 	if (context->double_res) {
 		line *= 2;
 		if (context->framebuf != context->oddbuf) {
 			line++;
 		}
+		window_line_shift = 4;
+		v_offset_mask = 0xF;
+		vscroll_shift = 4;
+	} else {
+		window_line_shift = 3;
+		v_offset_mask = 0x7;
+		vscroll_shift = 3;
 	}
 	if (!vsram_off) {
 		uint16_t left_col, right_col;
@@ -460,31 +468,35 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 		}
 		uint16_t top_line, bottom_line;
 		if (context->regs[REG_WINDOW_V] & WINDOW_DOWN) {
-			top_line = (context->regs[REG_WINDOW_V] & 0x1F) * 8;
-			bottom_line = 241;
+			top_line = (context->regs[REG_WINDOW_V] & 0x1F) << window_line_shift;
+			bottom_line = context->double_res ? 481 : 241;
 		} else {
 			top_line = 0;
-			bottom_line = (context->regs[REG_WINDOW_V] & 0x1F) * 8;
+			bottom_line = (context->regs[REG_WINDOW_V] & 0x1F) << window_line_shift;
 		}
 		if ((column >= left_col && column < right_col) || (line >= top_line && line < bottom_line)) {
 			uint16_t address = context->regs[REG_WINDOW] << 10;
 			uint16_t line_offset, offset, mask;
 			if (context->latched_mode & BIT_H40) {
 				address &= 0xF000;
-				line_offset = (((line) / 8) * 64 * 2) & 0xFFF;
+				line_offset = (((line) >> vscroll_shift) * 64 * 2) & 0xFFF;
 				mask = 0x7F;
 				
 			} else {
 				address &= 0xF800;
-				line_offset = (((line) / 8) * 32 * 2) & 0xFFF;
+				line_offset = (((line) >> vscroll_shift) * 32 * 2) & 0xFFF;
 				mask = 0x3F;
+			}
+			if (context->double_res) {
+				mask <<= 1;
+				mask |= 1;
 			}
 			offset = address + line_offset + (((column - 2) * 2) & mask);
 			context->col_1 = (context->vdpmem[offset] << 8) | context->vdpmem[offset+1];
 			//printf("Window | top: %d, bot: %d, left: %d, right: %d, base: %X, line: %X offset: %X, tile: %X, reg: %X\n", top_line, bottom_line, left_col, right_col, address, line_offset, offset, ((context->col_1 & 0x3FF) << 5), context->regs[REG_WINDOW]);
 			offset = address + line_offset + (((column - 1) * 2) & mask);
 			context->col_2 = (context->vdpmem[offset] << 8) | context->vdpmem[offset+1];
-			context->v_offset = (line) & 0x7;
+			context->v_offset = (line) & v_offset_mask;
 			context->flags |= FLAG_WINDOW;
 			return;
 		}
@@ -507,15 +519,9 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 		vscroll = 0x3FF;
 		break;
 	}
-	uint16_t v_offset_mask, vscroll_shift;
 	if (context->double_res) {
 		vscroll <<= 1;
 		vscroll |= 1;
-		v_offset_mask = 0xF;
-		vscroll_shift = 4;
-	} else {
-		v_offset_mask = 0x7;
-		vscroll_shift = 3;
 	}
 	vscroll &= (context->vsram[(context->regs[REG_MODE_3] & BIT_VSCROLL ? column : 0) + vsram_off] + line);
 	context->v_offset = vscroll & v_offset_mask;
