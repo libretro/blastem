@@ -440,12 +440,12 @@ void external_slot(vdp_context * context)
 
 void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_t address, uint16_t hscroll_val, vdp_context * context)
 {
-	/*if (context->double_res) {
+	if (context->double_res) {
 		line *= 2;
 		if (context->framebuf != context->oddbuf) {
 			line++;
 		}
-	}*/
+	}
 	if (!vsram_off) {
 		uint16_t left_col, right_col;
 		if (context->regs[REG_WINDOW_H] & WINDOW_RIGHT) {
@@ -507,14 +507,20 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 		vscroll = 0x3FF;
 		break;
 	}
-	/*if (context->double_res) {
+	uint16_t v_offset_mask, vscroll_shift;
+	if (context->double_res) {
 		vscroll <<= 1;
 		vscroll |= 1;
-	}*/
+		v_offset_mask = 0xF;
+		vscroll_shift = 4;
+	} else {
+		v_offset_mask = 0x7;
+		vscroll_shift = 3;
+	}
 	vscroll &= (context->vsram[(context->regs[REG_MODE_3] & BIT_VSCROLL ? column : 0) + vsram_off] + line);
-	context->v_offset = vscroll & 0x7;
+	context->v_offset = vscroll & v_offset_mask;
 	//printf("%s | line %d, vsram: %d, vscroll: %d, v_offset: %d\n",(vsram_off ? "B" : "A"), line, context->vsram[context->regs[REG_MODE_3] & 0x4 ? column : 0], vscroll, context->v_offset);
-	vscroll /= 8;
+	vscroll >>= vscroll_shift;
 	uint16_t hscroll_mask;
 	uint16_t v_mul;
 	switch(context->regs[REG_SCROLL] & 0x3)
@@ -575,9 +581,9 @@ void render_map(uint16_t col, uint8_t * tmp_buf, vdp_context * context)
 		add = 0;
 	}
 	if (col & MAP_BIT_V_FLIP) {
-		address +=  28 - 4 * ((context->v_offset << shift) + add);
+		address +=  28 - 4 * context->v_offset/*((context->v_offset << shift) + add)*/;
 	} else {
-		address += 4 * ((context->v_offset << shift) + add);
+		address += 4 * context->v_offset/*((context->v_offset << shift) + add)*/;
 	}
 	uint16_t pal_priority = (col >> 9) & 0x70;
 	int32_t dir;
