@@ -168,7 +168,7 @@ void scan_sprite_table(uint32_t line, vdp_context * context)
 		uint16_t sat_address = (context->regs[REG_SAT] & 0x7F) << 9;
 		uint16_t address = context->sprite_index * 8 + sat_address;
 		line += ymin;
-		uint16_t y = ((context->vdpmem[address] & 0x3) << 8 | context->vdpmem[address+1]) & 0x1FF;
+		uint16_t y = ((context->vdpmem[address] & 0x3) << 8 | context->vdpmem[address+1]) & ymask;
 		uint8_t height = ((context->vdpmem[address+2] & 0x3) + 1) * height_mult;
 		//printf("Sprite %d | y: %d, height: %d\n", context->sprite_index, y, height);
 		if (y <= line && line < (y + height)) {
@@ -181,7 +181,7 @@ void scan_sprite_table(uint32_t line, vdp_context * context)
 		if (context->sprite_index && context->slot_counter)
 		{
 			address = context->sprite_index * 8 + sat_address;
-			y = ((context->vdpmem[address] & 0x3) << 8 | context->vdpmem[address+1]) & 0x1FF;
+			y = ((context->vdpmem[address] & 0x3) << 8 | context->vdpmem[address+1]) & ymask;
 			height = ((context->vdpmem[address+2] & 0x3) + 1) * height_mult;
 			//printf("Sprite %d | y: %d, height: %d\n", context->sprite_index, y, height);
 			if (y <= line && line < (y + height)) {
@@ -1350,6 +1350,9 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 				}
 				if (reg == REG_MODE_4) {
 					context->double_res = (value & (BIT_INTERLACE | BIT_DOUBLE_RES)) == (BIT_INTERLACE | BIT_DOUBLE_RES);
+					if (!context->double_res) {
+						context->framebuf = context->oddbuf;
+					}
 				}
 			}
 		} else {
