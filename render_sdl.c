@@ -133,7 +133,7 @@ void render_init(int width, int height, char * title, uint32_t fps)
     desired.freq = 48000;
     desired.format = AUDIO_S16SYS;
     desired.channels = 2;
-    desired.samples = 1024;
+    desired.samples = 2048;//1024;
     desired.callback = audio_callback;
     desired.userdata = NULL;
     
