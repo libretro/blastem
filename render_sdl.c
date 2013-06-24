@@ -72,9 +72,12 @@ void render_close_audio()
 	SDL_CloseAudio();
 }
 
+SDL_Joystick * joysticks[MAX_JOYSTICKS];
+int num_joysticks;
+
 void render_init(int width, int height, char * title, uint32_t fps)
 {
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK) < 0) {
         fprintf(stderr, "Unable to init SDL: %s\n", SDL_GetError());
         exit(1);
     }
@@ -145,6 +148,18 @@ void render_init(int width, int height, char * title, uint32_t fps)
     sample_rate = actual.freq;
     printf("Initialized audio at frequency %d with a %d sample buffer\n", actual.freq, actual.samples);
     SDL_PauseAudio(0);
+    num_joysticks = SDL_NumJoysticks();
+    if (num_joysticks > MAX_JOYSTICKS) {
+    	num_joysticks = MAX_JOYSTICKS;
+    }
+    for (int i = 0; i < num_joysticks; i++) {
+    	printf("Joystick %d: %s\n", i, SDL_JoystickName(i));
+    	SDL_Joystick * joy = joysticks[i] = SDL_JoystickOpen(i);
+    	if (joy) {
+    		printf("\tNum Axes: %d\n\tNum Buttons: %d\n\tNum Hats: %d\n", SDL_JoystickNumAxes(joy), SDL_JoystickNumButtons(joy), SDL_JoystickNumHats(joy));
+    	}
+    }
+    SDL_JoystickEventState(SDL_ENABLE);
 }
 
 uint16_t blankbuf[320*240];
@@ -281,6 +296,22 @@ void render_context(vdp_context * context)
     }
 }
 
+int render_joystick_num_buttons(int joystick)
+{
+	if (joystick >= num_joysticks) {
+		return 0;
+	}
+	return SDL_JoystickNumButtons(joysticks[joystick]);
+}
+
+int render_joystick_num_hats(int joystick)
+{
+	if (joystick >= num_joysticks) {
+		return 0;
+	}
+	return SDL_JoystickNumHats(joysticks[joystick]);
+}
+
 void render_wait_quit(vdp_context * context)
 {
 	SDL_Event event;
@@ -328,6 +359,15 @@ int32_t handle_event(SDL_Event *event)
 		break;
 	case SDL_KEYUP:
 		handle_keyup(event->key.keysym.sym);
+		break;
+	case SDL_JOYBUTTONDOWN:
+		handle_joydown(event->jbutton.which, event->jbutton.button);
+		break;
+	case SDL_JOYBUTTONUP:
+		handle_joyup(event->jbutton.which, event->jbutton.button);
+		break;
+	case SDL_JOYHATMOTION:
+		handle_joy_dpad(event->jbutton.which, event->jhat.hat, event->jhat.value);
 		break;
 	case SDL_QUIT:
 		puts("");
