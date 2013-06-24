@@ -45,6 +45,9 @@ uint16_t read_dma_value(uint32_t address);
 m68k_context * debugger(m68k_context * context, uint32_t address);
 void handle_keydown(int keycode);
 void handle_keyup(int keycode);
+void handle_joydown(int joystick, int button);
+void handle_joyup(int joystick, int button);
+void handle_joy_dpad(int joystick, int dpad, uint8_t state);
 
 #endif //BLASTEM_H_
 
