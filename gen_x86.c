@@ -517,6 +517,54 @@ uint8_t * x86_irdisp8(uint8_t * out, uint8_t opcode, uint8_t op_ex, int32_t val,
 	return out;
 }
 
+uint8_t * x86_irdisp32(uint8_t * out, uint8_t opcode, uint8_t op_ex, int32_t val, uint8_t dst, int32_t disp, uint8_t size)
+{
+	uint8_t sign_extend = 0;
+	if ((size == SZ_D || size == SZ_Q) && val <= 0x7F && val >= -0x80) {
+		sign_extend = 1;
+		opcode |= BIT_DIR;
+	}
+	if (size == SZ_W) {
+		*(out++) = PRE_SIZE;
+	}
+
+	if (size == SZ_Q || dst >= R8) {
+		*out = PRE_REX;
+		if (size == SZ_Q) {
+			*out |= REX_QUAD;
+		}
+		if (dst >= R8) {
+			*out |= REX_RM_FIELD;
+			dst -= (R8 - X86_R8);
+		}
+		out++;
+	}
+	if (size != SZ_B) {
+		opcode |= BIT_SIZE;
+	}
+	*(out++) = opcode;
+	*(out++) = MODE_REG_DISPLACE32 | dst | (op_ex << 3);
+	*(out++) = disp;
+	disp >>= 8;
+	*(out++) = disp;
+	disp >>= 8;
+	*(out++) = disp;
+	disp >>= 8;
+	*(out++) = disp;
+	*(out++) = val;
+	if (size != SZ_B && !sign_extend) {
+		val >>= 8;
+		*(out++) = val;
+		if (size != SZ_W) {
+			val >>= 8;
+			*(out++) = val;
+			val >>= 8;
+			*(out++) = val;
+		}
+	}
+	return out;
+}
+
 
 uint8_t * x86_shiftrot_ir(uint8_t * out, uint8_t op_ex, uint8_t val, uint8_t dst, uint8_t size)
 {
@@ -779,6 +827,11 @@ uint8_t * add_ir(uint8_t * out, int32_t val, uint8_t dst, uint8_t size)
 uint8_t * add_irdisp8(uint8_t * out, int32_t val, uint8_t dst_base, int8_t disp, uint8_t size)
 {
 	return x86_irdisp8(out, OP_IMMED_ARITH, OP_EX_ADDI, val, dst_base, disp, size);
+}
+
+uint8_t * add_irdisp32(uint8_t * out, int32_t val, uint8_t dst_base, int32_t disp, uint8_t size)
+{
+	return x86_irdisp32(out, OP_IMMED_ARITH, OP_EX_ADDI, val, dst_base, disp, size);
 }
 
 uint8_t * add_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t disp, uint8_t size)
