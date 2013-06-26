@@ -1746,7 +1746,7 @@ int main(int argc, char ** argv)
 		}
 	}
 	update_title();
-	width = width < 320 ? 320 : width;
+	width = width < 320 ? 640 : width;
 	height = height < 240 ? (width/320) * 240 : height;
 	uint32_t fps = 60;
 	if (version_reg & 0x40) {
