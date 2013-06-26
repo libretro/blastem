@@ -4339,8 +4339,10 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	opts->dregs[0] = R10;
 	opts->dregs[1] = R11;
 	opts->dregs[2] = R12;
+	opts->dregs[3] = R8;
 	opts->aregs[0] = R13;
 	opts->aregs[1] = R14;
+	opts->aregs[2] = R9;
 	opts->aregs[7] = R15;
 	opts->native_code_map = malloc(sizeof(native_map_slot) * NATIVE_MAP_CHUNKS);
 	memset(opts->native_code_map, 0, sizeof(native_map_slot) * NATIVE_MAP_CHUNKS);
