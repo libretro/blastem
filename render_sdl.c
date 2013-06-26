@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include "render.h"
 #include "blastem.h"
+#include "io.h"
 
 SDL_Surface *screen;
 uint8_t render_dbg = 0;
