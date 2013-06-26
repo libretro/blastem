@@ -110,6 +110,7 @@ uint8_t * sub_ir(uint8_t * out, int32_t val, uint8_t dst, uint8_t size);
 uint8_t * sbb_ir(uint8_t * out, int32_t val, uint8_t dst, uint8_t size);
 uint8_t * cmp_ir(uint8_t * out, int32_t val, uint8_t dst, uint8_t size);
 uint8_t * add_irdisp8(uint8_t * out, int32_t val, uint8_t dst_base, int8_t disp, uint8_t size);
+uint8_t * add_irdisp32(uint8_t * out, int32_t val, uint8_t dst_base, int32_t disp, uint8_t size);
 uint8_t * adc_irdisp8(uint8_t * out, int32_t val, uint8_t dst_base, int8_t disp, uint8_t size);
 uint8_t * or_irdisp8(uint8_t * out, int32_t val, uint8_t dst_base, int8_t disp, uint8_t size);
 uint8_t * xor_irdisp8(uint8_t * out, int32_t val, uint8_t dst_base, int8_t disp, uint8_t size);
