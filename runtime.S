@@ -222,8 +222,10 @@ m68k_save_context:
 	mov %r10d, 8(%rsi) /* d0 */
 	mov %r11d, 12(%rsi) /* d1 */
 	mov %r12d, 16(%rsi) /* d2 */
+	mov %r8d,  20(%rsi) /* d3 */
 	mov %r13d, 40(%rsi) /* a0 */
 	mov %r14d, 44(%rsi) /* a1 */
+	mov %r9d,  48(%rsi) /* a2 */
 	mov %r15d, 68(%rsi) /* a7 */
 	mov %eax, 80(%rsi) /* current cycle count */
 	ret
@@ -237,13 +239,13 @@ m68k_load_context:
 	mov 8(%rsi), %r10d /* d0 */
 	mov 12(%rsi), %r11d /* d1 */
 	mov 16(%rsi), %r12d /* d2 */
+	mov 20(%rsi), %r8d  /* d3 */
 	mov 40(%rsi), %r13d /* a0 */
 	mov 44(%rsi), %r14d /* a1 */
+	mov 48(%rsi), %r9d  /* a2 */
 	mov 68(%rsi), %r15d /* a7 */
 	mov 76(%rsi), %ebp /* target cycle count */
 	mov 80(%rsi), %eax /* current cycle count */
-	mov 96(%rsi), %r8d /* cartridge address */
-	mov 104(%rsi), %r9d /* work ram address */
 	ret
 
 	.global m68k_start_context
