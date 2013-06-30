@@ -1884,7 +1884,7 @@ int main(int argc, char ** argv)
 	int debug = 0;
 	int ym_log = 0;
 	FILE *address_log = NULL;
-	char * statefile;
+	char * statefile = NULL;
 	for (int i = 2; i < argc; i++) {
 		if (argv[i][0] == '-') {
 			switch(argv[i][1]) {
