@@ -763,3 +763,24 @@ uint8_t ym_read_status(ym2612_context * context)
 	return context->status;
 }
 
+#define GST_YM_OFFSET 0x1E4
+#define GST_YM_SIZE (0x3E4-GST_YM_OFFSET)
+
+uint8_t ym_load_gst(ym2612_context * context, FILE * gstfile)
+{
+	uint8_t regdata[GST_YM_SIZE];
+	fseek(gstfile, GST_YM_OFFSET, SEEK_SET);
+	if (fread(regdata, 1, sizeof(regdata), gstfile) != sizeof(regdata)) {
+		return 0;
+	}
+	for (int i = 0; i < sizeof(regdata); i++) {
+		if (i & 0x100) {
+			ym_address_write_part2(context, i & 0xFF);
+		} else {
+			ym_address_write_part1(context, i);
+		}
+		ym_data_write(context, regdata[i]);
+	}
+	return 1;
+}
+

@@ -4127,7 +4127,7 @@ void remove_breakpoint(m68k_context * context, uint32_t address)
 
 void start_68k_context(m68k_context * context, uint32_t address)
 {
-	uint8_t * addr = get_native_address(context->native_code_map, address);
+	uint8_t * addr = get_native_address_trans(context, address);
 	m68k_start_context(addr, context);
 }
 

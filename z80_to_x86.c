@@ -1637,7 +1637,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 	default: {
 		char disbuf[80];
 		z80_disasm(inst, disbuf, address);
-		fprintf(stderr, "unimplemented instruction: %s\n", disbuf);
+		fprintf(stderr, "unimplemented instruction: %s at %X\n", disbuf, address);
 		FILE * f = fopen("zram.bin", "wb");
 		fwrite(context->mem_pointers[0], 1, 8 * 1024, f);
 		fclose(f);
