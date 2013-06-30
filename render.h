@@ -4,6 +4,8 @@
 #include "vdp.h"
 #include "psg.h"
 #include "ym2612.h"
+uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b);
+uint8_t render_depth();
 void render_init(int width, int height, char * title, uint32_t fps);
 void render_context(vdp_context * context);
 void render_wait_quit(vdp_context * context);

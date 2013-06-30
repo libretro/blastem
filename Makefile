@@ -1,8 +1,14 @@
 LIBS=sdl
+LDFLAGS=-lm `pkg-config --libs $(LIBS)`
 ifdef DEBUG
 CFLAGS=-ggdb -std=gnu99 `pkg-config --cflags-only-I $(LIBS)` -Wreturn-type -Werror=return-type
 else
 CFLAGS=-O2 -std=gnu99 `pkg-config --cflags-only-I $(LIBS)` -Wreturn-type -Werror=return-type
+endif
+
+ifdef PROFILE
+CFLAGS+= -pg
+LDFLAGS+= -pg
 endif
 
 TRANSOBJS=gen_x86.o x86_backend.o mem.o
@@ -13,7 +19,7 @@ AUDIOOBJS=ym2612.o psg.o wave.o
 all : dis trans stateview blastem
 
 blastem : blastem.o vdp.o render_sdl.o io.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS)
-	$(CC) -ggdb -o blastem  blastem.o vdp.o render_sdl.o io.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS) -lm `pkg-config --libs $(LIBS)`
+	$(CC) -ggdb -o blastem  blastem.o vdp.o render_sdl.o io.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS) $(LDFLAGS)
 
 dis : dis.o 68kinst.o
 	$(CC) -o dis dis.o 68kinst.o

@@ -10,7 +10,6 @@
 #define VRAM_SIZE (64*1024)
 #define LINEBUF_SIZE 320
 #define FRAMEBUF_ENTRIES (320+27)*(240+27) //PAL active display + full border
-#define FRAMEBUF_SIZE (FRAMEBUF_ENTRIES*sizeof(uint16_t))
 #define MAX_DRAWS 40
 #define MAX_DRAWS_H32 32
 #define MAX_SPRITES_LINE 20
@@ -124,10 +123,11 @@ typedef struct {
 	//stores 2-bit palette + 4-bit palette index + priority for current sprite line
 	uint8_t     *linebuf;
 	//stores 12-bit color + shadow/highlight bits
-	uint16_t    *framebuf;
-	uint16_t    *oddbuf;
-	uint16_t    *evenbuf;
+	void        *framebuf;
+	void        *oddbuf;
+	void        *evenbuf;
 	uint16_t    cram[CRAM_SIZE];
+	uint32_t    colors[CRAM_SIZE*3];
 	uint16_t    vsram[VSRAM_SIZE];
 	uint8_t     latched_mode;
 	uint16_t    hscroll_a;
@@ -146,6 +146,7 @@ typedef struct {
 	uint8_t     hint_counter;
 	uint8_t     flags2;
 	uint8_t     double_res;
+	uint8_t     b32;
 	uint8_t     *tmp_buf_a;
 	uint8_t     *tmp_buf_b;
 } vdp_context;
