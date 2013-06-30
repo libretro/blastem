@@ -1653,22 +1653,39 @@ void vdp_int_ack(vdp_context * context, uint16_t int_num)
 #define GST_VDP_REGS 0xFA
 #define GST_VDP_MEM 0x12478
 
-void vdp_load_savestate(vdp_context * context, FILE * state_file)
+uint8_t vdp_load_gst(vdp_context * context, FILE * state_file)
 {
 	uint8_t tmp_buf[CRAM_SIZE*2];
 	fseek(state_file, GST_VDP_REGS, SEEK_SET);
-	fread(context->regs, 1, VDP_REGS, state_file);
+	if (fread(context->regs, 1, VDP_REGS, state_file) != VDP_REGS) {
+		fputs("Failed to read VDP registers from savestate\n", stderr);
+		return 0;
+	}
+	context->double_res = (context->regs[REG_MODE_4] & (BIT_INTERLACE | BIT_DOUBLE_RES)) == (BIT_INTERLACE | BIT_DOUBLE_RES);
+	if (!context->double_res) {
+		context->framebuf = context->oddbuf;
+	}
 	latch_mode(context);
-	fread(tmp_buf, 1, sizeof(tmp_buf), state_file);
+	if (fread(tmp_buf, 1, sizeof(tmp_buf), state_file) != sizeof(tmp_buf)) {
+		fputs("Failed to read CRAM from savestate\n", stderr);
+		return 0;
+	}
 	for (int i = 0; i < CRAM_SIZE; i++) {
 		context->cram[i] = (tmp_buf[i*2+1] << 8) | tmp_buf[i*2];
 	}
-	fread(tmp_buf, 2, VSRAM_SIZE, state_file);
+	if (fread(tmp_buf, 2, VSRAM_SIZE, state_file) != VSRAM_SIZE) {
+		fputs("Failed to read VSRAM from savestate\n", stderr);
+		return 0;
+	}
 	for (int i = 0; i < VSRAM_SIZE; i++) {
 		context->vsram[i] = (tmp_buf[i*2+1] << 8) | tmp_buf[i*2];
 	}
 	fseek(state_file, GST_VDP_MEM, SEEK_SET);
-	fread(context->vdpmem, 1, VRAM_SIZE, state_file);
+	if (fread(context->vdpmem, 1, VRAM_SIZE, state_file) != VRAM_SIZE) {
+		fputs("Failed to read VRAM from savestate\n", stderr);
+		return 0;
+	}
+	return 1;
 }
 
 void vdp_save_state(vdp_context * context, FILE * outfile)

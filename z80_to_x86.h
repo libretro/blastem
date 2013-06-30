@@ -56,6 +56,7 @@ void translate_z80_stream(z80_context * context, uint32_t address);
 void init_x86_z80_opts(x86_z80_options * options);
 void init_z80_context(z80_context * context, x86_z80_options * options);
 uint8_t * z80_get_native_address(z80_context * context, uint32_t address);
+uint8_t * z80_get_native_address_trans(z80_context * context, uint32_t address);
 z80_context * z80_handle_code_write(uint32_t address, z80_context * context);
 void z80_run(z80_context * context);
 void z80_reset(z80_context * context);

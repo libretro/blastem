@@ -1463,6 +1463,190 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 	return context;
 }
 
+#define GST_68K_REGS 0x80
+#define GST_68K_REG_SIZE (0xDA-GST_68K_REGS)
+#define GST_68K_PC_OFFSET (0xC8-GST_68K_REGS)
+#define GST_68K_SR_OFFSET (0xD0-GST_68K_REGS)
+#define GST_68K_USP_OFFSET (0xD2-GST_68K_REGS)
+#define GST_68K_SSP_OFFSET (0xD6-GST_68K_REGS)
+#define GST_68K_RAM  0x2478
+#define GST_Z80_REGS 0x404
+#define GST_Z80_REG_SIZE (0x440-GST_Z80_REGS)
+#define GST_Z80_RAM 0x474
+
+uint32_t read_le_32(uint8_t * data)
+{
+	return data[3] << 24 | data[2] << 16 | data[1] << 8 | data[0];
+}
+
+uint16_t read_le_16(uint8_t * data)
+{
+	return data[1] << 8 | data[0];
+}
+
+uint16_t read_be_16(uint8_t * data)
+{
+	return data[0] << 8 | data[1];
+}
+
+uint32_t m68k_load_gst(m68k_context * context, FILE * gstfile)
+{
+	uint8_t buffer[4096];
+	fseek(gstfile, GST_68K_REGS, SEEK_SET);
+	if (fread(buffer, 1, GST_68K_REG_SIZE, gstfile) != GST_68K_REG_SIZE) {
+		fputs("Failed to read 68K registers from savestate\n", stderr);
+		return 0;
+	}
+	uint8_t * curpos = buffer;
+	for (int i = 0; i < 8; i++) {
+		context->dregs[i] = read_le_32(curpos);
+		curpos += sizeof(uint32_t);
+	}
+	for (int i = 0; i < 8; i++) {
+		context->aregs[i] = read_le_32(curpos);
+		curpos += sizeof(uint32_t);
+	}
+	uint32_t pc = read_le_32(buffer + GST_68K_PC_OFFSET);
+	uint16_t sr = read_le_16(buffer + GST_68K_SR_OFFSET);
+	context->status = sr >> 8;
+	for (int flag = 4; flag >= 0; flag--) {
+		context->flags[flag] = sr & 1;
+		sr >>= 1;
+	}
+	if (context->status & (1 << 5)) {
+		context->aregs[8] = read_le_32(buffer + GST_68K_USP_OFFSET);
+	} else {
+		context->aregs[8] = read_le_32(buffer + GST_68K_SSP_OFFSET);
+	}
+	fseek(gstfile, GST_68K_RAM, SEEK_SET);
+	for (int i = 0; i < (32*1024);) {
+		if (fread(buffer, 1, sizeof(buffer), gstfile) != sizeof(buffer)) {
+			fputs("Failed to read 68K RAM from savestate\n", stderr);
+			return 0;
+		}
+		for(curpos = buffer; curpos < (buffer + sizeof(buffer)); curpos += sizeof(uint16_t)) {
+			context->mem_pointers[1][i++] = read_be_16(curpos);
+		}
+	}
+	return pc;
+}
+
+uint8_t z80_load_gst(z80_context * context, FILE * gstfile)
+{
+	uint8_t regdata[GST_Z80_REG_SIZE];
+	fseek(gstfile, GST_Z80_REGS, SEEK_SET);
+	if (fread(regdata, 1, sizeof(regdata), gstfile) != sizeof(regdata)) {
+		fputs("Failed to read Z80 registers from savestate\n", stderr);
+		return 0;
+	}
+	uint8_t * curpos = regdata;
+	uint8_t f = *(curpos++);
+	context->flags[ZF_C] = f & 1;
+	f >>= 1;
+	context->flags[ZF_N] = f & 1;
+	f >>= 1;
+	context->flags[ZF_PV] = f & 1;
+	f >>= 2;
+	context->flags[ZF_H] = f & 1;
+	f >>= 2;
+	context->flags[ZF_Z] = f & 1;
+	f >>= 1;
+	context->flags[ZF_S] = f;
+	
+	context->regs[Z80_A] = *curpos;
+	curpos += 3;
+	for (int reg = Z80_C; reg <= Z80_IYH; reg++) {
+		context->regs[reg++] = *(curpos++);
+		context->regs[reg] = *curpos;
+		curpos += 3;
+	}
+	uint16_t pc = read_le_16(curpos);
+	curpos += 4;
+	context->sp = read_le_16(curpos);
+	curpos += 4;
+	f = *(curpos++);
+	context->alt_flags[ZF_C] = f & 1;
+	f >>= 1;
+	context->alt_flags[ZF_N] = f & 1;
+	f >>= 1;
+	context->alt_flags[ZF_PV] = f & 1;
+	f >>= 2;
+	context->alt_flags[ZF_H] = f & 1;
+	f >>= 2;
+	context->alt_flags[ZF_Z] = f & 1;
+	f >>= 1;
+	context->alt_flags[ZF_S] = f;
+	context->alt_regs[Z80_A] = *curpos;
+	curpos += 3;
+	for (int reg = Z80_C; reg <= Z80_H; reg++) {
+		context->alt_regs[reg++] = *(curpos++);
+		context->alt_regs[reg] = *curpos;
+		curpos += 3;
+	}
+	context->regs[Z80_I] = *curpos;
+	curpos += 2;
+	context->iff1 = context->iff2 = *curpos;
+	curpos += 2;
+	reset = !*(curpos++);
+	busreq = *curpos;
+	curpos += 3;
+	uint32_t bank = read_le_32(curpos);
+	if (bank < 0x400000) {
+		context->mem_pointers[1] = context->mem_pointers[2] + bank;
+	} else {
+		context->mem_pointers[1] = NULL;
+	}
+	context->bank_reg = bank >> 15;
+	fseek(gstfile, GST_Z80_RAM, SEEK_SET);
+	if(fread(context->mem_pointers[0], 1, 8*1024, gstfile) != (8*1024)) {
+		fputs("Failed to read Z80 RAM from savestate\n", stderr);
+		return 0;
+	}
+	context->native_pc =  z80_get_native_address_trans(context, pc);
+	return 1;
+}
+
+uint32_t load_gst(genesis_context * gen, char * fname)
+{
+	FILE * gstfile = fopen(fname, "rb");
+	if (!gstfile) {
+		fprintf(stderr, "Could not open file %s for reading\n", fname);
+		goto error;
+	}
+	char ident[5];
+	if (fread(ident, 1, sizeof(ident), gstfile) != sizeof(ident)) {
+		fprintf(stderr, "Could not read ident code from %s\n", fname);
+		goto error_close;
+	}
+	if (memcmp(ident, "GST\xE0\x40", 3) != 0) {
+		fprintf(stderr, "%s doesn't appear to be a GST savestate. The ident code is %c%c%c\\x%X\\x%X instead of GST\\xE0\\x40.\n", fname, ident[0], ident[1], ident[2], ident[3], ident[4]);
+		goto error_close;
+	}
+	uint32_t pc = m68k_load_gst(gen->m68k, gstfile);
+	if (!pc) {
+		goto error_close;
+	}
+	if (!vdp_load_gst(gen->vdp, gstfile)) {
+		goto error_close;
+	}
+	if (!ym_load_gst(gen->ym, gstfile)) {
+		goto error_close;
+	}
+	if (!z80_load_gst(gen->z80, gstfile)) {
+		goto error_close;
+	}
+	gen->ports[0].control = 0x40;
+	gen->ports[1].control = 0x40;
+	adjust_int_cycle(gen->m68k, gen->vdp);
+	fclose(gstfile);
+	return pc;
+	
+error_close:
+	fclose(gstfile);
+error:
+	return 0;
+}
+
 #define ROM_END   0x1A4
 #define RAM_ID    0x1B0
 #define RAM_FLAGS 0x1B2
@@ -1502,7 +1686,7 @@ void save_sram()
 	printf("Saved SRAM to %s\n", sram_filename);
 }
 
-void init_run_cpu(genesis_context * gen, int debug, FILE * address_log)
+void init_run_cpu(genesis_context * gen, int debug, FILE * address_log, char * statefile)
 {
 	m68k_context context;
 	x86_68k_options opts;
@@ -1616,10 +1800,21 @@ void init_run_cpu(genesis_context * gen, int debug, FILE * address_log)
 	uint32_t address;
 	address = cart[2] << 16 | cart[3];
 	translate_m68k_stream(address, &context);
-	if (debug) {
-		insert_breakpoint(&context, address, (uint8_t *)debugger);
+	if (statefile) {
+		uint32_t pc = load_gst(gen, statefile);
+		if (!pc) {
+			exit(1);
+		}
+		if (debug) {
+			insert_breakpoint(&context, pc, (uint8_t *)debugger);
+		}
+		start_68k_context(&context, pc);
+	} else {
+		if (debug) {
+			insert_breakpoint(&context, address, (uint8_t *)debugger);
+		}
+		m68k_reset(&context);
 	}
-	m68k_reset(&context);
 }
 
 char title[64];
@@ -1689,6 +1884,7 @@ int main(int argc, char ** argv)
 	int debug = 0;
 	int ym_log = 0;
 	FILE *address_log = NULL;
+	char * statefile;
 	for (int i = 2; i < argc; i++) {
 		if (argv[i][0] == '-') {
 			switch(argv[i][1]) {
@@ -1731,6 +1927,14 @@ int main(int argc, char ** argv)
 					fprintf(stderr, "'%c' is not a valid region character for the -r option\n", argv[i][0]);
 					return 1;
 				}
+				break;
+			case 's':
+				i++;
+				if (i >= argc) {
+					fputs("-s must be followed by a savestate filename\n", stderr);
+					return 1;
+				}
+				statefile = argv[i];
 				break;
 			case 'y':
 				ym_log = 1;
@@ -1801,6 +2005,6 @@ int main(int argc, char ** argv)
 	}
 	set_keybindings();
 	
-	init_run_cpu(&gen, debug, address_log);
+	init_run_cpu(&gen, debug, address_log, statefile);
 	return 0;
 }

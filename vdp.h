@@ -156,7 +156,7 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles);
 uint32_t vdp_run_to_vblank(vdp_context * context);
 //runs until the target cycle is reached or the current DMA operation has completed, whicever comes first
 void vdp_run_dma_done(vdp_context * context, uint32_t target_cycles);
-void vdp_load_savestate(vdp_context * context, FILE * state_file);
+uint8_t vdp_load_gst(vdp_context * context, FILE * state_file);
 void vdp_save_state(vdp_context * context, FILE * outfile);
 int vdp_control_port_write(vdp_context * context, uint16_t value);
 int vdp_data_port_write(vdp_context * context, uint16_t value);
