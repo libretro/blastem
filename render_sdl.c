@@ -10,9 +10,6 @@ uint8_t debug_pal = 0;
 
 uint32_t last_frame = 0;
 
-int32_t color_map[1 << 12];
-uint8_t levels[] = {0, 27, 49, 71, 87, 103, 119, 130, 146, 157, 174, 190, 206, 228, 255};
-
 uint32_t min_delay;
 uint32_t frame_delay = 1000/60;
 
@@ -76,6 +73,16 @@ void render_close_audio()
 SDL_Joystick * joysticks[MAX_JOYSTICKS];
 int num_joysticks;
 
+uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b)
+{
+	return SDL_MapRGB(screen->format, r, g, b);
+}
+
+uint8_t render_depth()
+{
+	return screen->format->BytesPerPixel * 8;
+}
+
 void render_init(int width, int height, char * title, uint32_t fps)
 {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK) < 0) {
@@ -90,28 +97,11 @@ void render_init(int width, int height, char * title, uint32_t fps)
     	fprintf(stderr, "Unable to get SDL surface: %s\n", SDL_GetError());
         exit(1);
     }
-    if (screen->format->BytesPerPixel < 2) {
-    	fprintf(stderr, "BlastEm requires at least a 16-bit surface, SDL returned a %d-bit surface\n", screen->format->BytesPerPixel * 8);
+    if (screen->format->BytesPerPixel != 2 && screen->format->BytesPerPixel != 4) {
+    	fprintf(stderr, "BlastEm requires a 16-bit or 32-bit surface, SDL returned a %d-bit surface\n", screen->format->BytesPerPixel * 8);
     	exit(1);
     }
     SDL_WM_SetCaption(title, title);
-    uint8_t b,g,r;
-    for (uint16_t color = 0; color < (1 << 12); color++) {
-    	if (color & FBUF_SHADOW) {
-    		b = levels[(color >> 9) & 0x7];
-			g = levels[(color >> 5) & 0x7];
-			r = levels[(color >> 1) & 0x7];
-    	} else if(color & FBUF_HILIGHT) {
-    		b = levels[((color >> 9) & 0x7) + 7];
-			g = levels[((color >> 5) & 0x7) + 7];
-			r = levels[((color >> 1) & 0x7) + 7];
-    	} else {
-			b = levels[(color >> 8) & 0xE];
-			g = levels[(color >> 4) & 0xE];
-			r = levels[color & 0xE];
-		}
-		color_map[color] = SDL_MapRGB(screen->format, r, g, b);
-    }
     min_delay = 0;
     for (int i = 0; i < 100; i++) {
     	uint32_t start = SDL_GetTicks();
@@ -163,11 +153,10 @@ void render_init(int width, int height, char * title, uint32_t fps)
     SDL_JoystickEventState(SDL_ENABLE);
 }
 
-uint16_t blankbuf[320*240];
+uint32_t blankbuf[320*240];
 
 void render_context(vdp_context * context)
 {
-	uint8_t *buf_8;
 	uint16_t *buf_16;
 	uint32_t *buf_32; 
 	uint8_t b,g,r;
@@ -185,108 +174,40 @@ void render_context(vdp_context * context)
     	repeat_y = repeat_x;
     }
     int othermask = repeat_y >> 1;
-    uint16_t *otherbuf = (context->regs[REG_MODE_4] & BIT_INTERLACE) ? context->evenbuf : blankbuf;
-    switch (screen->format->BytesPerPixel) {
-    case 2:
-        buf_16 = (uint16_t *)screen->pixels;
-        for (int y = 0; y < 240; y++) {
-        	for (int i = 0; i < repeat_y; i++,buf_16 += screen->pitch/2) {
+    
+    if (screen->format->BytesPerPixel == 2) {
+    	uint16_t *otherbuf = (context->regs[REG_MODE_4] & BIT_INTERLACE) ? context->evenbuf : (uint16_t *)blankbuf;
+    	uint16_t * oddbuf = context->oddbuf;
+    	buf_16 = (uint16_t *)screen->pixels;
+    	for (int y = 0; y < 240; y++) {
+    		for (int i = 0; i < repeat_y; i++,buf_16 += screen->pitch/2) {
         		uint16_t *line = buf_16;
-        		uint16_t *src_line = (i & othermask ? otherbuf : context->oddbuf) + y * 320;
+        		uint16_t *src_line = (i & othermask ? otherbuf : oddbuf) + y * 320;
 		    	for (int x = 0; x < 320; x++) {
-		    		uint16_t color = color_map[*(src_line++) & 0xFFF];
+		    		uint16_t color = *(src_line++);
 		    		for (int j = 0; j < repeat_x; j++) {
 		    			*(line++) = color;
 		    		}
 		    	}
 		    }
-        }
-    	break;
-    case 3:
-        buf_8 = (uint8_t *)screen->pixels;
-        for (int y = 0; y < 240; y++) {
-        	for (int i = 0; i < repeat_y; i++,buf_8 += screen->pitch) {
-        		uint8_t *line = buf_8;
+    	}
+    } else {
+    	uint32_t *otherbuf = (context->regs[REG_MODE_4] & BIT_INTERLACE) ? context->evenbuf : (uint32_t *)blankbuf;
+    	uint32_t * oddbuf = context->oddbuf;
+    	buf_32 = (uint32_t *)screen->pixels;
+    	for (int y = 0; y < 240; y++) {
+    		for (int i = 0; i < repeat_y; i++,buf_32 += screen->pitch/4) {
+        		uint32_t *line = buf_32;
+        		uint32_t *src_line = (i & othermask ? otherbuf : oddbuf) + y * 320;
 		    	for (int x = 0; x < 320; x++) {
-		    		uint16_t gen_color = context->oddbuf[y * 320 + x];
-		    		b = ((gen_color >> 8) & 0xE) * 18;
-		    		g = ((gen_color >> 4) & 0xE) * 18;
-		    		r = (gen_color& 0xE) * 18;
+		    		uint32_t color = *(src_line++);
 		    		for (int j = 0; j < repeat_x; j++) {
-						*(buf_8+screen->format->Rshift/8) = r;
-						*(buf_8+screen->format->Gshift/8) = g;
-						*(buf_8+screen->format->Bshift/8) = b;
-						buf_8 += 3;
-					}
+		    			*(line++) = color;
+		    		}
 		    	}
 		    }
-        }
-    	break;
-    case 4:
-        buf_32 = (uint32_t *)screen->pixels;
-
-	    for (int y = 0; y < 240; y++) {
-	    	for (int i = 0; i < repeat_y; i++,buf_32 += screen->pitch/4) {
-	    		uint32_t *line = buf_32;
-	    		uint16_t *src_line = (i & othermask ? otherbuf : context->oddbuf) + y * 320;
-		    	for (int x = 0; x < 320; x++) {
-		    		uint32_t color;
-		    		if (!render_dbg) {
-		    			color = color_map[*(src_line++) & 0xFFF];
-					} else if(render_dbg == 2) {
-						color = color_map[context->cram[(y/30)*8 + x/40]];
-					} else if(render_dbg == 3) {
-						if (x & 1) {
-							color = color_map[context->cram[ (debug_pal << 4) | (context->vdpmem[(x/8)*32 + (y/8)*32*40 + (x%8)/2 + (y%8)*4] & 0xF) ]];
-						} else {
-							color = color_map[context->cram[ (debug_pal << 4) | (context->vdpmem[(x/8)*32 + (y/8)*32*40 + (x%8)/2 + (y%8)*4] >> 4) ]];
-						}
-					}else {
-						uint16_t gen_color = context->oddbuf[y * 320 + x];
-						r = g = b = 0;
-						switch(gen_color & FBUF_SRC_MASK)
-						{
-						case FBUF_SRC_A:
-							g = 127;//plane a = green
-							break;
-						case FBUF_SRC_W:
-							g = 127;//window = cyan
-							b = 127;
-							break;
-						case FBUF_SRC_B:
-							b = 127;//plane b = blue
-							break;
-						case FBUF_SRC_S:
-							r = 127;//sprite = red
-							break;
-						case FBUF_SRC_BG:
-							r = 127;//BG = purple
-							b = 127;
-						}
-						if (gen_color & FBUF_BIT_PRIORITY) {
-							b *= 2;
-							g *= 2;
-							r *= 2;
-						}
-						if (gen_color & FBUF_SHADOW) {
-							b /= 2;
-							g /= 2;
-							r /= 2;
-						} else if(gen_color & FBUF_HILIGHT) {
-							b = b ? b : 64;
-							g = g ? g : 64;
-							r = r ? r : 64;
-						}
-						color = SDL_MapRGB(screen->format, r, g, b);
-					}
-					for (int j = 0; j < repeat_x; j++) {
-						*(line++) = color;
-					}
-				}
-	    	}
-	    }
-		break;
-	}
+    	}
+    }
     if ( SDL_MUSTLOCK(screen) ) {
         SDL_UnlockSurface(screen);
     }
