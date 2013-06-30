@@ -85,6 +85,7 @@ void ym_address_write_part1(ym2612_context * context, uint8_t address);
 void ym_address_write_part2(ym2612_context * context, uint8_t address);
 void ym_data_write(ym2612_context * context, uint8_t value);
 uint8_t ym_read_status(ym2612_context * context);
+uint8_t ym_load_gst(ym2612_context * context, FILE * gstfile);
 
 #endif //YM2612_H_
 
