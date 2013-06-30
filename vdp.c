@@ -2,6 +2,7 @@
 #include "blastem.h"
 #include <stdlib.h>
 #include <string.h>
+#include "render.h"
 
 #define NTSC_ACTIVE 225
 #define PAL_ACTIVE 241
@@ -26,15 +27,20 @@
 #define HBLANK_CLEAR_H40 (MCLK_WEIRD_END+61*4)
 #define HBLANK_CLEAR_H32 (HSYNC_END_H32 + 46*5)
 
+int32_t color_map[1 << 12];
+uint8_t levels[] = {0, 27, 49, 71, 87, 103, 119, 130, 146, 157, 174, 190, 206, 228, 255};
+
+uint8_t color_map_init_done;
+
 void init_vdp_context(vdp_context * context)
 {
 	memset(context, 0, sizeof(*context));
 	context->vdpmem = malloc(VRAM_SIZE);
 	memset(context->vdpmem, 0, VRAM_SIZE);
-	context->oddbuf = context->framebuf = malloc(FRAMEBUF_SIZE);
-	memset(context->framebuf, 0, FRAMEBUF_SIZE);
-	context->evenbuf = malloc(FRAMEBUF_SIZE);
-	memset(context->evenbuf, 0, FRAMEBUF_SIZE);
+	context->oddbuf = context->framebuf = malloc(FRAMEBUF_ENTRIES * (render_depth() / 8));
+	memset(context->framebuf, 0, FRAMEBUF_ENTRIES * (render_depth() / 8));
+	context->evenbuf = malloc(FRAMEBUF_ENTRIES * (render_depth() / 8));
+	memset(context->evenbuf, 0, FRAMEBUF_ENTRIES * (render_depth() / 8));
 	context->linebuf = malloc(LINEBUF_SIZE + SCROLL_BUFFER_SIZE*2);
 	memset(context->linebuf, 0, LINEBUF_SIZE + SCROLL_BUFFER_SIZE*2);
 	context->tmp_buf_a = context->linebuf + LINEBUF_SIZE;
@@ -42,6 +48,27 @@ void init_vdp_context(vdp_context * context)
 	context->sprite_draws = MAX_DRAWS;
 	context->fifo_cur = malloc(sizeof(fifo_entry) * FIFO_SIZE);
 	context->fifo_end = context->fifo_cur + FIFO_SIZE;
+	context->b32 = render_depth() == 32;
+	if (!color_map_init_done) {
+		uint8_t b,g,r;
+		for (uint16_t color = 0; color < (1 << 12); color++) {
+			if (color & FBUF_SHADOW) {
+				b = levels[(color >> 9) & 0x7];
+				g = levels[(color >> 5) & 0x7];
+				r = levels[(color >> 1) & 0x7];
+			} else if(color & FBUF_HILIGHT) {
+				b = levels[((color >> 9) & 0x7) + 7];
+				g = levels[((color >> 5) & 0x7) + 7];
+				r = levels[((color >> 1) & 0x7) + 7];
+			} else {
+				b = levels[(color >> 8) & 0xE];
+				g = levels[(color >> 4) & 0xE];
+				r = levels[color & 0xE];
+			}
+			color_map[color] = render_map_color(r, g, b);
+		}
+		color_map_init_done = 1;
+	}
 }
 
 void render_sprite_cells(vdp_context * context)
@@ -302,10 +329,15 @@ void external_slot(vdp_context * context)
 					context->flags |= FLAG_DMA_PROG;
 				}
 				break;
-			case CRAM_WRITE:
-				context->cram[(context->address/2) & (CRAM_SIZE-1)] = read_dma_value((context->regs[REG_DMASRC_H] << 16) | (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]);
+			case CRAM_WRITE: {
+				uint16_t addr = (context->address/2) & (CRAM_SIZE-1), value;
+				context->cram[addr] = value = read_dma_value((context->regs[REG_DMASRC_H] << 16) | (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]);
+				context->colors[addr] = color_map[value & 0xEEE];
+				context->colors[addr + CRAM_SIZE] = color_map[(value & 0xEEE) | FBUF_SHADOW];
+				context->colors[addr + CRAM_SIZE*2] = color_map[(value & 0xEEE) | FBUF_HILIGHT];
 				//printf("CRAM DMA | %X set to %X from %X at %d\n", (context->address/2) & (CRAM_SIZE-1), context->cram[(context->address/2) & (CRAM_SIZE-1)], (context->regs[REG_DMASRC_H] << 17) | (context->regs[REG_DMASRC_M] << 9) | (context->regs[REG_DMASRC_L] << 1), context->cycles);
 				break;
+			}
 			case VSRAM_WRITE:
 				if (((context->address/2) & 63) < VSRAM_SIZE) {
 					context->vsram[(context->address/2) & 63] = read_dma_value((context->regs[REG_DMASRC_H] << 16) | (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]);
@@ -322,10 +354,15 @@ void external_slot(vdp_context * context)
 				context->vdpmem[context->address] = context->dma_val;
 				context->dma_val = (context->dma_val << 8) | ((context->dma_val >> 8) & 0xFF);
 				break;
-			case CRAM_WRITE:
-				context->cram[(context->address/2) & (CRAM_SIZE-1)] = context->dma_val;
+			case CRAM_WRITE: {
+				uint16_t addr = (context->address/2) & (CRAM_SIZE-1);
+				context->cram[addr] = context->dma_val;
+				context->colors[addr] = color_map[context->dma_val & 0xEEE];
+				context->colors[addr + CRAM_SIZE] = color_map[(context->dma_val & 0xEEE) | FBUF_SHADOW];
+				context->colors[addr + CRAM_SIZE*2] = color_map[(context->dma_val & 0xEEE) | FBUF_HILIGHT];
 				//printf("CRAM DMA Fill | %X set to %X at %d\n", (context->address/2) & (CRAM_SIZE-1), context->cram[(context->address/2) & (CRAM_SIZE-1)], context->cycles);
 				break;
+			}
 			case VSRAM_WRITE:
 				if (((context->address/2) & 63) < VSRAM_SIZE) {
 					context->vsram[(context->address/2) & 63] = context->dma_val;
@@ -341,10 +378,15 @@ void external_slot(vdp_context * context)
 				case VRAM_WRITE:
 					context->vdpmem[context->address] = context->dma_val;
 					break;
-				case CRAM_WRITE:
-					context->cram[(context->address/2) & (CRAM_SIZE-1)] = context->dma_val;
+				case CRAM_WRITE: {
+					uint16_t addr = (context->address/2) & (CRAM_SIZE-1);
+					context->cram[addr] = context->dma_val;
+					context->colors[addr] = color_map[context->dma_val & 0xEEE];
+					context->colors[addr + CRAM_SIZE] = color_map[(context->dma_val & 0xEEE) | FBUF_SHADOW];
+					context->colors[addr + CRAM_SIZE*2] = color_map[(context->dma_val & 0xEEE) | FBUF_HILIGHT];
 					//printf("CRAM DMA Copy | %X set to %X from %X at %d\n", (context->address/2) & (CRAM_SIZE-1), context->cram[(context->address/2) & (CRAM_SIZE-1)], context->regs[REG_DMASRC_L] & (CRAM_SIZE-1), context->cycles);
 					break;
+				}
 				case VSRAM_WRITE:
 					if (((context->address/2) & 63) < VSRAM_SIZE) {
 						context->vsram[(context->address/2) & 63] = context->dma_val;
@@ -411,10 +453,15 @@ void external_slot(vdp_context * context)
 						return;
 					}
 					break;
-				case CRAM_WRITE:
+				case CRAM_WRITE: {
 					//printf("CRAM Write | %X to %X\n", start->value, (start->address/2) & (CRAM_SIZE-1));
-					context->cram[(start->address/2) & (CRAM_SIZE-1)] = start->value;
+					uint16_t addr = (context->address/2) & (CRAM_SIZE-1);
+					context->cram[addr] = start->value;
+					context->colors[addr] = color_map[start->value & 0xEEE];
+					context->colors[addr + CRAM_SIZE] = color_map[(start->value & 0xEEE) | FBUF_SHADOW];
+					context->colors[addr + CRAM_SIZE*2] = color_map[(start->value & 0xEEE) | FBUF_HILIGHT];
 					break;
+				}
 				case VSRAM_WRITE:
 					if (((start->address/2) & 63) < VSRAM_SIZE) {
 						//printf("VSRAM Write: %X to %X\n", start->value, context->address);
@@ -629,115 +676,133 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		return;
 	}
 	render_map(context->col_2, context->tmp_buf_b+SCROLL_BUFFER_DRAW+8, context);
-	uint16_t *dst, *end;
+	uint16_t *dst;
+	uint32_t *dst32;
 	uint8_t *sprite_buf, *plane_a, *plane_b;
 	if (col)
 	{
 		col-=2;
-		dst = context->framebuf + line * 320 + col * 8;
+		if (context->b32) {
+			dst32 = context->framebuf;
+			dst32 += line * 320 + col * 8;
+		} else {
+			dst = context->framebuf;
+			dst += line * 320 + col * 8;
+		}
 		sprite_buf = context->linebuf + col * 8;
 		uint16_t a_src;
 		if (context->flags & FLAG_WINDOW) {
 			plane_a = context->tmp_buf_a + SCROLL_BUFFER_DRAW;
-			a_src = FBUF_SRC_W;
+			//a_src = FBUF_SRC_W;
 		} else {
 			plane_a = context->tmp_buf_a + SCROLL_BUFFER_DRAW - (context->hscroll_a & 0xF);
-			a_src = FBUF_SRC_A;
+			//a_src = FBUF_SRC_A;
 		}
 		plane_b = context->tmp_buf_b + SCROLL_BUFFER_DRAW - (context->hscroll_b & 0xF);
-		end = dst + 16;
 		uint16_t src;
 		//printf("A | tmp_buf offset: %d\n", 8 - (context->hscroll_a & 0x7));
 		
 		if (context->regs[REG_MODE_4] & BIT_HILIGHT) {
-			for (; dst < end; ++plane_a, ++plane_b, ++sprite_buf, ++dst) {
+			for (int i = 0; i < 16; ++plane_a, ++plane_b, ++sprite_buf, ++i) {
 				uint8_t pixel;
 				
 				src = 0;
 				uint8_t sprite_color = *sprite_buf & 0x3F;
 				if (sprite_color == 0x3E || sprite_color == 0x3F) {
 					if (sprite_color == 0x3F) {
-						src = FBUF_SHADOW;
+						src = CRAM_SIZE;//FBUF_SHADOW;
 					} else {
-						src = FBUF_HILIGHT;
+						src = CRAM_SIZE*2;//FBUF_HILIGHT;
 					}
 					if (*plane_a & BUF_BIT_PRIORITY && *plane_a & 0xF) {
 						pixel = *plane_a;
-						src |= a_src;
+						//src |= a_src;
 					} else if (*plane_b & BUF_BIT_PRIORITY && *plane_b & 0xF) {
 						pixel = *plane_b;
-						src |= FBUF_SRC_B;
+						//src |= FBUF_SRC_B;
 					} else if (*plane_a & 0xF) {
 						pixel = *plane_a;
-						src |= a_src;
+						//src |= a_src;
 					} else if (*plane_b & 0xF){
 						pixel = *plane_b;
-						src |= FBUF_SRC_B;
+						//src |= FBUF_SRC_B;
 					} else {
 						pixel = context->regs[REG_BG_COLOR] & 0x3F;
-						src |= FBUF_SRC_BG;
+						//src |= FBUF_SRC_BG;
 					}
 				} else {
 					if (*sprite_buf & BUF_BIT_PRIORITY && *sprite_buf & 0xF) {
 						pixel = *sprite_buf;
-						src = FBUF_SRC_S;
+						//src = FBUF_SRC_S;
 					} else if (*plane_a & BUF_BIT_PRIORITY && *plane_a & 0xF) {
 						pixel = *plane_a;
-						src = a_src;
+						//src = a_src;
 					} else if (*plane_b & BUF_BIT_PRIORITY && *plane_b & 0xF) {
 						pixel = *plane_b;
-						src = FBUF_SRC_B;
+						//src = FBUF_SRC_B;
 					} else {
 						if (!(*plane_a & BUF_BIT_PRIORITY || *plane_a & BUF_BIT_PRIORITY)) {
-							src = FBUF_SHADOW;
+							src = CRAM_SIZE;//FBUF_SHADOW;
 						}
 						if (*sprite_buf & 0xF) {
 							pixel = *sprite_buf;
 							if (*sprite_buf & 0xF == 0xE) {
-								src = FBUF_SRC_S;
-							} else {
+								src = 0;//FBUF_SRC_S;
+							} /*else {
 								src |= FBUF_SRC_S;
-							}
+							}*/
 						} else if (*plane_a & 0xF) {
 							pixel = *plane_a;
-							src |= a_src;
+							//src |= a_src;
 						} else if (*plane_b & 0xF){
 							pixel = *plane_b;
-							src |= FBUF_SRC_B;
+							//src |= FBUF_SRC_B;
 						} else {
 							pixel = context->regs[REG_BG_COLOR] & 0x3F;
-							src |= FBUF_SRC_BG;
+							//src |= FBUF_SRC_BG;
 						}
 					}
 				}
-				*dst = (context->cram[pixel & 0x3F] & 0xEEE) | ((pixel & BUF_BIT_PRIORITY) ? FBUF_BIT_PRIORITY : 0) | src;
+				pixel &= 0x3F;
+				pixel += src;
+				if (context->b32) {
+					*(dst32++) = context->colors[pixel];
+				} else {
+					*(dst++) = context->colors[pixel];
+				}
+				//*dst = (context->cram[pixel & 0x3F] & 0xEEE) | ((pixel & BUF_BIT_PRIORITY) ? FBUF_BIT_PRIORITY : 0) | src;
 			}
 		} else {
-			for (; dst < end; ++plane_a, ++plane_b, ++sprite_buf, ++dst) {
+			for (int i = 0; i < 16; ++plane_a, ++plane_b, ++sprite_buf, ++i) {
 				uint8_t pixel;
 				if (*sprite_buf & BUF_BIT_PRIORITY && *sprite_buf & 0xF) {
 					pixel = *sprite_buf;
-					src = FBUF_SRC_S;
+					//src = FBUF_SRC_S;
 				} else if (*plane_a & BUF_BIT_PRIORITY && *plane_a & 0xF) {
 					pixel = *plane_a;
-					src = a_src;
+					//src = a_src;
 				} else if (*plane_b & BUF_BIT_PRIORITY && *plane_b & 0xF) {
 					pixel = *plane_b;
-					src = FBUF_SRC_B;
+					//src = FBUF_SRC_B;
 				} else if (*sprite_buf & 0xF) {
 					pixel = *sprite_buf;
-					src = FBUF_SRC_S;
+					//src = FBUF_SRC_S;
 				} else if (*plane_a & 0xF) {
 					pixel = *plane_a;
-					src = a_src;
+					//src = a_src;
 				} else if (*plane_b & 0xF){
 					pixel = *plane_b;
-					src = FBUF_SRC_B;
+					//src = FBUF_SRC_B;
 				} else {
 					pixel = context->regs[REG_BG_COLOR] & 0x3F;
-					src = FBUF_SRC_BG;
+					//src = FBUF_SRC_BG;
 				}
-				*dst = (context->cram[pixel & 0x3F] & 0xEEE) | ((pixel & BUF_BIT_PRIORITY) ? FBUF_BIT_PRIORITY : 0) | src;
+				if (context->b32) {
+					*(dst32++) = context->colors[pixel & 0x3F];
+				} else {
+					*(dst++) = context->colors[pixel & 0x3F];
+				}
+				//*dst = (context->cram[pixel & 0x3F] & 0xEEE) | ((pixel & BUF_BIT_PRIORITY) ? FBUF_BIT_PRIORITY : 0) | src;
 			}
 		}
 	} else {
@@ -1125,24 +1190,34 @@ void check_render_bg(vdp_context * context, int32_t line, uint32_t slot)
 {
 	if (line > 0) {
 		line -= 1;
-		uint16_t * start = NULL, *end = NULL;
+		int starti = -1;
 		if (context->latched_mode & BIT_H40) {
 			if (slot >= 50 && slot < 210) {
 				uint32_t x = (slot-50)*2;
-				start = context->framebuf + line * 320 + x;
-				end = start + 2;
+				starti = line * 320 + x;
 			}
 		} else {
 			if (slot >= 43 && slot < 171) {
 				uint32_t x = (slot-43)*2;
-				start = context->framebuf + line * 320 + x;
-				end = start + 2;
+				starti = line * 320 + x;
 			}
 		}
-		uint16_t color = (context->cram[context->regs[REG_BG_COLOR] & 0x3F] & 0xEEE);
-		while (start != end) {
-			*start = color;
-			++start;
+		if (starti >= 0) {
+			if (context->b32) {
+				uint32_t color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
+				uint32_t * start = context->framebuf;
+				start += starti;
+				for (int i = 0; i < 2; i++) {
+					*(start++) = color;
+				}
+			} else {
+				uint16_t color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
+				uint16_t * start = context->framebuf;
+				start += starti;
+				for (int i = 0; i < 2; i++) {
+					*(start++) = color;
+				}
+			}
 		}
 	}
 }
@@ -1671,7 +1746,11 @@ uint8_t vdp_load_gst(vdp_context * context, FILE * state_file)
 		return 0;
 	}
 	for (int i = 0; i < CRAM_SIZE; i++) {
-		context->cram[i] = (tmp_buf[i*2+1] << 8) | tmp_buf[i*2];
+		uint16_t value;
+		context->cram[i] = value = (tmp_buf[i*2+1] << 8) | tmp_buf[i*2];
+		context->colors[i] = color_map[value & 0xEEE];
+		context->colors[i + CRAM_SIZE] = color_map[(value & 0xEEE) | FBUF_SHADOW];
+		context->colors[i + CRAM_SIZE*2] = color_map[(value & 0xEEE) | FBUF_HILIGHT];
 	}
 	if (fread(tmp_buf, 2, VSRAM_SIZE, state_file) != VSRAM_SIZE) {
 		fputs("Failed to read VSRAM from savestate\n", stderr);
