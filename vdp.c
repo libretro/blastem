@@ -297,6 +297,15 @@ void read_sprite_x(uint32_t line, vdp_context * context)
 	}
 }
 
+void write_cram(vdp_context * context, uint16_t address, uint16_t value)
+{
+	uint16_t addr = (address/2) & (CRAM_SIZE-1);
+	context->cram[addr] = value;
+	context->colors[addr] = color_map[value & 0xEEE];
+	context->colors[addr + CRAM_SIZE] = color_map[(value & 0xEEE) | FBUF_SHADOW];
+	context->colors[addr + CRAM_SIZE*2] = color_map[(value & 0xEEE) | FBUF_HILIGHT];
+}
+
 #define VRAM_READ 0
 #define VRAM_WRITE 1
 #define CRAM_READ 8
@@ -330,11 +339,7 @@ void external_slot(vdp_context * context)
 				}
 				break;
 			case CRAM_WRITE: {
-				uint16_t addr = (context->address/2) & (CRAM_SIZE-1), value;
-				context->cram[addr] = value = read_dma_value((context->regs[REG_DMASRC_H] << 16) | (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]);
-				context->colors[addr] = color_map[value & 0xEEE];
-				context->colors[addr + CRAM_SIZE] = color_map[(value & 0xEEE) | FBUF_SHADOW];
-				context->colors[addr + CRAM_SIZE*2] = color_map[(value & 0xEEE) | FBUF_HILIGHT];
+				write_cram(context, context->address, read_dma_value((context->regs[REG_DMASRC_H] << 16) | (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]));
 				//printf("CRAM DMA | %X set to %X from %X at %d\n", (context->address/2) & (CRAM_SIZE-1), context->cram[(context->address/2) & (CRAM_SIZE-1)], (context->regs[REG_DMASRC_H] << 17) | (context->regs[REG_DMASRC_M] << 9) | (context->regs[REG_DMASRC_L] << 1), context->cycles);
 				break;
 			}
@@ -354,15 +359,10 @@ void external_slot(vdp_context * context)
 				context->vdpmem[context->address] = context->dma_val;
 				context->dma_val = (context->dma_val << 8) | ((context->dma_val >> 8) & 0xFF);
 				break;
-			case CRAM_WRITE: {
-				uint16_t addr = (context->address/2) & (CRAM_SIZE-1);
-				context->cram[addr] = context->dma_val;
-				context->colors[addr] = color_map[context->dma_val & 0xEEE];
-				context->colors[addr + CRAM_SIZE] = color_map[(context->dma_val & 0xEEE) | FBUF_SHADOW];
-				context->colors[addr + CRAM_SIZE*2] = color_map[(context->dma_val & 0xEEE) | FBUF_HILIGHT];
+			case CRAM_WRITE:
+				write_cram(context, context->address, context->dma_val);				
 				//printf("CRAM DMA Fill | %X set to %X at %d\n", (context->address/2) & (CRAM_SIZE-1), context->cram[(context->address/2) & (CRAM_SIZE-1)], context->cycles);
 				break;
-			}
 			case VSRAM_WRITE:
 				if (((context->address/2) & 63) < VSRAM_SIZE) {
 					context->vsram[(context->address/2) & 63] = context->dma_val;
@@ -379,11 +379,7 @@ void external_slot(vdp_context * context)
 					context->vdpmem[context->address] = context->dma_val;
 					break;
 				case CRAM_WRITE: {
-					uint16_t addr = (context->address/2) & (CRAM_SIZE-1);
-					context->cram[addr] = context->dma_val;
-					context->colors[addr] = color_map[context->dma_val & 0xEEE];
-					context->colors[addr + CRAM_SIZE] = color_map[(context->dma_val & 0xEEE) | FBUF_SHADOW];
-					context->colors[addr + CRAM_SIZE*2] = color_map[(context->dma_val & 0xEEE) | FBUF_HILIGHT];
+					write_cram(context, context->address, context->dma_val);
 					//printf("CRAM DMA Copy | %X set to %X from %X at %d\n", (context->address/2) & (CRAM_SIZE-1), context->cram[(context->address/2) & (CRAM_SIZE-1)], context->regs[REG_DMASRC_L] & (CRAM_SIZE-1), context->cycles);
 					break;
 				}
@@ -455,11 +451,7 @@ void external_slot(vdp_context * context)
 					break;
 				case CRAM_WRITE: {
 					//printf("CRAM Write | %X to %X\n", start->value, (start->address/2) & (CRAM_SIZE-1));
-					uint16_t addr = (context->address/2) & (CRAM_SIZE-1);
-					context->cram[addr] = start->value;
-					context->colors[addr] = color_map[start->value & 0xEEE];
-					context->colors[addr + CRAM_SIZE] = color_map[(start->value & 0xEEE) | FBUF_SHADOW];
-					context->colors[addr + CRAM_SIZE*2] = color_map[(start->value & 0xEEE) | FBUF_HILIGHT];
+					write_cram(context, start->address, start->value);
 					break;
 				}
 				case VSRAM_WRITE:
