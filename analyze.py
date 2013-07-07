@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+#OLD
 #0 - !SE
 #1 - !CAS
 #2 - A0
@@ -11,6 +12,27 @@
 #7 - EDCLK
 #------
 #8 - !HSYNC
+#9 - A4
+#A - A5
+#B - A6
+#------
+#C - !RAS
+#D - !WB/!WE
+#E - !DT/!OE
+#F - SC
+
+#NEW
+#0 - !IPL2
+#1 - !CAS
+#2 - A0
+#3 - A1
+#------
+#4 - A2
+#5 - A3
+#6 - A7
+#7 - !HSYNC
+#------
+#8 - !VSYNC
 #9 - A4
 #A - A5
 #B - A6
@@ -63,10 +85,11 @@ def detect_high(sample, bit):
 	return sample & mask
 
 
+ipl2 = 0x0
 cas = 0x1
 ras = 0xC
-edclk = 0x7
-hsync = 0x8
+vsync = 0x8
+hsync = 0x7
 wewb = 0xD
 oedt = 0xE
 sc = 0xF
@@ -103,8 +126,6 @@ for line in f:
 		sample,_,samplenum = line.partition('@')
 		samplenum = int(samplenum.strip())
 		sample = int(sample, 16)
-		if detect_rise(last, sample, edclk):
-			edclk_ticks += 1
 		if detect_rise(last, sample, sc):
 			sc_ticks += 1
 		if not (last is False):
@@ -114,12 +135,10 @@ for line in f:
 					print readcounter, 'reads,', sillyread, 'redundant reads'
 					readcounter = sillyread = 0
 				if not tick_start is False:
-					float(edclk_ticks)/((rate * (samplenum-tick_start)) / 1000.0)
-					print 'EDCLK:', edclk_ticks, ' ticks, {0}MHz'.format(float(edclk_ticks)/((rate * (samplenum-tick_start)) / 1000.0))
 					print 'SC:', sc_ticks, ' ticks, {0}MHz'.format(float(sc_ticks)/((rate * (samplenum-tick_start)) / 1000.0))
 				tick_start = samplenum
 				edclk_ticks = sc_ticks = 0
-				print 'HSYNC Start'
+				print 'HSYNC Start @ {0} ns'.format((samplenum - triggerpos)*rate)
 			#detect rising edge of !HSYNC
 			elif detect_rise(last, sample, hsync):
 				if not tick_start is False:
@@ -128,14 +147,22 @@ for line in f:
 					print 'SC:', sc_ticks, ' ticks, {0}MHz'.format(float(sc_ticks)/((rate * (samplenum-tick_start)) / 1000.0))
 				tick_start = samplenum
 				edclk_ticks = sc_ticks = 0
-				print 'HSYNC End'
+				print 'HSYNC End @ {0} ns'.format((samplenum - triggerpos)*rate)
+			if detect_fall(last, sample, vsync):
+				print 'VSYNC Start @ {0} ns'.format((samplenum - triggerpos)*rate)
+			elif detect_rise(last, sample, vsync):
+				print 'VSYNC End @ {0} ns'.format((samplenum - triggerpos)*rate)
+			if detect_fall(last, sample, ipl2):
+				print 'IPL2 Low @ {0} ns'.format((samplenum - triggerpos)*rate)
+			elif detect_rise(last, sample, ipl2):
+				print 'IPL2 High @ {0} ns'.format((samplenum - triggerpos)*rate)
 			if state == 'begin':
 				#detect falling edge of !RAS
 				if detect_fall(last, sample, ras):
 					state = 'ras'
 					row = get_addr(sample)
 					mode = 'ram' if detect_high(sample, oedt) else 'read transfer'
-				elif detect_fall(last, sample, cas):
+				elif detect_fall(last, sample, cas) and detect_high(sample, oedt):
 					state = 'cas'
 			elif state == 'ras':
 				if detect_fall(last, sample, cas):
