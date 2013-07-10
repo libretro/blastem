@@ -18,8 +18,8 @@ AUDIOOBJS=ym2612.o psg.o wave.o
 
 all : dis trans stateview blastem
 
-blastem : blastem.o vdp.o render_sdl.o io.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS)
-	$(CC) -ggdb -o blastem  blastem.o vdp.o render_sdl.o io.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS) $(LDFLAGS)
+blastem : blastem.o vdp.o render_sdl.o io.o config.o tern.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS)
+	$(CC) -ggdb -o blastem  blastem.o vdp.o render_sdl.o io.o config.o tern.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS) $(LDFLAGS)
 
 dis : dis.o 68kinst.o
 	$(CC) -o dis dis.o 68kinst.o
