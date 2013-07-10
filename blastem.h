@@ -8,6 +8,7 @@
 #include "vdp.h"
 #include "psg.h"
 #include "io.h"
+#include "config.h"
 
 #define RAM_FLAG_ODD  0x1800
 #define RAM_FLAG_EVEN 0x1000
@@ -30,6 +31,7 @@ typedef struct {
 
 extern genesis_context * genesis;
 extern int break_on_sync;
+extern tern_node * config;
 
 uint16_t read_dma_value(uint32_t address);
 m68k_context * debugger(m68k_context * context, uint32_t address);

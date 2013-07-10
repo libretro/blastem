@@ -35,6 +35,8 @@ int headless = 0;
 int z80_enabled = 1;
 int frame_limit = 0;
 
+tern_node * config;
+
 #ifndef MIN
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #endif
@@ -1871,13 +1873,14 @@ void detect_region()
 int main(int argc, char ** argv)
 {
 	if (argc < 2) {
-		fputs("Usage: blastem FILENAME\n", stderr);
+		fputs("Usage: blastem FILENAME [options]\n", stderr);
 		return 1;
 	}
 	if(!load_rom(argv[1])) {
 		fprintf(stderr, "Failed to open %s for reading\n", argv[1]);
 		return 1;
 	}
+	config = load_config(argv[0]);
 	detect_region();
 	int width = -1;
 	int height = -1;
