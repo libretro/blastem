@@ -252,6 +252,45 @@ void handle_joy_dpad(int joystick, int dpadnum, uint8_t value)
 	}
 }
 
+int parse_binding_target(char * target, tern_node * padbuttons, int * ui_out, int * padnum_out, int * padbutton_out)
+{
+	int gpadslen = strlen("gamepads.");
+	if (!memcmp(target, "gamepads.", gpadslen)) {
+		if (target[gpadslen] >= '1' && target[gpadslen] <= '8') {
+			int padnum = target[gpadslen] - '0';
+			int button = tern_find_int(padbuttons, target + gpadslen + 1, 0);
+			if (button) {
+				*padnum_out = padnum;
+				*padbutton_out = button;
+				return 1;
+			} else {
+				if (target[gpadslen+1]) {
+					fprintf(stderr, "Gamepad mapping string '%s' refers to an invalid button '%s'\n", target, target + gpadslen + 1);
+				} else {
+					fprintf(stderr, "Gamepad mapping string '%s' has no button component\n", target);
+				}
+			}
+		} else {
+			fprintf(stderr, "Gamepad mapping string '%s' refers to an invalid gamepad number %c\n", target, target[gpadslen]);
+		}
+	} else if(!memcmp(target, "ui.", strlen("ui."))) {
+		if (!strcmp(target + 3, "vdp_debug_mode")) {
+			*ui_out = UI_DEBUG_MODE_INC;
+		} else if(!strcmp(target + 3, "vdp_debug_pal")) {
+			*ui_out = UI_DEBUG_PAL_INC;
+		} else if(!strcmp(target + 3, "enter_debugger")) {
+			*ui_out = UI_ENTER_DEBUGGER;
+		} else {
+			fprintf(stderr, "Unreconized UI binding type %s\n", target);
+			return 0;
+		}
+		return 2;
+	} else {
+		fprintf(stderr, "Unrecognized binding type %s\n", target);
+	}
+	return 0;
+}
+
 void process_keys(tern_node * cur, tern_node * special, tern_node * padbuttons, char * prefix)
 {
 	char * curstr;
@@ -281,35 +320,12 @@ void process_keys(tern_node * cur, tern_node * special, tern_node * padbuttons, 
 			}
 		}
 		char * target = cur->straight.value.ptrval;
-		int gpadslen = strlen("gamepads.");
-		if (!memcmp(target, "gamepads.", gpadslen)) {
-			if (target[gpadslen] >= '1' && target[gpadslen] <= '8') {
-				int padnum = target[gpadslen] - '0';
-				int button = tern_find_int(padbuttons, target + gpadslen + 1, 0);
-				if (button) {
-					bind_gamepad(keycode, padnum, button);
-				} else {
-					if (target[gpadslen+1]) {
-						fprintf(stderr, "Gamepad mapping string '%s' refers to an invalid button '%s'\n", target, target + gpadslen + 1);
-					} else {
-						fprintf(stderr, "Gamepad mapping string '%s' has no button component\n", target);
-					}
-				}
-			} else {
-				fprintf(stderr, "Gamepad mapping string '%s' refers to an invalid gamepad number %c\n", target, target[gpadslen]);
-			}
-		} else if(!memcmp(target, "ui.", strlen("ui."))) {
-			if (!strcmp(target + 3, "vdp_debug_mode")) {
-				bind_ui(keycode, UI_DEBUG_MODE_INC);
-			} else if(!strcmp(target + 3, "vdp_debug_pal")) {
-				bind_ui(keycode, UI_DEBUG_PAL_INC);
-			} else if(!strcmp(target + 3, "enter_debugger")) {
-				bind_ui(keycode, UI_ENTER_DEBUGGER);
-			} else {
-				fprintf(stderr, "Unreconized UI binding type %s for key %s\n", target, curstr);
-			}
-		} else {
-			fprintf(stderr, "Unrecognized binding type %s for key %s\n", target, curstr);
+		int ui_func, padnum, button;
+		int bindtype = parse_binding_target(target, padbuttons, &ui_func, &padnum, &button);
+		if (bindtype == 1) {
+			bind_gamepad(keycode, padnum, button);
+		} else if(bindtype == 2) {
+			bind_ui(keycode, ui_func);
 		}
 	}
 	process_keys(cur->left, special, padbuttons, prefix);
@@ -339,19 +355,59 @@ void set_keybindings()
 	
 	tern_node * keys = tern_find_prefix(config, "bindingskeys");
 	process_keys(keys, special, padbuttons, NULL);
-	
-	bind_dpad_gamepad(0, 0, RENDER_DPAD_UP, 2, DPAD_UP);
-	bind_dpad_gamepad(0, 0, RENDER_DPAD_DOWN, 2, DPAD_DOWN);
-	bind_dpad_gamepad(0, 0, RENDER_DPAD_LEFT, 2, DPAD_LEFT);
-	bind_dpad_gamepad(0, 0, RENDER_DPAD_RIGHT, 2, DPAD_RIGHT);
-	bind_button_gamepad(0, 0, 2, BUTTON_A);
-	bind_button_gamepad(0, 1, 2, BUTTON_B);
-	bind_button_gamepad(0, 2, 2, BUTTON_C);
-	bind_button_gamepad(0, 3, 2, BUTTON_X);
-	bind_button_gamepad(0, 4, 2, BUTTON_Y);
-	bind_button_gamepad(0, 5, 2, BUTTON_Z);
-	bind_button_gamepad(0, 6, 2, BUTTON_START);
-	bind_button_gamepad(0, 7, 2, BUTTON_MODE);
+	char prefix[] = "bindingspads00";
+	for (int i = 0; i < 100 && i < render_num_joysticks(); i++)
+	{
+		if (i < 10) {
+			prefix[strlen("bindingspads")] = i + '0';
+			prefix[strlen("bindingspads")+1] = 0;
+		} else {
+			prefix[strlen("bindingspads")] = i/10 + '0';
+			prefix[strlen("bindingspads")+1] = i%10 + '0';
+		}
+		tern_node * pad = tern_find_prefix(config, prefix);
+		if (pad) {
+			char dprefix[] = "dpads0";
+			for (int dpad = 0; dpad < 10 && dpad < render_joystick_num_hats(i); dpad++)
+			{
+				dprefix[strlen("dpads")] = dpad + '0';
+				tern_node * pad_dpad = tern_find_prefix(pad, dprefix);
+				char * dirs[] = {"up", "down", "left", "right"};
+				int dirnums[] = {RENDER_DPAD_UP, RENDER_DPAD_DOWN, RENDER_DPAD_LEFT, RENDER_DPAD_RIGHT};
+				for (int dir = 0; dir < sizeof(dirs)/sizeof(dirs[0]); dir++) {
+					char * target = tern_find_ptr(pad_dpad, dirs[dir]);
+					if (target) {
+						int ui_func, padnum, button;
+						int bindtype = parse_binding_target(target, padbuttons, &ui_func, &padnum, &button);
+						if (bindtype == 1) {
+							bind_dpad_gamepad(i, dpad, dirnums[dir], padnum, button);
+						}
+						//TODO: Handle UI bindings
+					}
+				}
+			}
+			char bprefix[] = "buttons00";
+			for (int but = 0; but < 100 && but < render_joystick_num_buttons(i); but++)
+			{
+				if (but < 10) {
+					bprefix[strlen("buttons")] = but + '0';
+					bprefix[strlen("buttons")+1] = 0;
+				} else {
+					bprefix[strlen("buttons")] = but/10 + '0';
+					bprefix[strlen("buttons")+1] = but%10 + '0';
+				}
+				char * target = tern_find_ptr(pad, bprefix);
+				if (target) {
+					int ui_func, padnum, button;
+					int bindtype = parse_binding_target(target, padbuttons, &ui_func, &padnum, &button);
+					if (bindtype == 1) {
+						bind_button_gamepad(i, but, padnum, button);
+					}
+					//TODO: Handle UI bindings
+				}
+			}
+		}
+	}
 }
 
 #define TH 0x40
