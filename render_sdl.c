@@ -73,6 +73,11 @@ void render_close_audio()
 SDL_Joystick * joysticks[MAX_JOYSTICKS];
 int num_joysticks;
 
+int render_num_joysticks()
+{
+	return num_joysticks;
+}
+
 uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b)
 {
 	return SDL_MapRGB(screen->format, r, g, b);
