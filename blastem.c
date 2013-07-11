@@ -1867,6 +1867,25 @@ void detect_region()
 		version_reg = NO_DISK | JAP;
 	} else if (detect_specific_region('E') || detect_specific_region('A')) {
 		version_reg = NO_DISK | EUR;
+	} else {
+		char * def_region = tern_find_ptr(config, "default_region");
+		if (def_region) {
+			switch(*def_region)
+			{
+			case 'j':
+			case 'J':
+				version_reg = NO_DISK | JAP;
+				break;
+			case 'u':
+			case 'U':
+				version_reg = NO_DISK | USA;
+				break;
+			case 'e':
+			case 'E':
+				version_reg = NO_DISK | EUR;
+				break;
+			}
+		}
 	}
 }
 
