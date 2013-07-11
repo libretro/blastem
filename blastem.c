@@ -1953,7 +1953,15 @@ int main(int argc, char ** argv)
 		}
 	}
 	update_title();
-	width = width < 320 ? 640 : width;
+	int def_width = 0;
+	char *config_width = tern_find_ptr(config, "videowidth");
+	if (config_width) {
+		def_width = atoi(config_width);
+	}
+	if (!def_width) {
+		def_width = 640;
+	}
+	width = width < 320 ? def_width : width;
 	height = height < 240 ? (width/320) * 240 : height;
 	uint32_t fps = 60;
 	if (version_reg & 0x40) {
