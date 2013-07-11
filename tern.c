@@ -63,6 +63,23 @@ int tern_find(tern_node * head, char * key, tern_val *ret)
 	return 0;
 }
 
+tern_node * tern_find_prefix(tern_node * head, char * key)
+{
+	tern_node * cur = head;
+	while (cur && *key)
+	{
+		if (cur->el == *key) {
+			cur = cur->straight.next;
+			key++;
+		} else if (*key < cur->el) {
+			cur = cur->left;
+		} else {
+			cur = cur->right;
+		}
+	}
+	return cur;
+}
+
 intptr_t tern_find_int(tern_node * head, char * key, intptr_t def)
 {
 	tern_val ret;
