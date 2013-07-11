@@ -252,23 +252,93 @@ void handle_joy_dpad(int joystick, int dpadnum, uint8_t value)
 	}
 }
 
+void process_keys(tern_node * cur, tern_node * special, tern_node * padbuttons, char * prefix)
+{
+	char * curstr;
+	int len;
+	if (!cur) {
+		return;
+	}
+	char onec[2];
+	if (prefix) {
+		len = strlen(prefix);
+		curstr = malloc(len + 2);
+		memcpy(curstr, prefix, len);
+	} else {
+		curstr = onec;
+		len = 0;
+	}
+	curstr[len] = cur->el;
+	if (cur->el) {
+		curstr[len+1] = 0;
+		process_keys(cur->straight.next, special, padbuttons, curstr);
+	} else {
+		int keycode = tern_find_int(special, curstr, 0);
+		if (!keycode) {
+			keycode = curstr[0];
+			if (curstr[1] != 0) {
+				fprintf(stderr, "%s is not recognized as a key identifier, truncating to %c\n", curstr, curstr[0]);
+			}
+		}
+		char * target = cur->straight.value.ptrval;
+		int gpadslen = strlen("gamepads.");
+		if (!memcmp(target, "gamepads.", gpadslen)) {
+			if (target[gpadslen] >= '1' && target[gpadslen] <= '8') {
+				int padnum = target[gpadslen] - '0';
+				int button = tern_find_int(padbuttons, target + gpadslen + 1, 0);
+				if (button) {
+					bind_gamepad(keycode, padnum, button);
+				} else {
+					if (target[gpadslen+1]) {
+						fprintf(stderr, "Gamepad mapping string '%s' refers to an invalid button '%s'\n", target, target + gpadslen + 1);
+					} else {
+						fprintf(stderr, "Gamepad mapping string '%s' has no button component\n", target);
+					}
+				}
+			} else {
+				fprintf(stderr, "Gamepad mapping string '%s' refers to an invalid gamepad number %c\n", target, target[gpadslen]);
+			}
+		} else if(!memcmp(target, "ui.", strlen("ui."))) {
+			if (!strcmp(target + 3, "vdp_debug_mode")) {
+				bind_ui(keycode, UI_DEBUG_MODE_INC);
+			} else if(!strcmp(target + 3, "vdp_debug_pal")) {
+				bind_ui(keycode, UI_DEBUG_PAL_INC);
+			} else if(!strcmp(target + 3, "enter_debugger")) {
+				bind_ui(keycode, UI_ENTER_DEBUGGER);
+			} else {
+				fprintf(stderr, "Unreconized UI binding type %s for key %s\n", target, curstr);
+			}
+		} else {
+			fprintf(stderr, "Unrecognized binding type %s for key %s\n", target, curstr);
+		}
+	}
+	process_keys(cur->left, special, padbuttons, prefix);
+	process_keys(cur->right, special, padbuttons, prefix);
+}
+
 void set_keybindings()
 {
-	bind_gamepad(RENDERKEY_UP, 1, DPAD_UP);
-	bind_gamepad(RENDERKEY_DOWN, 1, DPAD_DOWN);
-	bind_gamepad(RENDERKEY_LEFT, 1, DPAD_LEFT);
-	bind_gamepad(RENDERKEY_RIGHT, 1, DPAD_RIGHT);
-	bind_gamepad('a', 1, BUTTON_A);
-	bind_gamepad('s', 1, BUTTON_B);
-	bind_gamepad('d', 1, BUTTON_C);
-	bind_gamepad('q', 1, BUTTON_X);
-	bind_gamepad('w', 1, BUTTON_Y);
-	bind_gamepad('e', 1, BUTTON_Z);
-	bind_gamepad('\r', 1, BUTTON_START);
-	bind_gamepad('f', 1, BUTTON_MODE);
-	bind_ui('[', UI_DEBUG_MODE_INC);
-	bind_ui(']', UI_DEBUG_PAL_INC);
-	bind_ui('u', UI_ENTER_DEBUGGER);
+	tern_node * special = tern_insert_int(NULL, "up", RENDERKEY_UP);
+	special = tern_insert_int(special, "down", RENDERKEY_DOWN);
+	special = tern_insert_int(special, "left", RENDERKEY_LEFT);
+	special = tern_insert_int(special, "right", RENDERKEY_RIGHT);
+	special = tern_insert_int(special, "enter", '\r');
+	
+	tern_node * padbuttons = tern_insert_int(NULL, ".up", DPAD_UP);
+	padbuttons = tern_insert_int(padbuttons, ".down", DPAD_DOWN);
+	padbuttons = tern_insert_int(padbuttons, ".left", DPAD_LEFT);
+	padbuttons = tern_insert_int(padbuttons, ".right", DPAD_RIGHT);
+	padbuttons = tern_insert_int(padbuttons, ".a", BUTTON_A);
+	padbuttons = tern_insert_int(padbuttons, ".b", BUTTON_B);
+	padbuttons = tern_insert_int(padbuttons, ".c", BUTTON_C);
+	padbuttons = tern_insert_int(padbuttons, ".x", BUTTON_X);
+	padbuttons = tern_insert_int(padbuttons, ".y", BUTTON_Y);
+	padbuttons = tern_insert_int(padbuttons, ".z", BUTTON_Z);
+	padbuttons = tern_insert_int(padbuttons, ".start", BUTTON_START);
+	padbuttons = tern_insert_int(padbuttons, ".mode", BUTTON_MODE);
+	
+	tern_node * keys = tern_find_prefix(config, "bindingskeys");
+	process_keys(keys, special, padbuttons, NULL);
 	
 	bind_dpad_gamepad(0, 0, RENDER_DPAD_UP, 2, DPAD_UP);
 	bind_dpad_gamepad(0, 0, RENDER_DPAD_DOWN, 2, DPAD_DOWN);
