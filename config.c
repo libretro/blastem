@@ -122,7 +122,7 @@ tern_node * parse_config(char * config_data)
 				if (prefix) {
 					key = alloc_concat(prefix, key);
 				}
-				head = tern_insert_ptr(head, key, val);
+				head = tern_insert_ptr(head, key, strdup(val));
 				if (prefix) {
 					free(key);
 				}
