@@ -12,7 +12,8 @@
 #define MAP_BIT_V_FLIP 0x1000
 
 #define SCROLL_BUFFER_SIZE 32
-#define SCROLL_BUFFER_DRAW 16
+#define SCROLL_BUFFER_MASK (SCROLL_BUFFER_SIZE-1)
+#define SCROLL_BUFFER_DRAW (SCROLL_BUFFER_SIZE/2)
 
 #define FIFO_SIZE 4
 
@@ -612,7 +613,7 @@ void read_map_scroll_b(uint16_t column, uint32_t line, vdp_context * context)
 	read_map_scroll(column, 1, line, (context->regs[REG_SCROLL_B] & 0x7) << 13, context->hscroll_b, context);
 }
 
-void render_map(uint16_t col, uint8_t * tmp_buf, vdp_context * context)
+void render_map(uint16_t col, uint8_t * tmp_buf, uint8_t offset, vdp_context * context)
 {
 	uint16_t address;
 	uint8_t shift, add;
@@ -633,33 +634,36 @@ void render_map(uint16_t col, uint8_t * tmp_buf, vdp_context * context)
 	uint16_t pal_priority = (col >> 9) & 0x70;
 	int32_t dir;
 	if (col & MAP_BIT_H_FLIP) {
-		tmp_buf += 7;
+		offset += 7;
+		offset &= SCROLL_BUFFER_MASK;
 		dir = -1;
 	} else {
 		dir = 1;
 	}
 	for (uint32_t i=0; i < 4; i++, address++)
 	{
-		*tmp_buf = pal_priority | (context->vdpmem[address] >> 4);
-		tmp_buf += dir;
-		*tmp_buf = pal_priority | (context->vdpmem[address] & 0xF);
-		tmp_buf += dir;
+		tmp_buf[offset] = pal_priority | (context->vdpmem[address] >> 4);
+		offset += dir;
+		offset &= SCROLL_BUFFER_MASK;
+		tmp_buf[offset] = pal_priority | (context->vdpmem[address] & 0xF);
+		offset += dir;
+		offset &= SCROLL_BUFFER_MASK;
 	}
 }
 
 void render_map_1(vdp_context * context)
 {
-	render_map(context->col_1, context->tmp_buf_a+SCROLL_BUFFER_DRAW, context);
+	render_map(context->col_1, context->tmp_buf_a, context->buf_a_off, context);
 }
 
 void render_map_2(vdp_context * context)
 {
-	render_map(context->col_2, context->tmp_buf_a+SCROLL_BUFFER_DRAW+8, context);
+	render_map(context->col_2, context->tmp_buf_a, context->buf_a_off+8, context);
 }
 
 void render_map_3(vdp_context * context)
 {
-	render_map(context->col_1, context->tmp_buf_b+SCROLL_BUFFER_DRAW, context);
+	render_map(context->col_1, context->tmp_buf_b, context->buf_b_off, context);
 }
 
 void render_map_output(uint32_t line, int32_t col, vdp_context * context)
@@ -667,10 +671,11 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 	if (line >= 240) {
 		return;
 	}
-	render_map(context->col_2, context->tmp_buf_b+SCROLL_BUFFER_DRAW+8, context);
+	render_map(context->col_2, context->tmp_buf_b, context->buf_b_off+8, context);
 	uint16_t *dst;
 	uint32_t *dst32;
-	uint8_t *sprite_buf, *plane_a, *plane_b;
+	uint8_t *sprite_buf,  *plane_a, *plane_b;
+	int plane_a_off, plane_b_off;
 	if (col)
 	{
 		col-=2;
@@ -684,20 +689,21 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		sprite_buf = context->linebuf + col * 8;
 		uint16_t a_src;
 		if (context->flags & FLAG_WINDOW) {
-			plane_a = context->tmp_buf_a + SCROLL_BUFFER_DRAW;
+			plane_a_off = context->buf_a_off;
 			//a_src = FBUF_SRC_W;
 		} else {
-			plane_a = context->tmp_buf_a + SCROLL_BUFFER_DRAW - (context->hscroll_a & 0xF);
+			plane_a_off = context->buf_a_off - (context->hscroll_a & 0xF);
 			//a_src = FBUF_SRC_A;
 		}
-		plane_b = context->tmp_buf_b + SCROLL_BUFFER_DRAW - (context->hscroll_b & 0xF);
+		plane_b_off = context->buf_b_off - (context->hscroll_b & 0xF);
 		uint16_t src;
 		//printf("A | tmp_buf offset: %d\n", 8 - (context->hscroll_a & 0x7));
 		
 		if (context->regs[REG_MODE_4] & BIT_HILIGHT) {
-			for (int i = 0; i < 16; ++plane_a, ++plane_b, ++sprite_buf, ++i) {
+			for (int i = 0; i < 16; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i) {
 				uint8_t pixel;
-				
+				plane_a = context->tmp_buf_a + (plane_a_off & SCROLL_BUFFER_MASK);
+				plane_b = context->tmp_buf_b + (plane_b_off & SCROLL_BUFFER_MASK);
 				src = 0;
 				uint8_t sprite_color = *sprite_buf & 0x3F;
 				if (sprite_color == 0x3E || sprite_color == 0x3F) {
@@ -765,8 +771,10 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 				//*dst = (context->cram[pixel & 0x3F] & 0xEEE) | ((pixel & BUF_BIT_PRIORITY) ? FBUF_BIT_PRIORITY : 0) | src;
 			}
 		} else {
-			for (int i = 0; i < 16; ++plane_a, ++plane_b, ++sprite_buf, ++i) {
+			for (int i = 0; i < 16; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i) {
 				uint8_t pixel;
+				plane_a = context->tmp_buf_a + (plane_a_off & SCROLL_BUFFER_MASK);
+				plane_b = context->tmp_buf_b + (plane_b_off & SCROLL_BUFFER_MASK);
 				if (*sprite_buf & BUF_BIT_PRIORITY && *sprite_buf & 0xF) {
 					pixel = *sprite_buf;
 					//src = FBUF_SRC_S;
@@ -804,14 +812,8 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		//plane_b = context->tmp_buf_b + 16 - (context->hscroll_b & 0x7);
 		//end = dst + 8;
 	}
-	
-	uint16_t remaining;
-	if (!(context->flags & FLAG_WINDOW)) {
-		remaining = context->hscroll_a & 0xF;
-		memcpy(context->tmp_buf_a + SCROLL_BUFFER_DRAW - remaining, context->tmp_buf_a + SCROLL_BUFFER_SIZE - remaining, remaining);
-	}
-	remaining = context->hscroll_b & 0xF;
-	memcpy(context->tmp_buf_b + SCROLL_BUFFER_DRAW - remaining, context->tmp_buf_b + SCROLL_BUFFER_SIZE - remaining, remaining);
+	context->buf_a_off = (context->buf_a_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
+	context->buf_b_off = (context->buf_b_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
 }
 
 #define COLUMN_RENDER_BLOCK(column, startcyc) \
