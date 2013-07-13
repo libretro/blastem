@@ -147,6 +147,8 @@ typedef struct {
 	uint8_t     flags2;
 	uint8_t     double_res;
 	uint8_t     b32;
+	uint8_t     buf_a_off;
+	uint8_t     buf_b_off;
 	uint8_t     *tmp_buf_a;
 	uint8_t     *tmp_buf_b;
 } vdp_context;
