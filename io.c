@@ -197,7 +197,7 @@ void handle_binding_up(keybinding * binding)
 			if (ui_debug_mode == 4) {
 				ui_debug_mode = 0;
 			}
-			render_debug_mode(ui_debug_mode);
+			genesis->vdp->debug = ui_debug_mode;
 			break;
 		case UI_DEBUG_PAL_INC:
 			ui_debug_pal++;
