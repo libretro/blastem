@@ -19,13 +19,15 @@
 
 #define FBUF_SHADOW 0x0001
 #define FBUF_HILIGHT 0x0010
-#define FBUF_BIT_PRIORITY 0x1000
-#define FBUF_SRC_MASK 0xE000
-#define FBUF_SRC_A 0x0000
-#define FBUF_SRC_W 0x2000
-#define FBUF_SRC_B 0x4000
-#define FBUF_SRC_S 0x6000
-#define FBUF_SRC_BG 0x8000
+#define DBG_SHADOW 0x10
+#define DBG_HILIGHT 0x20
+#define DBG_PRIORITY 0x8
+#define DBG_SRC_MASK 0x7
+#define DBG_SRC_A 0x1
+#define DBG_SRC_W 0x2
+#define DBG_SRC_B 0x3
+#define DBG_SRC_S 0x4
+#define DBG_SRC_BG 0x0
 
 #define MCLKS_LINE 3420
 
@@ -128,6 +130,7 @@ typedef struct {
 	void        *evenbuf;
 	uint16_t    cram[CRAM_SIZE];
 	uint32_t    colors[CRAM_SIZE*3];
+	uint32_t    debugcolors[1 << (3 + 1 + 1 + 1)];//3 bits for source, 1 bit for priority, 1 bit for shadow, 1 bit for hilight
 	uint16_t    vsram[VSRAM_SIZE];
 	uint8_t     latched_mode;
 	uint16_t    hscroll_a;
@@ -149,6 +152,7 @@ typedef struct {
 	uint8_t     b32;
 	uint8_t     buf_a_off;
 	uint8_t     buf_b_off;
+	uint8_t     debug;
 	uint8_t     *tmp_buf_a;
 	uint8_t     *tmp_buf_b;
 } vdp_context;
