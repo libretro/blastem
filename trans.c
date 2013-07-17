@@ -3,6 +3,15 @@
 #include "mem.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+
+m68k_context * sync_components(m68k_context * context, uint32_t address)
+{
+	if (context->current_cycle > 0x80000000) {
+		context->current_cycle -= 0x80000000;
+	}
+	return context;
+}
 
 int main(int argc, char ** argv)
 {
@@ -16,23 +25,34 @@ int main(int argc, char ** argv)
 	fseek(f, 0, SEEK_END);
 	filesize = ftell(f);
 	fseek(f, 0, SEEK_SET);
-	filebuf = malloc(filesize);
+	filebuf = malloc(filesize > 0x400000 ? filesize : 0x400000);
 	fread(filebuf, 2, filesize/2, f);
 	fclose(f);
 	for(cur = filebuf; cur - filebuf < (filesize/2); ++cur)
 	{
 		*cur = (*cur >> 8) | (*cur << 8);
 	}
-	init_x86_68k_opts(&opts);
+	memmap_chunk memmap[2];
+	memset(memmap, 0, sizeof(memmap_chunk)*2);
+	memmap[0].end = 0x400000;
+	memmap[0].mask = 0xFFFFFF;
+	memmap[0].flags = MMAP_READ;
+	memmap[0].buffer = filebuf;
+	
+	memmap[1].start = 0xE00000;
+	memmap[1].end = 0x1000000;
+	memmap[1].mask = 0xFFFF;
+	memmap[1].flags = MMAP_READ | MMAP_WRITE | MMAP_CODE;
+	memmap[1].buffer = malloc(64 * 1024);
+	init_x86_68k_opts(&opts, memmap, 2);
 	init_68k_context(&context, opts.native_code_map, &opts);
-	//cartridge ROM
-	context.mem_pointers[0] = filebuf;
-	context.target_cycle = 0x7FFFFFFF;
-	//work RAM
-	context.mem_pointers[1] = malloc(64 * 1024);
+	context.mem_pointers[0] = memmap[0].buffer;
+	context.mem_pointers[1] = memmap[1].buffer;
+	context.target_cycle = context.sync_cycle = 0x80000000;
 	uint32_t address;
 	address = filebuf[2] << 16 | filebuf[3];
 	translate_m68k_stream(address, &context);
 	m68k_reset(&context);
 	return 0;
 }
+
