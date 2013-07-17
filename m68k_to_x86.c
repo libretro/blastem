@@ -3557,6 +3557,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 				dst = cmp_ir(dst, 32, SCRATCH1, SZ_B);
 				norm_off = dst+1;
 				dst = jcc(dst, CC_L, dst+2);
+				dst = sub_ir(dst, 32, SCRATCH1, SZ_B);
 				if (dst_op.mode == MODE_REG_DIRECT) {
 					if (inst->op == M68K_ROL) {
 						dst = rol_ir(dst, 31, dst_op.base, inst->extra.size);
@@ -3574,7 +3575,6 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 						dst = ror_irdisp8(dst, 1, dst_op.base, dst_op.disp, inst->extra.size);
 					}
 				}
-				dst = sub_ir(dst, 32, SCRATCH1, SZ_B);
 				*norm_off = dst - (norm_off+1);
 				if (dst_op.mode == MODE_REG_DIRECT) {
 					if (inst->op == M68K_ROL) {
