@@ -31,7 +31,7 @@ for path in glob('generated_tests/*/*.bin'):
 		if not good:
 			continue
 	try:
-		b = subprocess.check_output(['./blastem', path, '-v'])
+		b = subprocess.check_output(['./trans', path])
 		try:
 			m = subprocess.check_output(['musashi/mustrans', path])
 			#_,_,b = b.partition('\n')

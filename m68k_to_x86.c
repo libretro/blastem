@@ -4333,7 +4333,7 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 
 void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks)
 {
-	opts->flags = 0;
+	memset(opts, 0, sizeof(*opts));
 	for (int i = 0; i < 8; i++)
 		opts->dregs[i] = opts->aregs[i] = -1;
 	opts->dregs[0] = R10;
