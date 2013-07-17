@@ -3840,9 +3840,12 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = cycles(dst, BUS);
 		if (src_op.mode == MODE_REG_DIRECT) {
 			dst = rol_ir(dst, 16, src_op.base, SZ_D);
+			dst = cmp_ir(dst, 0, src_op.base, SZ_D);
 		} else{
 			dst = rol_irdisp8(dst, 16, src_op.base, src_op.disp, SZ_D);
+			dst = cmp_irdisp8(dst, 0, src_op.base, src_op.disp, SZ_D);
 		}
+		
 		dst = mov_ir(dst, 0, FLAG_C, SZ_B);
 		dst = setcc_r(dst, CC_Z, FLAG_Z);
 		dst = setcc_r(dst, CC_S, FLAG_N);
