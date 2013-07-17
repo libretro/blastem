@@ -48,12 +48,13 @@ Name	Sizes	Src Modes														Dst Modes
 #cmpa	wl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	a
 #cmpi	bwl		#n																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
 #cmpm	bwl		(a)+															(a)+
-eor		bwl		d																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-eori	bwl		#n																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-exg		l		d																d;a
-exg		l		a																a
-link	w		a																#n
-or		bwl		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
-or		bwl		d																(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-ori		bwl		#n																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+#eor		bwl		d																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+#eori	bwl		#n																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+#exg		l		d																d;a
+#exg		l		a																a
+#link	w		a																#n
+#or		bwl		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
+#or		bwl		d																(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+#ori		bwl		#n																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+clr		bwl		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
 
