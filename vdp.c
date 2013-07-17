@@ -207,6 +207,11 @@ void vdp_print_reg_explain(vdp_context * context)
 	       context->regs[REG_HINT], context->regs[REG_HINT], 
 	       context->regs[REG_AUTOINC], context->regs[REG_AUTOINC],
 	       context->regs[REG_SCROLL], sizes[context->regs[REG_SCROLL] & 0x3], sizes[context->regs[REG_SCROLL] >> 4 & 0x3]);
+	printf("\n**Internal Group**\n"
+	       "Address: %X\n"
+	       "CD:      %X\n"
+	       "Pending: %s\n",
+	       context->address, context->cd, (context->flags & FLAG_PENDING) ? "true" : "false");
 	       
 	//TODO: Window Group, DMA Group      
 }
