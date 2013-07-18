@@ -88,7 +88,7 @@ uint8_t render_depth()
 	return screen->format->BytesPerPixel * 8;
 }
 
-void render_init(int width, int height, char * title, uint32_t fps)
+void render_init(int width, int height, char * title, uint32_t fps, uint8_t fullscreen)
 {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK) < 0) {
         fprintf(stderr, "Unable to init SDL: %s\n", SDL_GetError());
@@ -97,7 +97,13 @@ void render_init(int width, int height, char * title, uint32_t fps)
     atexit(SDL_Quit);
     atexit(render_close_audio);
     printf("width: %d, height: %d\n", width, height);
-    screen = SDL_SetVideoMode(width, height, 32, SDL_SWSURFACE | SDL_ANYFORMAT);
+    uint32_t flags = SDL_ANYFORMAT;
+    if (fullscreen) {
+    	flags |= SDL_FULLSCREEN | SDL_HWSURFACE | SDL_DOUBLEBUF;
+    } else {
+    	flags |= SDL_SWSURFACE;
+    }
+    screen = SDL_SetVideoMode(width, height, 32, flags);
     if (!screen) {
     	fprintf(stderr, "Unable to get SDL surface: %s\n", SDL_GetError());
         exit(1);
@@ -216,7 +222,8 @@ void render_context(vdp_context * context)
     if ( SDL_MUSTLOCK(screen) ) {
         SDL_UnlockSurface(screen);
     }
-    SDL_UpdateRect(screen, 0, 0, screen->clip_rect.w, screen->clip_rect.h);
+    //SDL_UpdateRect(screen, 0, 0, screen->clip_rect.w, screen->clip_rect.h);
+    SDL_Flip(screen);
     if (context->regs[REG_MODE_4] & BIT_INTERLACE)
     {
     	context->framebuf = context->framebuf == context->oddbuf ? context->evenbuf : context->oddbuf;
