@@ -1907,6 +1907,7 @@ int main(int argc, char ** argv)
 	int ym_log = 0;
 	FILE *address_log = NULL;
 	char * statefile = NULL;
+	uint8_t fullscreen = 0;
 	for (int i = 2; i < argc; i++) {
 		if (argv[i][0] == '-') {
 			switch(argv[i][1]) {
@@ -1914,7 +1915,7 @@ int main(int argc, char ** argv)
 				debug = 1;
 				break;
 			case 'f':
-				frame_limit = 1;
+				fullscreen = 1;
 				break;
 			case 'l':
 				address_log = fopen("address.log", "w");
@@ -1988,7 +1989,7 @@ int main(int argc, char ** argv)
 		fps = 50;
 	}
 	if (!headless) {
-		render_init(width, height, title, fps);
+		render_init(width, height, title, fps, fullscreen);
 	}
 	vdp_context v_context;
 	
