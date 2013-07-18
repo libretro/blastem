@@ -135,10 +135,21 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
     audio_ready = SDL_CreateCond();
     
     SDL_AudioSpec desired, actual;
-    desired.freq = 48000;
+    char * rate_str = tern_find_ptr(config, "audiorate");
+   	int rate = rate_str ? atoi(rate_str) : 0;
+   	if (!rate) {
+   		rate = 48000;
+   	}
+    desired.freq = rate;
     desired.format = AUDIO_S16SYS;
     desired.channels = 2;
-    desired.samples = 2048;//1024;
+    char * samples_str = tern_find_ptr(config, "audiobuffer");
+   	int samples = samples_str ? atoi(samples_str) : 0;
+   	if (!samples) {
+   		samples = 512;
+   	}
+    printf("config says: %d\n", samples);
+    desired.samples = samples*2;
     desired.callback = audio_callback;
     desired.userdata = NULL;
     
