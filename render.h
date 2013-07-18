@@ -6,7 +6,7 @@
 #include "ym2612.h"
 uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b);
 uint8_t render_depth();
-void render_init(int width, int height, char * title, uint32_t fps);
+void render_init(int width, int height, char * title, uint32_t fps, uint8_t fullscreen);
 void render_context(vdp_context * context);
 void render_wait_quit(vdp_context * context);
 void render_wait_psg(psg_context * context);
@@ -28,6 +28,7 @@ int render_num_joysticks();
 #define RENDERKEY_DOWN    SDLK_DOWN
 #define RENDERKEY_LEFT    SDLK_LEFT
 #define RENDERKEY_RIGHT   SDLK_RIGHT
+#define RENDERKEY_ESC     SDLK_ESCAPE
 #define RENDER_DPAD_UP    SDL_HAT_UP
 #define RENDER_DPAD_DOWN  SDL_HAT_DOWN
 #define RENDER_DPAD_LEFT  SDL_HAT_LEFT
