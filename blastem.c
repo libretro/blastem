@@ -258,6 +258,12 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 		context->int_ack = 0;
 	}
 	adjust_int_cycle(context, v_context);
+	if (context->current_cycle <= context->sync_cycle) {
+		context->sync_cycle = context->current_cycle + 4;
+		if (context->sync_cycle < context->int_cycle) {
+			context->target_cycle = context->sync_cycle;
+		}
+	}
 	if (break_on_sync && address) {
 		break_on_sync = 0;
 		debugger(context, address);

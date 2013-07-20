@@ -3781,8 +3781,30 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		}
 		dst = m68k_save_result(inst, dst, opts);
 		break;
-	/*case M68K_STOP:
-		break;*/
+	case M68K_STOP: {
+		//TODO: Trap if not in system mode
+		//manual says 4 cycles, but it has to be at least 8 since it's a 2-word instruction
+		//possibly even 12 since that's how long MOVE to SR takes
+		dst = cycles(dst, BUS*2);
+		dst = mov_ir(dst, src_op.disp & 0x1, FLAG_C, SZ_B);
+		dst = mov_ir(dst, (src_op.disp >> 1) & 0x1, FLAG_V, SZ_B);
+		dst = mov_ir(dst, (src_op.disp >> 2) & 0x1, FLAG_Z, SZ_B);
+		dst = mov_ir(dst, (src_op.disp >> 3) & 0x1, FLAG_N, SZ_B);
+		dst = mov_irind(dst, (src_op.disp >> 4) & 0x1, CONTEXT, SZ_B);
+		dst = mov_irdisp8(dst, (src_op.disp >> 8), CONTEXT, offsetof(m68k_context, status), SZ_B);
+		if (!((inst->src.params.immed >> 8) & (1 << BIT_SUPERVISOR))) {
+			//leave supervisor mode
+			dst = mov_rr(dst, opts->aregs[7], SCRATCH1, SZ_D);
+			dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, opts->aregs[7], SZ_D);
+			dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SZ_D);
+		}
+		uint8_t * loop_top = dst;
+		dst = call(dst, (uint8_t *)do_sync);
+		dst = mov_rr(dst, LIMIT, CYCLES, SZ_D);
+		dst = cmp_rdisp8r(dst, CONTEXT, offsetof(m68k_context, int_cycle), CYCLES, SZ_D);
+		dst = jcc(dst, CC_C, loop_top);
+		break;
+	}
 	case M68K_SUB:
 		size = inst->dst.addr_mode == MODE_AREG ? OPSIZE_LONG : inst->extra.size;
 		dst = cycles(dst, BUS);
