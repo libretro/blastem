@@ -123,9 +123,9 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 		//We only get one memory parameter, so if the dst operand is a register in memory,
 		//we need to copy this to a temp register first
 		reg = native_reg(&(inst->dst), opts);
-		if (reg >= 0 || inst->dst.addr_mode == MODE_UNUSED || !(inst->dst.addr_mode == MODE_REG || inst->dst.addr_mode == MODE_AREG) 
+		if (reg >= 0 || inst->dst.addr_mode == MODE_UNUSED || !(inst->dst.addr_mode == MODE_REG || inst->dst.addr_mode == MODE_AREG)
 		    || inst->op == M68K_EXG) {
-			
+
 			ea->mode = MODE_REG_DISPLACE8;
 			ea->base = CONTEXT;
 			ea->disp = reg_offset(&(inst->src));
@@ -150,7 +150,7 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 			out = sub_irdisp8(out, dec_amount, CONTEXT, reg_offset(&(inst->src)), SZ_D);
 		}
 	case MODE_AREG_INDIRECT:
-	case MODE_AREG_POSTINC:	
+	case MODE_AREG_POSTINC:
 		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
 			out = mov_rr(out, opts->aregs[inst->src.params.regs.pri], SCRATCH1, SZ_D);
 		} else {
@@ -168,7 +168,7 @@ uint8_t * translate_m68k_src(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 			out = call(out, opts->read_32);
 			break;
 		}
-		
+
 		if (inst->src.addr_mode == MODE_AREG_POSTINC) {
 			inc_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (inst->src.params.regs.pri == 7 ? 2 : 1));
 			if (opts->aregs[inst->src.params.regs.pri] >= 0) {
@@ -441,7 +441,7 @@ uint8_t * translate_m68k_dst(m68kinst * inst, x86_ea * ea, uint8_t * out, x86_68
 				out = mov_rdisp8r(out, CONTEXT, reg_offset(&(inst->dst)), SCRATCH2, SZ_D);
 			}
 		}
-		
+
 		if (inst->dst.addr_mode == MODE_AREG_POSTINC) {
 			inc_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (inst->dst.params.regs.pri == 7 ? 2 : 1));
 			if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
@@ -781,7 +781,7 @@ uint8_t * translate_m68k_move(uint8_t * dst, m68kinst * inst, x86_68k_options * 
 		dst = mov_ir(dst, 0, FLAG_V, SZ_B);
 		dst = mov_ir(dst, 0, FLAG_C, SZ_B);
 	}
-	
+
 	if (inst->dst.addr_mode != MODE_AREG) {
 		if (src.mode == MODE_REG_DIRECT) {
 			flags_reg = src.base;
@@ -2459,7 +2459,7 @@ uint8_t * translate_m68k_movep(uint8_t * dst, m68kinst * inst, x86_68k_options *
 				dst = pop_r(dst, SCRATCH2);
 				dst = mov_rr(dst, reg, SCRATCH1, SZ_D);
 				dst = shr_ir(dst, 16, SCRATCH1, SZ_D);
-				
+
 			} else {
 				dst = mov_rdisp8r(dst, CONTEXT, reg_offset(&(inst->src))+3, SCRATCH1, SZ_B);
 				dst = push_r(dst, SCRATCH2);
@@ -2527,7 +2527,7 @@ uint8_t * translate_m68k_movep(uint8_t * dst, m68kinst * inst, x86_68k_options *
 		dst = push_r(dst, SCRATCH1);
 		dst = call(dst, opts->read_8);
 		if (reg >= 0) {
-			
+
 			dst = shl_ir(dst, 8, SCRATCH1, SZ_W);
 			dst = mov_rr(dst, SCRATCH1, reg, SZ_W);
 			dst = pop_r(dst, SCRATCH1);
@@ -2628,7 +2628,7 @@ uint8_t * translate_shift(uint8_t * dst, m68kinst * inst, x86_ea *src_op, x86_ea
 				} else {
 					dst = mov_rdisp8r(dst, src_op->base, src_op->disp, RCX, SZ_B);
 				}
-				
+
 			}
 			dst = and_ir(dst, 63, RCX, SZ_D);
 			nz_off = dst+1;
@@ -2676,7 +2676,7 @@ uint8_t * translate_shift(uint8_t * dst, m68kinst * inst, x86_ea *src_op, x86_ea
 					if (inst->extra.size == OPSIZE_LONG) {
 						uint8_t * neq_32_off = dst + 1;
 						dst = jcc(dst, CC_NZ, dst+2);
-			
+
 						//set the carry bit to the lsb
 						if (dst_op->mode == MODE_REG_DIRECT) {
 							dst = special(dst, 1, dst_op->base, SZ_D);
@@ -2703,7 +2703,7 @@ uint8_t * translate_shift(uint8_t * dst, m68kinst * inst, x86_ea *src_op, x86_ea
 						dst = shift_irdisp8(dst, 31, dst_op->base, dst_op->disp, inst->extra.size);
 						dst = shift_irdisp8(dst, 1, dst_op->base, dst_op->disp, inst->extra.size);
 					}
-				
+
 				}
 				end_off = dst+1;
 				dst = jmp(dst, dst+2);
@@ -2715,7 +2715,7 @@ uint8_t * translate_shift(uint8_t * dst, m68kinst * inst, x86_ea *src_op, x86_ea
 				}
 			}
 		}
-		
+
 	}
 	if (!special && end_off) {
 		*end_off = dst - (end_off + 1);
@@ -3084,7 +3084,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		default:
 			isize = 2;
 		}
-		uint8_t * passed = dst+1;			
+		uint8_t * passed = dst+1;
 		dst = jcc(dst, CC_GE, dst+2);
 		dst = mov_ir(dst, 1, FLAG_N, SZ_B);
 		dst = mov_ir(dst, VECTOR_CHK, SCRATCH2, SZ_D);
@@ -3322,7 +3322,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 			}
 			dst = call(dst, (uint8_t *)(inst->op == M68K_MOVE_SR ? set_sr : set_ccr));
 			dst = cycles(dst, 12);
-			
+
 		}
 		break;
 	case M68K_MOVE_USP:
@@ -3446,7 +3446,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 			dst = not_rdisp8(dst, dst_op.base, dst_op.disp, inst->extra.size);
 			dst = cmp_irdisp8(dst, 0, dst_op.base, dst_op.disp, inst->extra.size);
 		}
-		
+
 		dst = mov_ir(dst, 0, FLAG_C, SZ_B);
 		dst = setcc_r(dst, CC_Z, FLAG_Z);
 		dst = setcc_r(dst, CC_S, FLAG_N);
@@ -3800,7 +3800,15 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		}
 		uint8_t * loop_top = dst;
 		dst = call(dst, (uint8_t *)do_sync);
+    dst = cmp_rr(dst, LIMIT, CYCLES, SZ_D);
+    uint8_t * normal_cycle_up = dst + 1;
+    dst = jcc(dst, CC_A, dst+2);
+    dst = cycles(dst, BUS);
+    uint8_t * after_cycle_up = dst + 1;
+    dst = jmp(dst, dst+2);
+    *normal_cycle_up = dst - (normal_cycle_up + 1);
 		dst = mov_rr(dst, LIMIT, CYCLES, SZ_D);
+    *after_cycle_up = dst - (after_cycle_up+1);
 		dst = cmp_rdisp8r(dst, CONTEXT, offsetof(m68k_context, int_cycle), CYCLES, SZ_D);
 		dst = jcc(dst, CC_C, loop_top);
 		break;
@@ -3867,7 +3875,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 			dst = rol_irdisp8(dst, 16, src_op.base, src_op.disp, SZ_D);
 			dst = cmp_irdisp8(dst, 0, src_op.base, src_op.disp, SZ_D);
 		}
-		
+
 		dst = mov_ir(dst, 0, FLAG_C, SZ_B);
 		dst = setcc_r(dst, CC_Z, FLAG_Z);
 		dst = setcc_r(dst, CC_S, FLAG_N);
@@ -3937,7 +3945,7 @@ uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context)
 	m68kinst instbuf;
 	x86_68k_options * opts = context->options;
 	uint8_t * dst = opts->cur_code;
-	uint8_t * dst_end = opts->code_end; 
+	uint8_t * dst_end = opts->code_end;
 	address &= 0xFFFFFF;
 	if(get_native_address(opts->native_code_map, address)) {
 		return dst;
@@ -4065,7 +4073,7 @@ void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
 				return orig_start;
 			}
 		}
-		
+
 		map_native_address(context, instbuf.address, dst, (after-inst)*2, MAX_NATIVE_SIZE);
 		opts->cur_code = dst+MAX_NATIVE_SIZE;
 		jmp(orig_start, dst);
@@ -4112,12 +4120,12 @@ void insert_breakpoint(m68k_context * context, uint32_t address, uint8_t * bp_ha
 		}
 		bp_stub = dst;
 		native = call(native, bp_stub);
-		
+
 		//Calculate length of prologue
 		dst = check_cycles_int(dst, address, opts);
 		int check_int_size = dst-bp_stub;
 		dst = bp_stub;
-		
+
 		//Save context and call breakpoint handler
 		dst = call(dst, (uint8_t *)m68k_save_context);
 		dst = push_r(dst, SCRATCH1);
@@ -4195,7 +4203,7 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 			ub_jcc = dst + 1;
 			dst = jcc(dst, CC_NC, dst+2);
 		}
-		
+
 		if (memmap[chunk].mask != 0xFFFFFF) {
 			dst = and_ir(dst, memmap[chunk].mask, adr_reg, SZ_D);
 		}
@@ -4239,7 +4247,7 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 						dst = mov_rr(dst, RAX, SCRATCH1, size);
 					}
 					dst = jmp(dst, (uint8_t *)m68k_load_context);
-					
+
 					*not_null = dst - (not_null + 1);
 				}
 				if (size == SZ_B) {
@@ -4248,7 +4256,7 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 				dst = add_rdisp8r(dst, CONTEXT, offsetof(m68k_context, mem_pointers) + sizeof(void*) * memmap[chunk].ptr_index, adr_reg, SZ_Q);
 				if (is_write) {
 					dst = mov_rrind(dst, SCRATCH1, SCRATCH2, size);
-					
+
 				} else {
 					dst = mov_rindr(dst, SCRATCH1, SCRATCH1, size);
 				}
@@ -4377,14 +4385,14 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	opts->code_end = opts->cur_code + size;
 	opts->ram_inst_sizes = malloc(sizeof(uint8_t *) * 64);
 	memset(opts->ram_inst_sizes, 0, sizeof(uint8_t *) * 64);
-	
+
 	opts->read_16 = gen_mem_fun(opts, memmap, num_chunks, READ_16);
 	opts->read_8 = gen_mem_fun(opts, memmap, num_chunks, READ_8);
 	opts->write_16 = gen_mem_fun(opts, memmap, num_chunks, WRITE_16);
 	opts->write_8 = gen_mem_fun(opts, memmap, num_chunks, WRITE_8);
-	
+
 	uint8_t * dst = opts->cur_code;
-	
+
 	opts->read_32 = dst;
 	dst = push_r(dst, SCRATCH1);
 	dst = call(dst, opts->read_16);
@@ -4398,7 +4406,7 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = shl_ir(dst, 16, SCRATCH2, SZ_D);
 	dst = or_rr(dst, SCRATCH2, SCRATCH1, SZ_D);
 	dst = retn(dst);
-	
+
 	opts->write_32_lowfirst = dst;
 	dst = push_r(dst, SCRATCH2);
 	dst = push_r(dst, SCRATCH1);
@@ -4408,7 +4416,7 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = pop_r(dst, SCRATCH2);
 	dst = shr_ir(dst, 16, SCRATCH1, SZ_D);
 	dst = jmp(dst, opts->write_16);
-	
+
 	opts->write_32_highfirst = dst;
 	dst = push_r(dst, SCRATCH1);
 	dst = push_r(dst, SCRATCH2);
@@ -4418,7 +4426,7 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = pop_r(dst, SCRATCH1);
 	dst = add_ir(dst, 2, SCRATCH2, SZ_D);
 	dst = jmp(dst, opts->write_16);
-	
+
 	opts->handle_cycle_limit_int = dst;
 	dst = cmp_rdisp8r(dst, CONTEXT, offsetof(m68k_context, int_cycle), CYCLES, SZ_D);
 	uint8_t * do_int = dst+1;
@@ -4470,7 +4478,7 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	//discard function return address
 	dst = pop_r(dst, SCRATCH2);
 	dst = jmp_r(dst, SCRATCH1);
-	
+
 	opts->trap = dst;
 	dst = push_r(dst, SCRATCH2);
 	//swap USP and SSP if not already in supervisor mode
@@ -4499,7 +4507,7 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = call(dst, (uint8_t *)m68k_native_addr_and_sync);
 	dst = cycles(dst, 18);
 	dst = jmp_r(dst, SCRATCH1);
-	
+
 	opts->cur_code = dst;
 }
 
