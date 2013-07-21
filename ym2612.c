@@ -162,7 +162,7 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clo
 		//populate sine table
 		for (int32_t i = 0; i < 512; i++) {
 			double sine = sin( ((double)(i*2+1) / SINE_TABLE_SIZE) * M_PI_2 );
-			
+
 			//table stores 4.8 fixed pointed representation of the base 2 log
 			sine_table[i] = round_fixed_point(-log2(sine), 8);
 		}
@@ -308,7 +308,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 					}
 				} else {
 					if (first_key_on) {
-						dfprintf(debug_file, "Changing op %d envelope %d by %d in %s phase\n", op, operator->envelope, envelope_inc, 
+						dfprintf(debug_file, "Changing op %d envelope %d by %d in %s phase\n", op, operator->envelope, envelope_inc,
 							operator->env_phase == PHASE_SUSTAIN ? "sustain" : (operator->env_phase == PHASE_DECAY ? "decay": "release"));
 					}
 					operator->envelope += envelope_inc;
@@ -328,7 +328,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				context->env_counter++;
 			}
 		}
-		
+
 		//Update Phase Generator
 		uint32_t channel = context->current_op / 4;
 		if (channel != 5 || !context->dac_enable) {
@@ -348,7 +348,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				} else {
 					lfo_mod >>= 1;
 				}
-				operator->phase_counter += lfo_mod;	
+				operator->phase_counter += lfo_mod;
 			}
 			int16_t mod = 0;
 			switch (op % 4)
@@ -413,7 +413,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				dfprintf(debug_file, "op %d, base phase: %d, mod: %d, sine: %d, out: %d\n", op, phase, mod, sine_table[(phase+mod) & 0x1FF], pow_table[sine_table[phase & 0x1FF] + env]);
 			}
 			phase += mod;
-			
+
 			int16_t output = pow_table[sine_table[phase & 0x1FF] + env];
 			if (phase & 0x200) {
 				output = -output;
@@ -561,7 +561,7 @@ void ym_update_phase_inc(ym2612_context * context, ym_operator * operator, uint3
 		}
 		//detune
 		detune = detune_table[channel->keycode][operator->detune & 0x3];
-	} 
+	}
 	if (operator->detune & 0x40) {
 		inc -= detune;
 		//this can underflow, mask to 17-bit result
@@ -600,7 +600,7 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 				context->lfo_am_step = context->lfo_pm_step = 0;
 			}
 			context->lfo_freq = value & 0x7;
-			
+
 			break;
 		case REG_TIMERA_HIGH:
 			context->timer_a_load &= 0x3;
@@ -644,11 +644,13 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 				}
 				for (uint8_t op = channel * 4, bit = 0x10; op < (channel + 1) * 4; op++, bit <<= 1) {
 					if (value & bit) {
-						first_key_on = 1;
-						//printf("Key On for operator %d in channel %d\n", op, channel);
-						context->operators[op].phase_counter = 0;
-						context->operators[op].env_phase = PHASE_ATTACK;
-						context->operators[op].envelope = MAX_ENVELOPE;
+						if (context->operators[op].env_phase == PHASE_RELEASE)
+						{
+							first_key_on = 1;
+							//printf("Key On for operator %d in channel %d\n", op, channel);
+							context->operators[op].phase_counter = 0;
+							context->operators[op].env_phase = PHASE_ATTACK;
+						}
 					} else {
 						//printf("Key Off for operator %d in channel %d\n", op, channel);
 						context->operators[op].env_phase = PHASE_RELEASE;
@@ -753,7 +755,7 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 			}
 		}
 	}
-	
+
 	context->write_cycle = context->current_cycle;
 	context->status |= 0x80;
 }
