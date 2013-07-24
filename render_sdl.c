@@ -4,9 +4,14 @@
 #include "blastem.h"
 #include "io.h"
 
+#ifndef DISABLE_OPENGL
+#include <GL/gl.h>
+#endif
+
 SDL_Surface *screen;
 uint8_t render_dbg = 0;
 uint8_t debug_pal = 0;
+uint8_t render_gl;
 
 uint32_t last_frame = 0;
 
@@ -75,7 +80,54 @@ int num_joysticks;
 
 uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b)
 {
-	return SDL_MapRGB(screen->format, r, g, b);
+	if (render_gl) {
+		return b << 24 | g << 16 | r << 8 | 255;
+	} else {
+		return SDL_MapRGB(screen->format, r, g, b);
+	}
+}
+
+GLuint textures[3], buffers[2];
+
+const GLfloat vertex_data[] = {
+	-1.0f, -1.0f,
+	 1.0f, -1.0f,
+	-1.0f,  1.0f,
+	 1.0f,  1.0f
+};
+
+const GLushort element_data[] = {0, 1, 2, 3};
+
+void render_alloc_surfaces(vdp_context * context)
+{
+	if (render_gl) {
+		context->oddbuf = context->framebuf = malloc(320 * 240 * 4 * 2);
+		memset(context->oddbuf, 0, 320 * 240 * 4 * 2);
+		context->evenbuf = ((char *)context->oddbuf) + 320 * 240 * 4;
+		glGenTextures(3, textures);
+		for (int i = 0; i < 3; i++)
+		{
+			glBindTexture(GL_TEXTURE_2D, textures[i]);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			if (i < 2) {
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8​, 512, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, i ? context->evenbuf : context->oddbuf);
+			} else {
+				uint32_t blank = 255;
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_BGRA, GL_UNSIGNED_BYTE, &blank);
+			}
+		}
+		glGenBuffers(2, buffers);
+		glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_data), vertex_data, GL_STATIC_DRAW);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[0]);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(element_data), element_data, GL_STATIC_DRAW);
+	} else {
+		context->oddbuf = context->framebuf = malloc(320 * 240 * screen->format->BytesPerPixel * 2);
+		context->evenbuf = ((char *)context->oddbuf) + 320 * 240 * screen->format->BytesPerPixel;
+	}
 }
 
 uint8_t render_depth()
@@ -83,74 +135,104 @@ uint8_t render_depth()
 	return screen->format->BytesPerPixel * 8;
 }
 
-void render_init(int width, int height, char * title, uint32_t fps)
+void render_init(int width, int height, char * title, uint32_t fps, uint8_t use_gl)
 {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK) < 0) {
-        fprintf(stderr, "Unable to init SDL: %s\n", SDL_GetError());
-        exit(1);
-    }
-    atexit(SDL_Quit);
-    atexit(render_close_audio);
-    printf("width: %d, height: %d\n", width, height);
-    screen = SDL_SetVideoMode(width, height, 32, SDL_SWSURFACE | SDL_ANYFORMAT);
-    if (!screen) {
-    	fprintf(stderr, "Unable to get SDL surface: %s\n", SDL_GetError());
-        exit(1);
-    }
-    if (screen->format->BytesPerPixel != 2 && screen->format->BytesPerPixel != 4) {
-    	fprintf(stderr, "BlastEm requires a 16-bit or 32-bit surface, SDL returned a %d-bit surface\n", screen->format->BytesPerPixel * 8);
-    	exit(1);
-    }
-    SDL_WM_SetCaption(title, title);
-    min_delay = 0;
-    for (int i = 0; i < 100; i++) {
-    	uint32_t start = SDL_GetTicks();
-    	SDL_Delay(1);
-    	uint32_t delay = SDL_GetTicks()-start;
-    	if (delay > min_delay) {
-    		min_delay = delay;
-    	}
-    }
-    if (!min_delay) {
-    	min_delay = 1;
-    }
-    printf("minimum delay: %d\n", min_delay);
-    
-    frame_delay = 1000/fps;
-    
-    audio_mutex = SDL_CreateMutex();
-    psg_cond = SDL_CreateCond();
-    ym_cond = SDL_CreateCond();
-    audio_ready = SDL_CreateCond();
-    
-    SDL_AudioSpec desired, actual;
-    desired.freq = 48000;
-    desired.format = AUDIO_S16SYS;
-    desired.channels = 2;
-    desired.samples = 2048;//1024;
-    desired.callback = audio_callback;
-    desired.userdata = NULL;
-    
-    if (SDL_OpenAudio(&desired, &actual) < 0) {
-    	fprintf(stderr, "Unable to open SDL audio: %s\n", SDL_GetError());
-    	exit(1);
-    }
-    buffer_samples = actual.samples;
-    sample_rate = actual.freq;
-    printf("Initialized audio at frequency %d with a %d sample buffer\n", actual.freq, actual.samples);
-    SDL_PauseAudio(0);
-    num_joysticks = SDL_NumJoysticks();
-    if (num_joysticks > MAX_JOYSTICKS) {
-    	num_joysticks = MAX_JOYSTICKS;
-    }
-    for (int i = 0; i < num_joysticks; i++) {
-    	printf("Joystick %d: %s\n", i, SDL_JoystickName(i));
-    	SDL_Joystick * joy = joysticks[i] = SDL_JoystickOpen(i);
-    	if (joy) {
-    		printf("\tNum Axes: %d\n\tNum Buttons: %d\n\tNum Hats: %d\n", SDL_JoystickNumAxes(joy), SDL_JoystickNumButtons(joy), SDL_JoystickNumHats(joy));
-    	}
-    }
-    SDL_JoystickEventState(SDL_ENABLE);
+		fprintf(stderr, "Unable to init SDL: %s\n", SDL_GetError());
+		exit(1);
+	}
+	atexit(SDL_Quit);
+	atexit(render_close_audio);
+	printf("width: %d, height: %d\n", width, height);
+	uint32_t flags
+#ifndef DISABLE_OPENGL
+	if (use_gl)
+	{
+		SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 5);
+		SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 5);
+		SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 5);
+		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
+		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+		flags = SDL_OPENGL;
+	} else {
+#else
+	{
+#endif
+		flags = SDL_SWSURFACE | SDL_ANYFORMAT;
+	}
+	screen = SDL_SetVideoMode(width, height, 32, flags);
+	if (!screen) {
+		fprintf(stderr, "Unable to get SDL surface: %s\n", SDL_GetError());
+		exit(1);
+	}
+	if (!use_gl && screen->format->BytesPerPixel != 2 && screen->format->BytesPerPixel != 4) {
+		fprintf(stderr, "BlastEm requires a 16-bit or 32-bit surface, SDL returned a %d-bit surface\n", screen->format->BytesPerPixel * 8);
+		exit(1);
+	}
+#ifndef DISABLE_OPENGL
+	//TODO: Fallback to plain SDL if OpenGL 2.0 not available
+	render_gl = use_gl;
+#endif
+	SDL_WM_SetCaption(title, title);
+	min_delay = 0;
+	for (int i = 0; i < 100; i++) {
+		uint32_t start = SDL_GetTicks();
+		SDL_Delay(1);
+		uint32_t delay = SDL_GetTicks()-start;
+		if (delay > min_delay) {
+			min_delay = delay;
+		}
+	}
+	if (!min_delay) {
+		min_delay = 1;
+	}
+	printf("minimum delay: %d\n", min_delay);
+
+	frame_delay = 1000/fps;
+
+	audio_mutex = SDL_CreateMutex();
+	psg_cond = SDL_CreateCond();
+	ym_cond = SDL_CreateCond();
+	audio_ready = SDL_CreateCond();
+
+	SDL_AudioSpec desired, actual;
+	desired.freq = 48000;
+	desired.format = AUDIO_S16SYS;
+	desired.channels = 2;
+	desired.samples = 2048;//1024;
+	desired.callback = audio_callback;
+	desired.userdata = NULL;
+
+	if (SDL_OpenAudio(&desired, &actual) < 0) {
+		fprintf(stderr, "Unable to open SDL audio: %s\n", SDL_GetError());
+		exit(1);
+	}
+	buffer_samples = actual.samples;
+	sample_rate = actual.freq;
+	printf("Initialized audio at frequency %d with a %d sample buffer\n", actual.freq, actual.samples);
+	SDL_PauseAudio(0);
+	num_joysticks = SDL_NumJoysticks();
+	if (num_joysticks > MAX_JOYSTICKS) {
+		num_joysticks = MAX_JOYSTICKS;
+	}
+	for (int i = 0; i < num_joysticks; i++) {
+		printf("Joystick %d: %s\n", i, SDL_JoystickName(i));
+		SDL_Joystick * joy = joysticks[i] = SDL_JoystickOpen(i);
+		if (joy) {
+			printf("\tNum Axes: %d\n\tNum Buttons: %d\n\tNum Hats: %d\n", SDL_JoystickNumAxes(joy), SDL_JoystickNumButtons(joy), SDL_JoystickNumHats(joy));
+		}
+	}
+	SDL_JoystickEventState(SDL_ENABLE);
+}
+
+void render_context_gl(vdp_context * context)
+{
+	glBindTexture(GL_TEXTURE_2D, textures[context->framebuf == context->oddbuf ? 0 : 1]);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 320, 240, GL_BGRA, GL_UNSIGNED_BYTE, context->framebuf);;
+
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+
 }
 
 uint32_t blankbuf[320*240];
@@ -158,64 +240,69 @@ uint32_t blankbuf[320*240];
 void render_context(vdp_context * context)
 {
 	uint16_t *buf_16;
-	uint32_t *buf_32; 
+	uint32_t *buf_32;
 	uint8_t b,g,r;
 	last_frame = SDL_GetTicks();
+	if (render_gl)
+	{
+		render_context_gl(context);
+		return;
+	}
 	if (SDL_MUSTLOCK(screen)) {
 		if (SDL_LockSurface(screen) < 0) {
 			return;
 		}
-    }
-    uint16_t repeat_x = screen->clip_rect.w / 320;
-    uint16_t repeat_y = screen->clip_rect.h / 240;
-    if (repeat_x > repeat_y) {
-    	repeat_x = repeat_y;
-    } else {
-    	repeat_y = repeat_x;
-    }
-    int othermask = repeat_y >> 1;
-    
-    if (screen->format->BytesPerPixel == 2) {
-    	uint16_t *otherbuf = (context->regs[REG_MODE_4] & BIT_INTERLACE) ? context->evenbuf : (uint16_t *)blankbuf;
-    	uint16_t * oddbuf = context->oddbuf;
-    	buf_16 = (uint16_t *)screen->pixels;
-    	for (int y = 0; y < 240; y++) {
-    		for (int i = 0; i < repeat_y; i++,buf_16 += screen->pitch/2) {
-        		uint16_t *line = buf_16;
-        		uint16_t *src_line = (i & othermask ? otherbuf : oddbuf) + y * 320;
-		    	for (int x = 0; x < 320; x++) {
-		    		uint16_t color = *(src_line++);
-		    		for (int j = 0; j < repeat_x; j++) {
-		    			*(line++) = color;
-		    		}
-		    	}
-		    }
-    	}
-    } else {
-    	uint32_t *otherbuf = (context->regs[REG_MODE_4] & BIT_INTERLACE) ? context->evenbuf : (uint32_t *)blankbuf;
-    	uint32_t * oddbuf = context->oddbuf;
-    	buf_32 = (uint32_t *)screen->pixels;
-    	for (int y = 0; y < 240; y++) {
-    		for (int i = 0; i < repeat_y; i++,buf_32 += screen->pitch/4) {
-        		uint32_t *line = buf_32;
-        		uint32_t *src_line = (i & othermask ? otherbuf : oddbuf) + y * 320;
-		    	for (int x = 0; x < 320; x++) {
-		    		uint32_t color = *(src_line++);
-		    		for (int j = 0; j < repeat_x; j++) {
-		    			*(line++) = color;
-		    		}
-		    	}
-		    }
-    	}
-    }
-    if ( SDL_MUSTLOCK(screen) ) {
-        SDL_UnlockSurface(screen);
-    }
-    SDL_UpdateRect(screen, 0, 0, screen->clip_rect.w, screen->clip_rect.h);
-    if (context->regs[REG_MODE_4] & BIT_INTERLACE)
-    {
-    	context->framebuf = context->framebuf == context->oddbuf ? context->evenbuf : context->oddbuf;
-    }
+	}
+	uint16_t repeat_x = screen->clip_rect.w / 320;
+	uint16_t repeat_y = screen->clip_rect.h / 240;
+	if (repeat_x > repeat_y) {
+		repeat_x = repeat_y;
+	} else {
+		repeat_y = repeat_x;
+	}
+	int othermask = repeat_y >> 1;
+
+	if (screen->format->BytesPerPixel == 2) {
+		uint16_t *otherbuf = (context->regs[REG_MODE_4] & BIT_INTERLACE) ? context->evenbuf : (uint16_t *)blankbuf;
+		uint16_t * oddbuf = context->oddbuf;
+		buf_16 = (uint16_t *)screen->pixels;
+		for (int y = 0; y < 240; y++) {
+			for (int i = 0; i < repeat_y; i++,buf_16 += screen->pitch/2) {
+				uint16_t *line = buf_16;
+				uint16_t *src_line = (i & othermask ? otherbuf : oddbuf) + y * 320;
+				for (int x = 0; x < 320; x++) {
+					uint16_t color = *(src_line++);
+					for (int j = 0; j < repeat_x; j++) {
+						*(line++) = color;
+					}
+				}
+			}
+		}
+	} else {
+		uint32_t *otherbuf = (context->regs[REG_MODE_4] & BIT_INTERLACE) ? context->evenbuf : (uint32_t *)blankbuf;
+		uint32_t * oddbuf = context->oddbuf;
+		buf_32 = (uint32_t *)screen->pixels;
+		for (int y = 0; y < 240; y++) {
+			for (int i = 0; i < repeat_y; i++,buf_32 += screen->pitch/4) {
+				uint32_t *line = buf_32;
+				uint32_t *src_line = (i & othermask ? otherbuf : oddbuf) + y * 320;
+				for (int x = 0; x < 320; x++) {
+					uint32_t color = *(src_line++);
+					for (int j = 0; j < repeat_x; j++) {
+						*(line++) = color;
+					}
+				}
+			}
+		}
+	}
+	if ( SDL_MUSTLOCK(screen) ) {
+		SDL_UnlockSurface(screen);
+	}
+	SDL_UpdateRect(screen, 0, 0, screen->clip_rect.w, screen->clip_rect.h);
+	if (context->regs[REG_MODE_4] & BIT_INTERLACE)
+	{
+		context->framebuf = context->framebuf == context->oddbuf ? context->evenbuf : context->oddbuf;
+	}
 }
 
 int render_joystick_num_buttons(int joystick)
@@ -321,8 +408,8 @@ int wait_render_frame(vdp_context * context, int frame_limit)
 		}
 	}
 	render_context(context);
-	
-	
+
+
 	//TODO: Figure out why this causes segfaults
 	/*frame_counter++;
 	if ((last_frame - start) > 1000) {
