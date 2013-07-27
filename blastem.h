@@ -31,7 +31,10 @@ typedef struct {
 
 extern genesis_context * genesis;
 extern int break_on_sync;
+extern int save_state;
 extern tern_node * config;
+extern uint8_t busreq;
+extern uint8_t reset;
 
 uint16_t read_dma_value(uint32_t address);
 m68k_context * debugger(m68k_context * context, uint32_t address);

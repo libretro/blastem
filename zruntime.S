@@ -19,12 +19,13 @@ do_limit:
 	cmp 112(%rsi), %ebp
 	jb no_sync
 sync_io:
+	movw $0, 164(%rsi)
 	call z80_save_context_scratch
 	pop %rax /*return address in read/write func*/
 	pop 104(%rsi) /*return address in native code*/
 	sub $5, %rax /* adjust return addres to point to the call instruction that got us here */
 	mov %rax, (%rsi)
-	
+
 	pop %r15 /* restore callee saved regsiters */
 	pop %r14
 	pop %r13
@@ -32,7 +33,7 @@ sync_io:
 	pop %rbp
 	pop %rbx
 	ret /* return to caller of z80_run */
-	
+
 	.global z80_handle_cycle_limit_int
 z80_handle_cycle_limit_int:
 	cmp 116(%rsi), %ebp
@@ -63,6 +64,7 @@ z80_handle_cycle_limit_int:
 zskip_int:
 	cmp 112(%rsi), %ebp
 	jb zskip_sync
+mov %r13w, 164(%rsi)
 	.global z80_do_sync
 z80_do_sync:
 	call z80_save_context
@@ -244,7 +246,7 @@ z80_io_write:
 	call z_inccycles_io
 	/* genesis Z80 has no IO port hardware and writes have no effect */
 	ret
-	
+
 	.global z80_retrans_stub
 z80_retrans_stub:
 	pop %r14
@@ -264,7 +266,7 @@ z80_retrans_stub:
 z80_native_addr:
 	call z80_save_context
 	push %rsi
-	mov %rsi, %rdi 
+	mov %rsi, %rdi
 	movzx %r13w, %esi
 	call z80_get_native_address_trans
 	mov %rax, %r13
@@ -275,7 +277,7 @@ z80_native_addr:
 z80_save_context_scratch:
 	mov %r13w, 98(%rsi)  /* scratch1 */
 	mov %r14w, 100(%rsi) /* scratch2 */
-	
+
 	.global z80_save_context
 z80_save_context:
 	mov %r9w, 8(%rsi)    /* SP */
@@ -295,7 +297,7 @@ z80_save_context:
 z80_load_context_scratch:
 	mov 98(%rsi), %r13w  /* scratch1 */
 	mov 100(%rsi), %r14w /* scratch2 */
-	
+
 	.global z80_load_context
 z80_load_context:
 	mov 8(%rsi), %r9w    /* SP */
@@ -328,4 +330,4 @@ z80_run:
 	movq $0, 104(%rsi)
 no_extra:
 	jmp *(%rsi)
-	
+
