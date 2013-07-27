@@ -13,6 +13,7 @@ typedef enum {
 	UI_DEBUG_MODE_INC,
 	UI_DEBUG_PAL_INC,
 	UI_ENTER_DEBUGGER,
+  UI_SAVE_STATE,
 	UI_EXIT
 } ui_action;
 
@@ -107,7 +108,7 @@ void bind_dpad(int joystick, int dpad, int direction, uint8_t bind_type, uint8_t
 
 void bind_gamepad(int keycode, int gamepadnum, int button)
 {
-	
+
 	if (gamepadnum < 1 || gamepadnum > 2) {
 		return;
 	}
@@ -210,6 +211,9 @@ void handle_binding_up(keybinding * binding)
 		case UI_ENTER_DEBUGGER:
 			break_on_sync = 1;
 			break;
+		case UI_SAVE_STATE:
+			save_state = 1;
+			break;
 		case UI_EXIT:
 			exit(0);
 		}
@@ -283,6 +287,8 @@ int parse_binding_target(char * target, tern_node * padbuttons, int * ui_out, in
 			*ui_out = UI_DEBUG_PAL_INC;
 		} else if(!strcmp(target + 3, "enter_debugger")) {
 			*ui_out = UI_ENTER_DEBUGGER;
+		} else if(!strcmp(target + 3, "save_state")) {
+			*ui_out = UI_SAVE_STATE;
 		} else if(!strcmp(target + 3, "exit")) {
 			*ui_out = UI_EXIT;
 		} else {
@@ -345,7 +351,7 @@ void set_keybindings()
 	special = tern_insert_int(special, "right", RENDERKEY_RIGHT);
 	special = tern_insert_int(special, "enter", '\r');
 		special = tern_insert_int(special, "esc", RENDERKEY_ESC);
-	
+
 	tern_node * padbuttons = tern_insert_int(NULL, ".up", DPAD_UP);
 	padbuttons = tern_insert_int(padbuttons, ".down", DPAD_DOWN);
 	padbuttons = tern_insert_int(padbuttons, ".left", DPAD_LEFT);
@@ -358,7 +364,7 @@ void set_keybindings()
 	padbuttons = tern_insert_int(padbuttons, ".z", BUTTON_Z);
 	padbuttons = tern_insert_int(padbuttons, ".start", BUTTON_START);
 	padbuttons = tern_insert_int(padbuttons, ".mode", BUTTON_MODE);
-	
+
 	tern_node * keys = tern_find_prefix(config, "bindingskeys");
 	process_keys(keys, special, padbuttons, NULL);
 	char prefix[] = "bindingspads00";

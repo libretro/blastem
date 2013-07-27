@@ -45,6 +45,12 @@ typedef struct {
 	uint8_t  keycode;
 } ym_supp;
 
+#define YM_PART1_START 0x21
+#define YM_PART2_START 0x30
+#define YM_REG_END     0xB8
+#define YM_PART1_REGS (YM_REG_END-YM_PART1_START)
+#define YM_PART2_REGS (YM_REG_END-YM_PART2_START)
+
 typedef struct {
     int16_t     *audio_buffer;
     int16_t     *back_buffer;
@@ -66,7 +72,7 @@ typedef struct {
 	uint8_t     ch3_mode;
 	uint8_t     current_op;
 	uint8_t     current_env_op;
-	
+
 	uint8_t     timer_control;
 	uint8_t     dac_enable;
 	uint8_t     lfo_enable;
@@ -77,6 +83,8 @@ typedef struct {
 	uint8_t     status;
 	uint8_t     selected_reg;
 	uint8_t     selected_part;
+	uint8_t     part1_regs[YM_PART1_REGS];
+	uint8_t     part2_regs[YM_PART2_REGS];
 } ym2612_context;
 
 void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t sample_limit, uint32_t options);
@@ -86,6 +94,7 @@ void ym_address_write_part2(ym2612_context * context, uint8_t address);
 void ym_data_write(ym2612_context * context, uint8_t value);
 uint8_t ym_read_status(ym2612_context * context);
 uint8_t ym_load_gst(ym2612_context * context, FILE * gstfile);
+uint8_t ym_save_gst(ym2612_context * context, FILE * gstfile);
 
 #endif //YM2612_H_
 

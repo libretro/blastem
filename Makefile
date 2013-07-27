@@ -18,18 +18,18 @@ AUDIOOBJS=ym2612.o psg.o wave.o
 
 all : dis trans stateview blastem
 
-blastem : blastem.o vdp.o render_sdl.o io.o config.o tern.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS)
-	$(CC) -ggdb -o blastem  blastem.o vdp.o render_sdl.o io.o config.o tern.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS) $(LDFLAGS)
+blastem : blastem.o vdp.o render_sdl.o io.o config.o tern.o gst.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS)
+	$(CC) -ggdb -o blastem  blastem.o vdp.o render_sdl.o io.o config.o tern.o gst.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS) $(LDFLAGS)
 
 dis : dis.o 68kinst.o
 	$(CC) -o dis dis.o 68kinst.o
 
 zdis : zdis.o z80inst.o
 	$(CC) -o zdis zdis.o z80inst.o
-	
+
 libemu68k.a : $(M68KOBJS) $(TRANSOBJS)
 	ar rcs libemu68k.a $(M68KOBJS) $(TRANSOBJS)
-	
+
 trans : trans.o $(M68KOBJS) $(TRANSOBJS)
 	$(CC) -o trans trans.o $(M68KOBJS) $(TRANSOBJS)
 
@@ -48,6 +48,9 @@ stateview : stateview.o vdp.o render_sdl.o
 vgmplay : vgmplay.o render_sdl.o $(AUDIOOBJS)
 	$(CC) -o vgmplay vgmplay.o render_sdl.o $(AUDIOOBJS) `pkg-config --libs $(LIBS)`
 
+testgst : testgst.o gst.o
+	$(CC) -o testgst testgst.o gst.o
+
 test_x86 : test_x86.o gen_x86.o
 	$(CC) -o test_x86 test_x86.o gen_x86.o
 
@@ -56,7 +59,7 @@ gen_fib : gen_fib.o gen_x86.o mem.o
 
 offsets : offsets.c z80_to_x86.h m68k_to_x86.h
 	$(CC) -o offsets offsets.c
-	
+
 %.o : %.S
 	$(CC) -c -o $@ $<
 
