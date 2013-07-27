@@ -125,7 +125,7 @@ void render_sprite_cells(vdp_context * context)
 {
 	if (context->cur_slot >= context->sprite_draws) {
 		sprite_draw * d = context->sprite_draw_list + context->cur_slot;
-		
+
 		uint16_t dir;
 		int16_t x;
 		if (d->h_flip) {
@@ -164,7 +164,7 @@ void vdp_print_sprite_table(vdp_context * context)
 		uint16_t link = context->vdpmem[address+3] & 0x7F;
 		uint8_t pal = context->vdpmem[address + 4] >> 5 & 0x3;
 		uint8_t pri = context->vdpmem[address + 4] >> 7;
-		uint16_t pattern = ((context->vdpmem[address + 4] << 8 | context->vdpmem[address + 5]) & 0x7FF) << 5;	
+		uint16_t pattern = ((context->vdpmem[address + 4] << 8 | context->vdpmem[address + 5]) & 0x7FF) << 5;
 		//printf("Sprite %d: X=%d(%d), Y=%d(%d), Width=%u, Height=%u, Link=%u, Pal=%u, Pri=%u, Pat=%X\n", current_index, x, x-128, y, y-128, width, height, link, pal, pri, pattern);
 		current_index = link;
 		count++;
@@ -179,9 +179,9 @@ void vdp_print_reg_explain(vdp_context * context)
 	       "01: %.2X | Display %s, V-ints %s, Height: %d, Mode %d\n"
 	       "0B: %.2X | E-ints %s, V-Scroll: %s, H-Scroll: %s\n"
 	       "0C: %.2X | Width: %d, Shadow/Highlight: %s\n",
-	       context->regs[REG_MODE_1], context->regs[REG_MODE_1] & BIT_HINT_EN ? "enabled" : "disabled", context->regs[REG_MODE_1] & BIT_PAL_SEL != 0, 
+	       context->regs[REG_MODE_1], context->regs[REG_MODE_1] & BIT_HINT_EN ? "enabled" : "disabled", context->regs[REG_MODE_1] & BIT_PAL_SEL != 0,
 	           context->regs[REG_MODE_1] & BIT_HVC_LATCH ? "enabled" : "disabled", context->regs[REG_MODE_1] & BIT_DISP_DIS ? "disabled" : "enabled",
-	       context->regs[REG_MODE_2], context->regs[REG_MODE_2] & BIT_DISP_EN ? "enabled" : "disabled", context->regs[REG_MODE_2] & BIT_VINT_EN ? "enabled" : "disabled", 
+	       context->regs[REG_MODE_2], context->regs[REG_MODE_2] & BIT_DISP_EN ? "enabled" : "disabled", context->regs[REG_MODE_2] & BIT_VINT_EN ? "enabled" : "disabled",
 	           context->regs[REG_MODE_2] & BIT_PAL ? 30 : 28, context->regs[REG_MODE_2] & BIT_MODE_5 ? 5 : 4,
 	       context->regs[REG_MODE_3], context->regs[REG_MODE_3] & BIT_EINT_EN ? "enabled" : "disabled", context->regs[REG_MODE_3] & BIT_VSCROLL ? "2 cell" : "full",
 	           hscroll[context->regs[REG_MODE_3] & 0x3],
@@ -203,8 +203,8 @@ void vdp_print_reg_explain(vdp_context * context)
 	       "0A: %.2X | H-Int Counter: %u\n"
 	       "0F: %.2X | Auto-increment: $%X\n"
 	       "10: %.2X | Scroll A/B Size: %sx%s\n",
-	       context->regs[REG_BG_COLOR], context->regs[REG_BG_COLOR] & 0x3F, 
-	       context->regs[REG_HINT], context->regs[REG_HINT], 
+	       context->regs[REG_BG_COLOR], context->regs[REG_BG_COLOR] & 0x3F,
+	       context->regs[REG_HINT], context->regs[REG_HINT],
 	       context->regs[REG_AUTOINC], context->regs[REG_AUTOINC],
 	       context->regs[REG_SCROLL], sizes[context->regs[REG_SCROLL] & 0x3], sizes[context->regs[REG_SCROLL] >> 4 & 0x3]);
 	printf("\n**Internal Group**\n"
@@ -212,8 +212,8 @@ void vdp_print_reg_explain(vdp_context * context)
 	       "CD:      %X\n"
 	       "Pending: %s\n",
 	       context->address, context->cd, (context->flags & FLAG_PENDING) ? "true" : "false");
-	       
-	//TODO: Window Group, DMA Group      
+
+	//TODO: Window Group, DMA Group
 }
 
 void scan_sprite_table(uint32_t line, vdp_context * context)
@@ -295,7 +295,7 @@ void read_sprite_x(uint32_t line, vdp_context * context)
 				height *= 2;
 			}
 			uint16_t att_addr = ((context->regs[REG_SAT] & 0x7F) << 9) + context->sprite_info_list[context->cur_slot].index * 8 + 4;
-			uint16_t tileinfo = (context->vdpmem[att_addr] << 8) | context->vdpmem[att_addr+1];		
+			uint16_t tileinfo = (context->vdpmem[att_addr] << 8) | context->vdpmem[att_addr+1];
 			uint8_t pal_priority = (tileinfo >> 9) & 0x70;
 			uint8_t row;
 			if (tileinfo & MAP_BIT_V_FLIP) {
@@ -315,7 +315,7 @@ void read_sprite_x(uint32_t line, vdp_context * context)
 			} else if(context->flags & (FLAG_CAN_MASK | FLAG_DOT_OFLOW)) {
 				context->flags |= FLAG_MASKED;
 			}
-			
+
 			context->flags &= ~FLAG_DOT_OFLOW;
 			int16_t i;
 			if (context->flags & FLAG_MASKED) {
@@ -415,7 +415,7 @@ void external_slot(vdp_context * context)
 				context->dma_val = (context->dma_val << 8) | ((context->dma_val >> 8) & 0xFF);
 				break;
 			case CRAM_WRITE:
-				write_cram(context, context->address, context->dma_val);				
+				write_cram(context, context->address, context->dma_val);
 				//printf("CRAM DMA Fill | %X set to %X at %d\n", (context->address/2) & (CRAM_SIZE-1), context->cram[(context->address/2) & (CRAM_SIZE-1)], context->cycles);
 				break;
 			case VSRAM_WRITE:
@@ -575,7 +575,7 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 				address &= 0xF000;
 				line_offset = (((line) >> vscroll_shift) * 64 * 2) & 0xFFF;
 				mask = 0x7F;
-				
+
 			} else {
 				address &= 0xF800;
 				line_offset = (((line) >> vscroll_shift) * 32 * 2) & 0xFFF;
@@ -751,7 +751,7 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		}
 		plane_b_off = context->buf_b_off - (context->hscroll_b & 0xF);
 		//printf("A | tmp_buf offset: %d\n", 8 - (context->hscroll_a & 0x7));
-		
+
 		if (context->regs[REG_MODE_4] & BIT_HILIGHT) {
 			for (int i = 0; i < 16; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i) {
 				uint8_t pixel;
@@ -1402,9 +1402,9 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 		}
 		if ((line < active_lines || (line == active_lines && linecyc < (context->latched_mode & BIT_H40 ? 64 : 80))) && context->regs[REG_MODE_2] & DISPLAY_ENABLE) {
 			//first sort-of active line is treated as 255 internally
-			//it's used for gathering sprite info for line 
+			//it's used for gathering sprite info for line
 			line = (line - 1) & 0xFF;
-			
+
 			//Convert to slot number
 			if (context->latched_mode & BIT_H40){
 				vdp_h40(line, slot, context);
@@ -1787,66 +1787,5 @@ void vdp_int_ack(vdp_context * context, uint16_t int_num)
 	} else if(int_num ==4) {
 		context->flags2 &= ~FLAG2_HINT_PENDING;
 	}
-}
-
-#define GST_VDP_REGS 0xFA
-#define GST_VDP_MEM 0x12478
-
-uint8_t vdp_load_gst(vdp_context * context, FILE * state_file)
-{
-	uint8_t tmp_buf[CRAM_SIZE*2];
-	fseek(state_file, GST_VDP_REGS, SEEK_SET);
-	if (fread(context->regs, 1, VDP_REGS, state_file) != VDP_REGS) {
-		fputs("Failed to read VDP registers from savestate\n", stderr);
-		return 0;
-	}
-	context->double_res = (context->regs[REG_MODE_4] & (BIT_INTERLACE | BIT_DOUBLE_RES)) == (BIT_INTERLACE | BIT_DOUBLE_RES);
-	if (!context->double_res) {
-		context->framebuf = context->oddbuf;
-	}
-	latch_mode(context);
-	if (fread(tmp_buf, 1, sizeof(tmp_buf), state_file) != sizeof(tmp_buf)) {
-		fputs("Failed to read CRAM from savestate\n", stderr);
-		return 0;
-	}
-	for (int i = 0; i < CRAM_SIZE; i++) {
-		uint16_t value;
-		context->cram[i] = value = (tmp_buf[i*2+1] << 8) | tmp_buf[i*2];
-		context->colors[i] = color_map[value & 0xEEE];
-		context->colors[i + CRAM_SIZE] = color_map[(value & 0xEEE) | FBUF_SHADOW];
-		context->colors[i + CRAM_SIZE*2] = color_map[(value & 0xEEE) | FBUF_HILIGHT];
-	}
-	if (fread(tmp_buf, 2, VSRAM_SIZE, state_file) != VSRAM_SIZE) {
-		fputs("Failed to read VSRAM from savestate\n", stderr);
-		return 0;
-	}
-	for (int i = 0; i < VSRAM_SIZE; i++) {
-		context->vsram[i] = (tmp_buf[i*2+1] << 8) | tmp_buf[i*2];
-	}
-	fseek(state_file, GST_VDP_MEM, SEEK_SET);
-	if (fread(context->vdpmem, 1, VRAM_SIZE, state_file) != VRAM_SIZE) {
-		fputs("Failed to read VRAM from savestate\n", stderr);
-		return 0;
-	}
-	return 1;
-}
-
-void vdp_save_state(vdp_context * context, FILE * outfile)
-{
-	uint8_t tmp_buf[CRAM_SIZE*2];
-	fseek(outfile, GST_VDP_REGS, SEEK_SET);
-	fwrite(context->regs, 1, VDP_REGS, outfile);
-	for (int i = 0; i < CRAM_SIZE; i++) {
-		tmp_buf[i*2] = context->cram[i];
-		tmp_buf[i*2+1] = context->cram[i] >> 8;
-	}
-	fwrite(tmp_buf, 1, sizeof(tmp_buf), outfile);
-	for (int i = 0; i < VSRAM_SIZE; i++) {
-		tmp_buf[i*2] = context->vsram[i];
-		tmp_buf[i*2+1] = context->vsram[i] >> 8;
-	}
-	fwrite(tmp_buf, 2, VSRAM_SIZE, outfile);
-	fseek(outfile, GST_VDP_MEM, SEEK_SET);
-	fwrite(context->vdpmem, 1, VRAM_SIZE, outfile);
 }
 

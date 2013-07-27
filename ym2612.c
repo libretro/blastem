@@ -582,8 +582,19 @@ void ym_update_phase_inc(ym2612_context * context, ym_operator * operator, uint3
 
 void ym_data_write(ym2612_context * context, uint8_t value)
 {
-	if (context->selected_reg < 0x21 || context->selected_reg > 0xB6 || (context->selected_reg < 0x30 && context->selected_part)) {
+	if (context->selected_reg >= YM_REG_END) {
 		return;
+	}
+	if (context->selected_part) {
+		if (context->selected_reg < YM_PART2_START) {
+			return;
+		}
+		context->part2_regs[context->selected_reg - YM_PART2_START] = value;
+	} else {
+		if (context->selected_reg < YM_PART1_START) {
+			return;
+		}
+		context->part1_regs[context->selected_reg - YM_PART1_START] = value;
 	}
 	dfprintf(debug_file, "write of %X to reg %X in part %d\n", value, context->selected_reg, context->selected_part+1);
 	if (context->selected_reg < 0x30) {
@@ -763,26 +774,5 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 uint8_t ym_read_status(ym2612_context * context)
 {
 	return context->status;
-}
-
-#define GST_YM_OFFSET 0x1E4
-#define GST_YM_SIZE (0x3E4-GST_YM_OFFSET)
-
-uint8_t ym_load_gst(ym2612_context * context, FILE * gstfile)
-{
-	uint8_t regdata[GST_YM_SIZE];
-	fseek(gstfile, GST_YM_OFFSET, SEEK_SET);
-	if (fread(regdata, 1, sizeof(regdata), gstfile) != sizeof(regdata)) {
-		return 0;
-	}
-	for (int i = 0; i < sizeof(regdata); i++) {
-		if (i & 0x100) {
-			ym_address_write_part2(context, i & 0xFF);
-		} else {
-			ym_address_write_part1(context, i);
-		}
-		ym_data_write(context, regdata[i]);
-	}
-	return 1;
 }
 
