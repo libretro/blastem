@@ -478,13 +478,15 @@ void external_slot(vdp_context * context)
 			context->regs[REG_DMALEN_H] = dma_len >> 8;
 			context->regs[REG_DMALEN_L] = dma_len;
 			if (!dma_len) {
+				printf("DMA end at cycle %d\n", context->cycles);
 				context->flags &= ~FLAG_DMA_RUN;
 			}
 		}
 	} else {
 		fifo_entry * start = (context->fifo_end - FIFO_SIZE);
 		if (context->fifo_cur != start && start->cycle <= context->cycles) {
-			if ((context->regs[REG_MODE_2] & BIT_DMA_ENABLE) && (context->cd & DMA_START)) {
+			if ((context->regs[REG_MODE_2] & BIT_DMA_ENABLE) && (context->cd & DMA_START) && (context->regs[REG_DMASRC_H] & 0xC0) == 0x80) {
+				printf("DMA fill started at %d\n", context->cycles);
 				context->flags |= FLAG_DMA_RUN;
 				context->dma_val = start->value;
 				context->address = start->address; //undo auto-increment
@@ -1458,7 +1460,7 @@ void vdp_run_dma_done(vdp_context * context, uint32_t target_cycles)
 
 int vdp_control_port_write(vdp_context * context, uint16_t value)
 {
-	//printf("control port write: %X\n", value);
+	printf("control port write: %X at %d\n", value, context->cycles);
 	if (context->flags & FLAG_DMA_RUN) {
 		return -1;
 	}
@@ -1466,13 +1468,14 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 		context->address = (context->address & 0x3FFF) | (value << 14);
 		context->cd = (context->cd & 0x3) | ((value >> 2) & 0x3C);
 		context->flags &= ~FLAG_PENDING;
-		//printf("New Address: %X, New CD: %X\n", context->address, context->cd);
+		printf("New Address: %X, New CD: %X\n", context->address, context->cd);
 		if (context->cd & 0x20 && (context->regs[REG_MODE_2] & BIT_DMA_ENABLE)) {
 			//
 			if((context->regs[REG_DMASRC_H] & 0xC0) != 0x80) {
 				//DMA copy or 68K -> VDP, transfer starts immediately
 				context->flags |= FLAG_DMA_RUN;
 				context->dma_cd = context->cd;
+				printf("DMA start at cycle %d\n", context->cycles);
 				if (!(context->regs[REG_DMASRC_H] & 0x80)) {
 					//printf("DMA Address: %X, New CD: %X, Source: %X, Length: %X\n", context->address, context->cd, (context->regs[REG_DMASRC_H] << 17) | (context->regs[REG_DMASRC_M] << 9) | (context->regs[REG_DMASRC_L] << 1), context->regs[REG_DMALEN_H] << 8 | context->regs[REG_DMALEN_L]);
 					return 1;
@@ -1480,7 +1483,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 					//printf("DMA Copy Address: %X, New CD: %X, Source: %X\n", context->address, context->cd, (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]);
 				}
 			} else {
-				//printf("DMA Fill Address: %X, New CD: %X\n", context->address, context->cd);
+				printf("DMA Fill Address: %X, New CD: %X\n", context->address, context->cd);
 			}
 		}
 	} else {
@@ -1488,7 +1491,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 			//Register write
 			uint8_t reg = (value >> 8) & 0x1F;
 			if (reg < VDP_REGS) {
-				//printf("register %d set to %X\n", reg, value & 0xFF);
+				printf("register %d set to %X\n", reg, value & 0xFF);
 				context->regs[reg] = value;
 				if (reg == REG_MODE_2) {
 					//printf("Display is now %s\n", (context->regs[REG_MODE_2] & DISPLAY_ENABLE) ? "enabled" : "disabled");
@@ -1511,7 +1514,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 
 int vdp_data_port_write(vdp_context * context, uint16_t value)
 {
-	//printf("data port write: %X\n", value);
+	printf("data port write: %X at %d\n", value, context->cycles);
 	if (context->flags & FLAG_DMA_RUN) {
 		return -1;
 	}
