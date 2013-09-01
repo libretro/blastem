@@ -219,7 +219,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 		if (gen->ym->write_cycle != CYCLE_NEVER) {
 			gen->ym->write_cycle = gen->ym->write_cycle >= mclks_per_frame/MCLKS_PER_68K ? gen->ym->write_cycle - mclks_per_frame/MCLKS_PER_68K : 0;
 		}
-		//printf("reached frame end | 68K Cycles: %d, MCLK Cycles: %d\n", context->current_cycle, mclks);
+		printf("reached frame end | 68K Cycles: %d, MCLK Cycles: %d\n", context->current_cycle, mclks);
 		vdp_run_context(v_context, mclks_per_frame);
 
 		if (!headless) {
@@ -284,6 +284,7 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 					vdp_run_dma_done(v_context, mclks_per_frame);
 					if (v_context->cycles >= mclks_per_frame) {
 						if (!headless) {
+							printf("reached frame end | 68K Cycles: %d, MCLK Cycles: %d\n", context->current_cycle, v_context->cycles);
 							wait_render_frame(v_context, frame_limit);
 						}
 						vdp_adjust_cycles(v_context, mclks_per_frame);
@@ -301,7 +302,7 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 						}
 					}
 				}
-				context->current_cycle = v_context->cycles / MCLKS_PER_68K;
+				//context->current_cycle = v_context->cycles / MCLKS_PER_68K;
 			}
 		} else if(vdp_port < 8) {
 			blocked = vdp_control_port_write(v_context, value);
@@ -343,6 +344,7 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 			exit(1);
 		}
 		if (v_context->cycles != before_cycle) {
+			printf("68K paused for %d cycles at cycle %d\n", v_context->cycles / MCLKS_PER_68K - context->current_cycle, context->current_cycle);
 			context->current_cycle = v_context->cycles / MCLKS_PER_68K;
 		}
 	} else if (vdp_port < 0x18) {

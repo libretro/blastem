@@ -125,7 +125,7 @@ void render_sprite_cells(vdp_context * context)
 {
 	if (context->cur_slot >= context->sprite_draws) {
 		sprite_draw * d = context->sprite_draw_list + context->cur_slot;
-		
+
 		uint16_t dir;
 		int16_t x;
 		if (d->h_flip) {
@@ -164,7 +164,7 @@ void vdp_print_sprite_table(vdp_context * context)
 		uint16_t link = context->vdpmem[address+3] & 0x7F;
 		uint8_t pal = context->vdpmem[address + 4] >> 5 & 0x3;
 		uint8_t pri = context->vdpmem[address + 4] >> 7;
-		uint16_t pattern = ((context->vdpmem[address + 4] << 8 | context->vdpmem[address + 5]) & 0x7FF) << 5;	
+		uint16_t pattern = ((context->vdpmem[address + 4] << 8 | context->vdpmem[address + 5]) & 0x7FF) << 5;
 		//printf("Sprite %d: X=%d(%d), Y=%d(%d), Width=%u, Height=%u, Link=%u, Pal=%u, Pri=%u, Pat=%X\n", current_index, x, x-128, y, y-128, width, height, link, pal, pri, pattern);
 		current_index = link;
 		count++;
@@ -179,9 +179,9 @@ void vdp_print_reg_explain(vdp_context * context)
 	       "01: %.2X | Display %s, V-ints %s, Height: %d, Mode %d\n"
 	       "0B: %.2X | E-ints %s, V-Scroll: %s, H-Scroll: %s\n"
 	       "0C: %.2X | Width: %d, Shadow/Highlight: %s\n",
-	       context->regs[REG_MODE_1], context->regs[REG_MODE_1] & BIT_HINT_EN ? "enabled" : "disabled", context->regs[REG_MODE_1] & BIT_PAL_SEL != 0, 
+	       context->regs[REG_MODE_1], context->regs[REG_MODE_1] & BIT_HINT_EN ? "enabled" : "disabled", context->regs[REG_MODE_1] & BIT_PAL_SEL != 0,
 	           context->regs[REG_MODE_1] & BIT_HVC_LATCH ? "enabled" : "disabled", context->regs[REG_MODE_1] & BIT_DISP_DIS ? "disabled" : "enabled",
-	       context->regs[REG_MODE_2], context->regs[REG_MODE_2] & BIT_DISP_EN ? "enabled" : "disabled", context->regs[REG_MODE_2] & BIT_VINT_EN ? "enabled" : "disabled", 
+	       context->regs[REG_MODE_2], context->regs[REG_MODE_2] & BIT_DISP_EN ? "enabled" : "disabled", context->regs[REG_MODE_2] & BIT_VINT_EN ? "enabled" : "disabled",
 	           context->regs[REG_MODE_2] & BIT_PAL ? 30 : 28, context->regs[REG_MODE_2] & BIT_MODE_5 ? 5 : 4,
 	       context->regs[REG_MODE_3], context->regs[REG_MODE_3] & BIT_EINT_EN ? "enabled" : "disabled", context->regs[REG_MODE_3] & BIT_VSCROLL ? "2 cell" : "full",
 	           hscroll[context->regs[REG_MODE_3] & 0x3],
@@ -203,8 +203,8 @@ void vdp_print_reg_explain(vdp_context * context)
 	       "0A: %.2X | H-Int Counter: %u\n"
 	       "0F: %.2X | Auto-increment: $%X\n"
 	       "10: %.2X | Scroll A/B Size: %sx%s\n",
-	       context->regs[REG_BG_COLOR], context->regs[REG_BG_COLOR] & 0x3F, 
-	       context->regs[REG_HINT], context->regs[REG_HINT], 
+	       context->regs[REG_BG_COLOR], context->regs[REG_BG_COLOR] & 0x3F,
+	       context->regs[REG_HINT], context->regs[REG_HINT],
 	       context->regs[REG_AUTOINC], context->regs[REG_AUTOINC],
 	       context->regs[REG_SCROLL], sizes[context->regs[REG_SCROLL] & 0x3], sizes[context->regs[REG_SCROLL] >> 4 & 0x3]);
 	printf("\n**Internal Group**\n"
@@ -212,8 +212,8 @@ void vdp_print_reg_explain(vdp_context * context)
 	       "CD:      %X\n"
 	       "Pending: %s\n",
 	       context->address, context->cd, (context->flags & FLAG_PENDING) ? "true" : "false");
-	       
-	//TODO: Window Group, DMA Group      
+
+	//TODO: Window Group, DMA Group
 }
 
 void scan_sprite_table(uint32_t line, vdp_context * context)
@@ -295,7 +295,7 @@ void read_sprite_x(uint32_t line, vdp_context * context)
 				height *= 2;
 			}
 			uint16_t att_addr = ((context->regs[REG_SAT] & 0x7F) << 9) + context->sprite_info_list[context->cur_slot].index * 8 + 4;
-			uint16_t tileinfo = (context->vdpmem[att_addr] << 8) | context->vdpmem[att_addr+1];		
+			uint16_t tileinfo = (context->vdpmem[att_addr] << 8) | context->vdpmem[att_addr+1];
 			uint8_t pal_priority = (tileinfo >> 9) & 0x70;
 			uint8_t row;
 			if (tileinfo & MAP_BIT_V_FLIP) {
@@ -315,7 +315,7 @@ void read_sprite_x(uint32_t line, vdp_context * context)
 			} else if(context->flags & (FLAG_CAN_MASK | FLAG_DOT_OFLOW)) {
 				context->flags |= FLAG_MASKED;
 			}
-			
+
 			context->flags &= ~FLAG_DOT_OFLOW;
 			int16_t i;
 			if (context->flags & FLAG_MASKED) {
@@ -415,7 +415,7 @@ void external_slot(vdp_context * context)
 				context->dma_val = (context->dma_val << 8) | ((context->dma_val >> 8) & 0xFF);
 				break;
 			case CRAM_WRITE:
-				write_cram(context, context->address, context->dma_val);				
+				write_cram(context, context->address, context->dma_val);
 				//printf("CRAM DMA Fill | %X set to %X at %d\n", (context->address/2) & (CRAM_SIZE-1), context->cram[(context->address/2) & (CRAM_SIZE-1)], context->cycles);
 				break;
 			case VSRAM_WRITE:
@@ -478,13 +478,15 @@ void external_slot(vdp_context * context)
 			context->regs[REG_DMALEN_H] = dma_len >> 8;
 			context->regs[REG_DMALEN_L] = dma_len;
 			if (!dma_len) {
+				printf("DMA end at cycle %d\n", context->cycles);
 				context->flags &= ~FLAG_DMA_RUN;
 			}
 		}
 	} else {
 		fifo_entry * start = (context->fifo_end - FIFO_SIZE);
 		if (context->fifo_cur != start && start->cycle <= context->cycles) {
-			if ((context->regs[REG_MODE_2] & BIT_DMA_ENABLE) && (context->cd & DMA_START)) {
+			if ((context->regs[REG_MODE_2] & BIT_DMA_ENABLE) && (context->cd & DMA_START) && (context->regs[REG_DMASRC_H] & 0xC0) == 0x80) {
+				printf("DMA fill started at %d\n", context->cycles);
 				context->flags |= FLAG_DMA_RUN;
 				context->dma_val = start->value;
 				context->address = start->address; //undo auto-increment
@@ -575,7 +577,7 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 				address &= 0xF000;
 				line_offset = (((line) >> vscroll_shift) * 64 * 2) & 0xFFF;
 				mask = 0x7F;
-				
+
 			} else {
 				address &= 0xF800;
 				line_offset = (((line) >> vscroll_shift) * 32 * 2) & 0xFFF;
@@ -751,7 +753,7 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		}
 		plane_b_off = context->buf_b_off - (context->hscroll_b & 0xF);
 		//printf("A | tmp_buf offset: %d\n", 8 - (context->hscroll_a & 0x7));
-		
+
 		if (context->regs[REG_MODE_4] & BIT_HILIGHT) {
 			for (int i = 0; i < 16; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i) {
 				uint8_t pixel;
@@ -1402,9 +1404,9 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 		}
 		if ((line < active_lines || (line == active_lines && linecyc < (context->latched_mode & BIT_H40 ? 64 : 80))) && context->regs[REG_MODE_2] & DISPLAY_ENABLE) {
 			//first sort-of active line is treated as 255 internally
-			//it's used for gathering sprite info for line 
+			//it's used for gathering sprite info for line
 			line = (line - 1) & 0xFF;
-			
+
 			//Convert to slot number
 			if (context->latched_mode & BIT_H40){
 				vdp_h40(line, slot, context);
@@ -1458,7 +1460,7 @@ void vdp_run_dma_done(vdp_context * context, uint32_t target_cycles)
 
 int vdp_control_port_write(vdp_context * context, uint16_t value)
 {
-	//printf("control port write: %X\n", value);
+	printf("control port write: %X at %d\n", value, context->cycles);
 	if (context->flags & FLAG_DMA_RUN) {
 		return -1;
 	}
@@ -1466,13 +1468,14 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 		context->address = (context->address & 0x3FFF) | (value << 14);
 		context->cd = (context->cd & 0x3) | ((value >> 2) & 0x3C);
 		context->flags &= ~FLAG_PENDING;
-		//printf("New Address: %X, New CD: %X\n", context->address, context->cd);
+		printf("New Address: %X, New CD: %X\n", context->address, context->cd);
 		if (context->cd & 0x20 && (context->regs[REG_MODE_2] & BIT_DMA_ENABLE)) {
 			//
 			if((context->regs[REG_DMASRC_H] & 0xC0) != 0x80) {
 				//DMA copy or 68K -> VDP, transfer starts immediately
 				context->flags |= FLAG_DMA_RUN;
 				context->dma_cd = context->cd;
+				printf("DMA start at cycle %d\n", context->cycles);
 				if (!(context->regs[REG_DMASRC_H] & 0x80)) {
 					//printf("DMA Address: %X, New CD: %X, Source: %X, Length: %X\n", context->address, context->cd, (context->regs[REG_DMASRC_H] << 17) | (context->regs[REG_DMASRC_M] << 9) | (context->regs[REG_DMASRC_L] << 1), context->regs[REG_DMALEN_H] << 8 | context->regs[REG_DMALEN_L]);
 					return 1;
@@ -1480,7 +1483,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 					//printf("DMA Copy Address: %X, New CD: %X, Source: %X\n", context->address, context->cd, (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]);
 				}
 			} else {
-				//printf("DMA Fill Address: %X, New CD: %X\n", context->address, context->cd);
+				printf("DMA Fill Address: %X, New CD: %X\n", context->address, context->cd);
 			}
 		}
 	} else {
@@ -1488,7 +1491,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 			//Register write
 			uint8_t reg = (value >> 8) & 0x1F;
 			if (reg < VDP_REGS) {
-				//printf("register %d set to %X\n", reg, value & 0xFF);
+				printf("register %d set to %X\n", reg, value & 0xFF);
 				context->regs[reg] = value;
 				if (reg == REG_MODE_2) {
 					//printf("Display is now %s\n", (context->regs[REG_MODE_2] & DISPLAY_ENABLE) ? "enabled" : "disabled");
@@ -1511,7 +1514,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 
 int vdp_data_port_write(vdp_context * context, uint16_t value)
 {
-	//printf("data port write: %X\n", value);
+	printf("data port write: %X at %d\n", value, context->cycles);
 	if (context->flags & FLAG_DMA_RUN) {
 		return -1;
 	}
