@@ -478,7 +478,7 @@ void external_slot(vdp_context * context)
 			context->regs[REG_DMALEN_H] = dma_len >> 8;
 			context->regs[REG_DMALEN_L] = dma_len;
 			if (!dma_len) {
-				printf("DMA end at cycle %d\n", context->cycles);
+				//printf("DMA end at cycle %d\n", context->cycles);
 				context->flags &= ~FLAG_DMA_RUN;
 			}
 		}
@@ -486,7 +486,7 @@ void external_slot(vdp_context * context)
 		fifo_entry * start = (context->fifo_end - FIFO_SIZE);
 		if (context->fifo_cur != start && start->cycle <= context->cycles) {
 			if ((context->regs[REG_MODE_2] & BIT_DMA_ENABLE) && (context->cd & DMA_START) && (context->regs[REG_DMASRC_H] & 0xC0) == 0x80) {
-				printf("DMA fill started at %d\n", context->cycles);
+				//printf("DMA fill started at %d\n", context->cycles);
 				context->flags |= FLAG_DMA_RUN;
 				context->dma_val = start->value;
 				context->address = start->address; //undo auto-increment
@@ -1241,12 +1241,19 @@ void latch_mode(vdp_context * context)
 int is_refresh(vdp_context * context, uint32_t slot)
 {
 	if (context->latched_mode & BIT_H40) {
-		//TODO: Figure out the exact behavior that reduces DMA slots for direct color DMA demos
-		return (slot == 37 || slot == 69 || slot == 102 || slot == 133 || slot == 165 || slot == 197 || slot >= 210 || (slot < 6 && (context->flags & FLAG_DMA_RUN) && ((context->dma_cd & 0xF) == CRAM_WRITE)));
+		//TODO: Determine behavior for DMA fills and copies
+		return (slot == 37 || slot == 69 || slot == 102 || slot == 133 || slot == 165 || slot == 197 || slot >= 210
+		        || ((context->flags & FLAG_DMA_RUN) && ((context->dma_cd & 0xF) != VRAM_WRITE)) && (
+		            //both of the missed reads occurred right next to each other, but there seems
+					//to be some buffering involved, these values produce similar artifacts
+					//to what I see on my Model 2
+				    slot == 34 || slot == 66 || slot == 99 || slot == 130 || slot == 162 || slot == 194));
 	} else {
 		//TODO: Figure out which slots are refresh when display is off in 32-cell mode
 		//These numbers are guesses based on H40 numbers
-		return (slot == 24 || slot == 56 || slot == 88 || slot == 120 || slot == 152 || (slot < 5 && (context->flags & FLAG_DMA_RUN) && ((context->dma_cd & 0xF) == CRAM_WRITE)));
+		return (slot == 24 || slot == 56 || slot == 88 || slot == 120 || slot == 152
+		        || ((context->flags & FLAG_DMA_RUN) && ((context->dma_cd & 0xF) != VRAM_WRITE)) && (
+				    slot == 21 || slot == 53 || slot == 85 || slot == 117 || slot == 149));
 		//The numbers below are the refresh slots during active display
 		//return (slot == 66 || slot == 98 || slot == 130 || slot == 162);
 	}
@@ -1460,7 +1467,7 @@ void vdp_run_dma_done(vdp_context * context, uint32_t target_cycles)
 
 int vdp_control_port_write(vdp_context * context, uint16_t value)
 {
-	printf("control port write: %X at %d\n", value, context->cycles);
+	//printf("control port write: %X at %d\n", value, context->cycles);
 	if (context->flags & FLAG_DMA_RUN) {
 		return -1;
 	}
@@ -1468,14 +1475,14 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 		context->address = (context->address & 0x3FFF) | (value << 14);
 		context->cd = (context->cd & 0x3) | ((value >> 2) & 0x3C);
 		context->flags &= ~FLAG_PENDING;
-		printf("New Address: %X, New CD: %X\n", context->address, context->cd);
+		//printf("New Address: %X, New CD: %X\n", context->address, context->cd);
 		if (context->cd & 0x20 && (context->regs[REG_MODE_2] & BIT_DMA_ENABLE)) {
 			//
 			if((context->regs[REG_DMASRC_H] & 0xC0) != 0x80) {
 				//DMA copy or 68K -> VDP, transfer starts immediately
 				context->flags |= FLAG_DMA_RUN;
 				context->dma_cd = context->cd;
-				printf("DMA start at cycle %d\n", context->cycles);
+				//printf("DMA start at cycle %d\n", context->cycles);
 				if (!(context->regs[REG_DMASRC_H] & 0x80)) {
 					//printf("DMA Address: %X, New CD: %X, Source: %X, Length: %X\n", context->address, context->cd, (context->regs[REG_DMASRC_H] << 17) | (context->regs[REG_DMASRC_M] << 9) | (context->regs[REG_DMASRC_L] << 1), context->regs[REG_DMALEN_H] << 8 | context->regs[REG_DMALEN_L]);
 					return 1;
@@ -1483,7 +1490,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 					//printf("DMA Copy Address: %X, New CD: %X, Source: %X\n", context->address, context->cd, (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]);
 				}
 			} else {
-				printf("DMA Fill Address: %X, New CD: %X\n", context->address, context->cd);
+				//printf("DMA Fill Address: %X, New CD: %X\n", context->address, context->cd);
 			}
 		}
 	} else {
@@ -1491,7 +1498,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 			//Register write
 			uint8_t reg = (value >> 8) & 0x1F;
 			if (reg < VDP_REGS) {
-				printf("register %d set to %X\n", reg, value & 0xFF);
+				//printf("register %d set to %X\n", reg, value & 0xFF);
 				context->regs[reg] = value;
 				if (reg == REG_MODE_2) {
 					//printf("Display is now %s\n", (context->regs[REG_MODE_2] & DISPLAY_ENABLE) ? "enabled" : "disabled");
@@ -1514,7 +1521,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 
 int vdp_data_port_write(vdp_context * context, uint16_t value)
 {
-	printf("data port write: %X at %d\n", value, context->cycles);
+	//printf("data port write: %X at %d\n", value, context->cycles);
 	if (context->flags & FLAG_DMA_RUN) {
 		return -1;
 	}
@@ -1557,7 +1564,7 @@ uint16_t vdp_control_port_read(vdp_context * context)
 	}
 	uint32_t line= context->cycles / MCLKS_LINE;
 	uint32_t linecyc = context->cycles % MCLKS_LINE;
-	if (line >= (context->latched_mode & BIT_PAL ? PAL_ACTIVE : NTSC_ACTIVE)) {
+	if (line >= (context->latched_mode & BIT_PAL ? PAL_ACTIVE : NTSC_ACTIVE) || context->cycles < (context->latched_mode & BIT_H40 ? 16*4 : 16*5)) {
 		value |= 0x8;
 	}
 	if (linecyc < (context->latched_mode & BIT_H40 ? HBLANK_CLEAR_H40 : HBLANK_CLEAR_H32)) {
