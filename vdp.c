@@ -619,7 +619,7 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 		vscroll <<= 1;
 		vscroll |= 1;
 	}
-	vscroll &= (context->vsram[(context->regs[REG_MODE_3] & BIT_VSCROLL ? column : 0) + vsram_off] + line);
+	vscroll &= (context->vsram[(context->regs[REG_MODE_3] & BIT_VSCROLL ? (column-2)&63 : 0) + vsram_off] + line);
 	context->v_offset = vscroll & v_offset_mask;
 	//printf("%s | line %d, vsram: %d, vscroll: %d, v_offset: %d\n",(vsram_off ? "B" : "A"), line, context->vsram[context->regs[REG_MODE_3] & 0x4 ? column : 0], vscroll, context->v_offset);
 	vscroll >>= vscroll_shift;
