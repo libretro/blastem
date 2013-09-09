@@ -347,7 +347,6 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 						blocked = 0;
 					}
 				}
-				context->current_cycle = v_context->cycles / MCLKS_PER_68K;
 			} else {
 				adjust_int_cycle(context, v_context);
 			}
@@ -356,7 +355,7 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 			exit(1);
 		}
 		if (v_context->cycles != before_cycle) {
-			//printf("68K paused for %d cycles at cycle %d\n", v_context->cycles / MCLKS_PER_68K - context->current_cycle, context->current_cycle);
+			//printf("68K paused for %d (%d) cycles at cycle %d (%d)\n", v_context->cycles / MCLKS_PER_68K - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
 			context->current_cycle = v_context->cycles / MCLKS_PER_68K;
 		}
 	} else if (vdp_port < 0x18) {
@@ -420,7 +419,6 @@ uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 			value = vdp_hv_counter_read(v_context);
 			//printf("HV Counter: %X at cycle %d\n", value, v_context->cycles);
 		}
-		context->current_cycle = v_context->cycles/MCLKS_PER_68K;
 	} else {
 		printf("Illegal read from PSG or test register port %X\n", vdp_port);
 		exit(1);
