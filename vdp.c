@@ -1211,14 +1211,20 @@ void check_render_bg(vdp_context * context, int32_t line, uint32_t slot)
 		line -= 1;
 		int starti = -1;
 		if (context->latched_mode & BIT_H40) {
-			if (slot >= 50 && slot < 210) {
-				uint32_t x = (slot-50)*2;
+			if (slot >= 55 && slot < 210) {
+				uint32_t x = (slot-55)*2;
 				starti = line * 320 + x;
+			} else if (slot < 5) {
+				uint32_t x = (slot + 155)*2;
+				starti = (line-1)*320 + x;
 			}
 		} else {
-			if (slot >= 43 && slot < 171) {
-				uint32_t x = (slot-43)*2;
+			if (slot >= 48 && slot < 171) {
+				uint32_t x = (slot-48)*2;
 				starti = line * 320 + x;
+			} else if (slot < 5) {
+				uint32_t x = (slot + 123)*2;
+				starti = (line-1)*320 + x;
 			}
 		}
 		if (starti >= 0) {
