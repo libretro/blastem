@@ -2952,7 +2952,9 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 	case M68K_BCLR:
 	case M68K_BSET:
 	case M68K_BTST:
-		dst = cycles(dst, inst->extra.size == OPSIZE_BYTE ? 4 : 6);
+		dst = cycles(dst, inst->extra.size == OPSIZE_BYTE ? 4 : (
+			inst->op == M68K_BTST ? 6 : (inst->op == M68K_BCLR ? 10 : 8))
+		);
 		if (src_op.mode == MODE_IMMED) {
 			if (inst->extra.size == OPSIZE_BYTE) {
 				src_op.disp &= 0x7;
