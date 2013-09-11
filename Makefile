@@ -16,7 +16,7 @@ M68KOBJS=68kinst.o m68k_to_x86.o runtime.o
 Z80OBJS=z80inst.o z80_to_x86.o zruntime.o
 AUDIOOBJS=ym2612.o psg.o wave.o
 
-all : dis trans stateview blastem
+all : dis zdis stateview vgmplay blastem
 
 blastem : blastem.o vdp.o render_sdl.o io.o config.o tern.o gst.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS)
 	$(CC) -ggdb -o blastem  blastem.o vdp.o render_sdl.o io.o config.o tern.o gst.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS) $(LDFLAGS)
@@ -42,8 +42,8 @@ ztestrun : ztestrun.o $(Z80OBJS) $(TRANSOBJS)
 ztestgen : ztestgen.o z80inst.o
 	$(CC) -o ztestgen ztestgen.o z80inst.o
 
-stateview : stateview.o vdp.o render_sdl.o
-	$(CC) -o stateview stateview.o vdp.o render_sdl.o `pkg-config --libs $(LIBS)`
+stateview : stateview.o vdp.o render_sdl.o config.o tern.o gst.o
+	$(CC) -o stateview stateview.o vdp.o render_sdl.o config.o tern.o gst.o `pkg-config --libs $(LIBS)`
 
 vgmplay : vgmplay.o render_sdl.o $(AUDIOOBJS)
 	$(CC) -o vgmplay vgmplay.o render_sdl.o $(AUDIOOBJS) `pkg-config --libs $(LIBS)`
