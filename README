@@ -1,0 +1,87 @@
+BlastEm 0.1.0
+-------------
+
+Installation
+------------
+
+Extract this tarball to a directory of your choosing. If you wish to change the
+configuration settings, copy default.cfg to ~/.config/blastem/blastem.cfg and
+modify the copy. You may also whish to add the blastem directory to your PATH
+environment variable.
+
+Configuration
+-------------
+
+Configuration is read from the file at ~/.config/blastem/blastem.cfg if it
+exists othwerise it is read from default.cfg from the same directory as the
+blastem executable. Sections are denoted by a section name followed by an open
+curly bracket, the section's contents and a closing curly bracket. Individual
+configuration values are set by entering the value's name followed by a space
+or tab and followed by the desired value.
+
+Bindings
+--------
+
+The keys subsection of bindings maps keyboard keys to gamepad buttons or UI
+actions. The key name goes on the left and the action is on the right.
+Most keys are named for the character they produce when pressed. Additionally,
+the arrow, enter and escape keys have the symbolic names up, down, left, right,
+enter and esc respectively. Other keys that do not produce characters are not
+yet supported.
+
+The pads subsection is used to map gamepads and joysticks. Analog axes are not
+currently supported. An example configuration is provided in default.cfg to map
+SDL joystick 0 to the second controller.
+
+Video
+-----
+
+Currently the only setting in the video section is "width", which is the width
+of the window in pixels. Height is calculated from this value. Both width and
+height can be overridden from the command line.
+
+Audio
+-----
+
+The audio section has two config values: rate and buffer. rate selects the
+sample rate and buffer sets the size of the output buffer in samples. 512 is
+generally a good value, but if you're experiencing audio dropouts you might
+want to increase it to 1024.
+
+Debugger
+--------
+
+BlastEm has an integrated command-line debugger loosely based on GDB's
+interface. The interface is very rough at the moment. Available commands in the
+68K debugger are:
+	b ADDRESS            - Set a breakpoint at ADDRESS
+	a ADDRESS            - Advance to address
+	n                    - Advance to next instruction
+	c                    - Continue
+	p[/(x|X|d|c)] VALUE  - Print a register or memory location
+	vs                   - Print VDP sprite list
+	vr                   - Print VDP register info
+	zb                   - Set a Z80 breakpoint
+	q                    - Quit BlastEm
+Available commands in the Z80 debugger are:
+	b ADDRESS            - Set a breakpoint at ADDRESS
+	a ADDRESS            - Advance to address
+	n                    - Advance to next instruction
+	c                    - Continue
+	p[/(x|X|d|c)] VALUE  - Print a register or memory location
+	di[/(x|X|d|c)] VALUE - Print VALUE before every debugger prompt
+	de BREAKPOINT        - Delete a Z80 breakpoint
+	q                    - Quit BlastEm
+
+The -d flag can be used to cause BlastEm to start in the debugger.
+Alternatively, you can use the ui.enter_debugger action (mapped to the 'u' key
+by default)to enter the debugger while a game is running.
+
+License
+-------
+
+BlastEm is free software distributed under the terms of the GNU General Public
+License version 3 or higher. This gives you the right to redistribute and/or
+modify the program as long as you follow the terms of the license. See the file
+COPYING for full license details.
+
