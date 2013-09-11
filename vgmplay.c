@@ -1,6 +1,7 @@
 #include "render.h"
 #include "ym2612.h"
 #include "psg.h"
+#include "config.h"
 #include <stdint.h>
 #include <stdio.h>
 
@@ -72,14 +73,27 @@ void handle_keyup(int keycode)
 {
 }
 
+void handle_joydown(int joystick, int button)
+{
+}
+
+void handle_joyup(int joystick, int button)
+{
+}
+
+void handle_joy_dpad(int joystick, int dpadnum, uint8_t value)
+{
+}
+
 #define CYCLE_LIMIT MCLKS_NTSC/60
+tern_node * config;
 
 void wait(ym2612_context * y_context, psg_context * p_context, uint32_t * current_cycle, uint32_t cycles)
 {
 	*current_cycle += cycles;
 	psg_run(p_context, *current_cycle);
 	ym_run(y_context, *current_cycle);
-	
+
 	if (*current_cycle > CYCLE_LIMIT) {
 		*current_cycle -= CYCLE_LIMIT;
 		p_context->cycles -= CYCLE_LIMIT;
@@ -91,15 +105,16 @@ void wait(ym2612_context * y_context, psg_context * p_context, uint32_t * curren
 int main(int argc, char ** argv)
 {
 	uint32_t fps = 60;
-	render_init(320, 240, "vgm play", 60);
-	
-	
+	config = load_config(argv[0]);
+	render_init(320, 240, "vgm play", 60, 0);
+
+
 	ym2612_context y_context;
 	ym_init(&y_context, render_sample_rate(), MCLKS_NTSC, MCLKS_PER_YM, render_audio_buffer(), 0);
-	
+
 	psg_context p_context;
 	psg_init(&p_context, render_sample_rate(), MCLKS_NTSC, MCLKS_PER_PSG, render_audio_buffer());
-	
+
 	FILE * f = fopen(argv[1], "rb");
 	vgm_header header;
 	fread(&header, sizeof(header), 1, f);
@@ -111,9 +126,9 @@ int main(int argc, char ** argv)
 	uint8_t * data = malloc(data_size);
 	fread(data, 1, data_size, f);
 	fclose(f);
-	
+
 	uint32_t mclks_sample = MCLKS_NTSC / 44100;
-	
+
 	uint8_t * end = data + data_size;
 	uint8_t * cur = data;
 	uint32_t current_cycle = 0;

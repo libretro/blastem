@@ -45,8 +45,8 @@ ztestgen : ztestgen.o z80inst.o
 stateview : stateview.o vdp.o render_sdl.o config.o tern.o gst.o
 	$(CC) -o stateview stateview.o vdp.o render_sdl.o config.o tern.o gst.o `pkg-config --libs $(LIBS)`
 
-vgmplay : vgmplay.o render_sdl.o $(AUDIOOBJS)
-	$(CC) -o vgmplay vgmplay.o render_sdl.o $(AUDIOOBJS) `pkg-config --libs $(LIBS)`
+vgmplay : vgmplay.o render_sdl.o config.o tern.o $(AUDIOOBJS)
+	$(CC) -o vgmplay vgmplay.o render_sdl.o config.o tern.o $(AUDIOOBJS) $(LDFLAGS)
 
 testgst : testgst.o gst.o
 	$(CC) -o testgst testgst.o gst.o
