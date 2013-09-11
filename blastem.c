@@ -10,6 +10,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define BLASTEM_VERSION "0.1.0"
+
 #define CARTRIDGE_WORDS 0x200000
 #define RAM_WORDS 32 * 1024
 #define Z80_RAM_BYTES 8 * 1024
@@ -1749,9 +1751,10 @@ int main(int argc, char ** argv)
 			case 'l':
 				address_log = fopen("address.log", "w");
 				break;
-//			case 'v':
-//				headless = 1;
-//				break;
+			case 'v':
+				printf("blastem %s\n", BLASTEM_VERSION);
+				return 0;
+				break;
 			case 'n':
 				z80_enabled = 0;
 				break;
@@ -1801,6 +1804,7 @@ int main(int argc, char ** argv)
 					"	-s FILE     Load a GST format savestate from FILE\n"
 					"	-d          Enter debugger on startup\n"
 					"	-n          Disable Z80\n"
+					"   -v          Display version number and exit\n"
 					"	-l          Log 68K code addresses (useful for assemblers)\n"
 					"	-y          Log individual YM-2612 channels to WAVE files\n"
 				);
