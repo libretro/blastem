@@ -1724,11 +1724,7 @@ void detect_region()
 int main(int argc, char ** argv)
 {
 	if (argc < 2) {
-		fputs("Usage: blastem FILENAME [options]\n", stderr);
-		return 1;
-	}
-	if(!load_rom(argv[1])) {
-		fprintf(stderr, "Failed to open %s for reading\n", argv[1]);
+		fputs("Usage: blastem ROMFILE [OPTIONS] [WIDTH] [HEIGHT]\n", stderr);
 		return 1;
 	}
 	config = load_config(argv[0]);
@@ -1737,10 +1733,11 @@ int main(int argc, char ** argv)
 	int height = -1;
 	int debug = 0;
 	int ym_log = 0;
+	int loaded = 0;
 	FILE *address_log = NULL;
 	char * statefile = NULL;
 	uint8_t fullscreen = 0;
-	for (int i = 2; i < argc; i++) {
+	for (int i = 1; i < argc; i++) {
 		if (argv[i][0] == '-') {
 			switch(argv[i][1]) {
 			case 'd':
@@ -1752,9 +1749,9 @@ int main(int argc, char ** argv)
 			case 'l':
 				address_log = fopen("address.log", "w");
 				break;
-			case 'v':
-				headless = 1;
-				break;
+//			case 'v':
+//				headless = 1;
+//				break;
 			case 'n':
 				z80_enabled = 0;
 				break;
@@ -1794,15 +1791,39 @@ int main(int argc, char ** argv)
 			case 'y':
 				ym_log = 1;
 				break;
+			case 'h':
+				puts(
+					"Usage: blastem ROMFILE [OPTIONS] [WIDTH] [HEIGHT]\n"
+					"Options:\n"
+					"	-h          Print this help text\n"
+					"	-r (J|U|E)  Force region to Japan, US or Europe respectively\n"
+					"	-f          Start in fullscreen mode\n"
+					"	-s FILE     Load a GST format savestate from FILE\n"
+					"	-d          Enter debugger on startup\n"
+					"	-n          Disable Z80\n"
+					"	-l          Log 68K code addresses (useful for assemblers)\n"
+					"	-y          Log individual YM-2612 channels to WAVE files\n"
+				);
+				return 0;
 			default:
 				fprintf(stderr, "Unrecognized switch %s\n", argv[i]);
 				return 1;
 			}
+		} else if (!loaded) {
+			if(!load_rom(argv[i])) {
+				fprintf(stderr, "Failed to open %s for reading\n", argv[1]);
+				return 1;
+			}
+			loaded = 1;
 		} else if (width < 0) {
 			width = atoi(argv[i]);
 		} else if (height < 0) {
 			height = atoi(argv[i]);
 		}
+	}
+	if (!loaded) {
+		fputs("You must specify a ROM filename!\n", stderr);
+		return 1;
 	}
 	update_title();
 	int def_width = 0;
