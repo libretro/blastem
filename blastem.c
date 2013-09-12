@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "68kinst.h"
@@ -1731,7 +1731,7 @@ void detect_region()
 int main(int argc, char ** argv)
 {
 	if (argc < 2) {
-		fputs("Usage: blastem ROMFILE [OPTIONS] [WIDTH] [HEIGHT]\n", stderr);
+		fputs("Usage: blastem [OPTIONS] ROMFILE [WIDTH] [HEIGHT]\n", stderr);
 		return 1;
 	}
 	config = load_config(argv[0]);
@@ -1741,6 +1741,8 @@ int main(int argc, char ** argv)
 	int debug = 0;
 	int ym_log = 0;
 	int loaded = 0;
+	uint8_t force_version = 0;
+	char * romfname = NULL;
 	FILE *address_log = NULL;
 	char * statefile = NULL;
 	uint8_t fullscreen = 0;
@@ -1773,15 +1775,15 @@ int main(int argc, char ** argv)
 				{
 				case 'j':
 				case 'J':
-					version_reg = NO_DISK | JAP;
+					force_version = NO_DISK | JAP;
 					break;
 				case 'u':
 				case 'U':
-					version_reg = NO_DISK | USA;
+					force_version = NO_DISK | USA;
 					break;
 				case 'e':
 				case 'E':
-					version_reg = NO_DISK | EUR;
+					force_version = NO_DISK | EUR;
 					break;
 				default:
 					fprintf(stderr, "'%c' is not a valid region character for the -r option\n", argv[i][0]);
@@ -1801,7 +1803,7 @@ int main(int argc, char ** argv)
 				break;
 			case 'h':
 				puts(
-					"Usage: blastem ROMFILE [OPTIONS] [WIDTH] [HEIGHT]\n"
+					"Usage: blastem [OPTIONS] ROMFILE [WIDTH] [HEIGHT]\n"
 					"Options:\n"
 					"	-h          Print this help text\n"
 					"	-r (J|U|E)  Force region to Japan, US or Europe respectively\n"
@@ -1820,9 +1822,10 @@ int main(int argc, char ** argv)
 			}
 		} else if (!loaded) {
 			if(!load_rom(argv[i])) {
-				fprintf(stderr, "Failed to open %s for reading\n", argv[1]);
+				fprintf(stderr, "Failed to open %s for reading\n", argv[i]);
 				return 1;
 			}
+			romfname = argv[i];
 			loaded = 1;
 		} else if (width < 0) {
 			width = atoi(argv[i]);
@@ -1833,6 +1836,9 @@ int main(int argc, char ** argv)
 	if (!loaded) {
 		fputs("You must specify a ROM filename!\n", stderr);
 		return 1;
+	}
+	if (force_version) {
+		version_reg = force_version;
 	}
 	update_title();
 	int def_width = 0;
@@ -1883,9 +1889,9 @@ int main(int argc, char ** argv)
 	gen.psg = &p_context;
 	genesis = &gen;
 
-	int fname_size = strlen(argv[1]);
+	int fname_size = strlen(romfname);
 	sram_filename = malloc(fname_size+6);
-	memcpy(sram_filename, argv[1], fname_size);
+	memcpy(sram_filename, romfname, fname_size);
 	int i;
 	for (i = fname_size-1; fname_size >= 0; --i) {
 		if (sram_filename[i] == '.') {
