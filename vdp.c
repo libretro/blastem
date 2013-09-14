@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "vdp.h"
@@ -391,15 +391,21 @@ void write_cram(vdp_context * context, uint16_t address, uint16_t value)
 void external_slot(vdp_context * context)
 {
 	fifo_entry * start = (context->fifo_end - FIFO_SIZE);
+	if (context->flags2 & FLAG2_READ_PENDING) {
+		context->flags2 &= ~FLAG2_READ_PENDING;
+		context->flags |= FLAG_UNUSED_SLOT;
+		return;
+	}
 	if (context->fifo_cur != start && start->cycle <= context->cycles) {
 		switch (start->cd & 0xF)
 		{
 		case VRAM_WRITE:
 			if (start->partial) {
-				//printf("VRAM Write: %X to %X\n", start->value, context->address ^ 1);
+				printf("VRAM Write: %X to %X at %d (line %d, slot %d)\n", start->value, start->address ^ 1, context->cycles, context->cycles/MCLKS_LINE, (context->cycles%MCLKS_LINE)/16);
+				context->last_fifo_val = start->value;
 				context->vdpmem[start->address ^ 1] = start->value;
 			} else {
-				//printf("VRAM Write High: %X to %X\n", start->value >> 8, context->address);
+				printf("VRAM Write High: %X to %X at %d (line %d, slot %d)\n", start->value >> 8, start->address, context->cycles, context->cycles/MCLKS_LINE, (context->cycles%MCLKS_LINE)/16);
 				context->vdpmem[start->address] = start->value >> 8;
 				start->partial = 1;
 				//skip auto-increment and removal of entry from fifo
@@ -409,12 +415,14 @@ void external_slot(vdp_context * context)
 		case CRAM_WRITE: {
 			//printf("CRAM Write | %X to %X\n", start->value, (start->address/2) & (CRAM_SIZE-1));
 			write_cram(context, start->address, start->value);
+			context->last_fifo_val = start->value;
 			break;
 		}
 		case VSRAM_WRITE:
 			if (((start->address/2) & 63) < VSRAM_SIZE) {
 				//printf("VSRAM Write: %X to %X\n", start->value, context->address);
 				context->vsram[(start->address/2) & 63] = start->value;
+				context->last_fifo_val = start->value;
 			}
 
 			break;
@@ -1428,7 +1436,7 @@ void vdp_run_dma_done(vdp_context * context, uint32_t target_cycles)
 
 int vdp_control_port_write(vdp_context * context, uint16_t value)
 {
-	//printf("control port write: %X at %d\n", value, context->cycles);
+	printf("control port write: %X at %d\n", value, context->cycles);
 	if (context->flags & FLAG_DMA_RUN) {
 		return -1;
 	}
@@ -1482,7 +1490,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 
 int vdp_data_port_write(vdp_context * context, uint16_t value)
 {
-	//printf("data port write: %X at %d\n", value, context->cycles);
+	printf("data port write: %X at %d\n", value, context->cycles);
 	if (context->flags & FLAG_DMA_RUN && (context->regs[REG_DMASRC_H] & 0xC0) != 0x80) {
 		return -1;
 	}
@@ -1512,6 +1520,11 @@ int vdp_data_port_write(vdp_context * context, uint16_t value)
 	context->fifo_cur++;
 	context->address += context->regs[REG_AUTOINC];
 	return 0;
+}
+
+void vdp_test_port_write(vdp_context * context, uint16_t value)
+{
+	//TODO: implement test register
 }
 
 uint16_t vdp_control_port_read(vdp_context * context)
@@ -1549,6 +1562,9 @@ uint16_t vdp_control_port_read(vdp_context * context)
 	return value;
 }
 
+#define CRAM_BITS 0xEEE
+#define VSRAM_BITS 0x3FF
+
 uint16_t vdp_data_port_read(vdp_context * context)
 {
 	context->flags &= ~FLAG_PENDING;
@@ -1557,6 +1573,7 @@ uint16_t vdp_data_port_read(vdp_context * context)
 	}
 	//Not sure if the FIFO should be drained before processing a read or not, but it would make sense
 	context->flags &= ~FLAG_UNUSED_SLOT;
+	context->flags2 |= FLAG2_READ_PENDING;
 	while (!(context->flags & FLAG_UNUSED_SLOT)) {
 		vdp_run_context(context, context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20));
 	}
@@ -1566,17 +1583,20 @@ uint16_t vdp_data_port_read(vdp_context * context)
 	case VRAM_READ:
 		value = context->vdpmem[context->address] << 8;
 		context->flags &= ~FLAG_UNUSED_SLOT;
+		context->flags2 |= FLAG2_READ_PENDING;
 		while (!(context->flags & FLAG_UNUSED_SLOT)) {
 			vdp_run_context(context, context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20));
 		}
 		value |= context->vdpmem[context->address ^ 1];
 		break;
 	case CRAM_READ:
-		value = context->cram[(context->address/2) & (CRAM_SIZE-1)];
+		value = context->cram[(context->address/2) & (CRAM_SIZE-1)] & CRAM_BITS;
+		value |= context->last_fifo_val & ~CRAM_BITS;
 		break;
 	case VSRAM_READ:
 		if (((context->address / 2) & 63) < VSRAM_SIZE) {
-			value = context->vsram[context->address & 63];
+			value = context->vsram[context->address & 63] & VSRAM_BITS;
+			value |= context->last_fifo_val & ~VSRAM_BITS;
 		}
 		break;
 	}
@@ -1691,6 +1711,12 @@ uint16_t vdp_hv_counter_read(vdp_context * context)
 		}
 	}
 	return (line << 8) | linecyc;
+}
+
+uint16_t vdp_test_port_read(vdp_context * context)
+{
+	//TODO: Find out what actually gets returned here
+	return 0xFFFF;
 }
 
 void vdp_adjust_cycles(vdp_context * context, uint32_t deduction)
