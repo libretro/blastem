@@ -362,7 +362,7 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 			exit(1);
 		}
 		if (v_context->cycles != before_cycle) {
-			//printf("68K paused for %d (%d) cycles at cycle %d (%d)\n", v_context->cycles / MCLKS_PER_68K - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
+			printf("68K paused for %d (%d) cycles at cycle %d (%d) for write\n", v_context->cycles / MCLKS_PER_68K - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
 			context->current_cycle = v_context->cycles / MCLKS_PER_68K;
 		}
 	} else if (vdp_port < 0x18) {
@@ -402,7 +402,7 @@ z80_context * z80_vdp_port_write(uint16_t vdp_port, z80_context * context, uint8
 		sync_sound(gen, context->current_cycle * MCLKS_PER_Z80);
 		psg_write(gen->psg, value);
 	} else {
-		//TODO: Implement undocumented test register(s)
+		vdp_test_port_write(gen->vdp, value);
 	}
 	return context;
 }
@@ -417,6 +417,7 @@ uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 	uint16_t value;
 	sync_components(context, 0);
 	vdp_context * v_context = context->video_context;
+	uint32_t before_cycle = v_context->cycles;
 	if (vdp_port < 0x10) {
 		if (vdp_port < 4) {
 			value = vdp_data_port_read(v_context);
@@ -426,9 +427,15 @@ uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 			value = vdp_hv_counter_read(v_context);
 			//printf("HV Counter: %X at cycle %d\n", value, v_context->cycles);
 		}
-	} else {
-		printf("Illegal read from PSG or test register port %X\n", vdp_port);
+	} else if (vdp_port < 0x18){
+		printf("Illegal read from PSG  port %X\n", vdp_port);
 		exit(1);
+	} else {
+		value = vdp_test_port_read(v_context);
+	}
+	if (v_context->cycles != before_cycle) {
+		printf("68K paused for %d (%d) cycles at cycle %d (%d) for read\n", v_context->cycles / MCLKS_PER_68K - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
+		context->current_cycle = v_context->cycles / MCLKS_PER_68K;
 	}
 	return value;
 }

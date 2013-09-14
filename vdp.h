@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #ifndef VDP_H_
@@ -47,6 +47,7 @@
 
 #define FLAG2_VINT_PENDING 0x01
 #define FLAG2_HINT_PENDING 0x02
+#define FLAG2_READ_PENDING 0x04
 
 #define DISPLAY_ENABLE 0x40
 
@@ -149,6 +150,7 @@ typedef struct {
 	uint16_t    col_1;
 	uint16_t    col_2;
 	uint16_t    last_write_val;
+	uint16_t    last_fifo_val;
 	uint8_t     v_offset;
 	uint8_t     dma_cd;
 	uint8_t     hint_counter;
@@ -172,9 +174,11 @@ uint8_t vdp_load_gst(vdp_context * context, FILE * state_file);
 uint8_t vdp_save_gst(vdp_context * context, FILE * outfile);
 int vdp_control_port_write(vdp_context * context, uint16_t value);
 int vdp_data_port_write(vdp_context * context, uint16_t value);
+void vdp_test_port_write(vdp_context * context, uint16_t value);
 uint16_t vdp_control_port_read(vdp_context * context);
 uint16_t vdp_data_port_read(vdp_context * context);
 uint16_t vdp_hv_counter_read(vdp_context * context);
+uint16_t vdp_test_port_read(vdp_context * context);
 void vdp_adjust_cycles(vdp_context * context, uint32_t deduction);
 uint32_t vdp_next_hint(vdp_context * context);
 uint32_t vdp_next_vint(vdp_context * context);
