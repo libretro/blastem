@@ -1583,13 +1583,13 @@ uint16_t vdp_data_port_read(vdp_context * context)
 	switch (context->cd & 0xF)
 	{
 	case VRAM_READ:
-		value = context->vdpmem[context->address] << 8;
+		value = context->vdpmem[context->address & 0xFFFE] << 8;
 		context->flags &= ~FLAG_UNUSED_SLOT;
 		context->flags2 |= FLAG2_READ_PENDING;
 		while (!(context->flags & FLAG_UNUSED_SLOT)) {
 			vdp_run_context(context, context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20));
 		}
-		value |= context->vdpmem[context->address ^ 1];
+		value |= context->vdpmem[context->address | 1];
 		break;
 	case CRAM_READ:
 		value = context->cram[(context->address/2) & (CRAM_SIZE-1)] & CRAM_BITS;
@@ -1597,7 +1597,7 @@ uint16_t vdp_data_port_read(vdp_context * context)
 		break;
 	case VSRAM_READ:
 		if (((context->address / 2) & 63) < VSRAM_SIZE) {
-			value = context->vsram[context->address & 63] & VSRAM_BITS;
+			value = context->vsram[(context->address / 2) & 63] & VSRAM_BITS;
 			value |= context->fifo[context->fifo_write].value & VSRAM_DIRTY_BITS;
 		}
 		break;
