@@ -362,7 +362,7 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 			exit(1);
 		}
 		if (v_context->cycles != before_cycle) {
-			printf("68K paused for %d (%d) cycles at cycle %d (%d) for write\n", v_context->cycles / MCLKS_PER_68K - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
+			//printf("68K paused for %d (%d) cycles at cycle %d (%d) for write\n", v_context->cycles / MCLKS_PER_68K - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
 			context->current_cycle = v_context->cycles / MCLKS_PER_68K;
 		}
 	} else if (vdp_port < 0x18) {
@@ -434,7 +434,7 @@ uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 		value = vdp_test_port_read(v_context);
 	}
 	if (v_context->cycles != before_cycle) {
-		printf("68K paused for %d (%d) cycles at cycle %d (%d) for read\n", v_context->cycles / MCLKS_PER_68K - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
+		//printf("68K paused for %d (%d) cycles at cycle %d (%d) for read\n", v_context->cycles / MCLKS_PER_68K - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
 		context->current_cycle = v_context->cycles / MCLKS_PER_68K;
 	}
 	return value;
