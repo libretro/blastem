@@ -378,12 +378,22 @@ void write_cram(vdp_context * context, uint16_t address, uint16_t value)
 	context->colors[addr + CRAM_SIZE*2] = color_map[(value & 0xEEE) | FBUF_HILIGHT];
 }
 
-#define VRAM_READ 0
-#define VRAM_WRITE 1
-#define CRAM_READ 8
-#define CRAM_WRITE 3
-#define VSRAM_READ 4
-#define VSRAM_WRITE 5
+#define VRAM_READ 0 //0000
+#define VRAM_WRITE 1 //0001
+//2 would trigger register write 0010
+#define CRAM_WRITE 3 //0011
+#define VSRAM_READ 4 //0100
+#define VSRAM_WRITE 5//0101
+//6 would trigger regsiter write 0110
+//7 is a mystery
+#define CRAM_READ 8  //1000
+//9 is also a mystery //1001
+//A would trigger register write 1010
+//B is a mystery 1011
+#define VRAM_READ8 0xC //1100
+//D is a mystery 1101
+//E would trigger register write 1110
+//F is a mystery 1111
 #define DMA_START 0x20
 
 void external_slot(vdp_context * context)
@@ -1590,6 +1600,10 @@ uint16_t vdp_data_port_read(vdp_context * context)
 			vdp_run_context(context, context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20));
 		}
 		value |= context->vdpmem[context->address | 1];
+		break;
+	case VRAM_READ8:
+		value = context->vdpmem[context->address ^ 1];
+		value |= context->fifo[context->fifo_write].value & 0xFF00;
 		break;
 	case CRAM_READ:
 		value = context->cram[(context->address/2) & (CRAM_SIZE-1)] & CRAM_BITS;
