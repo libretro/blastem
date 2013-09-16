@@ -1477,7 +1477,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 		if ((value & 0xC000) == 0x8000) {
 			//Register write
 			uint8_t reg = (value >> 8) & 0x1F;
-			if (reg < VDP_REGS) {
+			if (reg < (context->regs[REG_MODE_2] & BIT_MODE_5 ? VDP_REGS : 0xA)) {
 				//printf("register %d set to %X\n", reg, value & 0xFF);
 				context->regs[reg] = value;
 				if (reg == REG_MODE_2) {
