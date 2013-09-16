@@ -1489,6 +1489,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 						context->framebuf = context->oddbuf;
 					}
 				}
+				context->cd &= 0x3C;
 			}
 		} else {
 			context->flags |= FLAG_PENDING;
