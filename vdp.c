@@ -399,11 +399,11 @@ void write_cram(vdp_context * context, uint16_t address, uint16_t value)
 void external_slot(vdp_context * context)
 {
 	fifo_entry * start = context->fifo + context->fifo_read;
-	if (context->flags2 & FLAG2_READ_PENDING) {
+	/*if (context->flags2 & FLAG2_READ_PENDING) {
 		context->flags2 &= ~FLAG2_READ_PENDING;
 		context->flags |= FLAG_UNUSED_SLOT;
 		return;
-	}
+	}*/
 	if (context->fifo_read >= 0 && start->cycle <= context->cycles) {
 		switch (start->cd & 0xF)
 		{
@@ -1574,7 +1574,7 @@ uint16_t vdp_control_port_read(vdp_context * context)
 }
 
 #define CRAM_BITS 0xEEE
-#define VSRAM_BITS 0x3FF
+#define VSRAM_BITS 0x7FF
 #define VSRAM_DIRTY_BITS 0xF800
 
 uint16_t vdp_data_port_read(vdp_context * context)
@@ -1585,7 +1585,7 @@ uint16_t vdp_data_port_read(vdp_context * context)
 	}
 	//Not sure if the FIFO should be drained before processing a read or not, but it would make sense
 	context->flags &= ~FLAG_UNUSED_SLOT;
-	context->flags2 |= FLAG2_READ_PENDING;
+	//context->flags2 |= FLAG2_READ_PENDING;
 	while (!(context->flags & FLAG_UNUSED_SLOT)) {
 		vdp_run_context(context, context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20));
 	}
