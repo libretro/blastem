@@ -110,6 +110,8 @@ typedef struct {
 	int16_t y;
 } sprite_info;
 
+#define FIFO_SIZE 4
+
 typedef struct {
 	uint32_t cycle;
 	uint16_t address;
@@ -119,8 +121,9 @@ typedef struct {
 } fifo_entry;
 
 typedef struct {
-	fifo_entry  *fifo_cur;
-	fifo_entry  *fifo_end;
+	fifo_entry  fifo[FIFO_SIZE];
+	int32_t     fifo_write;
+	int32_t     fifo_read;
 	uint16_t    address;
 	uint8_t     cd;
 	uint8_t	    flags;

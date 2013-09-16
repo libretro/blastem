@@ -20,8 +20,6 @@
 #define SCROLL_BUFFER_MASK (SCROLL_BUFFER_SIZE-1)
 #define SCROLL_BUFFER_DRAW (SCROLL_BUFFER_SIZE/2)
 
-#define FIFO_SIZE 4
-
 #define MCLKS_SLOT_H40  16
 #define MCLKS_SLOT_H32  20
 #define VINT_CYCLE_H40  (21*MCLKS_SLOT_H40+332+9*MCLKS_SLOT_H40) //21 slots before HSYNC, 16 during, 10 after
@@ -61,8 +59,8 @@ void init_vdp_context(vdp_context * context)
 	context->tmp_buf_a = context->linebuf + LINEBUF_SIZE;
 	context->tmp_buf_b = context->tmp_buf_a + SCROLL_BUFFER_SIZE;
 	context->sprite_draws = MAX_DRAWS;
-	context->fifo_cur = malloc(sizeof(fifo_entry) * FIFO_SIZE);
-	context->fifo_end = context->fifo_cur + FIFO_SIZE;
+	context->fifo_write = 0;
+	context->fifo_read = -1;
 	context->b32 = render_depth() == 32;
 	if (!color_map_init_done) {
 		uint8_t b,g,r;
@@ -390,22 +388,22 @@ void write_cram(vdp_context * context, uint16_t address, uint16_t value)
 
 void external_slot(vdp_context * context)
 {
-	fifo_entry * start = (context->fifo_end - FIFO_SIZE);
+	fifo_entry * start = context->fifo + context->fifo_read;
 	if (context->flags2 & FLAG2_READ_PENDING) {
 		context->flags2 &= ~FLAG2_READ_PENDING;
 		context->flags |= FLAG_UNUSED_SLOT;
 		return;
 	}
-	if (context->fifo_cur != start && start->cycle <= context->cycles) {
+	if (context->fifo_read >= 0 && start->cycle <= context->cycles) {
 		switch (start->cd & 0xF)
 		{
 		case VRAM_WRITE:
 			if (start->partial) {
-				printf("VRAM Write: %X to %X at %d (line %d, slot %d)\n", start->value, start->address ^ 1, context->cycles, context->cycles/MCLKS_LINE, (context->cycles%MCLKS_LINE)/16);
+				//printf("VRAM Write: %X to %X at %d (line %d, slot %d)\n", start->value, start->address ^ 1, context->cycles, context->cycles/MCLKS_LINE, (context->cycles%MCLKS_LINE)/16);
 				context->last_fifo_val = start->value;
 				context->vdpmem[start->address ^ 1] = start->value;
 			} else {
-				printf("VRAM Write High: %X to %X at %d (line %d, slot %d)\n", start->value >> 8, start->address, context->cycles, context->cycles/MCLKS_LINE, (context->cycles%MCLKS_LINE)/16);
+				//printf("VRAM Write High: %X to %X at %d (line %d, slot %d)\n", start->value >> 8, start->address, context->cycles, context->cycles/MCLKS_LINE, (context->cycles%MCLKS_LINE)/16);
 				context->vdpmem[start->address] = start->value >> 8;
 				start->partial = 1;
 				//skip auto-increment and removal of entry from fifo
@@ -427,11 +425,10 @@ void external_slot(vdp_context * context)
 
 			break;
 		}
-		fifo_entry * cur = start+1;
-		if (cur < context->fifo_cur) {
-			memmove(start, cur, sizeof(fifo_entry) * (context->fifo_cur - cur));
+		context->fifo_read = (context->fifo_read+1) & (FIFO_SIZE-1);
+		if (context->fifo_read == context->fifo_write) {
+			context->fifo_read = -1;
 		}
-		context->fifo_cur -= 1;
 	} else {
 		context->flags |= FLAG_UNUSED_SLOT;
 	}
@@ -442,7 +439,7 @@ void run_dma_src(vdp_context * context, uint32_t slot)
 	//TODO: Figure out what happens if CD bit 4 is not set in DMA copy mode
 	//TODO: Figure out what happens when CD:0-3 is not set to a write mode in DMA operations
 	//TODO: Figure out what happens if DMA gets disabled part way through a DMA fill or DMA copy
-	if (context->fifo_cur == context->fifo_end) {
+	if (context->fifo_write == context->fifo_read) {
 		return;
 	}
 	uint16_t read_val;
@@ -489,12 +486,16 @@ void run_dma_src(vdp_context * context, uint32_t slot)
 	}
 
 	if (ran_source) {
-		context->fifo_cur->cycle = context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20)*FIFO_LATENCY;
-		context->fifo_cur->address = context->address;
-		context->fifo_cur->value = read_val;
-		context->fifo_cur->cd = context->cd;
-		context->fifo_cur->partial = partial;
-		context->fifo_cur++;
+		fifo_entry * cur = context->fifo + context->fifo_write;
+		cur->cycle = context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20)*FIFO_LATENCY;
+		cur->address = context->address;
+		cur->value = read_val;
+		cur->cd = context->cd;
+		cur->partial = partial;
+		if (context->fifo_read < 0) {
+			context->fifo_read = context->fifo_write;
+		}
+		context->fifo_write = (context->fifo_write+1) & (FIFO_SIZE-1);
 		context->regs[REG_DMASRC_L] += 1;
 		if (!context->regs[REG_DMASRC_L]) {
 			context->regs[REG_DMASRC_M] += 1;
@@ -1436,7 +1437,7 @@ void vdp_run_dma_done(vdp_context * context, uint32_t target_cycles)
 
 int vdp_control_port_write(vdp_context * context, uint16_t value)
 {
-	printf("control port write: %X at %d\n", value, context->cycles);
+	//printf("control port write: %X at %d\n", value, context->cycles);
 	if (context->flags & FLAG_DMA_RUN) {
 		return -1;
 	}
@@ -1490,13 +1491,9 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 
 int vdp_data_port_write(vdp_context * context, uint16_t value)
 {
-	printf("data port write: %X at %d\n", value, context->cycles);
+	//printf("data port write: %X at %d\n", value, context->cycles);
 	if (context->flags & FLAG_DMA_RUN && (context->regs[REG_DMASRC_H] & 0xC0) != 0x80) {
 		return -1;
-	}
-	if (!(context->cd & 1)) {
-		//ignore writes when cd is configured for read
-		return 0;
 	}
 	context->flags &= ~FLAG_PENDING;
 	/*if (context->fifo_cur == context->fifo_end) {
@@ -1505,19 +1502,23 @@ int vdp_data_port_write(vdp_context * context, uint16_t value)
 	if (context->cd & 0x20 && (context->regs[REG_DMASRC_H] & 0xC0) == 0x80) {
 		context->flags &= ~FLAG_DMA_RUN;
 	}
-	while (context->fifo_cur == context->fifo_end) {
+	while (context->fifo_write == context->fifo_read) {
 		vdp_run_context(context, context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20));
 	}
-	context->fifo_cur->cycle = context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20)*FIFO_LATENCY;
-	context->fifo_cur->address = context->address;
-	context->fifo_cur->value = value;
+	fifo_entry * cur = context->fifo + context->fifo_write;
+	cur->cycle = context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20)*FIFO_LATENCY;
+	cur->address = context->address;
+	cur->value = value;
 	context->last_write_val = value;
 	if (context->cd & 0x20 && (context->regs[REG_DMASRC_H] & 0xC0) == 0x80) {
 		context->flags |= FLAG_DMA_RUN;
 	}
-	context->fifo_cur->cd = context->cd;
-	context->fifo_cur->partial = 0;
-	context->fifo_cur++;
+	cur->cd = context->cd;
+	cur->partial = 0;
+	if (context->fifo_read < 0) {
+		context->fifo_read = context->fifo_write;
+	}
+	context->fifo_write = (context->fifo_write + 1) & (FIFO_SIZE-1);
 	context->address += context->regs[REG_AUTOINC];
 	return 0;
 }
@@ -1531,10 +1532,10 @@ uint16_t vdp_control_port_read(vdp_context * context)
 {
 	context->flags &= ~FLAG_PENDING;
 	uint16_t value = 0x3400;
-	if (context->fifo_cur == (context->fifo_end - FIFO_SIZE)) {
+	if (context->fifo_read < 0) {
 		value |= 0x200;
 	}
-	if (context->fifo_cur == context->fifo_end) {
+	if (context->fifo_read == context->fifo_write) {
 		value |= 0x100;
 	}
 	if (context->flags2 & FLAG2_VINT_PENDING) {
@@ -1564,6 +1565,7 @@ uint16_t vdp_control_port_read(vdp_context * context)
 
 #define CRAM_BITS 0xEEE
 #define VSRAM_BITS 0x3FF
+#define VSRAM_DIRTY_BITS 0xF800
 
 uint16_t vdp_data_port_read(vdp_context * context)
 {
@@ -1591,12 +1593,12 @@ uint16_t vdp_data_port_read(vdp_context * context)
 		break;
 	case CRAM_READ:
 		value = context->cram[(context->address/2) & (CRAM_SIZE-1)] & CRAM_BITS;
-		value |= context->last_fifo_val & ~CRAM_BITS;
+		value |= context->fifo[context->fifo_write].value & ~CRAM_BITS;
 		break;
 	case VSRAM_READ:
 		if (((context->address / 2) & 63) < VSRAM_SIZE) {
 			value = context->vsram[context->address & 63] & VSRAM_BITS;
-			value |= context->last_fifo_val & ~VSRAM_BITS;
+			value |= context->fifo[context->fifo_write].value & VSRAM_DIRTY_BITS;
 		}
 		break;
 	}
@@ -1722,12 +1724,16 @@ uint16_t vdp_test_port_read(vdp_context * context)
 void vdp_adjust_cycles(vdp_context * context, uint32_t deduction)
 {
 	context->cycles -= deduction;
-	for(fifo_entry * start = (context->fifo_end - FIFO_SIZE); start < context->fifo_cur; start++) {
-		if (start->cycle >= deduction) {
-			start->cycle -= deduction;
-		} else {
-			start->cycle = 0;
-		}
+	if (context->fifo_read >= 0) {
+		int32_t idx = context->fifo_read;
+		do {
+			if (context->fifo[idx].cycle >= deduction) {
+				context->fifo[idx].cycle -= deduction;
+			} else {
+				context->fifo[idx].cycle = 0;
+			}
+			idx = (idx+1) & (FIFO_SIZE-1);
+		} while(idx != context->fifo_write);
 	}
 }
 
