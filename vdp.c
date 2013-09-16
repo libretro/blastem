@@ -455,6 +455,7 @@ void run_dma_src(vdp_context * context, uint32_t slot)
 	uint16_t read_val;
 	uint8_t ran_source = 0, partial = 0;
 	uint16_t dma_len;
+	uint8_t cd = context->cd;
 	switch(context->regs[REG_DMASRC_H] & 0xC0)
 	{
 	//68K -> VDP
@@ -468,22 +469,9 @@ void run_dma_src(vdp_context * context, uint32_t slot)
 	//Copy
 	case 0xC0:
 		if (context->flags & FLAG_UNUSED_SLOT) {
-			switch(context->dma_cd & 0xF)
-			{
-			case VRAM_WRITE:
-				read_val = context->vdpmem[(context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]];
-				break;
-			case CRAM_WRITE:
-				read_val = context->cram[context->regs[REG_DMASRC_L] & (CRAM_SIZE-1)];
-				break;
-			case VSRAM_WRITE:
-				if ((context->regs[REG_DMASRC_L] & 63) < VSRAM_SIZE) {
-					read_val = context->vsram[context->regs[REG_DMASRC_L] & 63];
-				} else {
-					read_val = 0;
-				}
-				break;
-			}
+			read_val = context->vdpmem[(context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L] ^ 1] | (context->fifo[context->fifo_write].value & 0xFF00);
+			cd = VRAM_WRITE;
+			partial = 1;
 			ran_source = 1;
 			context->flags &= ~FLAG_UNUSED_SLOT;
 		}
@@ -500,7 +488,7 @@ void run_dma_src(vdp_context * context, uint32_t slot)
 		cur->cycle = context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20)*FIFO_LATENCY;
 		cur->address = context->address;
 		cur->value = read_val;
-		cur->cd = context->cd;
+		cur->cd = cd;
 		cur->partial = partial;
 		if (context->fifo_read < 0) {
 			context->fifo_read = context->fifo_write;
