@@ -152,6 +152,7 @@ typedef struct {
 	sprite_info sprite_info_list[MAX_SPRITES_LINE];
 	uint16_t    col_1;
 	uint16_t    col_2;
+	uint16_t    hv_latch;
 	uint8_t     v_offset;
 	uint8_t     dma_cd;
 	uint8_t     hint_counter;

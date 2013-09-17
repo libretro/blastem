@@ -1467,10 +1467,10 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 			uint8_t reg = (value >> 8) & 0x1F;
 			if (reg < (context->regs[REG_MODE_2] & BIT_MODE_5 ? VDP_REGS : 0xA)) {
 				//printf("register %d set to %X\n", reg, value & 0xFF);
-				context->regs[reg] = value;
-				if (reg == REG_MODE_2) {
-					//printf("Display is now %s\n", (context->regs[REG_MODE_2] & DISPLAY_ENABLE) ? "enabled" : "disabled");
+				if (reg == REG_MODE_1 && (value & BIT_HVC_LATCH) && !(context->regs[reg] & BIT_HVC_LATCH)) {
+					context->hv_latch = vdp_hv_counter_read(context);
 				}
+				context->regs[reg] = value;
 				if (reg == REG_MODE_4) {
 					context->double_res = (value & (BIT_INTERLACE | BIT_DOUBLE_RES)) == (BIT_INTERLACE | BIT_DOUBLE_RES);
 					if (!context->double_res) {
@@ -1613,7 +1613,9 @@ uint16_t vdp_data_port_read(vdp_context * context)
 
 uint16_t vdp_hv_counter_read(vdp_context * context)
 {
-	//TODO: deal with clock adjustemnts handled in vdp_run_context
+	if (context->regs[REG_MODE_1] & BIT_HVC_LATCH) {
+		return context->hv_latch;
+	}
 	uint32_t line= context->cycles / MCLKS_LINE;
 	if (!line) {
 		line = 0xFF;
