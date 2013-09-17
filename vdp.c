@@ -410,8 +410,7 @@ void external_slot(vdp_context * context)
 		case VRAM_WRITE:
 			if (start->partial) {
 				//printf("VRAM Write: %X to %X at %d (line %d, slot %d)\n", start->value, start->address ^ 1, context->cycles, context->cycles/MCLKS_LINE, (context->cycles%MCLKS_LINE)/16);
-				context->last_fifo_val = start->value;
-				context->vdpmem[start->address ^ 1] = start->value;
+				context->vdpmem[start->address ^ 1] = start->partial == 2 ? start->value >> 8 : start->value;
 			} else {
 				//printf("VRAM Write High: %X to %X at %d (line %d, slot %d)\n", start->value >> 8, start->address, context->cycles, context->cycles/MCLKS_LINE, (context->cycles%MCLKS_LINE)/16);
 				context->vdpmem[start->address] = start->value >> 8;
@@ -423,14 +422,12 @@ void external_slot(vdp_context * context)
 		case CRAM_WRITE: {
 			//printf("CRAM Write | %X to %X\n", start->value, (start->address/2) & (CRAM_SIZE-1));
 			write_cram(context, start->address, start->value);
-			context->last_fifo_val = start->value;
 			break;
 		}
 		case VSRAM_WRITE:
 			if (((start->address/2) & 63) < VSRAM_SIZE) {
 				//printf("VSRAM Write: %X to %X\n", start->value, context->address);
 				context->vsram[(start->address/2) & 63] = start->value;
-				context->last_fifo_val = start->value;
 			}
 
 			break;
@@ -452,54 +449,57 @@ void run_dma_src(vdp_context * context, uint32_t slot)
 	if (context->fifo_write == context->fifo_read) {
 		return;
 	}
-	uint16_t read_val;
-	uint8_t ran_source = 0, partial = 0;
-	uint16_t dma_len;
-	uint8_t cd = context->cd;
+	fifo_entry * cur = NULL;
 	switch(context->regs[REG_DMASRC_H] & 0xC0)
 	{
 	//68K -> VDP
 	case 0:
 	case 0x40:
 		if (!slot || !is_refresh(context, slot-1)) {
-			read_val = read_dma_value((context->regs[REG_DMASRC_H] << 16) | (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]);
-			ran_source = 1;
+			cur = context->fifo + context->fifo_write;
+			cur->cycle = context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20)*FIFO_LATENCY;
+			cur->address = context->address;
+			cur->value = read_dma_value((context->regs[REG_DMASRC_H] << 16) | (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]);
+			cur->cd = context->cd;
+			cur->partial = 0;
+			if (context->fifo_read < 0) {
+				context->fifo_read = context->fifo_write;
+			}
+			context->fifo_write = (context->fifo_write + 1) & (FIFO_SIZE-1);
 		}
 		break;
 	//Copy
 	case 0xC0:
-		if (context->flags & FLAG_UNUSED_SLOT) {
-			read_val = context->vdpmem[(context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L] ^ 1] | (context->fifo[context->fifo_write].value & 0xFF00);
-			cd = VRAM_WRITE;
-			partial = 1;
-			ran_source = 1;
+		if (context->flags & FLAG_UNUSED_SLOT && context->fifo_read < 0) {
+			//TODO: Fix this to not use the FIFO at all once read-caching is properly implemented
+			context->fifo_read = (context->fifo_write-1) & (FIFO_SIZE-1);
+			cur = context->fifo + context->fifo_read;
+			cur->cycle = context->cycles;
+			cur->address = context->address;
+			cur->partial = 1;
+			cur->value = context->vdpmem[(context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L] ^ 1] | (cur->value & 0xFF00);
+			cur->cd = VRAM_WRITE;
 			context->flags &= ~FLAG_UNUSED_SLOT;
 		}
 		break;
 	case 0x80:
-		read_val = (context->cd & 0xF) == VRAM_WRITE ? context->last_write_val >> 8 : context->last_write_val;
-		partial = 1;
-		ran_source = 1;
+		if (context->fifo_read < 0) {
+			context->fifo_read = (context->fifo_write-1) & (FIFO_SIZE-1);
+			cur = context->fifo + context->fifo_read;
+			cur->cycle = context->cycles;
+			cur->address = context->address;
+			cur->partial = 2;
+		}
 		break;
 	}
 
-	if (ran_source) {
-		fifo_entry * cur = context->fifo + context->fifo_write;
-		cur->cycle = context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20)*FIFO_LATENCY;
-		cur->address = context->address;
-		cur->value = read_val;
-		cur->cd = cd;
-		cur->partial = partial;
-		if (context->fifo_read < 0) {
-			context->fifo_read = context->fifo_write;
-		}
-		context->fifo_write = (context->fifo_write+1) & (FIFO_SIZE-1);
+	if (cur) {
 		context->regs[REG_DMASRC_L] += 1;
 		if (!context->regs[REG_DMASRC_L]) {
 			context->regs[REG_DMASRC_M] += 1;
 		}
 		context->address += context->regs[REG_AUTOINC];
-		dma_len = ((context->regs[REG_DMALEN_H] << 8) | context->regs[REG_DMALEN_L]) - 1;
+		uint16_t dma_len = ((context->regs[REG_DMALEN_H] << 8) | context->regs[REG_DMALEN_L]) - 1;
 		context->regs[REG_DMALEN_H] = dma_len >> 8;
 		context->regs[REG_DMALEN_L] = dma_len;
 		if (!dma_len) {
@@ -1508,7 +1508,6 @@ int vdp_data_port_write(vdp_context * context, uint16_t value)
 	cur->cycle = context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20)*FIFO_LATENCY;
 	cur->address = context->address;
 	cur->value = value;
-	context->last_write_val = value;
 	if (context->cd & 0x20 && (context->regs[REG_DMASRC_H] & 0xC0) == 0x80) {
 		context->flags |= FLAG_DMA_RUN;
 	}
