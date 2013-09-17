@@ -421,13 +421,13 @@ void external_slot(vdp_context * context)
 			break;
 		case CRAM_WRITE: {
 			//printf("CRAM Write | %X to %X\n", start->value, (start->address/2) & (CRAM_SIZE-1));
-			write_cram(context, start->address, start->value);
+			write_cram(context, start->address, start->partial == 2 ? context->fifo[context->fifo_write].value : start->value);
 			break;
 		}
 		case VSRAM_WRITE:
 			if (((start->address/2) & 63) < VSRAM_SIZE) {
 				//printf("VSRAM Write: %X to %X\n", start->value, context->address);
-				context->vsram[(start->address/2) & 63] = start->value;
+				context->vsram[(start->address/2) & 63] = start->partial == 2 ? context->fifo[context->fifo_write].value : start->value;
 			}
 
 			break;
@@ -1597,12 +1597,15 @@ uint16_t vdp_data_port_read(vdp_context * context)
 		value = context->cram[(context->address/2) & (CRAM_SIZE-1)] & CRAM_BITS;
 		value |= context->fifo[context->fifo_write].value & ~CRAM_BITS;
 		break;
-	case VSRAM_READ:
-		if (((context->address / 2) & 63) < VSRAM_SIZE) {
-			value = context->vsram[(context->address / 2) & 63] & VSRAM_BITS;
-			value |= context->fifo[context->fifo_write].value & VSRAM_DIRTY_BITS;
+	case VSRAM_READ: {
+		uint16_t address = (context->address /2) & 63;
+		if (address >= VSRAM_SIZE) {
+			address = 0;
 		}
+		value = context->vsram[address] & VSRAM_BITS;
+		value |= context->fifo[context->fifo_write].value & VSRAM_DIRTY_BITS;
 		break;
+		}
 	}
 	context->address += context->regs[REG_AUTOINC];
 	return value;
