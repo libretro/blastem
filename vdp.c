@@ -1544,7 +1544,7 @@ uint16_t vdp_control_port_read(vdp_context * context)
 	}
 	uint32_t line= context->cycles / MCLKS_LINE;
 	uint32_t linecyc = context->cycles % MCLKS_LINE;
-	if (line >= (context->latched_mode & BIT_PAL ? PAL_ACTIVE : NTSC_ACTIVE)) {
+	if (line >= (context->latched_mode & BIT_PAL ? PAL_ACTIVE : NTSC_ACTIVE) || !(context->regs[REG_MODE_2] & BIT_DISP_EN)) {
 		value |= 0x8;
 	}
 	if (linecyc < (context->latched_mode & BIT_H40 ? HBLANK_CLEAR_H40 : HBLANK_CLEAR_H32)) {
