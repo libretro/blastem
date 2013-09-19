@@ -517,7 +517,6 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 			}
 		} else {
 			if (location == 0x1100) {
-				sync_z80(gen->z80, context->current_cycle * MCLKS_PER_68K);
 				if (busack_cycle <= context->current_cycle) {
 					busack = new_busack;
 					busack_cycle = CYCLE_NEVER;
@@ -526,11 +525,13 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 					dputs("bus requesting Z80");
 
 					if(!reset && !busreq) {
-						busack_cycle = ((gen->z80->current_cycle + Z80_ACK_DELAY) * MCLKS_PER_Z80) / MCLKS_PER_68K;//context->current_cycle + Z80_ACK_DELAY;
+						sync_z80(gen->z80, context->current_cycle * MCLKS_PER_68K + Z80_ACK_DELAY*MCLKS_PER_Z80);
+						busack_cycle = (gen->z80->current_cycle * MCLKS_PER_Z80) / MCLKS_PER_68K;//context->current_cycle + Z80_ACK_DELAY;
 						new_busack = Z80_REQ_ACK;
 					}
 					busreq = 1;
 				} else {
+					sync_z80(gen->z80, context->current_cycle * MCLKS_PER_68K);
 					if (busreq) {
 						dputs("releasing z80 bus");
 						#ifdef DO_DEBUG_PRINT
