@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #ifndef BLASTEM_H_
@@ -30,6 +30,8 @@ typedef struct {
 	uint8_t        *save_ram;
 	uint32_t       save_ram_mask;
 	uint32_t       save_flags;
+	uint32_t       master_clock; //Current master clock value
+	uint32_t       normal_clock; //Normal master clock (used to restore master clock after turbo mode)
 	uint8_t        bank_regs[8];
 	io_port        ports[3];
 } genesis_context;
@@ -43,6 +45,7 @@ extern uint8_t reset;
 
 uint16_t read_dma_value(uint32_t address);
 m68k_context * debugger(m68k_context * context, uint32_t address);
+void set_speed_percent(genesis_context * context, uint32_t percent);
 
 #endif //BLASTEM_H_
 
