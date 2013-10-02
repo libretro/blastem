@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include <string.h>
@@ -127,6 +127,13 @@ void ym_finalize_log()
 		}
 	}
 }
+#define BUFFER_INC_RES 1000000000UL
+
+void ym_adjust_master_clock(ym2612_context * context, uint32_t master_clock)
+{
+	uint64_t old_inc = context->buffer_inc;
+	context->buffer_inc = ((BUFFER_INC_RES * (uint64_t)context->sample_rate) / (uint64_t)master_clock) * (uint64_t)context->clock_inc;
+}
 
 void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t sample_limit, uint32_t options)
 {
@@ -134,8 +141,10 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clo
 	memset(context, 0, sizeof(*context));
 	context->audio_buffer = malloc(sizeof(*context->audio_buffer) * sample_limit*2);
 	context->back_buffer = malloc(sizeof(*context->audio_buffer) * sample_limit*2);
-	context->buffer_inc = ((double)sample_rate / (double)master_clock) * clock_div * 6;
+	context->sample_rate = sample_rate;
 	context->clock_inc = clock_div * 6;
+	ym_adjust_master_clock(context, master_clock);
+
 	context->sample_limit = sample_limit*2;
 	context->write_cycle = CYCLE_NEVER;
 	for (int i = 0; i < NUM_OPERATORS; i++) {
@@ -451,29 +460,29 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 		context->buffer_fraction += context->buffer_inc;
 		if (context->current_op == NUM_OPERATORS) {
 			context->current_op = 0;
-			if (context->buffer_fraction > 1.0) {
-				context->buffer_fraction -= 1.0;
-				context->audio_buffer[context->buffer_pos] = 0;
-				context->audio_buffer[context->buffer_pos + 1] = 0;
-				for (int i = 0; i < NUM_CHANNELS; i++) {
-					int16_t value = context->channels[i].output & 0x3FE0;
-					if (value & 0x2000) {
-						value |= 0xC000;
-					}
-					if (context->channels[i].logfile) {
-						fwrite(&value, sizeof(value), 1, context->channels[i].logfile);
-					}
-					if (context->channels[i].lr & 0x80) {
-						context->audio_buffer[context->buffer_pos] += value / YM_VOLUME_DIVIDER;
-					}
-					if (context->channels[i].lr & 0x40) {
-						context->audio_buffer[context->buffer_pos+1] += value / YM_VOLUME_DIVIDER;
-					}
+		}
+		if (context->buffer_fraction > BUFFER_INC_RES) {
+			context->buffer_fraction -= BUFFER_INC_RES;
+			context->audio_buffer[context->buffer_pos] = 0;
+			context->audio_buffer[context->buffer_pos + 1] = 0;
+			for (int i = 0; i < NUM_CHANNELS; i++) {
+				int16_t value = context->channels[i].output & 0x3FE0;
+				if (value & 0x2000) {
+					value |= 0xC000;
 				}
-				context->buffer_pos += 2;
-				if (context->buffer_pos == context->sample_limit) {
-					render_wait_ym(context);
+				if (context->channels[i].logfile) {
+					fwrite(&value, sizeof(value), 1, context->channels[i].logfile);
 				}
+				if (context->channels[i].lr & 0x80) {
+					context->audio_buffer[context->buffer_pos] += value / YM_VOLUME_DIVIDER;
+				}
+				if (context->channels[i].lr & 0x40) {
+					context->audio_buffer[context->buffer_pos+1] += value / YM_VOLUME_DIVIDER;
+				}
+			}
+			context->buffer_pos += 2;
+			if (context->buffer_pos == context->sample_limit) {
+				render_wait_ym(context);
 			}
 		}
 	}

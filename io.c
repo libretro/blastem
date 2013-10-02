@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "io.h"
@@ -18,7 +18,10 @@ typedef enum {
 	UI_DEBUG_MODE_INC,
 	UI_DEBUG_PAL_INC,
 	UI_ENTER_DEBUGGER,
-  UI_SAVE_STATE,
+	UI_SAVE_STATE,
+	UI_SET_SPEED,
+	UI_NEXT_SPEED,
+	UI_PREV_SPEED,
 	UI_EXIT
 } ui_action;
 
@@ -139,9 +142,9 @@ void bind_dpad_gamepad(int joystick, int dpad, uint8_t direction, int gamepadnum
 	bind_dpad(joystick, dpad, direction, bind_type, button >> 12, button >> 8 & 0xF, button & 0xFF);
 }
 
-void bind_ui(int keycode, ui_action action)
+void bind_ui(int keycode, ui_action action, uint8_t param)
 {
-	bind_key(keycode, BIND_UI, action, 0, 0);
+	bind_key(keycode, BIND_UI, action, 0, param);
 }
 
 void handle_binding_down(keybinding * binding)
@@ -183,6 +186,10 @@ void handle_joydown(int joystick, int button)
 uint8_t ui_debug_mode = 0;
 uint8_t ui_debug_pal = 0;
 
+int current_speed = 0;
+int num_speeds = 1;
+uint32_t * speeds = NULL;
+
 void handle_binding_up(keybinding * binding)
 {
 	switch(binding->bind_type)
@@ -218,6 +225,32 @@ void handle_binding_up(keybinding * binding)
 			break;
 		case UI_SAVE_STATE:
 			save_state = 1;
+			break;
+		case UI_NEXT_SPEED:
+			current_speed++;
+			if (current_speed >= num_speeds) {
+				current_speed = 0;
+			}
+			printf("Setting speed to %d: %d\n", current_speed, speeds[current_speed]);
+			set_speed_percent(genesis, speeds[current_speed]);
+			break;
+		case UI_PREV_SPEED:
+			current_speed--;
+			if (current_speed < 0) {
+				current_speed = num_speeds - 1;
+			}
+			printf("Setting speed to %d: %d\n", current_speed, speeds[current_speed]);
+			set_speed_percent(genesis, speeds[current_speed]);
+			break;
+		case UI_SET_SPEED:
+			if (binding->value < num_speeds) {
+				current_speed = binding->value;
+				printf("Setting speed to %d: %d\n", current_speed, speeds[current_speed]);
+				set_speed_percent(genesis, speeds[current_speed]);
+			} else {
+				printf("Setting speed to %d\n", speeds[current_speed]);
+				set_speed_percent(genesis, binding->value);
+			}
 			break;
 		case UI_EXIT:
 			exit(0);
@@ -286,6 +319,7 @@ int parse_binding_target(char * target, tern_node * padbuttons, int * ui_out, in
 			fprintf(stderr, "Gamepad mapping string '%s' refers to an invalid gamepad number %c\n", target, target[gpadslen]);
 		}
 	} else if(!memcmp(target, "ui.", strlen("ui."))) {
+		*padbutton_out = 0;
 		if (!strcmp(target + 3, "vdp_debug_mode")) {
 			*ui_out = UI_DEBUG_MODE_INC;
 		} else if(!strcmp(target + 3, "vdp_debug_pal")) {
@@ -294,6 +328,13 @@ int parse_binding_target(char * target, tern_node * padbuttons, int * ui_out, in
 			*ui_out = UI_ENTER_DEBUGGER;
 		} else if(!strcmp(target + 3, "save_state")) {
 			*ui_out = UI_SAVE_STATE;
+		} else if(!memcmp(target + 3, "set_speed.", strlen("set_speed."))) {
+			*ui_out = UI_SET_SPEED;
+			*padbutton_out = atoi(target + 3 + strlen("set_speed."));
+		} else if(!strcmp(target + 3, "next_speed")) {
+			*ui_out = UI_NEXT_SPEED;
+		} else if(!strcmp(target + 3, "prev_speed")) {
+			*ui_out = UI_PREV_SPEED;
 		} else if(!strcmp(target + 3, "exit")) {
 			*ui_out = UI_EXIT;
 		} else {
@@ -309,7 +350,7 @@ int parse_binding_target(char * target, tern_node * padbuttons, int * ui_out, in
 
 void process_keys(tern_node * cur, tern_node * special, tern_node * padbuttons, char * prefix)
 {
-	char * curstr;
+	char * curstr = NULL;
 	int len;
 	if (!cur) {
 		return;
@@ -324,8 +365,8 @@ void process_keys(tern_node * cur, tern_node * special, tern_node * padbuttons, 
 		len = 0;
 	}
 	curstr[len] = cur->el;
+	curstr[len+1] = 0;
 	if (cur->el) {
-		curstr[len+1] = 0;
 		process_keys(cur->straight.next, special, padbuttons, curstr);
 	} else {
 		int keycode = tern_find_int(special, curstr, 0);
@@ -341,11 +382,59 @@ void process_keys(tern_node * cur, tern_node * special, tern_node * padbuttons, 
 		if (bindtype == 1) {
 			bind_gamepad(keycode, padnum, button);
 		} else if(bindtype == 2) {
-			bind_ui(keycode, ui_func);
+			bind_ui(keycode, ui_func, button);
 		}
 	}
 	process_keys(cur->left, special, padbuttons, prefix);
 	process_keys(cur->right, special, padbuttons, prefix);
+	if (curstr && len) {
+		free(curstr);
+	}
+}
+
+void process_speeds(tern_node * cur, char * prefix)
+{
+	char * curstr = NULL;
+	int len;
+	if (!cur) {
+		return;
+	}
+	char onec[2];
+	if (prefix) {
+		len = strlen(prefix);
+		curstr = malloc(len + 2);
+		memcpy(curstr, prefix, len);
+	} else {
+		curstr = onec;
+		len = 0;
+	}
+	curstr[len] = cur->el;
+	curstr[len+1] = 0;
+	if (cur->el) {
+		process_speeds(cur->straight.next, curstr);
+	} else {
+		int speed_index = atoi(curstr);
+		if (speed_index < 1) {
+			if (!strcmp(curstr, "0")) {
+				fputs("Speed index 0 cannot be set to a custom value\n", stderr);
+			} else {
+				fprintf(stderr, "%s is not a valid speed index", curstr);
+			}
+		} else {
+			if (speed_index >= num_speeds) {
+				speeds = realloc(speeds, sizeof(uint32_t) * (speed_index+1));
+				for(; num_speeds < speed_index + 1; num_speeds++) {
+					speeds[num_speeds] = 0;
+				}
+			}
+			speeds[speed_index] = atoi(cur->straight.value.ptrval);
+		}
+	}
+	process_speeds(cur->left, prefix);
+	process_speeds(cur->right, prefix);
+	if (curstr && len) {
+		free(curstr);
+	}
 }
 
 void set_keybindings()
@@ -423,6 +512,16 @@ void set_keybindings()
 					//TODO: Handle UI bindings
 				}
 			}
+		}
+	}
+	tern_node * speed_nodes = tern_find_prefix(config, "clocksspeeds");
+	speeds = malloc(sizeof(uint32_t));
+	speeds[0] = 100;
+	process_speeds(speed_nodes, NULL);
+	for (int i = 0; i < num_speeds; i++) {
+		if (!speeds[i]) {
+			fprintf(stderr, "Speed index %d was not set to a valid percentage!", i);
+			speeds[i] = 100;
 		}
 	}
 }

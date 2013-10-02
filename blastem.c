@@ -33,6 +33,8 @@
 #define LINES_NTSC 262
 #define LINES_PAL 312
 
+#define MAX_SOUND_CYCLES 100000
+
 uint32_t mclks_per_frame = MCLKS_LINE*LINES_NTSC;
 
 uint16_t cart[CARTRIDGE_WORDS];
@@ -206,6 +208,13 @@ void sync_z80(z80_context * z_context, uint32_t mclks)
 void sync_sound(genesis_context * gen, uint32_t target)
 {
 	//printf("YM | Cycle: %d, bpos: %d, PSG | Cycle: %d, bpos: %d\n", gen->ym->current_cycle, gen->ym->buffer_pos, gen->psg->cycles, gen->psg->buffer_pos * 2);
+	while (target > gen->psg->cycles && target - gen->psg->cycles > MAX_SOUND_CYCLES) {
+		uint32_t cur_target = gen->psg->cycles + MAX_SOUND_CYCLES;
+		//printf("Running PSG to cycle %d\n", cur_target);
+		psg_run(gen->psg, cur_target);
+		//printf("Running YM-2612 to cycle %d\n", cur_target);
+		ym_run(gen->ym, cur_target);
+	}
 	psg_run(gen->psg, target);
 	ym_run(gen->ym, target);
 
@@ -1492,6 +1501,17 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 	return context;
 }
 
+void set_speed_percent(genesis_context * context, uint32_t percent)
+{
+	uint32_t old_clock = context->master_clock;
+	context->master_clock = ((uint64_t)context->normal_clock * (uint64_t)percent) / 100;
+	while (context->ym->current_cycle != context->psg->cycles) {
+		sync_sound(context, context->psg->cycles + MCLKS_PER_PSG);
+	}
+	ym_adjust_master_clock(context->ym, context->master_clock);
+	psg_adjust_master_clock(context->psg, context->master_clock);
+}
+
 #define ROM_END   0x1A4
 #define RAM_ID    0x1B0
 #define RAM_FLAGS 0x1B2
@@ -1868,22 +1888,22 @@ int main(int argc, char ** argv)
 		render_init(width, height, title, fps, fullscreen);
 	}
 	vdp_context v_context;
+	genesis_context gen;
+	memset(&gen, 0, sizeof(gen));
+	gen.master_clock = gen.normal_clock = fps == 60 ? MCLKS_NTSC : MCLKS_PAL;
 
 	init_vdp_context(&v_context);
 
 	ym2612_context y_context;
-	ym_init(&y_context, render_sample_rate(), fps == 60 ? MCLKS_NTSC : MCLKS_PAL, MCLKS_PER_YM, render_audio_buffer(), ym_log ? YM_OPT_WAVE_LOG : 0);
+	ym_init(&y_context, render_sample_rate(), gen.master_clock, MCLKS_PER_YM, render_audio_buffer(), ym_log ? YM_OPT_WAVE_LOG : 0);
 
 	psg_context p_context;
-	psg_init(&p_context, render_sample_rate(), fps == 60 ? MCLKS_NTSC : MCLKS_PAL, MCLKS_PER_PSG, render_audio_buffer());
+	psg_init(&p_context, render_sample_rate(), gen.master_clock, MCLKS_PER_PSG, render_audio_buffer());
 
 	z80_context z_context;
 	x86_z80_options z_opts;
 	init_x86_z80_opts(&z_opts);
 	init_z80_context(&z_context, &z_opts);
-
-	genesis_context gen;
-	memset(&gen, 0, sizeof(gen));
 
 	z_context.system = &gen;
 	z_context.mem_pointers[0] = z80_ram;
