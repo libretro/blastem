@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #ifndef YM2612_H_
@@ -59,10 +59,11 @@ typedef struct {
 typedef struct {
     int16_t     *audio_buffer;
     int16_t     *back_buffer;
-    double      buffer_fraction;
-    double      buffer_inc;
+    uint64_t    buffer_fraction;
+    uint64_t    buffer_inc;
     uint32_t    clock_inc;
     uint32_t    buffer_pos;
+	uint32_t    sample_rate;
     uint32_t    sample_limit;
 	uint32_t    current_cycle;
 	uint32_t    write_cycle;
@@ -93,6 +94,7 @@ typedef struct {
 } ym2612_context;
 
 void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t sample_limit, uint32_t options);
+void ym_adjust_master_clock(ym2612_context * context, uint32_t master_clock);
 void ym_run(ym2612_context * context, uint32_t to_cycle);
 void ym_address_write_part1(ym2612_context * context, uint8_t address);
 void ym_address_write_part2(ym2612_context * context, uint8_t address);
