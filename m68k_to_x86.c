@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "gen_x86.h"
@@ -4246,7 +4246,17 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 						dst = push_r(dst, CONTEXT);
 						dst = mov_rr(dst, SCRATCH1, RDI, SZ_D);
 					}
+					dst = test_ir(dst, 8, RSP, SZ_D);
+					uint8_t *adjust_rsp = dst+1;
+					dst = jcc(dst, CC_NZ, dst+2);
 					dst = call(dst, cfun);
+					uint8_t *no_adjust = dst+1;
+					dst = jmp(dst, dst+2);
+					*adjust_rsp = dst - (adjust_rsp + 1);
+					dst = sub_ir(dst, 8, RSP, SZ_Q);
+					dst = call(dst, cfun);
+					dst = add_ir(dst, 8, RSP, SZ_Q);
+					*no_adjust = dst - (no_adjust + 1);
 					if (is_write) {
 						dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
 					} else {
@@ -4339,7 +4349,17 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 				dst = push_r(dst, CONTEXT);
 				dst = mov_rr(dst, SCRATCH1, RDI, SZ_D);
 			}
+			dst = test_ir(dst, 8, RSP, SZ_D);
+			uint8_t *adjust_rsp = dst+1;
+			dst = jcc(dst, CC_NZ, dst+2);
 			dst = call(dst, cfun);
+			uint8_t *no_adjust = dst+1;
+			dst = jmp(dst, dst+2);
+			*adjust_rsp = dst - (adjust_rsp + 1);
+			dst = sub_ir(dst, 8, RSP, SZ_Q);
+			dst = call(dst, cfun);
+			dst = add_ir(dst, 8, RSP, SZ_Q);
+			*no_adjust = dst - (no_adjust+1);
 			if (is_write) {
 				dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
 			} else {
@@ -4444,7 +4464,17 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = call(dst, (uint8_t *)m68k_save_context);
 	dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
 	dst = mov_rr(dst, SCRATCH1, RSI, SZ_D);
+	dst = test_ir(dst, 8, RSP, SZ_D);
+	uint8_t *adjust_rsp = dst+1;
+	dst = jcc(dst, CC_NZ, dst+2);
 	dst = call(dst, (uint8_t *)sync_components);
+	uint8_t *no_adjust = dst+1;
+	dst = jmp(dst, dst+2);
+	*adjust_rsp = dst - (adjust_rsp + 1);
+	dst = sub_ir(dst, 8, RSP, SZ_Q);
+	dst = call(dst, (uint8_t *)sync_components);
+	dst = add_ir(dst, 8, RSP, SZ_Q);
+	*no_adjust = dst - (no_adjust+1);
 	dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
 	dst = jmp(dst, (uint8_t *)m68k_load_context);
 	*skip_sync = dst - (skip_sync+1);
