@@ -93,6 +93,8 @@ uint8_t render_depth()
 	return screen->format->BytesPerPixel * 8;
 }
 
+char * caption = NULL;
+
 void render_init(int width, int height, char * title, uint32_t fps, uint8_t fullscreen)
 {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK) < 0) {
@@ -118,6 +120,7 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
     	exit(1);
     }
     SDL_WM_SetCaption(title, title);
+	caption = title;
     min_delay = 0;
     for (int i = 0; i < 100; i++) {
     	uint32_t start = SDL_GetTicks();
@@ -326,6 +329,8 @@ int32_t handle_event(SDL_Event *event)
 	return 0;
 }
 
+char * fps_caption = NULL;
+
 uint32_t frame_counter = 0;
 uint32_t start = 0;
 int wait_render_frame(vdp_context * context, int frame_limit)
@@ -349,18 +354,22 @@ int wait_render_frame(vdp_context * context, int frame_limit)
 		}
 	}
 	render_context(context);
-	
-	
+
+
 	//TODO: Figure out why this causes segfaults
-	/*frame_counter++;
+	frame_counter++;
 	if ((last_frame - start) > 1000) {
 		if (start && (last_frame-start)) {
-			printf("\r%f fps", ((float)frame_counter) / (((float)(last_frame-start)) / 1000.0));
+			if (!fps_caption) {
+				fps_caption = malloc(strlen(caption) + strlen(" - 1000.1 fps") + 1);
+			}
+			sprintf(fps_caption, "%s - %.1f fps", caption, ((float)frame_counter) / (((float)(last_frame-start)) / 1000.0));
+			SDL_WM_SetCaption(fps_caption, caption);
 			fflush(stdout);
 		}
 		start = last_frame;
 		frame_counter = 0;
-	}*/
+	}
 	return ret;
 }
 
