@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #ifndef GEN_X86_H_
@@ -154,6 +154,11 @@ uint8_t * mul_rdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size)
 uint8_t * imul_rdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size);
 uint8_t * div_rdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size);
 uint8_t * idiv_rdisp8(uint8_t * out, uint8_t dst_base, int8_t disp, uint8_t size);
+uint8_t * test_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size);
+uint8_t * test_ir(uint8_t * out, int32_t val, uint8_t dst, uint8_t size);
+uint8_t * test_irdisp8(uint8_t * out, int32_t val, uint8_t dst_base, int8_t disp, uint8_t size);
+uint8_t * test_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t disp, uint8_t size);
+uint8_t * test_rdisp8r(uint8_t * out, uint8_t src_base, int8_t disp, uint8_t dst, uint8_t size);
 uint8_t * mov_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size);
 uint8_t * mov_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t disp, uint8_t size);
 uint8_t * mov_rdisp8r(uint8_t * out, uint8_t src_base, int8_t disp, uint8_t dst, uint8_t size);
