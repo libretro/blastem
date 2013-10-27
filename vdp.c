@@ -50,10 +50,13 @@ void init_vdp_context(vdp_context * context)
 	memset(context, 0, sizeof(*context));
 	context->vdpmem = malloc(VRAM_SIZE);
 	memset(context->vdpmem, 0, VRAM_SIZE);
-	context->oddbuf = context->framebuf = malloc(FRAMEBUF_ENTRIES * (render_depth() / 8));
+	/*context->oddbuf = context->framebuf = malloc(FRAMEBUF_ENTRIES * (render_depth() / 8));
 	memset(context->framebuf, 0, FRAMEBUF_ENTRIES * (render_depth() / 8));
 	context->evenbuf = malloc(FRAMEBUF_ENTRIES * (render_depth() / 8));
 	memset(context->evenbuf, 0, FRAMEBUF_ENTRIES * (render_depth() / 8));
+	*/
+	render_alloc_surfaces(context);
+	context->framebuf = context->oddbuf;
 	context->linebuf = malloc(LINEBUF_SIZE + SCROLL_BUFFER_SIZE*2);
 	memset(context->linebuf, 0, LINEBUF_SIZE + SCROLL_BUFFER_SIZE*2);
 	context->tmp_buf_a = context->linebuf + LINEBUF_SIZE;
