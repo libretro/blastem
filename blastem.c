@@ -62,7 +62,7 @@ int load_smd_rom(long filesize, FILE * f)
 	uint8_t block[SMD_BLOCK_SIZE];
 	filesize -= SMD_HEADER_SIZE;
 	fseek(f, SMD_HEADER_SIZE, SEEK_SET);
-	
+
 	uint16_t * dst = cart;
 	while (filesize > 0) {
 		fread(block, 1, SMD_BLOCK_SIZE, f);
@@ -149,15 +149,15 @@ void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 				if (next_hint < context->int_cycle) {
 					context->int_cycle = next_hint;
 					context->int_num = 4;
-			
+
 				}
 			}
 		}
 	}
 
 	context->target_cycle = context->int_cycle < context->sync_cycle ? context->int_cycle : context->sync_cycle;
-	/*printf("Cyc: %d, Trgt: %d, Int Cyc: %d, Int: %d, Mask: %X, V: %d, H: %d, HICount: %d, HReg: %d, Line: %d\n", 
-		context->current_cycle, context->target_cycle, context->int_cycle, context->int_num, (context->status & 0x7), 
+	/*printf("Cyc: %d, Trgt: %d, Int Cyc: %d, Int: %d, Mask: %X, V: %d, H: %d, HICount: %d, HReg: %d, Line: %d\n",
+		context->current_cycle, context->target_cycle, context->int_cycle, context->int_num, (context->status & 0x7),
 		v_context->regs[REG_MODE_2] & 0x20, v_context->regs[REG_MODE_1] & 0x10, v_context->hint_counter, v_context->regs[REG_HINT], v_context->cycles / MCLKS_LINE);*/
 }
 
@@ -217,7 +217,7 @@ void sync_sound(genesis_context * gen, uint32_t target)
 	}
 	psg_run(gen->psg, target);
 	ym_run(gen->ym, target);
-	
+
 	//printf("Target: %d, YM bufferpos: %d, PSG bufferpos: %d\n", target, gen->ym->buffer_pos, gen->psg->buffer_pos * 2);
 }
 
@@ -239,7 +239,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 		}
 		//printf("reached frame end | 68K Cycles: %d, MCLK Cycles: %d\n", context->current_cycle, mclks);
 		vdp_run_context(v_context, mclks_per_frame);
-		
+
 		if (!headless) {
 			break_on_sync |= wait_render_frame(v_context, frame_limit);
 		}
@@ -532,7 +532,7 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 				}
 				if (value & 1) {
 					dputs("bus requesting Z80");
-					
+
 					if(!reset && !busreq) {
 						sync_z80(gen->z80, context->current_cycle * MCLKS_PER_68K + Z80_ACK_DELAY*MCLKS_PER_Z80);
 						busack_cycle = (gen->z80->current_cycle * MCLKS_PER_Z80) / MCLKS_PER_68K;//context->current_cycle + Z80_ACK_DELAY;
@@ -556,7 +556,7 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 					}
 					//busack_cycle = CYCLE_NEVER;
 					//busack = Z80_REQ_BUSY;
-					
+
 				}
 			} else if (location == 0x1200) {
 				sync_z80(gen->z80, context->current_cycle * MCLKS_PER_68K);
@@ -1471,7 +1471,7 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 				//Z80 debug commands
 				switch(input_buf[1])
 				{
-				case 'b': 
+				case 'b':
 					param = find_param(input_buf);
 					if (!param) {
 						fputs("zb command requires a parameter\n", stderr);
@@ -1523,7 +1523,7 @@ void set_speed_percent(genesis_context * context, uint32_t percent)
 const memmap_chunk static_map[] = {
 		{0,        0x400000,  0xFFFFFF, 0, MMAP_READ,                          cart,
 		           NULL,          NULL,         NULL,            NULL},
-		{0xE00000, 0x1000000, 0xFFFF,   0, MMAP_READ | MMAP_WRITE | MMAP_CODE, ram, 
+		{0xE00000, 0x1000000, 0xFFFF,   0, MMAP_READ | MMAP_WRITE | MMAP_CODE, ram,
 		           NULL,          NULL,         NULL,            NULL},
 		{0xC00000, 0xE00000,  0x1FFFFF, 0, 0,                                  NULL,
 		           (read_16_fun)vdp_port_read,  (write_16_fun)vdp_port_write,
@@ -1576,7 +1576,7 @@ void init_run_cpu(genesis_context * gen, int debug, FILE * address_log, char * s
 			memmap[0].mask = 0xFFFFFF;
 			memmap[0].flags = MMAP_READ;
 			memmap[0].buffer = cart;
-			
+
 			ram_start &= 0xFFFFFE;
 			ram_end |= 1;
 			memmap[1].start = ram_start;
@@ -1593,7 +1593,7 @@ void init_run_cpu(genesis_context * gen, int debug, FILE * address_log, char * s
 				size /= 2;
 			}
 			memmap[1].buffer = gen->save_ram = malloc(size);
-			
+
 			memcpy(memmap+2, static_map+1, sizeof(static_map)-sizeof(static_map[0]));
 			num_chunks = sizeof(static_map)/sizeof(memmap_chunk)+1;
 		} else {
@@ -1602,7 +1602,7 @@ void init_run_cpu(genesis_context * gen, int debug, FILE * address_log, char * s
 			memmap[0].mask = 0xFFFFFF;
 			memmap[0].flags = MMAP_READ;
 			memmap[0].buffer = cart;
-			
+
 			memmap[1].start = 0x200000;
 			memmap[1].end = 0x400000;
 			memmap[1].mask = 0x1FFFFF;
@@ -1622,7 +1622,7 @@ void init_run_cpu(genesis_context * gen, int debug, FILE * address_log, char * s
 			memmap[num_chunks].end = 0xA13100;
 			memmap[num_chunks].mask = 0xFF;
 			memmap[num_chunks].write_16 = (write_16_fun)write_bank_reg_w;
-			memmap[num_chunks].write_8 = (write_8_fun)write_bank_reg_b; 
+			memmap[num_chunks].write_8 = (write_8_fun)write_bank_reg_b;
 			num_chunks++;
 			ram_end++;
 			size = ram_end-ram_start;
@@ -1651,7 +1651,7 @@ void init_run_cpu(genesis_context * gen, int debug, FILE * address_log, char * s
 	init_x86_68k_opts(&opts, memmap, num_chunks);
 	opts.address_log = address_log;
 	init_68k_context(&context, opts.native_code_map, &opts);
-	
+
 	context.video_context = gen->vdp;
 	context.system = gen;
 	//cartridge ROM
@@ -1773,7 +1773,7 @@ int main(int argc, char ** argv)
 	char * romfname = NULL;
 	FILE *address_log = NULL;
 	char * statefile = NULL;
-	uint8_t fullscreen = 0;
+	uint8_t fullscreen = 0, use_gl = 0;
 	for (int i = 1; i < argc; i++) {
 		if (argv[i][0] == '-') {
 			switch(argv[i][1]) {
@@ -1782,6 +1782,9 @@ int main(int argc, char ** argv)
 				break;
 			case 'f':
 				fullscreen = 1;
+				break;
+			case 'g':
+				use_gl = 1;
 				break;
 			case 'l':
 				address_log = fopen("address.log", "w");
@@ -1885,21 +1888,21 @@ int main(int argc, char ** argv)
 		fps = 50;
 	}
 	if (!headless) {
-		render_init(width, height, title, fps, fullscreen, 0);
+		render_init(width, height, title, fps, fullscreen, use_gl);
 	}
 	vdp_context v_context;
 	genesis_context gen;
 	memset(&gen, 0, sizeof(gen));
 	gen.master_clock = gen.normal_clock = fps == 60 ? MCLKS_NTSC : MCLKS_PAL;
-	
+
 	init_vdp_context(&v_context);
-	
+
 	ym2612_context y_context;
 	ym_init(&y_context, render_sample_rate(), gen.master_clock, MCLKS_PER_YM, render_audio_buffer(), ym_log ? YM_OPT_WAVE_LOG : 0);
-	
+
 	psg_context p_context;
 	psg_init(&p_context, render_sample_rate(), gen.master_clock, MCLKS_PER_PSG, render_audio_buffer());
-	
+
 	z80_context z_context;
 	x86_z80_options z_opts;
 	init_x86_z80_opts(&z_opts);
@@ -1910,13 +1913,13 @@ int main(int argc, char ** argv)
 	z_context.sync_cycle = z_context.target_cycle = mclks_per_frame/MCLKS_PER_Z80;
 	z_context.int_cycle = CYCLE_NEVER;
 	z_context.mem_pointers[1] = z_context.mem_pointers[2] = (uint8_t *)cart;
-	
+
 	gen.z80 = &z_context;
 	gen.vdp = &v_context;
 	gen.ym = &y_context;
 	gen.psg = &p_context;
 	genesis = &gen;
-	
+
 	int fname_size = strlen(romfname);
 	sram_filename = malloc(fname_size+6);
 	memcpy(sram_filename, romfname, fname_size);
@@ -1931,7 +1934,7 @@ int main(int argc, char ** argv)
 		strcpy(sram_filename + fname_size, ".sram");
 	}
 	set_keybindings();
-	
+
 	init_run_cpu(&gen, debug, address_log, statefile);
 	return 0;
 }
