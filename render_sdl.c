@@ -1,3 +1,8 @@
+/*
+ Copyright 2013 Michael Pavone
+ This file is part of BlastEm.
+ BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
+*/
 #include <stdlib.h>
 #include <stdio.h>
 #include "render.h"
@@ -5,7 +10,9 @@
 #include "io.h"
 
 #ifndef DISABLE_OPENGL
+#define GL_GLEXT_PROTOTYPES
 #include <GL/gl.h>
+#include <GL/glext.h>
 #endif
 
 SDL_Surface *screen;
@@ -78,6 +85,11 @@ void render_close_audio()
 SDL_Joystick * joysticks[MAX_JOYSTICKS];
 int num_joysticks;
 
+int render_num_joysticks()
+{
+	return num_joysticks;
+}
+
 uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b)
 {
 	if (render_gl) {
@@ -113,7 +125,7 @@ void render_alloc_surfaces(vdp_context * context)
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 			if (i < 2) {
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8​, 512, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, i ? context->evenbuf : context->oddbuf);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 512, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, i ? context->evenbuf : context->oddbuf);
 			} else {
 				uint32_t blank = 255;
 				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_BGRA, GL_UNSIGNED_BYTE, &blank);
@@ -135,7 +147,9 @@ uint8_t render_depth()
 	return screen->format->BytesPerPixel * 8;
 }
 
-void render_init(int width, int height, char * title, uint32_t fps, uint8_t use_gl)
+char * caption = NULL;
+
+void render_init(int width, int height, char * title, uint32_t fps, uint8_t fullscreen, uint8_t use_gl)
 {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK) < 0) {
 		fprintf(stderr, "Unable to init SDL: %s\n", SDL_GetError());
@@ -144,7 +158,7 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t use_
 	atexit(SDL_Quit);
 	atexit(render_close_audio);
 	printf("width: %d, height: %d\n", width, height);
-	uint32_t flags
+	uint32_t flags = SDL_ANYFORMAT;
 #ifndef DISABLE_OPENGL
 	if (use_gl)
 	{
@@ -158,7 +172,11 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t use_
 #else
 	{
 #endif
-		flags = SDL_SWSURFACE | SDL_ANYFORMAT;
+		if (fullscreen) {
+			flags |= SDL_FULLSCREEN | SDL_HWSURFACE | SDL_DOUBLEBUF;
+		} else {
+			flags |= SDL_SWSURFACE;
+		}
 	}
 	screen = SDL_SetVideoMode(width, height, 32, flags);
 	if (!screen) {
@@ -174,6 +192,7 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t use_
 	render_gl = use_gl;
 #endif
 	SDL_WM_SetCaption(title, title);
+	caption = title;
 	min_delay = 0;
 	for (int i = 0; i < 100; i++) {
 		uint32_t start = SDL_GetTicks();
@@ -196,10 +215,21 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t use_
 	audio_ready = SDL_CreateCond();
 
 	SDL_AudioSpec desired, actual;
-	desired.freq = 48000;
+    char * rate_str = tern_find_ptr(config, "audiorate");
+   	int rate = rate_str ? atoi(rate_str) : 0;
+   	if (!rate) {
+   		rate = 48000;
+   	}
+    desired.freq = rate;
 	desired.format = AUDIO_S16SYS;
 	desired.channels = 2;
-	desired.samples = 2048;//1024;
+    char * samples_str = tern_find_ptr(config, "audiobuffer");
+   	int samples = samples_str ? atoi(samples_str) : 0;
+   	if (!samples) {
+   		samples = 512;
+   	}
+    printf("config says: %d\n", samples);
+    desired.samples = samples*2;
 	desired.callback = audio_callback;
 	desired.userdata = NULL;
 
@@ -298,7 +328,8 @@ void render_context(vdp_context * context)
 	if ( SDL_MUSTLOCK(screen) ) {
 		SDL_UnlockSurface(screen);
 	}
-	SDL_UpdateRect(screen, 0, 0, screen->clip_rect.w, screen->clip_rect.h);
+    //SDL_UpdateRect(screen, 0, 0, screen->clip_rect.w, screen->clip_rect.h);
+    SDL_Flip(screen);
 	if (context->regs[REG_MODE_4] & BIT_INTERLACE)
 	{
 		context->framebuf = context->framebuf == context->oddbuf ? context->evenbuf : context->oddbuf;
@@ -385,6 +416,8 @@ int32_t handle_event(SDL_Event *event)
 	return 0;
 }
 
+char * fps_caption = NULL;
+
 uint32_t frame_counter = 0;
 uint32_t start = 0;
 int wait_render_frame(vdp_context * context, int frame_limit)
@@ -411,15 +444,19 @@ int wait_render_frame(vdp_context * context, int frame_limit)
 
 
 	//TODO: Figure out why this causes segfaults
-	/*frame_counter++;
+	frame_counter++;
 	if ((last_frame - start) > 1000) {
 		if (start && (last_frame-start)) {
-			printf("\r%f fps", ((float)frame_counter) / (((float)(last_frame-start)) / 1000.0));
+			if (!fps_caption) {
+				fps_caption = malloc(strlen(caption) + strlen(" - 1000.1 fps") + 1);
+			}
+			sprintf(fps_caption, "%s - %.1f fps", caption, ((float)frame_counter) / (((float)(last_frame-start)) / 1000.0));
+			SDL_WM_SetCaption(fps_caption, caption);
 			fflush(stdout);
 		}
 		start = last_frame;
 		frame_counter = 0;
-	}*/
+	}
 	return ret;
 }
 

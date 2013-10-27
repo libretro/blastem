@@ -10,14 +10,22 @@ do_sync:
 	call m68k_save_context
 	mov %rsi, %rdi
 	xor %esi, %esi
+	test $8, %esp
+	jnz adjust_rsp
 	call sync_components
+	jmp done_adjust
+adjust_rsp:
+	sub $8, %rsp
+	call sync_components
+	add $8, %rsp
+done_adjust:
 	mov %rax, %rsi
 	call m68k_load_context
 	pop %rdi
 	pop %rcx
 skip_sync:
 	ret
-	
+
 sr_msg_int:
 	.asciz "SR set to $%X due to interrupt\n"
 debug_print_sr_int:
@@ -47,7 +55,7 @@ debug_print_sr:
 
 invalid_msg:
 	.asciz "Invalid instruction at %X\n"
-	
+
 	.global m68k_invalid
 m68k_invalid:
 	lea invalid_msg(%rip), %rdi
@@ -60,7 +68,7 @@ m68k_invalid:
 	.global bcd_add
 bcd_add:
 	xchg %rax, %rdi
-	
+
 	mov %cl, %ch
 	mov %al, %ah
 	and $0xF, %ch
@@ -82,14 +90,14 @@ def_adjust:
 	add $0x60, %cl
 	mov $1, %ch
 no_adjust_h:
-	
+
 	mov %rdi, %rax
 	ret
 
 	.global bcd_sub
 bcd_sub:
 	xchg %rax, %rdi
-	
+
 	mov %cl, %ch
 	mov %al, %ah
 	and $0xF, %ch
@@ -111,7 +119,7 @@ def_adjusts:
 	sub $0x60, %cl
 	mov $1, %ch
 no_adjust_hs:
-	
+
 	mov %rdi, %rax
 	ret
 
@@ -168,7 +176,7 @@ set_ccr:
 	and $1, %cl
 	mov %cl, (%rsi)
 	ret
-	
+
 	.global m68k_modified_ret_addr
 m68k_modified_ret_addr:
 	add $16, %rsp
@@ -181,7 +189,15 @@ m68k_native_addr_and_sync:
 	push %rcx
 	mov %rsi, %rdi
 	xor %esi, %esi
+	test $8, %rsp
+	jnz adjust_rsp_na
 	call sync_components
+	jmp no_adjust_rsp_na
+adjust_rsp_na:
+	sub $8, %rsp
+	call sync_components
+	add $8, %rsp
+no_adjust_rsp_na:
 	pop %rsi
 	push %rax
 	mov %rax, %rdi
@@ -202,7 +218,7 @@ m68k_native_addr:
 	pop %rsi
 	call m68k_load_context
 	ret
-	
+
 	.global m68k_retrans_stub
 m68k_retrans_stub:
 	call m68k_save_context
@@ -255,15 +271,15 @@ m68k_start_context:
 	push %r13
 	push %r14
 	push %r15
-	
+
 	call m68k_load_context
 	call *%rdi
 	call m68k_save_context
-	
+
 	pop %r15
 	pop %r14
 	pop %r13
 	pop %r12
 	pop %rbp
-	
+
 	ret

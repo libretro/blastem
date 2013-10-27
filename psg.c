@@ -1,3 +1,8 @@
+/*
+ Copyright 2013 Michael Pavone
+ This file is part of BlastEm.
+ BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
+*/
 #include "psg.h"
 #include "render.h"
 #include <string.h>
@@ -8,13 +13,21 @@ void psg_init(psg_context * context, uint32_t sample_rate, uint32_t master_clock
 	memset(context, 0, sizeof(*context));
 	context->audio_buffer = malloc(sizeof(*context->audio_buffer) * samples_frame);
 	context->back_buffer = malloc(sizeof(*context->audio_buffer) * samples_frame);
-	double clock_rate = (double)master_clock / (double)clock_div;
-	context->buffer_inc = ((double)sample_rate / (double)master_clock) * clock_div;
 	context->clock_inc = clock_div;
+	context->sample_rate = sample_rate;
 	context->samples_frame = samples_frame;
+	psg_adjust_master_clock(context, master_clock);
 	for (int i = 0; i < 4; i++) {
 		context->volume[i] = 0xF;
 	}
+}
+
+#define BUFFER_INC_RES 1000000000UL
+
+void psg_adjust_master_clock(psg_context * context, uint32_t master_clock)
+{
+	uint64_t old_inc = context->buffer_inc;
+	context->buffer_inc = ((BUFFER_INC_RES * (uint64_t)context->sample_rate) / (uint64_t)master_clock) * (uint64_t)context->clock_inc;
 }
 
 void psg_write(psg_context * context, uint8_t value)
@@ -65,7 +78,7 @@ void psg_write(psg_context * context, uint8_t value)
 //table shamelessly swiped from PSG doc from smspower.org
 int16_t volume_table[16] = {
 	32767/PSG_VOL_DIV, 26028/PSG_VOL_DIV, 20675/PSG_VOL_DIV, 16422/PSG_VOL_DIV, 13045/PSG_VOL_DIV, 10362/PSG_VOL_DIV,
-	8231/PSG_VOL_DIV, 6568/PSG_VOL_DIV, 5193/PSG_VOL_DIV, 4125/PSG_VOL_DIV, 3277/PSG_VOL_DIV, 2603/PSG_VOL_DIV, 
+	8231/PSG_VOL_DIV, 6568/PSG_VOL_DIV, 5193/PSG_VOL_DIV, 4125/PSG_VOL_DIV, 3277/PSG_VOL_DIV, 2603/PSG_VOL_DIV,
 	2067/PSG_VOL_DIV, 1642/PSG_VOL_DIV, 1304/PSG_VOL_DIV, 0
 };
 
@@ -92,8 +105,8 @@ void psg_run(psg_context * context, uint32_t cycles)
 			}
 		}
 		context->buffer_fraction += context->buffer_inc;
-		if (context->buffer_fraction >= 1.0) {
-			context->buffer_fraction -= 1.0;
+		if (context->buffer_fraction >= BUFFER_INC_RES) {
+			context->buffer_fraction -= BUFFER_INC_RES;
 			int16_t acc = 0;
 			for (int i = 0; i < 3; i++) {
 				if (context->output_state[i]) {

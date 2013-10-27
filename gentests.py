@@ -72,6 +72,16 @@ class Program(object):
 	def get_dreg(self):
 		return Register('d', self.avail_dregs.pop())
 
+class Dummy(object):
+	def __str__(self):
+		return ''
+	def write_init(self, outfile, size, already):
+		pass
+	def consume_regs(self, program):
+		pass
+
+dummy_op = Dummy()
+
 class Register(object):
 	def __init__(self, kind, num):
 		self.kind = kind
@@ -441,30 +451,47 @@ class Inst2Op(object):
 		self.src.consume_regs(program)
 		self.dst.consume_regs(program)
 
+class Inst1Op(Inst2Op):
+	def __init__(self, name, size, dst):
+		super(Inst1Op, self).__init__(name, size, dummy_op, dst)
+	
+	def __str__(self):
+		return self.name + '.' + self.size + ' ' + str(self.dst)
+
 class Entry(object):
 	def __init__(self, line):
 		fields = split_fields(line)
 		self.name = fields[0]
 		sizes = fields[1]
 		sources = fields[2].split(';')
-		dests = fields[3].split(';')
+		if len(fields) > 3:
+			dests = fields[3].split(';')
+		else:
+			dests = None
 		combos = []
 		for size in sizes:
 			for source in sources:
 				if size != 'b' or source != 'a':
-					for dest in dests:
-						if size != 'b' or dest != 'a':
-							combos.append((size, source, dest))
+					if dests:
+						for dest in dests:
+							if size != 'b' or dest != 'a':
+								combos.append((size, source, dest))
+					else:
+						combos.append((size, None, source))
 		self.cases = combos
 		
 	def programs(self):
 		res = []
 		for (size, src, dst) in self.cases:
-			sources = get_variations(src, size)
 			dests = get_variations(dst, size)
-			for source in sources:
+			if src:
+				sources = get_variations(src, size)
+				for source in sources:
+					for dest in dests:
+						res.append(Program(Inst2Op(self.name, size, source, dest)))
+			else:
 				for dest in dests:
-					res.append(Program(Inst2Op(self.name, size, source, dest)))
+					res.append(Program(Inst1Op(self.name, size, dest)))
 		return res
 		
 def process_entries(f):

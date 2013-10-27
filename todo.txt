@@ -6,10 +6,10 @@ Z80				mostly done		10
  |--Banked mem	complete
  |--Test gen	complete
 
-PSG				not started		9
-YM-2612			not started		9
+PSG				complete		9
+YM-2612			partial			9
 H-Ints			complete		8
-Interlace		not started		7
+Interlace		complete		7
 save states		partial			6
 mappers			partial			5
 save ram		complete		5

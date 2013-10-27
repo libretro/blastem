@@ -1,3 +1,8 @@
+/*
+ Copyright 2013 Michael Pavone
+ This file is part of BlastEm.
+ BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
+*/
 #include "vdp.h"
 #include "blastem.h"
 #include <stdlib.h>
@@ -12,9 +17,8 @@
 #define MAP_BIT_V_FLIP 0x1000
 
 #define SCROLL_BUFFER_SIZE 32
-#define SCROLL_BUFFER_DRAW 16
-
-#define FIFO_SIZE 4
+#define SCROLL_BUFFER_MASK (SCROLL_BUFFER_SIZE-1)
+#define SCROLL_BUFFER_DRAW (SCROLL_BUFFER_SIZE/2)
 
 #define MCLKS_SLOT_H40  16
 #define MCLKS_SLOT_H32  20
@@ -26,9 +30,18 @@
 #define HSYNC_END_H32   (33 * MCLKS_SLOT_H32)
 #define HBLANK_CLEAR_H40 (MCLK_WEIRD_END+61*4)
 #define HBLANK_CLEAR_H32 (HSYNC_END_H32 + 46*5)
+#define FIFO_LATENCY    3
 
 int32_t color_map[1 << 12];
 uint8_t levels[] = {0, 27, 49, 71, 87, 103, 119, 130, 146, 157, 174, 190, 206, 228, 255};
+
+uint8_t debug_base[][3] = {
+	{127, 127, 127}, //BG
+	{0, 0, 127},     //A
+	{127, 0, 0},     //Window
+	{0, 127, 0},     //B
+	{127, 0, 127}    //Sprites
+};
 
 uint8_t color_map_init_done;
 
@@ -46,8 +59,8 @@ void init_vdp_context(vdp_context * context)
 	context->tmp_buf_a = context->linebuf + LINEBUF_SIZE;
 	context->tmp_buf_b = context->tmp_buf_a + SCROLL_BUFFER_SIZE;
 	context->sprite_draws = MAX_DRAWS;
-	context->fifo_cur = malloc(sizeof(fifo_entry) * FIFO_SIZE);
-	context->fifo_end = context->fifo_cur + FIFO_SIZE;
+	context->fifo_write = 0;
+	context->fifo_read = -1;
 	context->b32 = render_depth() == 32;
 	if (!color_map_init_done) {
 		uint8_t b,g,r;
@@ -69,13 +82,67 @@ void init_vdp_context(vdp_context * context)
 		}
 		color_map_init_done = 1;
 	}
+	for (uint8_t color = 0; color < (1 << (3 + 1 + 1 + 1)); color++)
+	{
+		uint8_t src = color & DBG_SRC_MASK;
+		if (src > DBG_SRC_S) {
+			context->debugcolors[color] = 0;
+		} else {
+			uint8_t r,g,b;
+			b = debug_base[src][0];
+			g = debug_base[src][1];
+			r = debug_base[src][2];
+			if (color & DBG_PRIORITY)
+			{
+				if (b) {
+					b += 48;
+				}
+				if (g) {
+					g += 48;
+				}
+				if (r) {
+					r += 48;
+				}
+			}
+			if (color & DBG_SHADOW) {
+				b /= 2;
+				g /= 2;
+				r /=2 ;
+			}
+			if (color & DBG_HILIGHT) {
+				if (b) {
+					b += 72;
+				}
+				if (g) {
+					g += 72;
+				}
+				if (r) {
+					r += 72;
+				}
+			}
+			context->debugcolors[color] = render_map_color(r, g, b);
+		}
+	}
+}
+
+int is_refresh(vdp_context * context, uint32_t slot)
+{
+	if (context->latched_mode & BIT_H40) {
+		return (slot == 37 || slot == 69 || slot == 102 || slot == 133 || slot == 165 || slot == 197 || slot >= 210);
+	} else {
+		//TODO: Figure out which slots are refresh when display is off in 32-cell mode
+		//These numbers are guesses based on H40 numbers
+		return (slot == 24 || slot == 56 || slot == 88 || slot == 120 || slot == 152);
+		//The numbers below are the refresh slots during active display
+		//return (slot == 66 || slot == 98 || slot == 130 || slot == 162);
+	}
 }
 
 void render_sprite_cells(vdp_context * context)
 {
 	if (context->cur_slot >= context->sprite_draws) {
 		sprite_draw * d = context->sprite_draw_list + context->cur_slot;
-		
+
 		uint16_t dir;
 		int16_t x;
 		if (d->h_flip) {
@@ -114,7 +181,7 @@ void vdp_print_sprite_table(vdp_context * context)
 		uint16_t link = context->vdpmem[address+3] & 0x7F;
 		uint8_t pal = context->vdpmem[address + 4] >> 5 & 0x3;
 		uint8_t pri = context->vdpmem[address + 4] >> 7;
-		uint16_t pattern = ((context->vdpmem[address + 4] << 8 | context->vdpmem[address + 5]) & 0x7FF) << 5;	
+		uint16_t pattern = ((context->vdpmem[address + 4] << 8 | context->vdpmem[address + 5]) & 0x7FF) << 5;
 		//printf("Sprite %d: X=%d(%d), Y=%d(%d), Width=%u, Height=%u, Link=%u, Pal=%u, Pri=%u, Pat=%X\n", current_index, x, x-128, y, y-128, width, height, link, pal, pri, pattern);
 		current_index = link;
 		count++;
@@ -129,9 +196,9 @@ void vdp_print_reg_explain(vdp_context * context)
 	       "01: %.2X | Display %s, V-ints %s, Height: %d, Mode %d\n"
 	       "0B: %.2X | E-ints %s, V-Scroll: %s, H-Scroll: %s\n"
 	       "0C: %.2X | Width: %d, Shadow/Highlight: %s\n",
-	       context->regs[REG_MODE_1], context->regs[REG_MODE_1] & BIT_HINT_EN ? "enabled" : "disabled", context->regs[REG_MODE_1] & BIT_PAL_SEL != 0, 
+	       context->regs[REG_MODE_1], context->regs[REG_MODE_1] & BIT_HINT_EN ? "enabled" : "disabled", context->regs[REG_MODE_1] & BIT_PAL_SEL != 0,
 	           context->regs[REG_MODE_1] & BIT_HVC_LATCH ? "enabled" : "disabled", context->regs[REG_MODE_1] & BIT_DISP_DIS ? "disabled" : "enabled",
-	       context->regs[REG_MODE_2], context->regs[REG_MODE_2] & BIT_DISP_EN ? "enabled" : "disabled", context->regs[REG_MODE_2] & BIT_VINT_EN ? "enabled" : "disabled", 
+	       context->regs[REG_MODE_2], context->regs[REG_MODE_2] & BIT_DISP_EN ? "enabled" : "disabled", context->regs[REG_MODE_2] & BIT_VINT_EN ? "enabled" : "disabled",
 	           context->regs[REG_MODE_2] & BIT_PAL ? 30 : 28, context->regs[REG_MODE_2] & BIT_MODE_5 ? 5 : 4,
 	       context->regs[REG_MODE_3], context->regs[REG_MODE_3] & BIT_EINT_EN ? "enabled" : "disabled", context->regs[REG_MODE_3] & BIT_VSCROLL ? "2 cell" : "full",
 	           hscroll[context->regs[REG_MODE_3] & 0x3],
@@ -153,12 +220,17 @@ void vdp_print_reg_explain(vdp_context * context)
 	       "0A: %.2X | H-Int Counter: %u\n"
 	       "0F: %.2X | Auto-increment: $%X\n"
 	       "10: %.2X | Scroll A/B Size: %sx%s\n",
-	       context->regs[REG_BG_COLOR], context->regs[REG_BG_COLOR] & 0x3F, 
-	       context->regs[REG_HINT], context->regs[REG_HINT], 
+	       context->regs[REG_BG_COLOR], context->regs[REG_BG_COLOR] & 0x3F,
+	       context->regs[REG_HINT], context->regs[REG_HINT],
 	       context->regs[REG_AUTOINC], context->regs[REG_AUTOINC],
 	       context->regs[REG_SCROLL], sizes[context->regs[REG_SCROLL] & 0x3], sizes[context->regs[REG_SCROLL] >> 4 & 0x3]);
-	       
-	//TODO: Window Group, DMA Group      
+	printf("\n**Internal Group**\n"
+	       "Address: %X\n"
+	       "CD:      %X\n"
+	       "Pending: %s\n",
+	       context->address, context->cd, (context->flags & FLAG_PENDING) ? "true" : "false");
+
+	//TODO: Window Group, DMA Group
 }
 
 void scan_sprite_table(uint32_t line, vdp_context * context)
@@ -240,7 +312,7 @@ void read_sprite_x(uint32_t line, vdp_context * context)
 				height *= 2;
 			}
 			uint16_t att_addr = ((context->regs[REG_SAT] & 0x7F) << 9) + context->sprite_info_list[context->cur_slot].index * 8 + 4;
-			uint16_t tileinfo = (context->vdpmem[att_addr] << 8) | context->vdpmem[att_addr+1];		
+			uint16_t tileinfo = (context->vdpmem[att_addr] << 8) | context->vdpmem[att_addr+1];
 			uint8_t pal_priority = (tileinfo >> 9) & 0x70;
 			uint8_t row;
 			if (tileinfo & MAP_BIT_V_FLIP) {
@@ -260,7 +332,7 @@ void read_sprite_x(uint32_t line, vdp_context * context)
 			} else if(context->flags & (FLAG_CAN_MASK | FLAG_DOT_OFLOW)) {
 				context->flags |= FLAG_MASKED;
 			}
-			
+
 			context->flags &= ~FLAG_DOT_OFLOW;
 			int16_t i;
 			if (context->flags & FLAG_MASKED) {
@@ -306,170 +378,134 @@ void write_cram(vdp_context * context, uint16_t address, uint16_t value)
 	context->colors[addr + CRAM_SIZE*2] = color_map[(value & 0xEEE) | FBUF_HILIGHT];
 }
 
-#define VRAM_READ 0
-#define VRAM_WRITE 1
-#define CRAM_READ 8
-#define CRAM_WRITE 3
-#define VSRAM_READ 4
-#define VSRAM_WRITE 5
+#define VRAM_READ 0 //0000
+#define VRAM_WRITE 1 //0001
+//2 would trigger register write 0010
+#define CRAM_WRITE 3 //0011
+#define VSRAM_READ 4 //0100
+#define VSRAM_WRITE 5//0101
+//6 would trigger regsiter write 0110
+//7 is a mystery
+#define CRAM_READ 8  //1000
+//9 is also a mystery //1001
+//A would trigger register write 1010
+//B is a mystery 1011
+#define VRAM_READ8 0xC //1100
+//D is a mystery 1101
+//E would trigger register write 1110
+//F is a mystery 1111
 #define DMA_START 0x20
 
 void external_slot(vdp_context * context)
 {
+	fifo_entry * start = context->fifo + context->fifo_read;
+	/*if (context->flags2 & FLAG2_READ_PENDING) {
+		context->flags2 &= ~FLAG2_READ_PENDING;
+		context->flags |= FLAG_UNUSED_SLOT;
+		return;
+	}*/
+	if (context->fifo_read >= 0 && start->cycle <= context->cycles) {
+		switch (start->cd & 0xF)
+		{
+		case VRAM_WRITE:
+			if (start->partial) {
+				//printf("VRAM Write: %X to %X at %d (line %d, slot %d)\n", start->value, start->address ^ 1, context->cycles, context->cycles/MCLKS_LINE, (context->cycles%MCLKS_LINE)/16);
+				context->vdpmem[start->address ^ 1] = start->partial == 2 ? start->value >> 8 : start->value;
+			} else {
+				//printf("VRAM Write High: %X to %X at %d (line %d, slot %d)\n", start->value >> 8, start->address, context->cycles, context->cycles/MCLKS_LINE, (context->cycles%MCLKS_LINE)/16);
+				context->vdpmem[start->address] = start->value >> 8;
+				start->partial = 1;
+				//skip auto-increment and removal of entry from fifo
+				return;
+			}
+			break;
+		case CRAM_WRITE: {
+			//printf("CRAM Write | %X to %X\n", start->value, (start->address/2) & (CRAM_SIZE-1));
+			write_cram(context, start->address, start->partial == 2 ? context->fifo[context->fifo_write].value : start->value);
+			break;
+		}
+		case VSRAM_WRITE:
+			if (((start->address/2) & 63) < VSRAM_SIZE) {
+				//printf("VSRAM Write: %X to %X\n", start->value, context->address);
+				context->vsram[(start->address/2) & 63] = start->partial == 2 ? context->fifo[context->fifo_write].value : start->value;
+			}
+
+			break;
+		}
+		context->fifo_read = (context->fifo_read+1) & (FIFO_SIZE-1);
+		if (context->fifo_read == context->fifo_write) {
+			context->fifo_read = -1;
+		}
+	} else {
+		context->flags |= FLAG_UNUSED_SLOT;
+	}
+}
+
+void run_dma_src(vdp_context * context, uint32_t slot)
+{
 	//TODO: Figure out what happens if CD bit 4 is not set in DMA copy mode
 	//TODO: Figure out what happens when CD:0-3 is not set to a write mode in DMA operations
 	//TODO: Figure out what happens if DMA gets disabled part way through a DMA fill or DMA copy
-	if(context->flags & FLAG_DMA_RUN) {
-		uint16_t dma_len;
-		switch(context->regs[REG_DMASRC_H] & 0xC0)
-		{
-		//68K -> VDP
-		case 0:
-		case 0x40:
-			switch(context->dma_cd & 0xF)
-			{
-			case VRAM_WRITE:
-				if (context->flags & FLAG_DMA_PROG) {
-					context->vdpmem[context->address ^ 1] = context->dma_val;
-					context->flags &= ~FLAG_DMA_PROG;
-				} else {
-					context->dma_val = read_dma_value((context->regs[REG_DMASRC_H] << 16) | (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]);
-					context->vdpmem[context->address] = context->dma_val >> 8;
-					context->flags |= FLAG_DMA_PROG;
-				}
-				break;
-			case CRAM_WRITE: {
-				write_cram(context, context->address, read_dma_value((context->regs[REG_DMASRC_H] << 16) | (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]));
-				//printf("CRAM DMA | %X set to %X from %X at %d\n", (context->address/2) & (CRAM_SIZE-1), context->cram[(context->address/2) & (CRAM_SIZE-1)], (context->regs[REG_DMASRC_H] << 17) | (context->regs[REG_DMASRC_M] << 9) | (context->regs[REG_DMASRC_L] << 1), context->cycles);
-				break;
+	if (context->fifo_write == context->fifo_read) {
+		return;
+	}
+	fifo_entry * cur = NULL;
+	switch(context->regs[REG_DMASRC_H] & 0xC0)
+	{
+	//68K -> VDP
+	case 0:
+	case 0x40:
+		if (!slot || !is_refresh(context, slot-1)) {
+			cur = context->fifo + context->fifo_write;
+			cur->cycle = context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20)*FIFO_LATENCY;
+			cur->address = context->address;
+			cur->value = read_dma_value((context->regs[REG_DMASRC_H] << 16) | (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]);
+			cur->cd = context->cd;
+			cur->partial = 0;
+			if (context->fifo_read < 0) {
+				context->fifo_read = context->fifo_write;
 			}
-			case VSRAM_WRITE:
-				if (((context->address/2) & 63) < VSRAM_SIZE) {
-					context->vsram[(context->address/2) & 63] = read_dma_value((context->regs[REG_DMASRC_H] << 16) | (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]);
-				}
-				break;
-			}
-			break;
-		//Fill
-		case 0x80:
-			switch(context->dma_cd & 0xF)
-			{
-			case VRAM_WRITE:
-				//Charles MacDonald's VDP doc says that the low byte gets written first
-				context->vdpmem[context->address] = context->dma_val;
-				context->dma_val = (context->dma_val << 8) | ((context->dma_val >> 8) & 0xFF);
-				break;
-			case CRAM_WRITE:
-				write_cram(context, context->address, context->dma_val);				
-				//printf("CRAM DMA Fill | %X set to %X at %d\n", (context->address/2) & (CRAM_SIZE-1), context->cram[(context->address/2) & (CRAM_SIZE-1)], context->cycles);
-				break;
-			case VSRAM_WRITE:
-				if (((context->address/2) & 63) < VSRAM_SIZE) {
-					context->vsram[(context->address/2) & 63] = context->dma_val;
-				}
-				break;
-			}
-			break;
-		//Copy
-		case 0xC0:
-			if (context->flags & FLAG_DMA_PROG) {
-				switch(context->dma_cd & 0xF)
-				{
-				case VRAM_WRITE:
-					context->vdpmem[context->address] = context->dma_val;
-					break;
-				case CRAM_WRITE: {
-					write_cram(context, context->address, context->dma_val);
-					//printf("CRAM DMA Copy | %X set to %X from %X at %d\n", (context->address/2) & (CRAM_SIZE-1), context->cram[(context->address/2) & (CRAM_SIZE-1)], context->regs[REG_DMASRC_L] & (CRAM_SIZE-1), context->cycles);
-					break;
-				}
-				case VSRAM_WRITE:
-					if (((context->address/2) & 63) < VSRAM_SIZE) {
-						context->vsram[(context->address/2) & 63] = context->dma_val;
-					}
-					break;
-				}
-				context->flags &= ~FLAG_DMA_PROG;
-			} else {
-				//I assume, that DMA copy copies from the same RAM as the destination
-				//but it's possible I'm mistaken
-				switch(context->dma_cd & 0xF)
-				{
-				case VRAM_WRITE:
-					context->dma_val = context->vdpmem[(context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]];
-					break;
-				case CRAM_WRITE:
-					context->dma_val = context->cram[context->regs[REG_DMASRC_L] & (CRAM_SIZE-1)];
-					break;
-				case VSRAM_WRITE:
-					if ((context->regs[REG_DMASRC_L] & 63) < VSRAM_SIZE) {
-						context->dma_val = context->vsram[context->regs[REG_DMASRC_L] & 63];
-					} else {
-						context->dma_val = 0;
-					}
-					break;
-				}
-				context->flags |= FLAG_DMA_PROG;
-			}
-			break;
+			context->fifo_write = (context->fifo_write + 1) & (FIFO_SIZE-1);
 		}
-		if (!(context->flags & FLAG_DMA_PROG)) {
-			context->address += context->regs[REG_AUTOINC];
-			context->regs[REG_DMASRC_L] += 1;
-			if (!context->regs[REG_DMASRC_L]) {
-				context->regs[REG_DMASRC_M] += 1;
-			}
-			dma_len = ((context->regs[REG_DMALEN_H] << 8) | context->regs[REG_DMALEN_L]) - 1;
-			context->regs[REG_DMALEN_H] = dma_len >> 8;
-			context->regs[REG_DMALEN_L] = dma_len;
-			if (!dma_len) {
-				context->flags &= ~FLAG_DMA_RUN;
-			}
+		break;
+	//Copy
+	case 0xC0:
+		if (context->flags & FLAG_UNUSED_SLOT && context->fifo_read < 0) {
+			//TODO: Fix this to not use the FIFO at all once read-caching is properly implemented
+			context->fifo_read = (context->fifo_write-1) & (FIFO_SIZE-1);
+			cur = context->fifo + context->fifo_read;
+			cur->cycle = context->cycles;
+			cur->address = context->address;
+			cur->partial = 1;
+			cur->value = context->vdpmem[(context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L] ^ 1] | (cur->value & 0xFF00);
+			cur->cd = VRAM_WRITE;
+			context->flags &= ~FLAG_UNUSED_SLOT;
 		}
-	} else {
-		fifo_entry * start = (context->fifo_end - FIFO_SIZE);
-		if (context->fifo_cur != start && start->cycle <= context->cycles) {
-			if ((context->regs[REG_MODE_2] & BIT_DMA_ENABLE) && (context->cd & DMA_START)) {
-				context->flags |= FLAG_DMA_RUN;
-				context->dma_val = start->value;
-				context->address = start->address; //undo auto-increment
-				context->dma_cd = context->cd;
-			} else {
-				switch (start->cd & 0xF)
-				{
-				case VRAM_WRITE:
-					if (start->partial) {
-						//printf("VRAM Write: %X to %X\n", start->value, context->address ^ 1);
-						context->vdpmem[start->address ^ 1] = start->value;
-					} else {
-						//printf("VRAM Write High: %X to %X\n", start->value >> 8, context->address);
-						context->vdpmem[start->address] = start->value >> 8;
-						start->partial = 1;
-						//skip auto-increment and removal of entry from fifo
-						return;
-					}
-					break;
-				case CRAM_WRITE: {
-					//printf("CRAM Write | %X to %X\n", start->value, (start->address/2) & (CRAM_SIZE-1));
-					write_cram(context, start->address, start->value);
-					break;
-				}
-				case VSRAM_WRITE:
-					if (((start->address/2) & 63) < VSRAM_SIZE) {
-						//printf("VSRAM Write: %X to %X\n", start->value, context->address);
-						context->vsram[(start->address/2) & 63] = start->value;
-					}
-					break;
-				}
-				//context->address += context->regs[REG_AUTOINC];
-			}
-			fifo_entry * cur = start+1;
-			if (cur < context->fifo_cur) {
-				memmove(start, cur, sizeof(fifo_entry) * (context->fifo_cur - cur));
-			}
-			context->fifo_cur -= 1;
-		} else {
-			context->flags |= FLAG_UNUSED_SLOT;
+		break;
+	case 0x80:
+		if (context->fifo_read < 0) {
+			context->fifo_read = (context->fifo_write-1) & (FIFO_SIZE-1);
+			cur = context->fifo + context->fifo_read;
+			cur->cycle = context->cycles;
+			cur->address = context->address;
+			cur->partial = 2;
+		}
+		break;
+	}
+
+	if (cur) {
+		context->regs[REG_DMASRC_L] += 1;
+		if (!context->regs[REG_DMASRC_L]) {
+			context->regs[REG_DMASRC_M] += 1;
+		}
+		context->address += context->regs[REG_AUTOINC];
+		uint16_t dma_len = ((context->regs[REG_DMALEN_H] << 8) | context->regs[REG_DMALEN_L]) - 1;
+		context->regs[REG_DMALEN_H] = dma_len >> 8;
+		context->regs[REG_DMALEN_L] = dma_len;
+		if (!dma_len) {
+			//printf("DMA end at cycle %d\n", context->cycles);
+			context->flags &= ~FLAG_DMA_RUN;
+			context->cd &= 0xF;
 		}
 	}
 }
@@ -520,7 +556,7 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 				address &= 0xF000;
 				line_offset = (((line) >> vscroll_shift) * 64 * 2) & 0xFFF;
 				mask = 0x7F;
-				
+
 			} else {
 				address &= 0xF800;
 				line_offset = (((line) >> vscroll_shift) * 32 * 2) & 0xFFF;
@@ -562,7 +598,7 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 		vscroll <<= 1;
 		vscroll |= 1;
 	}
-	vscroll &= (context->vsram[(context->regs[REG_MODE_3] & BIT_VSCROLL ? column : 0) + vsram_off] + line);
+	vscroll &= (context->vsram[(context->regs[REG_MODE_3] & BIT_VSCROLL ? (column-2)&63 : 0) + vsram_off] + line);
 	context->v_offset = vscroll & v_offset_mask;
 	//printf("%s | line %d, vsram: %d, vscroll: %d, v_offset: %d\n",(vsram_off ? "B" : "A"), line, context->vsram[context->regs[REG_MODE_3] & 0x4 ? column : 0], vscroll, context->v_offset);
 	vscroll >>= vscroll_shift;
@@ -612,7 +648,7 @@ void read_map_scroll_b(uint16_t column, uint32_t line, vdp_context * context)
 	read_map_scroll(column, 1, line, (context->regs[REG_SCROLL_B] & 0x7) << 13, context->hscroll_b, context);
 }
 
-void render_map(uint16_t col, uint8_t * tmp_buf, vdp_context * context)
+void render_map(uint16_t col, uint8_t * tmp_buf, uint8_t offset, vdp_context * context)
 {
 	uint16_t address;
 	uint8_t shift, add;
@@ -633,33 +669,36 @@ void render_map(uint16_t col, uint8_t * tmp_buf, vdp_context * context)
 	uint16_t pal_priority = (col >> 9) & 0x70;
 	int32_t dir;
 	if (col & MAP_BIT_H_FLIP) {
-		tmp_buf += 7;
+		offset += 7;
+		offset &= SCROLL_BUFFER_MASK;
 		dir = -1;
 	} else {
 		dir = 1;
 	}
 	for (uint32_t i=0; i < 4; i++, address++)
 	{
-		*tmp_buf = pal_priority | (context->vdpmem[address] >> 4);
-		tmp_buf += dir;
-		*tmp_buf = pal_priority | (context->vdpmem[address] & 0xF);
-		tmp_buf += dir;
+		tmp_buf[offset] = pal_priority | (context->vdpmem[address] >> 4);
+		offset += dir;
+		offset &= SCROLL_BUFFER_MASK;
+		tmp_buf[offset] = pal_priority | (context->vdpmem[address] & 0xF);
+		offset += dir;
+		offset &= SCROLL_BUFFER_MASK;
 	}
 }
 
 void render_map_1(vdp_context * context)
 {
-	render_map(context->col_1, context->tmp_buf_a+SCROLL_BUFFER_DRAW, context);
+	render_map(context->col_1, context->tmp_buf_a, context->buf_a_off, context);
 }
 
 void render_map_2(vdp_context * context)
 {
-	render_map(context->col_2, context->tmp_buf_a+SCROLL_BUFFER_DRAW+8, context);
+	render_map(context->col_2, context->tmp_buf_a, context->buf_a_off+8, context);
 }
 
 void render_map_3(vdp_context * context)
 {
-	render_map(context->col_1, context->tmp_buf_b+SCROLL_BUFFER_DRAW, context);
+	render_map(context->col_1, context->tmp_buf_b, context->buf_b_off, context);
 }
 
 void render_map_output(uint32_t line, int32_t col, vdp_context * context)
@@ -667,10 +706,11 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 	if (line >= 240) {
 		return;
 	}
-	render_map(context->col_2, context->tmp_buf_b+SCROLL_BUFFER_DRAW+8, context);
+	render_map(context->col_2, context->tmp_buf_b, context->buf_b_off+8, context);
 	uint16_t *dst;
 	uint32_t *dst32;
-	uint8_t *sprite_buf, *plane_a, *plane_b;
+	uint8_t *sprite_buf,  *plane_a, *plane_b;
+	int plane_a_off, plane_b_off;
 	if (col)
 	{
 		col-=2;
@@ -682,117 +722,136 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 			dst += line * 320 + col * 8;
 		}
 		sprite_buf = context->linebuf + col * 8;
-		uint16_t a_src;
+		uint8_t a_src, src;
 		if (context->flags & FLAG_WINDOW) {
-			plane_a = context->tmp_buf_a + SCROLL_BUFFER_DRAW;
-			//a_src = FBUF_SRC_W;
+			plane_a_off = context->buf_a_off;
+			a_src = DBG_SRC_W;
 		} else {
-			plane_a = context->tmp_buf_a + SCROLL_BUFFER_DRAW - (context->hscroll_a & 0xF);
-			//a_src = FBUF_SRC_A;
+			plane_a_off = context->buf_a_off - (context->hscroll_a & 0xF);
+			a_src = DBG_SRC_A;
 		}
-		plane_b = context->tmp_buf_b + SCROLL_BUFFER_DRAW - (context->hscroll_b & 0xF);
-		uint16_t src;
+		plane_b_off = context->buf_b_off - (context->hscroll_b & 0xF);
 		//printf("A | tmp_buf offset: %d\n", 8 - (context->hscroll_a & 0x7));
-		
+
 		if (context->regs[REG_MODE_4] & BIT_HILIGHT) {
-			for (int i = 0; i < 16; ++plane_a, ++plane_b, ++sprite_buf, ++i) {
+			for (int i = 0; i < 16; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i) {
 				uint8_t pixel;
-				
+				plane_a = context->tmp_buf_a + (plane_a_off & SCROLL_BUFFER_MASK);
+				plane_b = context->tmp_buf_b + (plane_b_off & SCROLL_BUFFER_MASK);
+				uint32_t * colors = context->colors;
 				src = 0;
 				uint8_t sprite_color = *sprite_buf & 0x3F;
 				if (sprite_color == 0x3E || sprite_color == 0x3F) {
 					if (sprite_color == 0x3F) {
-						src = CRAM_SIZE;//FBUF_SHADOW;
+						colors += CRAM_SIZE;
+						src = DBG_SHADOW;
 					} else {
-						src = CRAM_SIZE*2;//FBUF_HILIGHT;
+						colors += CRAM_SIZE*2;
+						src = DBG_HILIGHT;
 					}
 					if (*plane_a & BUF_BIT_PRIORITY && *plane_a & 0xF) {
 						pixel = *plane_a;
-						//src |= a_src;
+						src |= a_src;
 					} else if (*plane_b & BUF_BIT_PRIORITY && *plane_b & 0xF) {
 						pixel = *plane_b;
-						//src |= FBUF_SRC_B;
+						src |= DBG_SRC_B;
 					} else if (*plane_a & 0xF) {
 						pixel = *plane_a;
-						//src |= a_src;
+						src |= a_src;
 					} else if (*plane_b & 0xF){
 						pixel = *plane_b;
-						//src |= FBUF_SRC_B;
+						src |= DBG_SRC_B;
 					} else {
 						pixel = context->regs[REG_BG_COLOR] & 0x3F;
-						//src |= FBUF_SRC_BG;
+						src |= DBG_SRC_BG;
 					}
 				} else {
 					if (*sprite_buf & BUF_BIT_PRIORITY && *sprite_buf & 0xF) {
 						pixel = *sprite_buf;
-						//src = FBUF_SRC_S;
+						src = DBG_SRC_S;
 					} else if (*plane_a & BUF_BIT_PRIORITY && *plane_a & 0xF) {
 						pixel = *plane_a;
-						//src = a_src;
+						src = a_src;
 					} else if (*plane_b & BUF_BIT_PRIORITY && *plane_b & 0xF) {
 						pixel = *plane_b;
-						//src = FBUF_SRC_B;
+						src = DBG_SRC_B;
 					} else {
 						if (!(*plane_a & BUF_BIT_PRIORITY || *plane_a & BUF_BIT_PRIORITY)) {
-							src = CRAM_SIZE;//FBUF_SHADOW;
+							colors += CRAM_SIZE;
+							src = DBG_SHADOW;
 						}
 						if (*sprite_buf & 0xF) {
 							pixel = *sprite_buf;
 							if (*sprite_buf & 0xF == 0xE) {
-								src = 0;//FBUF_SRC_S;
-							} /*else {
-								src |= FBUF_SRC_S;
-							}*/
+								colors = context->colors;
+								src = DBG_SRC_S;
+							} else {
+								src |= DBG_SRC_S;
+							}
 						} else if (*plane_a & 0xF) {
 							pixel = *plane_a;
-							//src |= a_src;
+							src |= a_src;
 						} else if (*plane_b & 0xF){
 							pixel = *plane_b;
-							//src |= FBUF_SRC_B;
+							src |= DBG_SRC_B;
 						} else {
 							pixel = context->regs[REG_BG_COLOR] & 0x3F;
-							//src |= FBUF_SRC_BG;
+							src |= DBG_SRC_BG;
 						}
 					}
 				}
 				pixel &= 0x3F;
-				pixel += src;
-				if (context->b32) {
-					*(dst32++) = context->colors[pixel];
+				uint32_t outpixel;
+				if (context->debug) {
+					outpixel = context->debugcolors[src];
 				} else {
-					*(dst++) = context->colors[pixel];
+					outpixel = colors[pixel];
+				}
+				if (context->b32) {
+					*(dst32++) = outpixel;
+				} else {
+					*(dst++) = outpixel;
 				}
 				//*dst = (context->cram[pixel & 0x3F] & 0xEEE) | ((pixel & BUF_BIT_PRIORITY) ? FBUF_BIT_PRIORITY : 0) | src;
 			}
 		} else {
-			for (int i = 0; i < 16; ++plane_a, ++plane_b, ++sprite_buf, ++i) {
+			for (int i = 0; i < 16; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i) {
 				uint8_t pixel;
+				src = 0;
+				plane_a = context->tmp_buf_a + (plane_a_off & SCROLL_BUFFER_MASK);
+				plane_b = context->tmp_buf_b + (plane_b_off & SCROLL_BUFFER_MASK);
 				if (*sprite_buf & BUF_BIT_PRIORITY && *sprite_buf & 0xF) {
 					pixel = *sprite_buf;
-					//src = FBUF_SRC_S;
+					src = DBG_SRC_S;
 				} else if (*plane_a & BUF_BIT_PRIORITY && *plane_a & 0xF) {
 					pixel = *plane_a;
-					//src = a_src;
+					src = a_src;
 				} else if (*plane_b & BUF_BIT_PRIORITY && *plane_b & 0xF) {
 					pixel = *plane_b;
-					//src = FBUF_SRC_B;
+					src = DBG_SRC_B;
 				} else if (*sprite_buf & 0xF) {
 					pixel = *sprite_buf;
-					//src = FBUF_SRC_S;
+					src = DBG_SRC_S;
 				} else if (*plane_a & 0xF) {
 					pixel = *plane_a;
-					//src = a_src;
+					src = a_src;
 				} else if (*plane_b & 0xF){
 					pixel = *plane_b;
-					//src = FBUF_SRC_B;
+					src = DBG_SRC_B;
 				} else {
 					pixel = context->regs[REG_BG_COLOR] & 0x3F;
-					//src = FBUF_SRC_BG;
+					src = DBG_SRC_BG;
+				}
+				uint32_t outpixel;
+				if (context->debug) {
+					outpixel = context->debugcolors[src];
+				} else {
+					outpixel = context->colors[pixel & 0x3F];
 				}
 				if (context->b32) {
-					*(dst32++) = context->colors[pixel & 0x3F];
+					*(dst32++) = outpixel;
 				} else {
-					*(dst++) = context->colors[pixel & 0x3F];
+					*(dst++) = outpixel;
 				}
 				//*dst = (context->cram[pixel & 0x3F] & 0xEEE) | ((pixel & BUF_BIT_PRIORITY) ? FBUF_BIT_PRIORITY : 0) | src;
 			}
@@ -804,14 +863,8 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		//plane_b = context->tmp_buf_b + 16 - (context->hscroll_b & 0x7);
 		//end = dst + 8;
 	}
-	
-	uint16_t remaining;
-	if (!(context->flags & FLAG_WINDOW)) {
-		remaining = context->hscroll_a & 0xF;
-		memcpy(context->tmp_buf_a + SCROLL_BUFFER_DRAW - remaining, context->tmp_buf_a + SCROLL_BUFFER_SIZE - remaining, remaining);
-	}
-	remaining = context->hscroll_b & 0xF;
-	memcpy(context->tmp_buf_b + SCROLL_BUFFER_DRAW - remaining, context->tmp_buf_b + SCROLL_BUFFER_SIZE - remaining, remaining);
+	context->buf_a_off = (context->buf_a_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
+	context->buf_b_off = (context->buf_b_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
 }
 
 #define COLUMN_RENDER_BLOCK(column, startcyc) \
@@ -1164,34 +1217,26 @@ void latch_mode(vdp_context * context)
 	context->latched_mode = (context->regs[REG_MODE_4] & 0x81) | (context->regs[REG_MODE_2] & BIT_PAL);
 }
 
-int is_refresh(vdp_context * context, uint32_t slot)
-{
-	if (context->latched_mode & BIT_H40) {
-		//TODO: Figure out the exact behavior that reduces DMA slots for direct color DMA demos
-		return (slot == 37 || slot == 69 || slot == 102 || slot == 133 || slot == 165 || slot == 197 || slot >= 210 || (slot < 6 && (context->flags & FLAG_DMA_RUN) && ((context->dma_cd & 0xF) == CRAM_WRITE)));
-	} else {
-		//TODO: Figure out which slots are refresh when display is off in 32-cell mode
-		//These numbers are guesses based on H40 numbers
-		return (slot == 24 || slot == 56 || slot == 88 || slot == 120 || slot == 152 || (slot < 5 && (context->flags & FLAG_DMA_RUN) && ((context->dma_cd & 0xF) == CRAM_WRITE)));
-		//The numbers below are the refresh slots during active display
-		//return (slot == 66 || slot == 98 || slot == 130 || slot == 162);
-	}
-}
-
 void check_render_bg(vdp_context * context, int32_t line, uint32_t slot)
 {
 	if (line > 0) {
 		line -= 1;
 		int starti = -1;
 		if (context->latched_mode & BIT_H40) {
-			if (slot >= 50 && slot < 210) {
-				uint32_t x = (slot-50)*2;
+			if (slot >= 55 && slot < 210) {
+				uint32_t x = (slot-55)*2;
 				starti = line * 320 + x;
+			} else if (slot < 5) {
+				uint32_t x = (slot + 155)*2;
+				starti = (line-1)*320 + x;
 			}
 		} else {
-			if (slot >= 43 && slot < 171) {
-				uint32_t x = (slot-43)*2;
+			if (slot >= 48 && slot < 171) {
+				uint32_t x = (slot-48)*2;
 				starti = line * 320 + x;
+			} else if (slot < 5) {
+				uint32_t x = (slot + 123)*2;
+				starti = (line-1)*320 + x;
 			}
 		}
 		if (starti >= 0) {
@@ -1218,6 +1263,7 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 {
 	while(context->cycles < target_cycles)
 	{
+		context->flags &= ~FLAG_UNUSED_SLOT;
 		uint32_t line = context->cycles / MCLKS_LINE;
 		uint32_t active_lines = context->latched_mode & BIT_PAL ? PAL_ACTIVE : NTSC_ACTIVE;
 		if (!context->cycles) {
@@ -1330,9 +1376,9 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 		}
 		if ((line < active_lines || (line == active_lines && linecyc < (context->latched_mode & BIT_H40 ? 64 : 80))) && context->regs[REG_MODE_2] & DISPLAY_ENABLE) {
 			//first sort-of active line is treated as 255 internally
-			//it's used for gathering sprite info for line 
+			//it's used for gathering sprite info for line
 			line = (line - 1) & 0xFF;
-			
+
 			//Convert to slot number
 			if (context->latched_mode & BIT_H40){
 				vdp_h40(line, slot, context);
@@ -1346,6 +1392,9 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 			if (line < active_lines) {
 				check_render_bg(context, line, slot);
 			}
+		}
+		if (context->flags & FLAG_DMA_RUN && !is_refresh(context, slot)) {
+			run_dma_src(context, slot);
 		}
 		context->cycles += inccycles;
 	}
@@ -1386,7 +1435,7 @@ void vdp_run_dma_done(vdp_context * context, uint32_t target_cycles)
 
 int vdp_control_port_write(vdp_context * context, uint16_t value)
 {
-	//printf("control port write: %X\n", value);
+	//printf("control port write: %X at %d\n", value, context->cycles);
 	if (context->flags & FLAG_DMA_RUN) {
 		return -1;
 	}
@@ -1401,6 +1450,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 				//DMA copy or 68K -> VDP, transfer starts immediately
 				context->flags |= FLAG_DMA_RUN;
 				context->dma_cd = context->cd;
+				//printf("DMA start at cycle %d\n", context->cycles);
 				if (!(context->regs[REG_DMASRC_H] & 0x80)) {
 					//printf("DMA Address: %X, New CD: %X, Source: %X, Length: %X\n", context->address, context->cd, (context->regs[REG_DMASRC_H] << 17) | (context->regs[REG_DMASRC_M] << 9) | (context->regs[REG_DMASRC_L] << 1), context->regs[REG_DMALEN_H] << 8 | context->regs[REG_DMALEN_L]);
 					return 1;
@@ -1415,18 +1465,19 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 		if ((value & 0xC000) == 0x8000) {
 			//Register write
 			uint8_t reg = (value >> 8) & 0x1F;
-			if (reg < VDP_REGS) {
+			if (reg < (context->regs[REG_MODE_2] & BIT_MODE_5 ? VDP_REGS : 0xA)) {
 				//printf("register %d set to %X\n", reg, value & 0xFF);
-				context->regs[reg] = value;
-				if (reg == REG_MODE_2) {
-					//printf("Display is now %s\n", (context->regs[REG_MODE_2] & DISPLAY_ENABLE) ? "enabled" : "disabled");
+				if (reg == REG_MODE_1 && (value & BIT_HVC_LATCH) && !(context->regs[reg] & BIT_HVC_LATCH)) {
+					context->hv_latch = vdp_hv_counter_read(context);
 				}
+				context->regs[reg] = value;
 				if (reg == REG_MODE_4) {
 					context->double_res = (value & (BIT_INTERLACE | BIT_DOUBLE_RES)) == (BIT_INTERLACE | BIT_DOUBLE_RES);
 					if (!context->double_res) {
 						context->framebuf = context->oddbuf;
 					}
 				}
+				context->cd &= 0x3C;
 			}
 		} else {
 			context->flags |= FLAG_PENDING;
@@ -1439,39 +1490,50 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 
 int vdp_data_port_write(vdp_context * context, uint16_t value)
 {
-	//printf("data port write: %X\n", value);
-	if (context->flags & FLAG_DMA_RUN) {
+	//printf("data port write: %X at %d\n", value, context->cycles);
+	if (context->flags & FLAG_DMA_RUN && (context->regs[REG_DMASRC_H] & 0xC0) != 0x80) {
 		return -1;
-	}
-	if (!(context->cd & 1)) {
-		//ignore writes when cd is configured for read
-		return 0;
 	}
 	context->flags &= ~FLAG_PENDING;
 	/*if (context->fifo_cur == context->fifo_end) {
 		printf("FIFO full, waiting for space before next write at cycle %X\n", context->cycles);
 	}*/
-	while (context->fifo_cur == context->fifo_end) {
+	if (context->cd & 0x20 && (context->regs[REG_DMASRC_H] & 0xC0) == 0x80) {
+		context->flags &= ~FLAG_DMA_RUN;
+	}
+	while (context->fifo_write == context->fifo_read) {
 		vdp_run_context(context, context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20));
 	}
-	context->fifo_cur->cycle = context->cycles;
-	context->fifo_cur->address = context->address;
-	context->fifo_cur->value = value;
-	context->fifo_cur->cd = context->cd;
-	context->fifo_cur->partial = 0;
-	context->fifo_cur++;
+	fifo_entry * cur = context->fifo + context->fifo_write;
+	cur->cycle = context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20)*FIFO_LATENCY;
+	cur->address = context->address;
+	cur->value = value;
+	if (context->cd & 0x20 && (context->regs[REG_DMASRC_H] & 0xC0) == 0x80) {
+		context->flags |= FLAG_DMA_RUN;
+	}
+	cur->cd = context->cd;
+	cur->partial = 0;
+	if (context->fifo_read < 0) {
+		context->fifo_read = context->fifo_write;
+	}
+	context->fifo_write = (context->fifo_write + 1) & (FIFO_SIZE-1);
 	context->address += context->regs[REG_AUTOINC];
 	return 0;
+}
+
+void vdp_test_port_write(vdp_context * context, uint16_t value)
+{
+	//TODO: implement test register
 }
 
 uint16_t vdp_control_port_read(vdp_context * context)
 {
 	context->flags &= ~FLAG_PENDING;
 	uint16_t value = 0x3400;
-	if (context->fifo_cur == (context->fifo_end - FIFO_SIZE)) {
+	if (context->fifo_read < 0) {
 		value |= 0x200;
 	}
-	if (context->fifo_cur == context->fifo_end) {
+	if (context->fifo_read == context->fifo_write) {
 		value |= 0x100;
 	}
 	if (context->flags2 & FLAG2_VINT_PENDING) {
@@ -1482,7 +1544,7 @@ uint16_t vdp_control_port_read(vdp_context * context)
 	}
 	uint32_t line= context->cycles / MCLKS_LINE;
 	uint32_t linecyc = context->cycles % MCLKS_LINE;
-	if (line >= (context->latched_mode & BIT_PAL ? PAL_ACTIVE : NTSC_ACTIVE)) {
+	if (line >= (context->latched_mode & BIT_PAL ? PAL_ACTIVE : NTSC_ACTIVE) || !(context->regs[REG_MODE_2] & BIT_DISP_EN)) {
 		value |= 0x8;
 	}
 	if (linecyc < (context->latched_mode & BIT_H40 ? HBLANK_CLEAR_H40 : HBLANK_CLEAR_H32)) {
@@ -1494,9 +1556,14 @@ uint16_t vdp_control_port_read(vdp_context * context)
 	if (context->latched_mode & BIT_PAL) {//Not sure about this, need to verify
 		value |= 0x1;
 	}
+	//printf("status read at cycle %d returned %X\n", context->cycles, value);
 	//TODO: Sprite overflow, sprite collision, odd frame flag
 	return value;
 }
+
+#define CRAM_BITS 0xEEE
+#define VSRAM_BITS 0x7FF
+#define VSRAM_DIRTY_BITS 0xF800
 
 uint16_t vdp_data_port_read(vdp_context * context)
 {
@@ -1506,6 +1573,7 @@ uint16_t vdp_data_port_read(vdp_context * context)
 	}
 	//Not sure if the FIFO should be drained before processing a read or not, but it would make sense
 	context->flags &= ~FLAG_UNUSED_SLOT;
+	//context->flags2 |= FLAG2_READ_PENDING;
 	while (!(context->flags & FLAG_UNUSED_SLOT)) {
 		vdp_run_context(context, context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20));
 	}
@@ -1513,21 +1581,31 @@ uint16_t vdp_data_port_read(vdp_context * context)
 	switch (context->cd & 0xF)
 	{
 	case VRAM_READ:
-		value = context->vdpmem[context->address] << 8;
+		value = context->vdpmem[context->address & 0xFFFE] << 8;
 		context->flags &= ~FLAG_UNUSED_SLOT;
+		context->flags2 |= FLAG2_READ_PENDING;
 		while (!(context->flags & FLAG_UNUSED_SLOT)) {
 			vdp_run_context(context, context->cycles + ((context->latched_mode & BIT_H40) ? 16 : 20));
 		}
-		value |= context->vdpmem[context->address ^ 1];
+		value |= context->vdpmem[context->address | 1];
+		break;
+	case VRAM_READ8:
+		value = context->vdpmem[context->address ^ 1];
+		value |= context->fifo[context->fifo_write].value & 0xFF00;
 		break;
 	case CRAM_READ:
-		value = context->cram[(context->address/2) & (CRAM_SIZE-1)];
+		value = context->cram[(context->address/2) & (CRAM_SIZE-1)] & CRAM_BITS;
+		value |= context->fifo[context->fifo_write].value & ~CRAM_BITS;
 		break;
-	case VSRAM_READ:
-		if (((context->address / 2) & 63) < VSRAM_SIZE) {
-			value = context->vsram[context->address & 63];
+	case VSRAM_READ: {
+		uint16_t address = (context->address /2) & 63;
+		if (address >= VSRAM_SIZE) {
+			address = 0;
 		}
+		value = context->vsram[address] & VSRAM_BITS;
+		value |= context->fifo[context->fifo_write].value & VSRAM_DIRTY_BITS;
 		break;
+		}
 	}
 	context->address += context->regs[REG_AUTOINC];
 	return value;
@@ -1535,7 +1613,9 @@ uint16_t vdp_data_port_read(vdp_context * context)
 
 uint16_t vdp_hv_counter_read(vdp_context * context)
 {
-	//TODO: deal with clock adjustemnts handled in vdp_run_context
+	if (context->regs[REG_MODE_1] & BIT_HVC_LATCH) {
+		return context->hv_latch;
+	}
 	uint32_t line= context->cycles / MCLKS_LINE;
 	if (!line) {
 		line = 0xFF;
@@ -1642,15 +1722,25 @@ uint16_t vdp_hv_counter_read(vdp_context * context)
 	return (line << 8) | linecyc;
 }
 
+uint16_t vdp_test_port_read(vdp_context * context)
+{
+	//TODO: Find out what actually gets returned here
+	return 0xFFFF;
+}
+
 void vdp_adjust_cycles(vdp_context * context, uint32_t deduction)
 {
 	context->cycles -= deduction;
-	for(fifo_entry * start = (context->fifo_end - FIFO_SIZE); start < context->fifo_cur; start++) {
-		if (start->cycle >= deduction) {
-			start->cycle -= deduction;
-		} else {
-			start->cycle = 0;
-		}
+	if (context->fifo_read >= 0) {
+		int32_t idx = context->fifo_read;
+		do {
+			if (context->fifo[idx].cycle >= deduction) {
+				context->fifo[idx].cycle -= deduction;
+			} else {
+				context->fifo[idx].cycle = 0;
+			}
+			idx = (idx+1) & (FIFO_SIZE-1);
+		} while(idx != context->fifo_write);
 	}
 }
 
@@ -1715,66 +1805,5 @@ void vdp_int_ack(vdp_context * context, uint16_t int_num)
 	} else if(int_num ==4) {
 		context->flags2 &= ~FLAG2_HINT_PENDING;
 	}
-}
-
-#define GST_VDP_REGS 0xFA
-#define GST_VDP_MEM 0x12478
-
-uint8_t vdp_load_gst(vdp_context * context, FILE * state_file)
-{
-	uint8_t tmp_buf[CRAM_SIZE*2];
-	fseek(state_file, GST_VDP_REGS, SEEK_SET);
-	if (fread(context->regs, 1, VDP_REGS, state_file) != VDP_REGS) {
-		fputs("Failed to read VDP registers from savestate\n", stderr);
-		return 0;
-	}
-	context->double_res = (context->regs[REG_MODE_4] & (BIT_INTERLACE | BIT_DOUBLE_RES)) == (BIT_INTERLACE | BIT_DOUBLE_RES);
-	if (!context->double_res) {
-		context->framebuf = context->oddbuf;
-	}
-	latch_mode(context);
-	if (fread(tmp_buf, 1, sizeof(tmp_buf), state_file) != sizeof(tmp_buf)) {
-		fputs("Failed to read CRAM from savestate\n", stderr);
-		return 0;
-	}
-	for (int i = 0; i < CRAM_SIZE; i++) {
-		uint16_t value;
-		context->cram[i] = value = (tmp_buf[i*2+1] << 8) | tmp_buf[i*2];
-		context->colors[i] = color_map[value & 0xEEE];
-		context->colors[i + CRAM_SIZE] = color_map[(value & 0xEEE) | FBUF_SHADOW];
-		context->colors[i + CRAM_SIZE*2] = color_map[(value & 0xEEE) | FBUF_HILIGHT];
-	}
-	if (fread(tmp_buf, 2, VSRAM_SIZE, state_file) != VSRAM_SIZE) {
-		fputs("Failed to read VSRAM from savestate\n", stderr);
-		return 0;
-	}
-	for (int i = 0; i < VSRAM_SIZE; i++) {
-		context->vsram[i] = (tmp_buf[i*2+1] << 8) | tmp_buf[i*2];
-	}
-	fseek(state_file, GST_VDP_MEM, SEEK_SET);
-	if (fread(context->vdpmem, 1, VRAM_SIZE, state_file) != VRAM_SIZE) {
-		fputs("Failed to read VRAM from savestate\n", stderr);
-		return 0;
-	}
-	return 1;
-}
-
-void vdp_save_state(vdp_context * context, FILE * outfile)
-{
-	uint8_t tmp_buf[CRAM_SIZE*2];
-	fseek(outfile, GST_VDP_REGS, SEEK_SET);
-	fwrite(context->regs, 1, VDP_REGS, outfile);
-	for (int i = 0; i < CRAM_SIZE; i++) {
-		tmp_buf[i*2] = context->cram[i];
-		tmp_buf[i*2+1] = context->cram[i] >> 8;
-	}
-	fwrite(tmp_buf, 1, sizeof(tmp_buf), outfile);
-	for (int i = 0; i < VSRAM_SIZE; i++) {
-		tmp_buf[i*2] = context->vsram[i];
-		tmp_buf[i*2+1] = context->vsram[i] >> 8;
-	}
-	fwrite(tmp_buf, 2, VSRAM_SIZE, outfile);
-	fseek(outfile, GST_VDP_MEM, SEEK_SET);
-	fwrite(context->vdpmem, 1, VRAM_SIZE, outfile);
 }
 

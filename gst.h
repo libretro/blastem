@@ -3,14 +3,11 @@
  This file is part of BlastEm. 
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
-#ifndef MEM_H_
-#define MEM_H_
+#ifndef GST_H_
+#define GST_H_
+#include "blastem.h"
 
-#include <stddef.h>
+uint8_t save_gst(genesis_context * gen, char *fname, uint32_t m68k_pc);
+uint32_t load_gst(genesis_context * gen, char * fname);
 
-#define PAGE_SIZE 4096
-
-void * alloc_code(size_t *size);
-
-#endif //MEM_H_
-
+#endif //GST_H_

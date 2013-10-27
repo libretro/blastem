@@ -1,3 +1,8 @@
+/*
+ Copyright 2013 Michael Pavone
+ This file is part of BlastEm.
+ BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
+*/
 #ifndef RENDER_H_
 #define RENDER_H_
 
@@ -12,9 +17,9 @@ typedef struct {
 } surface_info;
 
 uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b);
-surface_info render_alloc_surfaces();
+void render_alloc_surfaces(vdp_context * context);
 uint8_t render_depth();
-void render_init(int width, int height, char * title, uint32_t fps, uint8_t use_gl);
+void render_init(int width, int height, char * title, uint32_t fps, uint8_t fullscreen, uint8_t use_gl);
 void render_context(vdp_context * context);
 void render_wait_quit(vdp_context * context);
 void render_wait_psg(psg_context * context);
@@ -28,6 +33,7 @@ void render_debug_pal(uint8_t pal);
 void process_events();
 int render_joystick_num_buttons(int joystick);
 int render_joystick_num_hats(int joystick);
+int render_num_joysticks();
 
 //TODO: Throw an ifdef in here once there's more than one renderer
 #include <SDL.h>
@@ -35,6 +41,7 @@ int render_joystick_num_hats(int joystick);
 #define RENDERKEY_DOWN    SDLK_DOWN
 #define RENDERKEY_LEFT    SDLK_LEFT
 #define RENDERKEY_RIGHT   SDLK_RIGHT
+#define RENDERKEY_ESC     SDLK_ESCAPE
 #define RENDER_DPAD_UP    SDL_HAT_UP
 #define RENDER_DPAD_DOWN  SDL_HAT_DOWN
 #define RENDER_DPAD_LEFT  SDL_HAT_LEFT

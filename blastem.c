@@ -1,3 +1,8 @@
+/*
+ Copyright 2013 Michael Pavone
+ This file is part of BlastEm.
+ BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
+*/
 #include "68kinst.h"
 #include "m68k_to_x86.h"
 #include "z80_to_x86.h"
@@ -5,9 +10,12 @@
 #include "vdp.h"
 #include "render.h"
 #include "blastem.h"
+#include "gst.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define BLASTEM_VERSION "0.1.0"
 
 #define CARTRIDGE_WORDS 0x200000
 #define RAM_WORDS 32 * 1024
@@ -25,6 +33,8 @@
 #define LINES_NTSC 262
 #define LINES_PAL 312
 
+#define MAX_SOUND_CYCLES 100000
+
 uint32_t mclks_per_frame = MCLKS_LINE*LINES_NTSC;
 
 uint16_t cart[CARTRIDGE_WORDS];
@@ -34,6 +44,8 @@ uint8_t z80_ram[Z80_RAM_BYTES];
 int headless = 0;
 int z80_enabled = 1;
 int frame_limit = 0;
+
+tern_node * config;
 
 #ifndef MIN
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
@@ -50,7 +62,7 @@ int load_smd_rom(long filesize, FILE * f)
 	uint8_t block[SMD_BLOCK_SIZE];
 	filesize -= SMD_HEADER_SIZE;
 	fseek(f, SMD_HEADER_SIZE, SEEK_SET);
-
+	
 	uint16_t * dst = cart;
 	while (filesize > 0) {
 		fread(block, 1, SMD_BLOCK_SIZE, f);
@@ -137,19 +149,20 @@ void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 				if (next_hint < context->int_cycle) {
 					context->int_cycle = next_hint;
 					context->int_num = 4;
-
+			
 				}
 			}
 		}
 	}
 
 	context->target_cycle = context->int_cycle < context->sync_cycle ? context->int_cycle : context->sync_cycle;
-	/*printf("Cyc: %d, Trgt: %d, Int Cyc: %d, Int: %d, Mask: %X, V: %d, H: %d, HICount: %d, HReg: %d, Line: %d\n",
-		context->current_cycle, context->target_cycle, context->int_cycle, context->int_num, (context->status & 0x7),
+	/*printf("Cyc: %d, Trgt: %d, Int Cyc: %d, Int: %d, Mask: %X, V: %d, H: %d, HICount: %d, HReg: %d, Line: %d\n", 
+		context->current_cycle, context->target_cycle, context->int_cycle, context->int_num, (context->status & 0x7), 
 		v_context->regs[REG_MODE_2] & 0x20, v_context->regs[REG_MODE_1] & 0x10, v_context->hint_counter, v_context->regs[REG_HINT], v_context->cycles / MCLKS_LINE);*/
 }
 
 int break_on_sync = 0;
+int save_state = 0;
 
 uint8_t reset = 1;
 uint8_t need_reset = 0;
@@ -195,9 +208,16 @@ void sync_z80(z80_context * z_context, uint32_t mclks)
 void sync_sound(genesis_context * gen, uint32_t target)
 {
 	//printf("YM | Cycle: %d, bpos: %d, PSG | Cycle: %d, bpos: %d\n", gen->ym->current_cycle, gen->ym->buffer_pos, gen->psg->cycles, gen->psg->buffer_pos * 2);
+	while (target > gen->psg->cycles && target - gen->psg->cycles > MAX_SOUND_CYCLES) {
+		uint32_t cur_target = gen->psg->cycles + MAX_SOUND_CYCLES;
+		//printf("Running PSG to cycle %d\n", cur_target);
+		psg_run(gen->psg, cur_target);
+		//printf("Running YM-2612 to cycle %d\n", cur_target);
+		ym_run(gen->ym, cur_target);
+	}
 	psg_run(gen->psg, target);
 	ym_run(gen->ym, target);
-
+	
 	//printf("Target: %d, YM bufferpos: %d, PSG bufferpos: %d\n", target, gen->ym->buffer_pos, gen->psg->buffer_pos * 2);
 }
 
@@ -219,7 +239,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 		}
 		//printf("reached frame end | 68K Cycles: %d, MCLK Cycles: %d\n", context->current_cycle, mclks);
 		vdp_run_context(v_context, mclks_per_frame);
-
+		
 		if (!headless) {
 			break_on_sync |= wait_render_frame(v_context, frame_limit);
 		}
@@ -256,9 +276,19 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 		context->int_ack = 0;
 	}
 	adjust_int_cycle(context, v_context);
-	if (break_on_sync && address) {
+	if (address) {
+		if (break_on_sync) {
 		break_on_sync = 0;
 		debugger(context, address);
+	}
+		if (save_state) {
+			save_state = 0;
+			while (!z_context->pc)
+			{
+				sync_z80(z_context, z_context->current_cycle * MCLKS_PER_Z80 + MCLKS_PER_Z80);
+			}
+			save_gst(gen, "savestate.gst", address);
+		}
 	}
 	return context;
 }
@@ -282,6 +312,7 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 					vdp_run_dma_done(v_context, mclks_per_frame);
 					if (v_context->cycles >= mclks_per_frame) {
 						if (!headless) {
+							//printf("reached frame end | 68K Cycles: %d, MCLK Cycles: %d\n", context->current_cycle, v_context->cycles);
 							wait_render_frame(v_context, frame_limit);
 						}
 						vdp_adjust_cycles(v_context, mclks_per_frame);
@@ -299,7 +330,7 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 						}
 					}
 				}
-				context->current_cycle = v_context->cycles / MCLKS_PER_68K;
+				//context->current_cycle = v_context->cycles / MCLKS_PER_68K;
 			}
 		} else if(vdp_port < 8) {
 			blocked = vdp_control_port_write(v_context, value);
@@ -332,7 +363,6 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 						blocked = 0;
 					}
 				}
-				context->current_cycle = v_context->cycles / MCLKS_PER_68K;
 			} else {
 				adjust_int_cycle(context, v_context);
 			}
@@ -341,6 +371,7 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 			exit(1);
 		}
 		if (v_context->cycles != before_cycle) {
+			//printf("68K paused for %d (%d) cycles at cycle %d (%d) for write\n", v_context->cycles / MCLKS_PER_68K - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
 			context->current_cycle = v_context->cycles / MCLKS_PER_68K;
 		}
 	} else if (vdp_port < 0x18) {
@@ -380,7 +411,7 @@ z80_context * z80_vdp_port_write(uint16_t vdp_port, z80_context * context, uint8
 		sync_sound(gen, context->current_cycle * MCLKS_PER_Z80);
 		psg_write(gen->psg, value);
 	} else {
-		//TODO: Implement undocumented test register(s)
+		vdp_test_port_write(gen->vdp, value);
 	}
 	return context;
 }
@@ -395,6 +426,7 @@ uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 	uint16_t value;
 	sync_components(context, 0);
 	vdp_context * v_context = context->video_context;
+	uint32_t before_cycle = v_context->cycles;
 	if (vdp_port < 0x10) {
 		if (vdp_port < 4) {
 			value = vdp_data_port_read(v_context);
@@ -404,10 +436,15 @@ uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 			value = vdp_hv_counter_read(v_context);
 			//printf("HV Counter: %X at cycle %d\n", value, v_context->cycles);
 		}
-		context->current_cycle = v_context->cycles/MCLKS_PER_68K;
-	} else {
-		printf("Illegal read from PSG or test register port %X\n", vdp_port);
+	} else if (vdp_port < 0x18){
+		printf("Illegal read from PSG  port %X\n", vdp_port);
 		exit(1);
+	} else {
+		value = vdp_test_port_read(v_context);
+	}
+	if (v_context->cycles != before_cycle) {
+		//printf("68K paused for %d (%d) cycles at cycle %d (%d) for read\n", v_context->cycles / MCLKS_PER_68K - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
+		context->current_cycle = v_context->cycles / MCLKS_PER_68K;
 	}
 	return value;
 }
@@ -489,20 +526,21 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 			}
 		} else {
 			if (location == 0x1100) {
-				sync_z80(gen->z80, context->current_cycle * MCLKS_PER_68K);
 				if (busack_cycle <= context->current_cycle) {
 					busack = new_busack;
 					busack_cycle = CYCLE_NEVER;
 				}
 				if (value & 1) {
 					dputs("bus requesting Z80");
-
+					
 					if(!reset && !busreq) {
-						busack_cycle = ((gen->z80->current_cycle + Z80_ACK_DELAY) * MCLKS_PER_Z80) / MCLKS_PER_68K;//context->current_cycle + Z80_ACK_DELAY;
+						sync_z80(gen->z80, context->current_cycle * MCLKS_PER_68K + Z80_ACK_DELAY*MCLKS_PER_Z80);
+						busack_cycle = (gen->z80->current_cycle * MCLKS_PER_Z80) / MCLKS_PER_68K;//context->current_cycle + Z80_ACK_DELAY;
 						new_busack = Z80_REQ_ACK;
 					}
 					busreq = 1;
 				} else {
+					sync_z80(gen->z80, context->current_cycle * MCLKS_PER_68K);
 					if (busreq) {
 						dputs("releasing z80 bus");
 						#ifdef DO_DEBUG_PRINT
@@ -518,7 +556,7 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 					}
 					//busack_cycle = CYCLE_NEVER;
 					//busack = Z80_REQ_BUSY;
-
+					
 				}
 			} else if (location == 0x1200) {
 				sync_z80(gen->z80, context->current_cycle * MCLKS_PER_68K);
@@ -1433,7 +1471,7 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 				//Z80 debug commands
 				switch(input_buf[1])
 				{
-				case 'b':
+				case 'b': 
 					param = find_param(input_buf);
 					if (!param) {
 						fputs("zb command requires a parameter\n", stderr);
@@ -1463,188 +1501,15 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 	return context;
 }
 
-#define GST_68K_REGS 0x80
-#define GST_68K_REG_SIZE (0xDA-GST_68K_REGS)
-#define GST_68K_PC_OFFSET (0xC8-GST_68K_REGS)
-#define GST_68K_SR_OFFSET (0xD0-GST_68K_REGS)
-#define GST_68K_USP_OFFSET (0xD2-GST_68K_REGS)
-#define GST_68K_SSP_OFFSET (0xD6-GST_68K_REGS)
-#define GST_68K_RAM  0x2478
-#define GST_Z80_REGS 0x404
-#define GST_Z80_REG_SIZE (0x440-GST_Z80_REGS)
-#define GST_Z80_RAM 0x474
-
-uint32_t read_le_32(uint8_t * data)
+void set_speed_percent(genesis_context * context, uint32_t percent)
 {
-	return data[3] << 24 | data[2] << 16 | data[1] << 8 | data[0];
+	uint32_t old_clock = context->master_clock;
+	context->master_clock = ((uint64_t)context->normal_clock * (uint64_t)percent) / 100;
+	while (context->ym->current_cycle != context->psg->cycles) {
+		sync_sound(context, context->psg->cycles + MCLKS_PER_PSG);
 }
-
-uint16_t read_le_16(uint8_t * data)
-{
-	return data[1] << 8 | data[0];
-}
-
-uint16_t read_be_16(uint8_t * data)
-{
-	return data[0] << 8 | data[1];
-}
-
-uint32_t m68k_load_gst(m68k_context * context, FILE * gstfile)
-{
-	uint8_t buffer[4096];
-	fseek(gstfile, GST_68K_REGS, SEEK_SET);
-	if (fread(buffer, 1, GST_68K_REG_SIZE, gstfile) != GST_68K_REG_SIZE) {
-		fputs("Failed to read 68K registers from savestate\n", stderr);
-		return 0;
-	}
-	uint8_t * curpos = buffer;
-	for (int i = 0; i < 8; i++) {
-		context->dregs[i] = read_le_32(curpos);
-		curpos += sizeof(uint32_t);
-	}
-	for (int i = 0; i < 8; i++) {
-		context->aregs[i] = read_le_32(curpos);
-		curpos += sizeof(uint32_t);
-	}
-	uint32_t pc = read_le_32(buffer + GST_68K_PC_OFFSET);
-	uint16_t sr = read_le_16(buffer + GST_68K_SR_OFFSET);
-	context->status = sr >> 8;
-	for (int flag = 4; flag >= 0; flag--) {
-		context->flags[flag] = sr & 1;
-		sr >>= 1;
-	}
-	if (context->status & (1 << 5)) {
-		context->aregs[8] = read_le_32(buffer + GST_68K_USP_OFFSET);
-	} else {
-		context->aregs[8] = read_le_32(buffer + GST_68K_SSP_OFFSET);
-	}
-	fseek(gstfile, GST_68K_RAM, SEEK_SET);
-	for (int i = 0; i < (32*1024);) {
-		if (fread(buffer, 1, sizeof(buffer), gstfile) != sizeof(buffer)) {
-			fputs("Failed to read 68K RAM from savestate\n", stderr);
-			return 0;
-		}
-		for(curpos = buffer; curpos < (buffer + sizeof(buffer)); curpos += sizeof(uint16_t)) {
-			context->mem_pointers[1][i++] = read_be_16(curpos);
-		}
-	}
-	return pc;
-}
-
-uint8_t z80_load_gst(z80_context * context, FILE * gstfile)
-{
-	uint8_t regdata[GST_Z80_REG_SIZE];
-	fseek(gstfile, GST_Z80_REGS, SEEK_SET);
-	if (fread(regdata, 1, sizeof(regdata), gstfile) != sizeof(regdata)) {
-		fputs("Failed to read Z80 registers from savestate\n", stderr);
-		return 0;
-	}
-	uint8_t * curpos = regdata;
-	uint8_t f = *(curpos++);
-	context->flags[ZF_C] = f & 1;
-	f >>= 1;
-	context->flags[ZF_N] = f & 1;
-	f >>= 1;
-	context->flags[ZF_PV] = f & 1;
-	f >>= 2;
-	context->flags[ZF_H] = f & 1;
-	f >>= 2;
-	context->flags[ZF_Z] = f & 1;
-	f >>= 1;
-	context->flags[ZF_S] = f;
-
-	context->regs[Z80_A] = *curpos;
-	curpos += 3;
-	for (int reg = Z80_C; reg <= Z80_IYH; reg++) {
-		context->regs[reg++] = *(curpos++);
-		context->regs[reg] = *curpos;
-		curpos += 3;
-	}
-	uint16_t pc = read_le_16(curpos);
-	curpos += 4;
-	context->sp = read_le_16(curpos);
-	curpos += 4;
-	f = *(curpos++);
-	context->alt_flags[ZF_C] = f & 1;
-	f >>= 1;
-	context->alt_flags[ZF_N] = f & 1;
-	f >>= 1;
-	context->alt_flags[ZF_PV] = f & 1;
-	f >>= 2;
-	context->alt_flags[ZF_H] = f & 1;
-	f >>= 2;
-	context->alt_flags[ZF_Z] = f & 1;
-	f >>= 1;
-	context->alt_flags[ZF_S] = f;
-	context->alt_regs[Z80_A] = *curpos;
-	curpos += 3;
-	for (int reg = Z80_C; reg <= Z80_H; reg++) {
-		context->alt_regs[reg++] = *(curpos++);
-		context->alt_regs[reg] = *curpos;
-		curpos += 3;
-	}
-	context->regs[Z80_I] = *curpos;
-	curpos += 2;
-	context->iff1 = context->iff2 = *curpos;
-	curpos += 2;
-	reset = !*(curpos++);
-	busreq = *curpos;
-	curpos += 3;
-	uint32_t bank = read_le_32(curpos);
-	if (bank < 0x400000) {
-		context->mem_pointers[1] = context->mem_pointers[2] + bank;
-	} else {
-		context->mem_pointers[1] = NULL;
-	}
-	context->bank_reg = bank >> 15;
-	fseek(gstfile, GST_Z80_RAM, SEEK_SET);
-	if(fread(context->mem_pointers[0], 1, 8*1024, gstfile) != (8*1024)) {
-		fputs("Failed to read Z80 RAM from savestate\n", stderr);
-		return 0;
-	}
-	context->native_pc =  z80_get_native_address_trans(context, pc);
-	return 1;
-}
-
-uint32_t load_gst(genesis_context * gen, char * fname)
-{
-	FILE * gstfile = fopen(fname, "rb");
-	if (!gstfile) {
-		fprintf(stderr, "Could not open file %s for reading\n", fname);
-		goto error;
-	}
-	char ident[5];
-	if (fread(ident, 1, sizeof(ident), gstfile) != sizeof(ident)) {
-		fprintf(stderr, "Could not read ident code from %s\n", fname);
-		goto error_close;
-	}
-	if (memcmp(ident, "GST\xE0\x40", 3) != 0) {
-		fprintf(stderr, "%s doesn't appear to be a GST savestate. The ident code is %c%c%c\\x%X\\x%X instead of GST\\xE0\\x40.\n", fname, ident[0], ident[1], ident[2], ident[3], ident[4]);
-		goto error_close;
-	}
-	uint32_t pc = m68k_load_gst(gen->m68k, gstfile);
-	if (!pc) {
-		goto error_close;
-	}
-	if (!vdp_load_gst(gen->vdp, gstfile)) {
-		goto error_close;
-	}
-	if (!ym_load_gst(gen->ym, gstfile)) {
-		goto error_close;
-	}
-	if (!z80_load_gst(gen->z80, gstfile)) {
-		goto error_close;
-	}
-	gen->ports[0].control = 0x40;
-	gen->ports[1].control = 0x40;
-	adjust_int_cycle(gen->m68k, gen->vdp);
-	fclose(gstfile);
-	return pc;
-
-error_close:
-	fclose(gstfile);
-error:
-	return 0;
+	ym_adjust_master_clock(context->ym, context->master_clock);
+	psg_adjust_master_clock(context->psg, context->master_clock);
 }
 
 #define ROM_END   0x1A4
@@ -1658,7 +1523,7 @@ error:
 const memmap_chunk static_map[] = {
 		{0,        0x400000,  0xFFFFFF, 0, MMAP_READ,                          cart,
 		           NULL,          NULL,         NULL,            NULL},
-		{0xE00000, 0x1000000, 0xFFFF,   0, MMAP_READ | MMAP_WRITE | MMAP_CODE, ram,
+		{0xE00000, 0x1000000, 0xFFFF,   0, MMAP_READ | MMAP_WRITE | MMAP_CODE, ram, 
 		           NULL,          NULL,         NULL,            NULL},
 		{0xC00000, 0xE00000,  0x1FFFFF, 0, 0,                                  NULL,
 		           (read_16_fun)vdp_port_read,  (write_16_fun)vdp_port_write,
@@ -1711,7 +1576,7 @@ void init_run_cpu(genesis_context * gen, int debug, FILE * address_log, char * s
 			memmap[0].mask = 0xFFFFFF;
 			memmap[0].flags = MMAP_READ;
 			memmap[0].buffer = cart;
-
+			
 			ram_start &= 0xFFFFFE;
 			ram_end |= 1;
 			memmap[1].start = ram_start;
@@ -1728,7 +1593,7 @@ void init_run_cpu(genesis_context * gen, int debug, FILE * address_log, char * s
 				size /= 2;
 			}
 			memmap[1].buffer = gen->save_ram = malloc(size);
-
+			
 			memcpy(memmap+2, static_map+1, sizeof(static_map)-sizeof(static_map[0]));
 			num_chunks = sizeof(static_map)/sizeof(memmap_chunk)+1;
 		} else {
@@ -1737,7 +1602,7 @@ void init_run_cpu(genesis_context * gen, int debug, FILE * address_log, char * s
 			memmap[0].mask = 0xFFFFFF;
 			memmap[0].flags = MMAP_READ;
 			memmap[0].buffer = cart;
-
+			
 			memmap[1].start = 0x200000;
 			memmap[1].end = 0x400000;
 			memmap[1].mask = 0x1FFFFF;
@@ -1757,7 +1622,7 @@ void init_run_cpu(genesis_context * gen, int debug, FILE * address_log, char * s
 			memmap[num_chunks].end = 0xA13100;
 			memmap[num_chunks].mask = 0xFF;
 			memmap[num_chunks].write_16 = (write_16_fun)write_bank_reg_w;
-			memmap[num_chunks].write_8 = (write_8_fun)write_bank_reg_b;
+			memmap[num_chunks].write_8 = (write_8_fun)write_bank_reg_b; 
 			num_chunks++;
 			ram_end++;
 			size = ram_end-ram_start;
@@ -1786,7 +1651,7 @@ void init_run_cpu(genesis_context * gen, int debug, FILE * address_log, char * s
 	init_x86_68k_opts(&opts, memmap, num_chunks);
 	opts.address_log = address_log;
 	init_68k_context(&context, opts.native_code_map, &opts);
-
+	
 	context.video_context = gen->vdp;
 	context.system = gen;
 	//cartridge ROM
@@ -1803,11 +1668,15 @@ void init_run_cpu(genesis_context * gen, int debug, FILE * address_log, char * s
 	if (statefile) {
 		uint32_t pc = load_gst(gen, statefile);
 		if (!pc) {
+			fprintf(stderr, "Failed to load save state %s\n", statefile);
 			exit(1);
 		}
+		printf("Loaded %s\n", statefile);
 		if (debug) {
 			insert_breakpoint(&context, pc, (uint8_t *)debugger);
 		}
+		adjust_int_cycle(gen->m68k, gen->vdp);
+		gen->z80->native_pc =  z80_get_native_address_trans(gen->z80, gen->z80->pc);
 		start_68k_context(&context, pc);
 	} else {
 		if (debug) {
@@ -1865,40 +1734,61 @@ void detect_region()
 		version_reg = NO_DISK | JAP;
 	} else if (detect_specific_region('E') || detect_specific_region('A')) {
 		version_reg = NO_DISK | EUR;
+	} else {
+		char * def_region = tern_find_ptr(config, "default_region");
+		if (def_region) {
+			switch(*def_region)
+			{
+			case 'j':
+			case 'J':
+				version_reg = NO_DISK | JAP;
+				break;
+			case 'u':
+			case 'U':
+				version_reg = NO_DISK | USA;
+				break;
+			case 'e':
+			case 'E':
+				version_reg = NO_DISK | EUR;
+				break;
+			}
+		}
 	}
 }
 
 int main(int argc, char ** argv)
 {
 	if (argc < 2) {
-		fputs("Usage: blastem FILENAME\n", stderr);
+		fputs("Usage: blastem [OPTIONS] ROMFILE [WIDTH] [HEIGHT]\n", stderr);
 		return 1;
 	}
-	if(!load_rom(argv[1])) {
-		fprintf(stderr, "Failed to open %s for reading\n", argv[1]);
-		return 1;
-	}
+	config = load_config(argv[0]);
 	detect_region();
 	int width = -1;
 	int height = -1;
 	int debug = 0;
 	int ym_log = 0;
+	int loaded = 0;
+	uint8_t force_version = 0;
+	char * romfname = NULL;
 	FILE *address_log = NULL;
 	char * statefile = NULL;
-	for (int i = 2; i < argc; i++) {
+	uint8_t fullscreen = 0;
+	for (int i = 1; i < argc; i++) {
 		if (argv[i][0] == '-') {
 			switch(argv[i][1]) {
 			case 'd':
 				debug = 1;
 				break;
 			case 'f':
-				frame_limit = 1;
+				fullscreen = 1;
 				break;
 			case 'l':
 				address_log = fopen("address.log", "w");
 				break;
 			case 'v':
-				headless = 1;
+				printf("blastem %s\n", BLASTEM_VERSION);
+				return 0;
 				break;
 			case 'n':
 				z80_enabled = 0;
@@ -1913,15 +1803,15 @@ int main(int argc, char ** argv)
 				{
 				case 'j':
 				case 'J':
-					version_reg = NO_DISK | JAP;
+					force_version = NO_DISK | JAP;
 					break;
 				case 'u':
 				case 'U':
-					version_reg = NO_DISK | USA;
+					force_version = NO_DISK | USA;
 					break;
 				case 'e':
 				case 'E':
-					version_reg = NO_DISK | EUR;
+					force_version = NO_DISK | EUR;
 					break;
 				default:
 					fprintf(stderr, "'%c' is not a valid region character for the -r option\n", argv[i][0]);
@@ -1939,18 +1829,55 @@ int main(int argc, char ** argv)
 			case 'y':
 				ym_log = 1;
 				break;
+			case 'h':
+				puts(
+					"Usage: blastem [OPTIONS] ROMFILE [WIDTH] [HEIGHT]\n"
+					"Options:\n"
+					"	-h          Print this help text\n"
+					"	-r (J|U|E)  Force region to Japan, US or Europe respectively\n"
+					"	-f          Start in fullscreen mode\n"
+					"	-s FILE     Load a GST format savestate from FILE\n"
+					"	-d          Enter debugger on startup\n"
+					"	-n          Disable Z80\n"
+					"   -v          Display version number and exit\n"
+					"	-l          Log 68K code addresses (useful for assemblers)\n"
+					"	-y          Log individual YM-2612 channels to WAVE files\n"
+				);
+				return 0;
 			default:
 				fprintf(stderr, "Unrecognized switch %s\n", argv[i]);
 				return 1;
 			}
+		} else if (!loaded) {
+			if(!load_rom(argv[i])) {
+				fprintf(stderr, "Failed to open %s for reading\n", argv[i]);
+				return 1;
+			}
+			romfname = argv[i];
+			loaded = 1;
 		} else if (width < 0) {
 			width = atoi(argv[i]);
 		} else if (height < 0) {
 			height = atoi(argv[i]);
 		}
 	}
+	if (!loaded) {
+		fputs("You must specify a ROM filename!\n", stderr);
+		return 1;
+	}
+	if (force_version) {
+		version_reg = force_version;
+	}
 	update_title();
-	width = width < 320 ? 640 : width;
+	int def_width = 0;
+	char *config_width = tern_find_ptr(config, "videowidth");
+	if (config_width) {
+		def_width = atoi(config_width);
+	}
+	if (!def_width) {
+		def_width = 640;
+	}
+	width = width < 320 ? def_width : width;
 	height = height < 240 ? (width/320) * 240 : height;
 	uint32_t fps = 60;
 	if (version_reg & 0x40) {
@@ -1958,41 +1885,41 @@ int main(int argc, char ** argv)
 		fps = 50;
 	}
 	if (!headless) {
-		render_init(width, height, title, fps, 0);
+		render_init(width, height, title, fps, fullscreen, 0);
 	}
 	vdp_context v_context;
-
+	genesis_context gen;
+	memset(&gen, 0, sizeof(gen));
+	gen.master_clock = gen.normal_clock = fps == 60 ? MCLKS_NTSC : MCLKS_PAL;
+	
 	init_vdp_context(&v_context);
-
+	
 	ym2612_context y_context;
-	ym_init(&y_context, render_sample_rate(), fps == 60 ? MCLKS_NTSC : MCLKS_PAL, MCLKS_PER_YM, render_audio_buffer(), ym_log ? YM_OPT_WAVE_LOG : 0);
-
+	ym_init(&y_context, render_sample_rate(), gen.master_clock, MCLKS_PER_YM, render_audio_buffer(), ym_log ? YM_OPT_WAVE_LOG : 0);
+	
 	psg_context p_context;
-	psg_init(&p_context, render_sample_rate(), fps == 60 ? MCLKS_NTSC : MCLKS_PAL, MCLKS_PER_PSG, render_audio_buffer());
-
+	psg_init(&p_context, render_sample_rate(), gen.master_clock, MCLKS_PER_PSG, render_audio_buffer());
+	
 	z80_context z_context;
 	x86_z80_options z_opts;
 	init_x86_z80_opts(&z_opts);
 	init_z80_context(&z_context, &z_opts);
-
-	genesis_context gen;
-	memset(&gen, 0, sizeof(gen));
 
 	z_context.system = &gen;
 	z_context.mem_pointers[0] = z80_ram;
 	z_context.sync_cycle = z_context.target_cycle = mclks_per_frame/MCLKS_PER_Z80;
 	z_context.int_cycle = CYCLE_NEVER;
 	z_context.mem_pointers[1] = z_context.mem_pointers[2] = (uint8_t *)cart;
-
+	
 	gen.z80 = &z_context;
 	gen.vdp = &v_context;
 	gen.ym = &y_context;
 	gen.psg = &p_context;
 	genesis = &gen;
-
-	int fname_size = strlen(argv[1]);
+	
+	int fname_size = strlen(romfname);
 	sram_filename = malloc(fname_size+6);
-	memcpy(sram_filename, argv[1], fname_size);
+	memcpy(sram_filename, romfname, fname_size);
 	int i;
 	for (i = fname_size-1; fname_size >= 0; --i) {
 		if (sram_filename[i] == '.') {
@@ -2004,7 +1931,7 @@ int main(int argc, char ** argv)
 		strcpy(sram_filename + fname_size, ".sram");
 	}
 	set_keybindings();
-
+	
 	init_run_cpu(&gen, debug, address_log, statefile);
 	return 0;
 }

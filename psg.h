@@ -1,3 +1,8 @@
+/*
+ Copyright 2013 Michael Pavone
+ This file is part of BlastEm.
+ BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
+*/
 #ifndef PSG_CONTEXT_H_
 #define PSG_CONTEXT_H_
 
@@ -6,11 +11,12 @@
 typedef struct {
 	int16_t  *audio_buffer;
 	int16_t  *back_buffer;
-	double   buffer_fraction;
-	double   buffer_inc;
+	uint64_t buffer_fraction;
+	uint64_t buffer_inc;
 	uint32_t buffer_pos;
 	uint32_t clock_inc;
 	uint32_t cycles;
+	uint32_t sample_rate;
 	uint32_t samples_frame;
 	uint16_t lsfr;
 	uint16_t counter_load[4];
@@ -25,6 +31,7 @@ typedef struct {
 
 
 void psg_init(psg_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t samples_frame);
+void psg_adjust_master_clock(psg_context * context, uint32_t master_clock);
 void psg_write(psg_context * context, uint8_t value);
 void psg_run(psg_context * context, uint32_t cycles);
 
