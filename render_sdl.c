@@ -10,9 +10,7 @@
 #include "io.h"
 
 #ifndef DISABLE_OPENGL
-#define GL_GLEXT_PROTOTYPES
-#include <GL/gl.h>
-#include <GL/glext.h>
+#include <GL/glew.h>
 #endif
 
 SDL_Surface *screen;
@@ -93,13 +91,13 @@ int render_num_joysticks()
 uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b)
 {
 	if (render_gl) {
-		return b << 24 | g << 16 | r << 8 | 255;
+		return 255 << 24 | r << 16 | g << 8 | b;
 	} else {
 		return SDL_MapRGB(screen->format, r, g, b);
 	}
 }
 
-GLuint textures[3], buffers[2];
+GLuint textures[3], buffers[2], vshader, fshader, program, un_textures[2], at_pos;
 
 const GLfloat vertex_data[] = {
 	-1.0f, -1.0f,
@@ -109,6 +107,41 @@ const GLfloat vertex_data[] = {
 };
 
 const GLushort element_data[] = {0, 1, 2, 3};
+
+GLuint load_shader(char * fname, GLenum shader_type)
+{
+	FILE * f = fopen(fname, "r");
+	if (!f) {
+		fprintf(stderr, "Failed to open shader file %s for reading\n", fname);
+		return 0;
+	}
+	fseek(f, 0, SEEK_END);
+	long fsize = ftell(f);
+	fseek(f, 0, SEEK_SET);
+	GLchar * text = malloc(fsize);
+	if (fread(text, 1, fsize, f) != fsize) {
+		fprintf(stderr, "Error reading from shader file %s\n", fname);
+		free(text);
+		return 0;
+	}
+	GLuint ret = glCreateShader(shader_type);
+	glShaderSource(ret, 1, (const GLchar **)&text, (const GLint *)&fsize);
+	free(text);
+	glCompileShader(ret);
+	GLint compile_status, loglen;
+	glGetShaderiv(ret, GL_COMPILE_STATUS, &compile_status);
+	if (!compile_status) {
+		fprintf(stderr, "Shader %s failed to compile\n", fname);
+		glGetShaderiv(ret, GL_INFO_LOG_LENGTH, &loglen);
+		text = malloc(loglen);
+		glGetShaderInfoLog(ret, loglen, NULL, text);
+		fputs(text, stderr);
+		free(text);
+		glDeleteShader(ret);
+		return 0;
+	}
+	return ret;
+}
 
 void render_alloc_surfaces(vdp_context * context)
 {
@@ -134,8 +167,23 @@ void render_alloc_surfaces(vdp_context * context)
 		glGenBuffers(2, buffers);
 		glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_data), vertex_data, GL_STATIC_DRAW);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[0]);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[1]);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(element_data), element_data, GL_STATIC_DRAW);
+		vshader = load_shader("default.v.glsl", GL_VERTEX_SHADER);
+		fshader = load_shader("default.f.glsl", GL_FRAGMENT_SHADER);
+		program = glCreateProgram();
+		glAttachShader(program, vshader);
+		glAttachShader(program, fshader);
+		glLinkProgram(program);
+		GLint link_status;
+		glGetProgramiv(program, GL_LINK_STATUS, &link_status);
+		if (!link_status) {
+			fputs("Failed to link shader program\n", stderr);
+			exit(1);
+		}
+		un_textures[0] = glGetUniformLocation(program, "textures[0]");
+		un_textures[1] = glGetUniformLocation(program, "textures[1]");
+		at_pos = glGetAttribLocation(program, "pos");
 	} else {
 		context->oddbuf = context->framebuf = malloc(320 * 240 * screen->format->BytesPerPixel * 2);
 		context->evenbuf = ((char *)context->oddbuf) + 320 * 240 * screen->format->BytesPerPixel;
@@ -159,6 +207,7 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	atexit(render_close_audio);
 	printf("width: %d, height: %d\n", width, height);
 	uint32_t flags = SDL_ANYFORMAT;
+
 #ifndef DISABLE_OPENGL
 	if (use_gl)
 	{
@@ -188,7 +237,21 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 		exit(1);
 	}
 #ifndef DISABLE_OPENGL
-	//TODO: Fallback to plain SDL if OpenGL 2.0 not available
+	//TODO: fallback on standard rendering if OpenGL 2.0 is unavailable or if init fails
+	if (use_gl)
+	{
+		GLenum res = glewInit();
+		if (res != GLEW_OK)
+		{
+			fprintf(stderr, "Initialization of GLEW failed with code %d\n", res);
+			exit(1);
+		}
+		if (!GLEW_VERSION_2_0)
+		{
+			fputs("OpenGL 2.0 is unable, falling back to standard SDL rendering\n", stderr);
+			exit(1);
+		}
+	}
 	render_gl = use_gl;
 #endif
 	SDL_WM_SetCaption(title, title);
@@ -262,6 +325,27 @@ void render_context_gl(vdp_context * context)
 
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
+
+	glUseProgram(program);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, textures[0]);
+	glUniform1i(un_textures[0], 0);
+
+	glActiveTexture(GL_TEXTURE1);
+	//TODO: Select appropriate texture based on status of interlace
+	glBindTexture(GL_TEXTURE_2D, textures[1]);
+	glUniform1i(un_textures[1], 1);
+
+	glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
+	glVertexAttribPointer(at_pos, 2, GL_FLOAT, GL_FALSE, sizeof(GLfloat[2]), (void *)0);
+	glEnableVertexAttribArray(at_pos);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[1]);
+	glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_SHORT, (void *)0);
+
+	glDisableVertexAttribArray(at_pos);
+
+	SDL_GL_SwapBuffers();
 
 }
 
