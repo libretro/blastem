@@ -1,4 +1,4 @@
-LIBS=sdl
+LIBS=sdl gl
 LDFLAGS=-lm `pkg-config --libs $(LIBS)`
 ifdef DEBUG
 CFLAGS=-ggdb -std=gnu99 `pkg-config --cflags-only-I $(LIBS)` -Wreturn-type -Werror=return-type
