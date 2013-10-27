@@ -3,14 +3,11 @@
  This file is part of BlastEm. 
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
-#ifndef MEM_H_
-#define MEM_H_
+#ifndef CONFIG_H_
+#define CONFIG_H_
+#include "tern.h"
 
-#include <stddef.h>
+tern_node * load_config(char * expath);
 
-#define PAGE_SIZE 4096
-
-void * alloc_code(size_t *size);
-
-#endif //MEM_H_
+#endif //CONFIG_H_
 

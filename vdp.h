@@ -1,3 +1,8 @@
+/*
+ Copyright 2013 Michael Pavone
+ This file is part of BlastEm.
+ BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
+*/
 #ifndef VDP_H_
 #define VDP_H_
 
@@ -19,13 +24,15 @@
 
 #define FBUF_SHADOW 0x0001
 #define FBUF_HILIGHT 0x0010
-#define FBUF_BIT_PRIORITY 0x1000
-#define FBUF_SRC_MASK 0xE000
-#define FBUF_SRC_A 0x0000
-#define FBUF_SRC_W 0x2000
-#define FBUF_SRC_B 0x4000
-#define FBUF_SRC_S 0x6000
-#define FBUF_SRC_BG 0x8000
+#define DBG_SHADOW 0x10
+#define DBG_HILIGHT 0x20
+#define DBG_PRIORITY 0x8
+#define DBG_SRC_MASK 0x7
+#define DBG_SRC_A 0x1
+#define DBG_SRC_W 0x2
+#define DBG_SRC_B 0x3
+#define DBG_SRC_S 0x4
+#define DBG_SRC_BG 0x0
 
 #define MCLKS_LINE 3420
 
@@ -40,6 +47,7 @@
 
 #define FLAG2_VINT_PENDING 0x01
 #define FLAG2_HINT_PENDING 0x02
+#define FLAG2_READ_PENDING 0x04
 
 #define DISPLAY_ENABLE 0x40
 
@@ -102,6 +110,8 @@ typedef struct {
 	int16_t y;
 } sprite_info;
 
+#define FIFO_SIZE 4
+
 typedef struct {
 	uint32_t cycle;
 	uint16_t address;
@@ -111,8 +121,9 @@ typedef struct {
 } fifo_entry;
 
 typedef struct {
-	fifo_entry  *fifo_cur;
-	fifo_entry  *fifo_end;
+	fifo_entry  fifo[FIFO_SIZE];
+	int32_t     fifo_write;
+	int32_t     fifo_read;
 	uint16_t    address;
 	uint8_t     cd;
 	uint8_t	    flags;
@@ -128,6 +139,7 @@ typedef struct {
 	void        *evenbuf;
 	uint16_t    cram[CRAM_SIZE];
 	uint32_t    colors[CRAM_SIZE*3];
+	uint32_t    debugcolors[1 << (3 + 1 + 1 + 1)];//3 bits for source, 1 bit for priority, 1 bit for shadow, 1 bit for hilight
 	uint16_t    vsram[VSRAM_SIZE];
 	uint8_t     latched_mode;
 	uint16_t    hscroll_a;
@@ -140,13 +152,16 @@ typedef struct {
 	sprite_info sprite_info_list[MAX_SPRITES_LINE];
 	uint16_t    col_1;
 	uint16_t    col_2;
-	uint16_t    dma_val;
+	uint16_t    hv_latch;
 	uint8_t     v_offset;
 	uint8_t     dma_cd;
 	uint8_t     hint_counter;
 	uint8_t     flags2;
 	uint8_t     double_res;
 	uint8_t     b32;
+	uint8_t     buf_a_off;
+	uint8_t     buf_b_off;
+	uint8_t     debug;
 	uint8_t     *tmp_buf_a;
 	uint8_t     *tmp_buf_b;
 } vdp_context;
@@ -158,12 +173,14 @@ uint32_t vdp_run_to_vblank(vdp_context * context);
 //runs until the target cycle is reached or the current DMA operation has completed, whicever comes first
 void vdp_run_dma_done(vdp_context * context, uint32_t target_cycles);
 uint8_t vdp_load_gst(vdp_context * context, FILE * state_file);
-void vdp_save_state(vdp_context * context, FILE * outfile);
+uint8_t vdp_save_gst(vdp_context * context, FILE * outfile);
 int vdp_control_port_write(vdp_context * context, uint16_t value);
 int vdp_data_port_write(vdp_context * context, uint16_t value);
+void vdp_test_port_write(vdp_context * context, uint16_t value);
 uint16_t vdp_control_port_read(vdp_context * context);
 uint16_t vdp_data_port_read(vdp_context * context);
 uint16_t vdp_hv_counter_read(vdp_context * context);
+uint16_t vdp_test_port_read(vdp_context * context);
 void vdp_adjust_cycles(vdp_context * context, uint32_t deduction);
 uint32_t vdp_next_hint(vdp_context * context);
 uint32_t vdp_next_vint(vdp_context * context);
@@ -171,5 +188,8 @@ uint32_t vdp_next_vint_z80(vdp_context * context);
 void vdp_int_ack(vdp_context * context, uint16_t int_num);
 void vdp_print_sprite_table(vdp_context * context);
 void vdp_print_reg_explain(vdp_context * context);
+void latch_mode(vdp_context * context);
+
+extern int32_t color_map[1 << 12];
 
 #endif //VDP_H_

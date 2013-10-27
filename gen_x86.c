@@ -1,3 +1,8 @@
+/*
+ Copyright 2013 Michael Pavone
+ This file is part of BlastEm.
+ BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
+*/
 #include "gen_x86.h"
 #include "68kinst.h"
 #include <stddef.h>
@@ -25,6 +30,7 @@
 #define PRE_SIZE 0x66
 #define OP_JCC 0x70
 #define OP_IMMED_ARITH 0x80
+#define OP_TEST 0x84
 #define OP_XCHG 0x86
 #define OP_MOV 0x88
 #define OP_XCHG_AX 0x90
@@ -425,7 +431,7 @@ uint8_t * x86_rdisp8_size(uint8_t * out, uint8_t opcode, uint8_t opex, uint8_t d
 uint8_t * x86_ir(uint8_t * out, uint8_t opcode, uint8_t op_ex, uint8_t al_opcode, int32_t val, uint8_t dst, uint8_t size)
 {
 	uint8_t sign_extend = 0;
-	if ((size == SZ_D || size == SZ_Q) && val <= 0x7F && val >= -0x80) {
+	if (opcode != OP_NOT_NEG && (size == SZ_D || size == SZ_Q) && val <= 0x7F && val >= -0x80) {
 		sign_extend = 1;
 		opcode |= BIT_DIR;
 	}
@@ -1018,6 +1024,31 @@ uint8_t * cmp_rdisp8r(uint8_t * out, uint8_t src_base, int8_t disp, uint8_t dst,
 	return x86_rrdisp8_sizedir(out, OP_CMP, dst, src_base, disp, size, BIT_DIR);
 }
 
+uint8_t * test_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
+{
+	return x86_rr_sizedir(out, OP_TEST, src, dst, size);
+}
+
+uint8_t * test_ir(uint8_t * out, int32_t val, uint8_t dst, uint8_t size)
+{
+	return x86_ir(out, OP_NOT_NEG, OP_EX_TEST_I, OP_TEST, val, dst, size);
+}
+
+uint8_t * test_irdisp8(uint8_t * out, int32_t val, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_irdisp8(out, OP_NOT_NEG, OP_EX_TEST_I, val, dst_base, disp, size);
+}
+
+uint8_t * test_rrdisp8(uint8_t * out, uint8_t src, uint8_t dst_base, int8_t disp, uint8_t size)
+{
+	return x86_rrdisp8_sizedir(out, OP_TEST, src, dst_base, disp, size, 0);
+}
+
+uint8_t * test_rdisp8r(uint8_t * out, uint8_t src_base, int8_t disp, uint8_t dst, uint8_t size)
+{
+	return x86_rrdisp8_sizedir(out, OP_TEST, dst, src_base, disp, size, BIT_DIR);
+}
+
 uint8_t * imul_rr(uint8_t * out, uint8_t src, uint8_t dst, uint8_t size)
 {
 	return x86_rr_sizedir(out, OP2_IMUL | (PRE_2BYTE << 8), dst, src, size);
@@ -1134,7 +1165,7 @@ uint8_t * mov_rindexr(uint8_t * out, uint8_t src_base, uint8_t src_index, uint8_
 }
 
 uint8_t * mov_ir(uint8_t * out, int64_t val, uint8_t dst, uint8_t size)
-{	
+{
 	uint8_t sign_extend = 0;
 	if (size == SZ_Q && val <= 0x7FFFFFFF && val >= -2147483648) {
 		sign_extend = 1;

@@ -1,3 +1,8 @@
+/*
+ Copyright 2013 Michael Pavone
+ This file is part of BlastEm.
+ BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
+*/
 #include <string.h>
 #include <math.h>
 #include <stdio.h>
@@ -122,6 +127,13 @@ void ym_finalize_log()
 		}
 	}
 }
+#define BUFFER_INC_RES 1000000000UL
+
+void ym_adjust_master_clock(ym2612_context * context, uint32_t master_clock)
+{
+	uint64_t old_inc = context->buffer_inc;
+	context->buffer_inc = ((BUFFER_INC_RES * (uint64_t)context->sample_rate) / (uint64_t)master_clock) * (uint64_t)context->clock_inc;
+}
 
 void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t sample_limit, uint32_t options)
 {
@@ -129,8 +141,10 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clo
 	memset(context, 0, sizeof(*context));
 	context->audio_buffer = malloc(sizeof(*context->audio_buffer) * sample_limit*2);
 	context->back_buffer = malloc(sizeof(*context->audio_buffer) * sample_limit*2);
-	context->buffer_inc = ((double)sample_rate / (double)master_clock) * clock_div * 6;
+	context->sample_rate = sample_rate;
 	context->clock_inc = clock_div * 6;
+	ym_adjust_master_clock(context, master_clock);
+
 	context->sample_limit = sample_limit*2;
 	context->write_cycle = CYCLE_NEVER;
 	for (int i = 0; i < NUM_OPERATORS; i++) {
@@ -162,7 +176,7 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clo
 		//populate sine table
 		for (int32_t i = 0; i < 512; i++) {
 			double sine = sin( ((double)(i*2+1) / SINE_TABLE_SIZE) * M_PI_2 );
-			
+
 			//table stores 4.8 fixed pointed representation of the base 2 log
 			sine_table[i] = round_fixed_point(-log2(sine), 8);
 		}
@@ -308,7 +322,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 					}
 				} else {
 					if (first_key_on) {
-						dfprintf(debug_file, "Changing op %d envelope %d by %d in %s phase\n", op, operator->envelope, envelope_inc, 
+						dfprintf(debug_file, "Changing op %d envelope %d by %d in %s phase\n", op, operator->envelope, envelope_inc,
 							operator->env_phase == PHASE_SUSTAIN ? "sustain" : (operator->env_phase == PHASE_DECAY ? "decay": "release"));
 					}
 					operator->envelope += envelope_inc;
@@ -328,7 +342,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				context->env_counter++;
 			}
 		}
-		
+
 		//Update Phase Generator
 		uint32_t channel = context->current_op / 4;
 		if (channel != 5 || !context->dac_enable) {
@@ -348,7 +362,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				} else {
 					lfo_mod >>= 1;
 				}
-				operator->phase_counter += lfo_mod;	
+				operator->phase_counter += lfo_mod;
 			}
 			int16_t mod = 0;
 			switch (op % 4)
@@ -413,7 +427,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				dfprintf(debug_file, "op %d, base phase: %d, mod: %d, sine: %d, out: %d\n", op, phase, mod, sine_table[(phase+mod) & 0x1FF], pow_table[sine_table[phase & 0x1FF] + env]);
 			}
 			phase += mod;
-			
+
 			int16_t output = pow_table[sine_table[phase & 0x1FF] + env];
 			if (phase & 0x200) {
 				output = -output;
@@ -446,29 +460,29 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 		context->buffer_fraction += context->buffer_inc;
 		if (context->current_op == NUM_OPERATORS) {
 			context->current_op = 0;
-			if (context->buffer_fraction > 1.0) {
-				context->buffer_fraction -= 1.0;
-				context->audio_buffer[context->buffer_pos] = 0;
-				context->audio_buffer[context->buffer_pos + 1] = 0;
-				for (int i = 0; i < NUM_CHANNELS; i++) {
-					int16_t value = context->channels[i].output & 0x3FE0;
-					if (value & 0x2000) {
-						value |= 0xC000;
-					}
-					if (context->channels[i].logfile) {
-						fwrite(&value, sizeof(value), 1, context->channels[i].logfile);
-					}
-					if (context->channels[i].lr & 0x80) {
-						context->audio_buffer[context->buffer_pos] += value / YM_VOLUME_DIVIDER;
-					}
-					if (context->channels[i].lr & 0x40) {
-						context->audio_buffer[context->buffer_pos+1] += value / YM_VOLUME_DIVIDER;
-					}
+		}
+		if (context->buffer_fraction > BUFFER_INC_RES) {
+			context->buffer_fraction -= BUFFER_INC_RES;
+			context->audio_buffer[context->buffer_pos] = 0;
+			context->audio_buffer[context->buffer_pos + 1] = 0;
+			for (int i = 0; i < NUM_CHANNELS; i++) {
+				int16_t value = context->channels[i].output & 0x3FE0;
+				if (value & 0x2000) {
+					value |= 0xC000;
 				}
-				context->buffer_pos += 2;
-				if (context->buffer_pos == context->sample_limit) {
-					render_wait_ym(context);
+				if (context->channels[i].logfile) {
+					fwrite(&value, sizeof(value), 1, context->channels[i].logfile);
 				}
+				if (context->channels[i].lr & 0x80) {
+					context->audio_buffer[context->buffer_pos] += value / YM_VOLUME_DIVIDER;
+				}
+				if (context->channels[i].lr & 0x40) {
+					context->audio_buffer[context->buffer_pos+1] += value / YM_VOLUME_DIVIDER;
+				}
+			}
+			context->buffer_pos += 2;
+			if (context->buffer_pos == context->sample_limit) {
+				render_wait_ym(context);
 			}
 		}
 	}
@@ -561,7 +575,7 @@ void ym_update_phase_inc(ym2612_context * context, ym_operator * operator, uint3
 		}
 		//detune
 		detune = detune_table[channel->keycode][operator->detune & 0x3];
-	} 
+	}
 	if (operator->detune & 0x40) {
 		inc -= detune;
 		//this can underflow, mask to 17-bit result
@@ -582,8 +596,19 @@ void ym_update_phase_inc(ym2612_context * context, ym_operator * operator, uint3
 
 void ym_data_write(ym2612_context * context, uint8_t value)
 {
-	if (context->selected_reg < 0x21 || context->selected_reg > 0xB6 || (context->selected_reg < 0x30 && context->selected_part)) {
+	if (context->selected_reg >= YM_REG_END) {
 		return;
+	}
+	if (context->selected_part) {
+		if (context->selected_reg < YM_PART2_START) {
+			return;
+		}
+		context->part2_regs[context->selected_reg - YM_PART2_START] = value;
+	} else {
+		if (context->selected_reg < YM_PART1_START) {
+			return;
+		}
+		context->part1_regs[context->selected_reg - YM_PART1_START] = value;
 	}
 	dfprintf(debug_file, "write of %X to reg %X in part %d\n", value, context->selected_reg, context->selected_part+1);
 	if (context->selected_reg < 0x30) {
@@ -600,7 +625,7 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 				context->lfo_am_step = context->lfo_pm_step = 0;
 			}
 			context->lfo_freq = value & 0x7;
-			
+
 			break;
 		case REG_TIMERA_HIGH:
 			context->timer_a_load &= 0x3;
@@ -644,11 +669,13 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 				}
 				for (uint8_t op = channel * 4, bit = 0x10; op < (channel + 1) * 4; op++, bit <<= 1) {
 					if (value & bit) {
-						first_key_on = 1;
-						//printf("Key On for operator %d in channel %d\n", op, channel);
-						context->operators[op].phase_counter = 0;
-						context->operators[op].env_phase = PHASE_ATTACK;
-						context->operators[op].envelope = MAX_ENVELOPE;
+						if (context->operators[op].env_phase == PHASE_RELEASE)
+						{
+							first_key_on = 1;
+							//printf("Key On for operator %d in channel %d\n", op, channel);
+							context->operators[op].phase_counter = 0;
+							context->operators[op].env_phase = PHASE_ATTACK;
+						}
 					} else {
 						//printf("Key Off for operator %d in channel %d\n", op, channel);
 						context->operators[op].env_phase = PHASE_RELEASE;
@@ -753,7 +780,7 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 			}
 		}
 	}
-	
+
 	context->write_cycle = context->current_cycle;
 	context->status |= 0x80;
 }
@@ -761,26 +788,5 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 uint8_t ym_read_status(ym2612_context * context)
 {
 	return context->status;
-}
-
-#define GST_YM_OFFSET 0x1E4
-#define GST_YM_SIZE (0x3E4-GST_YM_OFFSET)
-
-uint8_t ym_load_gst(ym2612_context * context, FILE * gstfile)
-{
-	uint8_t regdata[GST_YM_SIZE];
-	fseek(gstfile, GST_YM_OFFSET, SEEK_SET);
-	if (fread(regdata, 1, sizeof(regdata), gstfile) != sizeof(regdata)) {
-		return 0;
-	}
-	for (int i = 0; i < sizeof(regdata); i++) {
-		if (i & 0x100) {
-			ym_address_write_part2(context, i & 0xFF);
-		} else {
-			ym_address_write_part1(context, i);
-		}
-		ym_data_write(context, regdata[i]);
-	}
-	return 1;
 }
 
