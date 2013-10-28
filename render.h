@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #ifndef RENDER_H_
@@ -9,9 +9,17 @@
 #include "vdp.h"
 #include "psg.h"
 #include "ym2612.h"
+
+typedef struct {
+	void *oddbuf;
+	void *evenbuf;
+	int  stride;
+} surface_info;
+
 uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b);
+void render_alloc_surfaces(vdp_context * context);
 uint8_t render_depth();
-void render_init(int width, int height, char * title, uint32_t fps, uint8_t fullscreen);
+void render_init(int width, int height, char * title, uint32_t fps, uint8_t fullscreen, uint8_t use_gl);
 void render_context(vdp_context * context);
 void render_wait_quit(vdp_context * context);
 void render_wait_psg(psg_context * context);
