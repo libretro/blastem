@@ -160,7 +160,7 @@ void render_alloc_surfaces(vdp_context * context)
 			if (i < 2) {
 				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 512, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, i ? context->evenbuf : context->oddbuf);
 			} else {
-				uint32_t blank = 255;
+				uint32_t blank = 255 << 24;
 				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_BGRA, GL_UNSIGNED_BYTE, &blank);
 			}
 		}
@@ -332,8 +332,7 @@ void render_context_gl(vdp_context * context)
 	glUniform1i(un_textures[0], 0);
 
 	glActiveTexture(GL_TEXTURE1);
-	//TODO: Select appropriate texture based on status of interlace
-	glBindTexture(GL_TEXTURE_2D, textures[1]);
+	glBindTexture(GL_TEXTURE_2D, (context->regs[REG_MODE_4] & BIT_INTERLACE) ? textures[1] : textures[2]);
 	glUniform1i(un_textures[1], 1);
 
 	glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
@@ -346,7 +345,10 @@ void render_context_gl(vdp_context * context)
 	glDisableVertexAttribArray(at_pos);
 
 	SDL_GL_SwapBuffers();
-
+	if (context->regs[REG_MODE_4] & BIT_INTERLACE)
+	{
+		context->framebuf = context->framebuf == context->oddbuf ? context->evenbuf : context->oddbuf;
+	}
 }
 
 uint32_t blankbuf[320*240];
