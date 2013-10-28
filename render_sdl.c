@@ -217,6 +217,9 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
 		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 		flags = SDL_OPENGL;
+		if (fullscreen) {
+			flags |= SDL_FULLSCREEN;
+		}
 	} else {
 #else
 	{
