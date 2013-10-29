@@ -147,6 +147,16 @@ void bind_ui(int keycode, ui_action action, uint8_t param)
 	bind_key(keycode, BIND_UI, action, 0, param);
 }
 
+void bind_button_ui(int joystick, int joybutton, ui_action action, uint8_t param)
+{
+	bind_button(joystick, joybutton, BIND_UI, action, 0, param);
+}
+
+void bind_dpad_ui(int joystick, int dpad, uint8_t direction, ui_action action, uint8_t param)
+{
+	bind_dpad(joystick, dpad, direction, BIND_UI, action, 0, param);
+}
+
 void handle_binding_down(keybinding * binding)
 {
 	switch(binding->bind_type)
@@ -487,8 +497,9 @@ void set_keybindings()
 						int bindtype = parse_binding_target(target, padbuttons, &ui_func, &padnum, &button);
 						if (bindtype == 1) {
 							bind_dpad_gamepad(i, dpad, dirnums[dir], padnum, button);
+						} else if (bindtype == 2) {
+							bind_dpad_ui(i, dpad, dirnums[dir], ui_func, button);
 						}
-						//TODO: Handle UI bindings
 					}
 				}
 			}
@@ -508,8 +519,9 @@ void set_keybindings()
 					int bindtype = parse_binding_target(target, padbuttons, &ui_func, &padnum, &button);
 					if (bindtype == 1) {
 						bind_button_gamepad(i, but, padnum, button);
+					} else if (bindtype == 2) {
+						bind_button_ui(i, but, ui_func, button);
 					}
-					//TODO: Handle UI bindings
 				}
 			}
 		}
