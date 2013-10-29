@@ -9,10 +9,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
 #define MAX_NEST 30 //way more than I'll ever need
 
 tern_node * parse_config(char * config_data)
@@ -102,32 +98,9 @@ open_fail:
 	return ret;
 }
 
-char * readlink_alloc(char * path)
+tern_node * load_config()
 {
-	char * linktext = NULL;
-	ssize_t linksize = 512;
-	ssize_t cursize = 0;
-	do {
-		if (linksize > cursize) {
-			cursize = linksize;
-			if (linktext) {
-				free(linktext);
-			}
-		}
-		linktext = malloc(cursize);
-		linksize = readlink(path, linktext, cursize-1);
-		if (linksize == -1) {
-			perror("readlink");
-			free(linktext);
-			linktext = NULL;
-		}
-	} while (linksize > cursize);
-	return linktext;
-}
-
-tern_node * load_config(char * expath)
-{
-	char * linktext;
+	char * exe_dir;
 	char * home = getenv("HOME");
 	if (!home) {
 		goto load_in_app_dir;
@@ -139,33 +112,18 @@ tern_node * load_config(char * expath)
 	}
 	free(path);
 load_in_app_dir:
-
-	linktext = readlink_alloc("/proc/self/exe");
-	if (!linktext) {
-		goto link_prob;
+	exe_dir = get_exe_dir();
+	if (!exe_dir) {
+		goto no_config;
 	}
-	char * cur;
-	int linksize = strlen(linktext);
-	for(cur = linktext + linksize - 1; cur != linktext; cur--)
-	{
-		if (*cur == '/') {
-			*cur = 0;
-			break;
-		}
-	}
-	if (cur == linktext) {
-		goto link_prob;
-	}
-	path = alloc_concat(linktext, "/default.cfg");
+	path = alloc_concat(exe_dir, "/default.cfg");
 	ret = parse_config_file(path);
+	free(path);
 success:
-	return ret;
-link_prob:
-	if (linktext) {
-		free(linktext);
+	if (ret) {
+		return ret;
 	}
-no_proc:
-	//TODO: Fall back to using expath if /proc is not available
+no_config:
 	fputs("Failed to find a config file in ~/.config/blastem/blastem.cfg or in the blastem executable directory\n", stderr);
 	exit(1);
 }
