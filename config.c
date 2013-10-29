@@ -1,79 +1,13 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "tern.h"
+#include "util.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdarg.h>
-#include <ctype.h>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
-char * alloc_concat(char * first, char * second)
-{
-	int flen = strlen(first);
-	int slen = strlen(second);
-	char * ret = malloc(flen + slen + 1);
-	memcpy(ret, first, flen);
-	memcpy(ret+flen, second, slen+1);
-	return ret;
-}
-
-char * alloc_concat_m(int num_parts, char ** parts)
-{
-	int total = 0;
-	for (int i = 0; i < num_parts; i++) {
-		total += strlen(parts[i]);
-	}
-	char * ret = malloc(total + 1);
-	*ret = 0;
-	for (int i = 0; i < num_parts; i++) {
-		strcat(ret, parts[i]);
-	}
-	return ret;
-}
-
-long file_size(FILE * f)
-{
-	fseek(f, 0, SEEK_END);
-	long fsize = ftell(f);
-	fseek(f, 0, SEEK_SET);
-	return fsize;
-}
-
-char * strip_ws(char * text)
-{
-	while (*text && (!isprint(*text) || isblank(*text)))
-	{
-		text++;
-	}
-	char * ret = text;
-	text = ret + strlen(ret) - 1;
-	while (text > ret && (!isprint(*text) || isblank(*text)))
-	{
-		*text = 0;
-		text--;
-	}
-	return ret;
-}
-
-char * split_keyval(char * text)
-{
-	while (*text && !isblank(*text))
-	{
-		text++;
-	}
-	if (!*text) {
-		return text;
-	}
-	*text = 0;
-	return text+1;
-}
 
 #define MAX_NEST 30 //way more than I'll ever need
 
@@ -164,32 +98,9 @@ open_fail:
 	return ret;
 }
 
-char * readlink_alloc(char * path)
+tern_node * load_config()
 {
-	char * linktext = NULL;
-	ssize_t linksize = 512;
-	ssize_t cursize = 0;
-	do {
-		if (linksize > cursize) {
-			cursize = linksize;
-			if (linktext) {
-				free(linktext);
-			}
-		}
-		linktext = malloc(cursize);
-		linksize = readlink(path, linktext, cursize-1);
-		if (linksize == -1) {
-			perror("readlink");
-			free(linktext);
-			linktext = NULL;
-		}
-	} while (linksize > cursize);
-	return linktext;
-}
-
-tern_node * load_config(char * expath)
-{
-	char * linktext;
+	char * exe_dir;
 	char * home = getenv("HOME");
 	if (!home) {
 		goto load_in_app_dir;
@@ -201,33 +112,18 @@ tern_node * load_config(char * expath)
 	}
 	free(path);
 load_in_app_dir:
-	
-	linktext = readlink_alloc("/proc/self/exe");
-	if (!linktext) {
-		goto link_prob;
+	exe_dir = get_exe_dir();
+	if (!exe_dir) {
+		goto no_config;
 	}
-	char * cur;
-	int linksize = strlen(linktext);
-	for(cur = linktext + linksize - 1; cur != linktext; cur--)
-	{
-		if (*cur == '/') {
-			*cur = 0;
-			break;
-		}
-	}
-	if (cur == linktext) {
-		goto link_prob;
-	}
-	path = alloc_concat(linktext, "/default.cfg");
+	path = alloc_concat(exe_dir, "/default.cfg");
 	ret = parse_config_file(path);
+	free(path);
 success:
-	return ret;
-link_prob:
-	if (linktext) {
-		free(linktext);
+	if (ret) {
+		return ret;
 	}
-no_proc:
-	//TODO: Fall back to using expath if /proc is not available
+no_config:
 	fputs("Failed to find a config file in ~/.config/blastem/blastem.cfg or in the blastem executable directory\n", stderr);
 	exit(1);
 }

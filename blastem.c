@@ -11,6 +11,7 @@
 #include "render.h"
 #include "blastem.h"
 #include "gst.h"
+#include "util.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -278,9 +279,9 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	adjust_int_cycle(context, v_context);
 	if (address) {
 		if (break_on_sync) {
-			break_on_sync = 0;
-			debugger(context, address);
-		}
+		break_on_sync = 0;
+		debugger(context, address);
+	}
 		if (save_state) {
 			save_state = 0;
 			while (!z_context->pc)
@@ -1507,7 +1508,7 @@ void set_speed_percent(genesis_context * context, uint32_t percent)
 	context->master_clock = ((uint64_t)context->normal_clock * (uint64_t)percent) / 100;
 	while (context->ym->current_cycle != context->psg->cycles) {
 		sync_sound(context, context->psg->cycles + MCLKS_PER_PSG);
-	}
+}
 	ym_adjust_master_clock(context->ym, context->master_clock);
 	psg_adjust_master_clock(context->psg, context->master_clock);
 }
@@ -1762,7 +1763,8 @@ int main(int argc, char ** argv)
 		fputs("Usage: blastem [OPTIONS] ROMFILE [WIDTH] [HEIGHT]\n", stderr);
 		return 1;
 	}
-	config = load_config(argv[0]);
+	set_exe_str(argv[0]);
+	config = load_config();
 	detect_region();
 	int width = -1;
 	int height = -1;
@@ -1773,7 +1775,7 @@ int main(int argc, char ** argv)
 	char * romfname = NULL;
 	FILE *address_log = NULL;
 	char * statefile = NULL;
-	uint8_t fullscreen = 0;
+	uint8_t fullscreen = 0, use_gl = 0;
 	for (int i = 1; i < argc; i++) {
 		if (argv[i][0] == '-') {
 			switch(argv[i][1]) {
@@ -1782,6 +1784,9 @@ int main(int argc, char ** argv)
 				break;
 			case 'f':
 				fullscreen = 1;
+				break;
+			case 'g':
+				use_gl = 1;
 				break;
 			case 'l':
 				address_log = fopen("address.log", "w");
@@ -1885,7 +1890,7 @@ int main(int argc, char ** argv)
 		fps = 50;
 	}
 	if (!headless) {
-		render_init(width, height, title, fps, fullscreen);
+		render_init(width, height, title, fps, fullscreen, use_gl);
 	}
 	vdp_context v_context;
 	genesis_context gen;
