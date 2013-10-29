@@ -1,4 +1,8 @@
+ifdef NOGL
+LIBS=sdl
+else
 LIBS=sdl glew gl
+endif
 LDFLAGS=-lm `pkg-config --libs $(LIBS)`
 ifdef DEBUG
 CFLAGS=-ggdb -std=gnu99 `pkg-config --cflags-only-I $(LIBS)` -Wreturn-type -Werror=return-type
@@ -10,16 +14,20 @@ ifdef PROFILE
 CFLAGS+= -pg
 LDFLAGS+= -pg
 endif
+ifdef NOGL
+CFLAGS+= -DDISABLE_OPENGL
+endif
 
 TRANSOBJS=gen_x86.o x86_backend.o mem.o
 M68KOBJS=68kinst.o m68k_to_x86.o runtime.o
 Z80OBJS=z80inst.o z80_to_x86.o zruntime.o
 AUDIOOBJS=ym2612.o psg.o wave.o
+CONFIGOBJS=config.o tern.o util.o
 
 all : dis zdis stateview vgmplay blastem
 
-blastem : blastem.o vdp.o render_sdl.o io.o config.o tern.o gst.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS)
-	$(CC) -ggdb -o blastem  blastem.o vdp.o render_sdl.o io.o config.o tern.o gst.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS) $(LDFLAGS)
+blastem : blastem.o vdp.o render_sdl.o io.o $(CONFIGOBJS) gst.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS)
+	$(CC) -ggdb -o blastem  blastem.o vdp.o render_sdl.o io.o $(CONFIGOBJS) gst.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS) $(LDFLAGS)
 
 dis : dis.o 68kinst.o
 	$(CC) -o dis dis.o 68kinst.o
@@ -42,11 +50,11 @@ ztestrun : ztestrun.o $(Z80OBJS) $(TRANSOBJS)
 ztestgen : ztestgen.o z80inst.o
 	$(CC) -o ztestgen ztestgen.o z80inst.o
 
-stateview : stateview.o vdp.o render_sdl.o config.o tern.o gst.o
-	$(CC) -o stateview stateview.o vdp.o render_sdl.o config.o tern.o gst.o `pkg-config --libs $(LIBS)`
+stateview : stateview.o vdp.o render_sdl.o $(CONFIGOBJS) gst.o
+	$(CC) -o stateview stateview.o vdp.o render_sdl.o $(CONFIGOBJS) gst.o $(LDFLAGS)
 
-vgmplay : vgmplay.o render_sdl.o config.o tern.o $(AUDIOOBJS)
-	$(CC) -o vgmplay vgmplay.o render_sdl.o config.o tern.o $(AUDIOOBJS) $(LDFLAGS)
+vgmplay : vgmplay.o render_sdl.o $(CONFIGOBJS) $(AUDIOOBJS)
+	$(CC) -o vgmplay vgmplay.o render_sdl.o $(CONFIGOBJS) $(AUDIOOBJS) $(LDFLAGS)
 
 testgst : testgst.o gst.o
 	$(CC) -o testgst testgst.o gst.o
