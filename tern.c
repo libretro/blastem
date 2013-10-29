@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "tern.h"
@@ -101,13 +101,18 @@ tern_node * tern_insert_int(tern_node * head, char * key, intptr_t value)
 	return tern_insert(head, key, val);
 }
 
-void * tern_find_ptr(tern_node * head, char * key)
+void * tern_find_ptr_default(tern_node * head, char * key, void * def)
 {
 	tern_val ret;
 	if (tern_find(head, key, &ret)) {
 		return ret.ptrval;
 	}
-	return NULL;
+	return def;
+}
+
+void * tern_find_ptr(tern_node * head, char * key)
+{
+	return tern_find_ptr_default(head, key, NULL);
 }
 
 tern_node * tern_insert_ptr(tern_node * head, char * key, void * value)
