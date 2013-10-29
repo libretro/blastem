@@ -159,10 +159,16 @@ void render_sprite_cells(vdp_context * context)
 		context->cur_slot--;
 		for (uint16_t address = d->address; address != ((d->address+4) & 0xFFFF); address++) {
 			if (x >= 0 && x < 320 && !(context->linebuf[x] & 0xF)) {
+				if (context->linebuf[x] && (context->vdpmem[address] >> 4)) {
+					context->flags2 |= FLAG2_SPRITE_COLLIDE;
+				}
 				context->linebuf[x] = (context->vdpmem[address] >> 4) | d->pal_priority;
 			}
 			x += dir;
 			if (x >= 0 && x < 320 && !(context->linebuf[x] & 0xF)) {
+				if (context->linebuf[x] && (context->vdpmem[address] & 0xF)) {
+					context->flags2 |= FLAG2_SPRITE_COLLIDE;
+				}
 				context->linebuf[x] = (context->vdpmem[address] & 0xF)  | d->pal_priority;
 			}
 			x += dir;
@@ -1542,6 +1548,14 @@ uint16_t vdp_control_port_read(vdp_context * context)
 	if (context->flags2 & FLAG2_VINT_PENDING) {
 		value |= 0x80;
 	}
+	if (context->flags & FLAG_DOT_OFLOW) {
+		value |= 0x40;
+	}
+	if (context->flags2 & FLAG2_SPRITE_COLLIDE) {
+		value |= 0x20;
+		//TODO: Test when this is actually cleared
+		context->flags2 &= ~FLAG2_SPRITE_COLLIDE;
+	}
 	if ((context->regs[REG_MODE_4] & BIT_INTERLACE) && context->framebuf == context->oddbuf) {
 		value |= 0x10;
 	}
@@ -1560,7 +1574,6 @@ uint16_t vdp_control_port_read(vdp_context * context)
 		value |= 0x1;
 	}
 	//printf("status read at cycle %d returned %X\n", context->cycles, value);
-	//TODO: Sprite overflow, sprite collision, odd frame flag
 	return value;
 }
 
