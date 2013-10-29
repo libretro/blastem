@@ -11,6 +11,7 @@
 #include "render.h"
 #include "blastem.h"
 #include "gst.h"
+#include "util.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1762,7 +1763,8 @@ int main(int argc, char ** argv)
 		fputs("Usage: blastem [OPTIONS] ROMFILE [WIDTH] [HEIGHT]\n", stderr);
 		return 1;
 	}
-	config = load_config(argv[0]);
+	set_exe_str(argv[0]);
+	config = load_config();
 	detect_region();
 	int width = -1;
 	int height = -1;
