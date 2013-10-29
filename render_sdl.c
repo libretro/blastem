@@ -181,8 +181,8 @@ void render_alloc_surfaces(vdp_context * context)
 		glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_data), vertex_data, GL_STATIC_DRAW);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[1]);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(element_data), element_data, GL_STATIC_DRAW);
-		vshader = load_shader("default.v.glsl", GL_VERTEX_SHADER);
-		fshader = load_shader("default.f.glsl", GL_FRAGMENT_SHADER);
+		vshader = load_shader(tern_find_ptr_default(config, "videovertex_shader", "default.v.glsl"), GL_VERTEX_SHADER);
+		fshader = load_shader(tern_find_ptr_default(config, "videofragment_shader", "default.f.glsl"), GL_FRAGMENT_SHADER);
 		program = glCreateProgram();
 		glAttachShader(program, vshader);
 		glAttachShader(program, fshader);
