@@ -8,6 +8,7 @@
 #include "render.h"
 #include "blastem.h"
 #include "io.h"
+#include "util.h"
 
 #ifndef DISABLE_OPENGL
 #include <GL/glew.h>
@@ -111,14 +112,22 @@ const GLushort element_data[] = {0, 1, 2, 3};
 
 GLuint load_shader(char * fname, GLenum shader_type)
 {
-	FILE * f = fopen(fname, "r");
+	char * parts[] = {getenv("HOME"), "/.config/blastem/shaders/", fname};
+	char * shader_path = alloc_concat_m(3, parts);
+	FILE * f = fopen(shader_path, "r");
+	free(shader_path);
 	if (!f) {
-		fprintf(stderr, "Failed to open shader file %s for reading\n", fname);
-		return 0;
+		parts[0] = get_exe_dir();
+		parts[1] = "/shaders/";
+		shader_path = alloc_concat_m(3, parts);
+		f = fopen(shader_path, "r");
+		free(shader_path);
+		if (!f) {
+			fprintf(stderr, "Failed to open shader file %s for reading\n", fname);
+			return 0;
+		}
 	}
-	fseek(f, 0, SEEK_END);
-	long fsize = ftell(f);
-	fseek(f, 0, SEEK_SET);
+	long fsize = file_size(f);
 	GLchar * text = malloc(fsize);
 	if (fread(text, 1, fsize, f) != fsize) {
 		fprintf(stderr, "Error reading from shader file %s\n", fname);
