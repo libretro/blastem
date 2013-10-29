@@ -97,6 +97,7 @@ uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b)
 	}
 }
 
+#ifndef DISABLE_OPENGL
 GLuint textures[3], buffers[2], vshader, fshader, program, un_textures[2], at_pos;
 
 const GLfloat vertex_data[] = {
@@ -142,9 +143,11 @@ GLuint load_shader(char * fname, GLenum shader_type)
 	}
 	return ret;
 }
+#endif
 
 void render_alloc_surfaces(vdp_context * context)
 {
+#ifndef DISABLE_OPENGL
 	if (render_gl) {
 		context->oddbuf = context->framebuf = malloc(320 * 240 * 4 * 2);
 		memset(context->oddbuf, 0, 320 * 240 * 4 * 2);
@@ -185,9 +188,12 @@ void render_alloc_surfaces(vdp_context * context)
 		un_textures[1] = glGetUniformLocation(program, "textures[1]");
 		at_pos = glGetAttribLocation(program, "pos");
 	} else {
+#endif
 		context->oddbuf = context->framebuf = malloc(320 * 240 * screen->format->BytesPerPixel * 2);
 		context->evenbuf = ((char *)context->oddbuf) + 320 * 240 * screen->format->BytesPerPixel;
+#ifndef DISABLE_OPENGL
 	}
+#endif
 }
 
 uint8_t render_depth()
@@ -320,7 +326,7 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	}
 	SDL_JoystickEventState(SDL_ENABLE);
 }
-
+#ifndef DISABLE_OPENGL
 void render_context_gl(vdp_context * context)
 {
 	glBindTexture(GL_TEXTURE_2D, textures[context->framebuf == context->oddbuf ? 0 : 1]);
@@ -353,6 +359,7 @@ void render_context_gl(vdp_context * context)
 		context->framebuf = context->framebuf == context->oddbuf ? context->evenbuf : context->oddbuf;
 	}
 }
+#endif
 
 uint32_t blankbuf[320*240];
 
@@ -362,11 +369,13 @@ void render_context(vdp_context * context)
 	uint32_t *buf_32;
 	uint8_t b,g,r;
 	last_frame = SDL_GetTicks();
+#ifndef DISABLE_OPENGL
 	if (render_gl)
 	{
 		render_context_gl(context);
 		return;
 	}
+#endif
 	if (SDL_MUSTLOCK(screen)) {
 		if (SDL_LockSurface(screen) < 0) {
 			return;
