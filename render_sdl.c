@@ -159,9 +159,9 @@ void render_alloc_surfaces(vdp_context * context)
 {
 #ifndef DISABLE_OPENGL
 	if (render_gl) {
-		context->oddbuf = context->framebuf = malloc(320 * 240 * 4 * 2);
-		memset(context->oddbuf, 0, 320 * 240 * 4 * 2);
-		context->evenbuf = ((char *)context->oddbuf) + 320 * 240 * 4;
+		context->oddbuf = context->framebuf = malloc(512 * 256 * 4 * 2);
+		memset(context->oddbuf, 0, 512 * 256 * 4 * 2);
+		context->evenbuf = ((char *)context->oddbuf) + 512 * 256 * 4;
 		glGenTextures(3, textures);
 		for (int i = 0; i < 3; i++)
 		{
