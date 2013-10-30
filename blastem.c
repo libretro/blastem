@@ -1775,7 +1775,7 @@ int main(int argc, char ** argv)
 	char * romfname = NULL;
 	FILE *address_log = NULL;
 	char * statefile = NULL;
-	uint8_t fullscreen = 0, use_gl = 0;
+	uint8_t fullscreen = 0, use_gl = 1;
 	for (int i = 1; i < argc; i++) {
 		if (argv[i][0] == '-') {
 			switch(argv[i][1]) {
@@ -1786,7 +1786,7 @@ int main(int argc, char ** argv)
 				fullscreen = 1;
 				break;
 			case 'g':
-				use_gl = 1;
+				use_gl = 0;
 				break;
 			case 'l':
 				address_log = fopen("address.log", "w");
@@ -1841,10 +1841,11 @@ int main(int argc, char ** argv)
 					"	-h          Print this help text\n"
 					"	-r (J|U|E)  Force region to Japan, US or Europe respectively\n"
 					"	-f          Start in fullscreen mode\n"
+					"	-g          Disable OpenGL rendering\n"
 					"	-s FILE     Load a GST format savestate from FILE\n"
 					"	-d          Enter debugger on startup\n"
 					"	-n          Disable Z80\n"
-					"   -v          Display version number and exit\n"
+					"	-v          Display version number and exit\n"
 					"	-l          Log 68K code addresses (useful for assemblers)\n"
 					"	-y          Log individual YM-2612 channels to WAVE files\n"
 				);
