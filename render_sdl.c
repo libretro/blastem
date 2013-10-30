@@ -5,6 +5,7 @@
 */
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 #include "render.h"
 #include "blastem.h"
 #include "io.h"
@@ -101,7 +102,7 @@ uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b)
 #ifndef DISABLE_OPENGL
 GLuint textures[3], buffers[2], vshader, fshader, program, un_textures[2], at_pos;
 
-const GLfloat vertex_data[] = {
+GLfloat vertex_data[] = {
 	-1.0f, -1.0f,
 	 1.0f, -1.0f,
 	-1.0f,  1.0f,
@@ -259,15 +260,24 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	if (use_gl)
 	{
 		GLenum res = glewInit();
-		if (res != GLEW_OK)
-		{
+		if (res != GLEW_OK) {
 			fprintf(stderr, "Initialization of GLEW failed with code %d\n", res);
 			exit(1);
 		}
-		if (!GLEW_VERSION_2_0)
-		{
+		if (!GLEW_VERSION_2_0) {
 			fputs("OpenGL 2.0 is unable, falling back to standard SDL rendering\n", stderr);
 			exit(1);
+		}
+		float aspect = (float)width / height;
+		if (fabs(aspect - 4.0/3.0) > 0.01 && strcmp(tern_find_ptr_default(config, "videoaspect", "normal"), "stretch")) {
+			for (int i = 0; i < 4; i++)
+			{
+				if (aspect > 4.0/3.0) {
+					vertex_data[i*2] *= (4.0/3.0)/aspect;
+				} else {
+					vertex_data[i*2+1] *= aspect/(4.0/3.0);
+				}
+			}
 		}
 	}
 	render_gl = use_gl;
