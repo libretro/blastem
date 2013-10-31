@@ -1221,6 +1221,147 @@ void vdp_h32(uint32_t line, uint32_t linecyc, vdp_context * context)
 		break;
 	}
 }
+
+void vdp_h40_line(uint32_t line, vdp_context * context)
+{
+	context->cur_slot = MAX_DRAWS-1;
+	memset(context->linebuf, 0, LINEBUF_SIZE);
+	if (line == 0xFF) {
+		external_slot(context);
+		if (context->flags & FLAG_DMA_RUN) {
+			run_dma_src(context, 0);
+		}
+		external_slot(context);
+		if (context->flags & FLAG_DMA_RUN) {
+			run_dma_src(context, 0);
+		}
+		external_slot(context);
+		if (context->flags & FLAG_DMA_RUN) {
+			run_dma_src(context, 0);
+		}
+		external_slot(context);
+		if (context->flags & FLAG_DMA_RUN) {
+			run_dma_src(context, 0);
+		}
+	} else {
+		render_sprite_cells(context);
+		render_sprite_cells(context);
+		render_sprite_cells(context);
+		render_sprite_cells(context);
+	}
+	context->sprite_index = 0x80;
+	context->slot_counter = MAX_SPRITES_LINE;
+	for (int i = 0; i < 19; i++)
+	{
+		render_sprite_cells(context);
+		scan_sprite_table(line, context);
+	}
+	external_slot(context);
+	for (int i = 0; i < 11; i++)
+	{
+		render_sprite_cells(context);
+		scan_sprite_table(line, context);
+	}
+	uint16_t address;
+	uint32_t mask;
+	address = (context->regs[REG_HSCROLL] & 0x3F) << 10;
+	mask = 0;
+	if (context->regs[REG_MODE_3] & 0x2) {
+		mask |= 0xF8;
+	}
+	if (context->regs[REG_MODE_3] & 0x1) {
+		mask |= 0x7;
+	}
+	address += (line & mask) * 4;
+	context->hscroll_a = context->vdpmem[address] << 8 | context->vdpmem[address+1];
+	context->hscroll_b = context->vdpmem[address+2] << 8 | context->vdpmem[address+3];
+	render_sprite_cells(context);
+	scan_sprite_table(line, context);
+	render_sprite_cells(context);
+	scan_sprite_table(line, context);
+	render_sprite_cells(context);
+	scan_sprite_table(line, context);
+	render_sprite_cells(context);
+	scan_sprite_table(line, context);
+
+	render_sprite_cells(context);
+	scan_sprite_table(line, context);
+	read_map_scroll_a(0, line, context);
+	render_sprite_cells(context);
+	scan_sprite_table(line, context);
+	render_map_1(context);
+	scan_sprite_table(line, context);//Just a guess
+	render_map_2(context);
+	scan_sprite_table(line, context);//Just a guess
+	read_map_scroll_b(0, line, context);
+	render_sprite_cells(context);
+	scan_sprite_table(line, context);
+	render_map_3(context);
+	scan_sprite_table(line, context);//Just a guess
+	render_map_output(line, 0, context);
+	scan_sprite_table(line, context);//Just a guess
+	//reverse context slot counter so it counts the number of sprite slots
+	//filled rather than the number of available slots
+	//context->slot_counter = MAX_SPRITES_LINE - context->slot_counter;
+	context->cur_slot = MAX_SPRITES_LINE-1;
+	context->sprite_draws = MAX_DRAWS;
+	context->flags &= (~FLAG_CAN_MASK & ~FLAG_MASKED);
+	for (int column = 2; column < 42; column += 2)
+	{
+		read_map_scroll_a(column, line, context);
+		external_slot(context);
+		if (context->flags & FLAG_DMA_RUN) {
+			run_dma_src(context, 0);
+		}
+		render_map_1(context);
+		render_map_2(context);
+		read_map_scroll_b(column, line, context);
+		read_sprite_x(line, context);
+		render_map_3(context);
+		render_map_output(line, column, context);
+
+		column += 2;
+		read_map_scroll_a(column, line, context);
+		external_slot(context);
+		if (context->flags & FLAG_DMA_RUN) {
+			run_dma_src(context, 0);
+		}
+		render_map_1(context);
+		render_map_2(context);
+		read_map_scroll_b(column, line, context);
+		read_sprite_x(line, context);
+		render_map_3(context);
+		render_map_output(line, column, context);
+
+		column += 2;
+		read_map_scroll_a(column, line, context);
+		external_slot(context);
+		if (context->flags & FLAG_DMA_RUN) {
+			run_dma_src(context, 0);
+		}
+		render_map_1(context);
+		render_map_2(context);
+		read_map_scroll_b(column, line, context);
+		read_sprite_x(line, context);
+		render_map_3(context);
+		render_map_output(line, column, context);
+
+		column += 2;
+		read_map_scroll_a(column, line, context);
+		render_map_1(context);
+		render_map_2(context);
+		read_map_scroll_b(column, line, context);
+		read_sprite_x(line, context);
+		render_map_3(context);
+		render_map_output(line, column, context);
+	}
+	external_slot(context);
+	if (context->flags & FLAG_DMA_RUN) {
+		run_dma_src(context, 0);
+	}
+	external_slot(context);
+}
+
 void latch_mode(vdp_context * context)
 {
 	context->latched_mode = (context->regs[REG_MODE_4] & 0x81) | (context->regs[REG_MODE_2] & BIT_PAL);
@@ -1390,7 +1531,12 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 
 			//Convert to slot number
 			if (context->latched_mode & BIT_H40){
-				vdp_h40(line, slot, context);
+				if (!slot && line != (active_lines-1) && (target_cycles - context->cycles) >= MCLKS_LINE) {
+					vdp_h40_line(line, context);
+					inccycles = MCLKS_LINE;
+				} else {
+					vdp_h40(line, slot, context);
+				}
 			} else {
 				vdp_h32(line, slot, context);
 			}
