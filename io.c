@@ -454,7 +454,9 @@ void set_keybindings()
 	special = tern_insert_int(special, "left", RENDERKEY_LEFT);
 	special = tern_insert_int(special, "right", RENDERKEY_RIGHT);
 	special = tern_insert_int(special, "enter", '\r');
-		special = tern_insert_int(special, "esc", RENDERKEY_ESC);
+	special = tern_insert_int(special, "esc", RENDERKEY_ESC);
+	special = tern_insert_int(special, "lshift", RENDERKEY_LSHIFT);
+	special = tern_insert_int(special, "rshift", RENDERKEY_RSHIFT);
 
 	tern_node * padbuttons = tern_insert_int(NULL, ".up", DPAD_UP);
 	padbuttons = tern_insert_int(padbuttons, ".down", DPAD_DOWN);
