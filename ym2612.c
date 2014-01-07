@@ -10,6 +10,7 @@
 #include "ym2612.h"
 #include "render.h"
 #include "wave.h"
+#include "blastem.h"
 
 //#define DO_DEBUG_PRINT
 #ifdef DO_DEBUG_PRINT
@@ -482,7 +483,9 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			}
 			context->buffer_pos += 2;
 			if (context->buffer_pos == context->sample_limit) {
-				render_wait_ym(context);
+				if (!headless) {
+					render_wait_ym(context);
+				}
 			}
 		}
 	}
