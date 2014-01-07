@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "render.h"
@@ -90,6 +90,8 @@ void handle_joy_dpad(int joystick, int dpadnum, uint8_t value)
 {
 }
 
+uint8_t headless = 0;
+
 #define CYCLE_LIMIT MCLKS_NTSC/60
 tern_node * config;
 
@@ -111,7 +113,7 @@ int main(int argc, char ** argv)
 {
 	uint32_t fps = 60;
 	config = load_config(argv[0]);
-	render_init(320, 240, "vgm play", 60, 0);
+	render_init(320, 240, "vgm play", 60, 0, 0);
 
 
 	ym2612_context y_context;

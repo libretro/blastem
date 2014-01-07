@@ -5,6 +5,7 @@
 */
 #include "psg.h"
 #include "render.h"
+#include "blastem.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -118,7 +119,9 @@ void psg_run(psg_context * context, uint32_t cycles)
 			}
 			context->audio_buffer[context->buffer_pos++] = acc;
 			if (context->buffer_pos == context->samples_frame) {
-				render_wait_psg(context);
+				if (!headless) {
+					render_wait_psg(context);
+				}
 			}
 		}
 		context->cycles += context->clock_inc;

@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "z80inst.h"
@@ -158,7 +158,7 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 	{
 		memcpy(&copy, inst, sizeof(copy));
 		inst = &copy;
-		if ((inst->reg == Z80_USE_IMMED && inst->op != Z80_BIT && inst->op != Z80_RES && inst->op != Z80_SET) 
+		if ((inst->reg == Z80_USE_IMMED && inst->op != Z80_BIT && inst->op != Z80_RES && inst->op != Z80_SET)
 			|| (addr_mode == Z80_IMMED && inst->op != Z80_IM))
 		{
 			copy.immed = rand() % (word_sized ? 65536 : 256);
@@ -236,7 +236,7 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 		break;
 	}
 	if (inst->reg != Z80_UNUSED && inst->reg != Z80_USE_IMMED) {
-		reg_usage[inst->reg] = 1;
+
 		if (word_sized) {
 			reg_values[inst->reg] = rand() % 65536;
 			reg_usage[z80_high_reg(inst->reg)] = 1;
@@ -244,13 +244,16 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 			reg_usage[z80_low_reg(inst->reg)] = 1;
 			reg_values[z80_low_reg(inst->reg)] = reg_values[inst->reg] & 0xFF;
 		} else {
-			reg_values[inst->reg] = rand() % 255;
-			uint8_t word_reg = z80_word_reg(inst->reg);
-			if (word_reg != Z80_UNUSED) {
-				reg_usage[word_reg] = 1;
-				reg_values[word_reg] = (reg_values[z80_high_reg(word_reg)] << 8) | (reg_values[z80_low_reg(word_reg)] & 0xFF);
+			if (!reg_usage[inst->reg]) {
+				reg_values[inst->reg] = rand() % 255;
+				uint8_t word_reg = z80_word_reg(inst->reg);
+				if (word_reg != Z80_UNUSED) {
+					reg_usage[word_reg] = 1;
+					reg_values[word_reg] = (reg_values[z80_high_reg(word_reg)] << 8) | (reg_values[z80_low_reg(word_reg)] & 0xFF);
+				}
 			}
 		}
+		reg_usage[inst->reg] = 1;
 	}
 	puts("--------------");
 	for (uint8_t reg = 0; reg < Z80_UNUSED; reg++) {
@@ -287,14 +290,14 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 		cur = ld_ir16(cur, Z80_BC, reg_values[Z80_A] << 8 | (i ? 0xFF : 0));
 		cur = push(cur, Z80_BC);
 		cur = pop(cur, Z80_AF);
-	
+
 		//setup other regs
 		for (uint8_t reg = Z80_BC; reg <= Z80_IY; reg++) {
 			if (reg != Z80_AF && reg != Z80_SP) {
 				cur = ld_ir16(cur, reg, reg_values[reg]);
 			}
 		}
-	
+
 		//copy instruction
 		if (instlen == 3) {
 			memcpy(cur, instbuf, 2);
@@ -303,7 +306,7 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 			memcpy(cur, instbuf, instlen);
 			cur += instlen;
 		}
-	
+
 		//immed/displacement byte(s)
 		if (addr_mode == Z80_IX_DISPLACE || addr_mode == Z80_IY_DISPLACE) {
 			*(cur++) = inst->ea_reg;
@@ -325,6 +328,11 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 		if (!i) {
 			//Save AF from first run
 			cur = push(cur, Z80_AF);
+			if (is_mem) {
+				//Save memory location from frist run
+				cur = ld_mema(cur, address);
+				cur = push(cur, Z80_AF);
+			}
 		} else {
 			//Pop AF from first run for final result
 			for (int reg = Z80_BC; reg <= Z80_IY; reg++) {
@@ -338,6 +346,21 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 					reg_usage[reg] = 1;
 					reg_usage[z80_low_reg(reg)] = 1;
 					break;
+				}
+			}
+			if (is_mem) {
+				//Pop memory location from frist run
+				for (int reg = Z80_BC; reg <= Z80_IY; reg++) {
+					if (reg != Z80_AF && !reg_usage[reg]) {
+						cur = pop(cur, reg);
+						cur = push(cur, Z80_AF);
+						cur = ld_mema(cur, address);
+						cur = ld_rr8(cur, Z80_A, z80_low_reg(reg));
+						cur = pop(cur, Z80_AF);
+						reg_usage[reg] = 1;
+						reg_usage[z80_low_reg(reg)] = 1;
+						break;
+					}
 				}
 			}
 		}
@@ -364,7 +387,7 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 			cur = pop(cur, Z80_AF);
 		}
 	}
-	
+
 	//halt
 	*(cur++) = 0x76;
 	sprintf(pathbuf + strlen(pathbuf), "/%s.bin", disbuf);
@@ -376,7 +399,7 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 
 uint8_t should_skip(z80inst * inst)
 {
-	return inst->op >= Z80_JP || (inst->op >= Z80_LDI && inst->op <= Z80_CPDR) || inst->op == Z80_HALT 
+	return inst->op >= Z80_JP || (inst->op >= Z80_LDI && inst->op <= Z80_CPDR) || inst->op == Z80_HALT
 		|| inst->op == Z80_DAA || inst->op == Z80_RLD || inst->op == Z80_RRD || inst->op == Z80_NOP
 		|| inst->op == Z80_DI || inst->op == Z80_EI;
 }

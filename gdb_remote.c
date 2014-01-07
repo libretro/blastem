@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "blastem.h"
@@ -14,6 +14,7 @@
 
 char * buf = NULL;
 char * curbuf = NULL;
+char * end = NULL;
 size_t bufsize;
 int cont = 0;
 int expect_break_response=0;
@@ -21,11 +22,54 @@ uint32_t resume_pc;
 
 void gdb_debug_enter(genesis_context * gen, uint32_t pc)
 {
+	fcntl(STDIN_FILENO, FD_SETFL, 0);
 	resume_pc = pc;
+	cont = 0;
+	uint8_t partial = 0;
 	while(!cont)
 	{
+		if (!curbuf) {
+			int numread = read(STDIN_FILENO, buf, bufsize);
+			curbuf = buf;
+			end = buf + numread;
+		} else if (partial) {
+			if (curbuf != buf) {
+				memmove(curbuf, buf, end-curbuf);
+				end -= cufbuf - buf;
+			}
+			int numread = read(STDIN_FILENO, end, bufsize - (end-buf));
+			end += numread;
+			curbuf = buf;
+		}
+		for (; curbuf < end; curbuf++)
+		{
+			if (*curbuf == '$')
+			{
+				curbuf++;
+				char * start = curbuf;
+				while (curbuf < end && *curbuf != '#') {
+					curbuf++;
+				}
+				if (*curbuf == '#') {
+					//check to make sure we've received the checksum bytes
+					if (end-curbuf >= 2) {
+						//TODO: verify checksum
+						//Null terminate payload
+						*curbuf = 0
+						//send acknowledgement
+						write(FILENO_STDOUT, "+", 1);
+						gdb_run_command(genesis_context * gen, start);
+						curbuf += 2;
+					}
+				} else {
+					curbuf--;
+					partial = 1;
+					break;
+				}
+			}
+		}
 	}
-	cont = 0;
+	fcntl(STDIN_FILENO, FD_SETFL, O_NONBLOCK);
 }
 
 void gdb_run_command(genesis_context * gen, char * command)
@@ -90,7 +134,7 @@ void gdb_run_commands(genesis_context * gen)
 	}
 }
 
-void gdb_command_poll(genesis_context * gen)
+int gdb_command_poll(genesis_context * gen)
 {
 	for(;;)
 	{
@@ -104,10 +148,10 @@ void gdb_command_poll(genesis_context * gen)
 			}
 			curbuf = buf + bufsize/2;
 		}
-		int numread = read(STDIN_FILENO, buf, bufsize - (curbuf-buf));
+		int numread = read(STDIN_FILENO, buf, bufsize);
 		if (numread < 0) {
 			if (errno == EAGAIN || errno == EWOULDBLOCK) {
-				return;
+				return 0;
 			} else {
 				fprintf(stderr, "Error %d while reading GDB commands from stdin", errno);
 				exit(1);
@@ -115,8 +159,16 @@ void gdb_command_poll(genesis_context * gen)
 		} else if (numread == 0) {
 			exit(0);
 		}
-		gdb_run_commands(genesis_context * gen);
+		for (curbuf = buf, end = buf+numread; curbuf < end; curbuf++)
+		{
+			if (*curbuf = 0x03)
+			{
+				curbuf++;
+				return 1;
+			}
+		}
 	}
+	return 0;
 }
 
 void gdb_remote_init()

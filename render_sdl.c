@@ -18,7 +18,7 @@
 SDL_Surface *screen;
 uint8_t render_dbg = 0;
 uint8_t debug_pal = 0;
-uint8_t render_gl;
+uint8_t render_gl = 1;
 
 uint32_t last_frame = 0;
 
@@ -100,7 +100,7 @@ uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b)
 }
 
 #ifndef DISABLE_OPENGL
-GLuint textures[3], buffers[2], vshader, fshader, program, un_textures[2], at_pos;
+GLuint textures[3], buffers[2], vshader, fshader, program, un_textures[2], un_width, at_pos;
 
 GLfloat vertex_data[] = {
 	-1.0f, -1.0f,
@@ -196,6 +196,7 @@ void render_alloc_surfaces(vdp_context * context)
 		}
 		un_textures[0] = glGetUniformLocation(program, "textures[0]");
 		un_textures[1] = glGetUniformLocation(program, "textures[1]");
+		un_width = glGetUniformLocation(program, "width");
 		at_pos = glGetAttribLocation(program, "pos");
 	} else {
 #endif
@@ -362,6 +363,8 @@ void render_context_gl(vdp_context * context)
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, (context->regs[REG_MODE_4] & BIT_INTERLACE) ? textures[1] : textures[2]);
 	glUniform1i(un_textures[1], 1);
+
+	glUniform1f(un_width, context->latched_mode & BIT_H40 ? 320.0f : 256.0f);
 
 	glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
 	glVertexAttribPointer(at_pos, 2, GL_FLOAT, GL_FALSE, sizeof(GLfloat[2]), (void *)0);

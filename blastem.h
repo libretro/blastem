@@ -37,6 +37,7 @@ typedef struct {
 } genesis_context;
 
 extern genesis_context * genesis;
+extern int headless;
 extern int break_on_sync;
 extern int save_state;
 extern tern_node * config;
