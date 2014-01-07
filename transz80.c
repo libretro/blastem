@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "z80inst.h"
@@ -25,6 +25,11 @@ uint8_t z80_read_ym(uint16_t location, z80_context * context)
 }
 
 z80_context * z80_write_ym(uint16_t location, z80_context * context, uint8_t value)
+{
+	return context;
+}
+
+z80_context * z80_vdp_port_write(uint16_t location, z80_context * context, uint8_t value)
 {
 	return context;
 }

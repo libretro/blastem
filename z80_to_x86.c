@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "z80inst.h"
@@ -309,19 +309,19 @@ uint8_t zar_off(uint8_t reg)
 
 void z80_print_regs_exit(z80_context * context)
 {
-	printf("A: %X\nB: %X\nC: %X\nD: %X\nE: %X\nHL: %X\nIX: %X\nIY: %X\nSP: %X\n\nIM: %d, IFF1: %d, IFF2: %d\n", 
+	printf("A: %X\nB: %X\nC: %X\nD: %X\nE: %X\nHL: %X\nIX: %X\nIY: %X\nSP: %X\n\nIM: %d, IFF1: %d, IFF2: %d\n",
 		context->regs[Z80_A], context->regs[Z80_B], context->regs[Z80_C],
-		context->regs[Z80_D], context->regs[Z80_E], 
-		(context->regs[Z80_H] << 8) | context->regs[Z80_L], 
-		(context->regs[Z80_IXH] << 8) | context->regs[Z80_IXL], 
-		(context->regs[Z80_IYH] << 8) | context->regs[Z80_IYL], 
+		context->regs[Z80_D], context->regs[Z80_E],
+		(context->regs[Z80_H] << 8) | context->regs[Z80_L],
+		(context->regs[Z80_IXH] << 8) | context->regs[Z80_IXL],
+		(context->regs[Z80_IYH] << 8) | context->regs[Z80_IYL],
 		context->sp, context->im, context->iff1, context->iff2);
 	puts("--Alternate Regs--");
-	printf("A: %X\nB: %X\nC: %X\nD: %X\nE: %X\nHL: %X\nIX: %X\nIY: %X\n", 
+	printf("A: %X\nB: %X\nC: %X\nD: %X\nE: %X\nHL: %X\nIX: %X\nIY: %X\n",
 		context->alt_regs[Z80_A], context->alt_regs[Z80_B], context->alt_regs[Z80_C],
-		context->alt_regs[Z80_D], context->alt_regs[Z80_E], 
-		(context->alt_regs[Z80_H] << 8) | context->alt_regs[Z80_L], 
-		(context->alt_regs[Z80_IXH] << 8) | context->alt_regs[Z80_IXL], 
+		context->alt_regs[Z80_D], context->alt_regs[Z80_E],
+		(context->alt_regs[Z80_H] << 8) | context->alt_regs[Z80_L],
+		(context->alt_regs[Z80_IXH] << 8) | context->alt_regs[Z80_IXL],
 		(context->alt_regs[Z80_IYH] << 8) | context->alt_regs[Z80_IYL]);
 	exit(0);
 }
@@ -363,8 +363,8 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		}
 		dst = zcycles(dst, cycles);
 		if (inst->addr_mode & Z80_DIR) {
-			dst = translate_z80_reg(inst, &src_op, dst, opts);
 			dst = translate_z80_ea(inst, &dst_op, dst, opts, DONT_READ, MODIFY);
+			dst = translate_z80_reg(inst, &src_op, dst, opts);
 		} else {
 			dst = translate_z80_ea(inst, &src_op, dst, opts, READ, DONT_MODIFY);
 			dst = translate_z80_reg(inst, &dst_op, dst, opts);
@@ -418,7 +418,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = call(dst, (uint8_t *)z80_read_word);
 		dst = add_ir(dst, 2, opts->regs[Z80_SP], SZ_W);
 		if (inst->reg == Z80_AF) {
-			
+
 			dst = bt_ir(dst, 0, SCRATCH1, SZ_W);
 			dst = setcc_rdisp8(dst, CC_C, CONTEXT, zf_off(ZF_C));
 			dst = bt_ir(dst, 1, SCRATCH1, SZ_W);
@@ -452,7 +452,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 				dst = mov_rr(dst, opts->regs[Z80_A], SCRATCH1, SZ_B);
 				dst = mov_rdisp8r(dst, CONTEXT, zar_off(Z80_A), opts->regs[Z80_A], SZ_B);
 				dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, zar_off(Z80_A), SZ_B);
-		
+
 				//Flags are currently word aligned, so we can move
 				//them efficiently a word at a time
 				for (int f = ZF_C; f < ZF_NUM; f+=2) {
@@ -525,7 +525,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = call(dst, (uint8_t *)z80_write_byte);
 		dst = add_ir(dst, 1, opts->regs[Z80_DE], SZ_W);
 		dst = add_ir(dst, 1, opts->regs[Z80_HL], SZ_W);
-		
+
 		dst = sub_ir(dst, 1, opts->regs[Z80_BC], SZ_W);
 		uint8_t * cont = dst+1;
 		dst = jcc(dst, CC_Z, dst+2);
@@ -563,7 +563,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = call(dst, (uint8_t *)z80_write_byte);
 		dst = sub_ir(dst, 1, opts->regs[Z80_DE], SZ_W);
 		dst = sub_ir(dst, 1, opts->regs[Z80_HL], SZ_W);
-		
+
 		dst = sub_ir(dst, 1, opts->regs[Z80_BC], SZ_W);
 		uint8_t * cont = dst+1;
 		dst = jcc(dst, CC_Z, dst+2);
@@ -1162,7 +1162,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = setcc_rdisp8(dst, CC_P, CONTEXT, zf_off(ZF_PV));
 		dst = setcc_rdisp8(dst, CC_Z, CONTEXT, zf_off(ZF_Z));
 		dst = setcc_rdisp8(dst, CC_S, CONTEXT, zf_off(ZF_S));
-		
+
 		dst = mov_rr(dst, opts->regs[Z80_HL], SCRATCH2, SZ_W);
 		dst = ror_ir(dst, 8, SCRATCH1, SZ_W);
 		dst = call(dst, (uint8_t *)z80_write_byte);
@@ -1192,7 +1192,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 		dst = setcc_rdisp8(dst, CC_P, CONTEXT, zf_off(ZF_PV));
 		dst = setcc_rdisp8(dst, CC_Z, CONTEXT, zf_off(ZF_Z));
 		dst = setcc_rdisp8(dst, CC_S, CONTEXT, zf_off(ZF_S));
-		
+
 		dst = mov_rr(dst, opts->regs[Z80_HL], SCRATCH2, SZ_W);
 		dst = ror_ir(dst, 8, SCRATCH1, SZ_W);
 		dst = call(dst, (uint8_t *)z80_write_byte);
@@ -1255,7 +1255,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 					dst = ror_ir(dst, 8, src_op.base, SZ_W);
 				} else {
 					dst = mov_rr(dst, opts->regs[inst->ea_reg], dst_op.base, SZ_B);
-				}	
+				}
 			} else {
 				dst = mov_rr(dst, src_op.base, dst_op.base, SZ_B);
 			}
@@ -1297,7 +1297,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 					dst = ror_ir(dst, 8, src_op.base, SZ_W);
 				} else {
 					dst = mov_rr(dst, opts->regs[inst->ea_reg], dst_op.base, SZ_B);
-				}	
+				}
 			} else {
 				dst = mov_rr(dst, src_op.base, dst_op.base, SZ_B);
 			}
@@ -1848,6 +1848,7 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 		return;
 	}
 	x86_z80_options * opts = context->options;
+	uint32_t start_address = address;
 	uint8_t * encoded = NULL, *next;
 	if (address < 0x4000) {
 		encoded = context->mem_pointers[0] + (address & 0x1FFF);
@@ -1896,7 +1897,7 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 			address += next-encoded;
 			if (address > 0xFFFF) {
 				address &= 0xFFFF;
-				
+
 			} else {
 				encoded = next;
 			}
@@ -1987,12 +1988,12 @@ void zinsert_breakpoint(z80_context * context, uint16_t address, uint8_t * bp_ha
 		}
 		bp_stub = dst;
 		native = call(native, bp_stub);
-		
+
 		//Calculate length of prologue
 		dst = z80_check_cycles_int(dst, address);
 		int check_int_size = dst-bp_stub;
 		dst = bp_stub;
-		
+
 		//Save context and call breakpoint handler
 		dst = call(dst, (uint8_t *)z80_save_context);
 		dst = push_r(dst, SCRATCH1);

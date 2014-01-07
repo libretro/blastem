@@ -43,6 +43,7 @@ uint16_t ram[RAM_WORDS];
 uint8_t z80_ram[Z80_RAM_BYTES];
 
 int headless = 0;
+int exit_after = 0;
 int z80_enabled = 1;
 int frame_limit = 0;
 
@@ -186,20 +187,22 @@ void sync_z80(z80_context * z_context, uint32_t mclks)
 {
 	if (z80_enabled && !reset && !busreq) {
 		genesis_context * gen = z_context->system;
-		if (need_reset) {
-			z80_reset(z_context);
-			need_reset = 0;
-		}
 		z_context->sync_cycle = mclks / MCLKS_PER_Z80;
-		uint32_t vint_cycle = vdp_next_vint_z80(gen->vdp) / MCLKS_PER_Z80;
-		while (z_context->current_cycle < z_context->sync_cycle) {
-			if (z_context->iff1 && z_context->current_cycle < (vint_cycle + Z80_VINT_DURATION)) {
-				z_context->int_cycle = vint_cycle < z_context->int_enable_cycle ? z_context->int_enable_cycle : vint_cycle;
+		if (z_context->current_cycle < z_context->sync_cycle) {
+			if (need_reset) {
+				z80_reset(z_context);
+				need_reset = 0;
 			}
-			z_context->target_cycle = z_context->sync_cycle < z_context->int_cycle ? z_context->sync_cycle : z_context->int_cycle;
-			dprintf("Running Z80 from cycle %d to cycle %d. Native PC: %p\n", z_context->current_cycle, z_context->sync_cycle, z_context->native_pc);
-			z80_run(z_context);
-			dprintf("Z80 ran to cycle %d\n", z_context->current_cycle);
+			uint32_t vint_cycle = vdp_next_vint_z80(gen->vdp) / MCLKS_PER_Z80;
+			while (z_context->current_cycle < z_context->sync_cycle) {
+				if (z_context->iff1 && z_context->current_cycle < (vint_cycle + Z80_VINT_DURATION)) {
+					z_context->int_cycle = vint_cycle < z_context->int_enable_cycle ? z_context->int_enable_cycle : vint_cycle;
+				}
+				z_context->target_cycle = z_context->sync_cycle < z_context->int_cycle ? z_context->sync_cycle : z_context->int_cycle;
+				dprintf("Running Z80 from cycle %d to cycle %d. Native PC: %p\n", z_context->current_cycle, z_context->sync_cycle, z_context->native_pc);
+				z80_run(z_context);
+				dprintf("Z80 ran to cycle %d\n", z_context->current_cycle);
+			}
 		}
 	} else {
 		z_context->current_cycle = mclks / MCLKS_PER_Z80;
@@ -243,6 +246,11 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 
 		if (!headless) {
 			break_on_sync |= wait_render_frame(v_context, frame_limit);
+		} else if(exit_after){
+			--exit_after;
+			if (!exit_after) {
+				exit(0);
+			}
 		}
 		frame++;
 		mclks -= mclks_per_frame;
@@ -315,6 +323,11 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 						if (!headless) {
 							//printf("reached frame end | 68K Cycles: %d, MCLK Cycles: %d\n", context->current_cycle, v_context->cycles);
 							wait_render_frame(v_context, frame_limit);
+						} else if(exit_after){
+							--exit_after;
+							if (!exit_after) {
+								exit(0);
+							}
 						}
 						vdp_adjust_cycles(v_context, mclks_per_frame);
 						genesis_context * gen = context->system;
@@ -342,6 +355,11 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 						if (v_context->cycles >= mclks_per_frame) {
 							if (!headless) {
 								wait_render_frame(v_context, frame_limit);
+							} else if(exit_after){
+								--exit_after;
+								if (!exit_after) {
+									exit(0);
+								}
 							}
 							vdp_adjust_cycles(v_context, mclks_per_frame);
 							genesis_context * gen = context->system;
@@ -570,7 +588,7 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 					if (reset) {
 						need_reset = 1;
 						//TODO: Add necessary delay between release of reset and start of execution
-						gen->z80->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80;
+						gen->z80->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80 + 16;
 					}
 					reset = 0;
 				} else {
@@ -1779,6 +1797,15 @@ int main(int argc, char ** argv)
 	for (int i = 1; i < argc; i++) {
 		if (argv[i][0] == '-') {
 			switch(argv[i][1]) {
+			case 'b':
+				i++;
+				if (i >= argc) {
+					fputs("-b must be followed by a frame count\n", stderr);
+					return 1;
+				}
+				headless = 1;
+				exit_after = atoi(argv[i]);
+				break;
 			case 'd':
 				debug = 1;
 				break;

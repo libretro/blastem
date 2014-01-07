@@ -50,12 +50,18 @@ void init_vdp_context(vdp_context * context)
 	memset(context, 0, sizeof(*context));
 	context->vdpmem = malloc(VRAM_SIZE);
 	memset(context->vdpmem, 0, VRAM_SIZE);
-	/*context->oddbuf = context->framebuf = malloc(FRAMEBUF_ENTRIES * (render_depth() / 8));
-	memset(context->framebuf, 0, FRAMEBUF_ENTRIES * (render_depth() / 8));
-	context->evenbuf = malloc(FRAMEBUF_ENTRIES * (render_depth() / 8));
-	memset(context->evenbuf, 0, FRAMEBUF_ENTRIES * (render_depth() / 8));
+	/*
 	*/
-	render_alloc_surfaces(context);
+	if (headless) {
+		context->oddbuf = context->framebuf = malloc(FRAMEBUF_ENTRIES * (32 / 8));
+		memset(context->framebuf, 0, FRAMEBUF_ENTRIES * (32 / 8));
+		context->evenbuf = malloc(FRAMEBUF_ENTRIES * (32 / 8));
+		memset(context->evenbuf, 0, FRAMEBUF_ENTRIES * (32 / 8));
+		context->b32 = 1;
+	} else {
+		render_alloc_surfaces(context);
+		context->b32 = render_depth() == 32;
+	}
 	context->framebuf = context->oddbuf;
 	context->linebuf = malloc(LINEBUF_SIZE + SCROLL_BUFFER_SIZE*2);
 	memset(context->linebuf, 0, LINEBUF_SIZE + SCROLL_BUFFER_SIZE*2);
@@ -64,7 +70,7 @@ void init_vdp_context(vdp_context * context)
 	context->sprite_draws = MAX_DRAWS;
 	context->fifo_write = 0;
 	context->fifo_read = -1;
-	context->b32 = render_depth() == 32;
+
 	if (!color_map_init_done) {
 		uint8_t b,g,r;
 		for (uint16_t color = 0; color < (1 << 12); color++) {
@@ -229,7 +235,7 @@ void vdp_print_reg_explain(vdp_context * context)
 	       "0A: %.2X | H-Int Counter: %u\n"
 	       "0F: %.2X | Auto-increment: $%X\n"
 	       "10: %.2X | Scroll A/B Size: %sx%s\n",
-	       context->regs[REG_BG_COLOR], context->regs[REG_BG_COLOR] & 0x3F,
+	       context->regs[REG_BG_COLOR], context->regs[REG_BG_COLOR],
 	       context->regs[REG_HINT], context->regs[REG_HINT],
 	       context->regs[REG_AUTOINC], context->regs[REG_AUTOINC],
 	       context->regs[REG_SCROLL], sizes[context->regs[REG_SCROLL] & 0x3], sizes[context->regs[REG_SCROLL] >> 4 & 0x3]);
@@ -749,65 +755,36 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 				plane_b = context->tmp_buf_b + (plane_b_off & SCROLL_BUFFER_MASK);
 				uint32_t * colors = context->colors;
 				src = 0;
-				uint8_t sprite_color = *sprite_buf & 0x3F;
-				if (sprite_color == 0x3E || sprite_color == 0x3F) {
-					if (sprite_color == 0x3F) {
-						colors += CRAM_SIZE;
-						src = DBG_SHADOW;
-					} else {
+				pixel = context->regs[REG_BG_COLOR];
+				src = DBG_SRC_BG;
+				if (*plane_b & 0xF) {
+					pixel = *plane_b;
+					src = DBG_SRC_B;
+				}
+				if (*plane_a & 0xF && (*plane_a & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
+					pixel = *plane_a;
+					src = DBG_SRC_A;
+				}
+				if (*sprite_buf & 0xF) {
+					uint8_t sprite_color = *sprite_buf & 0x3F;
+					if (sprite_color == 0x3E) {
 						colors += CRAM_SIZE*2;
-						src = DBG_HILIGHT;
-					}
-					if (*plane_a & BUF_BIT_PRIORITY && *plane_a & 0xF) {
-						pixel = *plane_a;
-						src |= a_src;
-					} else if (*plane_b & BUF_BIT_PRIORITY && *plane_b & 0xF) {
-						pixel = *plane_b;
-						src |= DBG_SRC_B;
-					} else if (*plane_a & 0xF) {
-						pixel = *plane_a;
-						src |= a_src;
-					} else if (*plane_b & 0xF){
-						pixel = *plane_b;
-						src |= DBG_SRC_B;
-					} else {
-						pixel = context->regs[REG_BG_COLOR] & 0x3F;
-						src |= DBG_SRC_BG;
-					}
-				} else {
-					if (*sprite_buf & BUF_BIT_PRIORITY && *sprite_buf & 0xF) {
+						src |= DBG_HILIGHT;
+					} else if (sprite_color == 0x3F) {
+						colors += CRAM_SIZE;
+						src |= DBG_SHADOW;
+					} else if ((*sprite_buf & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
 						pixel = *sprite_buf;
 						src = DBG_SRC_S;
-					} else if (*plane_a & BUF_BIT_PRIORITY && *plane_a & 0xF) {
-						pixel = *plane_a;
-						src = a_src;
-					} else if (*plane_b & BUF_BIT_PRIORITY && *plane_b & 0xF) {
-						pixel = *plane_b;
-						src = DBG_SRC_B;
-					} else {
-						if (!(*plane_a & BUF_BIT_PRIORITY || *plane_a & BUF_BIT_PRIORITY)) {
+						if ((pixel & 0xF) == 0xE) {
+							src |= DBG_SHADOW;
 							colors += CRAM_SIZE;
-							src = DBG_SHADOW;
 						}
-						if (*sprite_buf & 0xF) {
-							pixel = *sprite_buf;
-							if (*sprite_buf & 0xF == 0xE) {
-								colors = context->colors;
-								src = DBG_SRC_S;
-							} else {
-								src |= DBG_SRC_S;
-							}
-						} else if (*plane_a & 0xF) {
-							pixel = *plane_a;
-							src |= a_src;
-						} else if (*plane_b & 0xF){
-							pixel = *plane_b;
-							src |= DBG_SRC_B;
-						} else {
-							pixel = context->regs[REG_BG_COLOR] & 0x3F;
-							src |= DBG_SRC_BG;
-						}
+
 					}
+				} else if (!((*plane_a | *plane_b) & BUF_BIT_PRIORITY)) {
+					colors += CRAM_SIZE;
+					src |= DBG_SHADOW;
 				}
 				pixel &= 0x3F;
 				uint32_t outpixel;
@@ -825,31 +802,21 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 			}
 		} else {
 			for (int i = 0; i < 16; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i) {
-				uint8_t pixel;
-				src = 0;
 				plane_a = context->tmp_buf_a + (plane_a_off & SCROLL_BUFFER_MASK);
 				plane_b = context->tmp_buf_b + (plane_b_off & SCROLL_BUFFER_MASK);
-				if (*sprite_buf & BUF_BIT_PRIORITY && *sprite_buf & 0xF) {
-					pixel = *sprite_buf;
-					src = DBG_SRC_S;
-				} else if (*plane_a & BUF_BIT_PRIORITY && *plane_a & 0xF) {
-					pixel = *plane_a;
-					src = a_src;
-				} else if (*plane_b & BUF_BIT_PRIORITY && *plane_b & 0xF) {
+				uint8_t pixel = context->regs[REG_BG_COLOR];
+				src = DBG_SRC_BG;
+				if (*plane_b & 0xF) {
 					pixel = *plane_b;
 					src = DBG_SRC_B;
-				} else if (*sprite_buf & 0xF) {
+				}
+				if (*plane_a & 0xF && (*plane_a & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
+					pixel = *plane_a;
+					src = DBG_SRC_A;
+				}
+				if (*sprite_buf & 0xF && (*sprite_buf & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
 					pixel = *sprite_buf;
 					src = DBG_SRC_S;
-				} else if (*plane_a & 0xF) {
-					pixel = *plane_a;
-					src = a_src;
-				} else if (*plane_b & 0xF){
-					pixel = *plane_b;
-					src = DBG_SRC_B;
-				} else {
-					pixel = context->regs[REG_BG_COLOR] & 0x3F;
-					src = DBG_SRC_BG;
 				}
 				uint32_t outpixel;
 				if (context->debug) {
@@ -862,15 +829,8 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 				} else {
 					*(dst++) = outpixel;
 				}
-				//*dst = (context->cram[pixel & 0x3F] & 0xEEE) | ((pixel & BUF_BIT_PRIORITY) ? FBUF_BIT_PRIORITY : 0) | src;
 			}
 		}
-	} else {
-		//dst = context->framebuf + line * 320;
-		//sprite_buf = context->linebuf + col * 8;
-		//plane_a = context->tmp_buf_a + 16 - (context->hscroll_a & 0x7);
-		//plane_b = context->tmp_buf_b + 16 - (context->hscroll_b & 0x7);
-		//end = dst + 8;
 	}
 	context->buf_a_off = (context->buf_a_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
 	context->buf_b_off = (context->buf_b_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
@@ -1243,12 +1203,55 @@ void vdp_h40_line(uint32_t line, vdp_context * context)
 		if (context->flags & FLAG_DMA_RUN) {
 			run_dma_src(context, 0);
 		}
-	} else {
-		render_sprite_cells(context);
-		render_sprite_cells(context);
-		render_sprite_cells(context);
-		render_sprite_cells(context);
+		for (int i = 0; i < 19; i++)
+		{
+			scan_sprite_table(line, context);
+		}
+		external_slot(context);
+		for (int i = 0; i < 21; i++)
+		{
+			scan_sprite_table(line, context);
+		}
+		//reverse context slot counter so it counts the number of sprite slots
+		//filled rather than the number of available slots
+		//context->slot_counter = MAX_SPRITES_LINE - context->slot_counter;
+		context->cur_slot = MAX_SPRITES_LINE-1;
+		context->sprite_draws = MAX_DRAWS;
+		context->flags &= (~FLAG_CAN_MASK & ~FLAG_MASKED);
+		for (int column = 2; column < 42; column += 8)
+		{
+			external_slot(context);
+			if (context->flags & FLAG_DMA_RUN) {
+				run_dma_src(context, 0);
+			}
+			read_sprite_x(line, context);
+
+			external_slot(context);
+			if (context->flags & FLAG_DMA_RUN) {
+				run_dma_src(context, 0);
+			}
+			read_sprite_x(line, context);
+
+			external_slot(context);
+			if (context->flags & FLAG_DMA_RUN) {
+				run_dma_src(context, 0);
+			}
+			read_sprite_x(line, context);
+
+			read_sprite_x(line, context);
+		}
+		external_slot(context);
+		if (context->flags & FLAG_DMA_RUN) {
+			run_dma_src(context, 0);
+		}
+		external_slot(context);
+		return;
 	}
+
+	render_sprite_cells(context);
+	render_sprite_cells(context);
+	render_sprite_cells(context);
+	render_sprite_cells(context);
 	context->sprite_index = 0x80;
 	context->slot_counter = MAX_SPRITES_LINE;
 	for (int i = 0; i < 19; i++)
@@ -1284,8 +1287,6 @@ void vdp_h40_line(uint32_t line, vdp_context * context)
 	render_sprite_cells(context);
 	scan_sprite_table(line, context);
 
-	render_sprite_cells(context);
-	scan_sprite_table(line, context);
 	read_map_scroll_a(0, line, context);
 	render_sprite_cells(context);
 	scan_sprite_table(line, context);
@@ -1391,14 +1392,14 @@ void check_render_bg(vdp_context * context, int32_t line, uint32_t slot)
 		}
 		if (starti >= 0) {
 			if (context->b32) {
-				uint32_t color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
+				uint32_t color = context->colors[context->regs[REG_BG_COLOR]];
 				uint32_t * start = context->framebuf;
 				start += starti;
 				for (int i = 0; i < 2; i++) {
 					*(start++) = color;
 				}
 			} else {
-				uint16_t color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
+				uint16_t color = context->colors[context->regs[REG_BG_COLOR]];
 				uint16_t * start = context->framebuf;
 				start += starti;
 				for (int i = 0; i < 2; i++) {
@@ -1624,6 +1625,9 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 				//printf("register %d set to %X\n", reg, value & 0xFF);
 				if (reg == REG_MODE_1 && (value & BIT_HVC_LATCH) && !(context->regs[reg] & BIT_HVC_LATCH)) {
 					context->hv_latch = vdp_hv_counter_read(context);
+				}
+				if (reg == REG_BG_COLOR) {
+					value &= 0x3F;
 				}
 				context->regs[reg] = value;
 				if (reg == REG_MODE_4) {

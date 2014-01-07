@@ -42,13 +42,13 @@ trans : trans.o $(M68KOBJS) $(TRANSOBJS)
 	$(CC) -o trans trans.o $(M68KOBJS) $(TRANSOBJS)
 
 transz80 : transz80.o $(Z80OBJS) $(TRANSOBJS)
-	$(CC) -o transz80 $(Z80OBJS) $(TRANSOBJS)
+	$(CC) -o transz80 transz80.o $(Z80OBJS) $(TRANSOBJS)
 
 ztestrun : ztestrun.o $(Z80OBJS) $(TRANSOBJS)
-	$(CC) -o ztestrun $(Z80OBJS) $(TRANSOBJS)
+	$(CC) -o ztestrun ztestrun.o $(Z80OBJS) $(TRANSOBJS)
 
 ztestgen : ztestgen.o z80inst.o
-	$(CC) -o ztestgen ztestgen.o z80inst.o
+	$(CC) -ggdb -o ztestgen ztestgen.o z80inst.o
 
 stateview : stateview.o vdp.o render_sdl.o $(CONFIGOBJS) gst.o
 	$(CC) -o stateview stateview.o vdp.o render_sdl.o $(CONFIGOBJS) gst.o $(LDFLAGS)
