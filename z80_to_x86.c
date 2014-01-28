@@ -346,6 +346,9 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			if (inst->ea_reg == Z80_IX || inst->ea_reg == Z80_IY) {
 				cycles += 4;
 			}
+			if (inst->reg == Z80_I || inst->ea_reg == Z80_I) {
+				cycles += 5;
+			}
 			break;
 		case Z80_IMMED:
 			cycles = size == SZ_B ? 7 : 10;
@@ -355,7 +358,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 			break;
 		case Z80_IX_DISPLACE:
 		case Z80_IY_DISPLACE:
-			cycles = 12;
+			cycles = 16;
 			break;
 		}
 		if ((inst->reg >= Z80_IXL && inst->reg <= Z80_IYH) || inst->reg == Z80_IX || inst->reg == Z80_IY) {
@@ -1312,7 +1315,7 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 	}
 	case Z80_JP: {
 		cycles = 4;
-		if (inst->addr_mode != Z80_REG) {
+		if (inst->addr_mode != Z80_REG_INDIRECT) {
 			cycles += 6;
 		} else if(inst->ea_reg == Z80_IX || inst->ea_reg == Z80_IY) {
 			cycles += 4;
