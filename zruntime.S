@@ -107,6 +107,8 @@ z80_read_ram:
 	mov (%r11, %r13), %r13b
 	ret
 z80_read_bank:
+	/* approximation of wait states for 68K bus access */
+	add $3, %ebp
 	and $0x7FFF, %r13
 	cmp $0, %r12
 	je slow_bank_read
@@ -158,6 +160,8 @@ not_code:
 	ret
 z80_write_bank:
 slow_bank_write:
+	/* approximation of wait states for 68K bus access */
+	add $3, %ebp
 	/* TODO: Call into C to implement this */
 	ret
 z80_write_ym2612:
