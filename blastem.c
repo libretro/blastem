@@ -312,10 +312,12 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 	//printf("vdp_port write: %X, value: %X, cycle: %d\n", vdp_port, value, context->current_cycle);
 	sync_components(context, 0);
 	vdp_context * v_context = context->video_context;
+	genesis_context * gen = context->system;
 	if (vdp_port < 0x10) {
 		int blocked;
 		uint32_t before_cycle = v_context->cycles;
 		if (vdp_port < 4) {
+			gen->bus_busy = 1;
 			while (vdp_data_port_write(v_context, value) < 0) {
 				while(v_context->flags & FLAG_DMA_RUN) {
 					vdp_run_dma_done(v_context, mclks_per_frame);
@@ -347,6 +349,7 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 				//context->current_cycle = v_context->cycles / MCLKS_PER_68K;
 			}
 		} else if(vdp_port < 8) {
+			gen->bus_busy = 1;
 			blocked = vdp_control_port_write(v_context, value);
 			if (blocked) {
 				while (blocked) {
@@ -394,11 +397,16 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 			context->current_cycle = v_context->cycles / MCLKS_PER_68K;
 		}
 	} else if (vdp_port < 0x18) {
-		genesis_context * gen = context->system;
 		sync_sound(gen, context->current_cycle * MCLKS_PER_68K);
 		psg_write(gen->psg, value);
 	} else {
 		//TODO: Implement undocumented test register(s)
+	}
+	if (gen->bus_busy)
+	{
+		//Lock the Z80 out of the bus until the VDP access is complete
+		sync_z80(gen->z80, v_context->cycles);
+		gen->bus_busy = 0;
 	}
 	return context;
 }
