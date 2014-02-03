@@ -34,6 +34,21 @@ sync_io:
 	pop %rbx
 	ret /* return to caller of z80_run */
 
+forced_sync:
+	movw $0, 164(%rsi)
+	call z80_save_context_scratch
+	pop %rax /*return address in read/write func*/
+	pop 104(%rsi) /*return address in native code*/
+	mov %rax, (%rsi)
+
+	pop %r15 /* restore callee saved regsiters */
+	pop %r14
+	pop %r13
+	pop %r12
+	pop %rbp
+	pop %rbx
+	ret /* return to caller of z80_run */
+
 	.global z80_handle_cycle_limit_int
 z80_handle_cycle_limit_int:
 	cmp 116(%rsi), %ebp
@@ -107,8 +122,14 @@ z80_read_ram:
 	mov (%r11, %r13), %r13b
 	ret
 z80_read_bank:
-	/* approximation of wait states for 68K bus access */
+	push %rsi
+	mov 144(%rsi), %rsi /* get system context pointer */
+	cmp $0, 120(%rsi) /* check bus busy flag */
+	pop %rsi
+	jne bus_busy
+	/* approximation of wait states for normal 68K bus access */
 	add $3, %ebp
+z80_read_bank_cont:
 	and $0x7FFF, %r13
 	cmp $0, %r12
 	je slow_bank_read
@@ -119,6 +140,10 @@ z80_read_bank:
 slow_bank_read:
 	/* TODO: Call into C to implement this */
 	ret
+bus_busy:
+	mov %edi, %ebp
+	call forced_sync
+	jp z80_read_bank_cont
 z80_read_ym2612:
 	call z80_save_context
 	mov %r13w, %di
@@ -199,6 +224,8 @@ z80_write_vdp:
 	.global z80_read_word
 z80_read_word:
 	call z_inccycles
+	cmp $0x8000, %r13w
+	jae z80_read_bank_word
 	push %r13
 	call z80_read_byte_noinc
 	mov %r13b, %r14b
@@ -209,6 +236,42 @@ z80_read_word:
 	shl $8, %r13w
 	mov %r14b, %r13b
 	ret
+
+z80_read_bank_word:
+	push %rsi
+	mov 144(%rsi), %rsi /* get system context pointer */
+	cmp $0, 120(%rsi) /* check bus busy flag */
+	pop %rsi
+	jne bus_busy_word
+	add $3, %ebp /* first read typically has 3 wait states */
+z80_read_bank_word_cont:
+	push %r13
+	call z80_read_bank_cont
+	mov %r13b, %r14b
+	pop %r13
+	inc %r13
+	call z_inccycles
+	push %rsi
+	mov 144(%rsi), %rsi /* get system context pointer */
+	cmp $0, 120(%rsi) /* check bus busy flag */
+	pop %rsi
+	jne bus_busy_word2
+	add $4, %ebp /* second read typically has 4 wait states */
+z80_read_bank_word_cont2:
+	call z80_read_bank_cont
+	shl $8, %r13w
+	mov %r14b, %r13b
+	ret
+
+bus_busy_word:
+	mov %edi, %ebp
+	call forced_sync
+	jp z80_read_bank_word_cont
+
+bus_busy_word2:
+	mov %edi, %ebp
+	call forced_sync
+	jp z80_read_bank_word_cont2
 
 	.global z80_write_word_highfirst
 z80_write_word_highfirst:

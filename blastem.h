@@ -34,6 +34,7 @@ typedef struct {
 	uint32_t       normal_clock; //Normal master clock (used to restore master clock after turbo mode)
 	uint8_t        bank_regs[8];
 	io_port        ports[3];
+	uint8_t        bus_busy;
 } genesis_context;
 
 extern genesis_context * genesis;
