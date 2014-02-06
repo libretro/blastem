@@ -1513,6 +1513,13 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 					zbreakpoints = new_bp;
 					printf("Z80 Breakpoint %d set at %X\n", new_bp->index, value);
 					break;
+				case 'p':
+					param = find_param(input_buf);
+					if (!param) {
+						fputs("zp command requires a parameter\n", stderr);
+						break;
+					}
+					zdebugger_print(gen->z80, input_buf[2] == '/' ? input_buf[3] : 0, param);
 				}
 				break;
 			}
