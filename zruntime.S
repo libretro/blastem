@@ -37,9 +37,8 @@ sync_io:
 forced_sync:
 	movw $0, 164(%rsi)
 	call z80_save_context_scratch
-	pop %rax /*return address in read/write func*/
+	pop (%rsi) /*return address in read/write func*/
 	pop 104(%rsi) /*return address in native code*/
-	mov %rax, (%rsi)
 
 	pop %r15 /* restore callee saved regsiters */
 	pop %r14
@@ -122,13 +121,13 @@ z80_read_ram:
 	mov (%r11, %r13), %r13b
 	ret
 z80_read_bank:
+	/* approximation of wait states for normal 68K bus access */
+	add $3, %ebp
 	push %rsi
 	mov 144(%rsi), %rsi /* get system context pointer */
 	cmp $0, 120(%rsi) /* check bus busy flag */
 	pop %rsi
 	jne bus_busy
-	/* approximation of wait states for normal 68K bus access */
-	add $3, %ebp
 z80_read_bank_cont:
 	and $0x7FFF, %r13
 	cmp $0, %r12
@@ -141,9 +140,12 @@ slow_bank_read:
 	/* TODO: Call into C to implement this */
 	ret
 bus_busy:
+	cmp %ebp, %edi
+	jbe no_adjust
 	mov %edi, %ebp
+no_adjust:
 	call forced_sync
-	jp z80_read_bank_cont
+	jmp z80_read_bank_cont
 z80_read_ym2612:
 	call z80_save_context
 	mov %r13w, %di
@@ -238,12 +240,12 @@ z80_read_word:
 	ret
 
 z80_read_bank_word:
+	add $3, %ebp /* first read typically has 3 wait states */
 	push %rsi
 	mov 144(%rsi), %rsi /* get system context pointer */
 	cmp $0, 120(%rsi) /* check bus busy flag */
 	pop %rsi
 	jne bus_busy_word
-	add $3, %ebp /* first read typically has 3 wait states */
 z80_read_bank_word_cont:
 	push %r13
 	call z80_read_bank_cont
@@ -251,12 +253,12 @@ z80_read_bank_word_cont:
 	pop %r13
 	inc %r13
 	call z_inccycles
+	add $4, %ebp /* second read typically has 4 wait states */
 	push %rsi
 	mov 144(%rsi), %rsi /* get system context pointer */
 	cmp $0, 120(%rsi) /* check bus busy flag */
 	pop %rsi
 	jne bus_busy_word2
-	add $4, %ebp /* second read typically has 4 wait states */
 z80_read_bank_word_cont2:
 	call z80_read_bank_cont
 	shl $8, %r13w
@@ -264,14 +266,25 @@ z80_read_bank_word_cont2:
 	ret
 
 bus_busy_word:
+	cmp %ebp, %edi
+	jb no_adjust_word
 	mov %edi, %ebp
+no_adjust_word:
 	call forced_sync
-	jp z80_read_bank_word_cont
+	jmp z80_read_bank_word_cont
+
+foofoo:
+	jmp foofoo
 
 bus_busy_word2:
+	cmp %ebp, %edi
+	jb no_adjust_word2
 	mov %edi, %ebp
+no_adjust_word2:
 	call forced_sync
-	jp z80_read_bank_word_cont2
+	jmp z80_read_bank_word_cont2
+blahblah:
+	jmp blahblah
 
 	.global z80_write_word_highfirst
 z80_write_word_highfirst:
