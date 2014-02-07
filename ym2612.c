@@ -315,10 +315,13 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 					if (first_key_on) {
 						dfprintf(debug_file, "Changing op %d envelope %d by %d(%d * %d) in attack phase\n", op, operator->envelope, (~operator->envelope * envelope_inc) >> 4, ~operator->envelope, envelope_inc);
 					}
+					uint16_t old_env = operator->envelope;
 					operator->envelope += (~operator->envelope * envelope_inc) >> 4;
-					operator->envelope &= MAX_ENVELOPE;
-					if (!operator->envelope) {
+					if (operator->envelope > old_env) {
+						//Handle overflow
 						operator->envelope = 0;
+					}
+					if (!operator->envelope) {
 						operator->env_phase = PHASE_DECAY;
 					}
 				} else {
