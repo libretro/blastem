@@ -255,7 +255,12 @@ int main(int argc, char ** argv)
 			} else if (cmd >= CMD_YM2612_DAC && cmd < CMD_DAC_STREAM_SETUP) {
 				if (seek_block) {
 					ym_address_write_part1(&y_context, 0x2A);
-					ym_data_write(&y_context, seek_block->data[block_offset]);
+					ym_data_write(&y_context, seek_block->data[block_offset++]);
+					seek_offset++;
+					if (block_offset > seek_block->size) {
+						seek_block = seek_block->next;
+						block_offset = 0;
+					}
 				} else {
 					fputs("Encountered DAC write command but data seek pointer is invalid!\n", stderr);
 				}
