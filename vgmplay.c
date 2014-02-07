@@ -65,7 +65,18 @@ enum {
 	CMD_DATA,
 	CMD_PCM_WRITE,
 	CMD_WAIT_SHORT = 0x70,
-	CMD_YM2612_DAC = 0x80
+	CMD_YM2612_DAC = 0x80,
+	CMD_DAC_STREAM_SETUP = 0x90,
+	CMD_DAC_STREAM_DATA,
+	CMD_DAC_STREAM_FREQ,
+	CMD_DAC_STREAM_START,
+	CMD_DAC_STREAM_STOP,
+	CMD_DAC_STREAM_STARTFAST,
+	CMD_DATA_SEEK = 0xE0
+};
+
+enum {
+	DATA_YM2612_PCM = 0
 };
 
 #pragma pack(pop)
@@ -93,10 +104,16 @@ void handle_joy_dpad(int joystick, int dpadnum, uint8_t value)
 uint8_t headless = 0;
 
 #define CYCLE_LIMIT MCLKS_NTSC/60
+#define MAX_SOUND_CYCLES 100000
 tern_node * config;
 
 void wait(ym2612_context * y_context, psg_context * p_context, uint32_t * current_cycle, uint32_t cycles)
 {
+	while (cycles > MAX_SOUND_CYCLES)
+	{
+		wait(y_context, p_context, current_cycle, MAX_SOUND_CYCLES);
+		cycles -= MAX_SOUND_CYCLES;
+	}
 	*current_cycle += cycles;
 	psg_run(p_context, *current_cycle);
 	ym_run(y_context, *current_cycle);
@@ -109,8 +126,20 @@ void wait(ym2612_context * y_context, psg_context * p_context, uint32_t * curren
 	}
 }
 
+typedef struct {
+	struct data_block *next;
+	uint8_t           *data;
+	uint32_t          size;
+	uint8_t           type;
+} data_block;
+
 int main(int argc, char ** argv)
 {
+	data_block *blocks = NULL;
+	data_block *seek_block = NULL;
+	uint32_t seek_offset;
+	uint32_t block_offset;
+
 	uint32_t fps = 60;
 	config = load_config(argv[0]);
 	render_init(320, 240, "vgm play", 60, 0, 0);
@@ -173,13 +202,71 @@ int main(int argc, char ** argv)
 			break;
 		case CMD_END:
 			return 0;
+		case CMD_DATA: {
+			cur++; //skip compat command
+			uint8_t data_type = *(cur++);
+			uint32_t data_size = *(cur++);
+			data_size |= *(cur++) << 8;
+			data_size |= *(cur++) << 16;
+			data_size |= *(cur++) << 24;
+			if (data_type == DATA_YM2612_PCM) {
+				data_block ** curblock = &blocks;
+				while(*curblock)
+				{
+					curblock = &((*curblock)->next);
+				}
+				*curblock = malloc(sizeof(data_block));
+				(*curblock)->size = data_size;
+				(*curblock)->type = data_type;
+				(*curblock)->data = cur;
+				(*curblock)->next = NULL;
+			} else {
+				fprintf(stderr, "Skipping data block with unrecognized type %X\n", data_type);
+			}
+			cur += data_size;
+			break;
+		}
+		case CMD_DATA_SEEK: {
+			uint32_t new_offset = *(cur++);
+			new_offset |= *(cur++) << 8;
+			new_offset |= *(cur++) << 16;
+			new_offset |= *(cur++) << 24;
+			if (!seek_block || new_offset < seek_offset) {
+				seek_block = blocks;
+				seek_offset = 0;
+				block_offset = 0;
+			}
+			while (seek_block && (seek_offset - block_offset + seek_block->size) < new_offset)
+			{
+				seek_offset += seek_block->size - block_offset;
+				seek_block = seek_block->next;
+				block_offset = 0;
+			}
+			block_offset += new_offset-seek_offset;
+			seek_offset = new_offset;
+			break;
+		}
+
 		default:
 			if (cmd >= CMD_WAIT_SHORT && cmd < (CMD_WAIT_SHORT + 0x10)) {
 				uint32_t wait_time = (cmd & 0xF) + 1;
 				wait_time *= mclks_sample;
 				wait(&y_context, &p_context, &current_cycle, wait_time);
+			} else if (cmd >= CMD_YM2612_DAC && cmd < CMD_DAC_STREAM_SETUP) {
+				if (seek_block) {
+					ym_address_write_part1(&y_context, 0x2A);
+					ym_data_write(&y_context, seek_block->data[block_offset]);
+				} else {
+					fputs("Encountered DAC write command but data seek pointer is invalid!\n", stderr);
+				}
+				uint32_t wait_time = (cmd & 0xF);
+				if (wait_time)
+				{
+					wait_time *= mclks_sample;
+					wait(&y_context, &p_context, &current_cycle, wait_time);
+				}
 			} else {
-				printf("unimplemented command: %X at offset %X\n", cmd, cur - data - 1);
+				printf("unimplemented command: %X at offset %X\n", cmd, (unsigned int)(cur - data - 1));
 				exit(1);
 			}
 		}
