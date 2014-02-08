@@ -28,7 +28,7 @@ typedef struct {
 	uint32_t gd3_offset;
 	uint32_t num_samples;
 	uint32_t loop_offset;
-	uint32_t loop_count;
+	uint32_t loop_samples;
 	uint32_t rate;
 	uint16_t sn76489_fb;
 	uint8_t  sn76489_shift;
@@ -144,9 +144,13 @@ int main(int argc, char ** argv)
 	config = load_config(argv[0]);
 	render_init(320, 240, "vgm play", 60, 0, 0);
 
+	uint32_t opts = 0;
+	if (argc >= 3 && !strcmp(argv[2], "-y")) {
+		opts |= YM_OPT_WAVE_LOG;
+	}
 
 	ym2612_context y_context;
-	ym_init(&y_context, render_sample_rate(), MCLKS_NTSC, MCLKS_PER_YM, render_audio_buffer(), 0);
+	ym_init(&y_context, render_sample_rate(), MCLKS_NTSC, MCLKS_PER_YM, render_audio_buffer(), opts);
 
 	psg_context p_context;
 	psg_init(&p_context, render_sample_rate(), MCLKS_NTSC, MCLKS_PER_PSG, render_audio_buffer());
@@ -164,6 +168,7 @@ int main(int argc, char ** argv)
 	fclose(f);
 
 	uint32_t mclks_sample = MCLKS_NTSC / 44100;
+	uint32_t loop_count = 2;
 
 	uint8_t * end = data + data_size;
 	uint8_t * cur = data;
@@ -201,7 +206,13 @@ int main(int argc, char ** argv)
 			wait(&y_context, &p_context, &current_cycle, 882 * mclks_sample);
 			break;
 		case CMD_END:
-			return 0;
+			if (header.loop_offset && --loop_count) {
+				cur = data + header.loop_offset + 0x1C - (header.data_offset + 0x34);
+			} else {
+				//TODO: fade out
+				return 0;
+			}
+			break;
 		case CMD_DATA: {
 			cur++; //skip compat command
 			uint8_t data_type = *(cur++);
