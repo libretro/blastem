@@ -1465,7 +1465,7 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 				printf(format, param, value);
 				break;
 			case 'n':
-				//TODO: Deal with jmp, dbcc, rtr and rte
+				//TODO: Deal with dbcc, rtr and rte
 				if (inst.op == M68K_RTS) {
 					after = (read_dma_value(context->aregs[7]/2) << 16) | read_dma_value(context->aregs[7]/2 + 1);
 				} else if(inst.op == M68K_BCC && inst.extra.cond != COND_FALSE) {
@@ -1475,6 +1475,56 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 						branch_f = after;
 						branch_t = inst.address + 2 + inst.src.params.immed;
 						insert_breakpoint(context, branch_t, (uint8_t *)debugger);
+					}
+				} else if(inst.op == M68K_JMP) {
+					switch(inst.src.addr_mode)
+					{
+					case MODE_AREG_INDIRECT:
+						after = context->aregs[inst.src.params.regs.pri];
+						break;
+					case MODE_AREG_INDEX_DISP8: {
+						uint8_t sec_reg = inst.src.params.regs.sec >> 1 & 0x7;
+						after = context->aregs[inst.src.params.regs.pri];
+						uint32_t * regfile = inst.src.params.regs.sec & 0x10 ? context->aregs : context->dregs;
+						if (inst.src.params.regs.sec & 1) {
+							//32-bit index register
+							after += regfile[sec_reg];
+						} else {
+							//16-bit index register
+							if (regfile[sec_reg] & 0x8000) {
+								after += (0xFFFF0000 | regfile[sec_reg]);
+							} else {
+								after += regfile[sec_reg];
+							}
+						}
+						after += inst.src.params.regs.displacement;
+						break;
+					}
+					case MODE_PC_DISPLACE:
+						after = inst.src.params.regs.displacement + address + 2;
+						break;
+					case MODE_PC_INDEX_DISP8: {
+						uint8_t sec_reg = inst.src.params.regs.sec >> 1 & 0x7;
+						after = address + 2;
+						uint32_t * regfile = inst.src.params.regs.sec & 0x10 ? context->aregs : context->dregs;
+						if (inst.src.params.regs.sec & 1) {
+							//32-bit index register
+							after += regfile[sec_reg];
+						} else {
+							//16-bit index register
+							if (regfile[sec_reg] & 0x8000) {
+								after += (0xFFFF0000 | regfile[sec_reg]);
+							} else {
+								after += regfile[sec_reg];
+							}
+						}
+						after += inst.src.params.regs.displacement;
+						break;
+					}
+					case MODE_ABSOLUTE:
+					case MODE_ABSOLUTE_SHORT:
+						after = inst.src.params.immed;
+						break;
 					}
 				}
 				insert_breakpoint(context, after, (uint8_t *)debugger);
