@@ -1465,16 +1465,26 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 				printf(format, param, value);
 				break;
 			case 'n':
-				//TODO: Deal with dbcc, rtr and rte
 				if (inst.op == M68K_RTS) {
 					after = (read_dma_value(context->aregs[7]/2) << 16) | read_dma_value(context->aregs[7]/2 + 1);
+				} else if (inst.op == M68K_RTE || inst.op == M68K_RTR) {
+					after = (read_dma_value((context->aregs[7]+2)/2) << 16) | read_dma_value((context->aregs[7]+2)/2 + 1);
 				} else if(inst.op == M68K_BCC && inst.extra.cond != COND_FALSE) {
-					if (inst.extra.cond = COND_TRUE) {
+					if (inst.extra.cond == COND_TRUE) {
 						after = inst.address + 2 + inst.src.params.immed;
 					} else {
 						branch_f = after;
 						branch_t = inst.address + 2 + inst.src.params.immed;
 						insert_breakpoint(context, branch_t, (uint8_t *)debugger);
+					}
+				} else if(inst.op == M68K_DBCC) {
+					if (inst.extra.cond == COND_FALSE) {
+						if (context->dregs[inst.dst.params.regs.pri] & 0xFFFF) {
+							after = inst.address + 2 + inst.src.params.immed;
+						}
+					} else if (inst.extra.cond != COND_TRUE) {
+						branch_t = after;
+						branch_f = inst.address + 2 + inst.src.params.immed;
 					}
 				} else if(inst.op == M68K_JMP) {
 					switch(inst.src.addr_mode)
