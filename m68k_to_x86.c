@@ -1953,6 +1953,7 @@ uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		}
 		sec_reg = (inst->src.params.regs.sec >> 1) & 0x7;
 		if (inst->src.params.regs.sec & 1) {
+			//32-bit index register
 			if (inst->src.params.regs.sec & 0x10) {
 				if (opts->aregs[sec_reg] >= 0) {
 					dst = add_rr(dst, opts->aregs[sec_reg], SCRATCH1, SZ_D);
@@ -1967,6 +1968,7 @@ uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 				}
 			}
 		} else {
+			//16-bit index register
 			if (inst->src.params.regs.sec & 0x10) {
 				if (opts->aregs[sec_reg] >= 0) {
 					dst = movsx_rr(dst, opts->aregs[sec_reg], SCRATCH2, SZ_W, SZ_D);
