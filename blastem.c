@@ -10,6 +10,7 @@
 #include "vdp.h"
 #include "render.h"
 #include "blastem.h"
+#include "gdb_remote.h"
 #include "gst.h"
 #include "util.h"
 #include <stdio.h>
@@ -1585,7 +1586,7 @@ void save_sram()
 	printf("Saved SRAM to %s\n", sram_filename);
 }
 
-void init_run_cpu(genesis_context * gen, int debug, FILE * address_log, char * statefile)
+void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, uint8_t * debugger)
 {
 	m68k_context context;
 	x86_68k_options opts;
@@ -1706,15 +1707,15 @@ void init_run_cpu(genesis_context * gen, int debug, FILE * address_log, char * s
 			exit(1);
 		}
 		printf("Loaded %s\n", statefile);
-		if (debug) {
-			insert_breakpoint(&context, pc, (uint8_t *)debugger);
+		if (debugger) {
+			insert_breakpoint(&context, pc, debugger);
 		}
 		adjust_int_cycle(gen->m68k, gen->vdp);
 		gen->z80->native_pc =  z80_get_native_address_trans(gen->z80, gen->z80->pc);
 		start_68k_context(&context, pc);
 	} else {
-		if (debug) {
-			insert_breakpoint(&context, address, (uint8_t *)debugger);
+		if (debugger) {
+			insert_breakpoint(&context, address, debugger);
 		}
 		m68k_reset(&context);
 	}
@@ -1808,6 +1809,7 @@ int main(int argc, char ** argv)
 	char * romfname = NULL;
 	FILE *address_log = NULL;
 	char * statefile = NULL;
+	uint8_t * debuggerfun = NULL;
 	uint8_t fullscreen = 0, use_gl = 1;
 	for (int i = 1; i < argc; i++) {
 		if (argv[i][0] == '-') {
@@ -1822,7 +1824,11 @@ int main(int argc, char ** argv)
 				exit_after = atoi(argv[i]);
 				break;
 			case 'd':
-				debug = 1;
+				debuggerfun = (uint8_t *)debugger;
+				break;
+			case 'D':
+				gdb_remote_init();
+				debuggerfun = (uint8_t *)gdb_debug_enter;
 				break;
 			case 'f':
 				fullscreen = 1;
@@ -1980,6 +1986,6 @@ int main(int argc, char ** argv)
 	}
 	set_keybindings();
 
-	init_run_cpu(&gen, debug, address_log, statefile);
+	init_run_cpu(&gen, address_log, statefile, debuggerfun);
 	return 0;
 }
