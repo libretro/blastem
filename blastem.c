@@ -1411,7 +1411,7 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 			case 'd':
 				param = find_param(input_buf);
 				if (!param) {
-					fputs("b command requires a parameter\n", stderr);
+					fputs("d command requires a parameter\n", stderr);
 					break;
 				}
 				value = atoi(param);
@@ -1474,7 +1474,66 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 						branch_f = after;
 						branch_t = m68k_branch_target(&inst, context->dregs, context->aregs);
 						insert_breakpoint(context, branch_t, (uint8_t *)debugger);
-					} else if(inst.op == M68K_BCC && inst.extra.cond != COND_FALSE) {
+					} else if(inst.op == M68K_DBCC) {
+						if ( inst.extra.cond == COND_FALSE) {
+							if (context->dregs[inst.dst.params.regs.pri] & 0xFFFF) {
+								after = m68k_branch_target(&inst, context->dregs, context->aregs);
+							}
+						} else {
+							branch_t = after;
+							branch_f = m68k_branch_target(&inst, context->dregs, context->aregs);
+							insert_breakpoint(context, branch_f, (uint8_t *)debugger);
+						}
+					} else {
+						after = m68k_branch_target(&inst, context->dregs, context->aregs);
+					}
+				}
+				insert_breakpoint(context, after, (uint8_t *)debugger);
+				debugging = 0;
+				break;
+			case 'o':
+				if (inst.op == M68K_RTS) {
+					after = (read_dma_value(context->aregs[7]/2) << 16) | read_dma_value(context->aregs[7]/2 + 1);
+				} else if (inst.op == M68K_RTE || inst.op == M68K_RTR) {
+					after = (read_dma_value((context->aregs[7]+2)/2) << 16) | read_dma_value((context->aregs[7]+2)/2 + 1);
+				} else if(m68k_is_noncall_branch(&inst)) {
+					if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
+						branch_t = m68k_branch_target(&inst, context->dregs, context->aregs);
+						if (branch_t < after) {
+								branch_t = 0;
+						} else {
+							branch_f = after;
+							insert_breakpoint(context, branch_t, (uint8_t *)debugger);
+						}
+					} else if(inst.op == M68K_DBCC) {
+						uint32_t target = m68k_branch_target(&inst, context->dregs, context->aregs);
+						if (target > after) {
+							if (inst.extra.cond == COND_FALSE) {
+								after = target;
+							} else {
+								branch_f = target;
+								branch_t = after;
+								insert_breakpoint(context, branch_f, (uint8_t *)debugger);
+							}
+						}
+					} else {
+						after = m68k_branch_target(&inst, context->dregs, context->aregs);
+					}
+				}
+				insert_breakpoint(context, after, (uint8_t *)debugger);
+				debugging = 0;
+				break;
+			case 's':
+				if (inst.op == M68K_RTS) {
+					after = (read_dma_value(context->aregs[7]/2) << 16) | read_dma_value(context->aregs[7]/2 + 1);
+				} else if (inst.op == M68K_RTE || inst.op == M68K_RTR) {
+					after = (read_dma_value((context->aregs[7]+2)/2) << 16) | read_dma_value((context->aregs[7]+2)/2 + 1);
+				} else if(m68k_is_branch(&inst)) {
+					if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
+						branch_f = after;
+						branch_t = m68k_branch_target(&inst, context->dregs, context->aregs);
+						insert_breakpoint(context, branch_t, (uint8_t *)debugger);
+					} else if(inst.op == M68K_DBCC && inst.extra.cond != COND_FALSE) {
 						branch_t = after;
 						branch_f = m68k_branch_target(&inst, context->dregs, context->aregs);
 						insert_breakpoint(context, branch_f, (uint8_t *)debugger);
