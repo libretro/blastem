@@ -470,9 +470,16 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			context->audio_buffer[context->buffer_pos] = 0;
 			context->audio_buffer[context->buffer_pos + 1] = 0;
 			for (int i = 0; i < NUM_CHANNELS; i++) {
-				int16_t value = context->channels[i].output & 0x3FE0;
-				if (value & 0x2000) {
-					value |= 0xC000;
+				int16_t value = context->channels[i].output;
+				if (value > 0x1FE0) {
+					value = 0x1FE0;
+				} else if (value < -0x1FF0) {
+					value = -0x1FF0;
+				} else {
+					value &= 0x3FE0;
+					if (value & 0x2000) {
+						value |= 0xC000;
+					}
 				}
 				if (context->channels[i].logfile) {
 					fwrite(&value, sizeof(value), 1, context->channels[i].logfile);
