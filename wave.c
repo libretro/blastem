@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "wave.h"
@@ -31,13 +31,13 @@ int wave_finalize(FILE * f)
 	uint32_t size = ftell(f);
 	fseek(f, offsetof(wave_header, chunk.size), SEEK_SET);
 	size -= 8;
-	if (fwrite(&size, sizeof(size), 1, f) != sizeof(size)) {
+	if (fwrite(&size, sizeof(size), 1, f) != 1) {
 		fclose(f);
 		return 0;
 	}
 	fseek(f, offsetof(wave_header, data_header.size), SEEK_SET);
 	size -= 36;
-	if (fwrite(&size, sizeof(size), 1, f)) {
+	if (fwrite(&size, sizeof(size), 1, f) != 1) {
 		fclose(f);
 		return 0;
 	}
