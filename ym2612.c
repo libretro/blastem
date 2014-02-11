@@ -232,7 +232,8 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clo
 	}
 }
 
-#define YM_VOLUME_DIVIDER 2
+#define YM_VOLUME_MULTIPLIER 2
+#define YM_VOLUME_DIVIDER 3
 #define YM_MOD_SHIFT 1
 
 #define TIMER_A_MAX 1023
@@ -455,7 +456,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 					if (value & 0x2000) {
 						value |= 0xC000;
 					}
-					dfprintf(debug_file, "channel %d output: %d\n", channel, value / YM_VOLUME_DIVIDER);
+					dfprintf(debug_file, "channel %d output: %d\n", channel, (value * YM_VOLUME_MULTIPLIER) / YM_VOLUME_DIVIDER);
 				}
 			}
 			//puts("operator update done");
@@ -485,10 +486,10 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 					fwrite(&value, sizeof(value), 1, context->channels[i].logfile);
 				}
 				if (context->channels[i].lr & 0x80) {
-					context->audio_buffer[context->buffer_pos] += value / YM_VOLUME_DIVIDER;
+					context->audio_buffer[context->buffer_pos] += (value * YM_VOLUME_MULTIPLIER) / YM_VOLUME_DIVIDER;
 				}
 				if (context->channels[i].lr & 0x40) {
-					context->audio_buffer[context->buffer_pos+1] += value / YM_VOLUME_DIVIDER;
+					context->audio_buffer[context->buffer_pos+1] += (value * YM_VOLUME_MULTIPLIER) / YM_VOLUME_DIVIDER;
 				}
 			}
 			context->buffer_pos += 2;
