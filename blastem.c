@@ -10,6 +10,7 @@
 #include "vdp.h"
 #include "render.h"
 #include "blastem.h"
+#include "gdb_remote.h"
 #include "gst.h"
 #include "util.h"
 #include <stdio.h>
@@ -1410,7 +1411,7 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 			case 'd':
 				param = find_param(input_buf);
 				if (!param) {
-					fputs("b command requires a parameter\n", stderr);
+					fputs("d command requires a parameter\n", stderr);
 					break;
 				}
 				value = atoi(param);
@@ -1464,16 +1465,80 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 				printf(format, param, value);
 				break;
 			case 'n':
-				//TODO: Deal with jmp, dbcc, rtr and rte
 				if (inst.op == M68K_RTS) {
 					after = (read_dma_value(context->aregs[7]/2) << 16) | read_dma_value(context->aregs[7]/2 + 1);
-				} else if(inst.op == M68K_BCC && inst.extra.cond != COND_FALSE) {
-					if (inst.extra.cond = COND_TRUE) {
-						after = inst.address + 2 + inst.src.params.immed;
-					} else {
+				} else if (inst.op == M68K_RTE || inst.op == M68K_RTR) {
+					after = (read_dma_value((context->aregs[7]+2)/2) << 16) | read_dma_value((context->aregs[7]+2)/2 + 1);
+				} else if(m68k_is_noncall_branch(&inst)) {
+					if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
 						branch_f = after;
-						branch_t = inst.address + 2 + inst.src.params.immed;
+						branch_t = m68k_branch_target(&inst, context->dregs, context->aregs);
 						insert_breakpoint(context, branch_t, (uint8_t *)debugger);
+					} else if(inst.op == M68K_DBCC) {
+						if ( inst.extra.cond == COND_FALSE) {
+							if (context->dregs[inst.dst.params.regs.pri] & 0xFFFF) {
+								after = m68k_branch_target(&inst, context->dregs, context->aregs);
+							}
+						} else {
+							branch_t = after;
+							branch_f = m68k_branch_target(&inst, context->dregs, context->aregs);
+							insert_breakpoint(context, branch_f, (uint8_t *)debugger);
+						}
+					} else {
+						after = m68k_branch_target(&inst, context->dregs, context->aregs);
+					}
+				}
+				insert_breakpoint(context, after, (uint8_t *)debugger);
+				debugging = 0;
+				break;
+			case 'o':
+				if (inst.op == M68K_RTS) {
+					after = (read_dma_value(context->aregs[7]/2) << 16) | read_dma_value(context->aregs[7]/2 + 1);
+				} else if (inst.op == M68K_RTE || inst.op == M68K_RTR) {
+					after = (read_dma_value((context->aregs[7]+2)/2) << 16) | read_dma_value((context->aregs[7]+2)/2 + 1);
+				} else if(m68k_is_noncall_branch(&inst)) {
+					if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
+						branch_t = m68k_branch_target(&inst, context->dregs, context->aregs);
+						if (branch_t < after) {
+								branch_t = 0;
+						} else {
+							branch_f = after;
+							insert_breakpoint(context, branch_t, (uint8_t *)debugger);
+						}
+					} else if(inst.op == M68K_DBCC) {
+						uint32_t target = m68k_branch_target(&inst, context->dregs, context->aregs);
+						if (target > after) {
+							if (inst.extra.cond == COND_FALSE) {
+								after = target;
+							} else {
+								branch_f = target;
+								branch_t = after;
+								insert_breakpoint(context, branch_f, (uint8_t *)debugger);
+							}
+						}
+					} else {
+						after = m68k_branch_target(&inst, context->dregs, context->aregs);
+					}
+				}
+				insert_breakpoint(context, after, (uint8_t *)debugger);
+				debugging = 0;
+				break;
+			case 's':
+				if (inst.op == M68K_RTS) {
+					after = (read_dma_value(context->aregs[7]/2) << 16) | read_dma_value(context->aregs[7]/2 + 1);
+				} else if (inst.op == M68K_RTE || inst.op == M68K_RTR) {
+					after = (read_dma_value((context->aregs[7]+2)/2) << 16) | read_dma_value((context->aregs[7]+2)/2 + 1);
+				} else if(m68k_is_branch(&inst)) {
+					if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
+						branch_f = after;
+						branch_t = m68k_branch_target(&inst, context->dregs, context->aregs);
+						insert_breakpoint(context, branch_t, (uint8_t *)debugger);
+					} else if(inst.op == M68K_DBCC && inst.extra.cond != COND_FALSE) {
+						branch_t = after;
+						branch_f = m68k_branch_target(&inst, context->dregs, context->aregs);
+						insert_breakpoint(context, branch_f, (uint8_t *)debugger);
+					} else {
+						after = m68k_branch_target(&inst, context->dregs, context->aregs);
 					}
 				}
 				insert_breakpoint(context, after, (uint8_t *)debugger);
@@ -1585,7 +1650,7 @@ void save_sram()
 	printf("Saved SRAM to %s\n", sram_filename);
 }
 
-void init_run_cpu(genesis_context * gen, int debug, FILE * address_log, char * statefile)
+void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, uint8_t * debugger)
 {
 	m68k_context context;
 	x86_68k_options opts;
@@ -1706,15 +1771,15 @@ void init_run_cpu(genesis_context * gen, int debug, FILE * address_log, char * s
 			exit(1);
 		}
 		printf("Loaded %s\n", statefile);
-		if (debug) {
-			insert_breakpoint(&context, pc, (uint8_t *)debugger);
+		if (debugger) {
+			insert_breakpoint(&context, pc, debugger);
 		}
 		adjust_int_cycle(gen->m68k, gen->vdp);
 		gen->z80->native_pc =  z80_get_native_address_trans(gen->z80, gen->z80->pc);
 		start_68k_context(&context, pc);
 	} else {
-		if (debug) {
-			insert_breakpoint(&context, address, (uint8_t *)debugger);
+		if (debugger) {
+			insert_breakpoint(&context, address, debugger);
 		}
 		m68k_reset(&context);
 	}
@@ -1808,6 +1873,7 @@ int main(int argc, char ** argv)
 	char * romfname = NULL;
 	FILE *address_log = NULL;
 	char * statefile = NULL;
+	uint8_t * debuggerfun = NULL;
 	uint8_t fullscreen = 0, use_gl = 1;
 	for (int i = 1; i < argc; i++) {
 		if (argv[i][0] == '-') {
@@ -1822,7 +1888,11 @@ int main(int argc, char ** argv)
 				exit_after = atoi(argv[i]);
 				break;
 			case 'd':
-				debug = 1;
+				debuggerfun = (uint8_t *)debugger;
+				break;
+			case 'D':
+				gdb_remote_init();
+				debuggerfun = (uint8_t *)gdb_debug_enter;
 				break;
 			case 'f':
 				fullscreen = 1;
@@ -1980,6 +2050,6 @@ int main(int argc, char ** argv)
 	}
 	set_keybindings();
 
-	init_run_cpu(&gen, debug, address_log, statefile);
+	init_run_cpu(&gen, address_log, statefile, debuggerfun);
 	return 0;
 }
