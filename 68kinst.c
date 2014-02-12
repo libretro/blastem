@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "68kinst.h"
@@ -434,8 +434,8 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				}
 				break;
 			case 7:
-				
-				
+
+
 				break;
 			}
 		}
@@ -459,7 +459,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 		}
 		break;
 	case MISC:
-		
+
 		if ((*istream & 0x1C0) == 0x1C0) {
 			decoded->op = M68K_LEA;
 			decoded->extra.size = OPSIZE_LONG;
@@ -682,7 +682,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 								}
 							}
 						}
-						break;	
+						break;
 					case 6:
 						//MULU, MULS, DIVU, DIVUL, DIVS, DIVSL
 #ifdef M68020
@@ -918,7 +918,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 					decoded->op = M68K_INVALID;
 					return start+1;
 				}
-				break;		
+				break;
 			}
 		} else {
 			decoded->op = M68K_OR;
@@ -1259,7 +1259,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			}
 			decoded->dst.addr_mode = MODE_REG;
 			decoded->dst.params.regs.pri = *istream & 0x7;
-			
+
 		} else {
 #ifdef M68020
 			//TODO: Implement bitfield instructions for M68020+ support
@@ -1272,6 +1272,79 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 	}
 	return istream+1;
 }
+
+uint32_t m68k_branch_target(m68kinst * inst, uint32_t *dregs, uint32_t *aregs)
+{
+	if(inst->op == M68K_BCC || inst->op == M68K_BSR || inst->op == M68K_DBCC) {
+		return inst->address + 2 + inst->src.params.immed;
+	} else if(inst->op == M68K_JMP || inst->op == M68K_JSR) {
+		uint32_t ret = 0;
+		switch(inst->src.addr_mode)
+		{
+		case MODE_AREG_INDIRECT:
+			ret = aregs[inst->src.params.regs.pri];
+			break;
+		case MODE_AREG_INDEX_DISP8: {
+			uint8_t sec_reg = inst->src.params.regs.sec >> 1 & 0x7;
+			ret = aregs[inst->src.params.regs.pri];
+			uint32_t * regfile = inst->src.params.regs.sec & 0x10 ? aregs : dregs;
+			if (inst->src.params.regs.sec & 1) {
+				//32-bit index register
+				ret += regfile[sec_reg];
+			} else {
+				//16-bit index register
+				if (regfile[sec_reg] & 0x8000) {
+					ret += (0xFFFF0000 | regfile[sec_reg]);
+				} else {
+					ret += regfile[sec_reg];
+				}
+			}
+			ret += inst->src.params.regs.displacement;
+			break;
+		}
+		case MODE_PC_DISPLACE:
+			ret = inst->src.params.regs.displacement + inst->address + 2;
+			break;
+		case MODE_PC_INDEX_DISP8: {
+			uint8_t sec_reg = inst->src.params.regs.sec >> 1 & 0x7;
+			ret = inst->address + 2;
+			uint32_t * regfile = inst->src.params.regs.sec & 0x10 ? aregs : dregs;
+			if (inst->src.params.regs.sec & 1) {
+				//32-bit index register
+				ret += regfile[sec_reg];
+			} else {
+				//16-bit index register
+				if (regfile[sec_reg] & 0x8000) {
+					ret += (0xFFFF0000 | regfile[sec_reg]);
+				} else {
+					ret += regfile[sec_reg];
+				}
+			}
+			ret += inst->src.params.regs.displacement;
+			break;
+		}
+		case MODE_ABSOLUTE:
+		case MODE_ABSOLUTE_SHORT:
+			ret = inst->src.params.immed;
+			break;
+		}
+		return ret;
+	}
+	return 0;
+}
+
+uint8_t m68k_is_branch(m68kinst * inst)
+{
+	return (inst->op == M68K_BCC && inst->extra.cond != COND_FALSE)
+		|| (inst->op == M68K_DBCC && inst->extra.cond != COND_TRUE)
+		|| inst->op == M68K_BSR || inst->op == M68K_JMP || inst->op == M68K_JSR;
+}
+
+uint8_t m68k_is_noncall_branch(m68kinst * inst)
+{
+	return m68k_is_branch(inst) && inst->op != M68K_BSR && inst->op != M68K_JSR;
+}
+
 
 char * mnemonics[] = {
 	"abcd",
@@ -1504,7 +1577,7 @@ int m68k_disasm_ex(m68kinst * decoded, char * dst, uint8_t labels)
 		break;
 	case M68K_BSR:
 		if (labels) {
-			ret = sprintf(dst, "bsr%s ADR_%X", decoded->variant == VAR_BYTE ? ".s" : "", 
+			ret = sprintf(dst, "bsr%s ADR_%X", decoded->variant == VAR_BYTE ? ".s" : "",
 			decoded->address + 2 + decoded->src.params.immed);
 		} else {
 			ret = sprintf(dst, "bsr%s #%d <%X>", decoded->variant == VAR_BYTE ? ".s" : "", decoded->src.params.immed, decoded->address + 2 + decoded->src.params.immed);
@@ -1540,9 +1613,9 @@ int m68k_disasm_ex(m68kinst * decoded, char * dst, uint8_t labels)
 		return ret;
 	default:
 		size = decoded->extra.size;
-		ret = sprintf(dst, "%s%s%s", 
-				mnemonics[decoded->op], 
-				decoded->variant == VAR_QUICK ? "q" : (decoded->variant == VAR_IMMEDIATE ? "i" : ""), 
+		ret = sprintf(dst, "%s%s%s",
+				mnemonics[decoded->op],
+				decoded->variant == VAR_QUICK ? "q" : (decoded->variant == VAR_IMMEDIATE ? "i" : ""),
 				size == OPSIZE_BYTE ? ".b" : (size == OPSIZE_WORD ? ".w" : (size == OPSIZE_LONG ? ".l" : "")));
 	}
 	if (decoded->op == M68K_MOVEM) {
