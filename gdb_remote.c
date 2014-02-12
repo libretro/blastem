@@ -103,6 +103,16 @@ uint32_t calc_status(m68k_context * context)
 	return status;
 }
 
+void update_status(m68k_context * context, uint16_t value)
+{
+	context->status = value >> 8;
+	for (int i = 4; i >= 0; i--)
+	{
+		context->flags[i] = value & 1;
+		value >>= 1;
+	}
+}
+
 uint8_t read_byte(m68k_context * context, uint32_t address)
 {
 	uint16_t * word;
@@ -275,6 +285,25 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 		}
 		send_buf[8] = 0;
 		gdb_send_command(send_buf);
+		break;
+	}
+	case 'P': {
+		char *after = NULL;
+		unsigned long reg = strtoul(command+1, &after, 16);
+		uint32_t value = strtoul(after+1, NULL, 16);
+
+		if (reg < 8) {
+			context->dregs[reg] = value;
+		} else if (reg < 16) {
+			context->aregs[reg-8] = value;
+		} else if (reg == 16) {
+			update_status(context, value);
+		} else {
+			//supporting updates to PC is going to be a pain
+			gdb_send_command("E01");
+			break;
+		}
+		gdb_send_command("OK");
 		break;
 	}
 	case 'q':
