@@ -4,6 +4,8 @@
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "gdb_remote.h"
+#include "68kinst.h"
+#include "debug.h"
 #include <unistd.h>
 #include <fcntl.h>
 #include <stddef.h>
@@ -13,6 +15,12 @@
 
 #define INITIAL_BUFFER_SIZE (16*1024)
 
+#ifdef DO_DEBUG_PRINT
+#define dfprintf fprintf
+#else
+#define dfprintf
+#endif
+
 char * buf = NULL;
 char * curbuf = NULL;
 char * end = NULL;
@@ -20,6 +28,13 @@ size_t bufsize;
 int cont = 0;
 int expect_break_response=0;
 uint32_t resume_pc;
+
+
+static uint16_t branch_t;
+static uint16_t branch_f;
+
+static bp_def * breakpoints = NULL;
+static uint32_t bp_index = 0;
 
 
 void hex_32(uint32_t num, char * out)
@@ -74,7 +89,7 @@ void gdb_send_command(char * command)
 	end[0] = '#';
 	gdb_calc_checksum(command, end+1);
 	write_or_die(STDOUT_FILENO, end, 3);
-	fprintf(stderr, "Sent $%s#%c%c\n", command, end[1], end[2]);
+	dfprintf(stderr, "Sent $%s#%c%c\n", command, end[1], end[2]);
 }
 
 uint32_t calc_status(m68k_context * context)
@@ -108,7 +123,7 @@ uint8_t read_byte(m68k_context * context, uint32_t address)
 void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 {
 	char send_buf[512];
-	fprintf(stderr, "Received command %s\n", command);
+	dfprintf(stderr, "Received command %s\n", command);
 	switch(*command)
 	{
 
@@ -120,6 +135,47 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 		cont = 1;
 		expect_break_response = 1;
 		break;
+	case 's': {
+		if (*(command+1) != 0) {
+			//TODO: implement resuming at an arbitrary address
+			goto not_impl;
+		}
+		m68kinst inst;
+		uint16_t * pc_ptr;
+		if (pc < 0x400000) {
+			pc_ptr = cart + pc/2;
+		} else if(pc > 0xE00000) {
+			pc_ptr = ram + (pc & 0xFFFF)/2;
+		} else {
+			fprintf(stderr, "Entered gdb remote debugger stub at address %X\n", pc);
+			exit(1);
+		}
+		uint16_t * after_pc = m68k_decode(pc_ptr, &inst, pc & 0xFFFFFF);
+		uint32_t after = pc + (after_pc-pc_ptr)*2;
+
+		if (inst.op == M68K_RTS) {
+			after = (read_dma_value(context->aregs[7]/2) << 16) | read_dma_value(context->aregs[7]/2 + 1);
+		} else if (inst.op == M68K_RTE || inst.op == M68K_RTR) {
+			after = (read_dma_value((context->aregs[7]+2)/2) << 16) | read_dma_value((context->aregs[7]+2)/2 + 1);
+		} else if(m68k_is_branch(&inst)) {
+			if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
+				branch_f = after;
+				branch_t = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
+				insert_breakpoint(context, branch_t, (uint8_t *)gdb_debug_enter);
+			} else if(inst.op == M68K_DBCC && inst.extra.cond != COND_FALSE) {
+				branch_t = after;
+				branch_f = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
+				insert_breakpoint(context, branch_f, (uint8_t *)gdb_debug_enter);
+			} else {
+				after = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
+			}
+		}
+		insert_breakpoint(context, after, (uint8_t *)gdb_debug_enter);
+
+		cont = 1;
+		expect_break_response = 1;
+		break;
+	}
 	case 'H':
 		if (command[1] == 'g' || command[1] == 'c') {;
 			//no thread suport, just acknowledge
@@ -133,6 +189,11 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 		if (type < '2') {
 			uint32_t address = strtoul(command+3, NULL, 16);
 			insert_breakpoint(context, address, (uint8_t *)gdb_debug_enter);
+			bp_def *new_bp = malloc(sizeof(bp_def));
+			new_bp->next = breakpoints;
+			new_bp->address = address;
+			new_bp->index = bp_index++;
+			breakpoints = new_bp;
 			gdb_send_command("OK");
 		} else {
 			//watchpoints are not currently supported
@@ -145,6 +206,13 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 		if (type < '2') {
 			uint32_t address = strtoul(command+3, NULL, 16);
 			remove_breakpoint(context, address);
+			bp_def **found = find_breakpoint(&breakpoints, address);
+			if (*found)
+			{
+				bp_def * to_remove = *found;
+				*found = to_remove->next;
+				free(to_remove);
+			}
 			gdb_send_command("OK");
 		} else {
 			//watchpoints are not currently supported
@@ -249,6 +317,44 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 				cont = 1;
 				expect_break_response = 1;
 				break;
+			case 's':
+			case 'S': {
+				m68kinst inst;
+				uint16_t * pc_ptr;
+				if (pc < 0x400000) {
+					pc_ptr = cart + pc/2;
+				} else if(pc > 0xE00000) {
+					pc_ptr = ram + (pc & 0xFFFF)/2;
+				} else {
+					fprintf(stderr, "Entered gdb remote debugger stub at address %X\n", pc);
+					exit(1);
+				}
+				uint16_t * after_pc = m68k_decode(pc_ptr, &inst, pc & 0xFFFFFF);
+				uint32_t after = pc + (after_pc-pc_ptr)*2;
+
+				if (inst.op == M68K_RTS) {
+					after = (read_dma_value(context->aregs[7]/2) << 16) | read_dma_value(context->aregs[7]/2 + 1);
+				} else if (inst.op == M68K_RTE || inst.op == M68K_RTR) {
+					after = (read_dma_value((context->aregs[7]+2)/2) << 16) | read_dma_value((context->aregs[7]+2)/2 + 1);
+				} else if(m68k_is_branch(&inst)) {
+					if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
+						branch_f = after;
+						branch_t = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
+						insert_breakpoint(context, branch_t, (uint8_t *)gdb_debug_enter);
+					} else if(inst.op == M68K_DBCC && inst.extra.cond != COND_FALSE) {
+						branch_t = after;
+						branch_f = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
+						insert_breakpoint(context, branch_f, (uint8_t *)gdb_debug_enter);
+					} else {
+						after = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
+					}
+				}
+				insert_breakpoint(context, after, (uint8_t *)gdb_debug_enter);
+
+				cont = 1;
+				expect_break_response = 1;
+				break;
+			}
 			default:
 				goto not_impl;
 			}
@@ -271,10 +377,28 @@ not_impl:
 
 m68k_context *  gdb_debug_enter(m68k_context * context, uint32_t pc)
 {
-	fprintf(stderr, "Entered debugger at address %X\n", pc);
+	dfprintf(stderr, "Entered debugger at address %X\n", pc);
 	if (expect_break_response) {
 		gdb_send_command("S05");
 		expect_break_response = 0;
+	}
+	if ((pc & 0xFFFFFF) == branch_t) {
+		bp_def ** f_bp = find_breakpoint(&breakpoints, branch_f);
+		if (!*f_bp) {
+			remove_breakpoint(context, branch_f);
+		}
+		branch_t = branch_f = 0;
+	} else if((pc & 0xFFFFFF) == branch_f) {
+		bp_def ** t_bp = find_breakpoint(&breakpoints, branch_t);
+		if (!*t_bp) {
+			remove_breakpoint(context, branch_t);
+		}
+		branch_t = branch_f = 0;
+	}
+	//Check if this is a user set breakpoint, or just a temporary one
+	bp_def ** this_bp = find_breakpoint(&breakpoints, pc & 0xFFFFFF);
+	if (!*this_bp) {
+		remove_breakpoint(context, pc & 0xFFFFFF);
 	}
 	resume_pc = pc;
 	cont = 0;
@@ -323,7 +447,7 @@ m68k_context *  gdb_debug_enter(m68k_context * context, uint32_t pc)
 					break;
 				}
 			} else {
-				fprintf(stderr, "Ignoring character %c\n", *curbuf);
+				dfprintf(stderr, "Ignoring character %c\n", *curbuf);
 			}
 		}
 		if (curbuf == end) {

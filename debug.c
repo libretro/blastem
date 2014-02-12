@@ -4,10 +4,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-bp_def * breakpoints = NULL;
-bp_def * zbreakpoints = NULL;
-uint32_t bp_index = 0;
-uint32_t zbp_index = 0;
+static bp_def * breakpoints = NULL;
+static bp_def * zbreakpoints = NULL;
+static uint32_t bp_index = 0;
+static uint32_t zbp_index = 0;
 
 bp_def ** find_breakpoint(bp_def ** cur, uint32_t address)
 {
