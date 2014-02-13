@@ -121,6 +121,8 @@ uint8_t read_byte(m68k_context * context, uint32_t address)
 		word = context->mem_pointers[0] + address/2;
 	} else if (address >= 0xE00000) {
 		word = context->mem_pointers[1] + (address & 0xFFFF)/2;
+	} else if (address >= 0xA00000 && address < 0xA04000) {
+		return z80_ram[address & 0x1FFF];
 	} else {
 		return 0;
 	}
@@ -128,6 +130,31 @@ uint8_t read_byte(m68k_context * context, uint32_t address)
 		return *word;
 	}
 	return *word >> 8;
+}
+
+void write_byte(m68k_context * context, uint32_t address, uint8_t value)
+{
+	uint16_t * word;
+	//TODO: Use generated read/write functions so that memory map is properly respected
+	if (address < 0x400000) {
+		//TODO: Invalidate translated code
+		word = context->mem_pointers[0] + address/2;
+	} else if (address >= 0xE00000) {
+		m68k_handle_code_write(address & 0xFFFF, context);
+		word = context->mem_pointers[1] + (address & 0xFFFF)/2;
+	} else if (address >= 0xA00000 && address < 0xA04000) {
+		z80_ram[address & 0x1FFF] = value;
+		genesis_context * gen = context->system;
+		z80_handle_code_write(address & 0x1FFF, gen->z80);
+		return;
+	} else {
+		return;
+	}
+	if (address & 1) {
+		*word = (*word & 0xFF00) | value;
+	} else {
+		*word = (*word & 0xFF) | value << 8;
+	}
 }
 
 void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
@@ -269,6 +296,29 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 		gdb_send_command(send_buf);
 		break;
 	}
+	case 'M': {
+		char * rest;
+		uint32_t address = strtoul(command+1, &rest, 16);
+		uint32_t size = strtoul(rest+1, &rest, 16);
+
+		char *cur = rest+1;
+		while (size)
+		{
+			char tmp[3];
+			tmp[0] = *(cur++);
+			tmp[1] = *(cur++);
+			tmp[2] = 0;
+			write_byte(context, address, strtoul(tmp, NULL, 16));
+			address++;
+			size--;
+		}
+		gdb_send_command("OK");
+		break;
+	}
+	case 'X':
+		//binary transfers aren't supported currently as I don't feel like dealing with the escaping
+		gdb_send_command("");
+		break;
 	case 'p': {
 		unsigned long reg = strtoul(command+1, NULL, 16);
 
