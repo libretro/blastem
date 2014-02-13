@@ -67,7 +67,9 @@ typedef struct {
 	uint32_t    sample_rate;
     uint32_t    sample_limit;
 	uint32_t    current_cycle;
+	//TODO: Condense the next two fields into one
 	uint32_t    write_cycle;
+	uint32_t    busy_cycles;
 	ym_operator operators[NUM_OPERATORS];
 	ym_channel  channels[NUM_CHANNELS];
 	uint16_t    timer_a;
