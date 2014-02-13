@@ -636,9 +636,9 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 		{
 		//TODO: Test reg
 		case REG_LFO:
-			if ((value & 0x8) && !context->lfo_enable) {
+			/*if ((value & 0x8) && !context->lfo_enable) {
 				printf("LFO Enabled, Freq: %d\n", value & 0x7);
-			}
+			}*/
 			context->lfo_enable = value & 0x8;
 			if (!context->lfo_enable) {
 				context->lfo_am_step = context->lfo_pm_step = 0;
