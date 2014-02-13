@@ -319,28 +319,11 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 				while(v_context->flags & FLAG_DMA_RUN) {
 					vdp_run_dma_done(v_context, mclks_per_frame);
 					if (v_context->cycles >= mclks_per_frame) {
-						if (!headless) {
-							//printf("reached frame end | 68K Cycles: %d, MCLK Cycles: %d\n", context->current_cycle, v_context->cycles);
-							wait_render_frame(v_context, frame_limit);
-						} else if(exit_after){
-							--exit_after;
-							if (!exit_after) {
-								exit(0);
-							}
+						context->current_cycle = v_context->cycles / MCLKS_PER_68K;
+						if (context->current_cycle * MCLKS_PER_68K < mclks_per_frame) {
+							++context->current_cycle;
 						}
-						vdp_adjust_cycles(v_context, mclks_per_frame);
-						genesis_context * gen = context->system;
-						io_adjust_cycles(gen->ports, v_context->cycles/MCLKS_PER_68K, mclks_per_frame/MCLKS_PER_68K);
-						io_adjust_cycles(gen->ports+1, v_context->cycles/MCLKS_PER_68K, mclks_per_frame/MCLKS_PER_68K);
-						io_adjust_cycles(gen->ports+2, v_context->cycles/MCLKS_PER_68K, mclks_per_frame/MCLKS_PER_68K);
-						if (busack_cycle != CYCLE_NEVER) {
-							if (busack_cycle > mclks_per_frame/MCLKS_PER_68K) {
-								busack_cycle -= mclks_per_frame/MCLKS_PER_68K;
-							} else {
-								busack_cycle = CYCLE_NEVER;
-								busack = new_busack;
-							}
-						}
+						sync_components(context, 0);
 					}
 				}
 				//context->current_cycle = v_context->cycles / MCLKS_PER_68K;
@@ -353,27 +336,11 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 					while(v_context->flags & FLAG_DMA_RUN) {
 						vdp_run_dma_done(v_context, mclks_per_frame);
 						if (v_context->cycles >= mclks_per_frame) {
-							if (!headless) {
-								wait_render_frame(v_context, frame_limit);
-							} else if(exit_after){
-								--exit_after;
-								if (!exit_after) {
-									exit(0);
-								}
+							context->current_cycle = v_context->cycles / MCLKS_PER_68K;
+							if (context->current_cycle * MCLKS_PER_68K < mclks_per_frame) {
+								++context->current_cycle;
 							}
-							vdp_adjust_cycles(v_context, mclks_per_frame);
-							genesis_context * gen = context->system;
-							io_adjust_cycles(gen->ports, v_context->cycles/MCLKS_PER_68K, mclks_per_frame/MCLKS_PER_68K);
-							io_adjust_cycles(gen->ports+1, v_context->cycles/MCLKS_PER_68K, mclks_per_frame/MCLKS_PER_68K);
-							io_adjust_cycles(gen->ports+2, v_context->cycles/MCLKS_PER_68K, mclks_per_frame/MCLKS_PER_68K);
-							if (busack_cycle != CYCLE_NEVER) {
-								if (busack_cycle > mclks_per_frame/MCLKS_PER_68K) {
-									busack_cycle -= mclks_per_frame/MCLKS_PER_68K;
-								} else {
-									busack_cycle = CYCLE_NEVER;
-									busack = new_busack;
-								}
-							}
+							sync_components(context, 0);
 						}
 					}
 					if (blocked < 0) {
