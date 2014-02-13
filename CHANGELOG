@@ -1,0 +1,29 @@
+0.2.0
+-----
+*New Features*
+
+- Added Turbo and Slow modes that overclock and underclock the system respectively
+- Added FPS counter
+- New OpenGL render backend that allows filters to be writte in GLSL
+- Support 'UI' bindings on gamepad buttons and dpads
+- GDB remote debugging support
+- New debugger 68K debugger commands o, s and zp (see README for details)
+
+*Bugfixes*
+
+- Fixed argument handling so that the ROM filename does not need to be specified first
+- Don't allow register writes to Mode 5 only regs when in Mode 4
+- Fixed a bunch of VDP edge case behavior checked by Nemesis's test ROM
+- Fixed operator 1 self-feedback
+- Fixed handling of envelope overflow in attack phase
+- Fixed handling of channel output overflow
+- Adjusted FM and PSG volume to better match real hardware
+- Improved YM-2612 busy flag emulation
+- Properly sync hardware at end of frame when the 68K is blocked by DMA
+- Approximate wait state behavior when the Z80 accesses the 68K's bus
+- Implemented HV counter latch
+- Implemented sprite overflow and collision flags
+
+0.1.0
+-----
+Initial Release
