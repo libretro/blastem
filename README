@@ -1,4 +1,4 @@
-BlastEm 0.1.0
+BlastEm 0.2.0
 -------------
 
 Installation
@@ -36,9 +36,12 @@ SDL joystick 0 to the second controller.
 Video
 -----
 
-Currently the only setting in the video section is "width", which is the width
-of the window in pixels. Height is calculated from this value. Both width and
-height can be overridden from the command line.
+The video section currently has three settings: "width", "vertex_shader" and
+"fragment_shader". "width" sets the width of the window in pixels. Height is
+calculated from this value. Both width and height can be overridden from the
+command line. "vertex_shader" and "fragment_shader" control which GLSL shader
+files are used for rendering the display when in Open GL rendering mode.
+Shaders can be used to implement graphical filters and other effects.
 
 Audio
 -----
@@ -55,27 +58,49 @@ BlastEm has an integrated command-line debugger loosely based on GDB's
 interface. The interface is very rough at the moment. Available commands in the
 68K debugger are:
 	b ADDRESS            - Set a breakpoint at ADDRESS
+	d BREAKPOINT         - Delete a 68K breakpoint
 	a ADDRESS            - Advance to address
 	n                    - Advance to next instruction
+	o                    - Advance to next instruction ignoring branches to
+	                       lower addresses (good for breaking out of loops)
+	s                    - Advance to next instruction (follows bsr/jsr)
 	c                    - Continue
 	p[/(x|X|d|c)] VALUE  - Print a register or memory location
 	vs                   - Print VDP sprite list
 	vr                   - Print VDP register info
-	zb                   - Set a Z80 breakpoint
+	zb ADDRESS           - Set a Z80 breakpoint
+	zp[/(x|X|d|c)] VALUE - Display a Z80 value
 	q                    - Quit BlastEm
 Available commands in the Z80 debugger are:
-	b ADDRESS            - Set a breakpoint at ADDRESS
-	a ADDRESS            - Advance to address
+	b  ADDRESS           - Set a breakpoint at ADDRESS
+	de BREAKPOINT        - Delete a Z80 breakpoint
+	a  ADDRESS           - Advance to address
 	n                    - Advance to next instruction
 	c                    - Continue
 	p[/(x|X|d|c)] VALUE  - Print a register or memory location
 	di[/(x|X|d|c)] VALUE - Print VALUE before every debugger prompt
-	de BREAKPOINT        - Delete a Z80 breakpoint
 	q                    - Quit BlastEm
 
 The -d flag can be used to cause BlastEm to start in the debugger.
 Alternatively, you can use the ui.enter_debugger action (mapped to the 'u' key
 by default)to enter the debugger while a game is running.
+
+GDB Remote Debugging
+--------------------
+
+In addition to the native debugger, BlastEm can also act as a GDB remote
+debugging stub. To use this, you'll want to configure your Makefile to produce
+both an ELF executable and a raw binary. Invoke an m68k-elf targeted gdb with
+the ELF file. Once inside the gdb session, type:
+
+	target remote | BLASTEM_PATH/blastem ROM_FILE.bin -D
+
+where BLASTEM_PATH is the relative or absolute path to your BlastEm
+installation and ROM_FILE.bin is the name of the raw binary for your program.
+BlastEm will halt at the beginning of your program's entry point and return
+control to GDB. This will allow you to set breakpoints before your code runs.
+
+Trace points and watch points are not currently supported.
 
 License
 -------
