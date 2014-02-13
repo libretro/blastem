@@ -21,7 +21,9 @@
 #define dfopen(var, fname, mode)
 #endif
 
-#define BUSY_CYCLES 17
+#define BUSY_CYCLES_ADDRESS 17
+#define BUSY_CYCLES_DATA_LOW 83
+#define BUSY_CYCLES_DATA_HIGH 47
 #define OP_UPDATE_PERIOD 144
 
 enum {
@@ -505,7 +507,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			}
 		}
 	}
-	if (context->current_cycle >= context->write_cycle + (BUSY_CYCLES * context->clock_inc / 6)) {
+	if (context->current_cycle >= context->write_cycle + (context->busy_cycles * context->clock_inc / 6)) {
 		context->status &= 0x7F;
 		context->write_cycle = CYCLE_NEVER;
 	}
@@ -517,6 +519,8 @@ void ym_address_write_part1(ym2612_context * context, uint8_t address)
 	//printf("address_write_part1: %X\n", address);
 	context->selected_reg = address;
 	context->selected_part = 0;
+	context->write_cycle = context->current_cycle;
+	context->busy_cycles = BUSY_CYCLES_ADDRESS;
 }
 
 void ym_address_write_part2(ym2612_context * context, uint8_t address)
@@ -524,6 +528,8 @@ void ym_address_write_part2(ym2612_context * context, uint8_t address)
 	//printf("address_write_part2: %X\n", address);
 	context->selected_reg = address;
 	context->selected_part = 1;
+	context->write_cycle = context->current_cycle;
+	context->busy_cycles = BUSY_CYCLES_ADDRESS;
 }
 
 uint8_t fnum_to_keycode[] = {
@@ -802,6 +808,7 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 	}
 
 	context->write_cycle = context->current_cycle;
+	context->busy_cycles = context->selected_reg < 0xA0 ? BUSY_CYCLES_DATA_LOW : BUSY_CYCLES_DATA_HIGH;
 	context->status |= 0x80;
 }
 
