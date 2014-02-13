@@ -33,6 +33,7 @@ typedef struct {
 	FILE *   logfile;
 	uint16_t fnum;
 	int16_t  output;
+	int16_t  op1_old;
 	uint8_t  block_fnum_latch;
 	uint8_t  block;
 	uint8_t  keycode;

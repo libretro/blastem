@@ -374,7 +374,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			{
 			case 0://Operator 1
 				if (chan->feedback) {
-					mod = operator->output >> (9-chan->feedback);
+					mod = (chan->op1_old + operator->output) >> (10-chan->feedback);
 				}
 				break;
 			case 1://Operator 3
@@ -431,11 +431,16 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			if (first_key_on) {
 				dfprintf(debug_file, "op %d, base phase: %d, mod: %d, sine: %d, out: %d\n", op, phase, mod, sine_table[(phase+mod) & 0x1FF], pow_table[sine_table[phase & 0x1FF] + env]);
 			}
-			phase += mod;
+			//if ((channel != 0 && channel != 4) || chan->algorithm != 5) {
+				phase += mod;
+			//}
 
 			int16_t output = pow_table[sine_table[phase & 0x1FF] + env];
 			if (phase & 0x200) {
 				output = -output;
+			}
+			if (op % 4 == 0) {
+				chan->op1_old = operator->output;
 			}
 			operator->output = output;
 			//Update the channel output if we've updated all operators
@@ -784,6 +789,7 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 			case REG_ALG_FEEDBACK:
 				context->channels[channel].algorithm = value & 0x7;
 				context->channels[channel].feedback = value >> 3 & 0x7;
+				//printf("Algorithm %d, feedback %d for channel %d\n", value & 0x7, value >> 3 & 0x7, channel);
 				break;
 			case REG_LR_AMS_PMS:
 				context->channels[channel].pms = (value & 0x7) * 32;
