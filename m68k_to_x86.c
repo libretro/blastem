@@ -31,8 +31,6 @@ char disasm_buf[1024];
 m68k_context * sync_components(m68k_context * context, uint32_t address);
 
 void handle_cycle_limit();
-void m68k_save_context();
-void m68k_load_context();
 void m68k_modified_ret_addr();
 void m68k_native_addr();
 void m68k_native_addr_and_sync();
@@ -3286,7 +3284,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		}
 		break;
 	case M68K_ILLEGAL:
-		dst = call(dst, (uint8_t *)m68k_save_context);
+		dst = call(dst, opts->save_context);
 		dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
 		dst = call(dst, (uint8_t *)print_regs_exit);
 		break;
@@ -3513,7 +3511,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		}
 		break;
 	case M68K_RESET:
-		dst = call(dst, (uint8_t *)m68k_save_context);
+		dst = call(dst, opts->save_context);
 		dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
 		dst = call(dst, (uint8_t *)print_regs_exit);
 		break;
@@ -4136,14 +4134,14 @@ void insert_breakpoint(m68k_context * context, uint32_t address, uint8_t * bp_ha
 		dst = bp_stub;
 
 		//Save context and call breakpoint handler
-		dst = call(dst, (uint8_t *)m68k_save_context);
+		dst = call(dst, opts->save_context);
 		dst = push_r(dst, SCRATCH1);
 		dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
 		dst = mov_rr(dst, SCRATCH1, RSI, SZ_D);
 		dst = call(dst, bp_handler);
 		dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
 		//Restore context
-		dst = call(dst, (uint8_t *)m68k_load_context);
+		dst = call(dst, opts->load_context);
 		dst = pop_r(dst, SCRATCH1);
 		//do prologue stuff
 		dst = cmp_rr(dst, CYCLES, LIMIT, SZ_D);
@@ -4240,7 +4238,7 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 					dst = cmp_irdisp8(dst, 0, CONTEXT, offsetof(m68k_context, mem_pointers) + sizeof(void*) * memmap[chunk].ptr_index, SZ_Q);
 					uint8_t * not_null = dst+1;
 					dst = jcc(dst, CC_NZ, dst+2);
-					dst = call(dst, (uint8_t *)m68k_save_context);
+					dst = call(dst, opts->save_context);
 					if (is_write) {
 						//SCRATCH2 is RDI, so no need to move it there
 						dst = mov_rr(dst, SCRATCH1, RDX, size);
@@ -4265,7 +4263,7 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 						dst = pop_r(dst, CONTEXT);
 						dst = mov_rr(dst, RAX, SCRATCH1, size);
 					}
-					dst = jmp(dst, (uint8_t *)m68k_load_context);
+					dst = jmp(dst, opts->load_context);
 
 					*not_null = dst - (not_null + 1);
 				}
@@ -4335,15 +4333,15 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 				dst = bt_rrdisp32(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, ram_code_flags), SZ_D);
 				uint8_t * not_code = dst+1;
 				dst = jcc(dst, CC_NC, dst+2);
-				dst = call(dst, (uint8_t *)m68k_save_context);
+				dst = call(dst, opts->save_context);
 				dst = call(dst, (uint8_t *)m68k_handle_code_write);
 				dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
-				dst = call(dst, (uint8_t *)m68k_load_context);
+				dst = call(dst, opts->load_context);
 				*not_code = dst - (not_code+1);
 			}
 			dst = retn(dst);
 		} else if (cfun) {
-			dst = call(dst, (uint8_t *)m68k_save_context);
+			dst = call(dst, opts->save_context);
 			if (is_write) {
 				//SCRATCH2 is RDI, so no need to move it there
 				dst = mov_rr(dst, SCRATCH1, RDX, size);
@@ -4368,7 +4366,7 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 				dst = pop_r(dst, CONTEXT);
 				dst = mov_rr(dst, RAX, SCRATCH1, size);
 			}
-			dst = jmp(dst, (uint8_t *)m68k_load_context);
+			dst = jmp(dst, opts->load_context);
 		} else {
 			//Not sure the best course of action here
 			if (!is_write) {
@@ -4406,6 +4404,12 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	opts->aregs[1] = R14;
 	opts->aregs[2] = R9;
 	opts->aregs[7] = R15;
+
+	opts->flag_regs[0] = -1;
+	opts->flag_regs[1] = RBX;
+	opts->flag_regs[2] = RDX;
+	opts->flag_regs[3] = BH;
+	opts->flag_regs[4] = DH;
 	opts->native_code_map = malloc(sizeof(native_map_slot) * NATIVE_MAP_CHUNKS);
 	memset(opts->native_code_map, 0, sizeof(native_map_slot) * NATIVE_MAP_CHUNKS);
 	opts->deferred = NULL;
@@ -4415,12 +4419,51 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	opts->ram_inst_sizes = malloc(sizeof(uint8_t *) * 64);
 	memset(opts->ram_inst_sizes, 0, sizeof(uint8_t *) * 64);
 
+	uint8_t * dst = opts->cur_code;
+
+	opts->save_context = dst;
+	for (int i = 0; i < 5; i++)
+		if (opts->flag_regs[i] >= 0) {
+			dst = mov_rrdisp8(dst, opts->flag_regs[i], CONTEXT, offsetof(m68k_context, flags) + i, SZ_B);
+		}
+	for (int i = 0; i < 8; i++)
+	{
+		if (opts->dregs[i] >= 0) {
+			dst = mov_rrdisp8(dst, opts->dregs[i], CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t) * i, SZ_D);
+		}
+		if (opts->aregs[i] >= 0) {
+			dst = mov_rrdisp8(dst, opts->aregs[i], CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * i, SZ_D);
+		}
+	}
+	dst = mov_rrdisp8(dst, CYCLES, CONTEXT, offsetof(m68k_context, current_cycle), SZ_D);
+	dst = retn(dst);
+
+	opts->load_context = dst;
+	for (int i = 0; i < 5; i++)
+		if (opts->flag_regs[i] >= 0) {
+			dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, flags) + i, opts->flag_regs[i], SZ_B);
+		}
+	for (int i = 0; i < 8; i++)
+	{
+		if (opts->dregs[i] >= 0) {
+			dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, dregs) + sizeof(uint32_t) * i, opts->dregs[i], SZ_D);
+		}
+		if (opts->aregs[i] >= 0) {
+			dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * i, opts->aregs[i], SZ_D);
+		}
+	}
+	dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, current_cycle), CYCLES, SZ_D);
+	dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, target_cycle), LIMIT, SZ_D);
+	dst = retn(dst);
+
+	opts->cur_code = dst;
+
 	opts->read_16 = gen_mem_fun(opts, memmap, num_chunks, READ_16);
 	opts->read_8 = gen_mem_fun(opts, memmap, num_chunks, READ_8);
 	opts->write_16 = gen_mem_fun(opts, memmap, num_chunks, WRITE_16);
 	opts->write_8 = gen_mem_fun(opts, memmap, num_chunks, WRITE_8);
 
-	uint8_t * dst = opts->cur_code;
+	dst = opts->cur_code;
 
 	opts->read_32 = dst;
 	dst = push_r(dst, SCRATCH1);
@@ -4463,7 +4506,7 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = cmp_rdisp8r(dst, CONTEXT, offsetof(m68k_context, sync_cycle), CYCLES, SZ_D);
 	uint8_t * skip_sync = dst+1;
 	dst = jcc(dst, CC_C, dst+2);
-	dst = call(dst, (uint8_t *)m68k_save_context);
+	dst = call(dst, opts->save_context);
 	dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
 	dst = mov_rr(dst, SCRATCH1, RSI, SZ_D);
 	dst = test_ir(dst, 8, RSP, SZ_D);
@@ -4478,7 +4521,7 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = add_ir(dst, 8, RSP, SZ_Q);
 	*no_adjust = dst - (no_adjust+1);
 	dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
-	dst = jmp(dst, (uint8_t *)m68k_load_context);
+	dst = jmp(dst, opts->load_context);
 	*skip_sync = dst - (skip_sync+1);
 	dst = retn(dst);
 	*do_int = dst - (do_int+1);
