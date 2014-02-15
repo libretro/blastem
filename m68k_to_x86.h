@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #ifndef M68K_TO_X86_H_
@@ -22,6 +22,7 @@ typedef struct {
 	uint32_t        flags;
 	int8_t          dregs[8];
 	int8_t          aregs[8];
+	int8_t			flag_regs[5];
 	native_map_slot *native_code_map;
 	deferred_addr   *deferred;
 	uint8_t         *cur_code;
@@ -37,6 +38,8 @@ typedef struct {
 	uint8_t         *write_32_highfirst;
 	uint8_t         *handle_cycle_limit_int;
 	uint8_t         *trap;
+	uint8_t			*save_context;
+	uint8_t			*load_context;
 } x86_68k_options;
 
 typedef struct {
@@ -53,7 +56,7 @@ typedef struct {
 	uint16_t        *mem_pointers[NUM_MEM_AREAS];
 	void            *video_context;
 	uint16_t        reserved;
-	
+
 	native_map_slot *native_code_map;
 	void            *options;
 	uint8_t         ram_code_flags[32/8];
