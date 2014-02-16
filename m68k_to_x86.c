@@ -42,7 +42,6 @@ void get_sr();
 void do_sync();
 void bcd_add();
 void bcd_sub();
-void m68k_start_context(uint8_t * addr, m68k_context * context);
 void debug_print_sr();
 
 uint8_t * cycles(uint8_t * dst, uint32_t num)
@@ -4168,7 +4167,8 @@ void remove_breakpoint(m68k_context * context, uint32_t address)
 void start_68k_context(m68k_context * context, uint32_t address)
 {
 	uint8_t * addr = get_native_address_trans(context, address);
-	m68k_start_context(addr, context);
+	x86_68k_options * options = context->options;
+	options->start_context(addr, context);
 }
 
 void m68k_reset(m68k_context * context)
@@ -4454,6 +4454,22 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	}
 	dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, current_cycle), CYCLES, SZ_D);
 	dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, target_cycle), LIMIT, SZ_D);
+	dst = retn(dst);
+
+	opts->start_context = (start_fun)dst;
+	dst = push_r(dst, RBP);
+	dst = push_r(dst, R12);
+	dst = push_r(dst, R13);
+	dst = push_r(dst, R14);
+	dst = push_r(dst, R15);
+	dst = call(dst, opts->load_context);
+	dst = call_r(dst, RDI);
+	dst = call(dst, opts->save_context);
+	dst = pop_r(dst, R15);
+	dst = pop_r(dst, R14);
+	dst = pop_r(dst, R13);
+	dst = pop_r(dst, R12);
+	dst = pop_r(dst, RBP);
 	dst = retn(dst);
 
 	opts->cur_code = dst;
