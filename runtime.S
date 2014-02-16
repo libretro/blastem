@@ -177,12 +177,6 @@ set_ccr:
 	mov %cl, (%rsi)
 	ret
 
-	.global m68k_modified_ret_addr
-m68k_modified_ret_addr:
-	add $16, %rsp
-	call m68k_native_addr
-	jmp *%rcx
-
 	.global m68k_native_addr_and_sync
 m68k_native_addr_and_sync:
 	call m68k_save_context
