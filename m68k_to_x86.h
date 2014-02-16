@@ -16,8 +16,6 @@ struct m68kinst;
 #define NATIVE_CHUNK_SIZE ((16 * 1024 * 1024 / NATIVE_MAP_CHUNKS)/2)
 #define MAX_NATIVE_SIZE 255
 
-#define OPT_NATIVE_CALL_STACK 0x1
-
 typedef void (*start_fun)(uint8_t * addr, void * context);
 
 typedef struct {

@@ -31,7 +31,6 @@ char disasm_buf[1024];
 m68k_context * sync_components(m68k_context * context, uint32_t address);
 
 void handle_cycle_limit();
-void m68k_modified_ret_addr();
 void m68k_native_addr();
 void m68k_native_addr_and_sync();
 void m68k_invalid();
@@ -1754,9 +1753,6 @@ uint8_t * translate_m68k_bsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 	//TODO: Add cycles in the right place relative to pushing the return address on the stack
 	dst = cycles(dst, 10);
 	dst = mov_ir(dst, after, SCRATCH1, SZ_D);
-	if (opts->flags & OPT_NATIVE_CALL_STACK) {
-		dst = push_r(dst, SCRATCH1);
-	}
 	dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
 	dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
 	dst = call(dst, opts->write_32_highfirst);
@@ -1766,13 +1762,7 @@ uint8_t * translate_m68k_bsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		//dummy address to be replaced later
 		dest_addr = dst + 256;
 	}
-	if (opts->flags & OPT_NATIVE_CALL_STACK) {
-		dst = call(dst, (char *)dest_addr);
-		//would add_ir(dst, 8, RSP, SZ_Q) be faster here?
-		dst = pop_r(dst, SCRATCH1);
-	} else {
-		dst = jmp(dst, (char *)dest_addr);
-	}
+	dst = jmp(dst, (char *)dest_addr);
 	return dst;
 }
 
@@ -2080,9 +2070,6 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 	case MODE_AREG_INDIRECT:
 		dst = cycles(dst, BUS*2);
 		dst = mov_ir(dst, inst->address + 2, SCRATCH1, SZ_D);
-		if (opts->flags & OPT_NATIVE_CALL_STACK) {
-			dst = push_r(dst, SCRATCH1);
-		}
 		dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
 		dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
 		dst = call(dst, opts->write_32_highfirst);
@@ -2092,20 +2079,11 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 			dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->src.params.regs.pri, SCRATCH1, SZ_D);
 		}
 		dst = call(dst, (uint8_t *)m68k_native_addr);
-		if (opts->flags & OPT_NATIVE_CALL_STACK) {
-			dst = call_r(dst, SCRATCH1);
-			//would add_ir(dst, 8, RSP, SZ_Q) be faster here?
-			dst = pop_r(dst, SCRATCH1);
-		} else {
-			dst = jmp_r(dst, SCRATCH1);
-		}
+		dst = jmp_r(dst, SCRATCH1);
 		break;
 	case MODE_AREG_DISPLACE:
 		dst = cycles(dst, BUS*2);
 		dst = mov_ir(dst, inst->address + 4, SCRATCH1, SZ_D);
-		if (opts->flags & OPT_NATIVE_CALL_STACK) {
-			dst = push_r(dst, SCRATCH1);
-		}
 		dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
 		dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
 		dst = call(dst, opts->write_32_highfirst);
@@ -2116,20 +2094,11 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		}
 		dst = add_ir(dst, inst->src.params.regs.displacement, SCRATCH1, SZ_D);
 		dst = call(dst, (uint8_t *)m68k_native_addr);
-		if (opts->flags & OPT_NATIVE_CALL_STACK) {
-			dst = call_r(dst, SCRATCH1);
-			//would add_ir(dst, 8, RSP, SZ_Q) be faster here?
-			dst = pop_r(dst, SCRATCH1);
-		} else {
-			dst = jmp_r(dst, SCRATCH1);
-		}
+		dst = jmp_r(dst, SCRATCH1);
 		break;
 	case MODE_AREG_INDEX_DISP8:
 		dst = cycles(dst, BUS*3);//TODO: CHeck that this is correct
 		dst = mov_ir(dst, inst->address + 4, SCRATCH1, SZ_D);
-		if (opts->flags & OPT_NATIVE_CALL_STACK) {
-			dst = push_r(dst, SCRATCH1);
-		}
 		dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
 		dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
 		dst = call(dst, opts->write_32_highfirst);
@@ -2173,21 +2142,12 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 			dst = add_ir(dst, inst->src.params.regs.displacement, SCRATCH1, SZ_D);
 		}
 		dst = call(dst, (uint8_t *)m68k_native_addr);
-		if (opts->flags & OPT_NATIVE_CALL_STACK) {
-			dst = call_r(dst, SCRATCH1);
-			//would add_ir(dst, 8, RSP, SZ_Q) be faster here?
-			dst = pop_r(dst, SCRATCH1);
-		} else {
-			dst = jmp_r(dst, SCRATCH1);
-		}
+		dst = jmp_r(dst, SCRATCH1);
 		break;
 	case MODE_PC_DISPLACE:
 		//TODO: Add cycles in the right place relative to pushing the return address on the stack
 		dst = cycles(dst, 10);
 		dst = mov_ir(dst, inst->address + 4, SCRATCH1, SZ_D);
-		if (opts->flags & OPT_NATIVE_CALL_STACK) {
-			dst = push_r(dst, SCRATCH1);
-		}
 		dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
 		dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
 		dst = call(dst, opts->write_32_highfirst);
@@ -2199,31 +2159,16 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 				//dummy address to be replaced later, make sure it generates a 4-byte displacement
 				dest_addr = dst + 256;
 			}
-			if (opts->flags & OPT_NATIVE_CALL_STACK) {
-				dst = call(dst, (char *)dest_addr);
-			} else {
-				dst = jmp(dst, dest_addr);
-			}
+			dst = jmp(dst, dest_addr);
 		} else {
 			dst = mov_ir(dst, m68k_addr, SCRATCH1, SZ_D);
 			dst = call(dst, (uint8_t *)m68k_native_addr);
-			if (opts->flags & OPT_NATIVE_CALL_STACK) {
-				dst = call_r(dst, SCRATCH1);
-			} else {
-				dst = jmp_r(dst, SCRATCH1);
-			}
-		}
-		if (opts->flags & OPT_NATIVE_CALL_STACK) {
-			//would add_ir(dst, 8, RSP, SZ_Q) be faster here?
-			dst = pop_r(dst, SCRATCH1);
+			dst = jmp_r(dst, SCRATCH1);
 		}
 		break;
 	case MODE_PC_INDEX_DISP8:
 		dst = cycles(dst, BUS*3);//TODO: CHeck that this is correct
 		dst = mov_ir(dst, inst->address + 4, SCRATCH1, SZ_D);
-		if (opts->flags & OPT_NATIVE_CALL_STACK) {
-			dst = push_r(dst, SCRATCH1);
-		}
 		dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
 		dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
 		dst = call(dst, opts->write_32_highfirst);
@@ -2263,22 +2208,13 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 			dst = add_ir(dst, inst->src.params.regs.displacement, SCRATCH1, SZ_D);
 		}
 		dst = call(dst, (uint8_t *)m68k_native_addr);
-		if (opts->flags & OPT_NATIVE_CALL_STACK) {
-			dst = call_r(dst, SCRATCH1);
-			//would add_ir(dst, 8, RSP, SZ_Q) be faster here?
-			dst = pop_r(dst, SCRATCH1);
-		} else {
-			dst = jmp_r(dst, SCRATCH1);
-		}
+		dst = jmp_r(dst, SCRATCH1);
 		break;
 	case MODE_ABSOLUTE:
 	case MODE_ABSOLUTE_SHORT:
 		//TODO: Add cycles in the right place relative to pushing the return address on the stack
 		dst = cycles(dst, inst->src.addr_mode == MODE_ABSOLUTE ? 12 : 10);
 		dst = mov_ir(dst, inst->address + (inst->src.addr_mode == MODE_ABSOLUTE ? 6 : 4), SCRATCH1, SZ_D);
-		if (opts->flags & OPT_NATIVE_CALL_STACK) {
-			dst = push_r(dst, SCRATCH1);
-		}
 		dst = sub_ir(dst, 4, opts->aregs[7], SZ_D);
 		dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
 		dst = call(dst, opts->write_32_highfirst);
@@ -2290,23 +2226,11 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 				//dummy address to be replaced later, make sure it generates a 4-byte displacement
 				dest_addr = dst + 256;
 			}
-			if (opts->flags & OPT_NATIVE_CALL_STACK) {
-				dst = call(dst, (char *)dest_addr);
-			} else {
-				dst = jmp(dst, dest_addr);
-			}
+			dst = jmp(dst, dest_addr);
 		} else {
 			dst = mov_ir(dst, m68k_addr, SCRATCH1, SZ_D);
 			dst = call(dst, (uint8_t *)m68k_native_addr);
-			if (opts->flags & OPT_NATIVE_CALL_STACK) {
-				dst = call_r(dst, SCRATCH1);
-			} else {
-				dst = jmp_r(dst, SCRATCH1);
-			}
-		}
-		if (opts->flags & OPT_NATIVE_CALL_STACK) {
-			//would add_ir(dst, 8, RSP, SZ_Q) be faster here?
-			dst = pop_r(dst, SCRATCH1);
+			dst = jmp_r(dst, SCRATCH1);
 		}
 		break;
 	default:
@@ -2323,15 +2247,8 @@ uint8_t * translate_m68k_rts(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 	dst = mov_rr(dst, opts->aregs[7], SCRATCH1, SZ_D);
 	dst = add_ir(dst, 4, opts->aregs[7], SZ_D);
 	dst = call(dst, opts->read_32);
-	if (opts->flags & OPT_NATIVE_CALL_STACK) {
-		dst = cmp_rdisp8r(dst, RSP, 8, SCRATCH1, SZ_D);
-		dst = jcc(dst, CC_NZ, dst+3);
-		dst = retn(dst);
-		dst = jmp(dst, (char *)m68k_modified_ret_addr);
-	} else {
-		dst = call(dst, (uint8_t *)m68k_native_addr);
-		dst = jmp_r(dst, SCRATCH1);
-	}
+	dst = call(dst, (uint8_t *)m68k_native_addr);
+	dst = jmp_r(dst, SCRATCH1);
 	return dst;
 }
 
