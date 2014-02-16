@@ -18,6 +18,8 @@ struct m68kinst;
 
 #define OPT_NATIVE_CALL_STACK 0x1
 
+typedef void (*start_fun)(uint8_t * addr, void * context);
+
 typedef struct {
 	uint32_t        flags;
 	int8_t          dregs[8];
@@ -40,6 +42,7 @@ typedef struct {
 	uint8_t         *trap;
 	uint8_t			*save_context;
 	uint8_t			*load_context;
+	start_fun       start_context;
 } x86_68k_options;
 
 typedef struct {
