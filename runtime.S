@@ -1,30 +1,4 @@
 
-	.global handle_cycle_limit
-	.global do_sync
-handle_cycle_limit:
-	cmp 84(%rsi), %eax
-	jb skip_sync
-do_sync:
-	push %rcx
-	push %rdi
-	call m68k_save_context
-	mov %rsi, %rdi
-	xor %esi, %esi
-	test $8, %esp
-	jnz adjust_rsp
-	call sync_components
-	jmp done_adjust
-adjust_rsp:
-	sub $8, %rsp
-	call sync_components
-	add $8, %rsp
-done_adjust:
-	mov %rax, %rsi
-	call m68k_load_context
-	pop %rdi
-	pop %rcx
-skip_sync:
-	ret
 
 invalid_msg:
 	.asciz "Invalid instruction at %X\n"
@@ -147,40 +121,5 @@ set_ccr:
 	shr $1, %cl
 	and $1, %cl
 	mov %cl, (%rsi)
-	ret
-
-	.global m68k_save_context
-m68k_save_context:
-	mov %bl, 1(%rsi) /* N Flag */
-	mov %dl, 2(%rsi) /* Z flag */
-	mov %bh, 3(%rsi) /* V flag */
-	mov %dh, 4(%rsi) /* C flag */
-	mov %r10d, 8(%rsi) /* d0 */
-	mov %r11d, 12(%rsi) /* d1 */
-	mov %r12d, 16(%rsi) /* d2 */
-	mov %r8d,  20(%rsi) /* d3 */
-	mov %r13d, 40(%rsi) /* a0 */
-	mov %r14d, 44(%rsi) /* a1 */
-	mov %r9d,  48(%rsi) /* a2 */
-	mov %r15d, 68(%rsi) /* a7 */
-	mov %eax, 80(%rsi) /* current cycle count */
-	ret
-
-	.global m68k_load_context
-m68k_load_context:
-	mov 1(%rsi), %bl /* N Flag */
-	mov 2(%rsi), %dl /* Z flag */
-	mov 3(%rsi), %bh /* V flag */
-	mov 4(%rsi), %dh /* C flag */
-	mov 8(%rsi), %r10d /* d0 */
-	mov 12(%rsi), %r11d /* d1 */
-	mov 16(%rsi), %r12d /* d2 */
-	mov 20(%rsi), %r8d  /* d3 */
-	mov 40(%rsi), %r13d /* a0 */
-	mov 44(%rsi), %r14d /* a1 */
-	mov 48(%rsi), %r9d  /* a2 */
-	mov 68(%rsi), %r15d /* a7 */
-	mov 76(%rsi), %ebp /* target cycle count */
-	mov 80(%rsi), %eax /* current cycle count */
 	ret
 
