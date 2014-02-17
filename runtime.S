@@ -149,42 +149,6 @@ set_ccr:
 	mov %cl, (%rsi)
 	ret
 
-	.global m68k_native_addr_and_sync
-m68k_native_addr_and_sync:
-	call m68k_save_context
-	push %rcx
-	mov %rsi, %rdi
-	xor %esi, %esi
-	test $8, %rsp
-	jnz adjust_rsp_na
-	call sync_components
-	jmp no_adjust_rsp_na
-adjust_rsp_na:
-	sub $8, %rsp
-	call sync_components
-	add $8, %rsp
-no_adjust_rsp_na:
-	pop %rsi
-	push %rax
-	mov %rax, %rdi
-	call get_native_address_trans
-	mov %rax, %rcx
-	pop %rsi
-	call m68k_load_context
-	ret
-
-	.global m68k_native_addr
-m68k_native_addr:
-	call m68k_save_context
-	push %rsi
-	mov %rsi, %rdi
-	mov %ecx, %esi
-	call get_native_address_trans
-	mov %rax, %rcx
-	pop %rsi
-	call m68k_load_context
-	ret
-
 	.global m68k_save_context
 m68k_save_context:
 	mov %bl, 1(%rsi) /* N Flag */
