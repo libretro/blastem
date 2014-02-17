@@ -31,8 +31,6 @@ char disasm_buf[1024];
 m68k_context * sync_components(m68k_context * context, uint32_t address);
 
 void handle_cycle_limit();
-void m68k_native_addr();
-void m68k_native_addr_and_sync();
 void m68k_invalid();
 void set_sr();
 void set_ccr();
@@ -1926,7 +1924,7 @@ uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		} else {
 			dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->src.params.regs.pri, SCRATCH1, SZ_D);
 		}
-		dst = call(dst, (uint8_t *)m68k_native_addr);
+		dst = call(dst, opts->native_addr);
 		dst = jmp_r(dst, SCRATCH1);
 		break;
 	case MODE_AREG_INDEX_DISP8:
@@ -1972,7 +1970,7 @@ uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		if (inst->src.params.regs.displacement) {
 			dst = add_ir(dst, inst->src.params.regs.displacement, SCRATCH1, SZ_D);
 		}
-		dst = call(dst, (uint8_t *)m68k_native_addr);
+		dst = call(dst, opts->native_addr);
 		dst = jmp_r(dst, SCRATCH1);
 		break;
 	case MODE_PC_DISPLACE:
@@ -1988,7 +1986,7 @@ uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 			dst = jmp(dst, dest_addr);
 		} else {
 			dst = mov_ir(dst, m68k_addr, SCRATCH1, SZ_D);
-			dst = call(dst, (uint8_t *)m68k_native_addr);
+			dst = call(dst, opts->native_addr);
 			dst = jmp_r(dst, SCRATCH1);
 		}
 		break;
@@ -2029,7 +2027,7 @@ uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		if (inst->src.params.regs.displacement) {
 			dst = add_ir(dst, inst->src.params.regs.displacement, SCRATCH1, SZ_D);
 		}
-		dst = call(dst, (uint8_t *)m68k_native_addr);
+		dst = call(dst, opts->native_addr);
 		dst = jmp_r(dst, SCRATCH1);
 		break;
 	case MODE_ABSOLUTE:
@@ -2046,7 +2044,7 @@ uint8_t * translate_m68k_jmp(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 			dst = jmp(dst, dest_addr);
 		} else {
 			dst = mov_ir(dst, m68k_addr, SCRATCH1, SZ_D);
-			dst = call(dst, (uint8_t *)m68k_native_addr);
+			dst = call(dst, opts->native_addr);
 			dst = jmp_r(dst, SCRATCH1);
 		}
 		break;
@@ -2076,7 +2074,7 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		} else {
 			dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->src.params.regs.pri, SCRATCH1, SZ_D);
 		}
-		dst = call(dst, (uint8_t *)m68k_native_addr);
+		dst = call(dst, opts->native_addr);
 		dst = jmp_r(dst, SCRATCH1);
 		break;
 	case MODE_AREG_DISPLACE:
@@ -2091,7 +2089,7 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 			dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + 4 * inst->src.params.regs.pri, SCRATCH1, SZ_D);
 		}
 		dst = add_ir(dst, inst->src.params.regs.displacement, SCRATCH1, SZ_D);
-		dst = call(dst, (uint8_t *)m68k_native_addr);
+		dst = call(dst, opts->native_addr);
 		dst = jmp_r(dst, SCRATCH1);
 		break;
 	case MODE_AREG_INDEX_DISP8:
@@ -2139,7 +2137,7 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		if (inst->src.params.regs.displacement) {
 			dst = add_ir(dst, inst->src.params.regs.displacement, SCRATCH1, SZ_D);
 		}
-		dst = call(dst, (uint8_t *)m68k_native_addr);
+		dst = call(dst, opts->native_addr);
 		dst = jmp_r(dst, SCRATCH1);
 		break;
 	case MODE_PC_DISPLACE:
@@ -2160,7 +2158,7 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 			dst = jmp(dst, dest_addr);
 		} else {
 			dst = mov_ir(dst, m68k_addr, SCRATCH1, SZ_D);
-			dst = call(dst, (uint8_t *)m68k_native_addr);
+			dst = call(dst, opts->native_addr);
 			dst = jmp_r(dst, SCRATCH1);
 		}
 		break;
@@ -2205,7 +2203,7 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 		if (inst->src.params.regs.displacement) {
 			dst = add_ir(dst, inst->src.params.regs.displacement, SCRATCH1, SZ_D);
 		}
-		dst = call(dst, (uint8_t *)m68k_native_addr);
+		dst = call(dst, opts->native_addr);
 		dst = jmp_r(dst, SCRATCH1);
 		break;
 	case MODE_ABSOLUTE:
@@ -2227,7 +2225,7 @@ uint8_t * translate_m68k_jsr(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 			dst = jmp(dst, dest_addr);
 		} else {
 			dst = mov_ir(dst, m68k_addr, SCRATCH1, SZ_D);
-			dst = call(dst, (uint8_t *)m68k_native_addr);
+			dst = call(dst, opts->native_addr);
 			dst = jmp_r(dst, SCRATCH1);
 		}
 		break;
@@ -2245,7 +2243,7 @@ uint8_t * translate_m68k_rts(uint8_t * dst, m68kinst * inst, x86_68k_options * o
 	dst = mov_rr(dst, opts->aregs[7], SCRATCH1, SZ_D);
 	dst = add_ir(dst, 4, opts->aregs[7], SZ_D);
 	dst = call(dst, opts->read_32);
-	dst = call(dst, (uint8_t *)m68k_native_addr);
+	dst = call(dst, opts->native_addr);
 	dst = jmp_r(dst, SCRATCH1);
 	return dst;
 }
@@ -3648,7 +3646,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = mov_rrdisp8(dst, SCRATCH2, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SZ_D);
 		*end_off = dst - (end_off+1);
 		//Get native address, sync components, recalculate integer points and jump to returned address
-		dst = call(dst, (uint8_t *)m68k_native_addr_and_sync);
+		dst = call(dst, opts->native_addr_and_sync);
 		dst = jmp_r(dst, SCRATCH1);
 		break;
 	case M68K_RTR:
@@ -3662,7 +3660,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = call(dst, opts->read_32);
 		dst = add_ir(dst, 4, opts->aregs[7], SZ_D);
 		//Get native address and jump to it
-		dst = call(dst, (uint8_t *)m68k_native_addr);
+		dst = call(dst, opts->native_addr);
 		dst = jmp_r(dst, SCRATCH1);
 		break;
 	case M68K_SBCD:
@@ -4385,6 +4383,7 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = retn(dst);
 
 	opts->start_context = (start_fun)dst;
+	//save callee save registers
 	dst = push_r(dst, RBP);
 	dst = push_r(dst, R12);
 	dst = push_r(dst, R13);
@@ -4393,11 +4392,48 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = call(dst, opts->load_context);
 	dst = call_r(dst, RDI);
 	dst = call(dst, opts->save_context);
+	//restore callee save registers
 	dst = pop_r(dst, R15);
 	dst = pop_r(dst, R14);
 	dst = pop_r(dst, R13);
 	dst = pop_r(dst, R12);
 	dst = pop_r(dst, RBP);
+	dst = retn(dst);
+
+	opts->native_addr = dst;
+	dst = call(dst, opts->save_context);
+	dst = push_r(dst, CONTEXT);
+	dst = mov_rr(dst, CONTEXT, RDI, SZ_Q); //move context to 1st arg reg
+	dst = mov_rr(dst, SCRATCH1, RSI, SZ_D); //move address to 2nd arg reg
+	dst = call(dst, (uint8_t *)get_native_address_trans);
+	dst = mov_rr(dst, RAX, SCRATCH1, SZ_Q); //move result to scratch reg
+	dst = pop_r(dst, CONTEXT);
+	dst = call(dst, opts->load_context);
+	dst = retn(dst);
+
+	opts->native_addr_and_sync = dst;
+	dst = call(dst, opts->save_context);
+	dst = push_r(dst, SCRATCH1);
+	dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
+	dst = xor_rr(dst, RSI, RSI, SZ_D);
+	dst = test_ir(dst, 8, RSP, SZ_Q); //check stack alignment
+	uint8_t * do_adjust_rsp = dst+1;
+	dst = jcc(dst, CC_NZ, dst+2);
+	dst = call(dst, (uint8_t *)sync_components);
+	uint8_t * no_adjust_rsp = dst+1;
+	dst = jmp(dst, dst+2);
+	*do_adjust_rsp = dst - (do_adjust_rsp+1);
+	dst = sub_ir(dst, 8, RSP, SZ_Q);
+	dst = call(dst, (uint8_t *)sync_components);
+	dst = add_ir(dst, 8, RSP, SZ_Q);
+	*no_adjust_rsp = dst - (no_adjust_rsp+1);
+	dst = pop_r(dst, RSI);
+	dst = push_r(dst, RAX);
+	dst = mov_rr(dst, RAX, RDI, SZ_Q);
+	dst = call(dst, (uint8_t *)get_native_address_trans);
+	dst = mov_rr(dst, RAX, SCRATCH1, SZ_Q); //move result to scratch reg
+	dst = pop_r(dst, CONTEXT);
+	dst = call(dst, opts->load_context);
 	dst = retn(dst);
 
 	opts->cur_code = dst;
@@ -4499,7 +4535,7 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = shl_ir(dst, 2, SCRATCH1, SZ_D);
 	dst = add_ir(dst, 0x60, SCRATCH1, SZ_D);
 	dst = call(dst, opts->read_32);
-	dst = call(dst, (uint8_t *)m68k_native_addr_and_sync);
+	dst = call(dst, opts->native_addr_and_sync);
 	dst = cycles(dst, 24);
 	//discard function return address
 	dst = pop_r(dst, SCRATCH2);
@@ -4530,7 +4566,7 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = pop_r(dst, SCRATCH1);
 	dst = shl_ir(dst, 2, SCRATCH1, SZ_D);
 	dst = call(dst, opts->read_32);
-	dst = call(dst, (uint8_t *)m68k_native_addr_and_sync);
+	dst = call(dst, opts->native_addr_and_sync);
 	dst = cycles(dst, 18);
 	dst = jmp_r(dst, SCRATCH1);
 

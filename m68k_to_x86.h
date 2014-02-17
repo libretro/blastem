@@ -42,6 +42,8 @@ typedef struct {
 	uint8_t			*load_context;
 	start_fun       start_context;
 	uint8_t         *retrans_stub;
+	uint8_t         *native_addr;
+	uint8_t         *native_addr_and_sync;
 } x86_68k_options;
 
 typedef struct {
