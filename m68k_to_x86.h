@@ -41,6 +41,7 @@ typedef struct {
 	uint8_t			*save_context;
 	uint8_t			*load_context;
 	start_fun       start_context;
+	uint8_t         *retrans_stub;
 } x86_68k_options;
 
 typedef struct {

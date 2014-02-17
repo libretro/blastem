@@ -185,16 +185,6 @@ m68k_native_addr:
 	call m68k_load_context
 	ret
 
-	.global m68k_retrans_stub
-m68k_retrans_stub:
-	call m68k_save_context
-	push %rsi
-	call m68k_retranslate_inst
-	pop %rsi
-	mov %rax, %rcx
-	call m68k_load_context
-	jmp *%rcx
-
 	.global m68k_save_context
 m68k_save_context:
 	mov %bl, 1(%rsi) /* N Flag */
