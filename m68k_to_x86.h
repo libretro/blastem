@@ -36,7 +36,9 @@ typedef struct {
 	uint8_t         *read_32;
 	uint8_t         *write_32_lowfirst;
 	uint8_t         *write_32_highfirst;
+	uint8_t         *handle_cycle_limit;
 	uint8_t         *handle_cycle_limit_int;
+	uint8_t         *do_sync;
 	uint8_t         *trap;
 	uint8_t			*save_context;
 	uint8_t			*load_context;

@@ -30,12 +30,10 @@ char disasm_buf[1024];
 
 m68k_context * sync_components(m68k_context * context, uint32_t address);
 
-void handle_cycle_limit();
 void m68k_invalid();
 void set_sr();
 void set_ccr();
 void get_sr();
-void do_sync();
 void bcd_add();
 void bcd_sub();
 
@@ -56,12 +54,12 @@ uint8_t * check_cycles_int(uint8_t * dst, uint32_t address, x86_68k_options * op
 	return dst;
 }
 
-uint8_t * check_cycles(uint8_t * dst)
+uint8_t * check_cycles(uint8_t * dst, x86_68k_options * opts)
 {
 	dst = cmp_rr(dst, CYCLES, LIMIT, SZ_D);
 	uint8_t * jmp_off = dst+1;
 	dst = jcc(dst, CC_NC, dst + 7);
-	dst = call(dst, (uint8_t *)handle_cycle_limit);
+	dst = call(dst, opts->handle_cycle_limit);
 	*jmp_off = dst - (jmp_off+1);
 	return dst;
 }
@@ -2850,7 +2848,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 				dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SZ_B);
 			}
 			if (inst->src.params.immed & 0x700) {
-				dst = call(dst, (uint8_t *)do_sync);
+				dst = call(dst, opts->do_sync);
 			}
 		}
 		break;
@@ -3166,7 +3164,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		if (inst->op == M68K_ORI_SR) {
 			dst = xor_irdisp8(dst, inst->src.params.immed >> 8, CONTEXT, offsetof(m68k_context, status), SZ_B);
 			if (inst->src.params.immed & 0x700) {
-				dst = call(dst, (uint8_t *)do_sync);
+				dst = call(dst, opts->do_sync);
 			}
 		}
 		break;
@@ -3225,7 +3223,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 					dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, opts->aregs[7], SZ_D);
 					dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SZ_D);
 				}
-				dst = call(dst, (uint8_t *)do_sync);
+				dst = call(dst, opts->do_sync);
 			}
 			dst = cycles(dst, 12);
 		} else {
@@ -3414,7 +3412,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		if (inst->op == M68K_ORI_SR) {
 			dst = or_irdisp8(dst, inst->src.params.immed >> 8, CONTEXT, offsetof(m68k_context, status), SZ_B);
 			if (inst->src.params.immed & 0x700) {
-				dst = call(dst, (uint8_t *)do_sync);
+				dst = call(dst, opts->do_sync);
 			}
 		}
 		break;
@@ -3714,7 +3712,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 			dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SZ_D);
 		}
 		uint8_t * loop_top = dst;
-		dst = call(dst, (uint8_t *)do_sync);
+		dst = call(dst, opts->do_sync);
     dst = cmp_rr(dst, LIMIT, CYCLES, SZ_D);
     uint8_t * normal_cycle_up = dst + 1;
     dst = jcc(dst, CC_A, dst+2);
@@ -4116,7 +4114,7 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 {
 	uint8_t * dst = opts->cur_code;
 	uint8_t * start = dst;
-	dst = check_cycles(dst);
+	dst = check_cycles(dst, opts);
 	dst = cycles(dst, BUS);
 	dst = and_ir(dst, 0xFFFFFF, SCRATCH1, SZ_D);
 	uint8_t *lb_jcc = NULL, *ub_jcc = NULL;
@@ -4436,6 +4434,34 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = call(dst, opts->load_context);
 	dst = retn(dst);
 
+	opts->handle_cycle_limit = dst;
+	dst = cmp_rdisp8r(dst, CONTEXT, offsetof(m68k_context, sync_cycle), CYCLES, SZ_D);
+	uint8_t * skip_sync = dst+1;
+	dst = jcc(dst, CC_C, dst+2);
+	opts->do_sync = dst;
+	dst = push_r(dst, SCRATCH1);
+	dst = push_r(dst, SCRATCH2);
+	dst = call(dst, opts->save_context);
+	dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
+	dst = xor_rr(dst, RSI, RSI, SZ_D);
+	dst = test_ir(dst, 8, RSP, SZ_D);
+	uint8_t *adjust_rsp = dst+1;
+	dst = jcc(dst, CC_NZ, dst+2);
+	dst = call(dst, (uint8_t *)sync_components);
+	uint8_t *no_adjust = dst+1;
+	dst = jmp(dst, dst+2);
+	*adjust_rsp = dst - (adjust_rsp + 1);
+	dst = sub_ir(dst, 8, RSP, SZ_Q);
+	dst = call(dst, (uint8_t *)sync_components);
+	dst = add_ir(dst, 8, RSP, SZ_Q);
+	*no_adjust = dst - (no_adjust+1);
+	dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
+	dst = call(dst, opts->load_context);
+	dst = pop_r(dst, SCRATCH2);
+	dst = pop_r(dst, SCRATCH1);
+	*skip_sync = dst - (skip_sync+1);
+	dst = retn(dst);
+
 	opts->cur_code = dst;
 
 	opts->read_16 = gen_mem_fun(opts, memmap, num_chunks, READ_16);
@@ -4484,16 +4510,16 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	uint8_t * do_int = dst+1;
 	dst = jcc(dst, CC_NC, dst+2);
 	dst = cmp_rdisp8r(dst, CONTEXT, offsetof(m68k_context, sync_cycle), CYCLES, SZ_D);
-	uint8_t * skip_sync = dst+1;
+	skip_sync = dst+1;
 	dst = jcc(dst, CC_C, dst+2);
 	dst = call(dst, opts->save_context);
 	dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
 	dst = mov_rr(dst, SCRATCH1, RSI, SZ_D);
 	dst = test_ir(dst, 8, RSP, SZ_D);
-	uint8_t *adjust_rsp = dst+1;
+	adjust_rsp = dst+1;
 	dst = jcc(dst, CC_NZ, dst+2);
 	dst = call(dst, (uint8_t *)sync_components);
-	uint8_t *no_adjust = dst+1;
+	no_adjust = dst+1;
 	dst = jmp(dst, dst+2);
 	*adjust_rsp = dst - (adjust_rsp + 1);
 	dst = sub_ir(dst, 8, RSP, SZ_Q);
