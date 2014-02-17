@@ -26,33 +26,6 @@ done_adjust:
 skip_sync:
 	ret
 
-sr_msg_int:
-	.asciz "SR set to $%X due to interrupt\n"
-debug_print_sr_int:
-	call m68k_save_context
-	push %rsi
-	lea sr_msg_int(%rip), %rdi
-	movzxb 5(%rsi), %rsi
-	xor %rax, %rax
-	call printf
-	pop %rsi
-	call m68k_load_context
-	ret
-
-sr_msg:
-	.asciz "SR set to $%X\n"
-	.global debug_print_sr
-debug_print_sr:
-	call m68k_save_context
-	push %rsi
-	lea sr_msg(%rip), %rdi
-	movzxb 5(%rsi), %rsi
-	xor %rax, %rax
-	call printf
-	pop %rsi
-	call m68k_load_context
-	ret
-
 invalid_msg:
 	.asciz "Invalid instruction at %X\n"
 
@@ -156,7 +129,6 @@ set_sr:
 	mov %cl, (%rsi)
 	shr $8, %cx
 	mov %cl, 5(%rsi)
-	/* call debug_print_sr */
 	ret
 
 	.global set_ccr
