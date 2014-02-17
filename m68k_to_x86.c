@@ -34,7 +34,6 @@ void handle_cycle_limit();
 void m68k_native_addr();
 void m68k_native_addr_and_sync();
 void m68k_invalid();
-void m68k_retrans_stub();
 void set_sr();
 void set_ccr();
 void get_sr();
@@ -4016,7 +4015,24 @@ m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context)
 	if (inst_start) {
 		uint8_t * dst = get_native_address(context->native_code_map, inst_start);
 		dst = mov_ir(dst, inst_start, SCRATCH2, SZ_D);
-		dst = jmp(dst, (uint8_t *)m68k_retrans_stub);
+		x86_68k_options * options = context->options;
+		if (!options->retrans_stub) {
+			if (options->code_end - options->cur_code < 32) {
+				size_t size = 1024*1024;
+				options->cur_code = alloc_code(&size);
+				options->code_end = options->cur_code + size;
+			}
+			uint8_t * rdst = options->retrans_stub = options->cur_code;
+			rdst = call(rdst, options->save_context);
+			rdst = push_r(rdst, CONTEXT);
+			rdst = call(rdst, (uint8_t *)m68k_retranslate_inst);
+			rdst = pop_r(rdst, CONTEXT);
+			rdst = mov_rr(rdst, RAX, SCRATCH1, SZ_Q);
+			rdst = call(rdst, options->load_context);
+			rdst = jmp_r(rdst, SCRATCH1);
+			options->cur_code = rdst;
+		}
+		dst = jmp(dst, options->retrans_stub);
 	}
 	return context;
 }
