@@ -101,7 +101,7 @@ void handle_joy_dpad(int joystick, int dpadnum, uint8_t value)
 {
 }
 
-uint8_t headless = 0;
+int headless = 0;
 
 #define CYCLE_LIMIT MCLKS_NTSC/60
 #define MAX_SOUND_CYCLES 100000
