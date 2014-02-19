@@ -145,7 +145,9 @@ void write_byte(m68k_context * context, uint32_t address, uint8_t value)
 	} else if (address >= 0xA00000 && address < 0xA04000) {
 		z80_ram[address & 0x1FFF] = value;
 		genesis_context * gen = context->system;
+#ifdef X86_64
 		z80_handle_code_write(address & 0x1FFF, gen->z80);
+#endif
 		return;
 	} else {
 		return;
