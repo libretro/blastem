@@ -82,6 +82,8 @@ void strip_nl(char * buf)
 	}
 }
 
+#ifdef X86_64
+
 void zdebugger_print(z80_context * context, char format_char, char * param)
 {
 	uint32_t value;
@@ -460,6 +462,8 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 	return context;
 }
 
+#endif
+
 m68k_context * debugger(m68k_context * context, uint32_t address)
 {
 	static char last_cmd[1024];
@@ -701,6 +705,7 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 				}
 				break;
 			}
+#ifdef X86_64
 			case 'z': {
 				genesis_context * gen = context->system;
 				//Z80 debug commands
@@ -731,6 +736,7 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 				}
 				break;
 			}
+#endif
 			case 'q':
 				puts("Quitting");
 				exit(0);
