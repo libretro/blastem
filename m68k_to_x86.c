@@ -40,9 +40,6 @@ char disasm_buf[1024];
 m68k_context * sync_components(m68k_context * context, uint32_t address);
 
 void m68k_invalid();
-void set_sr();
-void set_ccr();
-void get_sr();
 void bcd_add();
 void bcd_sub();
 
@@ -3379,7 +3376,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		break;
 	case M68K_MOVE_FROM_SR:
 		//TODO: Trap if not in system mode
-		dst = call(dst, (uint8_t *)get_sr);
+		dst = call(dst, opts->get_sr);
 		if (dst_op.mode == MODE_REG_DIRECT) {
 			dst = mov_rr(dst, SCRATCH1, dst_op.base, SZ_W);
 		} else {
@@ -3415,7 +3412,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 					dst = mov_rdisp8r(dst, src_op.base, src_op.disp, SCRATCH1, SZ_W);
 				}
 			}
-			dst = call(dst, (uint8_t *)(inst->op == M68K_MOVE_SR ? set_sr : set_ccr));
+			dst = call(dst, inst->op == M68K_MOVE_SR ? opts->set_sr : opts->set_ccr);
 			dst = cycles(dst, 12);
 
 		}
@@ -3834,7 +3831,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = mov_rr(dst, opts->aregs[7], SCRATCH1, SZ_D);
 		dst = call(dst, opts->read_16);
 		dst = add_ir(dst, 2, opts->aregs[7], SZ_D);
-		dst = call(dst, (uint8_t *)set_sr);
+		dst = call(dst, opts->set_sr);
 		//Read saved PC
 		dst = mov_rr(dst, opts->aregs[7], SCRATCH1, SZ_D);
 		dst = call(dst, opts->read_32);
@@ -3856,7 +3853,7 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		dst = mov_rr(dst, opts->aregs[7], SCRATCH1, SZ_D);
 		dst = call(dst, opts->read_16);
 		dst = add_ir(dst, 2, opts->aregs[7], SZ_D);
-		dst = call(dst, (uint8_t *)set_ccr);
+		dst = call(dst, opts->set_ccr);
 		//Read saved PC
 		dst = mov_rr(dst, opts->aregs[7], SCRATCH1, SZ_D);
 		dst = call(dst, opts->read_32);
@@ -4724,6 +4721,66 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = add_ir(dst, 2, SCRATCH2, SZ_D);
 	dst = jmp(dst, opts->write_16);
 
+	opts->get_sr = dst;
+	dst = mov_rdisp8r(dst, CONTEXT, offsetof(m68k_context, status), SCRATCH1, SZ_B);
+	dst = shl_ir(dst, 8, SCRATCH1, SZ_W);
+	if (opts->flag_regs[FLAG_X] >= 0) {
+		dst = mov_rr(dst, opts->flag_regs[FLAG_X], SCRATCH1, SZ_B);
+	} else {
+		int8_t offset = offsetof(m68k_context, flags);
+		if (offset) {
+			dst = mov_rdisp8r(dst, CONTEXT, offset, SCRATCH1, SZ_B);
+		} else {
+			dst = mov_rindr(dst, CONTEXT, SCRATCH1, SZ_B);
+		}
+	}
+	for (int flag = FLAG_N; flag <= FLAG_C; flag++)
+	{
+		dst = shl_ir(dst, 1, SCRATCH1, SZ_B);
+		if (opts->flag_regs[flag] >= 0) {
+			dst = or_rr(dst, opts->flag_regs[flag], SCRATCH1, SZ_B);
+		} else {
+			dst = or_rdisp8r(dst, CONTEXT, offsetof(m68k_context, flags) + flag, SCRATCH1, SZ_B);
+		}
+	}
+	dst = retn(dst);
+
+	opts->set_sr = dst;
+	for (int flag = FLAG_C; flag >= FLAG_X; flag--)
+	{
+		dst = rcr_ir(dst, 1, SCRATCH1, SZ_B);
+		if (opts->flag_regs[flag] >= 0) {
+			dst = setcc_r(dst, CC_C, opts->flag_regs[flag]);
+		} else {
+			int8_t offset = offsetof(m68k_context, flags) + flag;
+			if (offset) {
+				dst = setcc_rdisp8(dst, CC_C, CONTEXT, offset);
+			} else {
+				dst = setcc_rind(dst, CC_C, CONTEXT);
+			}
+		}
+	}
+	dst = shr_ir(dst, 8, SCRATCH1, SZ_W);
+	dst = mov_rrdisp8(dst, SCRATCH1, CONTEXT, offsetof(m68k_context, status), SZ_B);
+	dst = retn(dst);
+
+	opts->set_ccr = dst;
+	for (int flag = FLAG_C; flag >= FLAG_X; flag--)
+	{
+		dst = rcr_ir(dst, 1, SCRATCH1, SZ_B);
+		if (opts->flag_regs[flag] >= 0) {
+			dst = setcc_r(dst, CC_C, opts->flag_regs[flag]);
+		} else {
+			int8_t offset = offsetof(m68k_context, flags) + flag;
+			if (offset) {
+				dst = setcc_rdisp8(dst, CC_C, CONTEXT, offset);
+			} else {
+				dst = setcc_rind(dst, CC_C, CONTEXT);
+			}
+		}
+	}
+	dst = retn(dst);
+
 	opts->handle_cycle_limit_int = dst;
 	dst = cmp_rdisp8r(dst, CONTEXT, offsetof(m68k_context, int_cycle), CYCLES, SZ_D);
 	uint8_t * do_int = dst+1;
@@ -4766,7 +4823,7 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = call(dst, opts->write_32_lowfirst);
 	//save status register
 	dst = sub_ir(dst, 2, opts->aregs[7], SZ_D);
-	dst = call(dst, (uint8_t *)get_sr);
+	dst = call(dst, opts->get_sr);
 	dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
 	dst = call(dst, opts->write_16);
 	//update status register
@@ -4802,7 +4859,7 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = call(dst, opts->write_32_lowfirst);
 	//save status register
 	dst = sub_ir(dst, 2, opts->aregs[7], SZ_D);
-	dst = call(dst, (uint8_t *)get_sr);
+	dst = call(dst, opts->get_sr);
 	dst = mov_rr(dst, opts->aregs[7], SCRATCH2, SZ_D);
 	dst = call(dst, opts->write_16);
 	//set supervisor bit
