@@ -70,56 +70,5 @@ no_adjust_hs:
 	mov %rdi, %rax
 	ret
 
-	.global get_sr
-get_sr:
-	mov 5(%rsi), %cl
-	shl $8, %cx
-	mov (%rsi), %cl
-	shl $1, %cl
-	or %bl, %cl
-	shl $1, %cl
-	or %dl, %cl
-	shl $1, %cl
-	or %bh, %cl
-	shl $1, %cl
-	or %dh, %cl
-	ret
 
-	.global set_sr
-set_sr:
-	mov %cl, %dh
-	and $1, %dh
-	shr $1, %cl
-	mov %cl, %bh
-	and $1, %bh
-	shr $1, %cl
-	mov %cl, %dl
-	and $1, %dl
-	shr $1, %cl
-	mov %cl, %bl
-	and $1, %bl
-	shr $1, %cl
-	and $1, %cl
-	mov %cl, (%rsi)
-	shr $8, %cx
-	mov %cl, 5(%rsi)
-	ret
-
-	.global set_ccr
-set_ccr:
-	mov %cl, %dh
-	and $1, %dh
-	shr $1, %cl
-	mov %cl, %bh
-	and $1, %bh
-	shr $1, %cl
-	mov %cl, %dl
-	and $1, %dl
-	shr $1, %cl
-	mov %cl, %bl
-	and $1, %bl
-	shr $1, %cl
-	and $1, %cl
-	mov %cl, (%rsi)
-	ret
 
