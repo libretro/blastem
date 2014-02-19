@@ -57,6 +57,12 @@ enum {
 	SZ_Q
 } x86_size;
 
+#ifdef X86_64
+#define SZ_PTR SZ_Q
+#else
+#define SZ_PTR SZ_D
+#endif
+
 enum {
 	MODE_REG_INDIRECT = 0,
 	MODE_REG_INDEXED = 4,
