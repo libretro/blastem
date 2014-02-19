@@ -94,7 +94,8 @@ char * readlink_alloc(char * path)
 			free(linktext);
 			linktext = NULL;
 		}
-	} while (linksize > cursize);
+	} while ((linksize+1) > cursize);
+	linktext[linksize] = 0;
 	return linktext;
 }
 
