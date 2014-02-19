@@ -22,8 +22,18 @@ ifndef CPU
 CPU:=$(shell uname -m)
 endif
 
+
+
 TRANSOBJS=gen_x86.o x86_backend.o mem.o
-M68KOBJS=68kinst.o m68k_to_x86.o runtime.o
+M68KOBJS=68kinst.o m68k_to_x86.o
+ifeq ($(CPU),x86_64)
+M68kOBJS+= runtime.o
+else
+ifeq ($(CPU),i686)
+M68KOBJS+= runtime_32.o
+endif
+endif
+
 Z80OBJS=z80inst.o z80_to_x86.o zruntime.o
 AUDIOOBJS=ym2612.o psg.o wave.o
 CONFIGOBJS=config.o tern.o util.o

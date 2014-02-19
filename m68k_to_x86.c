@@ -3371,7 +3371,11 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		break;
 	case M68K_ILLEGAL:
 		dst = call(dst, opts->save_context);
-		dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
+#ifdef X86_64
+		dst = mov_rr(dst, CONTEXT, RDI, SZ_PTR);
+#else
+		dst = push_r(dst, CONTEXT);
+#endif
 		dst = call(dst, (uint8_t *)print_regs_exit);
 		break;
 	case M68K_MOVE_FROM_SR:
@@ -3606,7 +3610,11 @@ uint8_t * translate_m68k(uint8_t * dst, m68kinst * inst, x86_68k_options * opts)
 		break;
 	case M68K_RESET:
 		dst = call(dst, opts->save_context);
-		dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
+#ifdef X86_64
+		dst = mov_rr(dst, CONTEXT, RDI, SZ_PTR);
+#else
+		dst = push_r(dst, CONTEXT);
+#endif
 		dst = call(dst, (uint8_t *)print_regs_exit);
 		break;
 	case M68K_ROL:
@@ -4108,6 +4116,9 @@ uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context)
 			}
 			if (address >= 0x400000 && address < 0xE00000) {
 				dst = xor_rr(dst, RDI, RDI, SZ_D);
+#ifdef X86_32
+				dst = push_r(dst, RDI);
+#endif
 				dst = call(dst, (uint8_t *)exit);
 				break;
 			}
@@ -4237,9 +4248,16 @@ m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context)
 			uint8_t * rdst = options->retrans_stub = options->cur_code;
 			rdst = call(rdst, options->save_context);
 			rdst = push_r(rdst, CONTEXT);
+#ifdef X86_32
+			rdst = push_r(rdst, CONTEXT);
+			rdst = push_r(rdst, SCRATCH2);
+#endif
 			rdst = call(rdst, (uint8_t *)m68k_retranslate_inst);
+#ifdef X86_32
+			rdst = add_ir(rdst, 8, RSP, SZ_D);
+#endif
 			rdst = pop_r(rdst, CONTEXT);
-			rdst = mov_rr(rdst, RAX, SCRATCH1, SZ_Q);
+			rdst = mov_rr(rdst, RAX, SCRATCH1, SZ_PTR);
 			rdst = call(rdst, options->load_context);
 			rdst = jmp_r(rdst, SCRATCH1);
 			options->cur_code = rdst;
@@ -4275,10 +4293,18 @@ void insert_breakpoint(m68k_context * context, uint32_t address, uint8_t * bp_ha
 		//Save context and call breakpoint handler
 		dst = call(dst, opts->save_context);
 		dst = push_r(dst, SCRATCH1);
-		dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
+#ifdef X86_64
+		dst = mov_rr(dst, CONTEXT, RDI, SZ_PTR);
 		dst = mov_rr(dst, SCRATCH1, RSI, SZ_D);
+#else
+		dst = push_r(dst, SCRATCH1);
+		dst = push_r(dst, CONTEXT);
+#endif
 		dst = call(dst, bp_handler);
-		dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
+#ifdef X86_32
+		dst = add_ir(dst, 8, RSP, SZ_D);
+#endif
+		dst = mov_rr(dst, RAX, CONTEXT, SZ_PTR);
 		//Restore context
 		dst = call(dst, opts->load_context);
 		dst = pop_r(dst, SCRATCH1);
@@ -4290,7 +4316,7 @@ void insert_breakpoint(m68k_context * context, uint32_t address, uint8_t * bp_ha
 		*jmp_off = dst - (jmp_off+1);
 		//jump back to body of translated instruction
 		dst = pop_r(dst, SCRATCH1);
-		dst = add_ir(dst, check_int_size - (native-start_native), SCRATCH1, SZ_Q);
+		dst = add_ir(dst, check_int_size - (native-start_native), SCRATCH1, SZ_PTR);
 		dst = jmp_r(dst, SCRATCH1);
 		opts->cur_code = dst;
 	} else {
@@ -4375,10 +4401,11 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 		if(memmap[chunk].buffer && memmap[chunk].flags & access_flag) {
 			if (memmap[chunk].flags & MMAP_PTR_IDX) {
 				if (memmap[chunk].flags & MMAP_FUNC_NULL) {
-					dst = cmp_irdisp8(dst, 0, CONTEXT, offsetof(m68k_context, mem_pointers) + sizeof(void*) * memmap[chunk].ptr_index, SZ_Q);
+					dst = cmp_irdisp8(dst, 0, CONTEXT, offsetof(m68k_context, mem_pointers) + sizeof(void*) * memmap[chunk].ptr_index, SZ_PTR);
 					uint8_t * not_null = dst+1;
 					dst = jcc(dst, CC_NZ, dst+2);
 					dst = call(dst, opts->save_context);
+#ifdef X86_64
 					if (is_write) {
 						if (SCRATCH2 != RDI) {
 							dst = mov_rr(dst, SCRATCH2, RDI, SZ_D);
@@ -4395,12 +4422,23 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 					uint8_t *no_adjust = dst+1;
 					dst = jmp(dst, dst+2);
 					*adjust_rsp = dst - (adjust_rsp + 1);
-					dst = sub_ir(dst, 8, RSP, SZ_Q);
+					dst = sub_ir(dst, 8, RSP, SZ_PTR);
 					dst = call(dst, cfun);
-					dst = add_ir(dst, 8, RSP, SZ_Q);
+					dst = add_ir(dst, 8, RSP, SZ_PTR);
 					*no_adjust = dst - (no_adjust + 1);
+#else
 					if (is_write) {
-						dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
+						dst = push_r(dst, SCRATCH1);
+					} else {
+						dst = push_r(dst, CONTEXT);//save CONTEXT for later
+					}
+					dst = push_r(dst, CONTEXT);
+					dst = push_r(dst, is_write ? SCRATCH2 : SCRATCH1);
+					dst = call(dst, cfun);
+					dst = add_ir(dst, is_write ? 12 : 8, RSP, SZ_D);
+#endif
+					if (is_write) {
+						dst = mov_rr(dst, RAX, CONTEXT, SZ_PTR);
 					} else {
 						dst = pop_r(dst, CONTEXT);
 						dst = mov_rr(dst, RAX, SCRATCH1, size);
@@ -4412,7 +4450,7 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 				if (size == SZ_B) {
 					dst = xor_ir(dst, 1, adr_reg, SZ_D);
 				}
-				dst = add_rdisp8r(dst, CONTEXT, offsetof(m68k_context, mem_pointers) + sizeof(void*) * memmap[chunk].ptr_index, adr_reg, SZ_Q);
+				dst = add_rdisp8r(dst, CONTEXT, offsetof(m68k_context, mem_pointers) + sizeof(void*) * memmap[chunk].ptr_index, adr_reg, SZ_PTR);
 				if (is_write) {
 					dst = mov_rrind(dst, SCRATCH1, SCRATCH2, size);
 
@@ -4442,21 +4480,21 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 						dst = shr_ir(dst, 8, SCRATCH1, SZ_W);
 					}
 				}
-				if ((int64_t)memmap[chunk].buffer <= 0x7FFFFFFF && (int64_t)memmap[chunk].buffer >= -2147483648) {
+				if ((intptr_t)memmap[chunk].buffer <= 0x7FFFFFFF && (intptr_t)memmap[chunk].buffer >= -2147483648) {
 					if (is_write) {
-						dst = mov_rrdisp32(dst, SCRATCH1, SCRATCH2, (int64_t)memmap[chunk].buffer, tmp_size);
+						dst = mov_rrdisp32(dst, SCRATCH1, SCRATCH2, (intptr_t)memmap[chunk].buffer, tmp_size);
 					} else {
-						dst = mov_rdisp32r(dst, SCRATCH1, (int64_t)memmap[chunk].buffer, SCRATCH1, tmp_size);
+						dst = mov_rdisp32r(dst, SCRATCH1, (intptr_t)memmap[chunk].buffer, SCRATCH1, tmp_size);
 					}
 				} else {
 					if (is_write) {
 						dst = push_r(dst, SCRATCH1);
-						dst = mov_ir(dst, (int64_t)memmap[chunk].buffer, SCRATCH1, SZ_Q);
-						dst = add_rr(dst, SCRATCH1, SCRATCH2, SZ_Q);
+						dst = mov_ir(dst, (intptr_t)memmap[chunk].buffer, SCRATCH1, SZ_PTR);
+						dst = add_rr(dst, SCRATCH1, SCRATCH2, SZ_PTR);
 						dst = pop_r(dst, SCRATCH1);
 						dst = mov_rrind(dst, SCRATCH1, SCRATCH2, tmp_size);
 					} else {
-						dst = mov_ir(dst, (int64_t)memmap[chunk].buffer, SCRATCH2, SZ_Q);
+						dst = mov_ir(dst, (intptr_t)memmap[chunk].buffer, SCRATCH2, SZ_PTR);
 						dst = mov_rindexr(dst, SCRATCH2, SCRATCH1, 1, SCRATCH1, tmp_size);
 					}
 				}
@@ -4476,14 +4514,22 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 				uint8_t * not_code = dst+1;
 				dst = jcc(dst, CC_NC, dst+2);
 				dst = call(dst, opts->save_context);
+#ifdef X86_32
+				dst = push_r(dst, CONTEXT);
+				dst = push_r(dst, SCRATCH2);
+#endif
 				dst = call(dst, (uint8_t *)m68k_handle_code_write);
-				dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
+#ifdef X86_32
+				dst = add_ir(dst, 8, RSP, SZ_D);
+#endif
+				dst = mov_rr(dst, RAX, CONTEXT, SZ_PTR);
 				dst = call(dst, opts->load_context);
 				*not_code = dst - (not_code+1);
 			}
 			dst = retn(dst);
 		} else if (cfun) {
 			dst = call(dst, opts->save_context);
+#ifdef X86_64
 			if (is_write) {
 				if (SCRATCH2 != RDI) {
 					dst = mov_rr(dst, SCRATCH2, RDI, SZ_D);
@@ -4500,12 +4546,23 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 			uint8_t *no_adjust = dst+1;
 			dst = jmp(dst, dst+2);
 			*adjust_rsp = dst - (adjust_rsp + 1);
-			dst = sub_ir(dst, 8, RSP, SZ_Q);
+			dst = sub_ir(dst, 8, RSP, SZ_PTR);
 			dst = call(dst, cfun);
-			dst = add_ir(dst, 8, RSP, SZ_Q);
+			dst = add_ir(dst, 8, RSP, SZ_PTR);
 			*no_adjust = dst - (no_adjust+1);
+#else
 			if (is_write) {
-				dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
+				dst = push_r(dst, SCRATCH1);
+			} else {
+				dst = push_r(dst, CONTEXT);//save CONTEXT for later
+			}
+			dst = push_r(dst, CONTEXT);
+			dst = push_r(dst, is_write ? SCRATCH2 : SCRATCH1);
+			dst = call(dst, cfun);
+			dst = add_ir(dst, is_write ? 12 : 8, RSP, SZ_D);
+#endif
+			if (is_write) {
+				dst = mov_rr(dst, RAX, CONTEXT, SZ_PTR);
 			} else {
 				dst = pop_r(dst, CONTEXT);
 				dst = mov_rr(dst, RAX, SCRATCH1, size);
@@ -4611,8 +4668,9 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = retn(dst);
 
 	opts->start_context = (start_fun)dst;
+#ifdef X86_64
 	if (SCRATCH2 != RDI) {
-		dst = mov_rr(dst, RDI, SCRATCH2, SZ_Q);
+		dst = mov_rr(dst, RDI, SCRATCH2, SZ_PTR);
 	}
 	//save callee save registers
 	dst = push_r(dst, RBP);
@@ -4620,24 +4678,49 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = push_r(dst, R13);
 	dst = push_r(dst, R14);
 	dst = push_r(dst, R15);
+#else
+	//save callee save registers
+	dst = push_r(dst, RBP);
+	dst = push_r(dst, RBX);
+	dst = push_r(dst, RSI);
+	dst = push_r(dst, RDI);
+
+	dst = mov_rdisp8r(dst, RSP, 20, SCRATCH2, SZ_D);
+	dst = mov_rdisp8r(dst, RSP, 24, CONTEXT, SZ_D);
+#endif
 	dst = call(dst, opts->load_context);
 	dst = call_r(dst, SCRATCH2);
 	dst = call(dst, opts->save_context);
+#ifdef X86_64
 	//restore callee save registers
 	dst = pop_r(dst, R15);
 	dst = pop_r(dst, R14);
 	dst = pop_r(dst, R13);
 	dst = pop_r(dst, R12);
 	dst = pop_r(dst, RBP);
+#else
+	dst = pop_r(dst, RDI);
+	dst = pop_r(dst, RSI);
+	dst = pop_r(dst, RBX);
+	dst = pop_r(dst, RBP);
+#endif
 	dst = retn(dst);
 
 	opts->native_addr = dst;
 	dst = call(dst, opts->save_context);
 	dst = push_r(dst, CONTEXT);
-	dst = mov_rr(dst, CONTEXT, RDI, SZ_Q); //move context to 1st arg reg
+#ifdef X86_64
+	dst = mov_rr(dst, CONTEXT, RDI, SZ_PTR); //move context to 1st arg reg
 	dst = mov_rr(dst, SCRATCH1, RSI, SZ_D); //move address to 2nd arg reg
+#else
+	dst = push_r(dst, SCRATCH1);
+	dst = push_r(dst, CONTEXT);
+#endif
 	dst = call(dst, (uint8_t *)get_native_address_trans);
-	dst = mov_rr(dst, RAX, SCRATCH1, SZ_Q); //move result to scratch reg
+#ifdef X86_32
+	dst = add_ir(dst, 8, RSP, SZ_D);
+#endif
+	dst = mov_rr(dst, RAX, SCRATCH1, SZ_PTR); //move result to scratch reg
 	dst = pop_r(dst, CONTEXT);
 	dst = call(dst, opts->load_context);
 	dst = retn(dst);
@@ -4645,24 +4728,40 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	opts->native_addr_and_sync = dst;
 	dst = call(dst, opts->save_context);
 	dst = push_r(dst, SCRATCH1);
-	dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
+#ifdef X86_64
+	dst = mov_rr(dst, CONTEXT, RDI, SZ_PTR);
 	dst = xor_rr(dst, RSI, RSI, SZ_D);
-	dst = test_ir(dst, 8, RSP, SZ_Q); //check stack alignment
+	dst = test_ir(dst, 8, RSP, SZ_PTR); //check stack alignment
 	uint8_t * do_adjust_rsp = dst+1;
 	dst = jcc(dst, CC_NZ, dst+2);
 	dst = call(dst, (uint8_t *)sync_components);
 	uint8_t * no_adjust_rsp = dst+1;
 	dst = jmp(dst, dst+2);
 	*do_adjust_rsp = dst - (do_adjust_rsp+1);
-	dst = sub_ir(dst, 8, RSP, SZ_Q);
+	dst = sub_ir(dst, 8, RSP, SZ_PTR);
 	dst = call(dst, (uint8_t *)sync_components);
-	dst = add_ir(dst, 8, RSP, SZ_Q);
+	dst = add_ir(dst, 8, RSP, SZ_PTR);
 	*no_adjust_rsp = dst - (no_adjust_rsp+1);
 	dst = pop_r(dst, RSI);
 	dst = push_r(dst, RAX);
-	dst = mov_rr(dst, RAX, RDI, SZ_Q);
+	dst = mov_rr(dst, RAX, RDI, SZ_PTR);
 	dst = call(dst, (uint8_t *)get_native_address_trans);
-	dst = mov_rr(dst, RAX, SCRATCH1, SZ_Q); //move result to scratch reg
+#else
+	//TODO: Add support for pushing a constant in gen_x86
+	dst = xor_rr(dst, RAX, RAX, SZ_D);
+	dst = push_r(dst, RAX);
+	dst = push_r(dst, CONTEXT);
+	dst = call(dst, (uint8_t *)sync_components);
+	dst = add_ir(dst, 8, RSP, SZ_D);
+	dst = pop_r(dst, RSI); //restore saved address from SCRATCH1
+	dst = push_r(dst, RAX); //save context pointer for later
+	dst = push_r(dst, RSI); //2nd arg -- address
+	dst = push_r(dst, RAX); //1st arg -- context pointer
+	dst = call(dst, (uint8_t *)get_native_address_trans);
+	dst = add_ir(dst, 8, RSP, SZ_D);
+#endif
+
+	dst = mov_rr(dst, RAX, SCRATCH1, SZ_PTR); //move result to scratch reg
 	dst = pop_r(dst, CONTEXT);
 	dst = call(dst, opts->load_context);
 	dst = retn(dst);
@@ -4675,7 +4774,8 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = push_r(dst, SCRATCH1);
 	dst = push_r(dst, SCRATCH2);
 	dst = call(dst, opts->save_context);
-	dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
+#ifdef X86_64
+	dst = mov_rr(dst, CONTEXT, RDI, SZ_PTR);
 	dst = xor_rr(dst, RSI, RSI, SZ_D);
 	dst = test_ir(dst, 8, RSP, SZ_D);
 	uint8_t *adjust_rsp = dst+1;
@@ -4684,11 +4784,19 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	uint8_t *no_adjust = dst+1;
 	dst = jmp(dst, dst+2);
 	*adjust_rsp = dst - (adjust_rsp + 1);
-	dst = sub_ir(dst, 8, RSP, SZ_Q);
+	dst = sub_ir(dst, 8, RSP, SZ_PTR);
 	dst = call(dst, (uint8_t *)sync_components);
-	dst = add_ir(dst, 8, RSP, SZ_Q);
+	dst = add_ir(dst, 8, RSP, SZ_PTR);
 	*no_adjust = dst - (no_adjust+1);
-	dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
+#else
+	//TODO: Add support for pushing a constant in gen_x86
+	dst = xor_rr(dst, RAX, RAX, SZ_D);
+	dst = push_r(dst, RAX);
+	dst = push_r(dst, CONTEXT);
+	dst = call(dst, (uint8_t *)sync_components);
+	dst = add_ir(dst, 8, RSP, SZ_D);
+#endif
+	dst = mov_rr(dst, RAX, CONTEXT, SZ_PTR);
 	dst = call(dst, opts->load_context);
 	dst = pop_r(dst, SCRATCH2);
 	dst = pop_r(dst, SCRATCH1);
@@ -4806,7 +4914,8 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	skip_sync = dst+1;
 	dst = jcc(dst, CC_C, dst+2);
 	dst = call(dst, opts->save_context);
-	dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
+#ifdef X86_64
+	dst = mov_rr(dst, CONTEXT, RDI, SZ_PTR);
 	dst = mov_rr(dst, SCRATCH1, RSI, SZ_D);
 	dst = test_ir(dst, 8, RSP, SZ_D);
 	adjust_rsp = dst+1;
@@ -4815,11 +4924,17 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	no_adjust = dst+1;
 	dst = jmp(dst, dst+2);
 	*adjust_rsp = dst - (adjust_rsp + 1);
-	dst = sub_ir(dst, 8, RSP, SZ_Q);
+	dst = sub_ir(dst, 8, RSP, SZ_PTR);
 	dst = call(dst, (uint8_t *)sync_components);
-	dst = add_ir(dst, 8, RSP, SZ_Q);
+	dst = add_ir(dst, 8, RSP, SZ_PTR);
 	*no_adjust = dst - (no_adjust+1);
-	dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
+#else
+	dst = push_r(dst, SCRATCH1);
+	dst = push_r(dst, CONTEXT);
+	dst = call(dst, (uint8_t *)sync_components);
+	dst = add_ir(dst, 8, RSP, SZ_D);
+#endif
+	dst = mov_rr(dst, RAX, CONTEXT, SZ_PTR);
 	dst = jmp(dst, opts->load_context);
 	*skip_sync = dst - (skip_sync+1);
 	dst = retn(dst);
