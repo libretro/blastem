@@ -15,18 +15,18 @@
 
 #define BUS 4
 #define PREDEC_PENALTY 2
+
 #define CYCLES RAX
 #define LIMIT RBP
-#define SCRATCH1 RCX
-#define SCRATCH2 RDI
 #define CONTEXT RSI
+#define SCRATCH1 RCX
 
-/*
-#define FLAG_N RBX
-#define FLAG_V BH
-#define FLAG_Z RDX
-#define FLAG_C DH
-*/
+#ifdef X86_64
+#define SCRATCH2 RDI
+#else
+#define SCRATCH2 RBX
+#endif
+
 enum {
 	FLAG_X,
 	FLAG_N,
@@ -4380,7 +4380,9 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 					dst = jcc(dst, CC_NZ, dst+2);
 					dst = call(dst, opts->save_context);
 					if (is_write) {
-						//SCRATCH2 is RDI, so no need to move it there
+						if (SCRATCH2 != RDI) {
+							dst = mov_rr(dst, SCRATCH2, RDI, SZ_D);
+						}
 						dst = mov_rr(dst, SCRATCH1, RDX, size);
 					} else {
 						dst = push_r(dst, CONTEXT);
@@ -4483,7 +4485,9 @@ uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t nu
 		} else if (cfun) {
 			dst = call(dst, opts->save_context);
 			if (is_write) {
-				//SCRATCH2 is RDI, so no need to move it there
+				if (SCRATCH2 != RDI) {
+					dst = mov_rr(dst, SCRATCH2, RDI, SZ_D);
+				}
 				dst = mov_rr(dst, SCRATCH1, RDX, size);
 			} else {
 				dst = push_r(dst, CONTEXT);
@@ -4536,6 +4540,7 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	memset(opts, 0, sizeof(*opts));
 	for (int i = 0; i < 8; i++)
 		opts->dregs[i] = opts->aregs[i] = -1;
+#ifdef X86_64
 	opts->dregs[0] = R10;
 	opts->dregs[1] = R11;
 	opts->dregs[2] = R12;
@@ -4550,6 +4555,15 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	opts->flag_regs[2] = RDX;
 	opts->flag_regs[3] = BH;
 	opts->flag_regs[4] = DH;
+#else
+	opts->dregs[0] = RDX;
+	opts->aregs[7] = RDI;
+
+	for (int i = 0; i < 5; i++)
+		opts->flag_regs[i] = -1;
+#endif
+
+
 	opts->native_code_map = malloc(sizeof(native_map_slot) * NATIVE_MAP_CHUNKS);
 	memset(opts->native_code_map, 0, sizeof(native_map_slot) * NATIVE_MAP_CHUNKS);
 	opts->deferred = NULL;
@@ -4597,6 +4611,9 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = retn(dst);
 
 	opts->start_context = (start_fun)dst;
+	if (SCRATCH2 != RDI) {
+		dst = mov_rr(dst, RDI, SCRATCH2, SZ_Q);
+	}
 	//save callee save registers
 	dst = push_r(dst, RBP);
 	dst = push_r(dst, R12);
@@ -4604,7 +4621,7 @@ void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t n
 	dst = push_r(dst, R14);
 	dst = push_r(dst, R15);
 	dst = call(dst, opts->load_context);
-	dst = call_r(dst, RDI);
+	dst = call_r(dst, SCRATCH2);
 	dst = call(dst, opts->save_context);
 	//restore callee save registers
 	dst = pop_r(dst, R15);

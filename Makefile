@@ -3,11 +3,11 @@ LIBS=sdl
 else
 LIBS=sdl glew gl
 endif
-LDFLAGS=-lm `pkg-config --libs $(LIBS)`
+LDFLAGS:=-lm $(shell pkg-config --libs $(LIBS))
 ifdef DEBUG
-CFLAGS=-ggdb -std=gnu99 `pkg-config --cflags-only-I $(LIBS)` -Wreturn-type -Werror=return-type
+CFLAGS:=-ggdb -std=gnu99 $(shell pkg-config --cflags-only-I $(LIBS)) -Wreturn-type -Werror=return-type
 else
-CFLAGS=-O2 -std=gnu99 `pkg-config --cflags-only-I $(LIBS)` -Wreturn-type -Werror=return-type
+CFLAGS:=-O2 -std=gnu99 $(shell pkg-config  --cflags-only-I $(LIBS)) -Wreturn-type -Werror=return-type
 endif
 
 ifdef PROFILE
@@ -18,16 +18,32 @@ ifdef NOGL
 CFLAGS+= -DDISABLE_OPENGL
 endif
 
+ifndef CPU
+CPU:=$(shell uname -m)
+endif
+
 TRANSOBJS=gen_x86.o x86_backend.o mem.o
 M68KOBJS=68kinst.o m68k_to_x86.o runtime.o
 Z80OBJS=z80inst.o z80_to_x86.o zruntime.o
 AUDIOOBJS=ym2612.o psg.o wave.o
 CONFIGOBJS=config.o tern.o util.o
 
+MAINOBJS=blastem.o debug.o gdb_remote.o vdp.o render_sdl.o io.o $(CONFIGOBJS) gst.o $(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS)
+
+ifeq ($(CPU),x86_64)
+CFLAGS+=-DX86_64
+MAINOBJS+= $(Z80OBJS)
+else
+ifeq ($(CPU),i686)
+CFLAGS+=-DX86_32
+endif
+endif
+
+
 all : dis zdis stateview vgmplay blastem
 
-blastem : blastem.o debug.o gdb_remote.o vdp.o render_sdl.o io.o $(CONFIGOBJS) gst.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS)
-	$(CC) -ggdb -o blastem blastem.o debug.o gdb_remote.o vdp.o render_sdl.o io.o $(CONFIGOBJS) gst.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS) $(LDFLAGS)
+blastem : $(MAINOBJS)
+	$(CC) -ggdb -o blastem $(MAINOBJS) $(LDFLAGS)
 
 dis : dis.o 68kinst.o
 	$(CC) -o dis dis.o 68kinst.o
