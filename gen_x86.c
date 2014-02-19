@@ -1756,7 +1756,7 @@ uint8_t * jcc(uint8_t * out, uint8_t cc, uint8_t * dest)
 			disp >>= 8;
 			*(out++) = disp;
 		} else {
-			printf("%p - %p = %lX\n", dest, out + 6, disp);
+			printf("%p - %p = %lX\n", dest, out + 6, (long)disp);
 			return NULL;
 		}
 	}
@@ -1781,7 +1781,7 @@ uint8_t * jmp(uint8_t * out, uint8_t * dest)
 			disp >>= 8;
 			*(out++) = disp;
 		} else {
-			printf("%p - %p = %lX\n", dest, out + 6, disp);
+			printf("%p - %p = %lX\n", dest, out + 6, (long)disp);
 			return NULL;
 		}
 	}
@@ -1813,7 +1813,7 @@ uint8_t * call(uint8_t * out, uint8_t * fun)
 		*(out++) = disp;
 	} else {
 		//TODO: Implement far call???
-		printf("%p - %p = %lX\n", fun, out + 5, disp);
+		printf("%p - %p = %lX\n", fun, out + 5, (long)disp);
 		return NULL;
 	}
 	return out;
