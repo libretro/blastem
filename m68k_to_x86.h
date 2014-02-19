@@ -46,6 +46,9 @@ typedef struct {
 	uint8_t         *retrans_stub;
 	uint8_t         *native_addr;
 	uint8_t         *native_addr_and_sync;
+	uint8_t			*get_sr;
+	uint8_t			*set_sr;
+	uint8_t			*set_ccr;
 } x86_68k_options;
 
 typedef struct {
