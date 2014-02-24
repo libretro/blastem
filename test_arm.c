@@ -20,7 +20,7 @@ int main(int arc, char **argv)
 	bl(&code, fib);
 	add(&code, r0, r4, r0, NO_COND);
 	popm(&code, LR | R4);
-	bx(&code, LR);
+	bx(&code, lr);
 
 	fib_fun fibc = (fib_fun)fib;
 	printf("fib(10): %d\n", fibc(10));
