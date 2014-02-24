@@ -24,7 +24,7 @@ endif
 
 
 
-TRANSOBJS=gen_x86.o x86_backend.o mem.o
+TRANSOBJS=gen_x86.o backend.o mem.o
 M68KOBJS=68kinst.o m68k_to_x86.o
 ifeq ($(CPU),x86_64)
 M68KOBJS+= runtime.o
