@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include "gen.h"
 
 #define INVALID_OFFSET 0xFFFFFFFF
 #define EXTENSION_WORD 0xFFFFFFFE
@@ -19,12 +20,6 @@ typedef struct {
 	uint8_t index;
 	uint8_t cycles;
 } x86_ea;
-
-#if defined(X86_64) || defined(X86_32)
-typedef uint8_t* code_ptr;
-#else
-typedef uint32_t* code_ptr;
-#endif
 
 typedef struct {
 	uint8_t  *base;
@@ -56,6 +51,8 @@ typedef struct {
 	code_ptr        handle_cycle_limit;
 	code_ptr        handle_cycle_limit_int;
 	uint8_t			context_reg;
+	uint8_t         cycles;
+	uint8_t         limit;
 	uint8_t			scratch1;
 	uint8_t			scratch2;
 } cpu_options;

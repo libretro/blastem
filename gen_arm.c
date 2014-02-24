@@ -57,10 +57,6 @@
 #define REG      0u
 
 
-
-#define RESERVE_INSTRUCTIONS 4 //1 ldr + 1bx + 1 constant
-#define CODE_ALLOC_SIZE (1024*1024)
-
 uint32_t make_immed(uint32_t val)
 {
 	uint32_t rot_amount = 0;
@@ -74,17 +70,6 @@ uint32_t make_immed(uint32_t val)
 	return INVALID_IMMED;
 }
 
-void init_code_info(code_info *code)
-{
-	size_t size = CODE_ALLOC_SIZE;
-	code->cur = alloc_code(&size);
-	if (!code->cur) {
-		fputs("Failed to allocate memory for generated code\n", stderr);
-		exit(1);
-	}
-	code->last = code->cur + size/sizeof(uint32_t) - RESERVE_INSTRUCTIONS;
-}
-
 void check_alloc_code(code_info *code)
 {
 	if (code->cur == code->last) {
@@ -94,9 +79,9 @@ void check_alloc_code(code_info *code)
 			fputs("Failed to allocate memory for generated code\n", stderr);
 			exit(1);
 		}
-		if (next_code = code->last + RESERVE_INSTRUCTIONS) {
+		if (next_code = code->last + RESERVE_WORDS) {
 			//new chunk is contiguous with the current one
-			code->last = next_code + size/sizeof(uint32_t) - RESERVE_INSTRUCTIONS;
+			code->last = next_code + size/sizeof(code_word) - RESERVE_WORDS;
 		} else {
 			uint32_t * from = code->cur + 2;
 			if (next_code - from < 0x400000 || from - next_code <= 0x400000) {
@@ -115,7 +100,7 @@ void check_alloc_code(code_info *code)
 				}
 				//branch to address in r0
 				*from = CC_AL | OP_BX;
-				code->last = next_code + size/sizeof(uint32_t) - RESERVE_INSTRUCTIONS;
+				code->last = next_code + size/sizeof(code_word) - RESERVE_WORDS;
 				//pop r0
 				*(next_code++) = CC_AL | POP;
 				code->cur = next_code;
