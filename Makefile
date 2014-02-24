@@ -24,13 +24,15 @@ endif
 
 
 
-TRANSOBJS=gen_x86.o backend.o mem.o
+TRANSOBJS=gen.o backend.o mem.o
 M68KOBJS=68kinst.o m68k_to_x86.o
 ifeq ($(CPU),x86_64)
 M68KOBJS+= runtime.o
+TRANSOBJS+= gen_x86.o
 else
 ifeq ($(CPU),i686)
 M68KOBJS+= runtime_32.o
+TRANSOBJS+= gen_x86.o
 endif
 endif
 
@@ -85,11 +87,11 @@ vgmplay : vgmplay.o render_sdl.o $(CONFIGOBJS) $(AUDIOOBJS)
 testgst : testgst.o gst.o
 	$(CC) -o testgst testgst.o gst.o
 
-test_x86 : test_x86.o gen_x86.o
-	$(CC) -o test_x86 test_x86.o gen_x86.o
+test_x86 : test_x86.o gen_x86.o gen.o
+	$(CC) -o test_x86 test_x86.o gen_x86.o gen.o
 
-test_arm : test_arm.o gen_arm.o mem.o
-	$(CC) -o test_arm test_arm.o gen_arm.o mem.o
+test_arm : test_arm.o gen_arm.o mem.o gen.o
+	$(CC) -o test_arm test_arm.o gen_arm.o mem.o gen.o
 
 gen_fib : gen_fib.o gen_x86.o mem.o
 	$(CC) -o gen_fib gen_fib.o gen_x86.o mem.o
