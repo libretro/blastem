@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #ifndef X86_BACKEND_H_
@@ -29,6 +29,30 @@ typedef struct deferred_addr {
 	uint8_t              *dest;
 	uint32_t             address;
 } deferred_addr;
+
+typedef enum {
+	READ_16,
+	READ_8,
+	WRITE_16,
+	WRITE_8
+} ftype;
+
+typedef struct {
+	uint32_t flags;
+	native_map_slot *native_code_map;
+	deferred_addr   *deferred;
+	uint8_t         *cur_code;
+	uint8_t         *code_end;
+	uint8_t         **ram_inst_sizes;
+	FILE            *address_log;
+	uint8_t			*save_context;
+	uint8_t			*load_context;
+	uint8_t         *handle_cycle_limit;
+	uint8_t         *handle_cycle_limit_int;
+	uint8_t			context_reg;
+	uint8_t			scratch1;
+	uint8_t			scratch2;
+} cpu_options;
 
 
 #define MMAP_READ      0x01
