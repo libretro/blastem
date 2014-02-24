@@ -88,6 +88,9 @@ testgst : testgst.o gst.o
 test_x86 : test_x86.o gen_x86.o
 	$(CC) -o test_x86 test_x86.o gen_x86.o
 
+test_arm : test_arm.o gen_arm.o mem.o
+	$(CC) -o test_arm test_arm.o gen_arm.o mem.o
+
 gen_fib : gen_fib.o gen_x86.o mem.o
 	$(CC) -o gen_fib gen_fib.o gen_x86.o mem.o
 
