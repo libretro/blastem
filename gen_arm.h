@@ -7,11 +7,7 @@
 #define GEN_ARM_H_
 
 #include <stdint.h>
-
-typedef struct {
-	uint32_t *cur;
-	uint32_t *last;
-} code_info;
+#include "gen.h"
 
 #define SET_COND 0x100000u
 #define NO_COND  0u
@@ -72,8 +68,6 @@ enum {
 #define SP  0x2000
 #define LR  0x4000
 #define PC  0x8000
-
-void init_code_info(code_info *code);
 
 uint32_t and(code_info *code, uint32_t dst, uint32_t src1, uint32_t src2, uint32_t set_cond);
 uint32_t andi(code_info *code, uint32_t dst, uint32_t src1, uint32_t immed, uint32_t set_cond);
