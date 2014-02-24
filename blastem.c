@@ -965,7 +965,7 @@ void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, u
 	}
 	init_x86_68k_opts(&opts, memmap, num_chunks);
 	opts.address_log = address_log;
-	init_68k_context(&context, opts.native_code_map, &opts);
+	init_68k_context(&context, opts.gen.native_code_map, &opts);
 
 	context.video_context = gen->vdp;
 	context.system = gen;

@@ -20,6 +20,12 @@ typedef struct {
 	uint8_t cycles;
 } x86_ea;
 
+#if defined(X86_64) || defined(X86_32)
+typedef uint8_t* code_ptr;
+#else
+typedef uint32_t* code_ptr;
+#endif
+
 typedef struct {
 	uint8_t  *base;
 	int32_t  *offsets;
@@ -27,7 +33,7 @@ typedef struct {
 
 typedef struct deferred_addr {
 	struct deferred_addr *next;
-	uint8_t              *dest;
+	code_ptr             dest;
 	uint32_t             address;
 } deferred_addr;
 
@@ -42,14 +48,13 @@ typedef struct {
 	uint32_t flags;
 	native_map_slot *native_code_map;
 	deferred_addr   *deferred;
-	uint8_t         *cur_code;
-	uint8_t         *code_end;
+	code_ptr        cur_code;
+	code_ptr        code_end;
 	uint8_t         **ram_inst_sizes;
-	FILE            *address_log;
-	uint8_t			*save_context;
-	uint8_t			*load_context;
-	uint8_t         *handle_cycle_limit;
-	uint8_t         *handle_cycle_limit_int;
+	code_ptr        save_context;
+	code_ptr        load_context;
+	code_ptr        handle_cycle_limit;
+	code_ptr        handle_cycle_limit_int;
 	uint8_t			context_reg;
 	uint8_t			scratch1;
 	uint8_t			scratch2;
