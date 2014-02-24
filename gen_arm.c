@@ -51,7 +51,7 @@
 #define PUSH     (OP_STR | PRE_IND | OFF_IMM | SZ_W | WRITE_B | DIR_DOWN | sizeof(uint32_t) | (sp << 16))
 #define POP      (OP_LDR | POST_IND | OFF_IMM | SZ_W | DIR_UP | sizeof(uint32_t) | (sp << 16))
 #define PUSHM     (OP_STM | PRE_IND | SZ_W | WRITE_B | DIR_DOWN | (sp << 16))
-#define POPM      (OP_LDM | POST_IND | SZ_W | DIR_UP | (sp << 16))
+#define POPM      (OP_LDM | POST_IND | SZ_W | WRITE_B | DIR_UP | (sp << 16))
 
 #define IMMED    0x2000000u
 #define REG      0u
@@ -87,7 +87,7 @@ void init_code_info(code_info *code)
 
 void check_alloc_code(code_info *code)
 {
-	if (code->cur = code->last) {
+	if (code->cur == code->last) {
 		size_t size = CODE_ALLOC_SIZE;
 		uint32_t *next_code = alloc_code(&size);
 		if (!next_code) {
@@ -127,7 +127,7 @@ void check_alloc_code(code_info *code)
 uint32_t data_proc(code_info *code, uint32_t cond, uint32_t op, uint32_t set_cond, uint32_t dst, uint32_t src1, uint32_t src2)
 {
 	check_alloc_code(code);
-	*(code->cur++) = cond | op | set_cond | (dst << 16) | (src1 << 12) | src2;
+	*(code->cur++) = cond | op | set_cond | (src1 << 16) | (dst << 12) | src2;
 
 	return CODE_OK;
 }
@@ -135,10 +135,10 @@ uint32_t data_proc(code_info *code, uint32_t cond, uint32_t op, uint32_t set_con
 uint32_t data_proci(code_info *code, uint32_t cond, uint32_t op, uint32_t set_cond, uint32_t dst, uint32_t src1, uint32_t immed)
 {
 	immed = make_immed(immed);
-	if (immed = INVALID_IMMED) {
+	if (immed == INVALID_IMMED) {
 		return immed;
 	}
-	return data_proc(code, cond, op, set_cond, dst, src1, immed);
+	return data_proc(code, cond, op | IMMED, set_cond, dst, src1, immed);
 }
 
 //TODO: support shifted register for op2
