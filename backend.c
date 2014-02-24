@@ -1,9 +1,9 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
-#include "x86_backend.h"
+#include "backend.h"
 #include <stdlib.h>
 
 deferred_addr * defer_address(deferred_addr * old_head, uint32_t address, uint8_t *dest)
