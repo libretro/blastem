@@ -7,6 +7,7 @@
 #define X86_BACKEND_H_
 
 #include <stdint.h>
+#include <stdio.h>
 
 #define INVALID_OFFSET 0xFFFFFFFF
 #define EXTENSION_WORD 0xFFFFFFFE
