@@ -30,10 +30,10 @@ void process_deferred(deferred_addr ** head_ptr, void * context, native_addr_fun
 	deferred_addr **last_next = head_ptr;
 	while(cur)
 	{
-		uint8_t * native = get_native(context, cur->address);//get_native_address(opts->native_code_map, cur->address);
+		code_ptr native = get_native(context, cur->address);//get_native_address(opts->native_code_map, cur->address);
 		if (native) {
 			int32_t disp = native - (cur->dest + 4);
-			uint8_t * out = cur->dest;
+			code_ptr out = cur->dest;
 			*(out++) = disp;
 			disp >>= 8;
 			*(out++) = disp;

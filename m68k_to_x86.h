@@ -19,36 +19,28 @@ struct m68kinst;
 typedef void (*start_fun)(uint8_t * addr, void * context);
 
 typedef struct {
-	uint32_t        flags;
+	cpu_options     gen;
+
 	int8_t          dregs[8];
 	int8_t          aregs[8];
 	int8_t			flag_regs[5];
-	native_map_slot *native_code_map;
-	deferred_addr   *deferred;
-	uint8_t         *cur_code;
-	uint8_t         *code_end;
-	uint8_t         **ram_inst_sizes;
 	FILE            *address_log;
-	uint8_t         *read_16;
-	uint8_t         *write_16;
-	uint8_t         *read_8;
-	uint8_t         *write_8;
-	uint8_t         *read_32;
-	uint8_t         *write_32_lowfirst;
-	uint8_t         *write_32_highfirst;
-	uint8_t         *handle_cycle_limit;
-	uint8_t         *handle_cycle_limit_int;
-	uint8_t         *do_sync;
-	uint8_t         *trap;
-	uint8_t			*save_context;
-	uint8_t			*load_context;
+	code_ptr        read_16;
+	code_ptr        write_16;
+	code_ptr        read_8;
+	code_ptr        write_8;
+	code_ptr        read_32;
+	code_ptr        write_32_lowfirst;
+	code_ptr        write_32_highfirst;
+	code_ptr        do_sync;
+	code_ptr        trap;
 	start_fun       start_context;
-	uint8_t         *retrans_stub;
-	uint8_t         *native_addr;
-	uint8_t         *native_addr_and_sync;
-	uint8_t			*get_sr;
-	uint8_t			*set_sr;
-	uint8_t			*set_ccr;
+	code_ptr        retrans_stub;
+	code_ptr        native_addr;
+	code_ptr        native_addr_and_sync;
+	code_ptr		get_sr;
+	code_ptr		set_sr;
+	code_ptr		set_ccr;
 } x86_68k_options;
 
 typedef struct {
