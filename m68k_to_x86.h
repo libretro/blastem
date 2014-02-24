@@ -7,7 +7,7 @@
 #define M68K_TO_X86_H_
 #include <stdint.h>
 #include <stdio.h>
-#include "x86_backend.h"
+#include "backend.h"
 //#include "68kinst.h"
 struct m68kinst;
 

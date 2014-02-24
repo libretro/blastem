@@ -3,8 +3,8 @@
  This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
-#ifndef X86_BACKEND_H_
-#define X86_BACKEND_H_
+#ifndef BACKEND_H_
+#define BACKEND_H_
 
 #include <stdint.h>
 #include <stdio.h>
@@ -88,5 +88,5 @@ deferred_addr * defer_address(deferred_addr * old_head, uint32_t address, uint8_
 void remove_deferred_until(deferred_addr **head_ptr, deferred_addr * remove_to);
 void process_deferred(deferred_addr ** head_ptr, void * context, native_addr_func get_native);
 
-#endif //X86_BACKEND_H_
+#endif //BACKEND_H_
 
