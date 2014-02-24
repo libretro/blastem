@@ -4345,13 +4345,6 @@ void m68k_reset(m68k_context * context)
 	start_68k_context(context, address);
 }
 
-typedef enum {
-	READ_16,
-	READ_8,
-	WRITE_16,
-	WRITE_8
-} ftype;
-
 uint8_t * gen_mem_fun(x86_68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks, ftype fun_type)
 {
 	uint8_t * dst = opts->cur_code;
