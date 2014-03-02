@@ -33,6 +33,7 @@ else
 ifeq ($(CPU),i686)
 M68KOBJS+= runtime_32.o
 TRANSOBJS+= gen_x86.o
+NOZ80:=1
 endif
 endif
 
@@ -44,11 +45,16 @@ MAINOBJS=blastem.o debug.o gdb_remote.o vdp.o render_sdl.o io.o $(CONFIGOBJS) gs
 
 ifeq ($(CPU),x86_64)
 CFLAGS+=-DX86_64
-MAINOBJS+= $(Z80OBJS)
 else
 ifeq ($(CPU),i686)
 CFLAGS+=-DX86_32
 endif
+endif
+
+ifdef NOZ80
+CFLAGS+=-DNO_Z80
+else
+MAINOBJS+= $(Z80OBJS)
 endif
 
 
