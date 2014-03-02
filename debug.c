@@ -531,19 +531,49 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 				debugging = 0;
 				break;
 			case 'b':
-				param = find_param(input_buf);
-				if (!param) {
-					fputs("b command requires a parameter\n", stderr);
-					break;
+				if (input_buf[1] == 't') {
+					uint32_t stack = context->aregs[7];
+					if (stack >= 0xE00000) {
+						stack &= 0xFFFF;
+						uint8_t non_adr_count = 0;
+						do {
+							uint32_t bt_address = ram[stack/2] << 16 | ram[stack/2+1];
+							bt_address = get_instruction_start(context->native_code_map, bt_address - 2);
+							if (bt_address) {
+								stack += 4;
+								non_adr_count = 0;
+								uint16_t *bt_pc = NULL;
+								if (bt_address < 0x400000) {
+									bt_pc = cart + bt_address/2;
+								} else if(bt_address > 0xE00000) {
+									bt_pc = ram + (bt_address & 0xFFFF)/2;
+								}
+								m68k_decode(bt_pc, &inst, bt_address);
+								m68k_disasm(&inst, input_buf);
+								printf("%X: %s\n", bt_address, input_buf);
+							} else {
+								//non-return address value on stack can be word wide
+								stack += 2;
+								non_adr_count++;
+							}
+							stack &= 0xFFFF;
+						} while (stack && non_adr_count < 6);
+					}
+				} else {
+					param = find_param(input_buf);
+					if (!param) {
+						fputs("b command requires a parameter\n", stderr);
+						break;
+					}
+					value = strtol(param, NULL, 16);
+					insert_breakpoint(context, value, (uint8_t *)debugger);
+					new_bp = malloc(sizeof(bp_def));
+					new_bp->next = breakpoints;
+					new_bp->address = value;
+					new_bp->index = bp_index++;
+					breakpoints = new_bp;
+					printf("68K Breakpoint %d set at %X\n", new_bp->index, value);
 				}
-				value = strtol(param, NULL, 16);
-				insert_breakpoint(context, value, (uint8_t *)debugger);
-				new_bp = malloc(sizeof(bp_def));
-				new_bp->next = breakpoints;
-				new_bp->address = value;
-				new_bp->index = bp_index++;
-				breakpoints = new_bp;
-				printf("68K Breakpoint %d set at %X\n", new_bp->index, value);
 				break;
 			case 'a':
 				param = find_param(input_buf);
