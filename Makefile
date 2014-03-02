@@ -28,11 +28,11 @@ TRANSOBJS=gen.o backend.o mem.o
 M68KOBJS=68kinst.o m68k_to_x86.o
 ifeq ($(CPU),x86_64)
 M68KOBJS+= runtime.o
-TRANSOBJS+= gen_x86.o
+TRANSOBJS+= gen_x86.o backend_x86.o
 else
 ifeq ($(CPU),i686)
 M68KOBJS+= runtime_32.o
-TRANSOBJS+= gen_x86.o
+TRANSOBJS+= gen_x86.o backend_x86.o
 NOZ80:=1
 endif
 endif
