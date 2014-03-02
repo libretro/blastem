@@ -4,7 +4,7 @@
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "gen_x86.h"
-#include "m68k_to_x86.h"
+#include "m68k_core.h"
 #include "68kinst.h"
 #include "mem.h"
 #include "backend.h"
@@ -44,7 +44,7 @@ void bcd_add();
 void bcd_sub();
 
 
-void set_flag(x86_68k_options * opts, uint8_t val, uint8_t flag)
+void set_flag(m68k_options * opts, uint8_t val, uint8_t flag)
 {
 	if (opts->flag_regs[flag] >= 0) {
 		mov_ir(&opts->gen.code, val, opts->flag_regs[flag], SZ_B);
@@ -58,7 +58,7 @@ void set_flag(x86_68k_options * opts, uint8_t val, uint8_t flag)
 	}
 }
 
-void set_flag_cond(x86_68k_options *opts, uint8_t cond, uint8_t flag)
+void set_flag_cond(m68k_options *opts, uint8_t cond, uint8_t flag)
 {
 	if (opts->flag_regs[flag] >= 0) {
 		setcc_r(&opts->gen.code, cond, opts->flag_regs[flag]);
@@ -72,7 +72,7 @@ void set_flag_cond(x86_68k_options *opts, uint8_t cond, uint8_t flag)
 	}
 }
 
-void check_flag(x86_68k_options *opts, uint8_t flag)
+void check_flag(m68k_options *opts, uint8_t flag)
 {
 	if (opts->flag_regs[flag] >= 0) {
 		cmp_ir(&opts->gen.code, 0, opts->flag_regs[flag], SZ_B);
@@ -81,7 +81,7 @@ void check_flag(x86_68k_options *opts, uint8_t flag)
 	}
 }
 
-void flag_to_reg(x86_68k_options *opts, uint8_t flag, uint8_t reg)
+void flag_to_reg(m68k_options *opts, uint8_t flag, uint8_t reg)
 {
 	if (opts->flag_regs[flag] >= 0) {
 		mov_rr(&opts->gen.code, opts->flag_regs[flag], reg, SZ_B);
@@ -95,7 +95,7 @@ void flag_to_reg(x86_68k_options *opts, uint8_t flag, uint8_t reg)
 	}
 }
 
-void reg_to_flag(x86_68k_options *opts, uint8_t reg, uint8_t flag)
+void reg_to_flag(m68k_options *opts, uint8_t reg, uint8_t flag)
 {
 	if (opts->flag_regs[flag] >= 0) {
 		mov_rr(&opts->gen.code, reg, opts->flag_regs[flag], SZ_B);
@@ -109,7 +109,7 @@ void reg_to_flag(x86_68k_options *opts, uint8_t reg, uint8_t flag)
 	}
 }
 
-void flag_to_flag(x86_68k_options *opts, uint8_t flag1, uint8_t flag2)
+void flag_to_flag(m68k_options *opts, uint8_t flag1, uint8_t flag2)
 {
 	code_info *code = &opts->gen.code;
 	if (opts->flag_regs[flag1] >= 0 && opts->flag_regs[flag2] >= 0) {
@@ -126,7 +126,7 @@ void flag_to_flag(x86_68k_options *opts, uint8_t flag1, uint8_t flag2)
 	}
 }
 
-void flag_to_carry(x86_68k_options * opts, uint8_t flag)
+void flag_to_carry(m68k_options * opts, uint8_t flag)
 {
 	if (opts->flag_regs[flag] >= 0) {
 		bt_ir(&opts->gen.code, 0, opts->flag_regs[flag], SZ_B);
@@ -135,7 +135,7 @@ void flag_to_carry(x86_68k_options * opts, uint8_t flag)
 	}
 }
 
-void or_flag_to_reg(x86_68k_options *opts, uint8_t flag, uint8_t reg)
+void or_flag_to_reg(m68k_options *opts, uint8_t flag, uint8_t reg)
 {
 	if (opts->flag_regs[flag] >= 0) {
 		or_rr(&opts->gen.code, opts->flag_regs[flag], reg, SZ_B);
@@ -144,7 +144,7 @@ void or_flag_to_reg(x86_68k_options *opts, uint8_t flag, uint8_t reg)
 	}
 }
 
-void xor_flag_to_reg(x86_68k_options *opts, uint8_t flag, uint8_t reg)
+void xor_flag_to_reg(m68k_options *opts, uint8_t flag, uint8_t reg)
 {
 	if (opts->flag_regs[flag] >= 0) {
 		xor_rr(&opts->gen.code, opts->flag_regs[flag], reg, SZ_B);
@@ -153,7 +153,7 @@ void xor_flag_to_reg(x86_68k_options *opts, uint8_t flag, uint8_t reg)
 	}
 }
 
-void xor_flag(x86_68k_options *opts, uint8_t val, uint8_t flag)
+void xor_flag(m68k_options *opts, uint8_t val, uint8_t flag)
 {
 	if (opts->flag_regs[flag] >= 0) {
 		xor_ir(&opts->gen.code, val, opts->flag_regs[flag], SZ_B);
@@ -162,7 +162,7 @@ void xor_flag(x86_68k_options *opts, uint8_t val, uint8_t flag)
 	}
 }
 
-void cmp_flags(x86_68k_options *opts, uint8_t flag1, uint8_t flag2)
+void cmp_flags(m68k_options *opts, uint8_t flag1, uint8_t flag2)
 {
 	code_info *code = &opts->gen.code;
 	if (opts->flag_regs[flag1] >= 0 && opts->flag_regs[flag2] >= 0) {
@@ -180,7 +180,7 @@ void cmp_flags(x86_68k_options *opts, uint8_t flag1, uint8_t flag2)
 	}
 }
 
-int8_t native_reg(m68k_op_info * op, x86_68k_options * opts)
+int8_t native_reg(m68k_op_info * op, m68k_options * opts)
 {
 	if (op->addr_mode == MODE_REG) {
 		return opts->dregs[op->params.regs.pri];
@@ -212,7 +212,7 @@ void print_regs_exit(m68k_context * context)
 	exit(0);
 }
 
-void m68k_read_size(x86_68k_options *opts, uint8_t size)
+void m68k_read_size(m68k_options *opts, uint8_t size)
 {
 	switch (size)
 	{
@@ -228,7 +228,7 @@ void m68k_read_size(x86_68k_options *opts, uint8_t size)
 	}
 }
 
-void m68k_write_size(x86_68k_options *opts, uint8_t size)
+void m68k_write_size(m68k_options *opts, uint8_t size)
 {
 	switch (size)
 	{
@@ -244,7 +244,7 @@ void m68k_write_size(x86_68k_options *opts, uint8_t size)
 	}
 }
 
-void translate_m68k_src(m68kinst * inst, x86_ea * ea, x86_68k_options * opts)
+void translate_m68k_src(m68kinst * inst, x86_ea * ea, m68k_options * opts)
 {
 	code_info *code = &opts->gen.code;
 	int8_t reg = native_reg(&(inst->src), opts);
@@ -458,7 +458,7 @@ void translate_m68k_src(m68kinst * inst, x86_ea * ea, x86_68k_options * opts)
 	}
 }
 
-void translate_m68k_dst(m68kinst * inst, x86_ea * ea, x86_68k_options * opts, uint8_t fake_read)
+void translate_m68k_dst(m68kinst * inst, x86_ea * ea, m68k_options * opts, uint8_t fake_read)
 {
 	code_info *code = &opts->gen.code;
 	int8_t reg = native_reg(&(inst->dst), opts), sec_reg;
@@ -667,7 +667,7 @@ void translate_m68k_dst(m68kinst * inst, x86_ea * ea, x86_68k_options * opts, ui
 	}
 }
 
-void m68k_save_result(m68kinst * inst, x86_68k_options * opts)
+void m68k_save_result(m68kinst * inst, m68k_options * opts)
 {
 	code_info *code = &opts->gen.code;
 	if (inst->dst.addr_mode != MODE_REG && inst->dst.addr_mode != MODE_AREG) {
@@ -736,7 +736,7 @@ uint32_t get_instruction_start(native_map_slot * native_code_map, uint32_t addre
 void map_native_address(m68k_context * context, uint32_t address, code_ptr native_addr, uint8_t size, uint8_t native_size)
 {
 	native_map_slot * native_code_map = context->native_code_map;
-	x86_68k_options * opts = context->options;
+	m68k_options * opts = context->options;
 	address &= 0xFFFFFF;
 	if (address > 0xE00000) {
 		context->ram_code_flags[(address & 0xC000) >> 14] |= 1 << ((address & 0x3800) >> 11);
@@ -770,7 +770,7 @@ void map_native_address(m68k_context * context, uint32_t address, code_ptr nativ
 	}
 }
 
-uint8_t get_native_inst_size(x86_68k_options * opts, uint32_t address)
+uint8_t get_native_inst_size(m68k_options * opts, uint32_t address)
 {
 	if (address < 0xE00000) {
 		return 0;
@@ -779,7 +779,7 @@ uint8_t get_native_inst_size(x86_68k_options * opts, uint32_t address)
 	return opts->gen.ram_inst_sizes[slot][((address & 0xFFFF)/2)%512];
 }
 
-void translate_m68k_move(x86_68k_options * opts, m68kinst * inst)
+void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
 	int8_t reg, flags_reg, sec_reg;
@@ -1075,7 +1075,7 @@ void translate_m68k_move(x86_68k_options * opts, m68kinst * inst)
 	cycles(&opts->gen, BUS);
 }
 
-void translate_m68k_movem(x86_68k_options * opts, m68kinst * inst)
+void translate_m68k_movem(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
 	int8_t bit,reg,sec_reg;
@@ -1403,7 +1403,7 @@ void translate_m68k_movem(x86_68k_options * opts, m68kinst * inst)
 	cycles(&opts->gen, 4);
 }
 
-void translate_m68k_clr(x86_68k_options * opts, m68kinst * inst)
+void translate_m68k_clr(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
 	set_flag(opts, 0, FLAG_N);
@@ -1426,7 +1426,7 @@ void translate_m68k_clr(x86_68k_options * opts, m68kinst * inst)
 	m68k_save_result(inst, opts);
 }
 
-void translate_m68k_ext(x86_68k_options * opts, m68kinst * inst)
+void translate_m68k_ext(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
 	x86_ea dst_op;
@@ -1449,7 +1449,7 @@ void translate_m68k_ext(x86_68k_options * opts, m68kinst * inst)
 	//M68K EXT only operates on registers so no need for a call to save result here
 }
 
-void translate_m68k_lea(x86_68k_options * opts, m68kinst * inst)
+void translate_m68k_lea(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
 	int8_t dst_reg = native_reg(&(inst->dst), opts), sec_reg;
@@ -1609,7 +1609,7 @@ void translate_m68k_lea(x86_68k_options * opts, m68kinst * inst)
 	}
 }
 
-void translate_m68k_pea(x86_68k_options * opts, m68kinst * inst)
+void translate_m68k_pea(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
 	uint8_t sec_reg;
@@ -1693,7 +1693,7 @@ void translate_m68k_pea(x86_68k_options * opts, m68kinst * inst)
 	call(code, opts->write_32_lowfirst);
 }
 
-void translate_m68k_bsr(x86_68k_options * opts, m68kinst * inst)
+void translate_m68k_bsr(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
 	int32_t disp = inst->src.params.immed;
@@ -1713,7 +1713,7 @@ void translate_m68k_bsr(x86_68k_options * opts, m68kinst * inst)
 	jmp(code, dest_addr);
 }
 
-uint8_t m68k_eval_cond(x86_68k_options * opts, uint8_t cc)
+uint8_t m68k_eval_cond(m68k_options * opts, uint8_t cc)
 {
 	uint8_t cond = CC_NZ;
 	switch (cc)
@@ -1760,7 +1760,7 @@ uint8_t m68k_eval_cond(x86_68k_options * opts, uint8_t cc)
 	return cond;
 }
 
-void translate_m68k_bcc(x86_68k_options * opts, m68kinst * inst)
+void translate_m68k_bcc(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
 	cycles(&opts->gen, 10);//TODO: Adjust this for branch not taken case
@@ -1785,7 +1785,7 @@ void translate_m68k_bcc(x86_68k_options * opts, m68kinst * inst)
 	}
 }
 
-void translate_m68k_scc(x86_68k_options * opts, m68kinst * inst)
+void translate_m68k_scc(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
 	uint8_t cond = inst->extra.cond;
@@ -1828,7 +1828,7 @@ void translate_m68k_scc(x86_68k_options * opts, m68kinst * inst)
 	m68k_save_result(inst, opts);
 }
 
-void translate_m68k_jmp_jsr(x86_68k_options * opts, m68kinst * inst)
+void translate_m68k_jmp_jsr(m68k_options * opts, m68kinst * inst)
 {
 	uint8_t is_jsr = inst->op == M68K_JSR;
 	code_info *code = &opts->gen.code;
@@ -2025,7 +2025,7 @@ void translate_m68k_jmp_jsr(x86_68k_options * opts, m68kinst * inst)
 	}
 }
 
-void translate_m68k_rts(x86_68k_options * opts, m68kinst * inst)
+void translate_m68k_rts(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
 	//TODO: Add cycles
@@ -2036,7 +2036,7 @@ void translate_m68k_rts(x86_68k_options * opts, m68kinst * inst)
 	jmp_r(code, opts->gen.scratch1);
 }
 
-void translate_m68k_dbcc(x86_68k_options * opts, m68kinst * inst)
+void translate_m68k_dbcc(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
 	//best case duration
@@ -2077,7 +2077,7 @@ void translate_m68k_dbcc(x86_68k_options * opts, m68kinst * inst)
 	}
 }
 
-void translate_m68k_link(x86_68k_options * opts, m68kinst * inst)
+void translate_m68k_link(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
 	int8_t reg = native_reg(&(inst->src), opts);
@@ -2101,7 +2101,7 @@ void translate_m68k_link(x86_68k_options * opts, m68kinst * inst)
 	cycles(&opts->gen, BUS);
 }
 
-void translate_m68k_movep(x86_68k_options * opts, m68kinst * inst)
+void translate_m68k_movep(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
 	int8_t reg;
@@ -2210,7 +2210,7 @@ void translate_m68k_movep(x86_68k_options * opts, m68kinst * inst)
 	}
 }
 
-void translate_m68k_cmp(x86_68k_options * opts, m68kinst * inst)
+void translate_m68k_cmp(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
 	uint8_t size = inst->extra.size;
@@ -2254,7 +2254,7 @@ typedef void (*shift_irdisp_t)(code_info *code, uint8_t val, uint8_t dst_base, i
 typedef void (*shift_clr_t)(code_info *code, uint8_t dst, uint8_t size);
 typedef void (*shift_clrdisp_t)(code_info *code, uint8_t dst_base, int32_t disp, uint8_t size);
 
-void translate_shift(x86_68k_options * opts, m68kinst * inst, x86_ea *src_op, x86_ea * dst_op, shift_ir_t shift_ir, shift_irdisp_t shift_irdisp, shift_clr_t shift_clr, shift_clrdisp_t shift_clrdisp, shift_ir_t special, shift_irdisp_t special_disp)
+void translate_shift(m68k_options * opts, m68kinst * inst, x86_ea *src_op, x86_ea * dst_op, shift_ir_t shift_ir, shift_irdisp_t shift_irdisp, shift_clr_t shift_clr, shift_clrdisp_t shift_clrdisp, shift_ir_t special, shift_irdisp_t special_disp)
 {
 	code_info *code = &opts->gen.code;
 	code_ptr end_off = NULL;
@@ -2422,7 +2422,7 @@ void translate_shift(x86_68k_options * opts, m68kinst * inst, x86_ea *src_op, x8
 
 #define BIT_SUPERVISOR 5
 
-void translate_m68k(x86_68k_options * opts, m68kinst * inst)
+void translate_m68k(m68k_options * opts, m68kinst * inst)
 {
 	code_ptr end_off, zero_off, norm_off;
 	uint8_t dst_reg;
@@ -3674,7 +3674,7 @@ uint8_t m68k_is_terminal(m68kinst * inst)
 
 void m68k_handle_deferred(m68k_context * context)
 {
-	x86_68k_options * opts = context->options;
+	m68k_options * opts = context->options;
 	process_deferred(&opts->gen.deferred, context, (native_addr_func)get_native_from_context);
 	if (opts->gen.deferred) {
 		translate_m68k_stream(opts->gen.deferred->address, context);
@@ -3684,7 +3684,7 @@ void m68k_handle_deferred(m68k_context * context)
 void translate_m68k_stream(uint32_t address, m68k_context * context)
 {
 	m68kinst instbuf;
-	x86_68k_options * opts = context->options;
+	m68k_options * opts = context->options;
 	code_info *code = &opts->gen.code;
 	address &= 0xFFFFFF;
 	if(get_native_address(opts->gen.native_code_map, address)) {
@@ -3766,7 +3766,7 @@ code_ptr get_native_address_trans(m68k_context * context, uint32_t address)
 
 void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
 {
-	x86_68k_options * opts = context->options;
+	m68k_options * opts = context->options;
 	code_info *code = &opts->gen.code;
 	uint8_t orig_size = get_native_inst_size(opts, address);
 	code_ptr orig_start = get_native_address(context->native_code_map, address);
@@ -3854,7 +3854,7 @@ m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context)
 {
 	uint32_t inst_start = get_instruction_start(context->native_code_map, address | 0xFF0000);
 	if (inst_start) {
-		x86_68k_options * options = context->options;
+		m68k_options * options = context->options;
 		code_info *code = &options->gen.code;
 		code_ptr dst = get_native_address(context->native_code_map, inst_start);
 		code_info orig;
@@ -3887,7 +3887,7 @@ m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context)
 void insert_breakpoint(m68k_context * context, uint32_t address, code_ptr bp_handler)
 {
 	static code_ptr bp_stub = NULL;
-	x86_68k_options * opts = context->options;
+	m68k_options * opts = context->options;
 	code_info native;
 	native.cur = get_native_address_trans(context, address);
 	native.last = native.cur + 128;
@@ -3946,7 +3946,7 @@ void remove_breakpoint(m68k_context * context, uint32_t address)
 void start_68k_context(m68k_context * context, uint32_t address)
 {
 	code_ptr addr = get_native_address_trans(context, address);
-	x86_68k_options * options = context->options;
+	m68k_options * options = context->options;
 	options->start_context(addr, context);
 }
 
@@ -4197,7 +4197,7 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	return start;
 }
 
-void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks)
+void init_x86_68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks)
 {
 	memset(opts, 0, sizeof(*opts));
 	for (int i = 0; i < 8; i++)

@@ -7,7 +7,7 @@
 #define BLASTEM_H_
 
 #include <stdint.h>
-#include "m68k_to_x86.h"
+#include "m68k_core.h"
 #include "z80_to_x86.h"
 #include "ym2612.h"
 #include "vdp.h"
