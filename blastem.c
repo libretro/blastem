@@ -182,7 +182,7 @@ uint8_t new_busack = 0;
 
 void sync_z80(z80_context * z_context, uint32_t mclks)
 {
-#ifdef X86_64
+#ifndef NO_Z80
 	if (z80_enabled && !reset && !busreq) {
 		genesis_context * gen = z_context->system;
 		z_context->sync_cycle = mclks / MCLKS_PER_Z80;
@@ -472,7 +472,7 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 			location &= 0x7FFF;
 			if (location < 0x4000) {
 				z80_ram[location & 0x1FFF] = value;
-#ifdef X86_64
+#ifndef NO_Z80
 				z80_handle_code_write(location & 0x1FFF, gen->z80);
 #endif
 			} else if (location < 0x6000) {
@@ -991,7 +991,7 @@ void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, u
 			insert_breakpoint(&context, pc, debugger);
 		}
 		adjust_int_cycle(gen->m68k, gen->vdp);
-#ifdef X86_64
+#ifndef NO_Z80
 		gen->z80->native_pc =  z80_get_native_address_trans(gen->z80, gen->z80->pc);
 #endif
 		start_68k_context(&context, pc);
@@ -1238,7 +1238,7 @@ int main(int argc, char ** argv)
 
 	z80_context z_context;
 	x86_z80_options z_opts;
-#ifdef X86_64
+#ifndef NO_Z80
 	init_x86_z80_opts(&z_opts);
 	init_z80_context(&z_context, &z_opts);
 #endif

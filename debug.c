@@ -82,7 +82,7 @@ void strip_nl(char * buf)
 	}
 }
 
-#ifdef X86_64
+#ifndef NO_Z80
 
 void zdebugger_print(z80_context * context, char format_char, char * param)
 {
@@ -705,7 +705,7 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 				}
 				break;
 			}
-#ifdef X86_64
+#ifndef NO_Z80
 			case 'z': {
 				genesis_context * gen = context->system;
 				//Z80 debug commands
