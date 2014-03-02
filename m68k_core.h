@@ -3,8 +3,8 @@
  This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
-#ifndef M68K_TO_X86_H_
-#define M68K_TO_X86_H_
+#ifndef M68K_CORE_H_
+#define M68K_CORE_H_
 #include <stdint.h>
 #include <stdio.h>
 #include "backend.h"
@@ -41,7 +41,7 @@ typedef struct {
 	code_ptr		get_sr;
 	code_ptr		set_sr;
 	code_ptr		set_ccr;
-} x86_68k_options;
+} m68k_options;
 
 typedef struct {
 	uint8_t         flags[5];
@@ -64,10 +64,10 @@ typedef struct {
 	void            *system;
 } m68k_context;
 
-void translate_m68k(x86_68k_options * opts, struct m68kinst * inst);
+void translate_m68k(m68k_options * opts, struct m68kinst * inst);
 void translate_m68k_stream(uint32_t address, m68k_context * context);
 void start_68k_context(m68k_context * context, uint32_t address);
-void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks);
+void init_x86_68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks);
 void init_68k_context(m68k_context * context, native_map_slot * native_code_map, void * opts);
 void m68k_reset(m68k_context * context);
 void insert_breakpoint(m68k_context * context, uint32_t address, uint8_t * bp_handler);
@@ -75,5 +75,5 @@ void remove_breakpoint(m68k_context * context, uint32_t address);
 m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context);
 uint32_t get_instruction_start(native_map_slot * native_code_map, uint32_t address);
 
-#endif //M68K_TO_X86_H_
+#endif //M68K_CORE_H_
 

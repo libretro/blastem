@@ -4,7 +4,7 @@
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "68kinst.h"
-#include "m68k_to_x86.h"
+#include "m68k_core.h"
 #include "z80_to_x86.h"
 #include "mem.h"
 #include "vdp.h"
@@ -869,7 +869,7 @@ void save_sram()
 void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, uint8_t * debugger)
 {
 	m68k_context context;
-	x86_68k_options opts;
+	m68k_options opts;
 	gen->m68k = &context;
 	memmap_chunk memmap[MAX_MAP_CHUNKS];
 	uint32_t num_chunks;

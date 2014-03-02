@@ -1,10 +1,10 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "gen_x86.h"
-#include "m68k_to_x86.h"
+#include "m68k_core.h"
 #include <stdio.h>
 #include <stddef.h>
 
