@@ -64,8 +64,8 @@ typedef struct {
 	void            *system;
 } m68k_context;
 
-uint8_t * translate_m68k(uint8_t * dst, struct m68kinst * inst, x86_68k_options * opts);
-uint8_t * translate_m68k_stream(uint32_t address, m68k_context * context);
+void translate_m68k(x86_68k_options * opts, struct m68kinst * inst);
+void translate_m68k_stream(uint32_t address, m68k_context * context);
 void start_68k_context(m68k_context * context, uint32_t address);
 void init_x86_68k_opts(x86_68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks);
 void init_68k_context(m68k_context * context, native_map_slot * native_code_map, void * opts);
