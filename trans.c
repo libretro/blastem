@@ -4,7 +4,7 @@
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "68kinst.h"
-#include "m68k_to_x86.h"
+#include "m68k_core.h"
 #include "mem.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,7 +24,7 @@ int main(int argc, char ** argv)
 	unsigned short *filebuf;
 	char disbuf[1024];
 	unsigned short * cur;
-	x86_68k_options opts;
+	m68k_options opts;
 	m68k_context context;
 	FILE * f = fopen(argv[1], "rb");
 	fseek(f, 0, SEEK_END);

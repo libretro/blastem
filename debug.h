@@ -2,7 +2,7 @@
 #define DEBUG_H_
 
 #include <stdint.h>
-#include "m68k_to_x86.h"
+#include "m68k_core.h"
 
 typedef struct disp_def {
 	struct disp_def * next;
