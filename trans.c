@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "68kinst.h"
@@ -43,14 +43,14 @@ int main(int argc, char ** argv)
 	memmap[0].mask = 0xFFFFFF;
 	memmap[0].flags = MMAP_READ;
 	memmap[0].buffer = filebuf;
-	
+
 	memmap[1].start = 0xE00000;
 	memmap[1].end = 0x1000000;
 	memmap[1].mask = 0xFFFF;
 	memmap[1].flags = MMAP_READ | MMAP_WRITE | MMAP_CODE;
 	memmap[1].buffer = malloc(64 * 1024);
 	init_x86_68k_opts(&opts, memmap, 2);
-	init_68k_context(&context, opts.native_code_map, &opts);
+	init_68k_context(&context, opts.gen.native_code_map, &opts);
 	context.mem_pointers[0] = memmap[0].buffer;
 	context.mem_pointers[1] = memmap[1].buffer;
 	context.target_cycle = context.sync_cycle = 0x80000000;
