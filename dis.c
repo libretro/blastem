@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "68kinst.h"
@@ -192,7 +192,7 @@ int main(int argc, char ** argv)
 					if (is_visited(address)) {
 						break;
 					}
-				} else if (instbuf.src.addr_mode = MODE_PC_DISPLACE) {
+				} else if (instbuf.src.addr_mode == MODE_PC_DISPLACE) {
 					address = instbuf.src.params.regs.displacement + instbuf.address + 2;
 					encoded = filebuf + address/2;
 					if (is_visited(address)) {
