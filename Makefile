@@ -5,9 +5,9 @@ LIBS=sdl glew gl
 endif
 LDFLAGS:=-lm $(shell pkg-config --libs $(LIBS))
 ifdef DEBUG
-CFLAGS:=-ggdb -std=gnu99 $(shell pkg-config --cflags-only-I $(LIBS)) -Wreturn-type -Werror=return-type
+CFLAGS:=-ggdb -std=gnu99 $(shell pkg-config --cflags-only-I $(LIBS)) -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration
 else
-CFLAGS:=-O2 -std=gnu99 $(shell pkg-config  --cflags-only-I $(LIBS)) -Wreturn-type -Werror=return-type
+CFLAGS:=-O2 -std=gnu99 $(shell pkg-config  --cflags-only-I $(LIBS)) -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration
 endif
 
 ifdef PROFILE
@@ -25,13 +25,13 @@ endif
 
 
 TRANSOBJS=gen.o backend.o mem.o
-M68KOBJS=68kinst.o m68k_to_x86.o
+M68KOBJS=68kinst.o m68k_core.o
 ifeq ($(CPU),x86_64)
-M68KOBJS+= runtime.o
+M68KOBJS+= runtime.o m68k_core_x86.o
 TRANSOBJS+= gen_x86.o backend_x86.o
 else
 ifeq ($(CPU),i686)
-M68KOBJS+= runtime_32.o
+M68KOBJS+= runtime_32.o m68k_core_x86.o
 TRANSOBJS+= gen_x86.o backend_x86.o
 NOZ80:=1
 endif
@@ -102,7 +102,7 @@ test_arm : test_arm.o gen_arm.o mem.o gen.o
 gen_fib : gen_fib.o gen_x86.o mem.o
 	$(CC) -o gen_fib gen_fib.o gen_x86.o mem.o
 
-offsets : offsets.c z80_to_x86.h m68k_to_x86.h
+offsets : offsets.c z80_to_x86.h m68k_core.h
 	$(CC) -o offsets offsets.c
 
 %.o : %.S

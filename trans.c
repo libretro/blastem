@@ -49,7 +49,7 @@ int main(int argc, char ** argv)
 	memmap[1].mask = 0xFFFF;
 	memmap[1].flags = MMAP_READ | MMAP_WRITE | MMAP_CODE;
 	memmap[1].buffer = malloc(64 * 1024);
-	init_x86_68k_opts(&opts, memmap, 2);
+	init_m68k_opts(&opts, memmap, 2);
 	init_68k_context(&context, opts.gen.native_code_map, &opts);
 	context.mem_pointers[0] = memmap[0].buffer;
 	context.mem_pointers[1] = memmap[1].buffer;
