@@ -963,7 +963,7 @@ void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, u
 		}
 		atexit(save_sram);
 	}
-	init_x86_68k_opts(&opts, memmap, num_chunks);
+	init_m68k_opts(&opts, memmap, num_chunks);
 	opts.address_log = address_log;
 	init_68k_context(&context, opts.gen.native_code_map, &opts);
 

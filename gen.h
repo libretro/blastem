@@ -18,5 +18,7 @@ typedef struct {
 } code_info;
 
 void init_code_info(code_info *code);
+void call(code_info *code, code_ptr fun);
+void jmp(code_info *code, code_ptr dest);
 
 #endif //GEN_H_
