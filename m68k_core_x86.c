@@ -181,15 +181,16 @@ void cmp_flags(m68k_options *opts, uint8_t flag1, uint8_t flag2)
 	}
 }
 
-void translate_m68k_src(m68kinst * inst, x86_ea * ea, m68k_options * opts)
+void translate_m68k_op(m68kinst * inst, x86_ea * ea, m68k_options * opts, uint8_t dst)
 {
 	code_info *code = &opts->gen.code;
-	int8_t reg = native_reg(&(inst->src), opts);
+	m68k_op_info *op = dst ? &inst->dst : &inst->src;
+	int8_t reg = native_reg(op, opts);
 	uint8_t sec_reg;
 	int32_t dec_amount,inc_amount;
 	if (reg >= 0) {
 		ea->mode = MODE_REG_DIRECT;
-		if (inst->dst.addr_mode == MODE_AREG && inst->extra.size == OPSIZE_WORD) {
+		if (!dst && inst->dst.addr_mode == MODE_AREG && inst->extra.size == OPSIZE_WORD) {
 			movsx_rr(code, reg, opts->gen.scratch1, SZ_W, SZ_D);
 			ea->base = opts->gen.scratch1;
 		} else {
@@ -197,24 +198,23 @@ void translate_m68k_src(m68kinst * inst, x86_ea * ea, m68k_options * opts)
 		}
 		return;
 	}
-	switch (inst->src.addr_mode)
+	switch (op->addr_mode)
 	{
 	case MODE_REG:
 	case MODE_AREG:
 		//We only get one memory parameter, so if the dst operand is a register in memory,
-		//we need to copy this to a temp register first
-		reg = native_reg(&(inst->dst), opts);
-		if (reg >= 0 || inst->dst.addr_mode == MODE_UNUSED || !(inst->dst.addr_mode == MODE_REG || inst->dst.addr_mode == MODE_AREG)
+		//we need to copy this to a temp register first if we're translating the src operand
+		if (dst || native_reg(&(inst->dst), opts) >= 0 || inst->dst.addr_mode == MODE_UNUSED || !(inst->dst.addr_mode == MODE_REG || inst->dst.addr_mode == MODE_AREG)
 		    || inst->op == M68K_EXG) {
 
 			ea->mode = MODE_REG_DISPLACE8;
 			ea->base = opts->gen.context_reg;
-			ea->disp = reg_offset(&(inst->src));
+			ea->disp = reg_offset(op);
 		} else {
 			if (inst->dst.addr_mode == MODE_AREG && inst->extra.size == OPSIZE_WORD) {
-				movsx_rdispr(code, opts->gen.context_reg, reg_offset(&(inst->src)), opts->gen.scratch1, SZ_W, SZ_D);
+				movsx_rdispr(code, opts->gen.context_reg, reg_offset(op), opts->gen.scratch1, SZ_W, SZ_D);
 			} else {
-				mov_rdispr(code, opts->gen.context_reg, reg_offset(&(inst->src)), opts->gen.scratch1, inst->extra.size);
+				mov_rdispr(code, opts->gen.context_reg, reg_offset(op), opts->gen.scratch1, inst->extra.size);
 			}
 			ea->mode = MODE_REG_DIRECT;
 			ea->base = opts->gen.scratch1;
@@ -223,56 +223,81 @@ void translate_m68k_src(m68kinst * inst, x86_ea * ea, m68k_options * opts)
 		}
 		break;
 	case MODE_AREG_PREDEC:
-		dec_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (inst->src.params.regs.pri == 7 ? 2 :1));
-		cycles(&opts->gen, PREDEC_PENALTY);
-		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
-			sub_ir(code, dec_amount, opts->aregs[inst->src.params.regs.pri], SZ_D);
+		if (dst && inst->src.addr_mode == MODE_AREG_PREDEC) {
+			push_r(code, opts->gen.scratch1);
+		}
+		dec_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (op->params.regs.pri == 7 ? 2 :1));
+		if (!dst) {
+			cycles(&opts->gen, PREDEC_PENALTY);
+		}
+		if (opts->aregs[op->params.regs.pri] >= 0) {
+			sub_ir(code, dec_amount, opts->aregs[op->params.regs.pri], SZ_D);
 		} else {
-			sub_irdisp(code, dec_amount, opts->gen.context_reg, reg_offset(&(inst->src)), SZ_D);
+			sub_irdisp(code, dec_amount, opts->gen.context_reg, reg_offset(op), SZ_D);
 		}
 	case MODE_AREG_INDIRECT:
 	case MODE_AREG_POSTINC:
-		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
-			mov_rr(code, opts->aregs[inst->src.params.regs.pri], opts->gen.scratch1, SZ_D);
+		if (opts->aregs[op->params.regs.pri] >= 0) {
+			mov_rr(code, opts->aregs[op->params.regs.pri], opts->gen.scratch1, SZ_D);
 		} else {
-			mov_rdispr(code, opts->gen.context_reg,  reg_offset(&(inst->src)), opts->gen.scratch1, SZ_D);
+			mov_rdispr(code, opts->gen.context_reg,  reg_offset(op), opts->gen.scratch1, SZ_D);
 		}
 		m68k_read_size(opts, inst->extra.size);
 
-		if (inst->src.addr_mode == MODE_AREG_POSTINC) {
-			inc_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (inst->src.params.regs.pri == 7 ? 2 : 1));
-			if (opts->aregs[inst->src.params.regs.pri] >= 0) {
-				add_ir(code, inc_amount, opts->aregs[inst->src.params.regs.pri], SZ_D);
+		if (dst) {
+			if (inst->src.addr_mode == MODE_AREG_PREDEC) {
+				//restore src operand to opts->gen.scratch2
+				pop_r(code, opts->gen.scratch2);
 			} else {
-				add_irdisp(code, inc_amount, opts->gen.context_reg, reg_offset(&(inst->src)), SZ_D);
+				//save reg value in opts->gen.scratch2 so we can use it to save the result in memory later
+				if (opts->aregs[op->params.regs.pri] >= 0) {
+					mov_rr(code, opts->aregs[op->params.regs.pri], opts->gen.scratch2, SZ_D);
+				} else {
+					mov_rdispr(code, opts->gen.context_reg, reg_offset(op), opts->gen.scratch2, SZ_D);
+				}
+			}
+		}
+
+		if (op->addr_mode == MODE_AREG_POSTINC) {
+			inc_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (op->params.regs.pri == 7 ? 2 : 1));
+			if (opts->aregs[op->params.regs.pri] >= 0) {
+				add_ir(code, inc_amount, opts->aregs[op->params.regs.pri], SZ_D);
+			} else {
+				add_irdisp(code, inc_amount, opts->gen.context_reg, reg_offset(op), SZ_D);
 			}
 		}
 		ea->mode = MODE_REG_DIRECT;
-		ea->base = (inst->dst.addr_mode == MODE_AREG_PREDEC && inst->op != M68K_MOVE) ? opts->gen.scratch2 : opts->gen.scratch1;
+		ea->base = (!dst && inst->dst.addr_mode == MODE_AREG_PREDEC && inst->op != M68K_MOVE) ? opts->gen.scratch2 : opts->gen.scratch1;
 		break;
 	case MODE_AREG_DISPLACE:
 		cycles(&opts->gen, BUS);
-		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
-			mov_rr(code, opts->aregs[inst->src.params.regs.pri], opts->gen.scratch1, SZ_D);
+		if (opts->aregs[op->params.regs.pri] >= 0) {
+			mov_rr(code, opts->aregs[op->params.regs.pri], opts->gen.scratch1, SZ_D);
 		} else {
-			mov_rdispr(code, opts->gen.context_reg,  reg_offset(&(inst->src)), opts->gen.scratch1, SZ_D);
+			mov_rdispr(code, opts->gen.context_reg,  reg_offset(op), opts->gen.scratch1, SZ_D);
 		}
-		add_ir(code, inst->src.params.regs.displacement, opts->gen.scratch1, SZ_D);
+		add_ir(code, op->params.regs.displacement, opts->gen.scratch1, SZ_D);
+		if (dst) {
+			push_r(code, opts->gen.scratch1);
+		}
 		m68k_read_size(opts, inst->extra.size);
+		if (dst) {
+			pop_r(code, opts->gen.scratch2);
+		}
 
 		ea->mode = MODE_REG_DIRECT;
 		ea->base = opts->gen.scratch1;
 		break;
 	case MODE_AREG_INDEX_DISP8:
 		cycles(&opts->gen, 6);
-		if (opts->aregs[inst->src.params.regs.pri] >= 0) {
-			mov_rr(code, opts->aregs[inst->src.params.regs.pri], opts->gen.scratch1, SZ_D);
+		if (opts->aregs[op->params.regs.pri] >= 0) {
+			mov_rr(code, opts->aregs[op->params.regs.pri], opts->gen.scratch1, SZ_D);
 		} else {
-			mov_rdispr(code, opts->gen.context_reg,  reg_offset(&(inst->src)), opts->gen.scratch1, SZ_D);
+			mov_rdispr(code, opts->gen.context_reg,  reg_offset(op), opts->gen.scratch1, SZ_D);
 		}
-		sec_reg = (inst->src.params.regs.sec >> 1) & 0x7;
-		if (inst->src.params.regs.sec & 1) {
-			if (inst->src.params.regs.sec & 0x10) {
+		sec_reg = (op->params.regs.sec >> 1) & 0x7;
+		if (op->params.regs.sec & 1) {
+			if (op->params.regs.sec & 0x10) {
 				if (opts->aregs[sec_reg] >= 0) {
 					add_rr(code, opts->aregs[sec_reg], opts->gen.scratch1, SZ_D);
 				} else {
@@ -286,7 +311,7 @@ void translate_m68k_src(m68kinst * inst, x86_ea * ea, m68k_options * opts)
 				}
 			}
 		} else {
-			if (inst->src.params.regs.sec & 0x10) {
+			if (op->params.regs.sec & 0x10) {
 				if (opts->aregs[sec_reg] >= 0) {
 					movsx_rr(code, opts->aregs[sec_reg], opts->gen.scratch2, SZ_W, SZ_D);
 				} else {
@@ -301,18 +326,30 @@ void translate_m68k_src(m68kinst * inst, x86_ea * ea, m68k_options * opts)
 			}
 			add_rr(code, opts->gen.scratch2, opts->gen.scratch1, SZ_D);
 		}
-		if (inst->src.params.regs.displacement) {
-			add_ir(code, inst->src.params.regs.displacement, opts->gen.scratch1, SZ_D);
+		if (op->params.regs.displacement) {
+			add_ir(code, op->params.regs.displacement, opts->gen.scratch1, SZ_D);
+		}
+		if (dst) {
+			push_r(code, opts->gen.scratch1);
 		}
 		m68k_read_size(opts, inst->extra.size);
+		if (dst) {
+			pop_r(code, opts->gen.scratch2);
+		}
 
 		ea->mode = MODE_REG_DIRECT;
 		ea->base = opts->gen.scratch1;
 		break;
 	case MODE_PC_DISPLACE:
 		cycles(&opts->gen, BUS);
-		mov_ir(code, inst->src.params.regs.displacement + inst->address+2, opts->gen.scratch1, SZ_D);
+		mov_ir(code, op->params.regs.displacement + inst->address+2, opts->gen.scratch1, SZ_D);
+		if (dst) {
+			push_r(code, opts->gen.scratch1);
+		}
 		m68k_read_size(opts, inst->extra.size);
+		if (dst) {
+			pop_r(code, opts->gen.scratch2);
+		}
 
 		ea->mode = MODE_REG_DIRECT;
 		ea->base = opts->gen.scratch1;
@@ -320,9 +357,9 @@ void translate_m68k_src(m68kinst * inst, x86_ea * ea, m68k_options * opts)
 	case MODE_PC_INDEX_DISP8:
 		cycles(&opts->gen, 6);
 		mov_ir(code, inst->address+2, opts->gen.scratch1, SZ_D);
-		sec_reg = (inst->src.params.regs.sec >> 1) & 0x7;
-		if (inst->src.params.regs.sec & 1) {
-			if (inst->src.params.regs.sec & 0x10) {
+		sec_reg = (op->params.regs.sec >> 1) & 0x7;
+		if (op->params.regs.sec & 1) {
+			if (op->params.regs.sec & 0x10) {
 				if (opts->aregs[sec_reg] >= 0) {
 					add_rr(code, opts->aregs[sec_reg], opts->gen.scratch1, SZ_D);
 				} else {
@@ -336,7 +373,7 @@ void translate_m68k_src(m68kinst * inst, x86_ea * ea, m68k_options * opts)
 				}
 			}
 		} else {
-			if (inst->src.params.regs.sec & 0x10) {
+			if (op->params.regs.sec & 0x10) {
 				if (opts->aregs[sec_reg] >= 0) {
 					movsx_rr(code, opts->aregs[sec_reg], opts->gen.scratch2, SZ_W, SZ_D);
 				} else {
@@ -351,19 +388,31 @@ void translate_m68k_src(m68kinst * inst, x86_ea * ea, m68k_options * opts)
 			}
 			add_rr(code, opts->gen.scratch2, opts->gen.scratch1, SZ_D);
 		}
-		if (inst->src.params.regs.displacement) {
-			add_ir(code, inst->src.params.regs.displacement, opts->gen.scratch1, SZ_D);
+		if (op->params.regs.displacement) {
+			add_ir(code, op->params.regs.displacement, opts->gen.scratch1, SZ_D);
+		}
+		if (dst) {
+			push_r(code, opts->gen.scratch1);
 		}
 		m68k_read_size(opts, inst->extra.size);
+		if (dst) {
+			pop_r(code, opts->gen.scratch2);
+		}
 
 		ea->mode = MODE_REG_DIRECT;
 		ea->base = opts->gen.scratch1;
 		break;
 	case MODE_ABSOLUTE:
 	case MODE_ABSOLUTE_SHORT:
-		cycles(&opts->gen, inst->src.addr_mode == MODE_ABSOLUTE ? BUS*2 : BUS);
-		mov_ir(code, inst->src.params.immed, opts->gen.scratch1, SZ_D);
+		cycles(&opts->gen, op->addr_mode == MODE_ABSOLUTE ? BUS*2 : BUS);
+		mov_ir(code, op->params.immed, opts->gen.scratch1, SZ_D);
+		if (dst) {
+			push_r(code, opts->gen.scratch1);
+		}
 		m68k_read_size(opts, inst->extra.size);
+		if (dst) {
+			pop_r(code, opts->gen.scratch2);
+		}
 
 		ea->mode = MODE_REG_DIRECT;
 		ea->base = opts->gen.scratch1;
@@ -371,20 +420,21 @@ void translate_m68k_src(m68kinst * inst, x86_ea * ea, m68k_options * opts)
 	case MODE_IMMEDIATE:
 	case MODE_IMMEDIATE_WORD:
 		if (inst->variant != VAR_QUICK) {
-			cycles(&opts->gen, (inst->extra.size == OPSIZE_LONG && inst->src.addr_mode == MODE_IMMEDIATE) ? BUS*2 : BUS);
+			cycles(&opts->gen, (inst->extra.size == OPSIZE_LONG && op->addr_mode == MODE_IMMEDIATE) ? BUS*2 : BUS);
 		}
 		ea->mode = MODE_IMMED;
-		ea->disp = inst->src.params.immed;
+		ea->disp = op->params.immed;
+		//sign extend value when the destination is an address register
 		if (inst->dst.addr_mode == MODE_AREG && inst->extra.size == OPSIZE_WORD && ea->disp & 0x8000) {
 			ea->disp |= 0xFFFF0000;
 		}
 		return;
 	default:
 		m68k_disasm(inst, disasm_buf);
-		printf("%X: %s\naddress mode %d not implemented (src)\n", inst->address, disasm_buf, inst->src.addr_mode);
+		printf("%X: %s\naddress mode %d not implemented (%s)\n", inst->address, disasm_buf, op->addr_mode, dst ? "dst" : "src");
 		exit(1);
 	}
-	if (inst->dst.addr_mode == MODE_AREG && inst->extra.size == OPSIZE_WORD) {
+	if (!dst && inst->dst.addr_mode == MODE_AREG && inst->extra.size == OPSIZE_WORD) {
 		if (ea->mode == MODE_REG_DIRECT) {
 			movsx_rr(code, ea->base, opts->gen.scratch1, SZ_W, SZ_D);
 		} else {
@@ -392,215 +442,6 @@ void translate_m68k_src(m68kinst * inst, x86_ea * ea, m68k_options * opts)
 			ea->mode = MODE_REG_DIRECT;
 		}
 		ea->base = opts->gen.scratch1;
-	}
-}
-
-void translate_m68k_dst(m68kinst * inst, x86_ea * ea, m68k_options * opts, uint8_t fake_read)
-{
-	code_info *code = &opts->gen.code;
-	int8_t reg = native_reg(&(inst->dst), opts), sec_reg;
-	int32_t dec_amount, inc_amount;
-	if (reg >= 0) {
-		ea->mode = MODE_REG_DIRECT;
-		ea->base = reg;
-		return;
-	}
-	switch (inst->dst.addr_mode)
-	{
-	case MODE_REG:
-	case MODE_AREG:
-		ea->mode = MODE_REG_DISPLACE8;
-		ea->base = opts->gen.context_reg;
-		ea->disp = reg_offset(&(inst->dst));
-		break;
-	case MODE_AREG_PREDEC:
-		if (inst->src.addr_mode == MODE_AREG_PREDEC) {
-			push_r(code, opts->gen.scratch1);
-		}
-		dec_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (inst->dst.params.regs.pri == 7 ? 2 : 1));
-		if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
-			sub_ir(code, dec_amount, opts->aregs[inst->dst.params.regs.pri], SZ_D);
-		} else {
-			sub_irdisp(code, dec_amount, opts->gen.context_reg, reg_offset(&(inst->dst)), SZ_D);
-		}
-	case MODE_AREG_INDIRECT:
-	case MODE_AREG_POSTINC:
-		if (fake_read) {
-			cycles(&opts->gen, inst->extra.size == OPSIZE_LONG ? 8 : 4);
-		} else {
-			if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
-				mov_rr(code, opts->aregs[inst->dst.params.regs.pri], opts->gen.scratch1, SZ_D);
-			} else {
-				mov_rdispr(code, opts->gen.context_reg, reg_offset(&(inst->dst)), opts->gen.scratch1, SZ_D);
-			}
-			m68k_read_size(opts, inst->extra.size);
-		}
-		if (inst->src.addr_mode == MODE_AREG_PREDEC) {
-			//restore src operand to opts->gen.scratch2
-			pop_r(code, opts->gen.scratch2);
-		} else {
-			//save reg value in opts->gen.scratch2 so we can use it to save the result in memory later
-			if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
-				mov_rr(code, opts->aregs[inst->dst.params.regs.pri], opts->gen.scratch2, SZ_D);
-			} else {
-				mov_rdispr(code, opts->gen.context_reg, reg_offset(&(inst->dst)), opts->gen.scratch2, SZ_D);
-			}
-		}
-
-		if (inst->dst.addr_mode == MODE_AREG_POSTINC) {
-			inc_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (inst->dst.params.regs.pri == 7 ? 2 : 1));
-			if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
-				add_ir(code, inc_amount, opts->aregs[inst->dst.params.regs.pri], SZ_D);
-			} else {
-				add_irdisp(code, inc_amount, opts->gen.context_reg, reg_offset(&(inst->dst)), SZ_D);
-			}
-		}
-		ea->mode = MODE_REG_DIRECT;
-		ea->base = opts->gen.scratch1;
-		break;
-	case MODE_AREG_DISPLACE:
-		cycles(&opts->gen, fake_read ? BUS+(inst->extra.size == OPSIZE_LONG ? BUS*2 : BUS) : BUS);
-		reg = fake_read ? opts->gen.scratch2 : opts->gen.scratch1;
-		if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
-			mov_rr(code, opts->aregs[inst->dst.params.regs.pri], reg, SZ_D);
-		} else {
-			mov_rdispr(code, opts->gen.context_reg,  reg_offset(&(inst->dst)), reg, SZ_D);
-		}
-		add_ir(code, inst->dst.params.regs.displacement, reg, SZ_D);
-		if (!fake_read) {
-			push_r(code, opts->gen.scratch1);
-			m68k_read_size(opts, inst->extra.size);
-			pop_r(code, opts->gen.scratch2);
-		}
-		ea->mode = MODE_REG_DIRECT;
-		ea->base = opts->gen.scratch1;
-		break;
-	case MODE_AREG_INDEX_DISP8:
-		cycles(&opts->gen, fake_read ? (6 + inst->extra.size == OPSIZE_LONG ? 8 : 4) : 6);
-		if (opts->aregs[inst->dst.params.regs.pri] >= 0) {
-			mov_rr(code, opts->aregs[inst->dst.params.regs.pri], opts->gen.scratch1, SZ_D);
-		} else {
-			mov_rdispr(code, opts->gen.context_reg,  reg_offset(&(inst->dst)), opts->gen.scratch1, SZ_D);
-		}
-		sec_reg = (inst->dst.params.regs.sec >> 1) & 0x7;
-		if (inst->dst.params.regs.sec & 1) {
-			if (inst->dst.params.regs.sec & 0x10) {
-				if (opts->aregs[sec_reg] >= 0) {
-					add_rr(code, opts->aregs[sec_reg], opts->gen.scratch1, SZ_D);
-				} else {
-					add_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, opts->gen.scratch1, SZ_D);
-				}
-			} else {
-				if (opts->dregs[sec_reg] >= 0) {
-					add_rr(code, opts->dregs[sec_reg], opts->gen.scratch1, SZ_D);
-				} else {
-					add_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, opts->gen.scratch1, SZ_D);
-				}
-			}
-		} else {
-			if (inst->dst.params.regs.sec & 0x10) {
-				if (opts->aregs[sec_reg] >= 0) {
-					movsx_rr(code, opts->aregs[sec_reg], opts->gen.scratch2, SZ_W, SZ_D);
-				} else {
-					movsx_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, opts->gen.scratch2, SZ_W, SZ_D);
-				}
-			} else {
-				if (opts->dregs[sec_reg] >= 0) {
-					movsx_rr(code, opts->dregs[sec_reg], opts->gen.scratch2, SZ_W, SZ_D);
-				} else {
-					movsx_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, opts->gen.scratch2, SZ_W, SZ_D);
-				}
-			}
-			add_rr(code, opts->gen.scratch2, opts->gen.scratch1, SZ_D);
-		}
-		if (inst->dst.params.regs.displacement) {
-			add_ir(code, inst->dst.params.regs.displacement, opts->gen.scratch1, SZ_D);
-		}
-		if (fake_read) {
-			mov_rr(code, opts->gen.scratch1, opts->gen.scratch2, SZ_D);
-		} else {
-			push_r(code, opts->gen.scratch1);
-			m68k_read_size(opts, inst->extra.size);
-			pop_r(code, opts->gen.scratch2);
-		}
-		ea->mode = MODE_REG_DIRECT;
-		ea->base = opts->gen.scratch1;
-		break;
-	case MODE_PC_DISPLACE:
-		cycles(&opts->gen, fake_read ? BUS+(inst->extra.size == OPSIZE_LONG ? BUS*2 : BUS) : BUS);
-		mov_ir(code, inst->dst.params.regs.displacement + inst->address+2, fake_read ? opts->gen.scratch2 : opts->gen.scratch1, SZ_D);
-		if (!fake_read) {
-			push_r(code, opts->gen.scratch1);
-			m68k_read_size(opts, inst->extra.size);
-			pop_r(code, opts->gen.scratch2);
-		}
-		ea->mode = MODE_REG_DIRECT;
-		ea->base = opts->gen.scratch1;
-		break;
-	case MODE_PC_INDEX_DISP8:
-		cycles(&opts->gen, fake_read ? (6 + inst->extra.size == OPSIZE_LONG ? 8 : 4) : 6);
-		mov_ir(code, inst->address+2, opts->gen.scratch1, SZ_D);
-		sec_reg = (inst->dst.params.regs.sec >> 1) & 0x7;
-		if (inst->dst.params.regs.sec & 1) {
-			if (inst->dst.params.regs.sec & 0x10) {
-				if (opts->aregs[sec_reg] >= 0) {
-					add_rr(code, opts->aregs[sec_reg], opts->gen.scratch1, SZ_D);
-				} else {
-					add_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, opts->gen.scratch1, SZ_D);
-				}
-			} else {
-				if (opts->dregs[sec_reg] >= 0) {
-					add_rr(code, opts->dregs[sec_reg], opts->gen.scratch1, SZ_D);
-				} else {
-					add_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, opts->gen.scratch1, SZ_D);
-				}
-			}
-		} else {
-			if (inst->dst.params.regs.sec & 0x10) {
-				if (opts->aregs[sec_reg] >= 0) {
-					movsx_rr(code, opts->aregs[sec_reg], opts->gen.scratch2, SZ_W, SZ_D);
-				} else {
-					movsx_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, aregs) + sizeof(uint32_t)*sec_reg, opts->gen.scratch2, SZ_W, SZ_D);
-				}
-			} else {
-				if (opts->dregs[sec_reg] >= 0) {
-					movsx_rr(code, opts->dregs[sec_reg], opts->gen.scratch2, SZ_W, SZ_D);
-				} else {
-					movsx_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, dregs) + sizeof(uint32_t)*sec_reg, opts->gen.scratch2, SZ_W, SZ_D);
-				}
-			}
-			add_rr(code, opts->gen.scratch2, opts->gen.scratch1, SZ_D);
-		}
-		if (inst->dst.params.regs.displacement) {
-			add_ir(code, inst->dst.params.regs.displacement, opts->gen.scratch1, SZ_D);
-		}
-		if (fake_read) {
-			mov_rr(code, opts->gen.scratch1, opts->gen.scratch2, SZ_D);
-		} else {
-			push_r(code, opts->gen.scratch1);
-			m68k_read_size(opts, inst->extra.size);
-			pop_r(code, opts->gen.scratch2);
-		}
-		ea->mode = MODE_REG_DIRECT;
-		ea->base = opts->gen.scratch1;
-		break;
-	case MODE_ABSOLUTE:
-	case MODE_ABSOLUTE_SHORT:
-		//Add cycles for reading address from instruction stream
-		cycles(&opts->gen, (inst->dst.addr_mode == MODE_ABSOLUTE ? BUS*2 : BUS) + (fake_read ? (inst->extra.size == OPSIZE_LONG ? BUS*2 : BUS) : 0));
-		mov_ir(code, inst->dst.params.immed, fake_read ? opts->gen.scratch2 : opts->gen.scratch1, SZ_D);
-		if (!fake_read) {
-			push_r(code, opts->gen.scratch1);
-			m68k_read_size(opts, inst->extra.size);
-			pop_r(code, opts->gen.scratch2);
-		}
-		ea->mode = MODE_REG_DIRECT;
-		ea->base = opts->gen.scratch1;
-		break;
-	default:
-		m68k_disasm(inst, disasm_buf);
-		printf("%X: %s\naddress mode %d not implemented (dst)\n", inst->address, disasm_buf, inst->dst.addr_mode);
-		exit(1);
 	}
 }
 
@@ -638,7 +479,7 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 	int32_t offset;
 	int32_t inc_amount, dec_amount;
 	x86_ea src;
-	translate_m68k_src(inst, &src, opts);
+	translate_m68k_op(inst, &src, opts, 0);
 	reg = native_reg(&(inst->dst), opts);
 	if (inst->dst.addr_mode != MODE_AREG) {
 		//update statically set flags
@@ -1268,7 +1109,7 @@ void translate_m68k_clr(m68k_options * opts, m68kinst * inst)
 		return;
 	}
 	x86_ea dst_op;
-	translate_m68k_dst(inst, &dst_op, opts, 1);
+	translate_m68k_op(inst, &dst_op, opts, 1);
 	if (dst_op.mode == MODE_REG_DIRECT) {
 		xor_rr(code, dst_op.base, dst_op.base, inst->extra.size);
 	} else {
@@ -1283,7 +1124,7 @@ void translate_m68k_ext(m68k_options * opts, m68kinst * inst)
 	x86_ea dst_op;
 	uint8_t dst_size = inst->extra.size;
 	inst->extra.size--;
-	translate_m68k_dst(inst, &dst_op, opts, 0);
+	translate_m68k_op(inst, &dst_op, opts, 1);
 	if (dst_op.mode == MODE_REG_DIRECT) {
 		movsx_rr(code, dst_op.base, dst_op.base, inst->extra.size, dst_size);
 		cmp_ir(code, 0, dst_op.base, dst_size);
@@ -1642,7 +1483,7 @@ void translate_m68k_scc(m68k_options * opts, m68kinst * inst)
 	uint8_t cond = inst->extra.cond;
 	x86_ea dst_op;
 	inst->extra.size = OPSIZE_BYTE;
-	translate_m68k_dst(inst, &dst_op, opts, 1);
+	translate_m68k_op(inst, &dst_op, opts, 1);
 	if (cond == COND_TRUE || cond == COND_FALSE) {
 		if ((inst->dst.addr_mode == MODE_REG || inst->dst.addr_mode == MODE_AREG) && inst->extra.cond == COND_TRUE) {
 			cycles(&opts->gen, 6);
@@ -2066,14 +1907,14 @@ void translate_m68k_cmp(m68k_options * opts, m68kinst * inst)
 	code_info *code = &opts->gen.code;
 	uint8_t size = inst->extra.size;
 	x86_ea src_op, dst_op;
-	translate_m68k_src(inst, &src_op, opts);
+	translate_m68k_op(inst, &src_op, opts, 0);
 	if (inst->dst.addr_mode == MODE_AREG_POSTINC) {
 		push_r(code, opts->gen.scratch1);
-		translate_m68k_dst(inst, &dst_op, opts, 0);
+		translate_m68k_op(inst, &dst_op, opts, 1);
 		pop_r(code, opts->gen.scratch2);
 		src_op.base = opts->gen.scratch2;
 	} else {
-		translate_m68k_dst(inst, &dst_op, opts, 0);
+		translate_m68k_op(inst, &dst_op, opts, 1);
 		if (inst->dst.addr_mode == MODE_AREG && size == OPSIZE_WORD) {
 			size = OPSIZE_LONG;
 		}
@@ -2320,10 +2161,10 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 	}
 	x86_ea src_op, dst_op;
 	if (inst->src.addr_mode != MODE_UNUSED) {
-		translate_m68k_src(inst, &src_op, opts);
+		translate_m68k_op(inst, &src_op, opts, 0);
 	}
 	if (inst->dst.addr_mode != MODE_UNUSED) {
-		translate_m68k_dst(inst, &dst_op, opts, 0);
+		translate_m68k_op(inst, &dst_op, opts, 1);
 	}
 	uint8_t size;
 	switch(inst->op)
