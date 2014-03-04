@@ -115,6 +115,33 @@ void flag_to_flag(m68k_options *opts, uint8_t flag1, uint8_t flag2)
 	}
 }
 
+void update_flags(m68k_options *opts, uint32_t update_mask)
+{
+	uint8_t native_flags[] = {0, CC_S, CC_Z, CC_O, CC_C};
+	for (int8_t flag = FLAG_C; flag >= FLAG_X; --flag)
+	{
+		if (update_mask & X0 << (flag*3)) {
+			set_flag(opts, 0, flag);
+		} else if(update_mask & X1 << (flag*3)) {
+			set_flag(opts, 1, flag);
+		} else if(update_mask & X << (flag*3)) {
+			if (flag == FLAG_X) {
+				if (opts->flag_regs[FLAG_C] >= 0 || !(update_mask & (C0|C1|C))) {
+					flag_to_flag(opts, FLAG_C, FLAG_X);
+				} else if(update_mask & C0) {
+					set_flag(opts, 0, flag);
+				} else if(update_mask & C1) {
+					set_flag(opts, 1, flag);
+				} else {
+					set_flag_cond(opts, CC_C, flag);
+				}
+			} else {
+				set_flag_cond(opts, native_flags[flag], flag);
+			}
+		}
+	}
+}
+
 void flag_to_carry(m68k_options * opts, uint8_t flag)
 {
 	if (opts->flag_regs[flag] >= 0) {
@@ -512,11 +539,6 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 	x86_ea src;
 	translate_m68k_op(inst, &src, opts, 0);
 	reg = native_reg(&(inst->dst), opts);
-	if (inst->dst.addr_mode != MODE_AREG) {
-		//update statically set flags
-		set_flag(opts, 0, FLAG_V);
-		set_flag(opts, 0, FLAG_C);
-	}
 
 	if (inst->dst.addr_mode != MODE_AREG) {
 		if (src.mode == MODE_REG_DIRECT) {
@@ -554,11 +576,6 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 		} else {
 			mov_irdisp(code, src.disp, opts->gen.context_reg, reg_offset(&(inst->dst)), size);
 		}
-		if (inst->dst.addr_mode != MODE_AREG) {
-			cmp_ir(code, 0, flags_reg, size);
-			set_flag_cond(opts, CC_Z, FLAG_Z);
-			set_flag_cond(opts, CC_S, FLAG_N);
-		}
 		break;
 	case MODE_AREG_PREDEC:
 		dec_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (inst->dst.params.regs.pri == 7 ? 2 : 1));
@@ -575,17 +592,6 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 		} else {
 			mov_ir(code, src.disp, opts->gen.scratch1, inst->extra.size);
 		}
-		if (inst->dst.addr_mode != MODE_AREG) {
-			cmp_ir(code, 0, flags_reg, inst->extra.size);
-			set_flag_cond(opts, CC_Z, FLAG_Z);
-			set_flag_cond(opts, CC_S, FLAG_N);
-		}
-		m68k_write_size(opts, inst->extra.size);
-
-		if (inst->dst.addr_mode == MODE_AREG_POSTINC) {
-			inc_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (inst->dst.params.regs.pri == 7 ? 2 : 1));
-			addi_areg(opts, inc_amount, inst->dst.params.regs.pri);
-		}
 		break;
 	case MODE_AREG_DISPLACE:
 		cycles(&opts->gen, BUS);
@@ -599,12 +605,6 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 		} else {
 			mov_ir(code, src.disp, opts->gen.scratch1, inst->extra.size);
 		}
-		if (inst->dst.addr_mode != MODE_AREG) {
-			cmp_ir(code, 0, flags_reg, inst->extra.size);
-			set_flag_cond(opts, CC_Z, FLAG_Z);
-			set_flag_cond(opts, CC_S, FLAG_N);
-		}
-		m68k_write_size(opts, inst->extra.size);
 		break;
 	case MODE_AREG_INDEX_DISP8:
 		cycles(&opts->gen, 6);//TODO: Check to make sure this is correct
@@ -625,12 +625,6 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 		} else {
 			mov_ir(code, src.disp, opts->gen.scratch1, inst->extra.size);
 		}
-		if (inst->dst.addr_mode != MODE_AREG) {
-			cmp_ir(code, 0, flags_reg, inst->extra.size);
-			set_flag_cond(opts, CC_Z, FLAG_Z);
-			set_flag_cond(opts, CC_S, FLAG_N);
-		}
-		m68k_write_size(opts, inst->extra.size);
 		break;
 	case MODE_PC_DISPLACE:
 		cycles(&opts->gen, BUS);
@@ -644,12 +638,6 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 		} else {
 			mov_ir(code, src.disp, opts->gen.scratch1, inst->extra.size);
 		}
-		if (inst->dst.addr_mode != MODE_AREG) {
-			cmp_ir(code, 0, flags_reg, inst->extra.size);
-			set_flag_cond(opts, CC_Z, FLAG_Z);
-			set_flag_cond(opts, CC_S, FLAG_N);
-		}
-		m68k_write_size(opts, inst->extra.size);
 		break;
 	case MODE_PC_INDEX_DISP8:
 		cycles(&opts->gen, 6);//TODO: Check to make sure this is correct
@@ -670,12 +658,6 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 		} else {
 			mov_ir(code, src.disp, opts->gen.scratch1, inst->extra.size);
 		}
-		if (inst->dst.addr_mode != MODE_AREG) {
-			cmp_ir(code, 0, flags_reg, inst->extra.size);
-			set_flag_cond(opts, CC_Z, FLAG_Z);
-			set_flag_cond(opts, CC_S, FLAG_N);
-		}
-		m68k_write_size(opts, inst->extra.size);
 		break;
 	case MODE_ABSOLUTE:
 	case MODE_ABSOLUTE_SHORT:
@@ -694,17 +676,23 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 			cycles(&opts->gen, BUS);
 		}
 		mov_ir(code, inst->dst.params.immed, opts->gen.scratch2, SZ_D);
-		if (inst->dst.addr_mode != MODE_AREG) {
-			cmp_ir(code, 0, flags_reg, inst->extra.size);
-			set_flag_cond(opts, CC_Z, FLAG_Z);
-			set_flag_cond(opts, CC_S, FLAG_N);
-		}
-		m68k_write_size(opts, inst->extra.size);
 		break;
 	default:
 		m68k_disasm(inst, disasm_buf);
 		printf("%X: %s\naddress mode %d not implemented (move dst)\n", inst->address, disasm_buf, inst->dst.addr_mode);
 		exit(1);
+	}
+
+	if (inst->dst.addr_mode != MODE_AREG) {
+		cmp_ir(code, 0, flags_reg, inst->extra.size);
+		update_flags(opts, N|Z|V0|C0);
+	}
+	if (inst->dst.addr_mode != MODE_REG && inst->dst.addr_mode != MODE_AREG) {
+		m68k_write_size(opts, inst->extra.size);
+		if (inst->dst.addr_mode == MODE_AREG_POSTINC) {
+			inc_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (inst->dst.params.regs.pri == 7 ? 2 : 1));
+			addi_areg(opts, inc_amount, inst->dst.params.regs.pri);
+		}
 	}
 
 	//add cycles for prefetch
@@ -856,10 +844,7 @@ void translate_m68k_movem(m68k_options * opts, m68kinst * inst)
 void translate_m68k_clr(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
-	set_flag(opts, 0, FLAG_N);
-	set_flag(opts, 0, FLAG_V);
-	set_flag(opts, 0, FLAG_C);
-	set_flag(opts, 1, FLAG_Z);
+	update_flags(opts, N0|V0|C0|Z1);
 	int8_t reg = native_reg(&(inst->dst), opts);
 	if (reg >= 0) {
 		cycles(&opts->gen, (inst->extra.size == OPSIZE_LONG ? 6 : 4));
@@ -867,6 +852,7 @@ void translate_m68k_clr(m68k_options * opts, m68kinst * inst)
 		return;
 	}
 	x86_ea dst_op;
+	//TODO: fix timing
 	translate_m68k_op(inst, &dst_op, opts, 1);
 	if (dst_op.mode == MODE_REG_DIRECT) {
 		xor_rr(code, dst_op.base, dst_op.base, inst->extra.size);
@@ -892,10 +878,7 @@ void translate_m68k_ext(m68k_options * opts, m68kinst * inst)
 		mov_rrdisp(code, opts->gen.scratch1, dst_op.base, dst_op.disp, dst_size);
 	}
 	inst->extra.size = dst_size;
-	set_flag(opts, 0, FLAG_V);
-	set_flag(opts, 0, FLAG_C);
-	set_flag_cond(opts, CC_Z, FLAG_Z);
-	set_flag_cond(opts, CC_S, FLAG_N);
+	update_flags(opts, N|V0|C0|Z);
 	//M68K EXT only operates on registers so no need for a call to save result here
 }
 
@@ -1172,10 +1155,7 @@ void translate_m68k_cmp(m68k_options * opts, m68kinst * inst)
 			cmp_irdisp(code, src_op.disp, dst_op.base, dst_op.disp, size);
 		}
 	}
-	set_flag_cond(opts, CC_C, FLAG_C);
-	set_flag_cond(opts, CC_Z, FLAG_Z);
-	set_flag_cond(opts, CC_S, FLAG_N);
-	set_flag_cond(opts, CC_O, FLAG_V);
+	update_flags(opts, N|Z|V|C);
 }
 
 typedef void (*shift_ir_t)(code_info *code, uint8_t val, uint8_t dst, uint8_t size);
@@ -1460,15 +1440,7 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 			}
 		}
 		if (inst->dst.addr_mode != MODE_AREG) {
-			set_flag_cond(opts, CC_C, FLAG_C);
-			set_flag_cond(opts, CC_Z, FLAG_Z);
-			set_flag_cond(opts, CC_S, FLAG_N);
-			set_flag_cond(opts, CC_O, FLAG_V);
-			if (opts->flag_regs[FLAG_C] >= 0) {
-				flag_to_flag(opts, FLAG_C, FLAG_X);
-			} else {
-				set_flag_cond(opts, CC_C, FLAG_X);
-			}
+			update_flags(opts, X|N|Z|V|C);
 		}
 		m68k_save_result(inst, opts);
 		break;
@@ -1524,44 +1496,42 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 				and_irdisp(code, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
 			}
 		}
-		set_flag(opts, 0, FLAG_C);
-		set_flag_cond(opts, CC_Z, FLAG_Z);
-		set_flag_cond(opts, CC_S, FLAG_N);
-		set_flag(opts, 0, FLAG_V);
+		update_flags(opts, N|Z|V0|C0);
 		m68k_save_result(inst, opts);
 		break;
 	case M68K_ANDI_CCR:
-	case M68K_ANDI_SR:
+	case M68K_ANDI_SR: {
 		cycles(&opts->gen, 20);
 		//TODO: If ANDI to SR, trap if not in supervisor mode
+		uint32_t flag_mask = 0;
 		if (!(inst->src.params.immed & 0x1)) {
-			set_flag(opts, 0, FLAG_C);
+			flag_mask |= C0;
 		}
 		if (!(inst->src.params.immed & 0x2)) {
-			set_flag(opts, 0, FLAG_V);
+			flag_mask |= V0;
 		}
 		if (!(inst->src.params.immed & 0x4)) {
-			set_flag(opts, 0, FLAG_Z);
+			flag_mask |= Z0;
 		}
 		if (!(inst->src.params.immed & 0x8)) {
-			set_flag(opts, 0, FLAG_N);
+			flag_mask |= N0;
 		}
 		if (!(inst->src.params.immed & 0x10)) {
-			set_flag(opts, 0, FLAG_X);
+			flag_mask |= X0;
 		}
+		update_flags(opts, flag_mask);
 		if (inst->op == M68K_ANDI_SR) {
 			and_irdisp(code, inst->src.params.immed >> 8, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
 			if (!((inst->src.params.immed >> 8) & (1 << BIT_SUPERVISOR))) {
 				//leave supervisor mode
-				mov_rr(code, opts->aregs[7], opts->gen.scratch1, SZ_B);
-				mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, opts->aregs[7], SZ_B);
-				mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SZ_B);
+				swap_ssp_usp(opts);
 			}
 			if (inst->src.params.immed & 0x700) {
 				call(code, opts->do_sync);
 			}
 		}
 		break;
+	}
 	case M68K_ASL:
 	case M68K_LSL:
 		translate_shift(opts, inst, &src_op, &dst_op, shl_ir, shl_irdisp, shl_clr, shl_clrdisp, shr_ir, shr_irdisp);
@@ -1850,10 +1820,7 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 				xor_irdisp(code, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
 			}
 		}
-		set_flag(opts, 0, FLAG_C);
-		set_flag_cond(opts, CC_Z, FLAG_Z);
-		set_flag_cond(opts, CC_S, FLAG_N);
-		set_flag(opts, 0, FLAG_V);
+		update_flags(opts, N|Z|V0|C0);
 		m68k_save_result(inst, opts);
 		break;
 	case M68K_EORI_CCR:
@@ -1928,11 +1895,12 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 	case M68K_MOVE_SR:
 		//TODO: Privilege check for MOVE to SR
 		if (src_op.mode == MODE_IMMED) {
-			set_flag(opts, src_op.disp & 0x1, FLAG_C);
-			set_flag(opts, (src_op.disp >> 1) & 0x1, FLAG_V);
-			set_flag(opts, (src_op.disp >> 2) & 0x1, FLAG_Z);
-			set_flag(opts, (src_op.disp >> 3) & 0x1, FLAG_N);
-			set_flag(opts, (src_op.disp >> 4) & 0x1, FLAG_X);
+			uint32_t flag_mask = src_op.disp & 0x10 ? X1 : X0;
+			flag_mask |= src_op.disp & 0x8 ? N1 : N0;
+			flag_mask |= src_op.disp & 0x4 ? Z1 : Z0;
+			flag_mask |= src_op.disp & 0x2 ? V1 : V0;
+			flag_mask |= src_op.disp & 0x1 ? C1 : C0;
+			update_flags(opts, flag_mask);
 			if (inst->op == M68K_MOVE_SR) {
 				mov_irdisp(code, (src_op.disp >> 8), opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
 				if (!((inst->src.params.immed >> 8) & (1 << BIT_SUPERVISOR))) {
@@ -2012,11 +1980,8 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 		if (dst_op.mode == MODE_REG_DISPLACE8) {
 			mov_rrdisp(code, dst_reg, dst_op.base, dst_op.disp, SZ_D);
 		}
-		set_flag(opts, 0, FLAG_V);
-		set_flag(opts, 0, FLAG_C);
 		cmp_ir(code, 0, dst_reg, SZ_D);
-		set_flag_cond(opts, CC_Z, FLAG_Z);
-		set_flag_cond(opts, CC_S, FLAG_N);
+		update_flags(opts, N|Z|V0|C0);
 		break;
 	//case M68K_NBCD:
 	case M68K_NEG:
@@ -2026,15 +1991,7 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 		} else {
 			neg_rdisp(code, dst_op.base, dst_op.disp, inst->extra.size);
 		}
-		set_flag_cond(opts, CC_C, FLAG_C);
-		set_flag_cond(opts, CC_Z, FLAG_Z);
-		set_flag_cond(opts, CC_S, FLAG_N);
-		set_flag_cond(opts, CC_O, FLAG_V);
-		if (opts->flag_regs[FLAG_C] >= 0) {
-			flag_to_flag(opts, FLAG_C, FLAG_X);
-		} else {
-			set_flag_cond(opts, CC_C, FLAG_X);
-		}
+		update_flags(opts, X|N|Z|V|C);
 		m68k_save_result(inst, opts);
 		break;
 	case M68K_NEGX: {
@@ -2086,10 +2043,7 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 			cmp_irdisp(code, 0, dst_op.base, dst_op.disp, inst->extra.size);
 		}
 
-		set_flag(opts, 0, FLAG_C);
-		set_flag_cond(opts, CC_Z, FLAG_Z);
-		set_flag_cond(opts, CC_S, FLAG_N);
-		set_flag(opts, 0, FLAG_V);
+		update_flags(opts, N|Z|V0|C0);
 		m68k_save_result(inst, opts);
 		break;
 	case M68K_OR:
@@ -2109,31 +2063,30 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 				or_irdisp(code, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
 			}
 		}
-		set_flag(opts, 0, FLAG_C);
-		set_flag_cond(opts, CC_Z, FLAG_Z);
-		set_flag_cond(opts, CC_S, FLAG_N);
-		set_flag(opts, 0, FLAG_V);
+		update_flags(opts, N|Z|V0|C0);
 		m68k_save_result(inst, opts);
 		break;
 	case M68K_ORI_CCR:
 	case M68K_ORI_SR:
 		cycles(&opts->gen, 20);
-		//TODO: If ANDI to SR, trap if not in supervisor mode
+		//TODO: If ORI to SR, trap if not in supervisor mode
+		uint32_t flag_mask = 0;
 		if (inst->src.params.immed & 0x1) {
-			set_flag(opts, 1, FLAG_C);
+			flag_mask |= C1;
 		}
 		if (inst->src.params.immed & 0x2) {
-			set_flag(opts, 1, FLAG_V);
+			flag_mask |= V1;
 		}
 		if (inst->src.params.immed & 0x4) {
-			set_flag(opts, 1, FLAG_Z);
+			flag_mask |= Z1;
 		}
 		if (inst->src.params.immed & 0x8) {
-			set_flag(opts, 1, FLAG_N);
+			flag_mask |= N1;
 		}
 		if (inst->src.params.immed & 0x10) {
-			set_flag(opts, 1, FLAG_X);
+			flag_mask |= X1;
 		}
+		update_flags(opts, flag_mask);
 		if (inst->op == M68K_ORI_SR) {
 			or_irdisp(code, inst->src.params.immed >> 8, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
 			if (inst->src.params.immed & 0x700) {
@@ -2431,11 +2384,12 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 		//manual says 4 cycles, but it has to be at least 8 since it's a 2-word instruction
 		//possibly even 12 since that's how long MOVE to SR takes
 		cycles(&opts->gen, BUS*2);
-		set_flag(opts, src_op.disp & 0x1, FLAG_C);
-		set_flag(opts, (src_op.disp >> 1) & 0x1, FLAG_V);
-		set_flag(opts, (src_op.disp >> 2) & 0x1, FLAG_Z);
-		set_flag(opts, (src_op.disp >> 3) & 0x1, FLAG_N);
-		set_flag(opts, (src_op.disp >> 4) & 0x1, FLAG_X);
+		uint32_t flag_mask = src_op.disp & 0x10 ? X1 : X0;
+		flag_mask |= src_op.disp & 0x8 ? N1 : N0;
+		flag_mask |= src_op.disp & 0x4 ? Z1 : Z0;
+		flag_mask |= src_op.disp & 0x2 ? V1 : V0;
+		flag_mask |= src_op.disp & 0x1 ? C1 : C0;
+		update_flags(opts, flag_mask);
 		mov_irdisp(code, (src_op.disp >> 8), opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
 		if (!((inst->src.params.immed >> 8) & (1 << BIT_SUPERVISOR))) {
 			//leave supervisor mode
@@ -2475,15 +2429,7 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 			}
 		}
 		if (inst->dst.addr_mode != MODE_AREG) {
-			set_flag_cond(opts, CC_C, FLAG_C);
-			set_flag_cond(opts, CC_Z, FLAG_Z);
-			set_flag_cond(opts, CC_S, FLAG_N);
-			set_flag_cond(opts, CC_O, FLAG_V);
-			if (opts->flag_regs[FLAG_C] >= 0) {
-				flag_to_flag(opts, FLAG_C, FLAG_X);
-			} else {
-				set_flag_cond(opts, CC_C, FLAG_X);
-			}
+			update_flags(opts, X|N|Z|V|C);
 		}
 		m68k_save_result(inst, opts);
 		break;
@@ -2531,10 +2477,7 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 			cmp_irdisp(code, 0, src_op.base, src_op.disp, SZ_D);
 		}
 
-		set_flag(opts, 0, FLAG_C);
-		set_flag_cond(opts, CC_Z, FLAG_Z);
-		set_flag_cond(opts, CC_S, FLAG_N);
-		set_flag(opts, 0, FLAG_V);
+		update_flags(opts, N|Z|V0|C0);
 		break;
 	//case M68K_TAS:
 	case M68K_TRAP:
@@ -2548,10 +2491,7 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 		} else { //M68000 doesn't support immedate operand for tst, so this must be MODE_REG_DISPLACE8
 			cmp_irdisp(code, 0, src_op.base, src_op.disp, inst->extra.size);
 		}
-		set_flag(opts, 0, FLAG_C);
-		set_flag_cond(opts, CC_Z, FLAG_Z);
-		set_flag_cond(opts, CC_S, FLAG_N);
-		set_flag(opts, 0, FLAG_V);
+		update_flags(opts, N|Z|V0|C0);
 		break;
 	default:
 		m68k_disasm(inst, disasm_buf);
