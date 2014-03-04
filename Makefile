@@ -3,11 +3,12 @@ LIBS=sdl
 else
 LIBS=sdl glew gl
 endif
-LDFLAGS:=-lm $(shell pkg-config --libs $(LIBS))
 ifdef DEBUG
 CFLAGS:=-ggdb -std=gnu99 $(shell pkg-config --cflags-only-I $(LIBS)) -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration
+LDFLAGS:=-ggdb -lm $(shell pkg-config --libs $(LIBS))
 else
-CFLAGS:=-O2 -std=gnu99 $(shell pkg-config  --cflags-only-I $(LIBS)) -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration
+CFLAGS:=-O2 -flto -std=gnu99 $(shell pkg-config  --cflags-only-I $(LIBS)) -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration
+LDFLAGS:=-O2 -flto -lm $(shell pkg-config --libs $(LIBS))
 endif
 
 ifdef PROFILE
@@ -61,7 +62,7 @@ endif
 all : dis zdis stateview vgmplay blastem
 
 blastem : $(MAINOBJS)
-	$(CC) -ggdb -o blastem $(MAINOBJS) $(LDFLAGS)
+	$(CC) -o blastem $(MAINOBJS) $(LDFLAGS)
 
 dis : dis.o 68kinst.o
 	$(CC) -o dis dis.o 68kinst.o
