@@ -56,6 +56,23 @@ void translate_m68k_rts(m68k_options * opts, m68kinst * inst);
 void translate_m68k_rtr(m68k_options *opts, m68kinst * inst);
 void translate_m68k_trap(m68k_options *opts, m68kinst *inst);
 
+//flag update bits
+#define X0  0x0001
+#define X1  0x0002
+#define X   0x0004
+#define N0  0x0008
+#define N1  0x0010
+#define N   0x0020
+#define Z0  0x0040
+#define Z1  0x0080
+#define Z   0x0100
+#define V0  0x0200
+#define V1  0x0400
+#define V   0x0800
+#define C0  0x1000
+#define C1  0x2000
+#define C   0x4000
+
 #define BUS 4
 #define PREDEC_PENALTY 2
 extern char disasm_buf[1024];
