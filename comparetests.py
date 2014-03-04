@@ -18,6 +18,49 @@ for i in range(1, len(argv)):
 	else:
 		prefixes.append(argv[i])
 
+def print_mismatch(path, b, m):
+	blines = b.split('\n')
+	mlines = m.split('\n')
+	if len(blines) != len(mlines):
+		print '-----------------------------'
+		print 'Unknown mismatch in', path
+		print 'blastem output:'
+		print b
+		print 'musashi output:'
+		print m
+		print '-----------------------------'
+		return
+	prevline = ''
+	differences = []
+	flagmismatch = False
+	regmismatch = False
+	for i in xrange(0, len(blines)):
+		if blines[i] != mlines[i]:
+			if prevline == 'XNZVC':
+				differences.append((prevline, prevline))
+				flagmismatch = True
+			else:
+				regmismatch = True
+			differences.append((blines[i], mlines[i]))
+		prevline = blines[i]
+	if flagmismatch and regmismatch:
+		mtype = 'General'
+	elif flagmismatch:
+		mtype = 'Flag'
+	elif regmismatch:
+		mtype = 'Register'
+	else:
+		mtype = 'Unknown'
+	print '-----------------------------'
+	print mtype, 'mismatch in', path
+	for i in xrange(0, 2):
+		print 'musashi' if i else 'blastem', 'output:'
+		for diff in differences:
+			print diff[i]
+	print '-----------------------------'
+
+
+
 for path in glob('generated_tests/*/*.bin'):
 	if path in skip:
 		continue
@@ -36,13 +79,8 @@ for path in glob('generated_tests/*/*.bin'):
 			m = subprocess.check_output(['musashi/mustrans', path])
 			#_,_,b = b.partition('\n')
 			if b != m:
-				print '-----------------------------'
-				print 'Mismatch in ' + path
-				print 'blastem output:'
-				print b
-				print 'musashi output:'
-				print m
-				print '-----------------------------'
+				print_mismatch(path, b, m)
+
 			else:
 				print path, 'passed'
 		except subprocess.CalledProcessError as e:

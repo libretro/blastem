@@ -30,8 +30,9 @@ int main(int argc, char ** argv)
 	fseek(f, 0, SEEK_END);
 	filesize = ftell(f);
 	fseek(f, 0, SEEK_SET);
-	filebuf = malloc(filesize > 0x400000 ? filesize : 0x400000);
-	fread(filebuf, 2, filesize/2, f);
+	filebuf = malloc(0x400000);
+	memset(filebuf, 0, 0x400000);
+	fread(filebuf, 2, filesize/2 > 0x200000 ? 0x200000 : filesize/2, f);
 	fclose(f);
 	for(cur = filebuf; cur - filebuf < (filesize/2); ++cur)
 	{
@@ -49,6 +50,7 @@ int main(int argc, char ** argv)
 	memmap[1].mask = 0xFFFF;
 	memmap[1].flags = MMAP_READ | MMAP_WRITE | MMAP_CODE;
 	memmap[1].buffer = malloc(64 * 1024);
+	memset(memmap[1].buffer, 0, 64 * 1024);
 	init_m68k_opts(&opts, memmap, 2);
 	init_68k_context(&context, opts.gen.native_code_map, &opts);
 	context.mem_pointers[0] = memmap[0].buffer;
