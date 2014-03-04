@@ -84,4 +84,5 @@ Name	Sizes	Src Modes														Dst Modes
 #sle		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
 #swap	w		d
 tst		bwl		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+lea		l		(a);(n,a);(n,a,x);(n).w;(n).l;(n,pc);(n,pc,x)					a
 
