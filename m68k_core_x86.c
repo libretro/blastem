@@ -510,7 +510,7 @@ void translate_m68k_op(m68kinst * inst, x86_ea * ea, m68k_options * opts, uint8_
 void m68k_save_result(m68kinst * inst, m68k_options * opts)
 {
 	code_info *code = &opts->gen.code;
-	if (inst->dst.addr_mode != MODE_REG && inst->dst.addr_mode != MODE_AREG) {
+	if (inst->dst.addr_mode != MODE_REG && inst->dst.addr_mode != MODE_AREG && inst->dst.addr_mode != MODE_UNUSED) {
 		if (inst->dst.addr_mode == MODE_AREG_PREDEC && inst->src.addr_mode == MODE_AREG_PREDEC && inst->op != M68K_MOVE) {
 			areg_to_native(opts, inst->dst.params.regs.pri, opts->gen.scratch2);
 		}
@@ -1329,6 +1329,161 @@ void translate_shift(m68k_options * opts, m68kinst * inst, x86_ea *src_op, x86_e
 	}
 }
 
+void op_ir(code_info *code, m68kinst *inst, int32_t val, uint8_t dst, uint8_t size)
+{
+	switch (inst->op)
+	{
+	case M68K_ADD:  add_ir(code, val, dst, size); break;
+	case M68K_ADDX: adc_ir(code, val, dst, size); break;
+	case M68K_AND:  and_ir(code, val, dst, size); break;
+	case M68K_EOR:  xor_ir(code, val, dst, size); break;
+	case M68K_OR:   or_ir(code, val, dst, size); break;
+	case M68K_ROL:  rol_ir(code, val, dst, size); break;
+	case M68K_ROR:  ror_ir(code, val, dst, size); break;
+	case M68K_ROXL: rcl_ir(code, val, dst, size); break;
+	case M68K_ROXR: rcr_ir(code, val, dst, size); break;
+	case M68K_SUB:  sub_ir(code, val, dst, size); break;
+	case M68K_SUBX: sbb_ir(code, val, dst, size); break;
+	}
+}
+
+void op_irdisp(code_info *code, m68kinst *inst, int32_t val, uint8_t dst, int32_t disp, uint8_t size)
+{
+	switch (inst->op)
+	{
+	case M68K_ADD:  add_irdisp(code, val, dst, disp, size); break;
+	case M68K_ADDX: adc_irdisp(code, val, dst, disp, size); break;
+	case M68K_AND:  and_irdisp(code, val, dst, disp, size); break;
+	case M68K_EOR:  xor_irdisp(code, val, dst, disp, size); break;
+	case M68K_OR:   or_irdisp(code, val, dst, disp, size); break;
+	case M68K_ROL:  rol_irdisp(code, val, dst, disp, size); break;
+	case M68K_ROR:  ror_irdisp(code, val, dst, disp, size); break;
+	case M68K_ROXL: rcl_irdisp(code, val, dst, disp, size); break;
+	case M68K_ROXR: rcr_irdisp(code, val, dst, disp, size); break;
+	case M68K_SUB:  sub_irdisp(code, val, dst, disp, size); break;
+	case M68K_SUBX: sbb_irdisp(code, val, dst, disp, size); break;
+	}
+}
+
+void op_rr(code_info *code, m68kinst *inst, uint8_t src, uint8_t dst, uint8_t size)
+{
+	switch (inst->op)
+	{
+	case M68K_ADD:  add_rr(code, src, dst, size); break;
+	case M68K_ADDX: adc_rr(code, src, dst, size); break;
+	case M68K_AND:  and_rr(code, src, dst, size); break;
+	case M68K_EOR:  xor_rr(code, src, dst, size); break;
+	case M68K_OR:   or_rr(code, src, dst, size); break;
+	case M68K_SUB:  sub_rr(code, src, dst, size); break;
+	case M68K_SUBX: sbb_rr(code, src, dst, size); break;
+	}
+}
+
+void op_rrdisp(code_info *code, m68kinst *inst, uint8_t src, uint8_t dst, int32_t disp, uint8_t size)
+{
+	switch (inst->op)
+	{
+	case M68K_ADD:  add_rrdisp(code, src, dst, disp, size); break;
+	case M68K_ADDX: adc_rrdisp(code, src, dst, disp, size); break;
+	case M68K_AND:  and_rrdisp(code, src, dst, disp, size); break;
+	case M68K_EOR:  xor_rrdisp(code, src, dst, disp, size); break;
+	case M68K_OR:   or_rrdisp(code, src, dst, disp, size); break;
+	case M68K_SUB:  sub_rrdisp(code, src, dst, disp, size); break;
+	case M68K_SUBX: sbb_rrdisp(code, src, dst, disp, size); break;
+	}
+}
+
+void op_rdispr(code_info *code, m68kinst *inst, uint8_t src, int32_t disp, uint8_t dst, uint8_t size)
+{
+	switch (inst->op)
+	{
+	case M68K_ADD:  add_rdispr(code, src, disp, dst, size); break;
+	case M68K_ADDX: adc_rdispr(code, src, disp, dst, size); break;
+	case M68K_AND:  and_rdispr(code, src, disp, dst, size); break;
+	case M68K_EOR:  xor_rdispr(code, src, disp, dst, size); break;
+	case M68K_OR:   or_rdispr(code, src, disp, dst, size); break;
+	case M68K_SUB:  sub_rdispr(code, src, disp, dst, size); break;
+	case M68K_SUBX: sbb_rdispr(code, src, disp, dst, size); break;
+	}
+}
+
+void translate_m68k_arith(m68k_options *opts, m68kinst * inst, uint32_t flag_mask, x86_ea *src_op, x86_ea *dst_op)
+{
+	code_info *code = &opts->gen.code;
+	cycles(&opts->gen, BUS);
+	if (inst->op == M68K_ADDX || inst->op == M68K_SUBX) {
+		flag_to_carry(opts, FLAG_X);
+	}
+	uint8_t size = inst->dst.addr_mode == MODE_AREG ? OPSIZE_LONG : inst->extra.size;
+	if (src_op->mode == MODE_REG_DIRECT) {
+		if (dst_op->mode == MODE_REG_DIRECT) {
+			op_rr(code, inst, src_op->base, dst_op->base, size);
+		} else {
+			op_rrdisp(code, inst, src_op->base, dst_op->base, dst_op->disp, size);
+		}
+	} else if (src_op->mode == MODE_REG_DISPLACE8) {
+		op_rdispr(code, inst, src_op->base, src_op->disp, dst_op->base, size);
+	} else {
+		if (dst_op->mode == MODE_REG_DIRECT) {
+			op_ir(code, inst, src_op->disp, dst_op->base, size);
+		} else {
+			op_irdisp(code, inst, src_op->disp, dst_op->base, dst_op->disp, size);
+		}
+	}
+	if (inst->dst.addr_mode != MODE_AREG) {
+		update_flags(opts, flag_mask);
+		if (inst->op == M68K_ADDX || inst->op == M68K_SUBX) {
+			check_alloc_code(code, 2*MAX_INST_LEN);
+			code_ptr after_flag_set = code->cur + 1;
+			jcc(code, CC_Z, code->cur + 2);
+			set_flag(opts, 0, FLAG_Z);
+			*after_flag_set = code->cur - (after_flag_set+1);
+		}
+	}
+	m68k_save_result(inst, opts);
+}
+
+void op_r(code_info *code, m68kinst *inst, uint8_t dst, uint8_t size)
+{
+	switch(inst->op)
+	{
+	case M68K_NEG:   neg_r(code, dst, size); break;
+	case M68K_NOT:   not_r(code, dst, size); cmp_ir(code, 0, dst, size); break;
+	case M68K_ROL:   rol_clr(code, dst, size); break;
+	case M68K_ROR:   ror_clr(code, dst, size); break;
+	case M68K_ROXL:  rcl_clr(code, dst, size); break;
+	case M68K_ROXR:  rcr_clr(code, dst, size); break;
+	case M68K_TST:   cmp_ir(code, 0, dst, size); break;
+	}
+}
+
+void op_rdisp(code_info *code, m68kinst *inst, uint8_t dst, int32_t disp, uint8_t size)
+{
+	switch(inst->op)
+	{
+	case M68K_NEG:   neg_rdisp(code, dst, disp, size); break;
+	case M68K_NOT:   not_rdisp(code, dst, disp, size); cmp_irdisp(code, 0, dst, disp, size); break;
+	case M68K_ROL:   rol_clrdisp(code, dst, disp, size); break;
+	case M68K_ROR:   ror_clrdisp(code, dst, disp, size); break;
+	case M68K_ROXL:  rcl_clrdisp(code, dst, disp, size); break;
+	case M68K_ROXR:  rcr_clrdisp(code, dst, disp, size); break;
+	case M68K_TST:   cmp_irdisp(code, 0, dst, disp, size); break;
+	}
+}
+
+void translate_m68k_unary(m68k_options *opts, m68kinst *inst, uint32_t flag_mask, x86_ea *dst_op)
+{
+	code_info *code = &opts->gen.code;
+	cycles(&opts->gen, BUS);
+	if (dst_op->mode == MODE_REG_DIRECT) {
+		op_r(code, inst, dst_op->base, inst->extra.size);
+	} else {
+		op_rdisp(code, inst, dst_op->base, dst_op->disp, inst->extra.size);
+	}
+	update_flags(opts, flag_mask);
+	m68k_save_result(inst, opts);
+}
+
 #define BIT_SUPERVISOR 5
 
 void translate_m68k(m68k_options * opts, m68kinst * inst)
@@ -1422,82 +1577,18 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 		m68k_save_result(inst, opts);
 		break;
 	case M68K_ADD:
-		cycles(&opts->gen, BUS);
-		size = inst->dst.addr_mode == MODE_AREG ? OPSIZE_LONG : inst->extra.size;
-		if (src_op.mode == MODE_REG_DIRECT) {
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				add_rr(code, src_op.base, dst_op.base, size);
-			} else {
-				add_rrdisp(code, src_op.base, dst_op.base, dst_op.disp, size);
-			}
-		} else if (src_op.mode == MODE_REG_DISPLACE8) {
-			add_rdispr(code, src_op.base, src_op.disp, dst_op.base, size);
-		} else {
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				add_ir(code, src_op.disp, dst_op.base, size);
-			} else {
-				add_irdisp(code, src_op.disp, dst_op.base, dst_op.disp, size);
-			}
-		}
-		if (inst->dst.addr_mode != MODE_AREG) {
-			update_flags(opts, X|N|Z|V|C);
-		}
-		m68k_save_result(inst, opts);
+	case M68K_SUB:
+		translate_m68k_arith(opts, inst, X|N|Z|V|C, &src_op, &dst_op);
 		break;
-	case M68K_ADDX: {
-		cycles(&opts->gen, BUS);
-		flag_to_carry(opts, FLAG_X);
-		if (src_op.mode == MODE_REG_DIRECT) {
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				adc_rr(code, src_op.base, dst_op.base, inst->extra.size);
-			} else {
-				adc_rrdisp(code, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
-			}
-		} else if (src_op.mode == MODE_REG_DISPLACE8) {
-			adc_rdispr(code, src_op.base, src_op.disp, dst_op.base, inst->extra.size);
-		} else {
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				adc_ir(code, src_op.disp, dst_op.base, inst->extra.size);
-			} else {
-				adc_irdisp(code, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
-			}
-		}
-		set_flag_cond(opts, CC_C, FLAG_C);
-
-		check_alloc_code(code, 2*MAX_INST_LEN);
-		code_ptr after_flag_set = code->cur + 1;
-		jcc(code, CC_Z, code->cur + 2);
-		set_flag(opts, 0, FLAG_Z);
-		*after_flag_set = code->cur - (after_flag_set+1);
-		set_flag_cond(opts, CC_S, FLAG_N);
-		set_flag_cond(opts, CC_O, FLAG_V);
-		if (opts->flag_regs[FLAG_C] >= 0) {
-			flag_to_flag(opts, FLAG_C, FLAG_X);
-		} else {
-			set_flag_cond(opts, CC_C, FLAG_X);
-		}
-		m68k_save_result(inst, opts);
+	case M68K_ADDX:
+	case M68K_SUBX:
+		//z flag is special cased in translate_m68k_arith
+		translate_m68k_arith(opts, inst, X|N|V|C, &src_op, &dst_op);
 		break;
-	}
 	case M68K_AND:
-		cycles(&opts->gen, BUS);
-		if (src_op.mode == MODE_REG_DIRECT) {
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				and_rr(code, src_op.base, dst_op.base, inst->extra.size);
-			} else {
-				and_rrdisp(code, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
-			}
-		} else if (src_op.mode == MODE_REG_DISPLACE8) {
-			and_rdispr(code, src_op.base, src_op.disp, dst_op.base, inst->extra.size);
-		} else {
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				and_ir(code, src_op.disp, dst_op.base, inst->extra.size);
-			} else {
-				and_irdisp(code, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
-			}
-		}
-		update_flags(opts, N|Z|V0|C0);
-		m68k_save_result(inst, opts);
+	case M68K_EOR:
+	case M68K_OR:
+		translate_m68k_arith(opts, inst, N|Z|V0|C0, &src_op, &dst_op);
 		break;
 	case M68K_ANDI_CCR:
 	case M68K_ANDI_SR: {
@@ -1803,26 +1894,6 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 		*end_off = code->cur - (end_off + 1);
 		break;
 	}
-	case M68K_EOR:
-		cycles(&opts->gen, BUS);
-		if (src_op.mode == MODE_REG_DIRECT) {
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				xor_rr(code, src_op.base, dst_op.base, inst->extra.size);
-			} else {
-				xor_rrdisp(code, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
-			}
-		} else if (src_op.mode == MODE_REG_DISPLACE8) {
-			xor_rdispr(code, src_op.base, src_op.disp, dst_op.base, inst->extra.size);
-		} else {
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				xor_ir(code, src_op.disp, dst_op.base, inst->extra.size);
-			} else {
-				xor_irdisp(code, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
-			}
-		}
-		update_flags(opts, N|Z|V0|C0);
-		m68k_save_result(inst, opts);
-		break;
 	case M68K_EORI_CCR:
 	case M68K_EORI_SR:
 		cycles(&opts->gen, 20);
@@ -1985,14 +2056,7 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 		break;
 	//case M68K_NBCD:
 	case M68K_NEG:
-		cycles(&opts->gen, BUS);
-		if (dst_op.mode == MODE_REG_DIRECT) {
-			neg_r(code, dst_op.base, inst->extra.size);
-		} else {
-			neg_rdisp(code, dst_op.base, dst_op.disp, inst->extra.size);
-		}
-		update_flags(opts, X|N|Z|V|C);
-		m68k_save_result(inst, opts);
+		translate_m68k_unary(opts, inst, X|N|Z|V|C, &dst_op);
 		break;
 	case M68K_NEGX: {
 		cycles(&opts->gen, BUS);
@@ -2035,36 +2099,7 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 		cycles(&opts->gen, BUS);
 		break;
 	case M68K_NOT:
-		if (dst_op.mode == MODE_REG_DIRECT) {
-			not_r(code, dst_op.base, inst->extra.size);
-			cmp_ir(code, 0, dst_op.base, inst->extra.size);
-		} else {
-			not_rdisp(code, dst_op.base, dst_op.disp, inst->extra.size);
-			cmp_irdisp(code, 0, dst_op.base, dst_op.disp, inst->extra.size);
-		}
-
-		update_flags(opts, N|Z|V0|C0);
-		m68k_save_result(inst, opts);
-		break;
-	case M68K_OR:
-		cycles(&opts->gen, BUS);
-		if (src_op.mode == MODE_REG_DIRECT) {
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				or_rr(code, src_op.base, dst_op.base, inst->extra.size);
-			} else {
-				or_rrdisp(code, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
-			}
-		} else if (src_op.mode == MODE_REG_DISPLACE8) {
-			or_rdispr(code, src_op.base, src_op.disp, dst_op.base, inst->extra.size);
-		} else {
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				or_ir(code, src_op.disp, dst_op.base, inst->extra.size);
-			} else {
-				or_irdisp(code, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
-			}
-		}
-		update_flags(opts, N|Z|V0|C0);
-		m68k_save_result(inst, opts);
+		translate_m68k_unary(opts, inst, N|Z|V0|C0, &dst_op);
 		break;
 	case M68K_ORI_CCR:
 	case M68K_ORI_SR:
@@ -2105,147 +2140,34 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 		break;
 	case M68K_ROL:
 	case M68K_ROR:
-		set_flag(opts, 0, FLAG_V);
-		if (inst->src.addr_mode == MODE_UNUSED) {
-			cycles(&opts->gen, BUS);
-			//Memory rotate
-			if (inst->op == M68K_ROL) {
-				rol_ir(code, 1, dst_op.base, inst->extra.size);
-			} else {
-				ror_ir(code, 1, dst_op.base, inst->extra.size);
-			}
-			set_flag_cond(opts, CC_C, FLAG_C);
-			cmp_ir(code, 0, dst_op.base, inst->extra.size);
-			set_flag_cond(opts, CC_Z, FLAG_Z);
-			set_flag_cond(opts, CC_S, FLAG_N);
-			m68k_save_result(inst, opts);
-		} else {
-			if (src_op.mode == MODE_IMMED) {
-				cycles(&opts->gen, (inst->extra.size == OPSIZE_LONG ? 8 : 6) + src_op.disp*2);
-				if (dst_op.mode == MODE_REG_DIRECT) {
-					if (inst->op == M68K_ROL) {
-						rol_ir(code, src_op.disp, dst_op.base, inst->extra.size);
-					} else {
-						ror_ir(code, src_op.disp, dst_op.base, inst->extra.size);
-					}
-				} else {
-					if (inst->op == M68K_ROL) {
-						rol_irdisp(code, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
-					} else {
-						ror_irdisp(code, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
-					}
-				}
-				set_flag_cond(opts, CC_C, FLAG_C);
-			} else {
-				if (src_op.mode == MODE_REG_DIRECT) {
-					if (src_op.base != opts->gen.scratch1) {
-						mov_rr(code, src_op.base, opts->gen.scratch1, SZ_B);
-					}
-				} else {
-					mov_rdispr(code, src_op.base, src_op.disp, opts->gen.scratch1, SZ_B);
-				}
-				and_ir(code, 63, opts->gen.scratch1, SZ_D);
-				zero_off = code->cur + 1;
-				jcc(code, CC_Z, code->cur + 2);
-				add_rr(code, opts->gen.scratch1, CYCLES, SZ_D);
-				add_rr(code, opts->gen.scratch1, CYCLES, SZ_D);
-				cmp_ir(code, 32, opts->gen.scratch1, SZ_B);
-				norm_off = code->cur + 1;
-				jcc(code, CC_L, code->cur + 2);
-				sub_ir(code, 32, opts->gen.scratch1, SZ_B);
-				if (dst_op.mode == MODE_REG_DIRECT) {
-					if (inst->op == M68K_ROL) {
-						rol_ir(code, 31, dst_op.base, inst->extra.size);
-						rol_ir(code, 1, dst_op.base, inst->extra.size);
-					} else {
-						ror_ir(code, 31, dst_op.base, inst->extra.size);
-						ror_ir(code, 1, dst_op.base, inst->extra.size);
-					}
-				} else {
-					if (inst->op == M68K_ROL) {
-						rol_irdisp(code, 31, dst_op.base, dst_op.disp, inst->extra.size);
-						rol_irdisp(code, 1, dst_op.base, dst_op.disp, inst->extra.size);
-					} else {
-						ror_irdisp(code, 31, dst_op.base, dst_op.disp, inst->extra.size);
-						ror_irdisp(code, 1, dst_op.base, dst_op.disp, inst->extra.size);
-					}
-				}
-				*norm_off = code->cur - (norm_off+1);
-				if (dst_op.mode == MODE_REG_DIRECT) {
-					if (inst->op == M68K_ROL) {
-						rol_clr(code, dst_op.base, inst->extra.size);
-					} else {
-						ror_clr(code, dst_op.base, inst->extra.size);
-					}
-				} else {
-					if (inst->op == M68K_ROL) {
-						rol_clrdisp(code, dst_op.base, dst_op.disp, inst->extra.size);
-					} else {
-						ror_clrdisp(code, dst_op.base, dst_op.disp, inst->extra.size);
-					}
-				}
-				set_flag_cond(opts, CC_C, FLAG_C);
-				end_off = code->cur + 1;
-				jmp(code, code->cur + 2);
-				*zero_off = code->cur - (zero_off+1);
-				set_flag(opts, 0, FLAG_C);
-				*end_off = code->cur - (end_off+1);
-			}
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				cmp_ir(code, 0, dst_op.base, inst->extra.size);
-			} else {
-				cmp_irdisp(code, 0, dst_op.base, dst_op.disp, inst->extra.size);
-			}
-			set_flag_cond(opts, CC_Z, FLAG_Z);
-			set_flag_cond(opts, CC_S, FLAG_N);
-		}
-		break;
 	case M68K_ROXL:
-	case M68K_ROXR:
-		set_flag(opts, 0, FLAG_V);
+	case M68K_ROXR: {
+		int32_t init_flags = C|V0;
 		if (inst->src.addr_mode == MODE_UNUSED) {
 			cycles(&opts->gen, BUS);
 			//Memory rotate
-			flag_to_carry(opts, FLAG_X);
-			if (inst->op == M68K_ROXL) {
-				rcl_ir(code, 1, dst_op.base, inst->extra.size);
-			} else {
-				rcr_ir(code, 1, dst_op.base, inst->extra.size);
+			if (inst->op == M68K_ROXR || inst->op == M68K_ROXL) {
+				flag_to_carry(opts, FLAG_X);
+				init_flags |= X;
 			}
-			set_flag_cond(opts, CC_C, FLAG_C);
-			if (opts->flag_regs[FLAG_C] < 0) {
-				set_flag_cond(opts, CC_C, FLAG_X);
-			}
+			op_ir(code, inst, 1, dst_op.base, inst->extra.size);
+			update_flags(opts, init_flags);
 			cmp_ir(code, 0, dst_op.base, inst->extra.size);
-			set_flag_cond(opts, CC_Z, FLAG_Z);
-			set_flag_cond(opts, CC_S, FLAG_N);
-			if (opts->flag_regs[FLAG_C] >= 0) {
-				flag_to_flag(opts, FLAG_C, FLAG_X);
-			}
+			update_flags(opts, Z|N);
 			m68k_save_result(inst, opts);
 		} else {
 			if (src_op.mode == MODE_IMMED) {
 				cycles(&opts->gen, (inst->extra.size == OPSIZE_LONG ? 8 : 6) + src_op.disp*2);
-				flag_to_carry(opts, FLAG_X);
+				if (inst->op == M68K_ROXR || inst->op == M68K_ROXL) {
+					flag_to_carry(opts, FLAG_X);
+					init_flags |= X;
+				}
 				if (dst_op.mode == MODE_REG_DIRECT) {
-					if (inst->op == M68K_ROXL) {
-						rcl_ir(code, src_op.disp, dst_op.base, inst->extra.size);
-					} else {
-						rcr_ir(code, src_op.disp, dst_op.base, inst->extra.size);
-					}
+					op_ir(code, inst, src_op.disp, dst_op.base, inst->extra.size);
 				} else {
-					if (inst->op == M68K_ROXL) {
-						rcl_irdisp(code, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
-					} else {
-						rcr_irdisp(code, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
-					}
+					op_irdisp(code, inst, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
 				}
-				set_flag_cond(opts, CC_C, FLAG_C);
-				if (opts->flag_regs[FLAG_C] >= 0) {
-					flag_to_flag(opts, FLAG_C, FLAG_X);
-				} else {
-					set_flag_cond(opts, CC_C, FLAG_X);
-				}
+				update_flags(opts, init_flags);
 			} else {
 				if (src_op.mode == MODE_REG_DIRECT) {
 					if (src_op.base != opts->gen.scratch1) {
@@ -2262,52 +2184,43 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 				cmp_ir(code, 32, opts->gen.scratch1, SZ_B);
 				norm_off = code->cur + 1;
 				jcc(code, CC_L, code->cur + 2);
-				flag_to_carry(opts, FLAG_X);
-				if (dst_op.mode == MODE_REG_DIRECT) {
-					if (inst->op == M68K_ROXL) {
-						rcl_ir(code, 31, dst_op.base, inst->extra.size);
-						rcl_ir(code, 1, dst_op.base, inst->extra.size);
-					} else {
-						rcr_ir(code, 31, dst_op.base, inst->extra.size);
-						rcr_ir(code, 1, dst_op.base, inst->extra.size);
-					}
+				if (inst->op == M68K_ROXR || inst->op == M68K_ROXL) {
+					flag_to_carry(opts, FLAG_X);
+					init_flags |= X;
 				} else {
-					if (inst->op == M68K_ROXL) {
-						rcl_irdisp(code, 31, dst_op.base, dst_op.disp, inst->extra.size);
-						rcl_irdisp(code, 1, dst_op.base, dst_op.disp, inst->extra.size);
-					} else {
-						rcr_irdisp(code, 31, dst_op.base, dst_op.disp, inst->extra.size);
-						rcr_irdisp(code, 1, dst_op.base, dst_op.disp, inst->extra.size);
-					}
+					sub_ir(code, 32, opts->gen.scratch1, SZ_B);
 				}
-				set_flag_cond(opts, CC_C, FLAG_X);
-				sub_ir(code, 32, opts->gen.scratch1, SZ_B);
-				*norm_off = code->cur - (norm_off+1);
-				flag_to_carry(opts, FLAG_X);
 				if (dst_op.mode == MODE_REG_DIRECT) {
-					if (inst->op == M68K_ROXL) {
-						rcl_clr(code, dst_op.base, inst->extra.size);
-					} else {
-						rcr_clr(code, dst_op.base, inst->extra.size);
-					}
+					op_ir(code, inst, 31, dst_op.base, inst->extra.size);
+					op_ir(code, inst, 1, dst_op.base, inst->extra.size);
 				} else {
-					if (inst->op == M68K_ROXL) {
-						rcl_clrdisp(code, dst_op.base, dst_op.disp, inst->extra.size);
-					} else {
-						rcr_clrdisp(code, dst_op.base, dst_op.disp, inst->extra.size);
-					}
+					op_irdisp(code, inst, 31, dst_op.base, dst_op.disp, inst->extra.size);
+					op_irdisp(code, inst, 1, dst_op.base, dst_op.disp, inst->extra.size);
 				}
-				set_flag_cond(opts, CC_C, FLAG_C);
-				if (opts->flag_regs[FLAG_C] >= 0) {
-					flag_to_flag(opts, FLAG_C, FLAG_X);
-				} else {
+
+				if (inst->op == M68K_ROXR || inst->op == M68K_ROXL) {
 					set_flag_cond(opts, CC_C, FLAG_X);
+					sub_ir(code, 32, opts->gen.scratch1, SZ_B);
+					*norm_off = code->cur - (norm_off+1);
+					flag_to_carry(opts, FLAG_X);
+				} else {
+					*norm_off = code->cur - (norm_off+1);
 				}
+				if (dst_op.mode == MODE_REG_DIRECT) {
+					op_r(code, inst, dst_op.base, inst->extra.size);
+				} else {
+					op_rdisp(code, inst, dst_op.base, dst_op.disp, inst->extra.size);
+				}
+				update_flags(opts, init_flags);
 				end_off = code->cur + 1;
 				jmp(code, code->cur + 2);
 				*zero_off = code->cur - (zero_off+1);
-				//Carry flag is set to X flag when count is 0, this is different from ROR/ROL
-				flag_to_flag(opts, FLAG_X, FLAG_C);
+				if (inst->op == M68K_ROXR || inst->op == M68K_ROXL) {
+					//Carry flag is set to X flag when count is 0, this is different from ROR/ROL
+					flag_to_flag(opts, FLAG_X, FLAG_C);
+				} else {
+					set_flag(opts, 0, FLAG_C);
+				}
 				*end_off = code->cur - (end_off+1);
 			}
 			if (dst_op.mode == MODE_REG_DIRECT) {
@@ -2315,10 +2228,10 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 			} else {
 				cmp_irdisp(code, 0, dst_op.base, dst_op.disp, inst->extra.size);
 			}
-			set_flag_cond(opts, CC_Z, FLAG_Z);
-			set_flag_cond(opts, CC_S, FLAG_N);
+			update_flags(opts, Z|N);
 		}
 		break;
+	}
 	case M68K_RTE:
 		//TODO: Trap if not in system mode
 		//Read saved SR
@@ -2410,63 +2323,6 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 		jcc(code, CC_C, loop_top);
 		break;
 	}
-	case M68K_SUB:
-		size = inst->dst.addr_mode == MODE_AREG ? OPSIZE_LONG : inst->extra.size;
-		cycles(&opts->gen, BUS);
-		if (src_op.mode == MODE_REG_DIRECT) {
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				sub_rr(code, src_op.base, dst_op.base, size);
-			} else {
-				sub_rrdisp(code, src_op.base, dst_op.base, dst_op.disp, size);
-			}
-		} else if (src_op.mode == MODE_REG_DISPLACE8) {
-			sub_rdispr(code, src_op.base, src_op.disp, dst_op.base, size);
-		} else {
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				sub_ir(code, src_op.disp, dst_op.base, size);
-			} else {
-				sub_irdisp(code, src_op.disp, dst_op.base, dst_op.disp, size);
-			}
-		}
-		if (inst->dst.addr_mode != MODE_AREG) {
-			update_flags(opts, X|N|Z|V|C);
-		}
-		m68k_save_result(inst, opts);
-		break;
-	case M68K_SUBX: {
-		cycles(&opts->gen, BUS);
-		flag_to_carry(opts, FLAG_X);
-		if (src_op.mode == MODE_REG_DIRECT) {
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				sbb_rr(code, src_op.base, dst_op.base, inst->extra.size);
-			} else {
-				sbb_rrdisp(code, src_op.base, dst_op.base, dst_op.disp, inst->extra.size);
-			}
-		} else if (src_op.mode == MODE_REG_DISPLACE8) {
-			sbb_rdispr(code, src_op.base, src_op.disp, dst_op.base, inst->extra.size);
-		} else {
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				sbb_ir(code, src_op.disp, dst_op.base, inst->extra.size);
-			} else {
-				sbb_irdisp(code, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
-			}
-		}
-		set_flag_cond(opts, CC_C, FLAG_C);
-		if (opts->flag_regs[FLAG_C] < 0) {
-			set_flag_cond(opts, CC_C, FLAG_X);
-		}
-		code_ptr after_flag_set = code->cur + 1;
-		jcc(code, CC_Z, code->cur + 2);
-		set_flag(opts, 0, FLAG_Z);
-		*after_flag_set = code->cur - (after_flag_set+1);
-		set_flag_cond(opts, CC_S, FLAG_N);
-		set_flag_cond(opts, CC_O, FLAG_V);
-		if (opts->flag_regs[FLAG_C] >= 0) {
-			flag_to_flag(opts, FLAG_C, FLAG_X);
-		}
-		m68k_save_result(inst, opts);
-		break;
-	}
 	case M68K_SWAP:
 		cycles(&opts->gen, BUS);
 		if (src_op.mode == MODE_REG_DIRECT) {
@@ -2485,13 +2341,7 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 		break;
 	//case M68K_TRAPV:
 	case M68K_TST:
-		cycles(&opts->gen, BUS);
-		if (src_op.mode == MODE_REG_DIRECT) {
-			cmp_ir(code, 0, src_op.base, inst->extra.size);
-		} else { //M68000 doesn't support immedate operand for tst, so this must be MODE_REG_DISPLACE8
-			cmp_irdisp(code, 0, src_op.base, src_op.disp, inst->extra.size);
-		}
-		update_flags(opts, N|Z|V0|C0);
+		translate_m68k_unary(opts, inst, N|Z|V0|C0, &src_op);
 		break;
 	default:
 		m68k_disasm(inst, disasm_buf);
