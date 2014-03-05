@@ -1453,6 +1453,7 @@ void op_r(code_info *code, m68kinst *inst, uint8_t dst, uint8_t size)
 	case M68K_ROR:   ror_clr(code, dst, size); break;
 	case M68K_ROXL:  rcl_clr(code, dst, size); break;
 	case M68K_ROXR:  rcr_clr(code, dst, size); break;
+	case M68K_SWAP:  rol_ir(code, 16, dst, SZ_D); cmp_ir(code, 0, dst, SZ_D); break;
 	case M68K_TST:   cmp_ir(code, 0, dst, size); break;
 	}
 }
@@ -1467,6 +1468,7 @@ void op_rdisp(code_info *code, m68kinst *inst, uint8_t dst, int32_t disp, uint8_
 	case M68K_ROR:   ror_clrdisp(code, dst, disp, size); break;
 	case M68K_ROXL:  rcl_clrdisp(code, dst, disp, size); break;
 	case M68K_ROXR:  rcr_clrdisp(code, dst, disp, size); break;
+	case M68K_SWAP:  rol_irdisp(code, 16, dst, disp, SZ_D); cmp_irdisp(code, 0, dst, disp, SZ_D); break;
 	case M68K_TST:   cmp_irdisp(code, 0, dst, disp, size); break;
 	}
 }
@@ -2323,24 +2325,13 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 		jcc(code, CC_C, loop_top);
 		break;
 	}
-	case M68K_SWAP:
-		cycles(&opts->gen, BUS);
-		if (src_op.mode == MODE_REG_DIRECT) {
-			rol_ir(code, 16, src_op.base, SZ_D);
-			cmp_ir(code, 0, src_op.base, SZ_D);
-		} else{
-			rol_irdisp(code, 16, src_op.base, src_op.disp, SZ_D);
-			cmp_irdisp(code, 0, src_op.base, src_op.disp, SZ_D);
-		}
-
-		update_flags(opts, N|Z|V0|C0);
-		break;
 	//case M68K_TAS:
 	case M68K_TRAP:
 		translate_m68k_trap(opts, inst);
 		break;
 	//case M68K_TRAPV:
 	case M68K_TST:
+	case M68K_SWAP:
 		translate_m68k_unary(opts, inst, N|Z|V0|C0, &src_op);
 		break;
 	default:
