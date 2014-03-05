@@ -1122,42 +1122,6 @@ void translate_m68k_movep(m68k_options * opts, m68kinst * inst)
 	}
 }
 
-void translate_m68k_cmp(m68k_options * opts, m68kinst * inst)
-{
-	code_info *code = &opts->gen.code;
-	uint8_t size = inst->extra.size;
-	x86_ea src_op, dst_op;
-	translate_m68k_op(inst, &src_op, opts, 0);
-	if (inst->dst.addr_mode == MODE_AREG_POSTINC) {
-		push_r(code, opts->gen.scratch1);
-		translate_m68k_op(inst, &dst_op, opts, 1);
-		pop_r(code, opts->gen.scratch2);
-		src_op.base = opts->gen.scratch2;
-	} else {
-		translate_m68k_op(inst, &dst_op, opts, 1);
-		if (inst->dst.addr_mode == MODE_AREG && size == OPSIZE_WORD) {
-			size = OPSIZE_LONG;
-		}
-	}
-	cycles(&opts->gen, BUS);
-	if (src_op.mode == MODE_REG_DIRECT) {
-		if (dst_op.mode == MODE_REG_DIRECT) {
-			cmp_rr(code, src_op.base, dst_op.base, size);
-		} else {
-			cmp_rrdisp(code, src_op.base, dst_op.base, dst_op.disp, size);
-		}
-	} else if (src_op.mode == MODE_REG_DISPLACE8) {
-		cmp_rdispr(code, src_op.base, src_op.disp, dst_op.base, size);
-	} else {
-		if (dst_op.mode == MODE_REG_DIRECT) {
-			cmp_ir(code, src_op.disp, dst_op.base, size);
-		} else {
-			cmp_irdisp(code, src_op.disp, dst_op.base, dst_op.disp, size);
-		}
-	}
-	update_flags(opts, N|Z|V|C);
-}
-
 typedef void (*shift_ir_t)(code_info *code, uint8_t val, uint8_t dst, uint8_t size);
 typedef void (*shift_irdisp_t)(code_info *code, uint8_t val, uint8_t dst_base, int32_t disp, uint8_t size);
 typedef void (*shift_clr_t)(code_info *code, uint8_t dst, uint8_t size);
@@ -1430,7 +1394,7 @@ void translate_m68k_arith(m68k_options *opts, m68kinst * inst, uint32_t flag_mas
 			op_irdisp(code, inst, src_op->disp, dst_op->base, dst_op->disp, size);
 		}
 	}
-	if (inst->dst.addr_mode != MODE_AREG) {
+	if (inst->dst.addr_mode != MODE_AREG || inst->op == M68K_CMP) {
 		update_flags(opts, flag_mask);
 		if (inst->op == M68K_ADDX || inst->op == M68K_SUBX) {
 			check_alloc_code(code, 2*MAX_INST_LEN);
@@ -1440,7 +1404,29 @@ void translate_m68k_arith(m68k_options *opts, m68kinst * inst, uint32_t flag_mas
 			*after_flag_set = code->cur - (after_flag_set+1);
 		}
 	}
-	m68k_save_result(inst, opts);
+	if (inst->op != M68K_CMP) {
+		m68k_save_result(inst, opts);
+	}
+}
+
+void translate_m68k_cmp(m68k_options * opts, m68kinst * inst)
+{
+	code_info *code = &opts->gen.code;
+	uint8_t size = inst->extra.size;
+	x86_ea src_op, dst_op;
+	translate_m68k_op(inst, &src_op, opts, 0);
+	if (inst->dst.addr_mode == MODE_AREG_POSTINC) {
+		push_r(code, opts->gen.scratch1);
+		translate_m68k_op(inst, &dst_op, opts, 1);
+		pop_r(code, opts->gen.scratch2);
+		src_op.base = opts->gen.scratch2;
+	} else {
+		translate_m68k_op(inst, &dst_op, opts, 1);
+		if (inst->dst.addr_mode == MODE_AREG && size == OPSIZE_WORD) {
+			size = OPSIZE_LONG;
+		}
+	}
+	translate_m68k_arith(opts, inst, N|Z|V|C, &src_op, &dst_op);
 }
 
 void op_r(code_info *code, m68kinst *inst, uint8_t dst, uint8_t size)
