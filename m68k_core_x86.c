@@ -1546,6 +1546,7 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 	switch(inst->op)
 	{
 	case M68K_ABCD:
+	case M68K_SBCD:
 		if (src_op.base != opts->gen.scratch2) {
 			if (src_op.mode == MODE_REG_DIRECT) {
 				mov_rr(code, src_op.base, opts->gen.scratch2, SZ_B);
@@ -1562,8 +1563,12 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 		}
 		flag_to_carry(opts, FLAG_X);
 		jcc(code, CC_NC, code->cur + 5);
-		add_ir(code, 1, opts->gen.scratch1, SZ_B);
-		call(code, (code_ptr)bcd_add);
+		if (inst->op == M68K_ABCD) {
+			add_ir(code, 1, opts->gen.scratch1, SZ_B);
+		} else {
+			sub_ir(code, 1, opts->gen.scratch1, SZ_B);
+		}
+		call(code, (code_ptr) (inst->op == M68K_ABCD ? bcd_add : bcd_sub));
 		reg_to_flag(opts, CH, FLAG_C);
 		reg_to_flag(opts, CH, FLAG_X);
 		cmp_ir(code, 0, opts->gen.scratch1, SZ_B);
@@ -2258,42 +2263,6 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 	case M68K_RTR:
 		translate_m68k_rtr(opts, inst);
 		break;
-	case M68K_SBCD: {
-		if (src_op.base != opts->gen.scratch2) {
-			if (src_op.mode == MODE_REG_DIRECT) {
-				mov_rr(code, src_op.base, opts->gen.scratch2, SZ_B);
-			} else {
-				mov_rdispr(code, src_op.base, src_op.disp, opts->gen.scratch2, SZ_B);
-			}
-		}
-		if (dst_op.base != opts->gen.scratch1) {
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				mov_rr(code, dst_op.base, opts->gen.scratch1, SZ_B);
-			} else {
-				mov_rdispr(code, dst_op.base, dst_op.disp, opts->gen.scratch1, SZ_B);
-			}
-		}
-		flag_to_carry(opts, FLAG_X);
-		jcc(code, CC_NC, code->cur + 5);
-		sub_ir(code, 1, opts->gen.scratch1, SZ_B);
-		call(code, (code_ptr)bcd_sub);
-		reg_to_flag(opts, CH, FLAG_C);
-		reg_to_flag(opts, CH, FLAG_X);
-		cmp_ir(code, 0, opts->gen.scratch1, SZ_B);
-		code_ptr after_flag_set = code->cur+1;
-		jcc(code, CC_Z, code->cur + 2);
-		set_flag(opts, 0, FLAG_Z);
-		*after_flag_set = code->cur - (after_flag_set+1);
-		if (dst_op.base != opts->gen.scratch1) {
-			if (dst_op.mode == MODE_REG_DIRECT) {
-				mov_rr(code, opts->gen.scratch1, dst_op.base, SZ_B);
-			} else {
-				mov_rrdisp(code, opts->gen.scratch1, dst_op.base, dst_op.disp, SZ_B);
-			}
-		}
-		m68k_save_result(inst, opts);
-		break;
-	}
 	case M68K_STOP: {
 		//TODO: Trap if not in system mode
 		//manual says 4 cycles, but it has to be at least 8 since it's a 2-word instruction
