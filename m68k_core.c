@@ -86,10 +86,10 @@ void m68k_write_size(m68k_options *opts, uint8_t size)
 	}
 }
 
-void translate_m68k_lea(m68k_options * opts, m68kinst * inst)
+void translate_m68k_lea_pea(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
-	int8_t dst_reg = native_reg(&(inst->dst), opts);
+	int8_t dst_reg = inst->op == M68K_PEA ? opts->gen.scratch1 : native_reg(&(inst->dst), opts);
 	switch(inst->src.addr_mode)
 	{
 	case MODE_AREG_INDIRECT:
@@ -118,13 +118,17 @@ void translate_m68k_lea(m68k_options * opts, m68kinst * inst)
 			dst_reg = opts->gen.scratch1;
 		}
 		calc_areg_index_disp8(opts, &inst->src, dst_reg);
-		if (dst_reg == opts->gen.scratch1) {
+		if (dst_reg == opts->gen.scratch1 && inst->op != M68K_PEA) {
 			native_to_areg(opts, opts->gen.scratch1, inst->dst.params.regs.pri);
 		}
 		break;
 	case MODE_PC_DISPLACE:
 		cycles(&opts->gen, 8);
-		ldi_areg(opts, inst->src.params.regs.displacement + inst->address+2, inst->dst.params.regs.pri);
+		if (inst->op == M68K_PEA) {
+			ldi_native(opts, inst->src.params.regs.displacement + inst->address+2, dst_reg);
+		} else {
+			ldi_areg(opts, inst->src.params.regs.displacement + inst->address+2, inst->dst.params.regs.pri);
+		}
 		break;
 	case MODE_PC_INDEX_DISP8:
 		cycles(&opts->gen, BUS*3);
@@ -133,61 +137,29 @@ void translate_m68k_lea(m68k_options * opts, m68kinst * inst)
 		}
 		ldi_native(opts, inst->address+2, dst_reg);
 		calc_index_disp8(opts, &inst->src, dst_reg);
-		if (dst_reg == opts->gen.scratch1) {
+		if (dst_reg == opts->gen.scratch1 && inst->op != M68K_PEA) {
 			native_to_areg(opts, opts->gen.scratch1, inst->dst.params.regs.pri);
 		}
 		break;
 	case MODE_ABSOLUTE:
 	case MODE_ABSOLUTE_SHORT:
 		cycles(&opts->gen, (inst->src.addr_mode == MODE_ABSOLUTE) ? BUS * 3 : BUS * 2);
-		ldi_areg(opts, inst->src.params.immed, inst->dst.params.regs.pri);
+		if (inst->op == M68K_PEA) {
+			ldi_native(opts, inst->src.params.immed, dst_reg);
+		} else {
+			ldi_areg(opts, inst->src.params.immed, inst->dst.params.regs.pri);
+		}
 		break;
 	default:
 		m68k_disasm(inst, disasm_buf);
 		printf("%X: %s\naddress mode %d not implemented (lea src)\n", inst->address, disasm_buf, inst->src.addr_mode);
 		exit(1);
 	}
-}
-
-void translate_m68k_pea(m68k_options * opts, m68kinst * inst)
-{
-	code_info *code = &opts->gen.code;
-	switch(inst->src.addr_mode)
-	{
-	case MODE_AREG_INDIRECT:
-		cycles(&opts->gen, BUS);
-		areg_to_native(opts, inst->src.params.regs.pri, opts->gen.scratch1);
-		break;
-	case MODE_AREG_DISPLACE:
-		cycles(&opts->gen, 8);
-		calc_areg_displace(opts, &inst->src, opts->gen.scratch1);
-		break;
-	case MODE_AREG_INDEX_DISP8:
-		cycles(&opts->gen, 6);//TODO: Check to make sure this is correct
-		calc_areg_index_disp8(opts, &inst->src, opts->gen.scratch1);
-		break;
-	case MODE_PC_DISPLACE:
-		cycles(&opts->gen, 8);
-		ldi_native(opts, inst->src.params.regs.displacement + inst->address+2, opts->gen.scratch1);
-		break;
-	case MODE_PC_INDEX_DISP8:
-		cycles(&opts->gen, BUS*3);//TODO: Check to make sure this is correct
-		ldi_native(opts, inst->address+2, opts->gen.scratch1);
-		calc_index_disp8(opts, &inst->src, opts->gen.scratch1);
-		break;
-	case MODE_ABSOLUTE:
-	case MODE_ABSOLUTE_SHORT:
-		cycles(&opts->gen, (inst->src.addr_mode == MODE_ABSOLUTE) ? BUS * 3 : BUS * 2);
-		ldi_native(opts, inst->src.params.immed, opts->gen.scratch1);
-		break;
-	default:
-		m68k_disasm(inst, disasm_buf);
-		printf("%X: %s\naddress mode %d not implemented (lea src)\n", inst->address, disasm_buf, inst->src.addr_mode);
-		exit(1);
+	if (inst->op == M68K_PEA) {
+		subi_areg(opts, 4, 7);
+		areg_to_native(opts, 7, opts->gen.scratch2);
+		call(code, opts->write_32_lowfirst);
 	}
-	subi_areg(opts, 4, 7);
-	areg_to_native(opts, 7, opts->gen.scratch2);
-	call(code, opts->write_32_lowfirst);
 }
 
 void push_const(m68k_options *opts, int32_t value)
