@@ -1300,6 +1300,10 @@ void op_ir(code_info *code, m68kinst *inst, int32_t val, uint8_t dst, uint8_t si
 	case M68K_ADD:  add_ir(code, val, dst, size); break;
 	case M68K_ADDX: adc_ir(code, val, dst, size); break;
 	case M68K_AND:  and_ir(code, val, dst, size); break;
+	case M68K_BTST: bt_ir(code, val, dst, size); break;
+	case M68K_BSET: bts_ir(code, val, dst, size); break;
+	case M68K_BCLR: btr_ir(code, val, dst, size); break;
+	case M68K_BCHG: btc_ir(code, val, dst, size); break;
 	case M68K_EOR:  xor_ir(code, val, dst, size); break;
 	case M68K_OR:   or_ir(code, val, dst, size); break;
 	case M68K_ROL:  rol_ir(code, val, dst, size); break;
@@ -1318,6 +1322,10 @@ void op_irdisp(code_info *code, m68kinst *inst, int32_t val, uint8_t dst, int32_
 	case M68K_ADD:  add_irdisp(code, val, dst, disp, size); break;
 	case M68K_ADDX: adc_irdisp(code, val, dst, disp, size); break;
 	case M68K_AND:  and_irdisp(code, val, dst, disp, size); break;
+	case M68K_BTST: bt_irdisp(code, val, dst, disp, size); break;
+	case M68K_BSET: bts_irdisp(code, val, dst, disp, size); break;
+	case M68K_BCLR: btr_irdisp(code, val, dst, disp, size); break;
+	case M68K_BCHG: btc_irdisp(code, val, dst, disp, size); break;
 	case M68K_EOR:  xor_irdisp(code, val, dst, disp, size); break;
 	case M68K_OR:   or_irdisp(code, val, dst, disp, size); break;
 	case M68K_ROL:  rol_irdisp(code, val, dst, disp, size); break;
@@ -1336,6 +1344,10 @@ void op_rr(code_info *code, m68kinst *inst, uint8_t src, uint8_t dst, uint8_t si
 	case M68K_ADD:  add_rr(code, src, dst, size); break;
 	case M68K_ADDX: adc_rr(code, src, dst, size); break;
 	case M68K_AND:  and_rr(code, src, dst, size); break;
+	case M68K_BTST: bt_rr(code, src, dst, size); break;
+	case M68K_BSET: bts_rr(code, src, dst, size); break;
+	case M68K_BCLR: btr_rr(code, src, dst, size); break;
+	case M68K_BCHG: btc_rr(code, src, dst, size); break;
 	case M68K_EOR:  xor_rr(code, src, dst, size); break;
 	case M68K_OR:   or_rr(code, src, dst, size); break;
 	case M68K_SUB:  sub_rr(code, src, dst, size); break;
@@ -1350,6 +1362,10 @@ void op_rrdisp(code_info *code, m68kinst *inst, uint8_t src, uint8_t dst, int32_
 	case M68K_ADD:  add_rrdisp(code, src, dst, disp, size); break;
 	case M68K_ADDX: adc_rrdisp(code, src, dst, disp, size); break;
 	case M68K_AND:  and_rrdisp(code, src, dst, disp, size); break;
+	case M68K_BTST: bt_rrdisp(code, src, dst, disp, size); break;
+	case M68K_BSET: bts_rrdisp(code, src, dst, disp, size); break;
+	case M68K_BCLR: btr_rrdisp(code, src, dst, disp, size); break;
+	case M68K_BCHG: btc_rrdisp(code, src, dst, disp, size); break;
 	case M68K_EOR:  xor_rrdisp(code, src, dst, disp, size); break;
 	case M68K_OR:   or_rrdisp(code, src, dst, disp, size); break;
 	case M68K_SUB:  sub_rrdisp(code, src, dst, disp, size); break;
@@ -1482,10 +1498,8 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 	check_cycles_int(&opts->gen, inst->address);
 	if (inst->op == M68K_MOVE) {
 		return translate_m68k_move(opts, inst);
-	} else if(inst->op == M68K_LEA) {
-		return translate_m68k_lea(opts, inst);
-	} else if(inst->op == M68K_PEA) {
-		return translate_m68k_pea(opts, inst);
+	} else if(inst->op == M68K_LEA || inst->op == M68K_PEA) {
+		return translate_m68k_lea_pea(opts, inst);
 	} else if(inst->op == M68K_BSR) {
 		return translate_m68k_bsr(opts, inst);
 	} else if(inst->op == M68K_BCC) {
@@ -1637,30 +1651,10 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 			if (inst->extra.size == OPSIZE_BYTE) {
 				src_op.disp &= 0x7;
 			}
-			if (inst->op == M68K_BTST) {
-				if (dst_op.mode == MODE_REG_DIRECT) {
-					bt_ir(code, src_op.disp, dst_op.base, inst->extra.size);
-				} else {
-					bt_irdisp(code, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
-				}
-			} else if (inst->op == M68K_BSET) {
-				if (dst_op.mode == MODE_REG_DIRECT) {
-					bts_ir(code, src_op.disp, dst_op.base, inst->extra.size);
-				} else {
-					bts_irdisp(code, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
-				}
-			} else if (inst->op == M68K_BCLR) {
-				if (dst_op.mode == MODE_REG_DIRECT) {
-					btr_ir(code, src_op.disp, dst_op.base, inst->extra.size);
-				} else {
-					btr_irdisp(code, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
-				}
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				op_ir(code, inst, src_op.disp, dst_op.base, inst->extra.size);
 			} else {
-				if (dst_op.mode == MODE_REG_DIRECT) {
-					btc_ir(code, src_op.disp, dst_op.base, inst->extra.size);
-				} else {
-					btc_irdisp(code, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
-				}
+				op_irdisp(code, inst, src_op.disp, dst_op.base, dst_op.disp, inst->extra.size);
 			}
 		} else {
 			if (src_op.mode == MODE_REG_DISPLACE8 || (inst->dst.addr_mode != MODE_REG && src_op.base != opts->gen.scratch1 && src_op.base != opts->gen.scratch2)) {
@@ -1703,30 +1697,10 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 				and_ir(code, 7, src_op.base, SZ_D);
 				size = SZ_D;
 			}
-			if (inst->op == M68K_BTST) {
-				if (dst_op.mode == MODE_REG_DIRECT) {
-					bt_rr(code, src_op.base, dst_op.base, size);
-				} else {
-					bt_rrdisp(code, src_op.base, dst_op.base, dst_op.disp, size);
-				}
-			} else if (inst->op == M68K_BSET) {
-				if (dst_op.mode == MODE_REG_DIRECT) {
-					bts_rr(code, src_op.base, dst_op.base, size);
-				} else {
-					bts_rrdisp(code, src_op.base, dst_op.base, dst_op.disp, size);
-				}
-			} else if (inst->op == M68K_BCLR) {
-				if (dst_op.mode == MODE_REG_DIRECT) {
-					btr_rr(code, src_op.base, dst_op.base, size);
-				} else {
-					btr_rrdisp(code, src_op.base, dst_op.base, dst_op.disp, size);
-				}
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				op_rr(code, inst, src_op.base, dst_op.base, size);
 			} else {
-				if (dst_op.mode == MODE_REG_DIRECT) {
-					btc_rr(code, src_op.base, dst_op.base, size);
-				} else {
-					btc_rrdisp(code, src_op.base, dst_op.base, dst_op.disp, size);
-				}
+				op_rrdisp(code, inst, src_op.base, dst_op.base, dst_op.disp, size);
 			}
 			if (src_op.base == opts->gen.scratch2) {
 				pop_r(code, opts->gen.scratch2);
