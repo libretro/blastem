@@ -46,8 +46,7 @@ void m68k_handle_deferred(m68k_context * context);
 code_ptr get_native_address_trans(m68k_context * context, uint32_t address);
 
 //individual instructions
-void translate_m68k_lea(m68k_options * opts, m68kinst * inst);
-void translate_m68k_pea(m68k_options * opts, m68kinst * inst);
+void translate_m68k_lea_pea(m68k_options * opts, m68kinst * inst);
 void translate_m68k_bsr(m68k_options * opts, m68kinst * inst);
 void translate_m68k_jmp_jsr(m68k_options * opts, m68kinst * inst);
 void translate_m68k_unlk(m68k_options * opts, m68kinst * inst);
