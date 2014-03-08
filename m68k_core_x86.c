@@ -1270,9 +1270,7 @@ void translate_shift(m68k_options * opts, m68kinst * inst, host_ea *src_op, host
 	if (!special && end_off) {
 		*end_off = code->cur - (end_off + 1);
 	}
-	set_flag_cond(opts, CC_C, FLAG_C);
-	set_flag_cond(opts, CC_Z, FLAG_Z);
-	set_flag_cond(opts, CC_S, FLAG_N);
+	update_flags(opts, C|Z|N);
 	if (special && end_off) {
 		*end_off = code->cur - (end_off + 1);
 	}
@@ -1766,9 +1764,7 @@ void translate_m68k_div(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 	cmp_ir(code, 0, RAX, SZ_W);
 	pop_r(code, RAX);
 	pop_r(code, RDX);
-	set_flag(opts, 0, FLAG_V);
-	set_flag_cond(opts, CC_Z, FLAG_Z);
-	set_flag_cond(opts, CC_S, FLAG_N);
+	update_flags(opts, V0|Z|N);
 	code_ptr end_off = code->cur + 1;
 	jmp(code, code->cur + 2);
 	*norm_off = code->cur - (norm_off + 1);
