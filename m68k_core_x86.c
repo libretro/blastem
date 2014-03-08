@@ -2181,91 +2181,16 @@ void translate_out_of_bounds(code_info *code)
 void check_code_prologue(code_info *code)
 {
 	check_alloc_code(code, MAX_INST_LEN*4);
-}
+};
 
-void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
+void nop_fill_or_jmp_next(code_info *code, code_ptr old_end, code_ptr next_inst)
 {
-	m68k_options * opts = context->options;
-	code_info *code = &opts->gen.code;
-	uint8_t orig_size = get_native_inst_size(opts, address);
-	code_ptr orig_start = get_native_address(context->native_code_map, address);
-	uint32_t orig = address;
-	code_info orig_code;
-	orig_code.cur = orig_start;
-	orig_code.last = orig_start + orig_size + 5;
-	address &= 0xFFFF;
-	uint16_t *after, *inst = context->mem_pointers[1] + address/2;
-	m68kinst instbuf;
-	after = m68k_decode(inst, &instbuf, orig);
-	if (orig_size != MAX_NATIVE_SIZE) {
-		deferred_addr * orig_deferred = opts->gen.deferred;
-
-		//make sure the beginning of the code for an instruction is contiguous
-		check_alloc_code(code, MAX_INST_LEN*4);
-		code_ptr native_start = code->cur;
-		translate_m68k(opts, &instbuf);
-		code_ptr native_end = code->cur;
-		uint8_t is_terminal = m68k_is_terminal(&instbuf);
-		if ((native_end - native_start) <= orig_size) {
-			code_ptr native_next;
-			if (!is_terminal) {
-				native_next = get_native_address(context->native_code_map, orig + (after-inst)*2);
-			}
-			if (is_terminal || (native_next && ((native_next == orig_start + orig_size) || (orig_size - (native_end - native_start)) > 5))) {
-				remove_deferred_until(&opts->gen.deferred, orig_deferred);
-				code_info tmp;
-				tmp.cur = code->cur;
-				tmp.last = code->last;
-				code->cur = orig_code.cur;
-				code->last = orig_code.last;
-				translate_m68k(opts, &instbuf);
-				native_end = orig_code.cur = code->cur;
-				code->cur = tmp.cur;
-				code->last = tmp.last;
-				if (!is_terminal) {
-					if (native_next == orig_start + orig_size && (native_next-native_end) < 2) {
-						while (orig_code.cur < orig_start + orig_size) {
-							*(orig_code.cur++) = 0x90; //NOP
-						}
-					} else {
-						jmp(&orig_code, native_next);
-					}
-				}
-				m68k_handle_deferred(context);
-				return orig_start;
-			}
+	if (next_inst == old_end && next_inst - code->cur < 2) {
+		while (code->cur < old_end) {
+			*(code->cur++) = 0x90; //NOP
 		}
-
-		map_native_address(context, instbuf.address, native_start, (after-inst)*2, MAX_NATIVE_SIZE);
-
-		jmp(&orig_code, native_start);
-		if (!m68k_is_terminal(&instbuf)) {
-			code_ptr native_end = code->cur;
-			code->cur = native_start + MAX_NATIVE_SIZE;
-			code_ptr rest = get_native_address_trans(context, orig + (after-inst)*2);
-			code_ptr tmp = code->cur;
-			code->cur = native_end;
-			jmp(code, rest);
-			code->cur = tmp;
-		} else {
-			code->cur = native_start + MAX_NATIVE_SIZE;
-		}
-		m68k_handle_deferred(context);
-		return native_start;
 	} else {
-		code_info tmp;
-		tmp.cur = code->cur;
-		tmp.last = code->last;
-		code->cur = orig_code.cur;
-		code->last = orig_code.last;
-		translate_m68k(opts, &instbuf);
-		if (!m68k_is_terminal(&instbuf)) {
-			jmp(code, get_native_address_trans(context, orig + (after-inst)*2));
-		}
-		code->cur = tmp.cur;
-		code->last = tmp.last;
-		m68k_handle_deferred(context);
-		return orig_start;
+		jmp(code, next_inst);
 	}
 }
 
