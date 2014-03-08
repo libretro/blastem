@@ -2052,17 +2052,22 @@ void translate_m68k_eori_ccr_sr(m68k_options *opts, m68kinst *inst)
 	}
 }
 
+void set_all_flags(m68k_options *opts, uint8_t flags)
+{
+	uint32_t flag_mask = flags & 0x10 ? X1 : X0;
+	flag_mask |= flags & 0x8 ? N1 : N0;
+	flag_mask |= flags & 0x4 ? Z1 : Z0;
+	flag_mask |= flags & 0x2 ? V1 : V0;
+	flag_mask |= flags & 0x1 ? C1 : C0;
+	update_flags(opts, flag_mask);
+}
+
 void translate_m68k_move_ccr_sr(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op)
 {
 	code_info *code = &opts->gen.code;
 	//TODO: Privilege check for MOVE to SR
 	if (src_op->mode == MODE_IMMED) {
-		uint32_t flag_mask = src_op->disp & 0x10 ? X1 : X0;
-		flag_mask |= src_op->disp & 0x8 ? N1 : N0;
-		flag_mask |= src_op->disp & 0x4 ? Z1 : Z0;
-		flag_mask |= src_op->disp & 0x2 ? V1 : V0;
-		flag_mask |= src_op->disp & 0x1 ? C1 : C0;
-		update_flags(opts, flag_mask);
+		set_all_flags(opts, src_op->disp);
 		if (inst->op == M68K_MOVE_SR) {
 			mov_irdisp(code, (src_op->disp >> 8), opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
 			if (!((inst->src.params.immed >> 8) & (1 << BIT_SUPERVISOR))) {
@@ -2094,12 +2099,7 @@ void translate_m68k_stop(m68k_options *opts, m68kinst *inst)
 	//Motorola's accounting make sense here
 	code_info *code = &opts->gen.code;
 	cycles(&opts->gen, BUS*2);
-	uint32_t flag_mask = inst->src.params.immed & 0x10 ? X1 : X0;
-	flag_mask |= inst->src.params.immed & 0x8 ? N1 : N0;
-	flag_mask |= inst->src.params.immed & 0x4 ? Z1 : Z0;
-	flag_mask |= inst->src.params.immed & 0x2 ? V1 : V0;
-	flag_mask |= inst->src.params.immed & 0x1 ? C1 : C0;
-	update_flags(opts, flag_mask);
+	set_all_flags(opts,  inst->src.params.immed);
 	mov_irdisp(code, (inst->src.params.immed >> 8), opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
 	if (!((inst->src.params.immed >> 8) & (1 << BIT_SUPERVISOR))) {
 		//leave supervisor mode
