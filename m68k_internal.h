@@ -26,6 +26,7 @@ void add_dreg_native(m68k_options *opts, uint8_t reg, uint8_t native_reg);
 void calc_areg_displace(m68k_options *opts, m68k_op_info *op, uint8_t native_reg);
 void calc_index_disp8(m68k_options *opts, m68k_op_info *op, uint8_t native_reg);
 void calc_areg_index_disp8(m68k_options *opts, m68k_op_info *op, uint8_t native_reg);
+void nop_fill_or_jmp_next(code_info *code, code_ptr old_end, code_ptr next_inst);
 
 //functions implemented in m68k_core.c
 int8_t native_reg(m68k_op_info * op, m68k_options * opts);
@@ -45,6 +46,7 @@ uint8_t get_native_inst_size(m68k_options * opts, uint32_t address);
 uint8_t m68k_is_terminal(m68kinst * inst);
 void m68k_handle_deferred(m68k_context * context);
 code_ptr get_native_address_trans(m68k_context * context, uint32_t address);
+void * m68k_retranslate_inst(uint32_t address, m68k_context * context);
 
 //individual instructions
 void translate_m68k_lea_pea(m68k_options * opts, m68kinst * inst);
