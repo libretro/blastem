@@ -349,6 +349,148 @@ void translate_m68k_move_usp(m68k_options *opts, m68kinst *inst)
 	}
 }
 
+void translate_m68k_movem(m68k_options * opts, m68kinst * inst)
+{
+	code_info *code = &opts->gen.code;
+	int8_t bit,reg,sec_reg;
+	uint8_t early_cycles;
+	if(inst->src.addr_mode == MODE_REG) {
+		//reg to mem
+		early_cycles = 8;
+		int8_t dir;
+		switch (inst->dst.addr_mode)
+		{
+		case MODE_AREG_INDIRECT:
+		case MODE_AREG_PREDEC:
+			areg_to_native(opts, inst->dst.params.regs.pri, opts->gen.scratch2);
+			break;
+		case MODE_AREG_DISPLACE:
+			early_cycles += BUS;
+			calc_areg_displace(opts, &inst->dst, opts->gen.scratch2);
+			break;
+		case MODE_AREG_INDEX_DISP8:
+			early_cycles += 6;
+			calc_areg_index_disp8(opts, &inst->dst, opts->gen.scratch2);
+			break;
+		case MODE_PC_DISPLACE:
+			early_cycles += BUS;
+			ldi_native(opts, inst->dst.params.regs.displacement + inst->address+2, opts->gen.scratch2);
+			break;
+		case MODE_PC_INDEX_DISP8:
+			early_cycles += 6;
+			ldi_native(opts, inst->address+2, opts->gen.scratch2);
+			calc_index_disp8(opts, &inst->dst, opts->gen.scratch2);
+		case MODE_ABSOLUTE:
+			early_cycles += 4;
+		case MODE_ABSOLUTE_SHORT:
+			early_cycles += 4;
+			ldi_native(opts, inst->dst.params.immed, opts->gen.scratch2);
+			break;
+		default:
+			m68k_disasm(inst, disasm_buf);
+			printf("%X: %s\naddress mode %d not implemented (movem dst)\n", inst->address, disasm_buf, inst->dst.addr_mode);
+			exit(1);
+		}
+		if (inst->dst.addr_mode == MODE_AREG_PREDEC) {
+			reg = 15;
+			dir = -1;
+		} else {
+			reg = 0;
+			dir = 1;
+		}
+		cycles(&opts->gen, early_cycles);
+		for(bit=0; reg < 16 && reg >= 0; reg += dir, bit++) {
+			if (inst->src.params.immed & (1 << bit)) {
+				if (inst->dst.addr_mode == MODE_AREG_PREDEC) {
+					subi_native(opts, (inst->extra.size == OPSIZE_LONG) ? 4 : 2, opts->gen.scratch2);
+				}
+				push_native(opts, opts->gen.scratch2);
+				if (reg > 7) {
+					areg_to_native(opts, reg-8, opts->gen.scratch1);
+				} else {
+					dreg_to_native(opts, reg, opts->gen.scratch1);
+				}
+				if (inst->extra.size == OPSIZE_LONG) {
+					call(code, opts->write_32_lowfirst);
+				} else {
+					call(code, opts->write_16);
+				}
+				pop_native(opts, opts->gen.scratch2);
+				if (inst->dst.addr_mode != MODE_AREG_PREDEC) {
+					addi_native(opts, (inst->extra.size == OPSIZE_LONG) ? 4 : 2, opts->gen.scratch2);
+				}
+			}
+		}
+		if (inst->dst.addr_mode == MODE_AREG_PREDEC) {
+			native_to_areg(opts, opts->gen.scratch2, inst->dst.params.regs.pri);
+		}
+	} else {
+		//mem to reg
+		early_cycles = 4;
+		switch (inst->src.addr_mode)
+		{
+		case MODE_AREG_INDIRECT:
+		case MODE_AREG_POSTINC:
+			areg_to_native(opts, inst->src.params.regs.pri, opts->gen.scratch1);
+			break;
+		case MODE_AREG_DISPLACE:
+			early_cycles += BUS;
+			reg = opts->gen.scratch2;
+			calc_areg_displace(opts, &inst->src, opts->gen.scratch1);
+			break;
+		case MODE_AREG_INDEX_DISP8:
+			early_cycles += 6;
+			calc_areg_index_disp8(opts, &inst->src, opts->gen.scratch1);
+			break;
+		case MODE_PC_DISPLACE:
+			early_cycles += BUS;
+			ldi_native(opts, inst->src.params.regs.displacement + inst->address+2, opts->gen.scratch1);
+			break;
+		case MODE_PC_INDEX_DISP8:
+			early_cycles += 6;
+			ldi_native(opts, inst->address+2, opts->gen.scratch1);
+			calc_index_disp8(opts, &inst->src, opts->gen.scratch1);
+			break;
+		case MODE_ABSOLUTE:
+			early_cycles += 4;
+		case MODE_ABSOLUTE_SHORT:
+			early_cycles += 4;
+			ldi_native(opts, inst->src.params.immed, opts->gen.scratch1);
+			break;
+		default:
+			m68k_disasm(inst, disasm_buf);
+			printf("%X: %s\naddress mode %d not implemented (movem src)\n", inst->address, disasm_buf, inst->src.addr_mode);
+			exit(1);
+		}
+		cycles(&opts->gen, early_cycles);
+		for(reg = 0; reg < 16; reg ++) {
+			if (inst->dst.params.immed & (1 << reg)) {
+				push_native(opts, opts->gen.scratch1);
+				if (inst->extra.size == OPSIZE_LONG) {
+					call(code, opts->read_32);
+				} else {
+					call(code, opts->read_16);
+				}
+				if (inst->extra.size == OPSIZE_WORD) {
+					sign_extend16_native(opts, opts->gen.scratch1);
+				}
+				if (reg > 7) {
+					native_to_areg(opts, opts->gen.scratch1, reg-8);
+				} else {
+					native_to_dreg(opts, opts->gen.scratch1, reg);
+				}
+				pop_native(opts, opts->gen.scratch1);
+				addi_native(opts, (inst->extra.size == OPSIZE_LONG) ? 4 : 2, opts->gen.scratch1);
+			}
+		}
+		if (inst->src.addr_mode == MODE_AREG_POSTINC) {
+			native_to_areg(opts, opts->gen.scratch1, inst->src.params.regs.pri);
+		}
+	}
+	//prefetch
+	cycles(&opts->gen, 4);
+}
+
 void translate_m68k_nop(m68k_options *opts, m68kinst *inst)
 {
 	cycles(&opts->gen, BUS);
