@@ -1992,65 +1992,33 @@ void translate_m68k_illegal(m68k_options *opts, m68kinst *inst)
 
 #define BIT_SUPERVISOR 5
 
-void translate_m68k_andi_ccr_sr(m68k_options *opts, m68kinst *inst)
+void translate_m68k_andi_ori_ccr_sr(m68k_options *opts, m68kinst *inst)
 {
 	code_info *code = &opts->gen.code;
 	cycles(&opts->gen, 20);
 	//TODO: If ANDI to SR, trap if not in supervisor mode
 	uint32_t flag_mask = 0;
-	if (!(inst->src.params.immed & 0x1)) {
-		flag_mask |= C0;
-	}
-	if (!(inst->src.params.immed & 0x2)) {
-		flag_mask |= V0;
-	}
-	if (!(inst->src.params.immed & 0x4)) {
-		flag_mask |= Z0;
-	}
-	if (!(inst->src.params.immed & 0x8)) {
-		flag_mask |= N0;
-	}
-	if (!(inst->src.params.immed & 0x10)) {
-		flag_mask |= X0;
+	uint32_t base_flag = inst->op == M68K_ANDI_SR || inst->op == M68K_ANDI_CCR ? X0 : X1;
+	for (int i = 0; i < 5; i++)
+	{
+		if ((base_flag == X0) ^ (inst->src.params.immed & 1 << i) > 0)
+		{
+			flag_mask |= base_flag << ((4 - i) * 3);
+		}
 	}
 	update_flags(opts, flag_mask);
-	if (inst->op == M68K_ANDI_SR) {
-		and_irdisp(code, inst->src.params.immed >> 8, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
-		if (!((inst->src.params.immed >> 8) & (1 << BIT_SUPERVISOR))) {
+	if (inst->op == M68K_ANDI_SR || inst->op == M68K_ORI_SR) {
+		if (inst->op == M68K_ANDI_SR) {
+			and_irdisp(code, inst->src.params.immed >> 8, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
+		} else {
+			or_irdisp(code, inst->src.params.immed >> 8, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
+		}
+		if ((base_flag == X0) ^ (((inst->src.params.immed >> 8) & (1 << BIT_SUPERVISOR)) > 0)) {
 			//leave supervisor mode
 			swap_ssp_usp(opts);
 		}
-		if (inst->src.params.immed & 0x700) {
-			call(code, opts->do_sync);
-		}
-	}
-}
-
-void translate_m68k_ori_ccr_sr(m68k_options *opts, m68kinst *inst)
-{
-	code_info *code = &opts->gen.code;
-	cycles(&opts->gen, 20);
-	//TODO: If ORI to SR, trap if not in supervisor mode
-	uint32_t flag_mask = 0;
-	if (inst->src.params.immed & 0x1) {
-		flag_mask |= C1;
-	}
-	if (inst->src.params.immed & 0x2) {
-		flag_mask |= V1;
-	}
-	if (inst->src.params.immed & 0x4) {
-		flag_mask |= Z1;
-	}
-	if (inst->src.params.immed & 0x8) {
-		flag_mask |= N1;
-	}
-	if (inst->src.params.immed & 0x10) {
-		flag_mask |= X1;
-	}
-	update_flags(opts, flag_mask);
-	if (inst->op == M68K_ORI_SR) {
-		or_irdisp(code, inst->src.params.immed >> 8, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
-		if (inst->src.params.immed & 0x700) {
+		if ((inst->op == M68K_ANDI_SR && (inst->src.params.immed  & 0x700) != 0x700)
+		    || (inst->op == M68K_ORI_SR && inst->src.params.immed & 0x700)) {
 			call(code, opts->do_sync);
 		}
 	}
