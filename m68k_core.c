@@ -551,12 +551,12 @@ impl_info m68k_impls[] = {
 	RAW_IMPL(M68K_UNLK, translate_m68k_unlk),
 
 	//SR/CCR stuff
-	RAW_IMPL(M68K_ANDI_CCR, translate_m68k_andi_ccr_sr),
-	RAW_IMPL(M68K_ANDI_SR, translate_m68k_andi_ccr_sr),
+	RAW_IMPL(M68K_ANDI_CCR, translate_m68k_andi_ori_ccr_sr),
+	RAW_IMPL(M68K_ANDI_SR, translate_m68k_andi_ori_ccr_sr),
 	RAW_IMPL(M68K_EORI_CCR, translate_m68k_eori_ccr_sr),
 	RAW_IMPL(M68K_EORI_SR, translate_m68k_eori_ccr_sr),
-	RAW_IMPL(M68K_ORI_CCR, translate_m68k_ori_ccr_sr),
-	RAW_IMPL(M68K_ORI_SR, translate_m68k_ori_ccr_sr),
+	RAW_IMPL(M68K_ORI_CCR, translate_m68k_andi_ori_ccr_sr),
+	RAW_IMPL(M68K_ORI_SR, translate_m68k_andi_ori_ccr_sr),
 	OP_IMPL(M68K_MOVE_CCR, translate_m68k_move_ccr_sr),
 	OP_IMPL(M68K_MOVE_SR, translate_m68k_move_ccr_sr),
 	OP_IMPL(M68K_MOVE_FROM_SR, translate_m68k_move_from_sr),
