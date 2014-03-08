@@ -13,13 +13,20 @@
 #define INVALID_OFFSET 0xFFFFFFFF
 #define EXTENSION_WORD 0xFFFFFFFE
 
+#if defined(X86_32) || defined(X86_64)
 typedef struct {
 	int32_t disp;
 	uint8_t mode;
 	uint8_t base;
 	uint8_t index;
-	uint8_t cycles;
-} x86_ea;
+} host_ea;
+#else
+typedef struct {
+	int32_t disp;
+	uint8_t mode;
+	uint8_t base;
+} host_ea;
+#endif
 
 typedef struct {
 	uint8_t  *base;

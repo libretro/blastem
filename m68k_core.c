@@ -326,6 +326,34 @@ void translate_m68k_trap(m68k_options *opts, m68kinst *inst)
 	jmp(code, opts->trap);
 }
 
+void translate_m68k_move_usp(m68k_options *opts, m68kinst *inst)
+{
+	cycles(&opts->gen, BUS);
+	int8_t reg;
+	if (inst->src.addr_mode == MODE_UNUSED) {
+		reg = native_reg(&inst->dst, opts);
+		if (reg < 0) {
+			reg = opts->gen.scratch1;
+		}
+		areg_to_native(opts, 8, reg);
+		if (reg == opts->gen.scratch1) {
+			native_to_areg(opts, opts->gen.scratch1, inst->dst.params.regs.pri);
+		}
+	} else {
+		reg = native_reg(&inst->src, opts);
+		if (reg < 0) {
+			reg = opts->gen.scratch1;
+			areg_to_native(opts, inst->src.params.regs.pri, reg);
+		}
+		native_to_areg(opts, reg, 8);
+	}
+}
+
+void translate_m68k_nop(m68k_options *opts, m68kinst *inst)
+{
+	cycles(&opts->gen, BUS);
+}
+
 void swap_ssp_usp(m68k_options * opts)
 {
 	areg_to_native(opts, 7, opts->gen.scratch2);
@@ -432,6 +460,150 @@ void m68k_handle_deferred(m68k_context * context)
 	process_deferred(&opts->gen.deferred, context, (native_addr_func)get_native_from_context);
 	if (opts->gen.deferred) {
 		translate_m68k_stream(opts->gen.deferred->address, context);
+	}
+}
+
+typedef enum {
+	RAW_FUNC = 1,
+	BINARY_ARITH,
+	UNARY_ARITH,
+	OP_FUNC
+} impl_type;
+
+typedef void (*raw_fun)(m68k_options * opts, m68kinst *inst);
+typedef void (*op_fun)(m68k_options * opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op);
+
+typedef struct {
+	union {
+		raw_fun  raw;
+		uint32_t flag_mask;
+		op_fun   op;
+	} impl;
+	impl_type itype;
+} impl_info;
+
+#define RAW_IMPL(inst, fun)     [inst] = { .impl = { .raw = fun }, .itype = RAW_FUNC }
+#define OP_IMPL(inst, fun)      [inst] = { .impl = { .op = fun }, .itype = OP_FUNC }
+#define UNARY_IMPL(inst, mask)  [inst] = { .impl = { .flag_mask = mask }, .itype = UNARY_ARITH }
+#define BINARY_IMPL(inst, mask) [inst] = { .impl = { .flag_mask = mask}, .itype = BINARY_ARITH }
+
+impl_info m68k_impls[] = {
+	//math
+	BINARY_IMPL(M68K_ADD, X|N|Z|V|C),
+	BINARY_IMPL(M68K_SUB, X|N|Z|V|C),
+	//z flag is special cased for ADDX/SUBX
+	BINARY_IMPL(M68K_ADDX, X|N|V|C),
+	BINARY_IMPL(M68K_SUBX, X|N|V|C),
+	OP_IMPL(M68K_ABCD, translate_m68k_abcd_sbcd),
+	OP_IMPL(M68K_SBCD, translate_m68k_abcd_sbcd),
+	BINARY_IMPL(M68K_AND, N|Z|V0|C0),
+	BINARY_IMPL(M68K_EOR, N|Z|V0|C0),
+	BINARY_IMPL(M68K_OR, N|Z|V0|C0),
+	RAW_IMPL(M68K_CMP, translate_m68k_cmp),
+	OP_IMPL(M68K_DIVS, translate_m68k_div),
+	OP_IMPL(M68K_DIVU, translate_m68k_div),
+	OP_IMPL(M68K_MULS, translate_m68k_mul),
+	OP_IMPL(M68K_MULU, translate_m68k_mul),
+	RAW_IMPL(M68K_EXT, translate_m68k_ext),
+	UNARY_IMPL(M68K_NEG, X|N|Z|V|C),
+	OP_IMPL(M68K_NEGX, translate_m68k_negx),
+	UNARY_IMPL(M68K_NOT, X|N|Z|V|C),
+	UNARY_IMPL(M68K_TST, N|Z|V0|C0),
+
+	//shift/rotate
+	OP_IMPL(M68K_ASL, translate_m68k_sl),
+	OP_IMPL(M68K_LSL, translate_m68k_sl),
+	OP_IMPL(M68K_ASR, translate_m68k_asr),
+	OP_IMPL(M68K_LSR, translate_m68k_lsr),
+	OP_IMPL(M68K_ROL, translate_m68k_rot),
+	OP_IMPL(M68K_ROR, translate_m68k_rot),
+	OP_IMPL(M68K_ROXL, translate_m68k_rot),
+	OP_IMPL(M68K_ROXR, translate_m68k_rot),
+	UNARY_IMPL(M68K_SWAP, N|Z|V0|C0),
+
+	//bit
+	OP_IMPL(M68K_BCHG, translate_m68k_bit),
+	OP_IMPL(M68K_BCLR, translate_m68k_bit),
+	OP_IMPL(M68K_BSET, translate_m68k_bit),
+	OP_IMPL(M68K_BTST, translate_m68k_bit),
+
+	//data movement
+	RAW_IMPL(M68K_MOVE, translate_m68k_move),
+	RAW_IMPL(M68K_MOVEM, translate_m68k_movem),
+	RAW_IMPL(M68K_MOVEP, translate_m68k_movep),
+	RAW_IMPL(M68K_MOVE_USP, translate_m68k_move_usp),
+	RAW_IMPL(M68K_LEA, translate_m68k_lea_pea),
+	RAW_IMPL(M68K_PEA, translate_m68k_lea_pea),
+	RAW_IMPL(M68K_CLR, translate_m68k_clr),
+	OP_IMPL(M68K_EXG, translate_m68k_exg),
+	RAW_IMPL(M68K_SCC, translate_m68k_scc),
+
+	//function calls and branches
+	RAW_IMPL(M68K_BCC, translate_m68k_bcc),
+	RAW_IMPL(M68K_BSR, translate_m68k_bsr),
+	RAW_IMPL(M68K_DBCC, translate_m68k_dbcc),
+	RAW_IMPL(M68K_JMP, translate_m68k_jmp_jsr),
+	RAW_IMPL(M68K_JSR, translate_m68k_jmp_jsr),
+	RAW_IMPL(M68K_RTS, translate_m68k_rts),
+	RAW_IMPL(M68K_RTE, translate_m68k_rte),
+	RAW_IMPL(M68K_RTR, translate_m68k_rtr),
+	RAW_IMPL(M68K_LINK, translate_m68k_link),
+	RAW_IMPL(M68K_UNLK, translate_m68k_unlk),
+
+	//SR/CCR stuff
+	RAW_IMPL(M68K_ANDI_CCR, translate_m68k_andi_ccr_sr),
+	RAW_IMPL(M68K_ANDI_SR, translate_m68k_andi_ccr_sr),
+	RAW_IMPL(M68K_EORI_CCR, translate_m68k_eori_ccr_sr),
+	RAW_IMPL(M68K_EORI_SR, translate_m68k_eori_ccr_sr),
+	RAW_IMPL(M68K_ORI_CCR, translate_m68k_ori_ccr_sr),
+	RAW_IMPL(M68K_ORI_SR, translate_m68k_ori_ccr_sr),
+	OP_IMPL(M68K_MOVE_CCR, translate_m68k_move_ccr_sr),
+	OP_IMPL(M68K_MOVE_SR, translate_m68k_move_ccr_sr),
+	OP_IMPL(M68K_MOVE_FROM_SR, translate_m68k_move_from_sr),
+	RAW_IMPL(M68K_STOP, translate_m68k_stop),
+
+	//traps
+	OP_IMPL(M68K_CHK, translate_m68k_chk),
+	RAW_IMPL(M68K_TRAP, translate_m68k_trap),
+	RAW_IMPL(M68K_ILLEGAL, translate_m68k_illegal),
+	RAW_IMPL(M68K_INVALID, translate_m68k_invalid),
+
+	//misc
+	RAW_IMPL(M68K_NOP, translate_m68k_nop),
+	RAW_IMPL(M68K_RESET, translate_m68k_reset),
+
+	//currently unimplemented
+	//M68K_NBCD
+	//M68K_TAS
+	//M68K_TRAPV
+};
+
+void translate_m68k(m68k_options * opts, m68kinst * inst)
+{
+	check_cycles_int(&opts->gen, inst->address);
+	impl_info * info = m68k_impls + inst->op;
+	if (info->itype == RAW_FUNC) {
+		info->impl.raw(opts, inst);
+		return;
+	}
+
+	host_ea src_op, dst_op;
+	if (inst->src.addr_mode != MODE_UNUSED) {
+		translate_m68k_op(inst, &src_op, opts, 0);
+	}
+	if (inst->dst.addr_mode != MODE_UNUSED) {
+		translate_m68k_op(inst, &dst_op, opts, 1);
+	}
+	if (info->itype == OP_FUNC) {
+		info->impl.op(opts, inst, &src_op, &dst_op);
+	} else if (info->itype == BINARY_ARITH) {
+		translate_m68k_arith(opts, inst, info->impl.flag_mask, &src_op, &dst_op);
+	} else if (info->itype == UNARY_ARITH) {
+		translate_m68k_unary(opts, inst, info->impl.flag_mask, inst->dst.addr_mode != MODE_UNUSED ? &dst_op : &src_op);
+	} else {
+		m68k_disasm(inst, disasm_buf);
+		printf("%X: %s\ninstruction %d not yet implemented\n", inst->address, disasm_buf, inst->op);
+		exit(1);
 	}
 }
 
