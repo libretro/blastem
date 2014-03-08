@@ -2067,9 +2067,7 @@ void translate_m68k_move_ccr_sr(m68k_options *opts, m68kinst *inst, host_ea *src
 			mov_irdisp(code, (src_op->disp >> 8), opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
 			if (!((inst->src.params.immed >> 8) & (1 << BIT_SUPERVISOR))) {
 				//leave supervisor mode
-				mov_rr(code, opts->aregs[7], opts->gen.scratch1, SZ_D);
-				mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, opts->aregs[7], SZ_D);
-				mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, offsetof(m68k_context, aregs) + sizeof(uint32_t) * 8, SZ_D);
+				swap_ssp_usp(opts);
 			}
 			call(code, opts->do_sync);
 		}
@@ -2084,7 +2082,6 @@ void translate_m68k_move_ccr_sr(m68k_options *opts, m68kinst *inst, host_ea *src
 		}
 		call(code, inst->op == M68K_MOVE_SR ? opts->set_sr : opts->set_ccr);
 		cycles(&opts->gen, 12);
-
 	}
 }
 
