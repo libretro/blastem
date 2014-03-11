@@ -56,7 +56,15 @@ typedef struct {
 	code_ptr        load_context;
 	code_ptr        handle_cycle_limit;
 	code_ptr        handle_cycle_limit_int;
-	uint8_t			context_reg;
+	code_ptr        handle_code_write;
+	uint32_t        address_mask;
+	uint32_t        max_address;
+	uint32_t        bus_cycles;
+	int32_t         mem_ptr_off;
+	int32_t         ram_flags_off;
+	uint8_t         address_size;
+	uint8_t         byte_swap;
+	uint8_t         context_reg;
 	uint8_t         cycles;
 	uint8_t         limit;
 	uint8_t			scratch1;
@@ -99,6 +107,8 @@ void process_deferred(deferred_addr ** head_ptr, void * context, native_addr_fun
 void cycles(cpu_options *opts, uint32_t num);
 void check_cycles_int(cpu_options *opts, uint32_t address);
 void check_cycles(cpu_options * opts);
+
+code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk * memmap, uint32_t num_chunks, ftype fun_type);
 
 #endif //BACKEND_H_
 
