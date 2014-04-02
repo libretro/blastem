@@ -1,3 +1,21 @@
+
+ifdef WINDOWS
+
+MEM:=mem_win.o
+BLASTEM:=blastem.exe
+RUNTIME32:=runtime_win.S
+
+CC:=wine gcc.exe
+CFLAGS:=-O2 -std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -DDISABLE_OPENGL -I"C:/MinGW/usr/include/SDL"
+LDFLAGS:= -L"C:/MinGW/usr/lib" -lm -lmingw32 -lSDLmain -lSDL -mwindows
+CPU:=i686
+
+else
+
+MEM:=mem.o
+BLASTEM:=blastem
+RUNTIME32:=runtime_32.S
+
 ifdef NOGL
 LIBS=sdl
 else
@@ -22,17 +40,17 @@ endif
 ifndef CPU
 CPU:=$(shell uname -m)
 endif
+endif
 
 
-
-TRANSOBJS=gen.o backend.o mem.o
+TRANSOBJS=gen.o backend.o $(MEM)
 M68KOBJS=68kinst.o m68k_core.o
 ifeq ($(CPU),x86_64)
 M68KOBJS+= runtime.o m68k_core_x86.o
 TRANSOBJS+= gen_x86.o backend_x86.o
 else
 ifeq ($(CPU),i686)
-M68KOBJS+= runtime_32.o m68k_core_x86.o
+M68KOBJS+= $(RUNTIME32) m68k_core_x86.o
 TRANSOBJS+= gen_x86.o backend_x86.o
 NOZ80:=1
 endif
@@ -61,8 +79,8 @@ endif
 
 all : dis zdis stateview vgmplay blastem
 
-blastem : $(MAINOBJS)
-	$(CC) -o blastem $(MAINOBJS) $(LDFLAGS)
+$(BLASTEM) : $(MAINOBJS)
+	$(CC) -o $(BLASTEM) $(MAINOBJS) $(LDFLAGS)
 
 dis : dis.o 68kinst.o
 	$(CC) -o dis dis.o 68kinst.o
