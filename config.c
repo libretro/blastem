@@ -11,6 +11,27 @@
 
 #define MAX_NEST 30 //way more than I'll ever need
 
+#ifdef _WIN32
+char * strtok_r(char * input, char * sep, char ** state)
+{
+	if (input) {
+		*state = input;
+	}
+	char * ret = *state;
+	while (**state && **state != *sep)
+	{
+		++*state;
+	}
+	if (**state)
+	{
+		**state = 0;
+		++*state;
+		return ret;
+	}
+	return NULL;
+}
+#endif
+
 tern_node * parse_config(char * config_data)
 {
 	char *state, *curline;
@@ -100,6 +121,9 @@ open_fail:
 
 tern_node * load_config()
 {
+#ifdef _WIN32
+	tern_node * ret = parse_config_file("default.cfg");
+#else
 	char * exe_dir;
 	char * home = getenv("HOME");
 	if (!home) {
@@ -119,6 +143,7 @@ load_in_app_dir:
 	path = alloc_concat(exe_dir, "/default.cfg");
 	ret = parse_config_file(path);
 	free(path);
+#endif
 success:
 	if (ret) {
 		return ret;

@@ -75,6 +75,7 @@ void set_exe_str(char * str)
 	exe_str = str;
 }
 
+#ifndef _WIN32
 char * readlink_alloc(char * path)
 {
 	char * linktext = NULL;
@@ -138,3 +139,4 @@ fallback:
 	}
 	return exe_dir;
 }
+#endif
