@@ -121,11 +121,8 @@ open_fail:
 
 tern_node * load_config()
 {
-#ifdef _WIN32
-	tern_node * ret = parse_config_file("default.cfg");
-#else
 	char * exe_dir;
-	char * home = getenv("HOME");
+	char * home = get_home_dir();
 	if (!home) {
 		goto load_in_app_dir;
 	}
@@ -143,7 +140,6 @@ load_in_app_dir:
 	path = alloc_concat(exe_dir, "/default.cfg");
 	ret = parse_config_file(path);
 	free(path);
-#endif
 success:
 	if (ret) {
 		return ret;

@@ -113,14 +113,22 @@ const GLushort element_data[] = {0, 1, 2, 3};
 
 GLuint load_shader(char * fname, GLenum shader_type)
 {
-	char * parts[] = {getenv("HOME"), "/.config/blastem/shaders/", fname};
+	char * parts[] = {get_home_dir(), "/.config/blastem/shaders/", fname};
 	char * shader_path = alloc_concat_m(3, parts);
+	printf("Trying to find shader at %s\n", shader_path);
 	FILE * f = fopen(shader_path, "r");
 	free(shader_path);
 	if (!f) {
+#ifdef _WIN32
+		parts[0] = "shaders/";
+		parts[1] = fname;
+		shader_path = alloc_concat_m(2, parts);
+#else
 		parts[0] = get_exe_dir();
 		parts[1] = "/shaders/";
 		shader_path = alloc_concat_m(3, parts);
+#endif
+		printf("Trying to find shader at %s\n", shader_path);
 		f = fopen(shader_path, "r");
 		free(shader_path);
 		if (!f) {
@@ -128,6 +136,7 @@ GLuint load_shader(char * fname, GLenum shader_type)
 			return 0;
 		}
 	}
+	puts("reading shader");
 	long fsize = file_size(f);
 	GLchar * text = malloc(fsize);
 	if (fread(text, 1, fsize, f) != fsize) {
@@ -138,6 +147,7 @@ GLuint load_shader(char * fname, GLenum shader_type)
 	GLuint ret = glCreateShader(shader_type);
 	glShaderSource(ret, 1, (const GLchar **)&text, (const GLint *)&fsize);
 	free(text);
+	puts("compiling shader");
 	glCompileShader(ret);
 	GLint compile_status, loglen;
 	glGetShaderiv(ret, GL_COMPILE_STATUS, &compile_status);
@@ -162,6 +172,7 @@ void render_alloc_surfaces(vdp_context * context)
 		context->oddbuf = context->framebuf = malloc(512 * 256 * 4 * 2);
 		memset(context->oddbuf, 0, 512 * 256 * 4 * 2);
 		context->evenbuf = ((char *)context->oddbuf) + 512 * 256 * 4;
+		puts("generating textures");
 		glGenTextures(3, textures);
 		for (int i = 0; i < 3; i++)
 		{
@@ -182,11 +193,15 @@ void render_alloc_surfaces(vdp_context * context)
 		glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_data), vertex_data, GL_STATIC_DRAW);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[1]);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(element_data), element_data, GL_STATIC_DRAW);
+		puts("Loading vertex shader");
 		vshader = load_shader(tern_find_ptr_default(config, "videovertex_shader", "default.v.glsl"), GL_VERTEX_SHADER);
+		puts("loading fragment shader");
 		fshader = load_shader(tern_find_ptr_default(config, "videofragment_shader", "default.f.glsl"), GL_FRAGMENT_SHADER);
+		puts("creating program");
 		program = glCreateProgram();
 		glAttachShader(program, vshader);
 		glAttachShader(program, fshader);
+		puts("linking program");
 		glLinkProgram(program);
 		GLint link_status;
 		glGetProgramiv(program, GL_LINK_STATUS, &link_status);
@@ -205,6 +220,7 @@ void render_alloc_surfaces(vdp_context * context)
 #ifndef DISABLE_OPENGL
 	}
 #endif
+	puts("alloc surfaces done");
 }
 
 uint8_t render_depth()
