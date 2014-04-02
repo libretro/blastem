@@ -6,8 +6,12 @@ BLASTEM:=blastem.exe
 RUNTIME32:=runtime_win.S
 
 CC:=wine gcc.exe
-CFLAGS:=-O2 -std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -DDISABLE_OPENGL -I"C:/MinGW/usr/include/SDL"
-LDFLAGS:= -L"C:/MinGW/usr/lib" -lm -lmingw32 -lSDLmain -lSDL -mwindows
+CFLAGS:=-O2 -std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -I"C:/MinGW/usr/include/SDL" -DGLEW_STATIC
+LDFLAGS:= -L"C:/MinGW/usr/lib" -lm -lmingw32 -lSDLmain -lSDL
+ifndef NOGL
+LDFLAGS+= -lopengl32 -lglu32
+endif
+LDFLAGS+= -mwindows
 CPU:=i686
 
 else
@@ -76,6 +80,11 @@ else
 MAINOBJS+= $(Z80OBJS)
 endif
 
+ifdef WINDOWS
+ifndef NOGL
+MAINOBJS+= glew.o
+endif
+endif
 
 all : dis zdis stateview vgmplay blastem
 
