@@ -19,6 +19,8 @@ char * split_keyval(char * text);
 void set_exe_str(char * str);
 //Returns the directory the executable is in
 char * get_exe_dir();
+//Returns the user's home directory
+char * get_home_dir();
 //Returns the contents of a symlink in a newly allocated string
 char * readlink_alloc(char * path);
 
