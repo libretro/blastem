@@ -383,6 +383,7 @@ m68k_context * vdp_port_write_b(uint32_t vdp_port, m68k_context * context, uint8
 	return vdp_port_write(vdp_port, context, vdp_port < 0x10 ? value | value << 8 : ((vdp_port & 1) ? value : 0));
 }
 
+z80_context * z80_vdp_port_write(uint16_t vdp_port, z80_context * context, uint8_t value) asm("z80_vdp_port_write");
 z80_context * z80_vdp_port_write(uint16_t vdp_port, z80_context * context, uint8_t value)
 {
 	genesis_context * gen = context->system;
@@ -674,6 +675,7 @@ uint16_t io_read_w(uint32_t location, m68k_context * context)
 	return value;
 }
 
+extern z80_context * z80_write_ym(uint16_t location, z80_context * context, uint8_t value) asm("z80_write_ym");
 z80_context * z80_write_ym(uint16_t location, z80_context * context, uint8_t value)
 {
 	genesis_context * gen = context->system;
@@ -688,6 +690,7 @@ z80_context * z80_write_ym(uint16_t location, z80_context * context, uint8_t val
 	return context;
 }
 
+extern uint8_t z80_read_ym(uint16_t location, z80_context * context) asm("z80_read_ym");
 uint8_t z80_read_ym(uint16_t location, z80_context * context)
 {
 	genesis_context * gen = context->system;

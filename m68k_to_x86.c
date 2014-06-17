@@ -39,9 +39,14 @@ char disasm_buf[1024];
 
 m68k_context * sync_components(m68k_context * context, uint32_t address);
 
-void m68k_invalid();
-void bcd_add();
-void bcd_sub();
+extern void bcd_add() asm("bcd_add");
+extern void bcd_sub() asm("bcd_sub");
+
+void m68k_invalid(uint32_t address, m68k_context * context)
+{
+	printf("Invalid instruction at %X\n", address);
+	exit(1);
+}
 
 code_ptr cycles(code_ptr dst, uint32_t num)
 {
@@ -2864,7 +2869,11 @@ code_ptr translate_m68k(code_ptr dst, m68kinst * inst, x86_68k_options * opts)
 		if (inst->src.params.immed == 0x7100) {
 			return retn(dst);
 		}
-		dst = mov_ir(dst, inst->address, SCRATCH1, SZ_D);
+		dst = mov_ir(dst, inst->address, SCRATCH2, SZ_D);
+#ifdef X86_32
+		dst = push_r(dst, CONTEXT);
+		dst = push_r(dst, SCRATCH2);
+#endif
 		return call(dst, (code_ptr)m68k_invalid);
 	} else if(inst->op == M68K_CMP) {
 		return translate_m68k_cmp(dst, inst, opts);

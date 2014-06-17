@@ -28,21 +28,21 @@
 #define dprintf
 #endif
 
-void z80_read_byte();
-void z80_read_word();
-void z80_write_byte();
-void z80_write_word_highfirst();
-void z80_write_word_lowfirst();
-void z80_save_context();
-void z80_native_addr();
-void z80_do_sync();
-void z80_handle_cycle_limit_int();
-void z80_retrans_stub();
-void z80_io_read();
-void z80_io_write();
-void z80_halt();
-void z80_save_context();
-void z80_load_context();
+extern void z80_read_byte() asm("z80_read_byte");
+extern void z80_read_word() asm("z80_read_word");
+extern void z80_write_byte() asm("z80_write_byte");
+extern void z80_write_word_highfirst() asm("z80_write_word_highfirst");
+extern void z80_write_word_lowfirst() asm("z80_write_word_lowfirst");
+extern void z80_save_context() asm("z80_save_context");
+extern void z80_native_addr() asm("z80_native_addr");
+extern void z80_do_sync() asm("z80_do_sync");
+extern void z80_handle_cycle_limit_int() asm("z80_handle_cycle_limit_int");
+extern void z80_retrans_stub() asm("z80_retrans_stub");
+extern void z80_io_read() asm("z80_io_read");
+extern void z80_io_write() asm("z80_io_write");
+extern void z80_halt() asm("z80_halt");
+extern void z80_save_context() asm("z80_save_context");
+extern void z80_load_context() asm("z80_load_context");
 
 uint8_t z80_size(z80inst * inst)
 {
@@ -1780,6 +1780,7 @@ void z80_handle_deferred(z80_context * context)
 	}
 }
 
+extern void * z80_retranslate_inst(uint32_t address, z80_context * context, uint8_t * orig_start) asm("z80_retranslate_inst");
 void * z80_retranslate_inst(uint32_t address, z80_context * context, uint8_t * orig_start)
 {
 	char disbuf[80];

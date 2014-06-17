@@ -125,7 +125,7 @@ z80_read_bank:
 	add $3, %ebp
 	push %rsi
 	mov 144(%rsi), %rsi /* get system context pointer */
-	cmp $0, 120(%rsi) /* check bus busy flag */
+	cmpb $0, 120(%rsi) /* check bus busy flag */
 	pop %rsi
 	jne bus_busy
 z80_read_bank_cont:
@@ -243,7 +243,7 @@ z80_read_bank_word:
 	add $3, %ebp /* first read typically has 3 wait states */
 	push %rsi
 	mov 144(%rsi), %rsi /* get system context pointer */
-	cmp $0, 120(%rsi) /* check bus busy flag */
+	cmpb $0, 120(%rsi) /* check bus busy flag */
 	pop %rsi
 	jne bus_busy_word
 z80_read_bank_word_cont:
@@ -256,7 +256,7 @@ z80_read_bank_word_cont:
 	add $4, %ebp /* second read typically has 4 wait states */
 	push %rsi
 	mov 144(%rsi), %rsi /* get system context pointer */
-	cmp $0, 120(%rsi) /* check bus busy flag */
+	cmpb $0, 120(%rsi) /* check bus busy flag */
 	pop %rsi
 	jne bus_busy_word2
 z80_read_bank_word_cont2:
