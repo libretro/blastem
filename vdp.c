@@ -227,8 +227,8 @@ void vdp_print_reg_explain(vdp_context * context)
 	       context->regs[REG_SCROLL_A], (context->regs[REG_SCROLL_A] & 0x38) << 10,
 	       context->regs[REG_WINDOW], (context->regs[REG_WINDOW] & (context->regs[REG_MODE_4] & BIT_H40 ? 0x3C : 0x3E)) << 10,
 	       context->regs[REG_SCROLL_B], (context->regs[REG_SCROLL_B] & 0x7) << 13,
-	       context->regs[REG_SAT], (context->regs[REG_SAT] & (context->regs[REG_MODE_4] & BIT_H40 ? 0x3E : 0x3F)) << 9,
-	       context->regs[REG_HSCROLL], (context->regs[REG_HSCROLL] & 0x1F) << 10);
+	       context->regs[REG_SAT], (context->regs[REG_SAT] & (context->regs[REG_MODE_4] & BIT_H40 ? 0x7E : 0x7F)) << 9,
+	       context->regs[REG_HSCROLL], (context->regs[REG_HSCROLL] & 0x3F) << 10);
 	char * sizes[] = {"32", "64", "invalid", "128"};
 	printf("\n**Misc Group**\n"
 	       "07: %.2X | Backdrop Color: $%X\n"
@@ -239,6 +239,20 @@ void vdp_print_reg_explain(vdp_context * context)
 	       context->regs[REG_HINT], context->regs[REG_HINT],
 	       context->regs[REG_AUTOINC], context->regs[REG_AUTOINC],
 	       context->regs[REG_SCROLL], sizes[context->regs[REG_SCROLL] & 0x3], sizes[context->regs[REG_SCROLL] >> 4 & 0x3]);
+	char * src_types[] = {"68K", "68K", "Copy", "Fill"};
+	printf("\n**DMA Group**\n"
+	       "13: %.2X |\n"
+		   "14: %.2X | DMA Length: $%.4X words\n"
+		   "15: %.2X |\n"
+		   "16: %.2X |\n"
+		   "17: %.2X | DMA Source Address: $%.6X, Type: %s\n",
+		   context->regs[REG_DMALEN_L],
+		   context->regs[REG_DMALEN_H], context->regs[REG_DMALEN_H] << 8 | context->regs[REG_DMALEN_L],
+		   context->regs[REG_DMASRC_L],
+		   context->regs[REG_DMASRC_M],
+		   context->regs[REG_DMASRC_H],
+		       context->regs[REG_DMASRC_H] << 17 | context->regs[REG_DMASRC_M] << 9 | context->regs[REG_DMASRC_L],
+			   src_types[context->regs[REG_DMASRC_H] >> 6 & 3]);
 	printf("\n**Internal Group**\n"
 	       "Address: %X\n"
 	       "CD:      %X\n"
@@ -1422,7 +1436,9 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 		}
 		uint32_t linecyc = context->cycles % MCLKS_LINE;
 		if (linecyc == 0) {
-			if (line <= 1 || line >= active_lines) {
+			context->latched_mode &= ~0x81;
+			context->latched_mode |= context->regs[REG_MODE_4] & 0x81;
+			if (line < 1 || line >= active_lines) {
 				context->hint_counter = context->regs[REG_HINT];
 			} else if (context->hint_counter) {
 				context->hint_counter--;
@@ -1925,9 +1941,6 @@ uint32_t vdp_next_hint(vdp_context * context)
 	}
 	uint32_t linecyc = context->cycles % MCLKS_LINE;
 	uint32_t hcycle = context->cycles + context->hint_counter * MCLKS_LINE + MCLKS_LINE - linecyc;
-	if (!line) {
-		hcycle += MCLKS_LINE;
-	}
 	return hcycle;
 }
 
