@@ -46,7 +46,7 @@ uint8_t debug_base[][3] = {
 
 uint8_t color_map_init_done;
 
-void init_vdp_context(vdp_context * context)
+void init_vdp_context(vdp_context * context, uint8_t region_pal)
 {
 	memset(context, 0, sizeof(*context));
 	context->vdpmem = malloc(VRAM_SIZE);
@@ -132,6 +132,9 @@ void init_vdp_context(vdp_context * context)
 			}
 			context->debugcolors[color] = render_map_color(r, g, b);
 		}
+	}
+	if (region_pal) {
+		context->flags2 |= FLAG2_REGION_PAL;
 	}
 }
 
@@ -1428,7 +1431,7 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 			latch_mode(context);
 		}
 		uint8_t is_h40 = context->regs[REG_MODE_4] & BIT_H40;
-		if (is_h40 && slot == 167 || !is_h40 && slot == 134) {
+		if (is_h40 && slot == HBLANK_START_H40 || !is_h40 && slot == 134) {
 			if (line >= inactive_start) {
 				context->hint_counter = context->regs[REG_HINT];
 			} else if (context->hint_counter) {
@@ -1467,7 +1470,7 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 		if (context->regs[REG_MODE_2] & DISPLAY_ENABLE && active_slot) {
 			//run VDP rendering for a slot or a line
 			if (is_h40) {
-				if (slot == 167 && line < inactive_start && (target_cycles - context->cycles) >= MCLKS_LINE) {
+				if (slot == HBLANK_START_H40 && line < inactive_start && (target_cycles - context->cycles) >= MCLKS_LINE) {
 					vdp_h40_line(line, context);
 					inccycles = MCLKS_LINE;
 					context->vcounter++;
@@ -1493,7 +1496,7 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 			context->hslot++;
 			context->hslot &= 0xFF;
 			if (is_h40) {
-				if (context->hslot == 167) {
+				if (context->hslot == HBLANK_START_H40) {
 					context->vcounter++;
 				} else if (context->hslot == 183) {
 					context->hslot = 229;
@@ -1507,10 +1510,17 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 			}
 
 		}
-		if (context->vcounter == 0xEA) {
-			context->vcounter += 0xFA;
-		} else {
-			context->vcounter &= 0x1FF;
+		context->vcounter &= 0x1FF;
+		if (context->flags2 & FLAG2_REGION_PAL) {
+			if (context->latched_mode & BIT_PAL) {
+				if (context->vcounter == 0x10B) {
+					context->vcounter = 0x1D2;
+				}
+			} else if (context->vcounter == 0x103){
+				context->vcounter = 0x1CA;
+			}
+		} else if (!(context->latched_mode & BIT_PAL) &&  context->vcounter == 0xEB) {
+			context->vcounter = 0x1E5;
 		}
 		context->cycles += inccycles;
 	}
@@ -1757,6 +1767,7 @@ uint16_t vdp_hv_counter_read(vdp_context * context)
 			line |= 1;
 		}
 	}
+	printf("hv_counter_read line: %d, horiz: %d, cycles: %d\n", line, linecyc, context->cycles);
 	return (line << 8) | linecyc;
 }
 
@@ -1782,6 +1793,88 @@ void vdp_adjust_cycles(vdp_context * context, uint32_t deduction)
 	}
 }
 
+uint32_t vdp_cycles_next_line(vdp_context * context)
+{
+	if (context->regs[REG_MODE_4] & BIT_H40) {
+		if (context->hslot < HBLANK_START_H40) {
+			return (HBLANK_START_H40 - context->hslot) * MCLKS_SLOT_H40;
+		} else if (context->hslot < 183) {
+			return MCLKS_LINE - (context->hslot - HBLANK_START_H40) * MCLKS_SLOT_H40;
+		} else {
+			return (256-context->hslot + HBLANK_START_H40) * MCLKS_SLOT_H40;
+		}
+	} else {
+		if (context->hslot < HBLANK_START_H32) {
+			return (HBLANK_START_H32 - context->hslot) * MCLKS_SLOT_H32;
+		} else if (context->hslot < 148) {
+			return MCLKS_LINE - (context->hslot - HBLANK_START_H32) * MCLKS_SLOT_H32;
+		} else {
+			return (256-context->hslot + HBLANK_START_H32) * MCLKS_SLOT_H32;
+		}
+	}
+}
+
+uint32_t vdp_cycles_to_line(vdp_context * context, uint32_t target)
+{
+	uint32_t jump_start, jump_dst;
+	if (context->flags2 & FLAG2_REGION_PAL) {
+		if (context->latched_mode & BIT_PAL) {
+			jump_start = 0x10B;
+			jump_dst = 0x1D2;
+		} else {
+			jump_start = 0x103;
+			jump_dst = 0x1CA;
+		}
+	} else {
+		if (context->latched_mode & BIT_PAL) {
+			jump_start = 0;
+			jump_dst = 0;
+		} else {
+			jump_start = 0xEB;
+			jump_dst = 0x1E5;
+		}
+	}
+	uint32_t lines;
+	if (context->vcounter < target) {
+		if (target < jump_start) {
+			lines = target - context->vcounter;
+		} else {
+			lines = jump_start - context->vcounter + target - jump_dst;
+		}
+	} else {
+		if (context->vcounter < jump_start) {
+			lines = jump_start - context->vcounter + 512 - jump_dst;
+		} else {
+			lines = 512 - context->vcounter;
+		}
+		if (target < jump_start) {
+			lines += target;
+		} else {
+			lines += jump_start + target - jump_dst;
+		}
+	}
+	return MCLKS_LINE * (lines - 1) + vdp_cycles_next_line(context);
+}
+
+uint32_t vdp_cycles_to_frame_end(vdp_context * context)
+{
+	uint32_t frame_end;
+	if (context->flags2 & FLAG2_REGION_PAL) {
+		if (context->latched_mode & BIT_PAL) {
+			frame_end = PAL_INACTIVE_START + 8;
+		} else {
+			frame_end = NTSC_INACTIVE_START + 8;
+		}
+	} else {
+		if (context->latched_mode & BIT_PAL) {
+			frame_end = 512;
+		} else {
+			frame_end = NTSC_INACTIVE_START + 8;
+		}
+	}
+	return context->cycles + vdp_cycles_to_line(context, frame_end);
+}
+
 uint32_t vdp_next_hint(vdp_context * context)
 {
 	if (!(context->regs[REG_MODE_1] & BIT_HINT_EN)) {
@@ -1791,13 +1884,14 @@ uint32_t vdp_next_hint(vdp_context * context)
 		return context->cycles;
 	}
 	uint32_t inactive_start = context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START;
-	uint32_t line = context->cycles / MCLKS_LINE;
-	if (line >= inactive_start) {
-		return 0xFFFFFFFF;
+	uint32_t hint_line;
+	if (context->vcounter >= inactive_start) {
+		hint_line = context->regs[REG_HINT];
+	} else {
+		hint_line = context->vcounter + context->hint_counter + 1;
 	}
-	uint32_t linecyc = context->cycles % MCLKS_LINE;
-	uint32_t hcycle = context->cycles + context->hint_counter * MCLKS_LINE + MCLKS_LINE - linecyc;
-	return hcycle;
+
+	return context->cycles + vdp_cycles_to_line(context, hint_line);
 }
 
 uint32_t vdp_next_vint(vdp_context * context)
@@ -1808,29 +1902,44 @@ uint32_t vdp_next_vint(vdp_context * context)
 	if (context->flags2 & FLAG2_VINT_PENDING) {
 		return context->cycles;
 	}
-	uint32_t inactive_start = context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START;
-	uint32_t vcycle =  MCLKS_LINE * inactive_start;
-	if (context->regs[REG_MODE_4] & BIT_H40) {
-		vcycle += VINT_SLOT_H40 * MCLKS_SLOT_H40;
-	} else {
-		vcycle += VINT_SLOT_H32 * MCLKS_SLOT_H32;
-	}
-	if (vcycle < context->cycles) {
-		return 0xFFFFFFFF;
-	}
-	return vcycle;
+
+
+	return vdp_next_vint_z80(context);
 }
 
 uint32_t vdp_next_vint_z80(vdp_context * context)
 {
 	uint32_t inactive_start = context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START;
-	uint32_t vcycle =  MCLKS_LINE * inactive_start;
-	if (context->regs[REG_MODE_4] & BIT_H40) {
-		vcycle += VINT_SLOT_H40 * MCLKS_SLOT_H40;
-	} else {
-		vcycle += VINT_SLOT_H32 * MCLKS_SLOT_H32;
+	if (context->vcounter == inactive_start) {
+		if (context->regs[REG_MODE_4] & BIT_H40) {
+			if (context->hslot >= HBLANK_START_H40) {
+				if (context->hslot < 183) {
+					return context->cycles + (VINT_SLOT_H40 + 183 - context->hslot + 256 - 229) * MCLKS_SLOT_H40;
+				} else {
+					return context->cycles + (VINT_SLOT_H40 + 256 - context->hslot) * MCLKS_SLOT_H40;
+				}
+			} else if (context->hslot < VINT_SLOT_H40) {
+				return context->cycles + (VINT_SLOT_H40 - context->hslot) * MCLKS_SLOT_H40;
+			}
+		} else {
+			if (context->hslot >= HBLANK_START_H32) {
+				if (context->hslot < 148) {
+					return context->cycles + (VINT_SLOT_H32 + 148 - context->hslot + 256 - 233) * MCLKS_SLOT_H32;
+				} else {
+					return context->cycles + (VINT_SLOT_H32 + 256 - context->hslot) * MCLKS_SLOT_H32;
+				}
+			} else if (context->hslot < VINT_SLOT_H32) {
+				return context->cycles + (VINT_SLOT_H32 - context->hslot) * MCLKS_SLOT_H32;
+			}
+		}
 	}
-	return vcycle;
+	int32_t cycles_to_vint = vdp_cycles_to_line(context, inactive_start);
+	if (context->regs[REG_MODE_4] & BIT_H40) {
+		cycles_to_vint += (VINT_SLOT_H40 + 183 - HBLANK_START_H40 + 256 - 229) * MCLKS_SLOT_H40;
+	} else {
+		cycles_to_vint += (VINT_SLOT_H32 + 148 - HBLANK_START_H32 + 256 - 233) * MCLKS_SLOT_H32;
+	}
+	return context->cycles + cycles_to_vint;
 }
 
 void vdp_int_ack(vdp_context * context, uint16_t int_num)

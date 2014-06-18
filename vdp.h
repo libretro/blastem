@@ -49,6 +49,7 @@
 #define FLAG2_HINT_PENDING   0x02
 #define FLAG2_READ_PENDING   0x04
 #define FLAG2_SPRITE_COLLIDE 0x08
+#define FLAG2_REGION_PAL     0x10
 
 #define DISPLAY_ENABLE 0x40
 
@@ -169,7 +170,7 @@ typedef struct {
 	uint8_t     *tmp_buf_b;
 } vdp_context;
 
-void init_vdp_context(vdp_context * context);
+void init_vdp_context(vdp_context * context, uint8_t region_pal);
 void vdp_run_context(vdp_context * context, uint32_t target_cycles);
 //runs from current cycle count to VBLANK for the current mode, returns ending cycle count
 uint32_t vdp_run_to_vblank(vdp_context * context);
@@ -192,6 +193,7 @@ void vdp_int_ack(vdp_context * context, uint16_t int_num);
 void vdp_print_sprite_table(vdp_context * context);
 void vdp_print_reg_explain(vdp_context * context);
 void latch_mode(vdp_context * context);
+uint32_t vdp_cycles_to_frame_end(vdp_context * context);
 
 extern int32_t color_map[1 << 12];
 
