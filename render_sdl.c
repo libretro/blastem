@@ -364,7 +364,7 @@ void render_context_gl(vdp_context * context)
 	glBindTexture(GL_TEXTURE_2D, (context->regs[REG_MODE_4] & BIT_INTERLACE) ? textures[1] : textures[2]);
 	glUniform1i(un_textures[1], 1);
 
-	glUniform1f(un_width, context->latched_mode & BIT_H40 ? 320.0f : 256.0f);
+	glUniform1f(un_width, context->regs[REG_MODE_4] & BIT_H40 ? 320.0f : 256.0f);
 
 	glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
 	glVertexAttribPointer(at_pos, 2, GL_FLOAT, GL_FALSE, sizeof(GLfloat[2]), (void *)0);
