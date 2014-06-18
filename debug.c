@@ -598,9 +598,14 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 					}
 				} else if(param[0] == 'c') {
 					value = context->current_cycle;
-				} else if (param[0] == '0' && param[1] == 'x') {
-					uint32_t p_addr = strtol(param+2, NULL, 16);
-					value = read_dma_value(p_addr/2);
+				} else if ((param[0] == '0' && param[1] == 'x') || param[0] == '$') {
+					uint32_t p_addr = strtol(param+(param[0] == '0' ? 2 : 1), NULL, 16);
+					if ((p_addr & 0xFFFFFF) == 0xC00004) {
+						genesis_context * gen = context->system;
+						value = vdp_hv_counter_read(gen->vdp);
+					} else {
+						value = read_dma_value(p_addr/2);
+					}
 				} else {
 					fprintf(stderr, "Unrecognized parameter to p: %s\n", param);
 					break;

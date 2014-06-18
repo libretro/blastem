@@ -142,9 +142,11 @@ typedef struct {
 	uint32_t    colors[CRAM_SIZE*3];
 	uint32_t    debugcolors[1 << (3 + 1 + 1 + 1)];//3 bits for source, 1 bit for priority, 1 bit for shadow, 1 bit for hilight
 	uint16_t    vsram[VSRAM_SIZE];
-	uint8_t     latched_mode;
+	uint16_t    vcounter;
+	uint16_t    hslot; //hcounter/2
 	uint16_t    hscroll_a;
 	uint16_t    hscroll_b;
+	uint8_t     latched_mode;
 	uint8_t	    sprite_index;
 	uint8_t     sprite_draws;
 	int8_t      slot_counter;
