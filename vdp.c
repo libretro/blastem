@@ -1767,7 +1767,6 @@ uint16_t vdp_hv_counter_read(vdp_context * context)
 			line |= 1;
 		}
 	}
-	printf("hv_counter_read line: %d, horiz: %d, cycles: %d\n", line, linecyc, context->cycles);
 	return (line << 8) | linecyc;
 }
 
