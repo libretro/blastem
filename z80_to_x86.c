@@ -1964,6 +1964,7 @@ void init_z80_context(z80_context * context, x86_z80_options * options)
 	context->banked_code_map = malloc(sizeof(native_map_slot) * (1 << 9));
 	memset(context->banked_code_map, 0, sizeof(native_map_slot) * (1 << 9));
 	context->options = options;
+	context->int_cycle = 0xFFFFFFFF;
 }
 
 void z80_reset(z80_context * context)
