@@ -328,16 +328,18 @@ void z80_print_regs_exit(z80_context * context)
 	exit(0);
 }
 
-uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context, uint16_t address)
+uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context, uint16_t address, uint8_t interp)
 {
 	uint32_t cycles;
 	x86_ea src_op, dst_op;
 	uint8_t size;
 	x86_z80_options *opts = context->options;
 	uint8_t * start = dst;
-	dst = z80_check_cycles_int(dst, address);
-	if (context->breakpoint_flags[address / sizeof(uint8_t)] & (1 << (address % sizeof(uint8_t)))) {
-		zbreakpoint_patch(context, address, start);
+	if (!interp) {
+		dst = z80_check_cycles_int(dst, address);
+		if (context->breakpoint_flags[address / sizeof(uint8_t)] & (1 << (address % sizeof(uint8_t)))) {
+			zbreakpoint_patch(context, address, start);
+		}
 	}
 	switch(inst->op)
 	{
@@ -1660,18 +1662,73 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 	return dst;
 }
 
+uint8_t * z80_interp_handler(uint8_t opcode, z80_context * context)
+{
+	if (!context->interp_code[opcode]) {
+		if (opcode == 0xCB || (opcode >= 0xDD && opcode & 0xF == 0xD)) {
+			fprintf(stderr, "Encountered prefix byte %X at address %X. Z80 interpeter doesn't support those yet.", opcode, context->pc);
+			exit(1);
+		}
+		uint8_t codebuf[8];
+		memset(codebuf, 0, sizeof(codebuf));
+		codebuf[0] = opcode;
+		z80inst inst;
+		uint8_t * after = z80_decode(codebuf, &inst);
+		if (after - codebuf > 1) {
+			fprintf(stderr, "Encountered multi-byte Z80 instruction at %X. Z80 interpeter doesn't support those yet.", context->pc);
+			exit(1);
+		}
+		x86_z80_options * opts = context->options;
+		if (opts->code_end - opts->cur_code < ZMAX_NATIVE_SIZE) {
+			size_t size = 1024*1024;
+			opts->cur_code = alloc_code(&size);
+			opts->code_end = opts->cur_code + size;
+		}
+		context->interp_code[opcode] = opts->cur_code;
+		opts->cur_code = translate_z80inst(&inst, opts->cur_code, context, 0, 1);
+		opts->cur_code = mov_rdisp8r(opts->cur_code, CONTEXT, offsetof(z80_context, pc), SCRATCH1, SZ_W);
+		opts->cur_code = add_ir(opts->cur_code, after - codebuf, SCRATCH1, SZ_W);
+		opts->cur_code = call(opts->cur_code, (uint8_t *)z80_native_addr);
+		opts->cur_code = jmp_r(opts->cur_code, SCRATCH1);
+	}
+	return context->interp_code[opcode];
+}
+
+uint8_t * z80_make_interp_stub(z80_context * context, uint16_t address)
+{
+	x86_z80_options *opts = context->options;
+	uint8_t *dst = opts->cur_code;
+	//TODO: make this play well with the breakpoint code
+	dst = mov_ir(dst, address, SCRATCH1, SZ_W);
+	dst = call(dst, (uint8_t *)z80_read_byte);
+	//normal opcode fetch is already factored into instruction timing
+	//back out the base 3 cycles from a read here
+	//not quite perfect, but it will have to do for now
+	dst = sub_ir(dst, 3, ZCYCLES, SZ_D);
+	dst = z80_check_cycles_int(dst, address);
+	dst = call(dst, (uint8_t *)z80_save_context);
+	dst = mov_rr(dst, SCRATCH1, RDI, SZ_B);
+	dst = mov_irdisp8(dst, address, CONTEXT, offsetof(z80_context, pc), SZ_W);
+	dst = push_r(dst, CONTEXT);
+	dst = call(dst, (uint8_t *)z80_interp_handler);
+	dst = mov_rr(dst, RAX, SCRATCH1, SZ_Q);
+	dst = pop_r(dst, CONTEXT);
+	dst = call(dst, (uint8_t *)z80_load_context);
+	dst = jmp_r(dst, SCRATCH1);
+	opts->code_end = dst;
+	return dst;
+}
+
+
 uint8_t * z80_get_native_address(z80_context * context, uint32_t address)
 {
 	native_map_slot *map;
 	if (address < 0x4000) {
 		address &= 0x1FFF;
 		map = context->static_code_map;
-	} else if (address >= 0x8000) {
-		address &= 0x7FFF;
-		map = context->banked_code_map + context->bank_reg;
 	} else {
-		//dprintf("z80_get_native_address: %X NULL\n", address);
-		return NULL;
+		address -= 0x4000;
+		map = context->banked_code_map;
 	}
 	if (!map->base || !map->offsets || map->offsets[address] == INVALID_OFFSET || map->offsets[address] == EXTENSION_WORD) {
 		//dprintf("z80_get_native_address: %X NULL\n", address);
@@ -1683,6 +1740,7 @@ uint8_t * z80_get_native_address(z80_context * context, uint32_t address)
 
 uint8_t z80_get_native_inst_size(x86_z80_options * opts, uint32_t address)
 {
+	//TODO: Fix for addresses >= 0x4000
 	if (address >= 0x4000) {
 		return 0;
 	}
@@ -1700,15 +1758,14 @@ void z80_map_native_address(z80_context * context, uint32_t address, uint8_t * n
 		opts->ram_inst_sizes[address] = native_size;
 		context->ram_code_flags[(address & 0x1C00) >> 10] |= 1 << ((address & 0x380) >> 7);
 		context->ram_code_flags[((address + size) & 0x1C00) >> 10] |= 1 << (((address + size) & 0x380) >> 7);
-	} else if (address >= 0x8000) {
-		address &= 0x7FFF;
-		map = context->banked_code_map + context->bank_reg;
-		if (!map->offsets) {
-			map->offsets = malloc(sizeof(int32_t) * 0x8000);
-			memset(map->offsets, 0xFF, sizeof(int32_t) * 0x8000);
-		}
 	} else {
-		return;
+		//HERE
+		address -= 0x4000;
+		map = context->banked_code_map;
+		if (!map->offsets) {
+			map->offsets = malloc(sizeof(int32_t) * 0xC000);
+			memset(map->offsets, 0xFF, sizeof(int32_t) * 0xC000);
+		}
 	}
 	if (!map->base) {
 		map->base = native_address;
@@ -1719,15 +1776,13 @@ void z80_map_native_address(z80_context * context, uint32_t address, uint8_t * n
 		if (address < 0x4000) {
 			address &= 0x1FFF;
 			map = context->static_code_map;
-		} else if (address >= 0x8000) {
-			address &= 0x7FFF;
-			map = context->banked_code_map + context->bank_reg;
 		} else {
-			return;
+			address -= 0x4000;
+			map = context->banked_code_map;
 		}
 		if (!map->offsets) {
-			map->offsets = malloc(sizeof(int32_t) * 0x8000);
-			memset(map->offsets, 0xFF, sizeof(int32_t) * 0x8000);
+			map->offsets = malloc(sizeof(int32_t) * 0xC000);
+			memset(map->offsets, 0xFF, sizeof(int32_t) * 0xC000);
 		}
 		map->offsets[address] = EXTENSION_WORD;
 	}
@@ -1737,6 +1792,7 @@ void z80_map_native_address(z80_context * context, uint32_t address, uint8_t * n
 
 uint32_t z80_get_instruction_start(native_map_slot * static_code_map, uint32_t address)
 {
+	//TODO: Fixme for address >= 0x4000
 	if (!static_code_map->base || address >= 0x4000) {
 		return INVALID_INSTRUCTION_START;
 	}
@@ -1814,12 +1870,12 @@ void * z80_retranslate_inst(uint32_t address, z80_context * context, uint8_t * o
 			opts->cur_code = dst;
 		}
 		deferred_addr * orig_deferred = opts->deferred;
-		uint8_t * native_end = translate_z80inst(&instbuf, dst, context, address);
+		uint8_t * native_end = translate_z80inst(&instbuf, dst, context, address, 0);
 		if ((native_end - dst) <= orig_size) {
 			uint8_t * native_next = z80_get_native_address(context, address + after-inst);
 			if (native_next && ((native_next == orig_start + orig_size) || (orig_size - (native_end - dst)) > 5)) {
 				remove_deferred_until(&opts->deferred, orig_deferred);
-				native_end = translate_z80inst(&instbuf, orig_start, context, address);
+				native_end = translate_z80inst(&instbuf, orig_start, context, address, 0);
 				if (native_next == orig_start + orig_size && (native_next-native_end) < 2) {
 					while (native_end < orig_start + orig_size) {
 						*(native_end++) = 0x90; //NOP
@@ -1840,7 +1896,7 @@ void * z80_retranslate_inst(uint32_t address, z80_context * context, uint8_t * o
 		z80_handle_deferred(context);
 		return dst;
 	} else {
-		dst = translate_z80inst(&instbuf, orig_start, context, address);
+		dst = translate_z80inst(&instbuf, orig_start, context, address, 0);
 		if (!z80_is_terminal(&instbuf)) {
 			dst = jmp(dst, z80_get_native_address_trans(context, address + after-inst));
 		}
@@ -1860,12 +1916,9 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 	uint8_t * encoded = NULL, *next;
 	if (address < 0x4000) {
 		encoded = context->mem_pointers[0] + (address & 0x1FFF);
-	} else if(address >= 0x8000 && context->mem_pointers[1]) {
-		printf("attempt to translate Z80 code from banked area at address %X\n", address);
-		exit(1);
-		//encoded = context->mem_pointers[1] + (address & 0x7FFF);
 	}
-	while (encoded != NULL)
+
+	while (encoded != NULL || address >= 0x4000)
 	{
 		z80inst inst;
 		dprintf("translating Z80 code at address %X\n", address);
@@ -1880,9 +1933,10 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 				opts->code_end = opts->cur_code + size;
 				jmp(opts->cur_code, opts->cur_code);
 			}
-			if (address > 0x4000 && address < 0x8000) {
-				opts->cur_code = xor_rr(opts->cur_code, RDI, RDI, SZ_D);
-				opts->cur_code = call(opts->cur_code, (uint8_t *)exit);
+			if (address >= 0x4000) {
+				uint8_t *native_start = opts->cur_code;
+				uint8_t *after = z80_make_interp_stub(context, address);
+				z80_map_native_address(context, address, opts->cur_code, 1, after - native_start);
 				break;
 			}
 			uint8_t * existing = z80_get_native_address(context, address);
@@ -1899,7 +1953,7 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 				printf("%X\t%s\n", address, disbuf);
 			}
 			#endif
-			uint8_t *after = translate_z80inst(&inst, opts->cur_code, context, address);
+			uint8_t *after = translate_z80inst(&inst, opts->cur_code, context, address, 0);
 			z80_map_native_address(context, address, opts->cur_code, next-encoded, after - opts->cur_code);
 			opts->cur_code = after;
 			address += next-encoded;
@@ -1916,14 +1970,12 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 			dprintf("defferred address: %X\n", address);
 			if (address < 0x4000) {
 				encoded = context->mem_pointers[0] + (address & 0x1FFF);
-			} else if (address > 0x8000 && context->mem_pointers[1]) {
-				encoded = context->mem_pointers[1] + (address  & 0x7FFF);
 			} else {
-				printf("attempt to translate non-memory address: %X\n", address);
-				exit(1);
+				encoded = NULL;
 			}
 		} else {
 			encoded = NULL;
+			address = 0;
 		}
 	}
 }
@@ -1966,8 +2018,8 @@ void init_z80_context(z80_context * context, x86_z80_options * options)
 	context->static_code_map->base = NULL;
 	context->static_code_map->offsets = malloc(sizeof(int32_t) * 0x2000);
 	memset(context->static_code_map->offsets, 0xFF, sizeof(int32_t) * 0x2000);
-	context->banked_code_map = malloc(sizeof(native_map_slot) * (1 << 9));
-	memset(context->banked_code_map, 0, sizeof(native_map_slot) * (1 << 9));
+	context->banked_code_map = malloc(sizeof(native_map_slot));
+	memset(context->banked_code_map, 0, sizeof(native_map_slot));
 	context->options = options;
 	context->int_cycle = 0xFFFFFFFF;
 }
