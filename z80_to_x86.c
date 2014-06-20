@@ -44,6 +44,8 @@ void z80_halt();
 void z80_save_context();
 void z80_load_context();
 
+uint8_t *  zbreakpoint_patch(z80_context * context, uint16_t address, uint8_t * native);
+
 uint8_t z80_size(z80inst * inst)
 {
 	uint8_t reg = (inst->reg & 0x1F);
@@ -334,6 +336,9 @@ uint8_t * translate_z80inst(z80inst * inst, uint8_t * dst, z80_context * context
 	x86_z80_options *opts = context->options;
 	uint8_t * start = dst;
 	dst = z80_check_cycles_int(dst, address);
+	if (context->breakpoint_flags[address / sizeof(uint8_t)] & (1 << (address % sizeof(uint8_t)))) {
+		zbreakpoint_patch(context, address, start);
+	}
 	switch(inst->op)
 	{
 	case Z80_LD:
@@ -1975,62 +1980,80 @@ void z80_reset(z80_context * context)
 	context->extra_pc = NULL;
 }
 
+uint8_t * zbreakpoint_patch(z80_context * context, uint16_t address, uint8_t * native)
+{
+	native = mov_ir(native, address, SCRATCH1, SZ_W);
+	native = call(native, context->bp_stub);
+	return native;
+}
+
+void zcreate_stub(z80_context * context)
+{
+	x86_z80_options * opts = context->options;
+	uint8_t * dst = opts->cur_code;
+	uint8_t * dst_end = opts->code_end;
+	if (dst_end - dst < 128) {
+		size_t size = 1024*1024;
+		dst = alloc_code(&size);
+		opts->code_end = dst_end = dst + size;
+	}
+	context->bp_stub = dst;
+
+	//Calculate length of prologue
+	int check_int_size = z80_check_cycles_int(dst, 0) - dst;
+
+	//Calculate length of patch
+	int patch_size = zbreakpoint_patch(context, 0, dst) - dst;
+
+	//Save context and call breakpoint handler
+	dst = call(dst, (uint8_t *)z80_save_context);
+	dst = push_r(dst, SCRATCH1);
+	dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
+	dst = mov_rr(dst, SCRATCH1, RSI, SZ_W);
+	dst = call(dst, context->bp_handler);
+	dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
+	//Restore context
+	dst = call(dst, (uint8_t *)z80_load_context);
+	dst = pop_r(dst, SCRATCH1);
+	//do prologue stuff
+	dst = cmp_rr(dst, ZCYCLES, ZLIMIT, SZ_D);
+	uint8_t * jmp_off = dst+1;
+	dst = jcc(dst, CC_NC, dst + 7);
+	dst = pop_r(dst, SCRATCH1);
+	dst = add_ir(dst, check_int_size - patch_size, SCRATCH1, SZ_Q);
+	dst = push_r(dst, SCRATCH1);
+	dst = jmp(dst, (uint8_t *)z80_handle_cycle_limit_int);
+	*jmp_off = dst - (jmp_off+1);
+	//jump back to body of translated instruction
+	dst = pop_r(dst, SCRATCH1);
+	dst = add_ir(dst, check_int_size - patch_size, SCRATCH1, SZ_Q);
+	dst = jmp_r(dst, SCRATCH1);
+	opts->cur_code = dst;
+}
+
 void zinsert_breakpoint(z80_context * context, uint16_t address, uint8_t * bp_handler)
 {
-	static uint8_t * bp_stub = NULL;
-	uint8_t * native = z80_get_native_address_trans(context, address);
-	uint8_t * start_native = native;
-	native = mov_ir(native, address, SCRATCH1, SZ_W);
-	if (!bp_stub) {
-		x86_z80_options * opts = context->options;
-		uint8_t * dst = opts->cur_code;
-		uint8_t * dst_end = opts->code_end;
-		if (dst_end - dst < 128) {
-			size_t size = 1024*1024;
-			dst = alloc_code(&size);
-			opts->code_end = dst_end = dst + size;
+	context->bp_handler = bp_handler;
+	uint8_t bit = 1 << (address % sizeof(uint8_t));
+	if (!(bit & context->breakpoint_flags[address / sizeof(uint8_t)])) {
+		context->breakpoint_flags[address / sizeof(uint8_t)] |= bit;
+		if (!context->bp_stub) {
+			zcreate_stub(context);
 		}
-		bp_stub = dst;
-		native = call(native, bp_stub);
-
-		//Calculate length of prologue
-		dst = z80_check_cycles_int(dst, address);
-		int check_int_size = dst-bp_stub;
-		dst = bp_stub;
-
-		//Save context and call breakpoint handler
-		dst = call(dst, (uint8_t *)z80_save_context);
-		dst = push_r(dst, SCRATCH1);
-		dst = mov_rr(dst, CONTEXT, RDI, SZ_Q);
-		dst = mov_rr(dst, SCRATCH1, RSI, SZ_W);
-		dst = call(dst, bp_handler);
-		dst = mov_rr(dst, RAX, CONTEXT, SZ_Q);
-		//Restore context
-		dst = call(dst, (uint8_t *)z80_load_context);
-		dst = pop_r(dst, SCRATCH1);
-		//do prologue stuff
-		dst = cmp_rr(dst, ZCYCLES, ZLIMIT, SZ_D);
-		uint8_t * jmp_off = dst+1;
-		dst = jcc(dst, CC_NC, dst + 7);
-		dst = pop_r(dst, SCRATCH1);
-		dst = add_ir(dst, check_int_size - (native-start_native), SCRATCH1, SZ_Q);
-		dst = push_r(dst, SCRATCH1);
-		dst = jmp(dst, (uint8_t *)z80_handle_cycle_limit_int);
-		*jmp_off = dst - (jmp_off+1);
-		//jump back to body of translated instruction
-		dst = pop_r(dst, SCRATCH1);
-		dst = add_ir(dst, check_int_size - (native-start_native), SCRATCH1, SZ_Q);
-		dst = jmp_r(dst, SCRATCH1);
-		opts->cur_code = dst;
-	} else {
-		native = call(native, bp_stub);
+		uint8_t * native = z80_get_native_address(context, address);
+		if (native) {
+			zbreakpoint_patch(context, address, native);
+		}
 	}
 }
 
 void zremove_breakpoint(z80_context * context, uint16_t address)
 {
+	context->breakpoint_flags[address / sizeof(uint8_t)] &= 1 << (address % sizeof(uint8_t));
 	uint8_t * native = z80_get_native_address(context, address);
-	z80_check_cycles_int(native, address);
+	if (native) {
+		z80_check_cycles_int(native, address);
+	}
 }
 
 
