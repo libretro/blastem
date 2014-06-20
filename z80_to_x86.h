@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #ifndef Z80_TO_X86_H_
@@ -55,6 +55,9 @@ typedef struct {
 	void *            system;
 	uint8_t           ram_code_flags[(8 * 1024)/128/8];
 	uint32_t          int_enable_cycle;
+	uint8_t           breakpoint_flags[(16 * 1024)/sizeof(uint8_t)];
+	uint8_t *         bp_handler;
+	uint8_t *         bp_stub;
   uint16_t          pc;
 } z80_context;
 
