@@ -2022,6 +2022,8 @@ void init_z80_context(z80_context * context, x86_z80_options * options)
 	memset(context->banked_code_map, 0, sizeof(native_map_slot));
 	context->options = options;
 	context->int_cycle = 0xFFFFFFFF;
+	context->int_pulse_start = 0xFFFFFFFF;
+	context->int_pulse_end = 0xFFFFFFFF;
 }
 
 void z80_reset(z80_context * context)

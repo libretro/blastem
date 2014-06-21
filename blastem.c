@@ -190,10 +190,14 @@ void sync_z80(z80_context * z_context, uint32_t mclks)
 				z80_reset(z_context);
 				need_reset = 0;
 			}
-			uint32_t vint_cycle = vdp_next_vint_z80(gen->vdp) / MCLKS_PER_Z80;
+
 			while (z_context->current_cycle < z_context->sync_cycle) {
-				if (z_context->iff1 && z_context->int_cycle == CYCLE_NEVER && z_context->current_cycle < (vint_cycle + Z80_VINT_DURATION)) {
-					z_context->int_cycle = vint_cycle < z_context->int_enable_cycle ? z_context->int_enable_cycle : vint_cycle;
+				if (z_context->int_pulse_end < z_context->current_cycle || z_context->int_pulse_end == CYCLE_NEVER) {
+					z_context->int_pulse_start = vdp_next_vint_z80(gen->vdp) / MCLKS_PER_Z80;
+					z_context->int_pulse_end = z_context->int_pulse_start + Z80_VINT_DURATION;
+				}
+				if (z_context->iff1) {
+					z_context->int_cycle = z_context->int_pulse_start < z_context->int_enable_cycle ? z_context->int_enable_cycle : z_context->int_pulse_start;
 				}
 				z_context->target_cycle = z_context->sync_cycle < z_context->int_cycle ? z_context->sync_cycle : z_context->int_cycle;
 				dprintf("Running Z80 from cycle %d to cycle %d. Int cycle: %d\n", z_context->current_cycle, z_context->sync_cycle, z_context->int_cycle);
@@ -268,6 +272,31 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			z_context->current_cycle -= mclk_target/MCLKS_PER_Z80;
 		} else {
 			z_context->current_cycle = 0;
+		}
+		if (z_context->int_cycle != CYCLE_NEVER) {
+			if (z_context->int_cycle >= mclk_target/MCLKS_PER_Z80) {
+				z_context->int_cycle -= mclk_target/MCLKS_PER_Z80;
+			} else {
+				z_context->int_cycle = 0;
+			}
+		}
+		if (z_context->int_pulse_start != CYCLE_NEVER) {
+			if (z_context->int_pulse_end >= mclk_target/MCLKS_PER_Z80) {
+				z_context->int_pulse_end -= mclk_target/MCLKS_PER_Z80;
+				if (z_context->int_pulse_start >= mclk_target/MCLKS_PER_Z80) {
+					z_context->int_pulse_start -= mclk_target/MCLKS_PER_Z80;
+				} else {
+					z_context->int_pulse_start = 0;
+				}
+			}
+		} else {
+			z_context->int_pulse_start = CYCLE_NEVER;
+			z_context->int_pulse_end = CYCLE_NEVER;
+		}
+		if (z_context->int_enable_cycle >= mclk_target/MCLKS_PER_Z80) {
+			z_context->int_enable_cycle -= mclk_target/MCLKS_PER_Z80;
+		} else {
+			z_context->int_enable_cycle = 0;
 		}
 		if (mclks) {
 			vdp_run_context(v_context, mclks);
