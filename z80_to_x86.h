@@ -56,6 +56,8 @@ typedef struct {
 	uint8_t           ram_code_flags[(8 * 1024)/128/8];
 	uint32_t          int_enable_cycle;
 	uint16_t          pc;
+	uint32_t          int_pulse_start;
+	uint32_t          int_pulse_end;
 	uint8_t           breakpoint_flags[(16 * 1024)/sizeof(uint8_t)];
 	uint8_t *         bp_handler;
 	uint8_t *         bp_stub;
