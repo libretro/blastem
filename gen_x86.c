@@ -359,13 +359,11 @@ uint8_t * x86_rrindex_sizedir(uint8_t * out, uint8_t opcode, uint8_t reg, uint8_
 		opcode |= BIT_SIZE;
 	}
 	*(out++) = opcode | dir;
-	*(out++) = MODE_REG_INDIRECT | base | (RSP << 3);
-	if (base == RSP) {
-		if (scale == 4) {
-			scale = 3;
-		}
-		*(out++) = scale << 6 | (index << 3) | base;
+	*(out++) = MODE_REG_INDIRECT | RSP | (reg << 3);
+	if (scale == 4) {
+		scale = 3;
 	}
+	*(out++) = scale << 6 | (index << 3) | base;
 	return out;
 }
 
