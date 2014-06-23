@@ -4492,11 +4492,17 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk * memmap, uint32_t num_chu
 					}
 				} else {
 					if (is_write) {
+						if (memmap[chunk].flags & MMAP_CODE) {
+							dst = push_r(dst, SCRATCH2);
+						}
 						dst = push_r(dst, SCRATCH1);
 						dst = mov_ir(dst, (intptr_t)memmap[chunk].buffer, SCRATCH1, SZ_PTR);
 						dst = add_rr(dst, SCRATCH1, SCRATCH2, SZ_PTR);
 						dst = pop_r(dst, SCRATCH1);
 						dst = mov_rrind(dst, SCRATCH1, SCRATCH2, tmp_size);
+						if (memmap[chunk].flags & MMAP_CODE) {
+							dst = pop_r(dst, SCRATCH2);
+						}
 					} else {
 						dst = mov_ir(dst, (intptr_t)memmap[chunk].buffer, SCRATCH2, SZ_PTR);
 						dst = mov_rindexr(dst, SCRATCH2, SCRATCH1, 0, SCRATCH1, tmp_size);
