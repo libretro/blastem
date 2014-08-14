@@ -255,7 +255,7 @@ void vdp_print_reg_explain(vdp_context * context)
 		   context->regs[REG_DMASRC_L],
 		   context->regs[REG_DMASRC_M],
 		   context->regs[REG_DMASRC_H],
-		       context->regs[REG_DMASRC_H] << 17 | context->regs[REG_DMASRC_M] << 9 | context->regs[REG_DMASRC_L],
+		       context->regs[REG_DMASRC_H] << 17 | context->regs[REG_DMASRC_M] << 9 | context->regs[REG_DMASRC_L] << 1,
 			   src_types[context->regs[REG_DMASRC_H] >> 6 & 3]);
 	printf("\n**Internal Group**\n"
 	       "Address: %X\n"
