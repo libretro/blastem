@@ -8,6 +8,13 @@
 
 #include <stdint.h>
 
+#ifdef M68030
+#define M68020
+#endif
+#ifdef M68020
+#define M68010
+#endif
+
 typedef enum {
 	BIT_MOVEP_IMMED = 0,
 	MOVE_BYTE,
@@ -97,7 +104,43 @@ typedef enum {
 	M68K_TRAPV,
 	M68K_TST,
 	M68K_UNLK,
-	M68K_INVALID
+	M68K_INVALID,
+#ifdef M68010
+	M68K_BKPT,
+	M68K_MOVE_FROM_CCR,
+	M68K_MOVEC,
+	M68K_MOVES,
+	M68K_RTD,
+#endif
+#ifdef M68020
+	M68K_BFCHG,
+	M68K_BFCLR,
+	M68K_BFEXTS,
+	M68K_BFEXTU,
+	M68K_BFFFO,
+	M68K_BFINS,
+	M68K_BFSET,
+	M68K_BFTST,
+	M68K_CALLM,
+	M68K_CAS,
+	M68K_CAS2,
+	M68K_CHK2,
+	M68K_CMP2,
+	M68K_CP_BCC,
+	M68K_CP_DBCC,
+	M68K_CP_GEN,
+	M68K_CP_RESTORE,
+	M68K_CP_SAVE,
+	M68K_CP_SCC,
+	M68K_CP_TRAPCC,
+	M68K_DIVSL,
+	M68K_DIVUL,
+	M68K_EXTB,
+	M68K_PACK,
+	M68K_RTM,
+	M68K_TRAPCC,
+	M68K_UNPK,
+#endif
 } m68K_op;
 
 typedef enum {
@@ -162,6 +205,32 @@ typedef enum {
 	COND_GREATER,
 	COND_LESS_EQ
 } m68K_condition;
+
+#ifdef M68010
+typedef enum {
+	CR_SFC,
+	CR_DFC,
+#ifdef M68020
+	CR_CACR,
+#endif
+	CR_USP,
+	CR_VBR,
+#ifdef M68020
+	CR_CAAR,
+	CR_MSP,
+	CR_ISP
+#endif
+} m68k_control_reg;
+
+#ifdef M68020
+#define MAX_HIGH_CR 0x804
+#define MAX_LOW_CR 0x002
+#else
+#define MAX_HIGH_CR 0x801
+#define MAX_LOW_CR 0x001
+#endif
+
+#endif
 
 typedef struct {
 	uint8_t addr_mode;
