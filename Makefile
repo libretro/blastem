@@ -18,6 +18,16 @@ ifdef NOGL
 CFLAGS+= -DDISABLE_OPENGL
 endif
 
+ifdef M68030
+CFLAGS+= -DM68030
+endif
+ifdef M68020
+CFLAGS+= -DM68020
+endif
+ifdef M68010
+CFLAGS+= -DM68010
+endif
+
 TRANSOBJS=gen_x86.o x86_backend.o mem.o
 M68KOBJS=68kinst.o m68k_to_x86.o runtime.o
 Z80OBJS=z80inst.o z80_to_x86.o zruntime.o
