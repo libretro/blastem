@@ -108,7 +108,7 @@ int main(int argc, char ** argv)
 	unsigned short * cur;
 	deferred *def = NULL, *tmpd;
 
-	uint8_t labels = 0, addr = 0, only = 0, vos = 0;
+	uint8_t labels = 0, addr = 0, only = 0, vos = 0, reset = 0;
 
 	for(uint8_t opt = 2; opt < argc; ++opt) {
 		if (argv[opt][0] == '-') {
@@ -126,6 +126,9 @@ int main(int argc, char ** argv)
 				break;
 			case 'v':
 				vos = 1;
+				break;
+			case 'r':
+				reset = 1;
 				break;
 			case 'f':
 				opt++;
@@ -174,7 +177,10 @@ int main(int argc, char ** argv)
 		named_labels = add_label(named_labels, "main_entry_link", header.main_entry_link.code_address);
 		for (int i = 0; i < header.n_modules; i++)
 		{
-			def = defer(header.module_map_entries[i].code_address, def);
+			if (!reset || header.module_map_entries[i].code_address != header.user_boundary)
+			{
+				def = defer(header.module_map_entries[i].code_address, def);
+			}
 			named_labels = add_label(named_labels, header.module_map_entries[i].name.str, header.module_map_entries[i].code_address);
 		}
 		fseek(f, 0x1000, SEEK_SET);
@@ -187,6 +193,11 @@ int main(int argc, char ** argv)
 		for(cur = filebuf; cur - filebuf < ((filesize - 0x1000)/2); ++cur)
 		{
 			*cur = (*cur >> 8) | (*cur << 8);
+		}
+		if (reset)
+		{
+			def = defer(filebuf[2] << 16 | filebuf[3], def);
+			named_labels = add_label(named_labels, "reset", filebuf[2] << 16 | filebuf[3]);
 		}
 	} else {
 		address_off = 0;
