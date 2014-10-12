@@ -39,8 +39,8 @@ all : dis zdis stateview vgmplay blastem
 blastem : blastem.o debug.o gdb_remote.o vdp.o render_sdl.o io.o $(CONFIGOBJS) gst.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS)
 	$(CC) -ggdb -o blastem blastem.o debug.o gdb_remote.o vdp.o render_sdl.o io.o $(CONFIGOBJS) gst.o $(M68KOBJS) $(Z80OBJS) $(TRANSOBJS) $(AUDIOOBJS) $(LDFLAGS)
 
-dis : dis.o 68kinst.o
-	$(CC) -o dis dis.o 68kinst.o
+dis : dis.o 68kinst.o tern.o vos_program_module.o
+	$(CC) -o dis dis.o 68kinst.o tern.o vos_program_module.o
 
 zdis : zdis.o z80inst.o
 	$(CC) -o zdis zdis.o z80inst.o
@@ -77,6 +77,9 @@ gen_fib : gen_fib.o gen_x86.o mem.o
 
 offsets : offsets.c z80_to_x86.h m68k_to_x86.h
 	$(CC) -o offsets offsets.c
+
+vos_prog_info : vos_prog_info.o vos_program_module.o
+	$(CC) -o vos_prog_info vos_prog_info.o vos_program_module.o
 
 %.o : %.S
 	$(CC) -c -o $@ $<
