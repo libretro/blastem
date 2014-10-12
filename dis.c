@@ -1,11 +1,14 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "68kinst.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include "vos_program_module.h"
+#include "tern.h"
 
 uint8_t visited[(16*1024*1024)/16];
 uint8_t label[(16*1024*1024)/8];
@@ -33,6 +36,36 @@ uint8_t is_label(uint32_t address)
 {
 	address &= 0xFFFFFF;
 	return label[address/16] & (1 << (address % 8));
+}
+
+typedef struct {
+	uint32_t num_labels;
+	uint32_t storage;
+	char     *labels[];
+} label_names;
+
+tern_node * add_label(tern_node * head, char * name, uint32_t address)
+{
+	char key[MAX_INT_KEY_SIZE];
+	address &= 0xFFFFFF;
+	reference(address);
+	tern_int_key(address, key);
+	label_names * names = tern_find_ptr(head, key);
+	if (names)
+	{
+		if (names->num_labels == names->storage)
+		{
+			names->storage = names->storage + (names->storage >> 1);
+			names = realloc(names, sizeof(label_names) + names->storage * sizeof(char *));
+		}
+	} else {
+		names = malloc(sizeof(label_names) + 4 * sizeof(char *));
+		names->num_labels = 0;
+		names->storage = 4;
+		head = tern_insert_ptr(head, key, names);
+	}
+	names->labels[names->num_labels++] = strdup(name);
+	return head;
 }
 
 typedef struct deferred {
@@ -66,10 +99,6 @@ void check_reference(m68kinst * inst, m68k_op_info * op)
 	}
 }
 
-uint8_t labels = 0;
-uint8_t addr = 0;
-uint8_t only = 0;
-
 int main(int argc, char ** argv)
 {
 	long filesize;
@@ -77,14 +106,10 @@ int main(int argc, char ** argv)
 	char disbuf[1024];
 	m68kinst instbuf;
 	unsigned short * cur;
-	FILE * f = fopen(argv[1], "rb");
-	fseek(f, 0, SEEK_END);
-	filesize = ftell(f);
-	fseek(f, 0, SEEK_SET);
-	filebuf = malloc(filesize);
-	fread(filebuf, 2, filesize/2, f);
-	fclose(f);
 	deferred *def = NULL, *tmpd;
+
+	uint8_t labels = 0, addr = 0, only = 0, vos = 0;
+
 	for(uint8_t opt = 2; opt < argc; ++opt) {
 		if (argv[opt][0] == '-') {
 			FILE * address_log;
@@ -98,6 +123,9 @@ int main(int argc, char ** argv)
 				break;
 			case 'o':
 				only = 1;
+				break;
+			case 'v':
+				vos = 1;
 				break;
 			case 'f':
 				opt++;
@@ -126,22 +154,70 @@ int main(int argc, char ** argv)
 			reference(address);
 		}
 	}
-	for(cur = filebuf; cur - filebuf < (filesize/2); ++cur)
+
+	FILE * f = fopen(argv[1], "rb");
+	fseek(f, 0, SEEK_END);
+	filesize = ftell(f);
+	fseek(f, 0, SEEK_SET);
+
+	tern_node * named_labels = NULL;
+	char int_key[MAX_INT_KEY_SIZE];
+	uint32_t address_off, address_end;
+	if (vos)
 	{
-		*cur = (*cur >> 8) | (*cur << 8);
+		vos_program_module header;
+		vos_read_header(f, &header);
+		vos_read_alloc_module_map(f, &header);
+		address_off = header.user_boundary;
+		address_end = address_off + filesize - 0x1000;
+		def = defer(header.main_entry_link.code_address, def);
+		named_labels = add_label(named_labels, "main_entry_link", header.main_entry_link.code_address);
+		for (int i = 0; i < header.n_modules; i++)
+		{
+			def = defer(header.module_map_entries[i].code_address, def);
+			named_labels = add_label(named_labels, header.module_map_entries[i].name.str, header.module_map_entries[i].code_address);
+		}
+		fseek(f, 0x1000, SEEK_SET);
+		filebuf = malloc(filesize - 0x1000);
+		if (fread(filebuf, 2, (filesize - 0x1000)/2, f) != (filesize - 0x1000)/2)
+		{
+			fprintf(stderr, "Failure while reading file %s\n", argv[1]);
+		}
+		fclose(f);
+		for(cur = filebuf; cur - filebuf < ((filesize - 0x1000)/2); ++cur)
+		{
+			*cur = (*cur >> 8) | (*cur << 8);
+		}
+	} else {
+		address_off = 0;
+		address_end = filesize;
+		filebuf = malloc(filesize);
+		if (fread(filebuf, 2, filesize/2, f) != filesize/2)
+		{
+			fprintf(stderr, "Failure while reading file %s\n", argv[1]);
+		}
+		fclose(f);
+		for(cur = filebuf; cur - filebuf < (filesize/2); ++cur)
+		{
+			*cur = (*cur >> 8) | (*cur << 8);
+		}
+		uint32_t start = filebuf[2] << 16 | filebuf[3];
+		uint32_t int_2 = filebuf[0x68/2] << 16 | filebuf[0x6A/2];
+		uint32_t int_4 = filebuf[0x70/2] << 16 | filebuf[0x72/2];
+		uint32_t int_6 = filebuf[0x78/2] << 16 | filebuf[0x7A/2];
+		named_labels = add_label(named_labels, "start", start);
+		named_labels = add_label(named_labels, "int_2", int_2);
+		named_labels = add_label(named_labels, "int_4", int_4);
+		named_labels = add_label(named_labels, "int_6", int_6);
+		if (!def || !only) {
+			def = defer(start, def);
+			def = defer(int_2, def);
+			def = defer(int_4, def);
+			def = defer(int_6, def);
+		}
 	}
-	uint32_t start = filebuf[2] << 16 | filebuf[3], tmp_addr;
-	uint32_t int_2 = filebuf[0x68/2] << 16 | filebuf[0x6A/2];
-	uint32_t int_4 = filebuf[0x70/2] << 16 | filebuf[0x72/2];
-	uint32_t int_6 = filebuf[0x78/2] << 16 | filebuf[0x7A/2];
 	uint16_t *encoded, *next;
-	uint32_t size;
-	if (!def || !only) {
-		def = defer(start, def);
-		def = defer(int_2, def);
-		def = defer(int_4, def);
-		def = defer(int_6, def);
-	}
+	uint32_t size, tmp_addr;
 	uint32_t address;
 	while(def) {
 		do {
@@ -218,25 +294,21 @@ int main(int argc, char ** argv)
 		}
 		puts("");
 	}
-	for (address = 0; address < filesize; address+=2) {
+	for (address = address_off; address < filesize; address+=2) {
 		if (is_visited(address)) {
-			encoded = filebuf + address/2;
+			encoded = filebuf + (address-address_off)/2;
 			m68k_decode(encoded, &instbuf, address);
 			if (labels) {
 				m68k_disasm_labels(&instbuf, disbuf);
-				if (address == start) {
-					puts("start:");
-				}
-				if(address == int_2) {
-					puts("int_2:");
-				}
-				if(address == int_4) {
-					puts("int_4:");
-				}
-				if(address == int_6) {
-					puts("int_6:");
-				}
-				if (is_label(instbuf.address)) {
+				char keybuf[MAX_INT_KEY_SIZE];
+				label_names * names = tern_find_ptr(named_labels, tern_int_key(address, keybuf));
+				if (names)
+				{
+					for (int i = 0; i < names->num_labels; i++)
+					{
+						printf("%s:\n", names->labels[i]);
+					}
+				} else if (is_label(instbuf.address)) {
 					printf("ADR_%X:\n", instbuf.address);
 				}
 				if (addr) {

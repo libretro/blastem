@@ -122,4 +122,14 @@ tern_node * tern_insert_ptr(tern_node * head, char * key, void * value)
 	return tern_insert(head, key, val);
 }
 
-
+char * tern_int_key(uint32_t key, char * buf)
+{
+	char * cur = buf;
+	while (key)
+	{
+		*(cur++) = (key & 0x7F) + 1;
+		key >>= 7;
+	}
+	*cur = 0;
+	return buf;
+}
