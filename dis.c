@@ -99,6 +99,19 @@ void check_reference(m68kinst * inst, m68k_op_info * op)
 	}
 }
 
+int label_fun(char *dst, uint32_t address, void * data)
+{
+	tern_node * labels = data;
+	char key[MAX_INT_KEY_SIZE];
+	label_names * names = tern_find_ptr(labels, tern_int_key(address & 0xFFFFFF, key));
+	if (names)
+	{
+		return sprintf(dst, "%s", names->labels[0]);
+	} else {
+		return m68k_default_label_fun(dst, address, NULL);
+	}
+}
+
 int main(int argc, char ** argv)
 {
 	long filesize;
@@ -310,7 +323,7 @@ int main(int argc, char ** argv)
 			encoded = filebuf + (address-address_off)/2;
 			m68k_decode(encoded, &instbuf, address);
 			if (labels) {
-				m68k_disasm_labels(&instbuf, disbuf);
+				m68k_disasm_labels(&instbuf, disbuf, label_fun, named_labels);
 				char keybuf[MAX_INT_KEY_SIZE];
 				label_names * names = tern_find_ptr(named_labels, tern_int_key(address, keybuf));
 				if (names)

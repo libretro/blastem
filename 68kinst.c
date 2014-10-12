@@ -1533,7 +1533,7 @@ char * cr_mnem[] = {
 };
 #endif
 
-int m68k_disasm_op(m68k_op_info *decoded, char *dst, int need_comma, uint8_t labels, uint32_t address)
+int m68k_disasm_op(m68k_op_info *decoded, char *dst, int need_comma, uint8_t labels, uint32_t address, format_label_fun label_fun, void * data)
 {
 	char * c = need_comma ? "," : "";
 	switch(decoded->addr_mode)
@@ -1556,20 +1556,29 @@ int m68k_disasm_op(m68k_op_info *decoded, char *dst, int need_comma, uint8_t lab
 	case MODE_IMMEDIATE_WORD:
 		return sprintf(dst, (decoded->params.immed <= 128 ? "%s #%d" : "%s #$%X"), c, decoded->params.immed);
 	case MODE_ABSOLUTE_SHORT:
-		if (labels) {
-			return sprintf(dst, "%s ADR_%X.w", c, decoded->params.immed);
+		if (labels) {	
+			int ret = sprintf(dst, "%s ", c);
+			ret += label_fun(dst+ret, decoded->params.immed, data);
+			strcat(dst+ret, ".w");
+			return ret + 2;
 		} else {
 			return sprintf(dst, "%s $%X.w", c, decoded->params.immed);
 		}
 	case MODE_ABSOLUTE:
 		if (labels) {
-			return sprintf(dst, "%s ADR_%X.l", c, decoded->params.immed);
+			int ret = sprintf(dst, "%s ", c);
+			ret += label_fun(dst+ret, decoded->params.immed, data);
+			strcat(dst+ret, ".l");
+			return ret + 2;
 		} else {
 			return sprintf(dst, "%s $%X", c, decoded->params.immed);
 		}
 	case MODE_PC_DISPLACE:
 		if (labels) {
-			return sprintf(dst, "%s ADR_%X(pc)", c, address + 2 + decoded->params.regs.displacement);
+			int ret = sprintf(dst, "%s ", c);
+			ret += label_fun(dst+ret, address + 2 + decoded->params.regs.displacement, data);
+			strcat(dst+ret, "(pc)");
+			return ret + 4;
 		} else {
 			return sprintf(dst, "%s (%d, pc)", c, decoded->params.regs.displacement);
 		}
@@ -1580,7 +1589,7 @@ int m68k_disasm_op(m68k_op_info *decoded, char *dst, int need_comma, uint8_t lab
 	}
 }
 
-int m68k_disasm_movem_op(m68k_op_info *decoded, m68k_op_info *other, char *dst, int need_comma, uint8_t labels, uint32_t address)
+int m68k_disasm_movem_op(m68k_op_info *decoded, m68k_op_info *other, char *dst, int need_comma, uint8_t labels, uint32_t address, format_label_fun label_fun, void * data)
 {
 	int8_t dir, reg, bit, regnum, last=-1, lastreg, first=-1;
 	char *rtype, *last_rtype;
@@ -1634,11 +1643,16 @@ int m68k_disasm_movem_op(m68k_op_info *decoded, m68k_op_info *other, char *dst, 
 		}
 		return oplen;
 	} else {
-		return m68k_disasm_op(decoded, dst, need_comma, labels, address);
+		return m68k_disasm_op(decoded, dst, need_comma, labels, address, label_fun, data);
 	}
 }
 
-int m68k_disasm_ex(m68kinst * decoded, char * dst, uint8_t labels)
+int m68k_default_label_fun(char * dst, uint32_t address, void * data)
+{
+	return sprintf(dst, "ADR_%X", address);
+}
+
+int m68k_disasm_ex(m68kinst * decoded, char * dst, uint8_t labels, format_label_fun label_fun, void * data)
 {
 	int ret,op1len;
 	uint8_t size;
@@ -1656,9 +1670,11 @@ int m68k_disasm_ex(m68kinst * decoded, char * dst, uint8_t labels)
 		if (decoded->op != M68K_SCC) {
 			if (labels) {
 				if (decoded->op == M68K_DBCC) {
-					ret += sprintf(dst+ret, " d%d, ADR_%X", decoded->dst.params.regs.pri, decoded->address + 2 + decoded->src.params.immed);
+					ret += sprintf(dst+ret, " d%d, ", decoded->dst.params.regs.pri);
+					ret += label_fun(dst+ret, decoded->address + 2 + decoded->src.params.immed, data);
 				} else {
-					ret += sprintf(dst+ret, " ADR_%X", decoded->address + 2 + decoded->src.params.immed);
+					dst[ret++] = ' ';
+					ret += label_fun(dst+ret, decoded->address + 2 + decoded->src.params.immed, data);
 				}
 			} else {
 				if (decoded->op == M68K_DBCC) {
@@ -1672,8 +1688,8 @@ int m68k_disasm_ex(m68kinst * decoded, char * dst, uint8_t labels)
 		break;
 	case M68K_BSR:
 		if (labels) {
-			ret = sprintf(dst, "bsr%s ADR_%X", decoded->variant == VAR_BYTE ? ".s" : "",
-			decoded->address + 2 + decoded->src.params.immed);
+			ret = sprintf(dst, "bsr%s ", decoded->variant == VAR_BYTE ? ".s" : "");
+			ret += label_fun(dst+ret, decoded->address + 2 + decoded->src.params.immed, data);
 		} else {
 			ret = sprintf(dst, "bsr%s #%d <%X>", decoded->variant == VAR_BYTE ? ".s" : "", decoded->src.params.immed, decoded->address + 2 + decoded->src.params.immed);
 		}
@@ -1681,7 +1697,7 @@ int m68k_disasm_ex(m68kinst * decoded, char * dst, uint8_t labels)
 	case M68K_MOVE_FROM_SR:
 		ret = sprintf(dst, "%s", mnemonics[decoded->op]);
 		ret += sprintf(dst + ret, " SR");
-		ret += m68k_disasm_op(&(decoded->dst), dst + ret, 1, labels, decoded->address);
+		ret += m68k_disasm_op(&(decoded->dst), dst + ret, 1, labels, decoded->address, label_fun, data);
 		return ret;
 	case M68K_ANDI_SR:
 	case M68K_EORI_SR:
@@ -1693,17 +1709,17 @@ int m68k_disasm_ex(m68kinst * decoded, char * dst, uint8_t labels)
 	case M68K_MOVE_CCR:
 	case M68K_ORI_CCR:
 		ret = sprintf(dst, "%s", mnemonics[decoded->op]);
-		ret += m68k_disasm_op(&(decoded->src), dst + ret, 0, labels, decoded->address);
+		ret += m68k_disasm_op(&(decoded->src), dst + ret, 0, labels, decoded->address, label_fun, data);
 		ret += sprintf(dst + ret, ", %s", special_op);
 		return ret;
 	case M68K_MOVE_USP:
 		ret = sprintf(dst, "%s", mnemonics[decoded->op]);
 		if (decoded->src.addr_mode != MODE_UNUSED) {
-			ret += m68k_disasm_op(&(decoded->src), dst + ret, 0, labels, decoded->address);
+			ret += m68k_disasm_op(&(decoded->src), dst + ret, 0, labels, decoded->address, label_fun, data);
 			ret += sprintf(dst + ret, ", USP");
 		} else {
 			ret += sprintf(dst + ret, "USP, ");
-			ret += m68k_disasm_op(&(decoded->dst), dst + ret, 0, labels, decoded->address);
+			ret += m68k_disasm_op(&(decoded->dst), dst + ret, 0, labels, decoded->address, label_fun, data);
 		}
 		return ret;
 	case M68K_INVALID:
@@ -1714,9 +1730,9 @@ int m68k_disasm_ex(m68kinst * decoded, char * dst, uint8_t labels)
 		ret = sprintf(dst, "%s ", mnemonics[decoded->op]);
 		if (decoded->src.addr_mode == MODE_UNUSED) {
 			ret += sprintf(dst + ret, "%s, ", cr_mnem[decoded->src.params.immed]);
-			ret += m68k_disasm_op(&(decoded->dst), dst + ret, 0, labels, decoded->address);
+			ret += m68k_disasm_op(&(decoded->dst), dst + ret, 0, labels, decoded->address, label_fun, data);
 		} else {
-			ret += m68k_disasm_op(&(decoded->src), dst + ret, 0, labels, decoded->address);
+			ret += m68k_disasm_op(&(decoded->src), dst + ret, 0, labels, decoded->address, label_fun, data);
 			ret += sprintf(dst + ret, ", %s", cr_mnem[decoded->dst.params.immed]);
 		}
 		return ret;
@@ -1729,23 +1745,27 @@ int m68k_disasm_ex(m68kinst * decoded, char * dst, uint8_t labels)
 				size == OPSIZE_BYTE ? ".b" : (size == OPSIZE_WORD ? ".w" : (size == OPSIZE_LONG ? ".l" : "")));
 	}
 	if (decoded->op == M68K_MOVEM) {
-		op1len = m68k_disasm_movem_op(&(decoded->src), &(decoded->dst), dst + ret, 0, labels, decoded->address);
+		op1len = m68k_disasm_movem_op(&(decoded->src), &(decoded->dst), dst + ret, 0, labels, decoded->address, label_fun, data);
 		ret += op1len;
-		ret += m68k_disasm_movem_op(&(decoded->dst), &(decoded->src), dst + ret, op1len, labels, decoded->address);
+		ret += m68k_disasm_movem_op(&(decoded->dst), &(decoded->src), dst + ret, op1len, labels, decoded->address, label_fun, data);
 	} else {
-		op1len = m68k_disasm_op(&(decoded->src), dst + ret, 0, labels, decoded->address);
+		op1len = m68k_disasm_op(&(decoded->src), dst + ret, 0, labels, decoded->address, label_fun, data);
 		ret += op1len;
-		ret += m68k_disasm_op(&(decoded->dst), dst + ret, op1len, labels, decoded->address);
+		ret += m68k_disasm_op(&(decoded->dst), dst + ret, op1len, labels, decoded->address, label_fun, data);
 	}
 	return ret;
 }
 
 int m68k_disasm(m68kinst * decoded, char * dst)
 {
-	return m68k_disasm_ex(decoded, dst, 0);
+	return m68k_disasm_ex(decoded, dst, 0, NULL, NULL);
 }
 
-int m68k_disasm_labels(m68kinst * decoded, char * dst)
+int m68k_disasm_labels(m68kinst * decoded, char * dst, format_label_fun label_fun, void * data)
 {
-	return m68k_disasm_ex(decoded, dst, 1);
+	if (!label_fun)
+	{
+		label_fun = m68k_default_label_fun;
+	}
+	return m68k_disasm_ex(decoded, dst, 1, label_fun, data);
 }
