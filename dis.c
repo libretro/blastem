@@ -235,7 +235,7 @@ int main(int argc, char ** argv)
 			encoded = NULL;
 			address = def->address;
 			if (!is_visited(address)) {
-				encoded = filebuf + address/2;
+				encoded = filebuf + (address - address_off)/2;
 			}
 			tmpd = def;
 			def = def->next;
@@ -245,7 +245,7 @@ int main(int argc, char ** argv)
 			break;
 		}
 		for(;;) {
-			if (address > filesize) {
+			if (address > address_end || address < address_off) {
 				break;
 			}
 			visit(address);
@@ -262,7 +262,7 @@ int main(int argc, char ** argv)
 			if (instbuf.op == M68K_BCC || instbuf.op == M68K_DBCC || instbuf.op == M68K_BSR) {
 				if (instbuf.op == M68K_BCC && instbuf.extra.cond == COND_TRUE) {
 					address = instbuf.address + 2 + instbuf.src.params.immed;
-					encoded = filebuf + address/2;
+					encoded = filebuf + (address - address_off)/2;
 					reference(address);
 					if (is_visited(address)) {
 						break;
@@ -275,13 +275,13 @@ int main(int argc, char ** argv)
 			} else if(instbuf.op == M68K_JMP) {
 				if (instbuf.src.addr_mode == MODE_ABSOLUTE || instbuf.src.addr_mode == MODE_ABSOLUTE_SHORT) {
 					address = instbuf.src.params.immed;
-					encoded = filebuf + address/2;
+					encoded = filebuf + (address - address_off)/2;
 					if (is_visited(address)) {
 						break;
 					}
 				} else if (instbuf.src.addr_mode = MODE_PC_DISPLACE) {
 					address = instbuf.src.params.regs.displacement + instbuf.address + 2;
-					encoded = filebuf + address/2;
+					encoded = filebuf + (address - address_off)/2;
 					if (is_visited(address)) {
 						break;
 					}
@@ -305,7 +305,7 @@ int main(int argc, char ** argv)
 		}
 		puts("");
 	}
-	for (address = address_off; address < filesize; address+=2) {
+	for (address = address_off; address < address_end; address+=2) {
 		if (is_visited(address)) {
 			encoded = filebuf + (address-address_off)/2;
 			m68k_decode(encoded, &instbuf, address);
