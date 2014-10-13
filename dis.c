@@ -11,7 +11,7 @@
 #include "tern.h"
 
 uint8_t visited[(16*1024*1024)/16];
-uint8_t label[(16*1024*1024)/8];
+uint16_t label[(16*1024*1024)/8];
 
 void visit(uint32_t address)
 {
@@ -23,7 +23,7 @@ void reference(uint32_t address)
 {
 	address &= 0xFFFFFF;
 	//printf("referenced: %X\n", address);
-	label[address/16] |= 1 << (address % 8);
+	label[address/16] |= 1 << (address % 16);
 }
 
 uint8_t is_visited(uint32_t address)
@@ -32,10 +32,10 @@ uint8_t is_visited(uint32_t address)
 	return visited[address/16] & (1 << ((address / 2) % 8));
 }
 
-uint8_t is_label(uint32_t address)
+uint16_t is_label(uint32_t address)
 {
 	address &= 0xFFFFFF;
-	return label[address/16] & (1 << (address % 8));
+	return label[address/16] & (1 << (address % 16));
 }
 
 typedef struct {
