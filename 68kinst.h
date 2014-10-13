@@ -186,6 +186,9 @@ typedef enum {
 	MODE_IMMEDIATE_WORD,//used to indicate an immediate operand that only uses a single extension word even for a long operation
 	MODE_UNUSED
 } m68k_addr_modes;
+#ifdef M68020
+#define M68K_FLAG_BITFIELD 0x80
+#endif
 
 typedef enum {
 	COND_TRUE,
@@ -233,7 +236,10 @@ typedef enum {
 #endif
 
 typedef struct {
-	uint8_t addr_mode;
+#ifdef M68020
+	uint16_t bitfield;
+#endif
+	uint8_t  addr_mode;
 	union {
 		struct {
 			uint8_t pri;
