@@ -173,6 +173,7 @@ typedef enum {
 //expanded values
 	MODE_AREG_INDEX_DISP8,
 #ifdef M68020
+	MODE_AREG_INDEX_DISP16,
 	MODE_AREG_INDEX_DISP32,
 #endif
 	MODE_ABSOLUTE_SHORT,
@@ -244,6 +245,9 @@ typedef struct {
 		struct {
 			uint8_t pri;
 			uint8_t sec;
+#ifdef M68020
+			uint8_t scale;
+#endif
 			int32_t displacement;
 		} regs;
 		uint32_t immed;
