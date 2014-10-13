@@ -1303,6 +1303,56 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 		} else {
 #ifdef M68020
 			//TODO: Implement bitfield instructions for M68020+ support
+			switch (*istream >> 8 & 7)
+			{
+			case 0:
+				decoded->op = M68K_BFTST; //<ea>
+				break;
+			case 1:
+				decoded->op = M68K_BFEXTU; //<ea>, Dn
+				break;
+			case 2:
+				decoded->op = M68K_BFCHG; //<ea>
+				break;
+			case 3:
+				decoded->op = M68K_BFEXTS; //<ea>, Dn
+				break;
+			case 4:
+				decoded->op = M68K_BFCLR; //<ea>
+				break;
+			case 5:
+				decoded->op = M68K_BFFFO; //<ea>, Dn
+				break;
+			case 6:
+				decoded->op = M68K_BFSET; //<ea>
+				break;
+			case 7:
+				decoded->op = M68K_BFINS; //Dn, <ea>
+				break;
+			}
+			opmode = *istream >> 3 & 0x7;
+			reg = *istream & 0x7;
+			m68k_op_info *ea, *other;
+			if (decoded->op == M68K_BFEXTU || decoded->op == M68K_BFEXTS || decoded->op == M68K_BFFFO)
+			{
+				ea = &(decoded->src);
+				other = &(decoded->dst);
+			} else {
+				ea = &(decoded->dst);
+				other = &(decoded->dst);
+			}
+			if (*istream & 0x100)
+			{
+				immed = *(istream++);
+				other->addr_mode = MODE_REG;
+				other->params.regs.pri = immed >> 12 & 0x7;
+			} else {
+				immed = *(istream++);
+			}
+			decoded->extra.size = OPSIZE_UNSIZED;
+			istream = m68k_decode_op_ex(istream, opmode, reg, decoded->extra.size, ea);
+			ea->addr_mode |= M68K_FLAG_BITFIELD;
+			ea->bitfield = immed & 0xFFF;
 #endif
 		}
 		break;
@@ -1466,6 +1516,7 @@ char * mnemonics[] = {
 	"move", //from ccr
 	"movec",
 	"moves",
+	"rtd",
 #endif
 #ifdef M68020
 	"bfchg",
@@ -1536,57 +1587,91 @@ char * cr_mnem[] = {
 int m68k_disasm_op(m68k_op_info *decoded, char *dst, int need_comma, uint8_t labels, uint32_t address, format_label_fun label_fun, void * data)
 {
 	char * c = need_comma ? "," : "";
-	switch(decoded->addr_mode)
+	int ret = 0;
+#ifdef M68020
+	uint8_t addr_mode = decoded->addr_mode & (~M68K_FLAG_BITFIELD);
+#else
+	uint8_t addr_mode = decoded->addr_mode;
+#endif
+	switch(addr_mode)
 	{
 	case MODE_REG:
-		return sprintf(dst, "%s d%d", c, decoded->params.regs.pri);
+		ret = sprintf(dst, "%s d%d", c, decoded->params.regs.pri);
+		break;
 	case MODE_AREG:
-		return sprintf(dst, "%s a%d", c, decoded->params.regs.pri);
+		ret = sprintf(dst, "%s a%d", c, decoded->params.regs.pri);
+		break;
 	case MODE_AREG_INDIRECT:
-		return sprintf(dst, "%s (a%d)", c, decoded->params.regs.pri);
+		ret = sprintf(dst, "%s (a%d)", c, decoded->params.regs.pri);
+		break;
 	case MODE_AREG_POSTINC:
-		return sprintf(dst, "%s (a%d)+", c, decoded->params.regs.pri);
+		ret = sprintf(dst, "%s (a%d)+", c, decoded->params.regs.pri);
+		break;
 	case MODE_AREG_PREDEC:
-		return sprintf(dst, "%s -(a%d)", c, decoded->params.regs.pri);
+		ret = sprintf(dst, "%s -(a%d)", c, decoded->params.regs.pri);
+		break;
 	case MODE_AREG_DISPLACE:
-		return sprintf(dst, "%s (%d, a%d)", c, decoded->params.regs.displacement, decoded->params.regs.pri);
+		ret = sprintf(dst, "%s (%d, a%d)", c, decoded->params.regs.displacement, decoded->params.regs.pri);
+		break;
 	case MODE_AREG_INDEX_DISP8:
-		return sprintf(dst, "%s (%d, a%d, %c%d.%c)", c, decoded->params.regs.displacement, decoded->params.regs.pri, (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w');
+		ret = sprintf(dst, "%s (%d, a%d, %c%d.%c)", c, decoded->params.regs.displacement, decoded->params.regs.pri, (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w');
+		break;
 	case MODE_IMMEDIATE:
 	case MODE_IMMEDIATE_WORD:
-		return sprintf(dst, (decoded->params.immed <= 128 ? "%s #%d" : "%s #$%X"), c, decoded->params.immed);
+		ret = sprintf(dst, (decoded->params.immed <= 128 ? "%s #%d" : "%s #$%X"), c, decoded->params.immed);
+		break;
 	case MODE_ABSOLUTE_SHORT:
 		if (labels) {	
-			int ret = sprintf(dst, "%s ", c);
+			ret = sprintf(dst, "%s ", c);
 			ret += label_fun(dst+ret, decoded->params.immed, data);
 			strcat(dst+ret, ".w");
-			return ret + 2;
+			ret = ret + 2;
 		} else {
-			return sprintf(dst, "%s $%X.w", c, decoded->params.immed);
+			ret = sprintf(dst, "%s $%X.w", c, decoded->params.immed);
 		}
+		break;
 	case MODE_ABSOLUTE:
 		if (labels) {
-			int ret = sprintf(dst, "%s ", c);
+			ret = sprintf(dst, "%s ", c);
 			ret += label_fun(dst+ret, decoded->params.immed, data);
 			strcat(dst+ret, ".l");
-			return ret + 2;
+			ret = ret + 2;
 		} else {
-			return sprintf(dst, "%s $%X", c, decoded->params.immed);
+			ret = sprintf(dst, "%s $%X", c, decoded->params.immed);
 		}
+		break;
 	case MODE_PC_DISPLACE:
 		if (labels) {
-			int ret = sprintf(dst, "%s ", c);
+			ret = sprintf(dst, "%s ", c);
 			ret += label_fun(dst+ret, address + 2 + decoded->params.regs.displacement, data);
 			strcat(dst+ret, "(pc)");
-			return ret + 4;
+			ret = ret + 4;
 		} else {
-			return sprintf(dst, "%s (%d, pc)", c, decoded->params.regs.displacement);
+			ret = sprintf(dst, "%s (%d, pc)", c, decoded->params.regs.displacement);
 		}
+		break;
 	case MODE_PC_INDEX_DISP8:
-		return sprintf(dst, "%s (%d, pc, %c%d.%c)", c, decoded->params.regs.displacement, (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w');
+		ret = sprintf(dst, "%s (%d, pc, %c%d.%c)", c, decoded->params.regs.displacement, (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w');
 	default:
-		return 0;
+		ret = 0;
 	}
+#ifdef M68020
+	if (decoded->addr_mode & M68K_FLAG_BITFIELD)
+	{
+		switch (decoded->bitfield & 0x820)
+		{
+		case 0:
+			return ret + sprintf(dst+ret, " {$%X:%d}", decoded->bitfield >> 6 & 0x1F, decoded->bitfield & 0x1F ? decoded->bitfield & 0x1F : 32);
+		case 0x20:
+			return ret + sprintf(dst+ret, " {$%X:d%d}", decoded->bitfield >> 6 & 0x1F, decoded->bitfield & 0x7);
+		case 0x800:
+			return ret + sprintf(dst+ret, " {d%d:%d}", decoded->bitfield >> 6 & 0x7, decoded->bitfield & 0x1F ? decoded->bitfield & 0x1F : 32);
+		case 0x820:
+			return ret + sprintf(dst+ret, " {d%d:d%d}", decoded->bitfield >> 6 & 0x7, decoded->bitfield & 0x7);
+		}
+	}
+#endif
+	return ret;
 }
 
 int m68k_disasm_movem_op(m68k_op_info *decoded, m68k_op_info *other, char *dst, int need_comma, uint8_t labels, uint32_t address, format_label_fun label_fun, void * data)
