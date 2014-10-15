@@ -970,6 +970,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 								immed = *(++istream);
 								reg = immed >> 12 & 0x7;
 								opmode = immed & 0x8000 ? MODE_AREG : MODE_REG;
+								immed &= 0xFFF;
 								if (immed & 0x800) {
 									if (immed > MAX_HIGH_CR) {
 										decoded->op = M68K_INVALID;
