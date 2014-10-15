@@ -311,6 +311,11 @@ int main(int argc, char ** argv)
 		}
 	}
 	if (labels) {
+		for (address = 0; address < address_off; address++) {
+			if (is_label(address)) {
+				printf("ADR_%X equ $%X\n", address, address);
+			}
+		}
 		for (address = filesize; address < (16*1024*1024); address++) {
 			if (is_label(address)) {
 				printf("ADR_%X equ $%X\n", address, address);
