@@ -610,13 +610,13 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				reg = immed  >> 12 & 0x7;
 				opmode = immed & 0x8000 ? MODE_AREG : MODE_REG;
 				if (immed & 0x800) {
-					m68k_decode_op_ex(istream, *start >> 3 & 0x7, *start & 0x7, decoded->extra.size, &(decoded->src));
-					decoded->dst.addr_mode = opmode;
-					decoded->dst.params.regs.pri = reg;
-				} else {
 					decoded->src.addr_mode = opmode;
 					decoded->src.params.regs.pri = reg;
 					m68k_decode_op_ex(istream, *start >> 3 & 0x7, *start & 0x7, decoded->extra.size, &(decoded->dst));
+				} else {
+					m68k_decode_op_ex(istream, *start >> 3 & 0x7, *start & 0x7, decoded->extra.size, &(decoded->src));
+					decoded->dst.addr_mode = opmode;
+					decoded->dst.params.regs.pri = reg;
 				}
 #endif
 				break;
