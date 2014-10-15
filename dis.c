@@ -75,7 +75,7 @@ typedef struct deferred {
 
 deferred * defer(uint32_t address, deferred * next)
 {
-	if (is_visited(address)) {
+	if (is_visited(address) || address & 1) {
 		return next;
 	}
 	//printf("deferring %X\n", address);
