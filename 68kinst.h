@@ -173,15 +173,32 @@ typedef enum {
 //expanded values
 	MODE_AREG_INDEX_DISP8,
 #ifdef M68020
-	MODE_AREG_INDEX_DISP16,
-	MODE_AREG_INDEX_DISP32,
+	MODE_AREG_INDEX_BASE_DISP,
+	MODE_AREG_PREINDEX,
+	MODE_AREG_POSTINDEX,
+	MODE_AREG_MEM_INDIRECT,
+	MODE_AREG_BASE_DISP,
+	MODE_INDEX_BASE_DISP,
+	MODE_PREINDEX,
+	MODE_POSTINDEX,
+	MODE_MEM_INDIRECT,
+	MODE_BASE_DISP,
 #endif
 	MODE_ABSOLUTE_SHORT,
 	MODE_ABSOLUTE,
 	MODE_PC_DISPLACE,
 	MODE_PC_INDEX_DISP8,
 #ifdef M68020
-	MODE_PC_INDEX_DISP32,
+	MODE_PC_INDEX_BASE_DISP,
+	MODE_PC_PREINDEX,
+	MODE_PC_POSTINDEX,
+	MODE_PC_MEM_INDIRECT,
+	MODE_PC_BASE_DISP,
+	MODE_ZPC_INDEX_BASE_DISP,
+	MODE_ZPC_PREINDEX,
+	MODE_ZPC_POSTINDEX,
+	MODE_ZPC_MEM_INDIRECT,
+	MODE_ZPC_BASE_DISP,
 #endif
 	MODE_IMMEDIATE,
 	MODE_IMMEDIATE_WORD,//used to indicate an immediate operand that only uses a single extension word even for a long operation
@@ -247,8 +264,12 @@ typedef struct {
 			uint8_t sec;
 #ifdef M68020
 			uint8_t scale;
+			uint8_t disp_sizes;
 #endif
 			int32_t displacement;
+#ifdef M68020
+			int32_t outer_disp;
+#endif
 		} regs;
 		uint32_t immed;
 	} params;
