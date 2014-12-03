@@ -140,15 +140,6 @@ uint16_t *m68k_decode_op_ex(uint16_t *cur, uint8_t mode, uint8_t reg, uint8_t si
 			dst->params.immed = ext << 16 | *(++cur);
 			break;
 		case 3:
-#ifdef M68020
-			//TODO: Implement me for M68020+ support;
-#else
-			dst->addr_mode = MODE_PC_INDEX_DISP8;
-			ext = *(++cur);
-			dst->params.regs.sec = ext >> 11;//includes areg/dreg bit, reg num and word/long bit
-			dst->params.regs.displacement = sign_extend8(ext&0xFF);
-#endif
-
 			ext = *(++cur);
 			dst->params.regs.sec = ext >> 11;//includes areg/dreg bit, reg num and word/long bit
 #ifdef M68020
