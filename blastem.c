@@ -1289,7 +1289,7 @@ int main(int argc, char ** argv)
 	if (i < 0) {
 		strcpy(sram_filename + fname_size, ".sram");
 	}
-	set_keybindings();
+	set_keybindings(gen.ports);
 
 	init_run_cpu(&gen, address_log, statefile, debuggerfun);
 	return 0;
