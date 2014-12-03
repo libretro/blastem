@@ -1871,6 +1871,7 @@ void * z80_retranslate_inst(uint32_t address, z80_context * context, uint8_t * o
 		}
 		deferred_addr * orig_deferred = opts->deferred;
 		uint8_t * native_end = translate_z80inst(&instbuf, dst, context, address, 0);
+		/*
 		if ((native_end - dst) <= orig_size) {
 			uint8_t * native_next = z80_get_native_address(context, address + after-inst);
 			if (native_next && ((native_next == orig_start + orig_size) || (orig_size - (native_end - dst)) > 5)) {
@@ -1887,6 +1888,7 @@ void * z80_retranslate_inst(uint32_t address, z80_context * context, uint8_t * o
 				return orig_start;
 			}
 		}
+		*/
 		z80_map_native_address(context, address, dst, after-inst, ZMAX_NATIVE_SIZE);
 		opts->cur_code = dst+ZMAX_NATIVE_SIZE;
 		jmp(orig_start, dst);
