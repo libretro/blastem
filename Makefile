@@ -88,7 +88,7 @@ vos_prog_info : vos_prog_info.o vos_program_module.o
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 %.bin : %.s68
-	vasmm68k_mot -Fbin -m68000 -no-opt -spaces -o $@ $<
+	vasmm68k_mot -Fbin -m68000 -no-opt -spaces -o $@ -L $@.list $<
 
 %.bin : %.sz8
 	vasmz80_mot -Fbin -spaces -o $@ $<
