@@ -28,12 +28,15 @@ void check_cycles(cpu_options * opts)
 	*jmp_off = code->cur - (jmp_off+1);
 }
 
-code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk * memmap, uint32_t num_chunks, ftype fun_type)
+code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk * memmap, uint32_t num_chunks, ftype fun_type, code_ptr *after_inc)
 {
 	code_info *code = &opts->code;
 	code_ptr start = code->cur;
 	check_cycles(opts);
 	cycles(opts, opts->bus_cycles);
+	if (after_inc) {
+		*after_inc = code->cur;
+	}
 	if (opts->address_size == SZ_D && opts->address_mask < 0xFFFFFFFF) {
 		and_ir(code, opts->address_mask, opts->scratch1, SZ_D);
 	}

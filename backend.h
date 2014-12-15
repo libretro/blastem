@@ -108,7 +108,7 @@ void cycles(cpu_options *opts, uint32_t num);
 void check_cycles_int(cpu_options *opts, uint32_t address);
 void check_cycles(cpu_options * opts);
 
-code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk * memmap, uint32_t num_chunks, ftype fun_type);
+code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk * memmap, uint32_t num_chunks, ftype fun_type, code_ptr *after_inc);
 
 #endif //BACKEND_H_
 
