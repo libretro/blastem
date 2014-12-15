@@ -2390,10 +2390,12 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	*skip_sync = code->cur - (skip_sync+1);
 	retn(code);
 
-	opts->read_16 = gen_mem_fun(&opts->gen, memmap, num_chunks, READ_16);
-	opts->read_8 = gen_mem_fun(&opts->gen, memmap, num_chunks, READ_8);
-	opts->write_16 = gen_mem_fun(&opts->gen, memmap, num_chunks, WRITE_16);
-	opts->write_8 = gen_mem_fun(&opts->gen, memmap, num_chunks, WRITE_8);
+	opts->gen.handle_code_write = (code_ptr)m68k_handle_code_write;
+
+	opts->read_16 = gen_mem_fun(&opts->gen, memmap, num_chunks, READ_16, NULL);
+	opts->read_8 = gen_mem_fun(&opts->gen, memmap, num_chunks, READ_8, NULL);
+	opts->write_16 = gen_mem_fun(&opts->gen, memmap, num_chunks, WRITE_16, NULL);
+	opts->write_8 = gen_mem_fun(&opts->gen, memmap, num_chunks, WRITE_8, NULL);
 
 	opts->read_32 = code->cur;
 	push_r(code, opts->gen.scratch1);
