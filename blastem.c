@@ -1072,6 +1072,15 @@ void detect_region()
 		}
 	}
 }
+#ifndef NO_Z80
+const memmap_chunk z80_map[] = {
+	{ 0x0000, 0x4000,  0x1FFF, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE,                     z80_ram, NULL, NULL, NULL,              NULL },
+	{ 0x8000, 0x10000, 0xFFFF, 1, MMAP_READ | MMAP_WRITE | MMAP_PTR_IDX | MMAP_FUNC_NULL, NULL,    NULL, NULL, z80_read_bank,     z80_write_bank},
+	{ 0x4000, 0x6000,  0x0003, 0, MMAP_READ | MMAP_WRITE,                                 NULL,    NULL, NULL, z80_read_ym,       z80_write_ym},
+	{ 0x6000, 0x6100,  0xFFFF, 0, MMAP_WRITE | MMAP_CUSTOM,                               NULL,    NULL, NULL, NULL,              (write_8_fun)z80_gen_bank_write},
+	{ 0x7F00, 0x8000,  0x00FF, 0, MMAP_READ | MMAP_WRITE,                                 NULL,    NULL, NULL, z80_vdp_port_read, z80_vdp_port_write}
+};
+#endif
 
 int main(int argc, char ** argv)
 {
@@ -1237,9 +1246,9 @@ int main(int argc, char ** argv)
 	psg_init(&p_context, render_sample_rate(), gen.master_clock, MCLKS_PER_PSG, render_audio_buffer());
 
 	z80_context z_context;
-	x86_z80_options z_opts;
 #ifndef NO_Z80
-	init_x86_z80_opts(&z_opts);
+	z80_options z_opts;
+	init_x86_z80_opts(&z_opts, z80_map, 5);
 	init_z80_context(&z_context, &z_opts);
 #endif
 
