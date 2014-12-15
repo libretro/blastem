@@ -12,6 +12,7 @@ vdpreverse/*
 nemesis/*
 html/*
 *.o
+*.list
 blastem
 dis
 stateview
