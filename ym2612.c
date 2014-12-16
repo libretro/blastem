@@ -521,6 +521,7 @@ void ym_address_write_part1(ym2612_context * context, uint8_t address)
 	context->selected_part = 0;
 	context->write_cycle = context->current_cycle;
 	context->busy_cycles = BUSY_CYCLES_ADDRESS;
+	context->status |= 0x80;
 }
 
 void ym_address_write_part2(ym2612_context * context, uint8_t address)
@@ -530,6 +531,7 @@ void ym_address_write_part2(ym2612_context * context, uint8_t address)
 	context->selected_part = 1;
 	context->write_cycle = context->current_cycle;
 	context->busy_cycles = BUSY_CYCLES_ADDRESS;
+	context->status |= 0x80;
 }
 
 uint8_t fnum_to_keycode[] = {
