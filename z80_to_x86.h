@@ -25,10 +25,17 @@ typedef struct {
 	cpu_options     gen;
 	code_ptr        save_context_scratch;
 	code_ptr        load_context_scratch;
+	code_ptr		read_8;
+	code_ptr		write_8;
 	code_ptr        write_8_noinc;
+	code_ptr		read_16;
+	code_ptr		write_16_highfirst;
+	code_ptr		write_16_lowfirst;
 
 	uint32_t        flags;
 	int8_t          regs[Z80_UNUSED];
+	int8_t			bank_reg;
+	int8_t			bank_pointer;
 } z80_options;
 
 typedef struct {
@@ -62,8 +69,8 @@ typedef struct {
 void translate_z80_stream(z80_context * context, uint32_t address);
 void init_x86_z80_opts(z80_options * options, memmap_chunk * chunks, uint32_t num_chunks);
 void init_z80_context(z80_context * context, z80_options * options);
-uint8_t * z80_get_native_address(z80_context * context, uint32_t address);
-uint8_t * z80_get_native_address_trans(z80_context * context, uint32_t address);
+code_ptr z80_get_native_address(z80_context * context, uint32_t address);
+code_ptr z80_get_native_address_trans(z80_context * context, uint32_t address);
 z80_context * z80_handle_code_write(uint32_t address, z80_context * context);
 void z80_run(z80_context * context);
 void z80_reset(z80_context * context);
