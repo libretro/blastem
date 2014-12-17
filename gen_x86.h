@@ -36,6 +36,7 @@ enum {
 	CC_O = 0,
 	CC_NO,
 	CC_C,
+	CC_B = CC_C,
 	CC_NC,
 	CC_Z,
 	CC_NZ,
