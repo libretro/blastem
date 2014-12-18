@@ -79,6 +79,7 @@ typedef struct {
 #define MMAP_ONLY_ODD  0x10
 #define MMAP_ONLY_EVEN 0x20
 #define MMAP_FUNC_NULL 0x40
+#define MMAP_CUSTOM    0x80
 
 typedef uint16_t (*read_16_fun)(uint32_t address, void * context);
 typedef uint8_t (*read_8_fun)(uint32_t address, void * context);

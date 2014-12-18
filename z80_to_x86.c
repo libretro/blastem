@@ -1897,7 +1897,7 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 	}
 }
 
-void init_x86_z80_opts(z80_options * options, memmap_chunk * chunks, uint32_t num_chunks)
+void init_x86_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t num_chunks)
 {
 	memset(options, 0, sizeof(*options));
 
@@ -2067,6 +2067,13 @@ void init_x86_z80_opts(z80_options * options, memmap_chunk * chunks, uint32_t nu
 	mov_ir(code, 0x38, options->gen.scratch1, SZ_W);
 	call(code, (code_ptr)z80_native_addr);
 	jmp_r(code, options->gen.scratch1);
+}
+
+void * z80_gen_bank_write(uint32_t start_address, void * voptions)
+{
+	z80_options * options = voptions;
+	//TODO: Handle writes to bank register
+	return options;
 }
 
 void init_z80_context(z80_context * context, z80_options * options)
