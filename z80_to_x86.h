@@ -67,7 +67,7 @@ typedef struct {
 } z80_context;
 
 void translate_z80_stream(z80_context * context, uint32_t address);
-void init_x86_z80_opts(z80_options * options, memmap_chunk * chunks, uint32_t num_chunks);
+void init_x86_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t num_chunks);
 void init_z80_context(z80_context * context, z80_options * options);
 code_ptr z80_get_native_address(z80_context * context, uint32_t address);
 code_ptr z80_get_native_address_trans(z80_context * context, uint32_t address);
@@ -76,6 +76,7 @@ void z80_run(z80_context * context);
 void z80_reset(z80_context * context);
 void zinsert_breakpoint(z80_context * context, uint16_t address, uint8_t * bp_handler);
 void zremove_breakpoint(z80_context * context, uint16_t address);
+void * z80_gen_bank_write(uint32_t start_address, void * voptions);
 
 #endif //Z80_TO_X86_H_
 

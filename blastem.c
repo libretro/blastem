@@ -383,8 +383,9 @@ m68k_context * vdp_port_write_b(uint32_t vdp_port, m68k_context * context, uint8
 	return vdp_port_write(vdp_port, context, vdp_port < 0x10 ? value | value << 8 : ((vdp_port & 1) ? value : 0));
 }
 
-z80_context * z80_vdp_port_write(uint16_t vdp_port, z80_context * context, uint8_t value)
+void * z80_vdp_port_write(uint32_t vdp_port, void * vcontext, uint8_t value)
 {
+	z80_context * context = vcontext;
 	genesis_context * gen = context->system;
 	if (vdp_port & 0xE0) {
 		printf("machine freeze due to write to Z80 address %X\n", 0x7F00 | vdp_port);
@@ -451,6 +452,34 @@ uint8_t vdp_port_read_b(uint32_t vdp_port, m68k_context * context)
 	} else {
 		return value >> 8;
 	}
+}
+
+uint8_t z80_vdp_port_read(uint32_t vdp_port, void * vcontext)
+{
+	z80_context * context = vcontext;
+	if (vdp_port & 0xE0) {
+		printf("machine freeze due to read from Z80 address %X\n", 0x7F00 | vdp_port);
+		exit(1);
+	}
+	genesis_context * gen = context->system;
+	vdp_port &= 0x1F;
+	uint16_t ret;
+	if (vdp_port < 0x10) {
+		//These probably won't currently interact well with the 68K accessing the VDP
+		vdp_run_context(gen->vdp, context->current_cycle * MCLKS_PER_Z80);
+		if (vdp_port < 4) {
+			ret = vdp_data_port_read(gen->vdp);
+		} else if (vdp_port < 8) {
+			ret = vdp_control_port_read(gen->vdp);
+		} else {
+			printf("Illegal write to HV Counter port %X\n", vdp_port);
+			exit(1);
+		}
+	} else {
+		//TODO: Figure out the correct value today
+		ret = 0xFFFF;
+	}
+	return vdp_port & 1 ? ret : ret >> 8;
 }
 
 uint32_t zram_counter = 0;
@@ -674,8 +703,9 @@ uint16_t io_read_w(uint32_t location, m68k_context * context)
 	return value;
 }
 
-z80_context * z80_write_ym(uint16_t location, z80_context * context, uint8_t value)
+void * z80_write_ym(uint32_t location, void * vcontext, uint8_t value)
 {
+	z80_context * context = vcontext;
 	genesis_context * gen = context->system;
 	sync_sound(gen, context->current_cycle * MCLKS_PER_Z80);
 	if (location & 1) {
@@ -688,11 +718,26 @@ z80_context * z80_write_ym(uint16_t location, z80_context * context, uint8_t val
 	return context;
 }
 
-uint8_t z80_read_ym(uint16_t location, z80_context * context)
+uint8_t z80_read_ym(uint32_t location, void * vcontext)
 {
+	z80_context * context = vcontext;
 	genesis_context * gen = context->system;
 	sync_sound(gen, context->current_cycle * MCLKS_PER_Z80);
 	return ym_read_status(gen->ym);
+}
+
+uint8_t z80_read_bank(uint32_t location, void * vcontext)
+{
+	z80_context * context = vcontext;
+	//TODO: Implement me
+	return 0;
+}
+
+void *z80_write_bank(uint32_t location, void * vcontext, uint8_t value)
+{
+	z80_context * context = vcontext;
+	//TODO: Implement me
+	return context;
 }
 
 uint16_t read_sram_w(uint32_t address, m68k_context * context)
