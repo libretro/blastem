@@ -33,6 +33,7 @@
 #define OP_TEST 0x84
 #define OP_XCHG 0x86
 #define OP_MOV 0x88
+#define PRE_XOP 0x8F
 #define OP_XCHG_AX 0x90
 #define OP_CDQ 0x99
 #define OP_PUSHF 0x9C
@@ -1516,6 +1517,13 @@ void push_r(code_info *code, uint8_t reg)
 	code->cur = out;
 }
 
+void push_rdisp(code_info *code, uint8_t base, int32_t disp)
+{
+	//This instruction has no explicit size, so we pass SZ_B
+	//to avoid any prefixes or bits being set
+	x86_rdisp_size(code, OP_SINGLE_EA, OP_EX_PUSH_EA, base, disp, SZ_B);
+}
+
 void pop_r(code_info *code, uint8_t reg)
 {
 	check_alloc_code(code, 2);
@@ -1525,6 +1533,19 @@ void pop_r(code_info *code, uint8_t reg)
 		reg -= R8 - X86_R8;
 	}
 	*(out++) = OP_POP | reg;
+	code->cur = out;
+}
+
+void pop_rind(code_info *code, uint8_t reg)
+{
+	check_alloc_code(code, 3);
+	code_ptr out = code->cur;
+	if (reg >= R8) {
+		*(out++) = PRE_REX | REX_RM_FIELD;
+		reg -= R8 - X86_R8;
+	}
+	*(out++) = PRE_XOP;
+	*(out++) = MODE_REG_INDIRECT | reg;
 	code->cur = out;
 }
 
@@ -1852,6 +1873,19 @@ void jmp_r(code_info *code, uint8_t dst)
 	}
 	*(out++) = OP_SINGLE_EA;
 	*(out++) = MODE_REG_DIRECT | dst | (OP_EX_JMP_EA << 3);
+	code->cur = out;
+}
+
+void jmp_rind(code_info *code, uint8_t dst)
+{
+	check_alloc_code(code, 3);
+	code_ptr out = code->cur;
+	if (dst >= R8) {
+		dst -= R8 - X86_R8;
+		*(out++) = PRE_REX | REX_RM_FIELD;
+	}
+	*(out++) = OP_SINGLE_EA;
+	*(out++) = MODE_REG_INDIRECT | dst | (OP_EX_JMP_EA << 3);
 	code->cur = out;
 }
 

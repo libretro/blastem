@@ -28,7 +28,7 @@ void check_cycles(cpu_options * opts)
 	*jmp_off = code->cur - (jmp_off+1);
 }
 
-code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk * memmap, uint32_t num_chunks, ftype fun_type, code_ptr *after_inc)
+code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t num_chunks, ftype fun_type, code_ptr *after_inc)
 {
 	code_info *code = &opts->code;
 	code_ptr start = code->cur;

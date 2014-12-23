@@ -38,7 +38,7 @@ NOZ80:=1
 endif
 endif
 
-Z80OBJS=z80inst.o z80_to_x86.o zruntime.o
+Z80OBJS=z80inst.o z80_to_x86.o
 AUDIOOBJS=ym2612.o psg.o wave.o
 CONFIGOBJS=config.o tern.o util.o
 
