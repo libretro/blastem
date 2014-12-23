@@ -187,7 +187,9 @@ void xchg_rr(code_info *code, uint8_t src, uint8_t dst, uint8_t size);
 void pushf(code_info *code);
 void popf(code_info *code);
 void push_r(code_info *code, uint8_t reg);
+void push_rdisp(code_info *code, uint8_t base, int32_t disp);
 void pop_r(code_info *code, uint8_t reg);
+void pop_rind(code_info *code, uint8_t reg);
 void setcc_r(code_info *code, uint8_t cc, uint8_t dst);
 void setcc_rind(code_info *code, uint8_t cc, uint8_t dst);
 void setcc_rdisp(code_info *code, uint8_t cc, uint8_t dst, int32_t disp);
@@ -208,6 +210,7 @@ void btc_rrdisp(code_info *code, uint8_t src, uint8_t dst_base, int32_t dst_disp
 void btc_ir(code_info *code, uint8_t val, uint8_t dst, uint8_t size);
 void btc_irdisp(code_info *code, uint8_t val, uint8_t dst_base, int32_t dst_disp, uint8_t size);
 void jcc(code_info *code, uint8_t cc, code_ptr dest);
+void jmp_rind(code_info *code, uint8_t dst);
 void call_r(code_info *code, uint8_t dst);
 void retn(code_info *code);
 void cdq(code_info *code);
