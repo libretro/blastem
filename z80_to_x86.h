@@ -21,21 +21,29 @@ enum {
 	ZF_NUM
 };
 
+typedef void (*z80_run_fun)(void * context);
+
 typedef struct {
 	cpu_options     gen;
 	code_ptr        save_context_scratch;
 	code_ptr        load_context_scratch;
-	code_ptr		read_8;
-	code_ptr		write_8;
+	code_ptr        native_addr;
+	code_ptr        retrans_stub;
+	code_ptr        do_sync;
+	code_ptr        read_8;
+	code_ptr        write_8;
 	code_ptr        write_8_noinc;
-	code_ptr		read_16;
-	code_ptr		write_16_highfirst;
-	code_ptr		write_16_lowfirst;
+	code_ptr        read_16;
+	code_ptr        write_16_highfirst;
+	code_ptr        write_16_lowfirst;
+	code_ptr		read_io;
+	code_ptr		write_io;
 
 	uint32_t        flags;
 	int8_t          regs[Z80_UNUSED];
-	int8_t			bank_reg;
-	int8_t			bank_pointer;
+	int8_t          bank_reg;
+	int8_t          bank_pointer;
+	z80_run_fun     run;
 } z80_options;
 
 typedef struct {
@@ -63,6 +71,7 @@ typedef struct {
 	void *            system;
 	uint8_t           ram_code_flags[(8 * 1024)/128/8];
 	uint32_t          int_enable_cycle;
+	z80_run_fun       run;
   uint16_t          pc;
 } z80_context;
 
