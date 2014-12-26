@@ -154,7 +154,7 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 						retn(code);
 						*good_addr = code->cur - (good_addr + 1);
 						shr_ir(code, 1, adr_reg, opts->address_size);
-					} else {
+					} else if (opts->byte_swap) {
 						xor_ir(code, 1, adr_reg, opts->address_size);
 					}
 				} else if ((memmap[chunk].flags & MMAP_ONLY_ODD) || (memmap[chunk].flags & MMAP_ONLY_EVEN)) {
@@ -163,6 +163,9 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 					if ((memmap[chunk].flags & MMAP_ONLY_EVEN) && is_write) {
 						shr_ir(code, 8, opts->scratch1, SZ_W);
 					}
+				}
+				if (opts->address_size != SZ_D) {
+					movzx_rr(code, adr_reg, adr_reg, opts->address_size, SZ_D);
 				}
 				if ((intptr_t)memmap[chunk].buffer <= 0x7FFFFFFF && (intptr_t)memmap[chunk].buffer >= -2147483648) {
 					if (is_write) {
