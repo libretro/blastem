@@ -10,7 +10,6 @@
 
 //functions implemented in host CPU specfic file
 void translate_out_of_bounds(code_info *code);
-void check_code_prologue(code_info *code);
 void areg_to_native(m68k_options *opts, uint8_t reg, uint8_t native_reg);
 void dreg_to_native(m68k_options *opts, uint8_t reg, uint8_t native_reg);
 void areg_to_native_sx(m68k_options *opts, uint8_t reg, uint8_t native_reg);
