@@ -8,6 +8,7 @@ syntax: glob
 *.tar.gz
 *~
 starscream/*
+gxz80/*
 vdpreverse/*
 nemesis/*
 html/*
@@ -16,4 +17,6 @@ blastem
 dis
 stateview
 trans
-
+zdis
+ztestrun
+address.log
