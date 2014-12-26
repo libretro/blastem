@@ -28,6 +28,11 @@ void check_cycles(cpu_options * opts)
 	*jmp_off = code->cur - (jmp_off+1);
 }
 
+void check_code_prologue(code_info *code)
+{
+	check_alloc_code(code, MAX_INST_LEN*4);
+}
+
 code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t num_chunks, ftype fun_type, code_ptr *after_inc)
 {
 	code_info *code = &opts->code;
