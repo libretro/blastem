@@ -2037,7 +2037,7 @@ void init_x86_z80_opts(z80_options * options, memmap_chunk const * chunks, uint3
 	pop_r(code, R12);
 	pop_r(code, RBP);
 	pop_r(code, RBX);
-	*no_sync = code->cur - no_sync;
+	*no_sync = code->cur - (no_sync + 1);
 	//return to caller of z80_run
 	retn(code);
 	
