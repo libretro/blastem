@@ -38,6 +38,7 @@ enum {
 	CC_C,
 	CC_B = CC_C,
 	CC_NC,
+	CC_NB = CC_NC,
 	CC_Z,
 	CC_NZ,
 	CC_BE,

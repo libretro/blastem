@@ -870,7 +870,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address)
 		add_rr(code, opts->gen.scratch2, opts->gen.cycles, SZ_D);
 		cmp_rr(code, opts->gen.limit, opts->gen.cycles, SZ_D);
 		code_ptr skip_last = code->cur+1;
-		jcc(code, CC_B, opts->gen.handle_cycle_limit_int);
+		jcc(code, CC_NB, code->cur+2);
 		cycles(&opts->gen, 4);
 		*skip_last = code->cur - (skip_last+1);
 		call(code, opts->gen.handle_cycle_limit_int);
@@ -1953,16 +1953,17 @@ void init_x86_z80_opts(z80_options * options, memmap_chunk const * chunks, uint3
 		int reg;
 		uint8_t size;
 		if (i < Z80_I) {
-			reg = i /2 + Z80_BC;
+			reg = i /2 + Z80_BC + (i > Z80_H ? 2 : 0);
 			size = SZ_W;
-			i++;
-
 		} else {
 			reg = i;
 			size = SZ_B;
 		}
 		if (options->regs[reg] >= 0) {
 			mov_rrdisp(code, options->regs[reg], options->gen.context_reg, offsetof(z80_context, regs) + i, size);
+		}
+		if (size == SZ_W) {
+			i++;
 		}
 	}
 	if (options->regs[Z80_SP] >= 0) {
@@ -1983,15 +1984,17 @@ void init_x86_z80_opts(z80_options * options, memmap_chunk const * chunks, uint3
 		int reg;
 		uint8_t size;
 		if (i < Z80_I) {
-			int reg = i /2 + Z80_BC;
+			reg = i /2 + Z80_BC + (i > Z80_H ? 2 : 0);
 			size = SZ_W;
-
 		} else {
 			reg = i;
 			size = SZ_B;
 		}
 		if (options->regs[reg] >= 0) {
 			mov_rdispr(code, options->gen.context_reg, offsetof(z80_context, regs) + i, options->regs[reg], size);
+		}
+		if (size == SZ_W) {
+			i++;
 		}
 	}
 	if (options->regs[Z80_SP] >= 0) {
@@ -2035,8 +2038,10 @@ void init_x86_z80_opts(z80_options * options, memmap_chunk const * chunks, uint3
 	*no_sync = code->cur - no_sync;
 	//return to caller of z80_run
 	retn(code);
+	
+	options->gen.handle_code_write = (code_ptr)z80_handle_code_write;
 
-	options->read_8 = gen_mem_fun(&options->gen, chunks, num_chunks, READ_8, NULL);
+	options->read_8 = gen_mem_fun(&options->gen, chunks, num_chunks, READ_8, &options->read_8_noinc);
 	options->write_8 = gen_mem_fun(&options->gen, chunks, num_chunks, WRITE_8, &options->write_8_noinc);
 
 	options->gen.handle_cycle_limit_int = code->cur;
@@ -2105,6 +2110,55 @@ void init_x86_z80_opts(z80_options * options, memmap_chunk const * chunks, uint3
 	check_cycles(&options->gen);
 	cycles(&options->gen, 4);
 	retn(code);
+	
+	options->read_16 = code->cur;
+	cycles(&options->gen, 3);
+	check_cycles(&options->gen);
+	//TODO: figure out how to handle the extra wait state for word reads to bank area
+	//may also need special handling to avoid too much stack depth when acces is blocked
+	push_r(code, options->gen.scratch1);
+	call(code, options->read_8_noinc);
+	mov_rr(code, options->gen.scratch1, options->gen.scratch2, SZ_B);
+	pop_r(code, options->gen.scratch1);
+	add_ir(code, 1, options->gen.scratch1, SZ_W);
+	cycles(&options->gen, 3);
+	check_cycles(&options->gen);
+	call(code, options->read_8_noinc);
+	shl_ir(code, 8, options->gen.scratch1, SZ_W);
+	mov_rr(code, options->gen.scratch2, options->gen.scratch1, SZ_B);
+	retn(code);
+	
+	options->write_16_highfirst = code->cur;
+	cycles(&options->gen, 3);
+	check_cycles(&options->gen);
+	push_r(code, options->gen.scratch2);
+	push_r(code, options->gen.scratch1);
+	add_ir(code, 1, options->gen.scratch2, SZ_W);
+	shr_ir(code, 8, options->gen.scratch1, SZ_W);
+	call(code, options->write_8_noinc);
+	pop_r(code, options->gen.scratch1);
+	pop_r(code, options->gen.scratch2);
+	cycles(&options->gen, 3);
+	check_cycles(&options->gen);
+	//TODO: Check if we can get away with TCO here
+	call(code, options->write_8_noinc);
+	retn(code);
+	
+	options->write_16_lowfirst = code->cur;
+	cycles(&options->gen, 3);
+	check_cycles(&options->gen);
+	push_r(code, options->gen.scratch2);
+	push_r(code, options->gen.scratch1);
+	call(code, options->write_8_noinc);
+	pop_r(code, options->gen.scratch1);
+	pop_r(code, options->gen.scratch2);
+	add_ir(code, 1, options->gen.scratch2, SZ_W);
+	shr_ir(code, 8, options->gen.scratch1, SZ_W);
+	cycles(&options->gen, 3);
+	check_cycles(&options->gen);
+	//TODO: Check if we can get away with TCO here
+	call(code, options->write_8_noinc);
+	retn(code);
 
 	options->retrans_stub = code->cur;
 	//pop return address
@@ -2130,6 +2184,7 @@ void init_x86_z80_opts(z80_options * options, memmap_chunk const * chunks, uint3
 	push_r(code, R14);
 	push_r(code, R15);
 	mov_rr(code, RDI, options->gen.context_reg, SZ_PTR);
+	call(code, options->load_context_scratch);
 	cmp_irdisp(code, 0, options->gen.context_reg, offsetof(z80_context, extra_pc), SZ_PTR);
 	code_ptr no_extra = code->cur+1;
 	jcc(code, CC_Z, no_extra);
