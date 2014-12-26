@@ -2169,6 +2169,7 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	memset(opts, 0, sizeof(*opts));
 	opts->gen.address_size = SZ_D;
 	opts->gen.address_mask = 0xFFFFFF;
+	opts->gen.byte_swap = 1;
 	opts->gen.max_address = 0x1000000;
 	opts->gen.bus_cycles = BUS;
 	opts->gen.mem_ptr_off = offsetof(m68k_context, mem_pointers);
