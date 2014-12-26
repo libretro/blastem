@@ -1303,7 +1303,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address)
 			if (!call_dst) {
 				opts->gen.deferred = defer_address(opts->gen.deferred, inst->immed, code->cur + 1);
 				//fake address to force large displacement
-				call_dst + 256;
+				call_dst = code->cur + 256;
 			}
 			jmp(code, call_dst);
 		} else {
@@ -1352,7 +1352,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address)
 			if (!call_dst) {
 				opts->gen.deferred = defer_address(opts->gen.deferred, dest_addr, code->cur + 1);
 				//fake address to force large displacement
-				call_dst + 256;
+				call_dst = code->cur + 256;
 			}
 			jmp(code, call_dst);
 		} else {
@@ -1371,7 +1371,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address)
 			if (!call_dst) {
 				opts->gen.deferred = defer_address(opts->gen.deferred, dest_addr, code->cur + 1);
 				//fake address to force large displacement
-				call_dst + 256;
+				call_dst = code->cur + 256;
 			}
 			jmp(code, call_dst);
 		} else {
@@ -1406,7 +1406,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address)
 			if (!call_dst) {
 				opts->gen.deferred = defer_address(opts->gen.deferred, dest_addr, code->cur + 1);
 				//fake address to force large displacement
-				call_dst + 256;
+				call_dst = code->cur + 256;
 			}
 			jmp(code, call_dst);
 		} else {
@@ -1429,7 +1429,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address)
 			if (!call_dst) {
 				opts->gen.deferred = defer_address(opts->gen.deferred, dest_addr, code->cur + 1);
 				//fake address to force large displacement
-				call_dst + 256;
+				call_dst = code->cur + 256;
 			}
 			jmp(code, call_dst);
 		} else {
@@ -1450,7 +1450,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address)
 			if (!call_dst) {
 				opts->gen.deferred = defer_address(opts->gen.deferred, inst->immed, code->cur + 1);
 				//fake address to force large displacement
-				call_dst + 256;
+				call_dst = code->cur + 256;
 			}
 			jmp(code, call_dst);
 		} else {
@@ -1498,7 +1498,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address)
 			if (!call_dst) {
 				opts->gen.deferred = defer_address(opts->gen.deferred, inst->immed, code->cur + 1);
 				//fake address to force large displacement
-				call_dst + 256;
+				call_dst = code->cur + 256;
 			}
 			jmp(code, call_dst);
 		} else {
@@ -1582,7 +1582,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address)
 		if (!call_dst) {
 			opts->gen.deferred = defer_address(opts->gen.deferred, inst->immed, code->cur + 1);
 			//fake address to force large displacement
-			call_dst + 256;
+			call_dst = code->cur + 256;
 		}
 		jmp(code, call_dst);
 		break;
@@ -1815,10 +1815,12 @@ void * z80_retranslate_inst(uint32_t address, z80_context * context, uint8_t * o
 		code->cur = orig_start;
 		code->last = orig_start + ZMAX_NATIVE_SIZE;
 		translate_z80inst(&instbuf, context, address);
-		if (!z80_is_terminal(&instbuf)) {
-			jmp(code, z80_get_native_address_trans(context, address + after-inst));
-		}
+		code_info tmp2 = *code;
 		*code = tmp_code;
+		if (!z80_is_terminal(&instbuf)) {
+			
+			jmp(&tmp2, z80_get_native_address_trans(context, address + after-inst));
+		}
 		z80_handle_deferred(context);
 		return orig_start;
 	}
@@ -1855,6 +1857,8 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 				jmp(&opts->gen.code, existing);
 				break;
 			}
+			//make sure prologue is in a contiguous chunk of code
+			check_code_prologue(&opts->gen.code);
 			next = z80_decode(encoded, &inst);
 			#ifdef DO_DEBUG_PRINT
 			z80_disasm(&inst, disbuf, address);
@@ -2228,12 +2232,12 @@ void zinsert_breakpoint(z80_context * context, uint16_t address, uint8_t * bp_ha
 {
 	static uint8_t * bp_stub = NULL;
 	z80_options * opts = context->options;
-	uint8_t * native = z80_get_native_address_trans(context, address);
+	code_ptr native = z80_get_native_address_trans(context, address);
 	code_info tmp_code = {native, native+16};
 	mov_ir(&tmp_code, address, opts->gen.scratch1, SZ_W);
 	if (!bp_stub) {
 		code_info *code = &opts->gen.code;
-		//TODO: do an alloc check here to make sure the prologue length calc works
+		check_code_prologue(code);
 		bp_stub = code->cur;
 		call(&tmp_code, bp_stub);
 
@@ -2257,13 +2261,13 @@ void zinsert_breakpoint(z80_context * context, uint16_t address, uint8_t * bp_ha
 		uint8_t * jmp_off = code->cur+1;
 		jcc(code, CC_NC, code->cur + 7);
 		pop_r(code, opts->gen.scratch1);
-		add_ir(code, check_int_size - (code->cur-native), opts->gen.scratch1, SZ_Q);
+		add_ir(code, check_int_size - (tmp_code.cur-native), opts->gen.scratch1, SZ_Q);
 		push_r(code, opts->gen.scratch1);
 		jmp(code, opts->gen.handle_cycle_limit_int);
 		*jmp_off = code->cur - (jmp_off+1);
 		//jump back to body of translated instruction
 		pop_r(code, opts->gen.scratch1);
-		add_ir(code, check_int_size - (code->cur-native), opts->gen.scratch1, SZ_Q);
+		add_ir(code, check_int_size - (tmp_code.cur-native), opts->gen.scratch1, SZ_Q);
 		jmp_r(code, opts->gen.scratch1);
 	} else {
 		call(&tmp_code, bp_stub);

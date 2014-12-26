@@ -2061,11 +2061,6 @@ void translate_out_of_bounds(code_info *code)
 	call(code, (code_ptr)exit);
 }
 
-void check_code_prologue(code_info *code)
-{
-	check_alloc_code(code, MAX_INST_LEN*4);
-};
-
 void nop_fill_or_jmp_next(code_info *code, code_ptr old_end, code_ptr next_inst)
 {
 	if (next_inst == old_end && next_inst - code->cur < 2) {
