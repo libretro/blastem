@@ -32,6 +32,7 @@ typedef struct {
 	code_ptr        do_sync;
 	code_ptr        read_8;
 	code_ptr        write_8;
+	code_ptr        read_8_noinc;
 	code_ptr        write_8_noinc;
 	code_ptr        read_16;
 	code_ptr        write_16_highfirst;
