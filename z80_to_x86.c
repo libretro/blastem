@@ -1779,6 +1779,7 @@ void * z80_retranslate_inst(uint32_t address, z80_context * context, uint8_t * o
 	}
 	#endif
 	if (orig_size != ZMAX_NATIVE_SIZE) {
+		check_alloc_code(code, ZMAX_NATIVE_SIZE);
 		code_ptr start = code->cur;
 		deferred_addr * orig_deferred = opts->gen.deferred;
 		translate_z80inst(&instbuf, context, address);
@@ -1802,10 +1803,11 @@ void * z80_retranslate_inst(uint32_t address, z80_context * context, uint8_t * o
 		z80_map_native_address(context, address, start, after-inst, ZMAX_NATIVE_SIZE);
 		code_info tmp_code = {orig_start, orig_start + 16};
 		jmp(&tmp_code, start);
-		if (!z80_is_terminal(&instbuf)) {
-			jmp(code, z80_get_native_address_trans(context, address + after-inst));
-		}
+		tmp_code = *code;
 		code->cur = start + ZMAX_NATIVE_SIZE;
+		if (!z80_is_terminal(&instbuf)) {
+			jmp(&tmp_code, z80_get_native_address_trans(context, address + after-inst));
+		}
 		z80_handle_deferred(context);
 		return start;
 	} else {
