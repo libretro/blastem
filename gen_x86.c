@@ -322,10 +322,17 @@ void x86_rrind_sizedir(code_info *code, uint8_t opcode, uint8_t reg, uint8_t bas
 		opcode |= BIT_SIZE;
 	}
 	*(out++) = opcode | dir;
-	*(out++) = MODE_REG_INDIRECT | base | (reg << 3);
-	if (base == RSP) {
-		//add SIB byte, with no index and RSP as base
-		*(out++) = (RSP << 3) | RSP;
+	if (base == RBP) {
+		//add a dummy 8-bit displacement since MODE_REG_INDIRECT with
+		//an R/M field of RBP selects RIP, relative addressing
+		*(out++) = MODE_REG_DISPLACE8 | base | (reg << 3);
+		*(out++) = 0;
+	} else {
+		*(out++) = MODE_REG_INDIRECT | base | (reg << 3);
+		if (base == RSP) {
+			//add SIB byte, with no index and RSP as base
+			*(out++) = (RSP << 3) | RSP;
+		}
 	}
 	code->cur = out;
 }
