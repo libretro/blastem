@@ -178,9 +178,17 @@ class Indexed(object):
 					self.disp -= (address & 0xFFFFFF)
 				else:
 					self.disp += 0xE00000-(address & 0xFFFFFF)
+				if self.disp > 127:
+					self.disp = 127
+				elif self.disp < -128:
+					self.disp = -128
 				address = base + index + self.disp
 			elif (address & 0xFFFFFF) > 0xFFFFFC:
 				self.disp -= (address & 0xFFFFFF) - 0xFFFFFC
+				if self.disp > 127:
+					self.disp = 127
+				elif self.disp < -128:
+					self.disp = -128
 				address = base + index + self.disp
 			if size != 'b' and address & 1:
 				self.disp = self.disp ^ 1
