@@ -1143,7 +1143,7 @@ void detect_region()
 #ifndef NO_Z80
 const memmap_chunk z80_map[] = {
 	{ 0x0000, 0x4000,  0x1FFF, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE,                         z80_ram, NULL, NULL, NULL,              NULL },
-	{ 0x8000, 0x10000, 0xFFFF, 1, MMAP_READ | MMAP_PTR_IDX | MMAP_FUNC_NULL | MMAP_BYTESWAP,  NULL,    NULL, NULL, z80_read_bank,     z80_write_bank},
+	{ 0x8000, 0x10000, 0x7FFF, 1, MMAP_READ | MMAP_PTR_IDX | MMAP_FUNC_NULL | MMAP_BYTESWAP,  NULL,    NULL, NULL, z80_read_bank,     z80_write_bank},
 	{ 0x4000, 0x6000,  0x0003, 0, 0,                                                          NULL,    NULL, NULL, z80_read_ym,       z80_write_ym},
 	{ 0x6000, 0x6100,  0xFFFF, 0, 0,                                                          NULL,    NULL, NULL, NULL,              z80_write_bank_reg},
 	{ 0x7F00, 0x8000,  0x00FF, 0, 0,                                                          NULL,    NULL, NULL, z80_vdp_port_read, z80_vdp_port_write}
