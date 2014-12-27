@@ -1896,7 +1896,7 @@ void translate_m68k_andi_ori_ccr_sr(m68k_options *opts, m68kinst *inst)
 		} else {
 			or_irdisp(code, inst->src.params.immed >> 8, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
 		}
-		if ((base_flag == X0) ^ (((inst->src.params.immed >> 8) & (1 << BIT_SUPERVISOR)) > 0)) {
+		if (inst->op == M68K_ANDI_SR && !(inst->src.params.immed & (1 << (BIT_SUPERVISOR + 8)))) {
 			//leave supervisor mode
 			swap_ssp_usp(opts);
 		}
