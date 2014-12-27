@@ -1604,6 +1604,20 @@ void translate_m68k_div(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 			movzx_rdispr(code, src_op->base, src_op->disp, opts->gen.scratch2, SZ_W, SZ_D);
 		}
 	}
+	uint32_t isize = 2;
+	switch(inst->src.addr_mode)
+	{
+	case MODE_AREG_DISPLACE:
+	case MODE_AREG_INDEX_DISP8:
+	case MODE_ABSOLUTE_SHORT:
+	case MODE_PC_INDEX_DISP8:
+	case MODE_IMMEDIATE:
+		isize = 4;		
+		break;
+	case MODE_ABSOLUTE:
+		isize = 6;
+		break;
+	}
 	cmp_ir(code, 0, opts->gen.scratch2, SZ_D);
 	check_alloc_code(code, 6*MAX_INST_LEN);
 	code_ptr not_zero = code->cur + 1;
@@ -1611,7 +1625,7 @@ void translate_m68k_div(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 	pop_r(code, RAX);
 	pop_r(code, RDX);
 	mov_ir(code, VECTOR_INT_DIV_ZERO, opts->gen.scratch2, SZ_D);
-	mov_ir(code, inst->address+2, opts->gen.scratch1, SZ_D);
+	mov_ir(code, inst->address+isize, opts->gen.scratch1, SZ_D);
 	jmp(code, opts->trap);
 	*not_zero = code->cur - (not_zero+1);
 	if (inst->op == M68K_DIVS) {
