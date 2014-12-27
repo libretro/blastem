@@ -731,14 +731,35 @@ uint8_t z80_read_ym(uint32_t location, void * vcontext)
 uint8_t z80_read_bank(uint32_t location, void * vcontext)
 {
 	z80_context * context = vcontext;
-	//TODO: Implement me
+	uint32_t address = context->bank_reg << 15 | location;
+	fprintf(stderr, "Unhandled read by Z80 from address %X through banked memory area\n", address);
 	return 0;
 }
 
 void *z80_write_bank(uint32_t location, void * vcontext, uint8_t value)
 {
 	z80_context * context = vcontext;
-	//TODO: Implement me
+	uint32_t address = context->bank_reg << 15 | location;
+	if (address >= 0xE00000) {
+		address &= 0xFFFF;
+		((uint8_t *)ram)[address ^ 1] = value;
+	} else {
+		fprintf(stderr, "Unhandled write by Z80 to address %X through banked memory area\n", address);
+	}
+	return context;
+}
+
+void *z80_write_bank_reg(uint32_t location, void * vcontext, uint8_t value)
+{
+	z80_context * context = vcontext;
+	
+	context->bank_reg = (context->bank_reg >> 1 | value << 8) & 0x1FF;
+	if (context->bank_reg < 0x80) {
+		context->mem_pointers[1] = context->mem_pointers[2] + (context->bank_reg << 15);
+	} else {
+		context->mem_pointers[1] = NULL;
+	}
+	
 	return context;
 }
 
@@ -1121,11 +1142,11 @@ void detect_region()
 }
 #ifndef NO_Z80
 const memmap_chunk z80_map[] = {
-	{ 0x0000, 0x4000,  0x1FFF, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE,                     z80_ram, NULL, NULL, NULL,              NULL },
-	{ 0x8000, 0x10000, 0xFFFF, 1, MMAP_READ | MMAP_WRITE | MMAP_PTR_IDX | MMAP_FUNC_NULL, NULL,    NULL, NULL, z80_read_bank,     z80_write_bank},
-	{ 0x4000, 0x6000,  0x0003, 0, MMAP_READ | MMAP_WRITE,                                 NULL,    NULL, NULL, z80_read_ym,       z80_write_ym},
-	{ 0x6000, 0x6100,  0xFFFF, 0, MMAP_WRITE | MMAP_CUSTOM,                               NULL,    NULL, NULL, NULL,              (write_8_fun)z80_gen_bank_write},
-	{ 0x7F00, 0x8000,  0x00FF, 0, MMAP_READ | MMAP_WRITE,                                 NULL,    NULL, NULL, z80_vdp_port_read, z80_vdp_port_write}
+	{ 0x0000, 0x4000,  0x1FFF, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE,                         z80_ram, NULL, NULL, NULL,              NULL },
+	{ 0x8000, 0x10000, 0xFFFF, 1, MMAP_READ | MMAP_PTR_IDX | MMAP_FUNC_NULL | MMAP_BYTESWAP,  NULL,    NULL, NULL, z80_read_bank,     z80_write_bank},
+	{ 0x4000, 0x6000,  0x0003, 0, 0,                                                          NULL,    NULL, NULL, z80_read_ym,       z80_write_ym},
+	{ 0x6000, 0x6100,  0xFFFF, 0, 0,                                                          NULL,    NULL, NULL, NULL,              z80_write_bank_reg},
+	{ 0x7F00, 0x8000,  0x00FF, 0, 0,                                                          NULL,    NULL, NULL, z80_vdp_port_read, z80_vdp_port_write}
 };
 #endif
 
