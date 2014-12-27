@@ -30,7 +30,7 @@ void * z80_unmapped_write(uint32_t location, void * context, uint8_t value)
 
 const memmap_chunk z80_map[] = {
 	{ 0x0000, 0x4000,  0x1FFF, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE, z80_ram, NULL, NULL, NULL,              NULL },
-	{ 0x4000, 0x10000, 0xFFFF, 0, MMAP_READ | MMAP_WRITE,             NULL,    NULL, NULL, z80_unmapped_read, z80_unmapped_write}
+	{ 0x4000, 0x10000, 0xFFFF, 0, 0,                                  NULL,    NULL, NULL, z80_unmapped_read, z80_unmapped_write}
 };
 
 int main(int argc, char ** argv)
