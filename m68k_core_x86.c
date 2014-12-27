@@ -604,10 +604,8 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 		break;
 	case MODE_AREG_PREDEC:
 		dec_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (inst->dst.params.regs.pri == 7 ? 2 : 1));
-		subi_areg(opts, dec_amount, inst->dst.params.regs.pri);
 	case MODE_AREG_INDIRECT:
 	case MODE_AREG_POSTINC:
-		areg_to_native(opts, inst->dst.params.regs.pri, opts->gen.scratch2);
 		if (src.mode == MODE_REG_DIRECT) {
 			if (src.base != opts->gen.scratch1) {
 				mov_rr(code, src.base, opts->gen.scratch1, inst->extra.size);
@@ -617,6 +615,10 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 		} else {
 			mov_ir(code, src.disp, opts->gen.scratch1, inst->extra.size);
 		}
+		if (inst->dst.addr_mode == MODE_AREG_PREDEC) {
+			subi_areg(opts, dec_amount, inst->dst.params.regs.pri);
+		}
+		areg_to_native(opts, inst->dst.params.regs.pri, opts->gen.scratch2);
 		break;
 	case MODE_AREG_DISPLACE:
 		cycles(&opts->gen, BUS);
