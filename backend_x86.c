@@ -84,7 +84,7 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 		default:
 			cfun = NULL;
 		}
-		if(memmap[chunk].buffer && memmap[chunk].flags & access_flag) {
+		if(memmap[chunk].flags & access_flag) {
 			if (memmap[chunk].flags & MMAP_PTR_IDX) {
 				if (memmap[chunk].flags & MMAP_FUNC_NULL) {
 					cmp_irdisp(code, 0, opts->context_reg, opts->mem_ptr_off + sizeof(void*) * memmap[chunk].ptr_index, SZ_PTR);
@@ -133,7 +133,7 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 
 					*not_null = code->cur - (not_null + 1);
 				}
-				if (opts->byte_swap && size == SZ_B) {
+				if ((opts->byte_swap || memmap[chunk].flags & MMAP_BYTESWAP) && size == SZ_B) {
 					xor_ir(code, 1, adr_reg, opts->address_size);
 				}
 				if (opts->address_size != SZ_D) {
@@ -159,7 +159,7 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 						retn(code);
 						*good_addr = code->cur - (good_addr + 1);
 						shr_ir(code, 1, adr_reg, opts->address_size);
-					} else if (opts->byte_swap) {
+					} else if (opts->byte_swap || memmap[chunk].flags & MMAP_BYTESWAP) {
 						xor_ir(code, 1, adr_reg, opts->address_size);
 					}
 				} else if ((memmap[chunk].flags & MMAP_ONLY_ODD) || (memmap[chunk].flags & MMAP_ONLY_EVEN)) {
