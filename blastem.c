@@ -732,7 +732,11 @@ uint8_t z80_read_bank(uint32_t location, void * vcontext)
 {
 	z80_context * context = vcontext;
 	uint32_t address = context->bank_reg << 15 | location;
-	fprintf(stderr, "Unhandled read by Z80 from address %X through banked memory area\n", address);
+	if (address >= 0xC00000 && address < 0xE00000) {
+		return z80_vdp_port_read(location & 0xFF, context);
+	} else {
+		fprintf(stderr, "Unhandled read by Z80 from address %X through banked memory area\n", address);
+	}
 	return 0;
 }
 
@@ -743,6 +747,8 @@ void *z80_write_bank(uint32_t location, void * vcontext, uint8_t value)
 	if (address >= 0xE00000) {
 		address &= 0xFFFF;
 		((uint8_t *)ram)[address ^ 1] = value;
+	} else if (address >= 0xC00000) {
+		z80_vdp_port_write(location & 0xFF, context, value);
 	} else {
 		fprintf(stderr, "Unhandled write by Z80 to address %X through banked memory area\n", address);
 	}
