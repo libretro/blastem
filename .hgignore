@@ -6,12 +6,16 @@ syntax: glob
 *.jpg
 *.pdf
 *.tar.gz
+*.list
 *~
 starscream/*
 gxz80/*
+musashi/*
 vdpreverse/*
 nemesis/*
 html/*
+generated_tests/*
+ztests/*
 *.o
 blastem
 dis
