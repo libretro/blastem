@@ -896,6 +896,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				break;
 			case 4:
 				decoded->op = M68K_SBCD;
+				decoded->extra.size = OPSIZE_BYTE;
 				decoded->dst.addr_mode = decoded->src.addr_mode = *istream & 0x8 ? MODE_AREG_PREDEC : MODE_REG;
 				decoded->src.params.regs.pri = *istream & 0x7;
 				decoded->dst.params.regs.pri = (*istream >> 9) & 0x7;
