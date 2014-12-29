@@ -649,7 +649,7 @@ impl_info m68k_impls[] = {
 	RAW_IMPL(M68K_EXT, translate_m68k_ext),
 	UNARY_IMPL(M68K_NEG, X|N|Z|V|C),
 	OP_IMPL(M68K_NEGX, translate_m68k_negx),
-	UNARY_IMPL(M68K_NOT, X|N|Z|V|C),
+	UNARY_IMPL(M68K_NOT, N|Z|V|C),
 	UNARY_IMPL(M68K_TST, N|Z|V0|C0),
 
 	//shift/rotate
