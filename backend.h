@@ -62,6 +62,7 @@ typedef struct {
 	uint32_t        bus_cycles;
 	int32_t         mem_ptr_off;
 	int32_t         ram_flags_off;
+	uint8_t         ram_flags_shift;
 	uint8_t         address_size;
 	uint8_t         byte_swap;
 	uint8_t         context_reg;

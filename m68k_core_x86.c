@@ -2237,6 +2237,7 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	opts->gen.bus_cycles = BUS;
 	opts->gen.mem_ptr_off = offsetof(m68k_context, mem_pointers);
 	opts->gen.ram_flags_off = offsetof(m68k_context, ram_code_flags);
+	opts->gen.ram_flags_shift = 11;
 	for (int i = 0; i < 8; i++)
 	{
 		opts->dregs[i] = opts->aregs[i] = -1;
