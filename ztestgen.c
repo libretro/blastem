@@ -289,7 +289,7 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 		reg_usage[inst->reg] = 1;
 	}
 	uint8_t counter_reg = Z80_UNUSED;
-	if (inst->op == Z80_JP) {
+	if (inst->op == Z80_JP || inst->op == Z80_JPCC) {
 		counter_reg = alloc_reg8(reg_usage, reg_values, 0);
 	}
 	puts("--------------");
@@ -331,12 +331,22 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 		//setup other regs
 		for (uint8_t reg = Z80_BC; reg <= Z80_IY; reg++) {
 			if (reg != Z80_AF && reg != Z80_SP && (inst->op != Z80_JP || addr_mode != Z80_REG_INDIRECT || inst->ea_reg != reg)) {
-				cur = ld_ir16(cur, reg, reg_values[reg]);
+				if (i == 1 && (z80_high_reg(reg) == counter_reg || z80_low_reg(reg) == counter_reg)) {
+					if (z80_high_reg(reg) == counter_reg) {
+						if (reg_usage[z80_low_reg(reg)]) {
+							cur = ld_ir8(cur, z80_low_reg(reg), reg_values[z80_low_reg(reg)]);
+						}
+					} else if (reg_usage[z80_high_reg(reg)]) {
+						cur = ld_ir8(cur, z80_high_reg(reg), reg_values[z80_high_reg(reg)]);
+					}
+				} else {
+					cur = ld_ir16(cur, reg, reg_values[reg]);
+				}
 			}
 		}
 
 		if (inst->op == Z80_JP && addr_mode == Z80_REG_INDIRECT) {
-			uint16_t address = cur - prog + (inst->ea_reg == Z80_HL ? 3 : 4) + instlen + 1;
+			uint16_t address = cur - prog + (inst->ea_reg == Z80_HL ? 3 : 4) + instlen + 1 + i;
 			cur = ld_ir16(cur, inst->ea_reg, address);
 		}
 
@@ -352,11 +362,10 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 		//immed/displacement byte(s)
 		if (addr_mode == Z80_IX_DISPLACE || addr_mode == Z80_IY_DISPLACE) {
 			*(cur++) = inst->ea_reg;
-		} else if (inst->op == Z80_JP && addr_mode == Z80_IMMED) {
-			uint16_t address = cur - prog + 5; //2 for immed address, 3 for instruction to skip
+		} else if ((inst->op == Z80_JP || inst->op == Z80_JPCC) && addr_mode == Z80_IMMED) {
+			uint16_t address = cur - prog + 3 + i; //2 for immed address, 1/2 for instruction(s) to skip
 			*(cur++) = address;
 			*(cur++) = address >> 8;
-			cur = ld_ir16(cur, Z80_HL, 0xDEAD);
 		} else if (addr_mode == Z80_IMMED & inst->op != Z80_IM) {
 			*(cur++) = inst->immed & 0xFF;
 			if (word_sized) {
@@ -372,8 +381,12 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 		if (instlen == 3) {
 			*(cur++) = instbuf[2];
 		}
-		if (inst->op == Z80_JP && addr_mode == Z80_REG_INDIRECT) {
+		if (inst->op == Z80_JP || inst->op == Z80_JPCC) {
 			cur = inc_r(cur, counter_reg);
+			if (i) {
+				//inc twice on second iteration so we can differentiate the two
+				cur = inc_r(cur, counter_reg);
+			}
 		}
 		if (!i) {
 			//Save AF from first run
@@ -449,7 +462,7 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 
 uint8_t should_skip(z80inst * inst)
 {
-	return inst->op >= Z80_JPCC || (inst->op >= Z80_LDI && inst->op <= Z80_CPDR) || inst->op == Z80_HALT
+	return inst->op >= Z80_JR || (inst->op >= Z80_LDI && inst->op <= Z80_CPDR) || inst->op == Z80_HALT
 		|| inst->op == Z80_DAA || inst->op == Z80_RLD || inst->op == Z80_RRD || inst->op == Z80_NOP
 		|| inst->op == Z80_DI || inst->op == Z80_EI;
 }
