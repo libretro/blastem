@@ -24,6 +24,7 @@ extern char * z80_regs[Z80_USE_IMMED];
 #define PRE_IX  0xDD
 #define PRE_IY  0xFD
 #define LD_IR16 0x01
+#define INC_R8  0x04
 #define LD_IR8  0x06
 #define LD_RR8  0x40
 #define AND_R   0xA0
@@ -143,6 +144,43 @@ uint8_t * and_r(uint8_t * dst, uint8_t reg)
 	}
 }
 
+uint8_t * inc_r(uint8_t *dst, uint8_t reg)
+{
+	if (reg == Z80_IXH || reg == Z80_IXL) {
+		*(dst++) = PRE_IX;
+		return inc_r(dst, reg - (Z80_IXL - Z80_L));
+	} else if(reg == Z80_IYH || reg == Z80_IYL) {
+		*(dst++) = PRE_IY;
+		return inc_r(dst, reg - (Z80_IYL - Z80_L));
+	} else {
+		*(dst++) = INC_R8 | reg << 3;
+		return dst;
+	}
+}
+
+void mark_used8(uint8_t *reg_usage, uint16_t *reg_values, uint8_t reg, uint8_t init_value)
+{
+	reg_usage[reg] = 1;
+	reg_values[reg] = init_value;
+	uint8_t word_reg = z80_word_reg(reg);
+	if (word_reg != Z80_UNUSED) {
+		reg_usage[word_reg] = 1;
+		reg_values[word_reg] = (reg_values[z80_high_reg(word_reg)] << 8) | (reg_values[z80_low_reg(word_reg)] & 0xFF);
+	}
+}
+
+uint8_t alloc_reg8(uint8_t *reg_usage, uint16_t *reg_values, uint8_t init_value)
+{
+	for (uint8_t reg = 0; reg < Z80_BC; reg++)
+	{
+		if (!reg_usage[reg]) {
+			mark_used8(reg_usage, reg_values, reg, init_value);
+			return reg;
+		}
+	}
+	return Z80_UNUSED;
+}
+
 void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 {
 	z80inst copy;
@@ -184,12 +222,7 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 			reg_values[z80_low_reg(inst->ea_reg)] = reg_values[inst->ea_reg] & 0xFF;
 			reg_usage[z80_low_reg(inst->ea_reg)] = 1;
 		} else {
-			reg_values[inst->ea_reg] = rand() % 256;
-			uint8_t word_reg = z80_word_reg(inst->ea_reg);
-			if (word_reg != Z80_UNUSED) {
-				reg_usage[word_reg] = 1;
-				reg_values[word_reg] = (reg_values[z80_high_reg(word_reg)] << 8) | (reg_values[z80_low_reg(word_reg)] & 0xFF);
-			}
+			mark_used8(reg_usage, reg_values, inst->ea_reg, rand() % 256);
 		}
 		break;
 	case Z80_REG_INDIRECT:
@@ -255,6 +288,10 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 		}
 		reg_usage[inst->reg] = 1;
 	}
+	uint8_t counter_reg = Z80_UNUSED;
+	if (inst->op == Z80_JP) {
+		counter_reg = alloc_reg8(reg_usage, reg_values, 0);
+	}
 	puts("--------------");
 	for (uint8_t reg = 0; reg < Z80_UNUSED; reg++) {
 		if (reg_values[reg]) {
@@ -293,9 +330,14 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 
 		//setup other regs
 		for (uint8_t reg = Z80_BC; reg <= Z80_IY; reg++) {
-			if (reg != Z80_AF && reg != Z80_SP) {
+			if (reg != Z80_AF && reg != Z80_SP && (inst->op != Z80_JP || addr_mode != Z80_REG_INDIRECT || inst->ea_reg != reg)) {
 				cur = ld_ir16(cur, reg, reg_values[reg]);
 			}
+		}
+
+		if (inst->op == Z80_JP && addr_mode == Z80_REG_INDIRECT) {
+			uint16_t address = cur - prog + (inst->ea_reg == Z80_HL ? 3 : 4) + instlen + 1;
+			cur = ld_ir16(cur, inst->ea_reg, address);
 		}
 
 		//copy instruction
@@ -310,6 +352,11 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 		//immed/displacement byte(s)
 		if (addr_mode == Z80_IX_DISPLACE || addr_mode == Z80_IY_DISPLACE) {
 			*(cur++) = inst->ea_reg;
+		} else if (inst->op == Z80_JP && addr_mode == Z80_IMMED) {
+			uint16_t address = cur - prog + 5; //2 for immed address, 3 for instruction to skip
+			*(cur++) = address;
+			*(cur++) = address >> 8;
+			cur = ld_ir16(cur, Z80_HL, 0xDEAD);
 		} else if (addr_mode == Z80_IMMED & inst->op != Z80_IM) {
 			*(cur++) = inst->immed & 0xFF;
 			if (word_sized) {
@@ -324,6 +371,9 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 		}
 		if (instlen == 3) {
 			*(cur++) = instbuf[2];
+		}
+		if (inst->op == Z80_JP && addr_mode == Z80_REG_INDIRECT) {
+			cur = inc_r(cur, counter_reg);
 		}
 		if (!i) {
 			//Save AF from first run
@@ -399,7 +449,7 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 
 uint8_t should_skip(z80inst * inst)
 {
-	return inst->op >= Z80_JP || (inst->op >= Z80_LDI && inst->op <= Z80_CPDR) || inst->op == Z80_HALT
+	return inst->op >= Z80_JPCC || (inst->op >= Z80_LDI && inst->op <= Z80_CPDR) || inst->op == Z80_HALT
 		|| inst->op == Z80_DAA || inst->op == Z80_RLD || inst->op == Z80_RRD || inst->op == Z80_NOP
 		|| inst->op == Z80_DI || inst->op == Z80_EI;
 }
