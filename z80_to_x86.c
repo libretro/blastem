@@ -1907,6 +1907,7 @@ void init_x86_z80_opts(z80_options * options, memmap_chunk const * chunks, uint3
 	options->gen.bus_cycles = 3;
 	options->gen.mem_ptr_off = offsetof(z80_context, mem_pointers);
 	options->gen.ram_flags_off = offsetof(z80_context, ram_code_flags);
+	options->gen.ram_flags_shift = 7;
 
 	options->flags = 0;
 	options->regs[Z80_B] = BH;

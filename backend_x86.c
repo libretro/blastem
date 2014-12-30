@@ -200,9 +200,8 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 				}
 			}
 			if (is_write && (memmap[chunk].flags & MMAP_CODE)) {
-				//TODO: Fixme for Z80
 				mov_rr(code, opts->scratch2, opts->scratch1, opts->address_size);
-				shr_ir(code, 11, opts->scratch1, opts->address_size);
+				shr_ir(code, opts->ram_flags_shift, opts->scratch1, opts->address_size);
 				bt_rrdisp(code, opts->scratch1, opts->context_reg, opts->ram_flags_off, opts->address_size);
 				code_ptr not_code = code->cur + 1;
 				jcc(code, CC_NC, code->cur + 2);
@@ -210,6 +209,10 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 #ifdef X86_32
 				push_r(code, opts->context_reg);
 				push_r(code, opts->scratch2);
+#else
+				if (opts->scratch2 != RDI) {
+					mov_rr(code, opts->scratch2, RDI, opts->address_size);
+				}
 #endif
 				call(code, opts->handle_code_write);
 #ifdef X86_32
