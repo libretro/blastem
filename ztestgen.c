@@ -289,7 +289,7 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 		reg_usage[inst->reg] = 1;
 	}
 	uint8_t counter_reg = Z80_UNUSED;
-	if (inst->op == Z80_JP || inst->op == Z80_JPCC) {
+	if (inst->op >= Z80_JP && inst->op <= Z80_JRCC) {
 		counter_reg = alloc_reg8(reg_usage, reg_values, 0);
 	}
 	puts("--------------");
@@ -366,6 +366,8 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 			uint16_t address = cur - prog + 3 + i; //2 for immed address, 1/2 for instruction(s) to skip
 			*(cur++) = address;
 			*(cur++) = address >> 8;
+		} else if(inst->op == Z80_JR || inst->op == Z80_JRCC) {
+			*(cur++) = 1 + i; //skip one or 2 instructions based on value of i
 		} else if (addr_mode == Z80_IMMED & inst->op != Z80_IM) {
 			*(cur++) = inst->immed & 0xFF;
 			if (word_sized) {
@@ -381,7 +383,7 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 		if (instlen == 3) {
 			*(cur++) = instbuf[2];
 		}
-		if (inst->op == Z80_JP || inst->op == Z80_JPCC) {
+		if (inst->op >= Z80_JP && inst->op <= Z80_JRCC) {
 			cur = inc_r(cur, counter_reg);
 			if (i) {
 				//inc twice on second iteration so we can differentiate the two
@@ -462,7 +464,7 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 
 uint8_t should_skip(z80inst * inst)
 {
-	return inst->op >= Z80_JR || (inst->op >= Z80_LDI && inst->op <= Z80_CPDR) || inst->op == Z80_HALT
+	return inst->op >= Z80_DJNZ || (inst->op >= Z80_LDI && inst->op <= Z80_CPDR) || inst->op == Z80_HALT
 		|| inst->op == Z80_DAA || inst->op == Z80_RLD || inst->op == Z80_RRD || inst->op == Z80_NOP
 		|| inst->op == Z80_DI || inst->op == Z80_EI;
 }
