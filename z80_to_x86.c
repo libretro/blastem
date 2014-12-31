@@ -28,6 +28,8 @@
 #define dprintf
 #endif
 
+uint32_t zbreakpoint_patch(z80_context * context, uint16_t address, code_ptr dst);
+
 uint8_t z80_size(z80inst * inst)
 {
 	uint8_t reg = (inst->reg & 0x1F);
@@ -124,7 +126,7 @@ void translate_z80_ea(z80inst * inst, host_ea * ea, z80_options * opts, uint8_t 
 				ea->base = opts->regs[Z80_IYL];
 				ror_ir(code, 8, opts->regs[Z80_IY], SZ_W);
 			}
-		} else {
+		} else if(opts->regs[inst->ea_reg] >= 0) {
 			ea->base = opts->regs[inst->ea_reg];
 			if (ea->base >= AH && ea->base <= BH && inst->reg != Z80_UNUSED && inst->reg != Z80_USE_IMMED) {
 				uint8_t other_reg = opts->regs[inst->reg];
@@ -134,6 +136,10 @@ void translate_z80_ea(z80inst * inst, host_ea * ea, z80_options * opts, uint8_t 
 					ror_ir(code, 8, ea->base, SZ_W);
 				}
 			}
+		} else {
+			ea->mode = MODE_REG_DISPLACE8;
+			ea->base = CONTEXT;
+			ea->disp = offsetof(z80_context, regs) + inst->ea_reg;
 		}
 		break;
 	case Z80_REG_INDIRECT:
@@ -292,7 +298,7 @@ void z80_print_regs_exit(z80_context * context)
 	exit(0);
 }
 
-void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address)
+void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, uint8_t interp)
 {
 	uint32_t num_cycles;
 	host_ea src_op, dst_op;
@@ -300,7 +306,12 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address)
 	z80_options *opts = context->options;
 	uint8_t * start = opts->gen.code.cur;
 	code_info *code = &opts->gen.code;
-	check_cycles_int(&opts->gen, address);
+	if (!interp) {
+		check_cycles_int(&opts->gen, address);
+		if (context->breakpoint_flags[address / sizeof(uint8_t)] & (1 << (address % sizeof(uint8_t)))) {
+			zbreakpoint_patch(context, address, start);
+		}
+	}
 	switch(inst->op)
 	{
 	case Z80_LD:
@@ -349,6 +360,16 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address)
 			mov_ir(code, src_op.disp, dst_op.base, size);
 		} else {
 			mov_rdispr(code, src_op.base, src_op.disp, dst_op.base, size);
+		}
+		if (inst->ea_reg == Z80_I && inst->addr_mode == Z80_REG) {
+			//ld a, i sets some flags
+			//TODO: Implement half-carry flag
+			cmp_ir(code, 0, dst_op.base, SZ_B);
+			setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
+			setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
+			mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);;
+			mov_rdispr(code, opts->gen.context_reg, offsetof(z80_context, iff2), SCRATCH1, SZ_B);
+			mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zf_off(ZF_PV), SZ_B);
 		}
 		z80_save_reg(inst, opts);
 		z80_save_ea(code, inst, opts);
@@ -915,10 +936,13 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address)
 		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		//TODO: Implement half-carry flag
+		if (inst->immed) {
+			//rlca does not set these flags
 		cmp_ir(code, 0, dst_op.base, SZ_B);
 		setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
 		setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
 		setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
+		}
 		if (inst->addr_mode != Z80_UNUSED) {
 			z80_save_result(opts, inst);
 			if (src_op.mode != MODE_UNUSED) {
@@ -947,10 +971,13 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address)
 		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		//TODO: Implement half-carry flag
+		if (inst->immed) {
+			//rla does not set these flags
 		cmp_ir(code, 0, dst_op.base, SZ_B);
 		setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
 		setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
 		setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
+		}
 		if (inst->addr_mode != Z80_UNUSED) {
 			z80_save_result(opts, inst);
 			if (src_op.mode != MODE_UNUSED) {
@@ -978,10 +1005,13 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address)
 		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		//TODO: Implement half-carry flag
+		if (inst->immed) {
+			//rrca does not set these flags
 		cmp_ir(code, 0, dst_op.base, SZ_B);
 		setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
 		setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
 		setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
+		}
 		if (inst->addr_mode != Z80_UNUSED) {
 			z80_save_result(opts, inst);
 			if (src_op.mode != MODE_UNUSED) {
@@ -1010,10 +1040,13 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address)
 		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		//TODO: Implement half-carry flag
+		if (inst->immed) {
+			//rra does not set these flags
 		cmp_ir(code, 0, dst_op.base, SZ_B);
 		setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
 		setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
 		setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
+		}
 		if (inst->addr_mode != Z80_UNUSED) {
 			z80_save_result(opts, inst);
 			if (src_op.mode != MODE_UNUSED) {
@@ -1631,18 +1664,73 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address)
 	}
 }
 
+uint8_t * z80_interp_handler(uint8_t opcode, z80_context * context)
+{
+	if (!context->interp_code[opcode]) {
+		if (opcode == 0xCB || (opcode >= 0xDD && opcode & 0xF == 0xD)) {
+			fprintf(stderr, "Encountered prefix byte %X at address %X. Z80 interpeter doesn't support those yet.", opcode, context->pc);
+			exit(1);
+		}
+		uint8_t codebuf[8];
+		memset(codebuf, 0, sizeof(codebuf));
+		codebuf[0] = opcode;
+		z80inst inst;
+		uint8_t * after = z80_decode(codebuf, &inst);
+		if (after - codebuf > 1) {
+			fprintf(stderr, "Encountered multi-byte Z80 instruction at %X. Z80 interpeter doesn't support those yet.", context->pc);
+			exit(1);
+		}
+
+		z80_options * opts = context->options;
+		code_info *code = &opts->gen.code;
+		check_alloc_code(code, ZMAX_NATIVE_SIZE);
+		context->interp_code[opcode] = code->cur;
+		translate_z80inst(&inst, context, 0, 1);
+		mov_rdispr(code, opts->gen.context_reg, offsetof(z80_context, pc), opts->gen.scratch1, SZ_W);
+		add_ir(code, after - codebuf, opts->gen.scratch1, SZ_W);
+		call(code, opts->native_addr);
+		jmp_r(code, opts->gen.scratch1);
+	}
+	return context->interp_code[opcode];
+}
+
+code_info z80_make_interp_stub(z80_context * context, uint16_t address)
+{
+	z80_options *opts = context->options;
+	code_info * code = &opts->gen.code;
+	check_alloc_code(code, 32);
+	code_info stub = {code->cur, NULL};
+	//TODO: make this play well with the breakpoint code
+	mov_ir(code, address, opts->gen.scratch1, SZ_W);
+	call(code, opts->read_8);
+	//normal opcode fetch is already factored into instruction timing
+	//back out the base 3 cycles from a read here
+	//not quite perfect, but it will have to do for now
+	cycles(&opts->gen, -3);
+	check_cycles_int(&opts->gen, address);
+	call(code, opts->gen.save_context);
+	mov_rr(code, opts->gen.scratch1, RDI, SZ_B);
+	mov_irdisp(code, address, opts->gen.context_reg, offsetof(z80_context, pc), SZ_W);
+	push_r(code, opts->gen.context_reg);
+	call(code, (code_ptr)z80_interp_handler);
+	mov_rr(code, RAX, opts->gen.scratch1, SZ_Q);
+	pop_r(code, opts->gen.context_reg);
+	call(code, opts->gen.load_context);
+	jmp_r(code, opts->gen.scratch1);
+	stub.last = code->cur;
+	return stub;
+}
+
+
 uint8_t * z80_get_native_address(z80_context * context, uint32_t address)
 {
 	native_map_slot *map;
 	if (address < 0x4000) {
 		address &= 0x1FFF;
 		map = context->static_code_map;
-	} else if (address >= 0x8000) {
-		address &= 0x7FFF;
-		map = context->banked_code_map + context->bank_reg;
 	} else {
-		//dprintf("z80_get_native_address: %X NULL\n", address);
-		return NULL;
+		address -= 0x4000;
+		map = context->banked_code_map;
 	}
 	if (!map->base || !map->offsets || map->offsets[address] == INVALID_OFFSET || map->offsets[address] == EXTENSION_WORD) {
 		//dprintf("z80_get_native_address: %X NULL\n", address);
@@ -1654,6 +1742,7 @@ uint8_t * z80_get_native_address(z80_context * context, uint32_t address)
 
 uint8_t z80_get_native_inst_size(z80_options * opts, uint32_t address)
 {
+	//TODO: Fix for addresses >= 0x4000
 	if (address >= 0x4000) {
 		return 0;
 	}
@@ -1671,15 +1760,14 @@ void z80_map_native_address(z80_context * context, uint32_t address, uint8_t * n
 		opts->gen.ram_inst_sizes[0][address] = native_size;
 		context->ram_code_flags[(address & 0x1C00) >> 10] |= 1 << ((address & 0x380) >> 7);
 		context->ram_code_flags[((address + size) & 0x1C00) >> 10] |= 1 << (((address + size) & 0x380) >> 7);
-	} else if (address >= 0x8000) {
-		address &= 0x7FFF;
-		map = context->banked_code_map + context->bank_reg;
-		if (!map->offsets) {
-			map->offsets = malloc(sizeof(int32_t) * 0x8000);
-			memset(map->offsets, 0xFF, sizeof(int32_t) * 0x8000);
-		}
 	} else {
-		return;
+		//HERE
+		address -= 0x4000;
+		map = context->banked_code_map;
+		if (!map->offsets) {
+			map->offsets = malloc(sizeof(int32_t) * 0xC000);
+			memset(map->offsets, 0xFF, sizeof(int32_t) * 0xC000);
+		}
 	}
 	if (!map->base) {
 		map->base = native_address;
@@ -1690,15 +1778,13 @@ void z80_map_native_address(z80_context * context, uint32_t address, uint8_t * n
 		if (address < 0x4000) {
 			address &= 0x1FFF;
 			map = context->static_code_map;
-		} else if (address >= 0x8000) {
-			address &= 0x7FFF;
-			map = context->banked_code_map + context->bank_reg;
 		} else {
-			return;
+			address -= 0x4000;
+			map = context->banked_code_map;
 		}
 		if (!map->offsets) {
-			map->offsets = malloc(sizeof(int32_t) * 0x8000);
-			memset(map->offsets, 0xFF, sizeof(int32_t) * 0x8000);
+			map->offsets = malloc(sizeof(int32_t) * 0xC000);
+			memset(map->offsets, 0xFF, sizeof(int32_t) * 0xC000);
 		}
 		map->offsets[address] = EXTENSION_WORD;
 	}
@@ -1708,6 +1794,7 @@ void z80_map_native_address(z80_context * context, uint32_t address, uint8_t * n
 
 uint32_t z80_get_instruction_start(native_map_slot * static_code_map, uint32_t address)
 {
+	//TODO: Fixme for address >= 0x4000
 	if (!static_code_map->base || address >= 0x4000) {
 		return INVALID_INSTRUCTION_START;
 	}
@@ -1782,13 +1869,13 @@ void * z80_retranslate_inst(uint32_t address, z80_context * context, uint8_t * o
 		check_alloc_code(code, ZMAX_NATIVE_SIZE);
 		code_ptr start = code->cur;
 		deferred_addr * orig_deferred = opts->gen.deferred;
-		translate_z80inst(&instbuf, context, address);
+		translate_z80inst(&instbuf, context, address, 0);
 		/*
 		if ((native_end - dst) <= orig_size) {
 			uint8_t * native_next = z80_get_native_address(context, address + after-inst);
 			if (native_next && ((native_next == orig_start + orig_size) || (orig_size - (native_end - dst)) > 5)) {
 				remove_deferred_until(&opts->gen.deferred, orig_deferred);
-				native_end = translate_z80inst(&instbuf, orig_start, context, address);
+				native_end = translate_z80inst(&instbuf, orig_start, context, address, 0);
 				if (native_next == orig_start + orig_size && (native_next-native_end) < 2) {
 					while (native_end < orig_start + orig_size) {
 						*(native_end++) = 0x90; //NOP
@@ -1814,11 +1901,11 @@ void * z80_retranslate_inst(uint32_t address, z80_context * context, uint8_t * o
 		code_info tmp_code = *code;
 		code->cur = orig_start;
 		code->last = orig_start + ZMAX_NATIVE_SIZE;
-		translate_z80inst(&instbuf, context, address);
+		translate_z80inst(&instbuf, context, address, 0);
 		code_info tmp2 = *code;
 		*code = tmp_code;
 		if (!z80_is_terminal(&instbuf)) {
-			
+
 			jmp(&tmp2, z80_get_native_address_trans(context, address + after-inst));
 		}
 		z80_handle_deferred(context);
@@ -1837,19 +1924,16 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 	uint8_t * encoded = NULL, *next;
 	if (address < 0x4000) {
 		encoded = context->mem_pointers[0] + (address & 0x1FFF);
-	} else if(address >= 0x8000 && context->mem_pointers[1]) {
-		printf("attempt to translate Z80 code from banked area at address %X\n", address);
-		exit(1);
-		//encoded = context->mem_pointers[1] + (address & 0x7FFF);
 	}
-	while (encoded != NULL)
+
+	while (encoded != NULL || address >= 0x4000)
 	{
 		z80inst inst;
 		dprintf("translating Z80 code at address %X\n", address);
 		do {
-			if (address > 0x4000 && address < 0x8000) {
-				xor_rr(&opts->gen.code, RDI, RDI, SZ_D);
-				call(&opts->gen.code, (uint8_t *)exit);
+			if (address >= 0x4000) {
+				code_info stub = z80_make_interp_stub(context, address);
+				z80_map_native_address(context, address, stub.cur, 1, stub.last - stub.cur);
 				break;
 			}
 			uint8_t * existing = z80_get_native_address(context, address);
@@ -1869,7 +1953,7 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 			}
 			#endif
 			code_ptr start = opts->gen.code.cur;
-			translate_z80inst(&inst, context, address);
+			translate_z80inst(&inst, context, address, 0);
 			z80_map_native_address(context, address, start, next-encoded, opts->gen.code.cur - start);
 			address += next-encoded;
 			if (address > 0xFFFF) {
@@ -1885,14 +1969,12 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 			dprintf("defferred address: %X\n", address);
 			if (address < 0x4000) {
 				encoded = context->mem_pointers[0] + (address & 0x1FFF);
-			} else if (address > 0x8000 && context->mem_pointers[1]) {
-				encoded = context->mem_pointers[1] + (address  & 0x7FFF);
 			} else {
-				printf("attempt to translate non-memory address: %X\n", address);
-				exit(1);
+				encoded = NULL;
 			}
 		} else {
 			encoded = NULL;
+			address = 0;
 		}
 	}
 }
@@ -1965,7 +2047,7 @@ void init_x86_z80_opts(z80_options * options, memmap_chunk const * chunks, uint3
 		} else {
 			reg = i;
 			size = SZ_B;
-		}
+}
 		if (options->regs[reg] >= 0) {
 			mov_rrdisp(code, options->regs[reg], options->gen.context_reg, offsetof(z80_context, regs) + i, size);
 		}
@@ -2045,7 +2127,7 @@ void init_x86_z80_opts(z80_options * options, memmap_chunk const * chunks, uint3
 	*no_sync = code->cur - (no_sync + 1);
 	//return to caller of z80_run
 	retn(code);
-	
+
 	options->gen.handle_code_write = (code_ptr)z80_handle_code_write;
 
 	options->read_8 = gen_mem_fun(&options->gen, chunks, num_chunks, READ_8, &options->read_8_noinc);
@@ -2117,7 +2199,7 @@ void init_x86_z80_opts(z80_options * options, memmap_chunk const * chunks, uint3
 	check_cycles(&options->gen);
 	cycles(&options->gen, 4);
 	retn(code);
-	
+
 	options->read_16 = code->cur;
 	cycles(&options->gen, 3);
 	check_cycles(&options->gen);
@@ -2134,7 +2216,7 @@ void init_x86_z80_opts(z80_options * options, memmap_chunk const * chunks, uint3
 	shl_ir(code, 8, options->gen.scratch1, SZ_W);
 	mov_rr(code, options->gen.scratch2, options->gen.scratch1, SZ_B);
 	retn(code);
-	
+
 	options->write_16_highfirst = code->cur;
 	cycles(&options->gen, 3);
 	check_cycles(&options->gen);
@@ -2150,7 +2232,7 @@ void init_x86_z80_opts(z80_options * options, memmap_chunk const * chunks, uint3
 	//TODO: Check if we can get away with TCO here
 	call(code, options->write_8_noinc);
 	retn(code);
-	
+
 	options->write_16_lowfirst = code->cur;
 	cycles(&options->gen, 3);
 	check_cycles(&options->gen);
@@ -2215,9 +2297,12 @@ void init_z80_context(z80_context * context, z80_options * options)
 	context->static_code_map->base = NULL;
 	context->static_code_map->offsets = malloc(sizeof(int32_t) * 0x2000);
 	memset(context->static_code_map->offsets, 0xFF, sizeof(int32_t) * 0x2000);
-	context->banked_code_map = malloc(sizeof(native_map_slot) * (1 << 9));
-	memset(context->banked_code_map, 0, sizeof(native_map_slot) * (1 << 9));
+	context->banked_code_map = malloc(sizeof(native_map_slot));
+	memset(context->banked_code_map, 0, sizeof(native_map_slot));
 	context->options = options;
+	context->int_cycle = 0xFFFFFFFF;
+	context->int_pulse_start = 0xFFFFFFFF;
+	context->int_pulse_end = 0xFFFFFFFF;
 	context->run = options->run;
 }
 
@@ -2229,61 +2314,81 @@ void z80_reset(z80_context * context)
 	context->extra_pc = NULL;
 }
 
+uint32_t zbreakpoint_patch(z80_context * context, uint16_t address, code_ptr dst)
+{
+	code_info code = {dst, dst+16};
+	mov_ir(&code, address, SCRATCH1, SZ_W);
+	call(&code, context->bp_stub);
+	return code.cur-dst;
+}
+
+void zcreate_stub(z80_context * context)
+{
+	z80_options * opts = context->options;
+	code_info *code = &opts->gen.code;
+	check_code_prologue(code);
+	context->bp_stub = code->cur;
+
+	//Calculate length of prologue
+	check_cycles_int(&opts->gen, 0);
+	int check_int_size = code->cur-context->bp_stub;
+	code->cur = context->bp_stub;
+
+	//Calculate length of patch
+	int patch_size = zbreakpoint_patch(context, 0, code->cur);
+
+	//Save context and call breakpoint handler
+	call(code, opts->gen.save_context);
+	push_r(code, opts->gen.scratch1);
+	mov_rr(code, opts->gen.context_reg, RDI, SZ_Q);
+	mov_rr(code, opts->gen.scratch1, RSI, SZ_W);
+	call(code, context->bp_handler);
+	mov_rr(code, RAX, opts->gen.context_reg, SZ_Q);
+	//Restore context
+	call(code, opts->gen.load_context);
+	pop_r(code, opts->gen.scratch1);
+	//do prologue stuff
+	cmp_rr(code, opts->gen.cycles, opts->gen.limit, SZ_D);
+	uint8_t * jmp_off = code->cur+1;
+	jcc(code, CC_NC, code->cur + 7);
+	pop_r(code, opts->gen.scratch1);
+	add_ir(code, check_int_size - patch_size, opts->gen.scratch1, SZ_Q);
+	push_r(code, opts->gen.scratch1);
+	jmp(code, opts->gen.handle_cycle_limit_int);
+	*jmp_off = code->cur - (jmp_off+1);
+	//jump back to body of translated instruction
+	pop_r(code, opts->gen.scratch1);
+	add_ir(code, check_int_size - patch_size, opts->gen.scratch1, SZ_Q);
+	jmp_r(code, opts->gen.scratch1);
+}
+
 void zinsert_breakpoint(z80_context * context, uint16_t address, uint8_t * bp_handler)
 {
-	static uint8_t * bp_stub = NULL;
-	z80_options * opts = context->options;
-	code_ptr native = z80_get_native_address_trans(context, address);
-	code_info tmp_code = {native, native+16};
-	mov_ir(&tmp_code, address, opts->gen.scratch1, SZ_W);
-	if (!bp_stub) {
-		code_info *code = &opts->gen.code;
-		check_code_prologue(code);
-		bp_stub = code->cur;
-		call(&tmp_code, bp_stub);
-
-		//Calculate length of prologue
-		check_cycles_int(&opts->gen, address);
-		int check_int_size = code->cur-bp_stub;
-		code->cur = bp_stub;
-
-		//Save context and call breakpoint handler
-		call(code, opts->gen.save_context);
-		push_r(code, opts->gen.scratch1);
-		mov_rr(code, opts->gen.context_reg, RDI, SZ_Q);
-		mov_rr(code, opts->gen.scratch1, RSI, SZ_W);
-		call(code, bp_handler);
-		mov_rr(code, RAX, opts->gen.context_reg, SZ_Q);
-		//Restore context
-		call(code, opts->gen.load_context);
-		pop_r(code, opts->gen.scratch1);
-		//do prologue stuff
-		cmp_rr(code, opts->gen.cycles, opts->gen.limit, SZ_D);
-		uint8_t * jmp_off = code->cur+1;
-		jcc(code, CC_NC, code->cur + 7);
-		pop_r(code, opts->gen.scratch1);
-		add_ir(code, check_int_size - (tmp_code.cur-native), opts->gen.scratch1, SZ_Q);
-		push_r(code, opts->gen.scratch1);
-		jmp(code, opts->gen.handle_cycle_limit_int);
-		*jmp_off = code->cur - (jmp_off+1);
-		//jump back to body of translated instruction
-		pop_r(code, opts->gen.scratch1);
-		add_ir(code, check_int_size - (tmp_code.cur-native), opts->gen.scratch1, SZ_Q);
-		jmp_r(code, opts->gen.scratch1);
-	} else {
-		call(&tmp_code, bp_stub);
+	context->bp_handler = bp_handler;
+	uint8_t bit = 1 << (address % sizeof(uint8_t));
+	if (!(bit & context->breakpoint_flags[address / sizeof(uint8_t)])) {
+		context->breakpoint_flags[address / sizeof(uint8_t)] |= bit;
+		if (!context->bp_stub) {
+			zcreate_stub(context);
+		}
+		uint8_t * native = z80_get_native_address(context, address);
+		if (native) {
+			zbreakpoint_patch(context, address, native);
+		}
 	}
 }
 
 void zremove_breakpoint(z80_context * context, uint16_t address)
 {
+	context->breakpoint_flags[address / sizeof(uint8_t)] &= ~(1 << (address % sizeof(uint8_t)));
 	uint8_t * native = z80_get_native_address(context, address);
-	z80_options * opts = context->options;
-	code_info tmp_code = opts->gen.code;
-	opts->gen.code.cur = native;
-	opts->gen.code.last = native + 16;
-	check_cycles_int(&opts->gen, address);
-	opts->gen.code = tmp_code;
+	if (native) {
+		z80_options * opts = context->options;
+		code_info tmp_code = opts->gen.code;
+		opts->gen.code.cur = native;
+		opts->gen.code.last = native + 16;
+		check_cycles_int(&opts->gen, address);
+		opts->gen.code = tmp_code;
+	}
 }
-
 

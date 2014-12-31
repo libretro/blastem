@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm.
+ This file is part of BlastEm. 
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #ifndef Z80_TO_X86_H_
@@ -74,6 +74,13 @@ typedef struct {
 	uint32_t          int_enable_cycle;
 	z80_run_fun       run;
   uint16_t          pc;
+	uint32_t          int_pulse_start;
+	uint32_t          int_pulse_end;
+	uint8_t           breakpoint_flags[(16 * 1024)/sizeof(uint8_t)];
+	uint8_t *         bp_handler;
+	uint8_t *         bp_stub;
+	uint8_t *         interp_code[256];
+
 } z80_context;
 
 void translate_z80_stream(z80_context * context, uint32_t address);

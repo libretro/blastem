@@ -17,6 +17,7 @@ html/*
 generated_tests/*
 ztests/*
 *.o
+*.list
 blastem
 dis
 stateview
