@@ -19,6 +19,16 @@ ifdef NOGL
 CFLAGS+= -DDISABLE_OPENGL
 endif
 
+ifdef M68030
+CFLAGS+= -DM68030
+endif
+ifdef M68020
+CFLAGS+= -DM68020
+endif
+ifdef M68010
+CFLAGS+= -DM68010
+endif
+
 ifndef CPU
 CPU:=$(shell uname -m)
 endif
@@ -64,8 +74,8 @@ all : dis zdis stateview vgmplay blastem
 blastem : $(MAINOBJS)
 	$(CC) -o blastem $(MAINOBJS) $(LDFLAGS)
 
-dis : dis.o 68kinst.o
-	$(CC) -o dis dis.o 68kinst.o
+dis : dis.o 68kinst.o tern.o vos_program_module.o
+	$(CC) -o dis dis.o 68kinst.o tern.o vos_program_module.o
 
 zdis : zdis.o z80inst.o
 	$(CC) -o zdis zdis.o z80inst.o
@@ -106,6 +116,9 @@ gen_fib : gen_fib.o gen_x86.o mem.o
 offsets : offsets.c z80_to_x86.h m68k_core.h
 	$(CC) -o offsets offsets.c
 
+vos_prog_info : vos_prog_info.o vos_program_module.o
+	$(CC) -o vos_prog_info vos_prog_info.o vos_program_module.o
+
 %.o : %.S
 	$(CC) -c -o $@ $<
 
@@ -113,7 +126,7 @@ offsets : offsets.c z80_to_x86.h m68k_core.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 %.bin : %.s68
-	vasmm68k_mot -Fbin -m68000 -no-opt -spaces -o $@ $<
+	vasmm68k_mot -Fbin -m68000 -no-opt -spaces -o $@ -L $@.list $<
 
 %.bin : %.sz8
 	vasmz80_mot -Fbin -spaces -o $@ $<

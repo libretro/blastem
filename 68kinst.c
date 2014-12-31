@@ -19,7 +19,7 @@ uint32_t sign_extend8(uint32_t val)
 
 uint16_t *m68k_decode_op_ex(uint16_t *cur, uint8_t mode, uint8_t reg, uint8_t size, m68k_op_info *dst)
 {
-	uint16_t ext;
+	uint16_t ext, tmp;
 	dst->addr_mode = mode;
 	switch(mode)
 	{
@@ -36,15 +36,95 @@ uint16_t *m68k_decode_op_ex(uint16_t *cur, uint8_t mode, uint8_t reg, uint8_t si
 		dst->params.regs.displacement = sign_extend16(ext);
 		break;
 	case MODE_AREG_INDEX_MEM:
-		#ifdef M68020
-			//TODO: implement me for M68020+ support
-		#else
+		dst->params.regs.pri = reg;
+		ext = *(++cur);
+		dst->params.regs.sec = ext >> 11;//includes areg/dreg bit, reg num and word/long bit
+#ifdef M68020
+		dst->params.regs.scale = ext >> 9 & 3;
+		if (ext & 0x100)
+		{
+			dst->params.regs.disp_sizes = ext >> 4 & 3;
+			switch (dst->params.regs.disp_sizes)
+			{
+			case 0:
+				//reserved
+				return NULL;
+			case 1:
+				dst->params.regs.displacement = 0;
+				break;
+			case 2:
+				dst->params.regs.displacement = sign_extend16(*(cur++));
+				break;
+			case 3:
+				tmp = *(cur++);
+				dst->params.regs.displacement = tmp << 16 | *(cur++);
+				break;
+			}
+			if (ext & 0x3)
+			{
+				//memory indirect
+				switch (ext & 0xC4)
+				{
+				case 0x00:
+					dst->addr_mode = MODE_AREG_PREINDEX;
+					break;
+				case 0x04:
+					dst->addr_mode = MODE_AREG_POSTINDEX;
+					break;
+				case 0x40:
+					dst->addr_mode = MODE_AREG_MEM_INDIRECT;
+					break;
+				case 0x80:
+					dst->addr_mode = MODE_PREINDEX;
+					break;
+				case 0x84:
+					dst->addr_mode = MODE_POSTINDEX;
+					break;
+				case 0xC0:
+					dst->addr_mode = MODE_MEM_INDIRECT;
+					break;
+				}
+				dst->params.regs.disp_sizes |= ext << 4 & 0x30;
+				switch (ext & 0x3)
+				{
+				case 0:
+					//reserved
+					return NULL;
+				case 1:
+					dst->params.regs.outer_disp = 0;
+					break;
+				case 2:
+					dst->params.regs.outer_disp = sign_extend16(*(cur++));
+					break;
+				case 3:
+					tmp = *(cur++);
+					dst->params.regs.outer_disp = tmp << 16 | *(cur++);
+					break;
+				}
+			} else {
+				switch (ext >> 6 & 3)
+				{
+				case 0:
+					dst->addr_mode = MODE_AREG_INDEX_BASE_DISP;
+					break;
+				case 1:
+					dst->addr_mode = MODE_AREG_BASE_DISP;
+					break;
+				case 2:
+					dst->addr_mode = MODE_INDEX_BASE_DISP;
+					break;
+				case 3:
+					dst->addr_mode = MODE_BASE_DISP;
+					break;
+				}
+			}
+		} else {
+#endif
 			dst->addr_mode = MODE_AREG_INDEX_DISP8;
-			dst->params.regs.pri = reg;
-			ext = *(++cur);
-			dst->params.regs.sec = ext >> 11;//includes areg/dreg bit, reg num and word/long bit
 			dst->params.regs.displacement = sign_extend8(ext&0xFF);
-		#endif
+#ifdef M68020
+		}
+#endif
 		break;
 	case MODE_PC_INDIRECT_ABS_IMMED:
 		switch(reg)
@@ -60,13 +140,93 @@ uint16_t *m68k_decode_op_ex(uint16_t *cur, uint8_t mode, uint8_t reg, uint8_t si
 			dst->params.immed = ext << 16 | *(++cur);
 			break;
 		case 3:
-#ifdef M68020
-			//TODO: Implement me for M68020+ support;
-#else
-			dst->addr_mode = MODE_PC_INDEX_DISP8;
 			ext = *(++cur);
 			dst->params.regs.sec = ext >> 11;//includes areg/dreg bit, reg num and word/long bit
-			dst->params.regs.displacement = sign_extend8(ext&0xFF);
+#ifdef M68020
+			dst->params.regs.scale = ext >> 9 & 3;
+			if (ext & 0x100)
+			{
+				dst->params.regs.disp_sizes = ext >> 4 & 3;
+				switch (dst->params.regs.disp_sizes)
+				{
+				case 0:
+					//reserved
+					return NULL;
+				case 1:
+					dst->params.regs.displacement = 0;
+					break;
+				case 2:
+					dst->params.regs.displacement = sign_extend16(*(cur++));
+					break;
+				case 3:
+					tmp = *(cur++);
+					dst->params.regs.displacement = tmp << 16 | *(cur++);
+					break;
+				}
+				if (ext & 0x3)
+				{
+					//memory indirect
+					switch (ext & 0xC4)
+					{
+					case 0x00:
+						dst->addr_mode = MODE_PC_PREINDEX;
+						break;
+					case 0x04:
+						dst->addr_mode = MODE_PC_POSTINDEX;
+						break;
+					case 0x40:
+						dst->addr_mode = MODE_PC_MEM_INDIRECT;
+						break;
+					case 0x80:
+						dst->addr_mode = MODE_ZPC_PREINDEX;
+						break;
+					case 0x84:
+						dst->addr_mode = MODE_ZPC_POSTINDEX;
+						break;
+					case 0xC0:
+						dst->addr_mode = MODE_ZPC_MEM_INDIRECT;
+						break;
+					}
+					dst->params.regs.disp_sizes |= ext << 4 & 0x30;
+					switch (ext & 0x3)
+					{
+					case 0:
+						//reserved
+						return NULL;
+					case 1:
+						dst->params.regs.outer_disp = 0;
+						break;
+					case 2:
+						dst->params.regs.outer_disp = sign_extend16(*(cur++));
+						break;
+					case 3:
+						tmp = *(cur++);
+						dst->params.regs.outer_disp = tmp << 16 | *(cur++);
+						break;
+					}
+				} else {
+					switch (ext >> 6 & 3)
+					{
+					case 0:
+						dst->addr_mode = MODE_PC_INDEX_BASE_DISP;
+						break;
+					case 1:
+						dst->addr_mode = MODE_PC_BASE_DISP;
+						break;
+					case 2:
+						dst->addr_mode = MODE_ZPC_INDEX_BASE_DISP;
+						break;
+					case 3:
+						dst->addr_mode = MODE_ZPC_BASE_DISP;
+						break;
+					}
+				}
+			} else {
+#endif
+				dst->addr_mode = MODE_PC_INDEX_DISP8;
+				dst->params.regs.displacement = sign_extend8(ext&0xFF);
+#ifdef M68020
+			}
 #endif
 			break;
 		case 2:
@@ -172,7 +332,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->dst));
 			if (!istream) {
 				decoded->op = M68K_INVALID;
-				return start+1;
+				break;
 			}
 			if (decoded->dst.addr_mode == MODE_REG) {
 				decoded->extra.size = OPSIZE_LONG;
@@ -202,7 +362,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			istream = m68k_decode_op_ex(istream, opmode, reg, decoded->extra.size, &(decoded->dst));
 			if (!istream) {
 				decoded->op = M68K_INVALID;
-				return start+1;
+				break;
 			}
 			if (decoded->dst.addr_mode == MODE_REG) {
 				decoded->extra.size = OPSIZE_LONG;
@@ -248,7 +408,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 					istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
 					if (!istream) {
 						decoded->op = M68K_INVALID;
-						return start+1;
+						break;
 					}
 				}
 				break;
@@ -287,7 +447,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 					istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
 					if (!istream) {
 						decoded->op = M68K_INVALID;
-						return start+1;
+						break;
 					}
 				}
 				break;
@@ -314,7 +474,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
 				if (!istream) {
 					decoded->op = M68K_INVALID;
-					return start+1;
+					break;
 				}
 				break;
 			case 3:
@@ -340,7 +500,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
 				if (!istream) {
 					decoded->op = M68K_INVALID;
-					return start+1;
+					break;
 				}
 				break;
 			case 4:
@@ -365,7 +525,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				istream = m68k_decode_op(istream, OPSIZE_BYTE, &(decoded->dst));
 				if (!istream) {
 					decoded->op = M68K_INVALID;
-					return start+1;
+					break;
 				}
 				break;
 			case 5:
@@ -403,7 +563,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 					istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
 					if (!istream) {
 						decoded->op = M68K_INVALID;
-						return start+1;
+						break;
 					}
 				}
 				break;
@@ -427,15 +587,29 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 					decoded->src.params.immed = (immed << 16) | *(++istream);
 					break;
 				}
-				istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
+				istream = m68k_decode_op_ex(istream, opmode, reg, decoded->extra.size, &(decoded->dst));
 				if (!istream) {
 					decoded->op = M68K_INVALID;
-					return start+1;
+					break;
 				}
 				break;
 			case 7:
-
-
+#ifdef M68010
+				decoded->op = M68K_MOVES;
+				decoded->extra.size = *istream >> 6 & 0x3;
+				immed = *(++istream);
+				reg = immed  >> 12 & 0x7;
+				opmode = immed & 0x8000 ? MODE_AREG : MODE_REG;
+				if (immed & 0x800) {
+					decoded->src.addr_mode = opmode;
+					decoded->src.params.regs.pri = reg;
+					m68k_decode_op_ex(istream, *start >> 3 & 0x7, *start & 0x7, decoded->extra.size, &(decoded->dst));
+				} else {
+					m68k_decode_op_ex(istream, *start >> 3 & 0x7, *start & 0x7, decoded->extra.size, &(decoded->src));
+					decoded->dst.addr_mode = opmode;
+					decoded->dst.params.regs.pri = reg;
+				}
+#endif
 				break;
 			}
 		}
@@ -450,12 +624,12 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 		istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
 		if (!istream) {
 			decoded->op = M68K_INVALID;
-			return start+1;
+			break;
 		}
 		istream = m68k_decode_op_ex(istream, opmode, reg, decoded->extra.size, &(decoded->dst));
 		if (!istream || decoded->dst.addr_mode == MODE_IMMEDIATE) {
 			decoded->op = M68K_INVALID;
-			return start+1;
+			break;
 		}
 		break;
 	case MISC:
@@ -468,7 +642,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
 			if (!istream) {
 				decoded->op = M68K_INVALID;
-				return start+1;
+				break;
 			}
 		} else {
 			if (*istream & 0x100) {
@@ -489,7 +663,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
 				if (!istream) {
 					decoded->op = M68K_INVALID;
-					return start+1;
+					break;
 				}
 			} else {
 				opmode = (*istream >> 3) & 0x7;
@@ -504,7 +678,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 						istream = m68k_decode_op_ex(istream, opmode, reg, decoded->extra.size, &(decoded->src));
 						if (!istream) {
 							decoded->op = M68K_INVALID;
-							return start+1;
+							break;
 						}
 						if (decoded->src.addr_mode == MODE_PC_DISPLACE || decoded->src.addr_mode == MODE_PC_INDEX_DISP8) {
 							//adjust displacement to account for extra instruction word
@@ -516,7 +690,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 						istream = m68k_decode_op_ex(istream, opmode, reg, decoded->extra.size, &(decoded->dst));
 						if (!istream) {
 							decoded->op = M68K_INVALID;
-							return start+1;
+							break;
 						}
 					}
 				} else {
@@ -536,7 +710,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 						istream= m68k_decode_op(istream, size, &(decoded->dst));
 						if (!istream) {
 							decoded->op = M68K_INVALID;
-							return start+1;
+							break;
 						}
 						break;
 					case 1:
@@ -546,7 +720,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 							decoded->op = M68K_MOVE_FROM_CCR;
 							size = OPSIZE_WORD;
 #else
-							return istream+1;
+							break;
 #endif
 						} else {
 							decoded->op = M68K_CLR;
@@ -555,7 +729,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 						istream= m68k_decode_op(istream, size, &(decoded->dst));
 						if (!istream) {
 							decoded->op = M68K_INVALID;
-							return start+1;
+							break;
 						}
 						break;
 					case 2:
@@ -566,14 +740,14 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 							istream= m68k_decode_op(istream, size, &(decoded->src));
 							if (!istream) {
 								decoded->op = M68K_INVALID;
-								return start+1;
+								break;
 							}
 						} else {
 							decoded->op = M68K_NEG;
 							istream= m68k_decode_op(istream, size, &(decoded->dst));
 							if (!istream) {
 								decoded->op = M68K_INVALID;
-								return start+1;
+								break;
 							}
 						}
 						decoded->extra.size = size;
@@ -586,14 +760,14 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 							istream= m68k_decode_op(istream, size, &(decoded->src));
 							if (!istream) {
 								decoded->op = M68K_INVALID;
-								return start+1;
+								break;
 							}
 						} else {
 							decoded->op = M68K_NOT;
 							istream= m68k_decode_op(istream, size, &(decoded->dst));
 							if (!istream) {
 								decoded->op = M68K_INVALID;
-								return start+1;
+								break;
 							}
 						}
 						decoded->extra.size = size;
@@ -648,7 +822,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 								istream = m68k_decode_op(istream, OPSIZE_BYTE, &(decoded->dst));
 								if (!istream) {
 									decoded->op = M68K_INVALID;
-									return start+1;
+									break;
 								}
 							} else if((*istream & 0x1C0) == 0x40) {
 								decoded->op = M68K_PEA;
@@ -656,7 +830,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 								istream = m68k_decode_op(istream, OPSIZE_LONG, &(decoded->src));
 								if (!istream) {
 									decoded->op = M68K_INVALID;
-									return start+1;
+									break;
 								}
 							}
 						}
@@ -678,7 +852,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 								istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
 								if (!istream) {
 									decoded->op = M68K_INVALID;
-									return start+1;
+									break;
 								}
 							}
 						}
@@ -702,7 +876,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 							istream = m68k_decode_op(istream, OPSIZE_UNSIZED, &(decoded->src));
 							if (!istream) {
 								decoded->op = M68K_INVALID;
-								return start+1;
+								break;
 							}
 						} else {
 							//it would appear bit 6 needs to be set for it to be a valid instruction here
@@ -783,6 +957,33 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 							case 7:
 								//MOVEC
 #ifdef M68010
+								decoded->op = M68K_MOVEC;
+								immed = *(++istream);
+								reg = immed >> 12 & 0x7;
+								opmode = immed & 0x8000 ? MODE_AREG : MODE_REG;
+								immed &= 0xFFF;
+								if (immed & 0x800) {
+									if (immed > MAX_HIGH_CR) {
+										decoded->op = M68K_INVALID;
+										break;
+									} else {
+										immed = immed - 0x800 + CR_USP;
+									}
+								} else {
+									if (immed > MAX_LOW_CR) {
+										decoded->op = M68K_INVALID;
+										break;
+									}
+								}
+								if (*start & 1) {
+									decoded->src.addr_mode = opmode;
+									decoded->src.params.regs.pri = reg;
+									decoded->dst.params.immed = immed;
+								} else {
+									decoded->dst.addr_mode = opmode;
+									decoded->dst.params.regs.pri = reg;
+									decoded->src.params.immed = immed;
+								}
 #endif
 								break;
 							}
@@ -816,7 +1017,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				istream = m68k_decode_op(istream, OPSIZE_BYTE, &(decoded->dst));
 				if (!istream) {
 					decoded->op = M68K_INVALID;
-					return start+1;
+					break;
 				}
 			}
 		} else {
@@ -837,7 +1038,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			istream = m68k_decode_op(istream, size, &(decoded->dst));
 			if (!istream) {
 				decoded->op = M68K_INVALID;
-				return start+1;
+				break;
 			}
 		}
 		break;
@@ -865,7 +1066,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 	case MOVEQ:
 		if (*istream & 0x100) {
 			decoded->op = M68K_INVALID;
-			return start+1;
+			break;
 		}
 		decoded->op = M68K_MOVE;
 		decoded->variant = VAR_QUICK;
@@ -891,7 +1092,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				istream = m68k_decode_op(istream, OPSIZE_WORD, &(decoded->src));
 				if (!istream || decoded->src.addr_mode == MODE_AREG) {
 					decoded->op = M68K_INVALID;
-					return start+1;
+					break;
 				}
 				break;
 			case 4:
@@ -917,7 +1118,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				istream = m68k_decode_op(istream, OPSIZE_WORD, &(decoded->src));
 				if (!istream || decoded->src.addr_mode == MODE_AREG) {
 					decoded->op = M68K_INVALID;
-					return start+1;
+					break;
 				}
 				break;
 			}
@@ -930,7 +1131,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				istream = m68k_decode_op(istream, size, &(decoded->dst));
 				if (!istream) {
 					decoded->op = M68K_INVALID;
-					return start+1;
+					break;
 				}
 			} else {
 				decoded->dst.addr_mode = MODE_REG;
@@ -938,7 +1139,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				istream = m68k_decode_op(istream, size, &(decoded->src));
 				if (!istream) {
 					decoded->op = M68K_INVALID;
-					return start+1;
+					break;
 				}
 			}
 		}
@@ -957,7 +1158,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 					istream = m68k_decode_op(istream, OPSIZE_LONG, &(decoded->src));
 					if (!istream) {
 						decoded->op = M68K_INVALID;
-						return start+1;
+						break;
 					}
 				} else {
 					decoded->extra.size = size;
@@ -966,7 +1167,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 					istream = m68k_decode_op(istream, size, &(decoded->dst));
 					if (!istream) {
 						decoded->op = M68K_INVALID;
-						return start+1;
+						break;
 					}
 				}
 			} else {
@@ -994,7 +1195,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
 			if (!istream) {
 				decoded->op = M68K_INVALID;
-				return start+1;
+				break;
 			}
 		}
 		break;
@@ -1012,14 +1213,14 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
 				if (!istream) {
 					decoded->op = M68K_INVALID;
-					return start+1;
+					break;
 				}
 			} else {
 				reg = m68k_reg_quick_field(*istream);
 				istream = m68k_decode_op(istream, size, &(decoded->dst));
 				if (!istream) {
 					decoded->op = M68K_INVALID;
-					return start+1;
+					break;
 				}
 				decoded->extra.size = size;
 				if (decoded->dst.addr_mode == MODE_AREG) {
@@ -1047,7 +1248,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
 			if (!istream) {
 				decoded->op = M68K_INVALID;
-				return start+1;
+				break;
 			}
 		}
 		break;
@@ -1070,7 +1271,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				istream = m68k_decode_op(istream, OPSIZE_WORD, &(decoded->src));
 				if (!istream) {
 					decoded->op = M68K_INVALID;
-					return start+1;
+					break;
 				}
 			} else if(!(*istream & 0xF0)) {
 				decoded->op = M68K_ABCD;
@@ -1101,7 +1302,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->dst));
 				if (!istream) {
 					decoded->op = M68K_INVALID;
-					return start+1;
+					break;
 				}
 			}
 		} else {
@@ -1113,7 +1314,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				istream = m68k_decode_op(istream, OPSIZE_WORD, &(decoded->src));
 				if (!istream) {
 					decoded->op = M68K_INVALID;
-					return start+1;
+					break;
 				}
 			} else {
 				decoded->op = M68K_AND;
@@ -1123,7 +1324,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
 				if (!istream) {
 					decoded->op = M68K_INVALID;
-					return start+1;
+					break;
 				}
 			}
 		}
@@ -1142,7 +1343,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 					istream = m68k_decode_op(istream, OPSIZE_LONG, &(decoded->src));
 					if (!istream) {
 						decoded->op = M68K_INVALID;
-						return start+1;
+						break;
 					}
 				} else {
 					decoded->extra.size = size;
@@ -1151,7 +1352,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 					istream = m68k_decode_op(istream, size, &(decoded->dst));
 					if (!istream) {
 						decoded->op = M68K_INVALID;
-						return start+1;
+						break;
 					}
 				}
 			} else {
@@ -1179,7 +1380,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
 			if (!istream) {
 				decoded->op = M68K_INVALID;
-				return start+1;
+				break;
 			}
 		}
 		break;
@@ -1216,7 +1417,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			istream = m68k_decode_op(istream, OPSIZE_WORD, &(decoded->dst));
 			if (!istream) {
 				decoded->op = M68K_INVALID;
-				return start+1;
+				break;
 			}
 		} else if((*istream & 0xC0) != 0xC0) {
 			switch(((*istream >> 2) & 0x6) | ((*istream >> 8) & 1))
@@ -1264,12 +1465,66 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 		} else {
 #ifdef M68020
 			//TODO: Implement bitfield instructions for M68020+ support
+			switch (*istream >> 8 & 7)
+			{
+			case 0:
+				decoded->op = M68K_BFTST; //<ea>
+				break;
+			case 1:
+				decoded->op = M68K_BFEXTU; //<ea>, Dn
+				break;
+			case 2:
+				decoded->op = M68K_BFCHG; //<ea>
+				break;
+			case 3:
+				decoded->op = M68K_BFEXTS; //<ea>, Dn
+				break;
+			case 4:
+				decoded->op = M68K_BFCLR; //<ea>
+				break;
+			case 5:
+				decoded->op = M68K_BFFFO; //<ea>, Dn
+				break;
+			case 6:
+				decoded->op = M68K_BFSET; //<ea>
+				break;
+			case 7:
+				decoded->op = M68K_BFINS; //Dn, <ea>
+				break;
+			}
+			opmode = *istream >> 3 & 0x7;
+			reg = *istream & 0x7;
+			m68k_op_info *ea, *other;
+			if (decoded->op == M68K_BFEXTU || decoded->op == M68K_BFEXTS || decoded->op == M68K_BFFFO)
+			{
+				ea = &(decoded->src);
+				other = &(decoded->dst);
+			} else {
+				ea = &(decoded->dst);
+				other = &(decoded->dst);
+			}
+			if (*istream & 0x100)
+			{
+				immed = *(istream++);
+				other->addr_mode = MODE_REG;
+				other->params.regs.pri = immed >> 12 & 0x7;
+			} else {
+				immed = *(istream++);
+			}
+			decoded->extra.size = OPSIZE_UNSIZED;
+			istream = m68k_decode_op_ex(istream, opmode, reg, decoded->extra.size, ea);
+			ea->addr_mode |= M68K_FLAG_BITFIELD;
+			ea->bitfield = immed & 0xFFF;
 #endif
 		}
 		break;
 	case COPROC:
 		//TODO: Implement me
 		break;
+	}
+	if (decoded->op == M68K_INVALID) {
+		decoded->src.params.immed = *start;
+		return start + 1;
 	}
 	return istream+1;
 }
@@ -1417,7 +1672,43 @@ char * mnemonics[] = {
 	"trapv",
 	"tst",
 	"unlk",
-	"invalid"
+	"invalid",
+#ifdef M68010
+	"bkpt",
+	"move", //from ccr
+	"movec",
+	"moves",
+	"rtd",
+#endif
+#ifdef M68020
+	"bfchg",
+	"bfclr",
+	"bfexts",
+	"bfextu",
+	"bfffo",
+	"bfins",
+	"bfset",
+	"bftst",
+	"callm",
+	"cas",
+	"cas2",
+	"chk2",
+	"cmp2",
+	"cpbcc",
+	"cpdbcc",
+	"cpgen",
+	"cprestore",
+	"cpsave",
+	"cpscc",
+	"cptrapcc",
+	"divsl",
+	"divul",
+	"extb",
+	"pack",
+	"rtm",
+	"trapcc",
+	"unpk"
+#endif
 };
 
 char * cond_mnem[] = {
@@ -1438,55 +1729,651 @@ char * cond_mnem[] = {
 	"gt",
 	"le"
 };
+#ifdef M68010
+char * cr_mnem[] = {
+	"SFC",
+	"DFC",
+#ifdef M68020
+	"CACR",
+#endif
+	"USP",
+	"VBR",
+#ifdef M68020
+	"CAAR",
+	"MSP",
+	"ISP"
+#endif
+};
+#endif
 
-int m68k_disasm_op(m68k_op_info *decoded, char *dst, int need_comma, uint8_t labels, uint32_t address)
+int m68k_disasm_op(m68k_op_info *decoded, char *dst, int need_comma, uint8_t labels, uint32_t address, format_label_fun label_fun, void * data)
 {
 	char * c = need_comma ? "," : "";
-	switch(decoded->addr_mode)
+	int ret = 0;
+#ifdef M68020
+	uint8_t addr_mode = decoded->addr_mode & (~M68K_FLAG_BITFIELD);
+#else
+	uint8_t addr_mode = decoded->addr_mode;
+#endif
+	switch(addr_mode)
 	{
 	case MODE_REG:
-		return sprintf(dst, "%s d%d", c, decoded->params.regs.pri);
+		ret = sprintf(dst, "%s d%d", c, decoded->params.regs.pri);
+		break;
 	case MODE_AREG:
-		return sprintf(dst, "%s a%d", c, decoded->params.regs.pri);
+		ret = sprintf(dst, "%s a%d", c, decoded->params.regs.pri);
+		break;
 	case MODE_AREG_INDIRECT:
-		return sprintf(dst, "%s (a%d)", c, decoded->params.regs.pri);
+		ret = sprintf(dst, "%s (a%d)", c, decoded->params.regs.pri);
+		break;
 	case MODE_AREG_POSTINC:
-		return sprintf(dst, "%s (a%d)+", c, decoded->params.regs.pri);
+		ret = sprintf(dst, "%s (a%d)+", c, decoded->params.regs.pri);
+		break;
 	case MODE_AREG_PREDEC:
-		return sprintf(dst, "%s -(a%d)", c, decoded->params.regs.pri);
+		ret = sprintf(dst, "%s -(a%d)", c, decoded->params.regs.pri);
+		break;
 	case MODE_AREG_DISPLACE:
-		return sprintf(dst, "%s (%d, a%d)", c, decoded->params.regs.displacement, decoded->params.regs.pri);
+		ret = sprintf(dst, "%s (%d, a%d)", c, decoded->params.regs.displacement, decoded->params.regs.pri);
+		break;
 	case MODE_AREG_INDEX_DISP8:
-		return sprintf(dst, "%s (%d, a%d, %c%d.%c)", c, decoded->params.regs.displacement, decoded->params.regs.pri, (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w');
+#ifdef M68020
+		if (decoded->params.regs.scale)
+		{
+			ret = sprintf(dst, "%s (%d, a%d, %c%d.%c*%d)", c, decoded->params.regs.displacement, decoded->params.regs.pri, (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale);
+		} else {
+#endif
+			ret = sprintf(dst, "%s (%d, a%d, %c%d.%c)", c, decoded->params.regs.displacement, decoded->params.regs.pri, (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w');
+#ifdef M68020
+		}
+#endif
+		break;
+#ifdef M68020
+	case MODE_AREG_INDEX_BASE_DISP:
+		if (decoded->params.regs.disp_sizes > 1)
+		{
+			ret = sprintf(dst, "%s (%d.%c, a%d, %c%d.%c*%d)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes == 2 ? 'w' : 'l', decoded->params.regs.pri,
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale);
+		} else {
+			ret = sprintf(dst, "%s (a%d, %c%d.%c*%d)", c, decoded->params.regs.pri,
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale);
+		}
+		break;
+	case MODE_AREG_PREINDEX:
+		switch (decoded->params.regs.disp_sizes)
+		{
+		case 0x11:
+			//no base displacement or outer displacement
+			ret = sprintf(dst, "%s ([a%d, %c%d.%c*%d])", c, decoded->params.regs.pri,
+						  (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+						  (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale);
+			break;
+		case 0x12:
+		case 0x13:
+			//base displacement only
+			ret = sprintf(dst, "%s ([%d.%c, a%d, %c%d.%c*%d])", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l', decoded->params.regs.pri,
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale);
+			break;
+		case 0x21:
+		case 0x31:
+			//outer displacement only
+			ret = sprintf(dst, "%s ([a%d, %c%d.%c*%d], %d.%c)", c, decoded->params.regs.pri,
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale,
+			              decoded->params.regs.outer_disp, decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		case 0x22:
+		case 0x23:
+		case 0x32:
+		case 0x33:
+			//both outer and inner displacement
+			ret = sprintf(dst, "%s ([%d.%c, a%d, %c%d.%c*%d], %d.%c)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l', decoded->params.regs.pri,
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale,
+			              decoded->params.regs.outer_disp, decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		}
+		break;
+	case MODE_AREG_POSTINDEX:
+		switch (decoded->params.regs.disp_sizes)
+		{
+		case 0x11:
+			//no base displacement or outer displacement
+			ret = sprintf(dst, "%s ([a%d], %c%d.%c*%d)", c, decoded->params.regs.pri,
+						  (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+						  (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale);
+			break;
+		case 0x12:
+		case 0x13:
+			//base displacement only
+			ret = sprintf(dst, "%s ([%d.%c, a%d], %c%d.%c*%d)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l', decoded->params.regs.pri,
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale);
+			break;
+		case 0x21:
+		case 0x31:
+			//outer displacement only
+			ret = sprintf(dst, "%s ([a%d], %c%d.%c*%d, %d.%c)", c, decoded->params.regs.pri,
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale,
+			              decoded->params.regs.outer_disp, decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		case 0x22:
+		case 0x23:
+		case 0x32:
+		case 0x33:
+			//both outer and inner displacement
+			ret = sprintf(dst, "%s ([%d.%c, a%d], %c%d.%c*%d, %d.%c)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l', decoded->params.regs.pri,
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale,
+			              decoded->params.regs.outer_disp, decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		}
+		break;
+	case MODE_AREG_MEM_INDIRECT:
+		switch (decoded->params.regs.disp_sizes)
+		{
+		case 0x11:
+			//no base displacement or outer displacement
+			ret = sprintf(dst, "%s ([a%d])", c, decoded->params.regs.pri);
+			break;
+		case 0x12:
+		case 0x13:
+			//base displacement only
+			ret = sprintf(dst, "%s ([%d.%c, a%d])", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l', decoded->params.regs.pri);
+			break;
+		case 0x21:
+		case 0x31:
+			//outer displacement only
+			ret = sprintf(dst, "%s ([a%d], %d.%c)", c, decoded->params.regs.pri, decoded->params.regs.outer_disp,
+			              decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		case 0x22:
+		case 0x23:
+		case 0x32:
+		case 0x33:
+			//both outer and inner displacement
+			ret = sprintf(dst, "%s ([%d.%c, a%d], %d.%c)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l', decoded->params.regs.pri,
+			              decoded->params.regs.outer_disp, decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		}
+		break;
+	case MODE_AREG_BASE_DISP:
+		if (decoded->params.regs.disp_sizes > 1)
+		{
+			ret = sprintf(dst, "%s (%d.%c, a%d)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes == 2 ? 'w' : 'l', decoded->params.regs.pri);
+		} else {
+			//this is a lossy representation of the encoded instruction
+			//not sure if there's a better way to print it though
+			ret = sprintf(dst, "%s (a%d)", c, decoded->params.regs.pri);
+		}
+		break;
+	case MODE_INDEX_BASE_DISP:
+		if (decoded->params.regs.disp_sizes > 1)
+		{
+			ret = sprintf(dst, "%s (%d.%c, %c%d.%c*%d)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes == 2 ? 'w' : 'l',
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale);
+		} else {
+			ret = sprintf(dst, "%s (%c%d.%c*%d)", c, (decoded->params.regs.sec & 0x10) ? 'a': 'd',
+			              (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w',
+			              1 << decoded->params.regs.scale);
+		}
+		break;
+	case MODE_PREINDEX:
+		switch (decoded->params.regs.disp_sizes)
+		{
+		case 0x11:
+			//no base displacement or outer displacement
+			ret = sprintf(dst, "%s ([%c%d.%c*%d])", c, (decoded->params.regs.sec & 0x10) ? 'a': 'd',
+			              (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w',
+			              1 << decoded->params.regs.scale);
+			break;
+		case 0x12:
+		case 0x13:
+			//base displacement only
+			ret = sprintf(dst, "%s ([%d.%c, %c%d.%c*%d])", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l',
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale);
+			break;
+		case 0x21:
+		case 0x31:
+			//outer displacement only
+			ret = sprintf(dst, "%s ([%c%d.%c*%d], %d.%c)", c, (decoded->params.regs.sec & 0x10) ? 'a': 'd',
+			              (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w',
+			              1 << decoded->params.regs.scale, decoded->params.regs.outer_disp,
+			              decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		case 0x22:
+		case 0x23:
+		case 0x32:
+		case 0x33:
+			//both outer and inner displacement
+			ret = sprintf(dst, "%s ([%d.%c, %c%d.%c*%d], %d.%c)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l',
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale,
+			              decoded->params.regs.outer_disp, decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		}
+		break;
+	case MODE_POSTINDEX:
+		switch (decoded->params.regs.disp_sizes)
+		{
+		case 0x11:
+			//no base displacement or outer displacement
+			ret = sprintf(dst, "%s ([], %c%d.%c*%d)", c, (decoded->params.regs.sec & 0x10) ? 'a': 'd',
+			              (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w',
+			              1 << decoded->params.regs.scale);
+			break;
+		case 0x12:
+		case 0x13:
+			//base displacement only
+			ret = sprintf(dst, "%s ([%d.%c], %c%d.%c*%d)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l',
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale);
+			break;
+		case 0x21:
+		case 0x31:
+			//outer displacement only
+			ret = sprintf(dst, "%s ([], %c%d.%c*%d, %d.%c)", c, (decoded->params.regs.sec & 0x10) ? 'a': 'd',
+			              (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w',
+			              1 << decoded->params.regs.scale, decoded->params.regs.outer_disp,
+			              decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		case 0x22:
+		case 0x23:
+		case 0x32:
+		case 0x33:
+			//both outer and inner displacement
+			ret = sprintf(dst, "%s ([%d.%c], %c%d.%c*%d, %d.%c)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l',
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale,
+			              decoded->params.regs.outer_disp, decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		}
+		break;
+	case MODE_MEM_INDIRECT:
+		switch (decoded->params.regs.disp_sizes)
+		{
+		case 0x11:
+			//no base displacement or outer displacement
+			ret = sprintf(dst, "%s ([])", c);
+			break;
+		case 0x12:
+		case 0x13:
+			//base displacement only
+			ret = sprintf(dst, "%s ([%d.%c])", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l');
+			break;
+		case 0x21:
+		case 0x31:
+			//outer displacement only
+			ret = sprintf(dst, "%s ([], %d.%c)", c, decoded->params.regs.outer_disp,
+			              decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		case 0x22:
+		case 0x23:
+		case 0x32:
+		case 0x33:
+			//both outer and inner displacement
+			ret = sprintf(dst, "%s ([%d.%c], %d.%c)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l', decoded->params.regs.outer_disp,
+			              decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		}
+		break;
+	case MODE_BASE_DISP:
+		if (decoded->params.regs.disp_sizes > 1)
+		{
+			ret = sprintf(dst, "%s (%d.%c)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l');
+		} else {
+			ret = sprintf(dst, "%s ()", c);
+		}
+		break;
+#endif
 	case MODE_IMMEDIATE:
 	case MODE_IMMEDIATE_WORD:
-		return sprintf(dst, (decoded->params.immed <= 128 ? "%s #%d" : "%s #$%X"), c, decoded->params.immed);
+		ret = sprintf(dst, (decoded->params.immed <= 128 ? "%s #%d" : "%s #$%X"), c, decoded->params.immed);
+		break;
 	case MODE_ABSOLUTE_SHORT:
 		if (labels) {
-			return sprintf(dst, "%s ADR_%X.w", c, decoded->params.immed);
+			ret = sprintf(dst, "%s ", c);
+			ret += label_fun(dst+ret, decoded->params.immed, data);
+			strcat(dst+ret, ".w");
+			ret = ret + 2;
 		} else {
-			return sprintf(dst, "%s $%X.w", c, decoded->params.immed);
+			ret = sprintf(dst, "%s $%X.w", c, decoded->params.immed);
 		}
+		break;
 	case MODE_ABSOLUTE:
 		if (labels) {
-			return sprintf(dst, "%s ADR_%X.l", c, decoded->params.immed);
+			ret = sprintf(dst, "%s ", c);
+			ret += label_fun(dst+ret, decoded->params.immed, data);
+			strcat(dst+ret, ".l");
+			ret = ret + 2;
 		} else {
-			return sprintf(dst, "%s $%X", c, decoded->params.immed);
+			ret = sprintf(dst, "%s $%X", c, decoded->params.immed);
 		}
+		break;
 	case MODE_PC_DISPLACE:
 		if (labels) {
-			return sprintf(dst, "%s ADR_%X(pc)", c, address + 2 + decoded->params.regs.displacement);
+			ret = sprintf(dst, "%s ", c);
+			ret += label_fun(dst+ret, address + 2 + decoded->params.regs.displacement, data);
+			strcat(dst+ret, "(pc)");
+			ret = ret + 4;
 		} else {
-			return sprintf(dst, "%s (%d, pc)", c, decoded->params.regs.displacement);
+			ret = sprintf(dst, "%s (%d, pc)", c, decoded->params.regs.displacement);
 		}
+		break;
 	case MODE_PC_INDEX_DISP8:
-		return sprintf(dst, "%s (%d, pc, %c%d.%c)", c, decoded->params.regs.displacement, (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w');
+#ifdef M68020
+		if (decoded->params.regs.scale)
+		{
+			ret = sprintf(dst, "%s (%d, pc, %c%d.%c*%d)", c, decoded->params.regs.displacement, (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale);
+		} else {
+#endif
+			ret = sprintf(dst, "%s (%d, pc, %c%d.%c)", c, decoded->params.regs.displacement, (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w');
+#ifdef M68020
+		}
+#endif
+		break;
+#ifdef M68020
+	case MODE_PC_INDEX_BASE_DISP:
+		if (decoded->params.regs.disp_sizes > 1)
+		{
+			ret = sprintf(dst, "%s (%d.%c, pc, %c%d.%c*%d)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes == 2 ? 'w' : 'l',
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale);
+		} else {
+			ret = sprintf(dst, "%s (pc, %c%d.%c*%d)", c, (decoded->params.regs.sec & 0x10) ? 'a': 'd',
+			              (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w',
+			              1 << decoded->params.regs.scale);
+		}
+		break;
+	case MODE_PC_PREINDEX:
+		switch (decoded->params.regs.disp_sizes)
+		{
+		case 0x11:
+			//no base displacement or outer displacement
+			ret = sprintf(dst, "%s ([pc, %c%d.%c*%d])", c, (decoded->params.regs.sec & 0x10) ? 'a': 'd',
+			              (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w',
+			              1 << decoded->params.regs.scale);
+			break;
+		case 0x12:
+		case 0x13:
+			//base displacement only
+			ret = sprintf(dst, "%s ([%d.%c, pc, %c%d.%c*%d])", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l',
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale);
+			break;
+		case 0x21:
+		case 0x31:
+			//outer displacement only
+			ret = sprintf(dst, "%s ([pc, %c%d.%c*%d], %d.%c)", c, (decoded->params.regs.sec & 0x10) ? 'a': 'd',
+			              (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w',
+			              1 << decoded->params.regs.scale, decoded->params.regs.outer_disp,
+			              decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		case 0x22:
+		case 0x23:
+		case 0x32:
+		case 0x33:
+			//both outer and inner displacement
+			ret = sprintf(dst, "%s ([%d.%c, pc, %c%d.%c*%d], %d.%c)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l',
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale,
+			              decoded->params.regs.outer_disp, decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		}
+		break;
+	case MODE_PC_POSTINDEX:
+		switch (decoded->params.regs.disp_sizes)
+		{
+		case 0x11:
+			//no base displacement or outer displacement
+			ret = sprintf(dst, "%s ([pc], %c%d.%c*%d)", c, (decoded->params.regs.sec & 0x10) ? 'a': 'd',
+			              (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w',
+			              1 << decoded->params.regs.scale);
+			break;
+		case 0x12:
+		case 0x13:
+			//base displacement only
+			ret = sprintf(dst, "%s ([%d.%c, pc], %c%d.%c*%d)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l',
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale);
+			break;
+		case 0x21:
+		case 0x31:
+			//outer displacement only
+			ret = sprintf(dst, "%s ([pc], %c%d.%c*%d, %d.%c)", c, (decoded->params.regs.sec & 0x10) ? 'a': 'd',
+			              (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w',
+			              1 << decoded->params.regs.scale, decoded->params.regs.outer_disp,
+			              decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		case 0x22:
+		case 0x23:
+		case 0x32:
+		case 0x33:
+			//both outer and inner displacement
+			ret = sprintf(dst, "%s ([%d.%c, pc], %c%d.%c*%d, %d.%c)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l',
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale,
+			              decoded->params.regs.outer_disp, decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		}
+		break;
+	case MODE_PC_MEM_INDIRECT:
+		switch (decoded->params.regs.disp_sizes)
+		{
+		case 0x11:
+			//no base displacement or outer displacement
+			ret = sprintf(dst, "%s ([pc])", c);
+			break;
+		case 0x12:
+		case 0x13:
+			//base displacement only
+			ret = sprintf(dst, "%s ([%d.%c, pc])", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l');
+			break;
+		case 0x21:
+		case 0x31:
+			//outer displacement only
+			ret = sprintf(dst, "%s ([pc], %d.%c)", c, decoded->params.regs.outer_disp,
+			              decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		case 0x22:
+		case 0x23:
+		case 0x32:
+		case 0x33:
+			//both outer and inner displacement
+			ret = sprintf(dst, "%s ([%d.%c, pc], %d.%c)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l', decoded->params.regs.outer_disp,
+			              decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		}
+		break;
+	case MODE_PC_BASE_DISP:
+		if (decoded->params.regs.disp_sizes > 1)
+		{
+			ret = sprintf(dst, "%s (%d.%c, pc)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l');
+		} else {
+			ret = sprintf(dst, "%s (pc)", c);
+		}
+		break;
+	case MODE_ZPC_INDEX_BASE_DISP:
+		if (decoded->params.regs.disp_sizes > 1)
+		{
+			ret = sprintf(dst, "%s (%d.%c, zpc, %c%d.%c*%d)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes == 2 ? 'w' : 'l',
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale);
+		} else {
+			ret = sprintf(dst, "%s (zpc, %c%d.%c*%d)", c, (decoded->params.regs.sec & 0x10) ? 'a': 'd',
+			              (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w',
+			              1 << decoded->params.regs.scale);
+		}
+		break;
+	case MODE_ZPC_PREINDEX:
+		switch (decoded->params.regs.disp_sizes)
+		{
+		case 0x11:
+			//no base displacement or outer displacement
+			ret = sprintf(dst, "%s ([zpc, %c%d.%c*%d])", c, (decoded->params.regs.sec & 0x10) ? 'a': 'd',
+			              (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w',
+			              1 << decoded->params.regs.scale);
+			break;
+		case 0x12:
+		case 0x13:
+			//base displacement only
+			ret = sprintf(dst, "%s ([%d.%c, zpc, %c%d.%c*%d])", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l',
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale);
+			break;
+		case 0x21:
+		case 0x31:
+			//outer displacement only
+			ret = sprintf(dst, "%s ([zpc, %c%d.%c*%d], %d.%c)", c, (decoded->params.regs.sec & 0x10) ? 'a': 'd',
+			              (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w',
+			              1 << decoded->params.regs.scale, decoded->params.regs.outer_disp,
+			              decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		case 0x22:
+		case 0x23:
+		case 0x32:
+		case 0x33:
+			//both outer and inner displacement
+			ret = sprintf(dst, "%s ([%d.%c, zpc, %c%d.%c*%d], %d.%c)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l',
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale,
+			              decoded->params.regs.outer_disp, decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		}
+		break;
+	case MODE_ZPC_POSTINDEX:
+		switch (decoded->params.regs.disp_sizes)
+		{
+		case 0x11:
+			//no base displacement or outer displacement
+			ret = sprintf(dst, "%s ([zpc], %c%d.%c*%d)", c, (decoded->params.regs.sec & 0x10) ? 'a': 'd',
+			              (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w',
+			              1 << decoded->params.regs.scale);
+			break;
+		case 0x12:
+		case 0x13:
+			//base displacement only
+			ret = sprintf(dst, "%s ([%d.%c, zpc], %c%d.%c*%d)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l',
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale);
+			break;
+		case 0x21:
+		case 0x31:
+			//outer displacement only
+			ret = sprintf(dst, "%s ([zpc], %c%d.%c*%d, %d.%c)", c, (decoded->params.regs.sec & 0x10) ? 'a': 'd',
+			              (decoded->params.regs.sec >> 1) & 0x7, (decoded->params.regs.sec & 1) ? 'l': 'w',
+			              1 << decoded->params.regs.scale, decoded->params.regs.outer_disp,
+			              decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		case 0x22:
+		case 0x23:
+		case 0x32:
+		case 0x33:
+			//both outer and inner displacement
+			ret = sprintf(dst, "%s ([%d.%c, zpc], %c%d.%c*%d, %d.%c)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l',
+			              (decoded->params.regs.sec & 0x10) ? 'a': 'd', (decoded->params.regs.sec >> 1) & 0x7,
+			              (decoded->params.regs.sec & 1) ? 'l': 'w', 1 << decoded->params.regs.scale,
+			              decoded->params.regs.outer_disp, decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		}
+		break;
+	case MODE_ZPC_MEM_INDIRECT:
+		switch (decoded->params.regs.disp_sizes)
+		{
+		case 0x11:
+			//no base displacement or outer displacement
+			ret = sprintf(dst, "%s ([zpc])", c);
+			break;
+		case 0x12:
+		case 0x13:
+			//base displacement only
+			ret = sprintf(dst, "%s ([%d.%c, zpc])", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l');
+			break;
+		case 0x21:
+		case 0x31:
+			//outer displacement only
+			ret = sprintf(dst, "%s ([zpc], %d.%c)", c, decoded->params.regs.outer_disp,
+			              decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		case 0x22:
+		case 0x23:
+		case 0x32:
+		case 0x33:
+			//both outer and inner displacement
+			ret = sprintf(dst, "%s ([%d.%c, zpc], %d.%c)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l', decoded->params.regs.outer_disp,
+			              decoded->params.regs.disp_sizes & 0x30 == 0x20 ? 'w' : 'l');
+			break;
+		}
+		break;
+	case MODE_ZPC_BASE_DISP:
+		if (decoded->params.regs.disp_sizes > 1)
+		{
+			ret = sprintf(dst, "%s (%d.%c, zpc)", c, decoded->params.regs.displacement,
+			              decoded->params.regs.disp_sizes & 3 == 2 ? 'w' : 'l');
+		} else {
+			ret = sprintf(dst, "%s (zpc)", c);
+		}
+		break;
+#endif
 	default:
-		return 0;
+		ret = 0;
 	}
+#ifdef M68020
+	if (decoded->addr_mode & M68K_FLAG_BITFIELD)
+	{
+		switch (decoded->bitfield & 0x820)
+		{
+		case 0:
+			return ret + sprintf(dst+ret, " {$%X:%d}", decoded->bitfield >> 6 & 0x1F, decoded->bitfield & 0x1F ? decoded->bitfield & 0x1F : 32);
+		case 0x20:
+			return ret + sprintf(dst+ret, " {$%X:d%d}", decoded->bitfield >> 6 & 0x1F, decoded->bitfield & 0x7);
+		case 0x800:
+			return ret + sprintf(dst+ret, " {d%d:%d}", decoded->bitfield >> 6 & 0x7, decoded->bitfield & 0x1F ? decoded->bitfield & 0x1F : 32);
+		case 0x820:
+			return ret + sprintf(dst+ret, " {d%d:d%d}", decoded->bitfield >> 6 & 0x7, decoded->bitfield & 0x7);
+		}
+	}
+#endif
+	return ret;
 }
 
-int m68k_disasm_movem_op(m68k_op_info *decoded, m68k_op_info *other, char *dst, int need_comma, uint8_t labels, uint32_t address)
+int m68k_disasm_movem_op(m68k_op_info *decoded, m68k_op_info *other, char *dst, int need_comma, uint8_t labels, uint32_t address, format_label_fun label_fun, void * data)
 {
 	int8_t dir, reg, bit, regnum, last=-1, lastreg, first=-1;
 	char *rtype, *last_rtype;
@@ -1540,11 +2427,16 @@ int m68k_disasm_movem_op(m68k_op_info *decoded, m68k_op_info *other, char *dst, 
 		}
 		return oplen;
 	} else {
-		return m68k_disasm_op(decoded, dst, need_comma, labels, address);
+		return m68k_disasm_op(decoded, dst, need_comma, labels, address, label_fun, data);
 	}
 }
 
-int m68k_disasm_ex(m68kinst * decoded, char * dst, uint8_t labels)
+int m68k_default_label_fun(char * dst, uint32_t address, void * data)
+{
+	return sprintf(dst, "ADR_%X", address);
+}
+
+int m68k_disasm_ex(m68kinst * decoded, char * dst, uint8_t labels, format_label_fun label_fun, void * data)
 {
 	int ret,op1len;
 	uint8_t size;
@@ -1562,9 +2454,11 @@ int m68k_disasm_ex(m68kinst * decoded, char * dst, uint8_t labels)
 		if (decoded->op != M68K_SCC) {
 			if (labels) {
 				if (decoded->op == M68K_DBCC) {
-					ret += sprintf(dst+ret, " d%d, ADR_%X", decoded->dst.params.regs.pri, decoded->address + 2 + decoded->src.params.immed);
+					ret += sprintf(dst+ret, " d%d, ", decoded->dst.params.regs.pri);
+					ret += label_fun(dst+ret, decoded->address + 2 + decoded->src.params.immed, data);
 				} else {
-					ret += sprintf(dst+ret, " ADR_%X", decoded->address + 2 + decoded->src.params.immed);
+					dst[ret++] = ' ';
+					ret += label_fun(dst+ret, decoded->address + 2 + decoded->src.params.immed, data);
 				}
 			} else {
 				if (decoded->op == M68K_DBCC) {
@@ -1578,8 +2472,8 @@ int m68k_disasm_ex(m68kinst * decoded, char * dst, uint8_t labels)
 		break;
 	case M68K_BSR:
 		if (labels) {
-			ret = sprintf(dst, "bsr%s ADR_%X", decoded->variant == VAR_BYTE ? ".s" : "",
-			decoded->address + 2 + decoded->src.params.immed);
+			ret = sprintf(dst, "bsr%s ", decoded->variant == VAR_BYTE ? ".s" : "");
+			ret += label_fun(dst+ret, decoded->address + 2 + decoded->src.params.immed, data);
 		} else {
 			ret = sprintf(dst, "bsr%s #%d <%X>", decoded->variant == VAR_BYTE ? ".s" : "", decoded->src.params.immed, decoded->address + 2 + decoded->src.params.immed);
 		}
@@ -1587,7 +2481,7 @@ int m68k_disasm_ex(m68kinst * decoded, char * dst, uint8_t labels)
 	case M68K_MOVE_FROM_SR:
 		ret = sprintf(dst, "%s", mnemonics[decoded->op]);
 		ret += sprintf(dst + ret, " SR");
-		ret += m68k_disasm_op(&(decoded->dst), dst + ret, 1, labels, decoded->address);
+		ret += m68k_disasm_op(&(decoded->dst), dst + ret, 1, labels, decoded->address, label_fun, data);
 		return ret;
 	case M68K_ANDI_SR:
 	case M68K_EORI_SR:
@@ -1599,19 +2493,34 @@ int m68k_disasm_ex(m68kinst * decoded, char * dst, uint8_t labels)
 	case M68K_MOVE_CCR:
 	case M68K_ORI_CCR:
 		ret = sprintf(dst, "%s", mnemonics[decoded->op]);
-		ret += m68k_disasm_op(&(decoded->src), dst + ret, 0, labels, decoded->address);
+		ret += m68k_disasm_op(&(decoded->src), dst + ret, 0, labels, decoded->address, label_fun, data);
 		ret += sprintf(dst + ret, ", %s", special_op);
 		return ret;
 	case M68K_MOVE_USP:
 		ret = sprintf(dst, "%s", mnemonics[decoded->op]);
 		if (decoded->src.addr_mode != MODE_UNUSED) {
-			ret += m68k_disasm_op(&(decoded->src), dst + ret, 0, labels, decoded->address);
+			ret += m68k_disasm_op(&(decoded->src), dst + ret, 0, labels, decoded->address, label_fun, data);
 			ret += sprintf(dst + ret, ", USP");
 		} else {
 			ret += sprintf(dst + ret, "USP, ");
-			ret += m68k_disasm_op(&(decoded->dst), dst + ret, 0, labels, decoded->address);
+			ret += m68k_disasm_op(&(decoded->dst), dst + ret, 0, labels, decoded->address, label_fun, data);
 		}
 		return ret;
+	case M68K_INVALID:
+		ret = sprintf(dst, "dc.w $%X", decoded->src.params.immed);
+		return ret;
+#ifdef M68010
+	case M68K_MOVEC:
+		ret = sprintf(dst, "%s ", mnemonics[decoded->op]);
+		if (decoded->src.addr_mode == MODE_UNUSED) {
+			ret += sprintf(dst + ret, "%s, ", cr_mnem[decoded->src.params.immed]);
+			ret += m68k_disasm_op(&(decoded->dst), dst + ret, 0, labels, decoded->address, label_fun, data);
+		} else {
+			ret += m68k_disasm_op(&(decoded->src), dst + ret, 0, labels, decoded->address, label_fun, data);
+			ret += sprintf(dst + ret, ", %s", cr_mnem[decoded->dst.params.immed]);
+		}
+		return ret;
+#endif
 	default:
 		size = decoded->extra.size;
 		ret = sprintf(dst, "%s%s%s",
@@ -1620,23 +2529,27 @@ int m68k_disasm_ex(m68kinst * decoded, char * dst, uint8_t labels)
 				size == OPSIZE_BYTE ? ".b" : (size == OPSIZE_WORD ? ".w" : (size == OPSIZE_LONG ? ".l" : "")));
 	}
 	if (decoded->op == M68K_MOVEM) {
-		op1len = m68k_disasm_movem_op(&(decoded->src), &(decoded->dst), dst + ret, 0, labels, decoded->address);
+		op1len = m68k_disasm_movem_op(&(decoded->src), &(decoded->dst), dst + ret, 0, labels, decoded->address, label_fun, data);
 		ret += op1len;
-		ret += m68k_disasm_movem_op(&(decoded->dst), &(decoded->src), dst + ret, op1len, labels, decoded->address);
+		ret += m68k_disasm_movem_op(&(decoded->dst), &(decoded->src), dst + ret, op1len, labels, decoded->address, label_fun, data);
 	} else {
-		op1len = m68k_disasm_op(&(decoded->src), dst + ret, 0, labels, decoded->address);
+		op1len = m68k_disasm_op(&(decoded->src), dst + ret, 0, labels, decoded->address, label_fun, data);
 		ret += op1len;
-		ret += m68k_disasm_op(&(decoded->dst), dst + ret, op1len, labels, decoded->address);
+		ret += m68k_disasm_op(&(decoded->dst), dst + ret, op1len, labels, decoded->address, label_fun, data);
 	}
 	return ret;
 }
 
 int m68k_disasm(m68kinst * decoded, char * dst)
 {
-	return m68k_disasm_ex(decoded, dst, 0);
+	return m68k_disasm_ex(decoded, dst, 0, NULL, NULL);
 }
 
-int m68k_disasm_labels(m68kinst * decoded, char * dst)
+int m68k_disasm_labels(m68kinst * decoded, char * dst, format_label_fun label_fun, void * data)
 {
-	return m68k_disasm_ex(decoded, dst, 1);
+	if (!label_fun)
+	{
+		label_fun = m68k_default_label_fun;
+	}
+	return m68k_disasm_ex(decoded, dst, 1, label_fun, data);
 }
