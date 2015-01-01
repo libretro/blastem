@@ -1464,7 +1464,7 @@ void translate_m68k_abcd_sbcd(m68k_options *opts, m68kinst *inst, host_ea *src_o
 	set_flag_cond(opts, CC_O, FLAG_V);
 	*no_adjust = code->cur - (no_adjust+1);
 	flag_to_flag(opts, FLAG_C, FLAG_X);
-	
+
 	cmp_ir(code, 0, opts->gen.scratch1, SZ_B);
 	set_flag_cond(opts, CC_S, FLAG_N);
 	jcc(code, CC_Z, code->cur + 4);
@@ -1664,7 +1664,7 @@ void translate_m68k_div(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 	case MODE_ABSOLUTE_SHORT:
 	case MODE_PC_INDEX_DISP8:
 	case MODE_IMMEDIATE:
-		isize = 4;		
+		isize = 4;
 		break;
 	case MODE_ABSOLUTE:
 		isize = 6;
@@ -2230,6 +2230,8 @@ void insert_breakpoint(m68k_context * context, uint32_t address, code_ptr bp_han
 void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks)
 {
 	memset(opts, 0, sizeof(*opts));
+	opts->gen.memmap = memmap;
+	opts->gen.memmap_chunks = num_chunks;
 	opts->gen.address_size = SZ_D;
 	opts->gen.address_mask = 0xFFFFFF;
 	opts->gen.byte_swap = 1;

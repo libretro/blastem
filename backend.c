@@ -51,3 +51,24 @@ void process_deferred(deferred_addr ** head_ptr, void * context, native_addr_fun
 	}
 }
 
+void * get_native_pointer(uint32_t address, void ** mem_pointers, cpu_options * opts)
+{
+	memmap_chunk * memmap = opts->memmap;
+	address &= opts->address_mask;
+	for (uint32_t chunk = 0; chunk < opts->memmap_chunks; chunk++)
+	{
+		if (address >= memmap[chunk].start && address < memmap[chunk].end) {
+			if (!(memmap[chunk].flags & MMAP_READ)) {
+				return NULL;
+			}
+			uint8_t * base = memmap[chunk].flags & MMAP_PTR_IDX
+				? mem_pointers[memmap[chunk].ptr_index]
+				: memmap[chunk].buffer;
+			if (!base) {
+				return NULL;
+			}
+			return base + (address & memmap[chunk].mask);
+		}
+	}
+	return NULL;
+}
