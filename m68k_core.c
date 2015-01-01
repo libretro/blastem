@@ -754,26 +754,17 @@ void translate_m68k_stream(uint32_t address, m68k_context * context)
 	m68kinst instbuf;
 	m68k_options * opts = context->options;
 	code_info *code = &opts->gen.code;
-	address &= 0xFFFFFF;
 	if(get_native_address(opts->gen.native_code_map, address)) {
 		return;
 	}
-	char disbuf[1024];
 	uint16_t *encoded, *next;
-	if ((address & 0xFFFFFF) < 0x400000) {
-		encoded = context->mem_pointers[0] + (address & 0xFFFFFF)/2;
-	} else if ((address & 0xFFFFFF) > 0xE00000) {
-		encoded = context->mem_pointers[1] + (address  & 0xFFFF)/2;
-	} else {
-		printf("attempt to translate non-memory address: %X\n", address);
-		exit(1);
-	}
 	do {
 		if (opts->address_log) {
 			fprintf(opts->address_log, "%X\n", address);
 		}
 		do {
-			if (address >= 0x400000 && address < 0xE00000) {
+			encoded = get_native_pointer(address, (void **)context->mem_pointers, &opts->gen);
+			if (!encoded) {
 				translate_out_of_bounds(code);
 				break;
 			}
@@ -788,7 +779,7 @@ void translate_m68k_stream(uint32_t address, m68k_context * context)
 			}
 			uint16_t m68k_size = (next-encoded)*2;
 			address += m68k_size;
-			encoded = next;
+			//char disbuf[1024];
 			//m68k_disasm(&instbuf, disbuf);
 			//printf("%X: %s\n", instbuf.address, disbuf);
 
@@ -802,18 +793,8 @@ void translate_m68k_stream(uint32_t address, m68k_context * context)
 		process_deferred(&opts->gen.deferred, context, (native_addr_func)get_native_from_context);
 		if (opts->gen.deferred) {
 			address = opts->gen.deferred->address;
-			if ((address & 0xFFFFFF) < 0x400000) {
-				encoded = context->mem_pointers[0] + (address & 0xFFFFFF)/2;
-			} else if ((address & 0xFFFFFF) > 0xE00000) {
-				encoded = context->mem_pointers[1] + (address  & 0xFFFF)/2;
-			} else {
-				printf("attempt to translate non-memory address: %X\n", address);
-				exit(1);
-			}
-		} else {
-			encoded = NULL;
 		}
-	} while(encoded != NULL);
+	} while(opts->gen.deferred);
 }
 
 void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
@@ -826,8 +807,7 @@ void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
 	code_info orig_code;
 	orig_code.cur = orig_start;
 	orig_code.last = orig_start + orig_size + 5;
-	address &= 0xFFFF;
-	uint16_t *after, *inst = context->mem_pointers[1] + address/2;
+	uint16_t *after, *inst = get_native_pointer(address, (void **)context->mem_pointers, &opts->gen);
 	m68kinst instbuf;
 	after = m68k_decode(inst, &instbuf, orig);
 	if (orig_size != MAX_NATIVE_SIZE) {
@@ -910,7 +890,7 @@ code_ptr get_native_address_trans(m68k_context * context, uint32_t address)
 void remove_breakpoint(m68k_context * context, uint32_t address)
 {
 	code_ptr native = get_native_address(context->native_code_map, address);
-	check_cycles_int(context->options, address);
+	check_cycles_int(&context->options->gen, address);
 }
 
 void start_68k_context(m68k_context * context, uint32_t address)
@@ -922,9 +902,10 @@ void start_68k_context(m68k_context * context, uint32_t address)
 
 void m68k_reset(m68k_context * context)
 {
-	//TODO: Make this actually use the normal read functions
-	context->aregs[7] = context->mem_pointers[0][0] << 16 | context->mem_pointers[0][1];
-	uint32_t address = context->mem_pointers[0][2] << 16 | context->mem_pointers[0][3];
+	//TODO: Actually execute the M68K reset vector rather than simulating some of its behavior
+	uint16_t *reset_vec = get_native_pointer(0, (void **)context->mem_pointers, &context->options->gen);
+	context->aregs[7] = reset_vec[0] << 16 | reset_vec[1];
+	uint32_t address = reset_vec[2] << 16 | reset_vec[3];
 	start_68k_context(context, address);
 }
 

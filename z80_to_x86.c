@@ -1331,7 +1331,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			num_cycles += 4;
 		}
 		cycles(&opts->gen, num_cycles);
-		if (inst->addr_mode != Z80_REG_INDIRECT && inst->immed < 0x4000) {
+		if (inst->addr_mode != Z80_REG_INDIRECT) {
 			code_ptr call_dst = z80_get_native_address(context, inst->immed);
 			if (!call_dst) {
 				opts->gen.deferred = defer_address(opts->gen.deferred, inst->immed, code->cur + 1);
@@ -1380,38 +1380,26 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		jcc(code, cond, code->cur+2);
 		cycles(&opts->gen, 5);//T States: 5
 		uint16_t dest_addr = inst->immed;
-		if (dest_addr < 0x4000) {
-			code_ptr call_dst = z80_get_native_address(context, dest_addr);
-			if (!call_dst) {
-				opts->gen.deferred = defer_address(opts->gen.deferred, dest_addr, code->cur + 1);
-				//fake address to force large displacement
-				call_dst = code->cur + 256;
-			}
-			jmp(code, call_dst);
-		} else {
-			mov_ir(code, dest_addr, opts->gen.scratch1, SZ_W);
-			call(code, opts->native_addr);
-			jmp_r(code, opts->gen.scratch1);
+		code_ptr call_dst = z80_get_native_address(context, dest_addr);
+		if (!call_dst) {
+			opts->gen.deferred = defer_address(opts->gen.deferred, dest_addr, code->cur + 1);
+			//fake address to force large displacement
+			call_dst = code->cur + 256;
 		}
+		jmp(code, call_dst);
 		*no_jump_off = code->cur - (no_jump_off+1);
 		break;
 	}
 	case Z80_JR: {
 		cycles(&opts->gen, 12);//T States: 4,3,5
 		uint16_t dest_addr = address + inst->immed + 2;
-		if (dest_addr < 0x4000) {
-			code_ptr call_dst = z80_get_native_address(context, dest_addr);
-			if (!call_dst) {
-				opts->gen.deferred = defer_address(opts->gen.deferred, dest_addr, code->cur + 1);
-				//fake address to force large displacement
-				call_dst = code->cur + 256;
-			}
-			jmp(code, call_dst);
-		} else {
-			mov_ir(code, dest_addr, opts->gen.scratch1, SZ_W);
-			call(code, opts->native_addr);
-			jmp_r(code, opts->gen.scratch1);
+		code_ptr call_dst = z80_get_native_address(context, dest_addr);
+		if (!call_dst) {
+			opts->gen.deferred = defer_address(opts->gen.deferred, dest_addr, code->cur + 1);
+			//fake address to force large displacement
+			call_dst = code->cur + 256;
 		}
+		jmp(code, call_dst);
 		break;
 	}
 	case Z80_JRCC: {
@@ -1434,66 +1422,49 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		jcc(code, cond, code->cur+2);
 		cycles(&opts->gen, 5);//T States: 5
 		uint16_t dest_addr = address + inst->immed + 2;
-		if (dest_addr < 0x4000) {
-			code_ptr call_dst = z80_get_native_address(context, dest_addr);
-			if (!call_dst) {
-				opts->gen.deferred = defer_address(opts->gen.deferred, dest_addr, code->cur + 1);
-				//fake address to force large displacement
-				call_dst = code->cur + 256;
-			}
-			jmp(code, call_dst);
-		} else {
-			mov_ir(code, dest_addr, opts->gen.scratch1, SZ_W);
-			call(code, opts->native_addr);
-			jmp_r(code, opts->gen.scratch1);
+		code_ptr call_dst = z80_get_native_address(context, dest_addr);
+		if (!call_dst) {
+			opts->gen.deferred = defer_address(opts->gen.deferred, dest_addr, code->cur + 1);
+			//fake address to force large displacement
+			call_dst = code->cur + 256;
 		}
+		jmp(code, call_dst);
 		*no_jump_off = code->cur - (no_jump_off+1);
 		break;
 	}
-	case Z80_DJNZ:
+	case Z80_DJNZ: {
 		cycles(&opts->gen, 8);//T States: 5,3
 		sub_ir(code, 1, opts->regs[Z80_B], SZ_B);
 		uint8_t *no_jump_off = code->cur+1;
 		jcc(code, CC_Z, code->cur+2);
 		cycles(&opts->gen, 5);//T States: 5
 		uint16_t dest_addr = address + inst->immed + 2;
-		if (dest_addr < 0x4000) {
-			code_ptr call_dst = z80_get_native_address(context, dest_addr);
-			if (!call_dst) {
-				opts->gen.deferred = defer_address(opts->gen.deferred, dest_addr, code->cur + 1);
-				//fake address to force large displacement
-				call_dst = code->cur + 256;
-			}
-			jmp(code, call_dst);
-		} else {
-			mov_ir(code, dest_addr, opts->gen.scratch1, SZ_W);
-			call(code, opts->native_addr);
-			jmp_r(code, opts->gen.scratch1);
+		code_ptr call_dst = z80_get_native_address(context, dest_addr);
+		if (!call_dst) {
+			opts->gen.deferred = defer_address(opts->gen.deferred, dest_addr, code->cur + 1);
+			//fake address to force large displacement
+			call_dst = code->cur + 256;
 		}
+		jmp(code, call_dst);
 		*no_jump_off = code->cur - (no_jump_off+1);
 		break;
+	}
 	case Z80_CALL: {
 		cycles(&opts->gen, 11);//T States: 4,3,4
 		sub_ir(code, 2, opts->regs[Z80_SP], SZ_W);
 		mov_ir(code, address + 3, opts->gen.scratch1, SZ_W);
 		mov_rr(code, opts->regs[Z80_SP], opts->gen.scratch2, SZ_W);
 		call(code, opts->write_16_highfirst);//T States: 3, 3
-		if (inst->immed < 0x4000) {
-			code_ptr call_dst = z80_get_native_address(context, inst->immed);
-			if (!call_dst) {
-				opts->gen.deferred = defer_address(opts->gen.deferred, inst->immed, code->cur + 1);
-				//fake address to force large displacement
-				call_dst = code->cur + 256;
-			}
-			jmp(code, call_dst);
-		} else {
-			mov_ir(code, inst->immed, opts->gen.scratch1, SZ_W);
-			call(code, opts->native_addr);
-			jmp_r(code, opts->gen.scratch1);
+		code_ptr call_dst = z80_get_native_address(context, inst->immed);
+		if (!call_dst) {
+			opts->gen.deferred = defer_address(opts->gen.deferred, inst->immed, code->cur + 1);
+			//fake address to force large displacement
+			call_dst = code->cur + 256;
 		}
+		jmp(code, call_dst);
 		break;
 	}
-	case Z80_CALLCC:
+	case Z80_CALLCC: {
 		cycles(&opts->gen, 10);//T States: 4,3,3 (false case)
 		uint8_t cond = CC_Z;
 		switch (inst->reg)
@@ -1526,21 +1497,16 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		mov_ir(code, address + 3, opts->gen.scratch1, SZ_W);
 		mov_rr(code, opts->regs[Z80_SP], opts->gen.scratch2, SZ_W);
 		call(code, opts->write_16_highfirst);//T States: 3, 3
-		if (inst->immed < 0x4000) {
-			code_ptr call_dst = z80_get_native_address(context, inst->immed);
-			if (!call_dst) {
-				opts->gen.deferred = defer_address(opts->gen.deferred, inst->immed, code->cur + 1);
-				//fake address to force large displacement
-				call_dst = code->cur + 256;
-			}
-			jmp(code, call_dst);
-		} else {
-			mov_ir(code, inst->immed, opts->gen.scratch1, SZ_W);
-			call(code, opts->native_addr);
-			jmp_r(code, opts->gen.scratch1);
+		code_ptr call_dst = z80_get_native_address(context, inst->immed);
+		if (!call_dst) {
+			opts->gen.deferred = defer_address(opts->gen.deferred, inst->immed, code->cur + 1);
+			//fake address to force large displacement
+			call_dst = code->cur + 256;
 		}
+		jmp(code, call_dst);
 		*no_call_off = code->cur - (no_call_off+1);
 		break;
+	}
 	case Z80_RET:
 		cycles(&opts->gen, 4);//T States: 4
 		mov_rr(code, opts->regs[Z80_SP], opts->gen.scratch1, SZ_W);
@@ -1850,10 +1816,8 @@ void * z80_retranslate_inst(uint32_t address, z80_context * context, uint8_t * o
 	char disbuf[80];
 	z80_options * opts = context->options;
 	uint8_t orig_size = z80_get_native_inst_size(opts, address);
-	uint32_t orig = address;
-	address &= 0x1FFF;
 	code_info *code = &opts->gen.code;
-	uint8_t *after, *inst = context->mem_pointers[0] + address;
+	uint8_t *after, *inst = get_native_pointer(address, (void **)context->mem_pointers, &opts->gen);
 	z80inst instbuf;
 	dprintf("Retranslating code at Z80 address %X, native address %p\n", address, orig_start);
 	after = z80_decode(inst, &instbuf);
@@ -1921,24 +1885,22 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 	}
 	z80_options * opts = context->options;
 	uint32_t start_address = address;
-	uint8_t * encoded = NULL, *next;
-	if (address < 0x4000) {
-		encoded = context->mem_pointers[0] + (address & 0x1FFF);
-	}
 
-	while (encoded != NULL || address >= 0x4000)
+	do
 	{
 		z80inst inst;
 		dprintf("translating Z80 code at address %X\n", address);
 		do {
-			if (address >= 0x4000) {
-				code_info stub = z80_make_interp_stub(context, address);
-				z80_map_native_address(context, address, stub.cur, 1, stub.last - stub.cur);
-				break;
-			}
 			uint8_t * existing = z80_get_native_address(context, address);
 			if (existing) {
 				jmp(&opts->gen.code, existing);
+				break;
+			}
+			uint8_t * encoded, *next;
+			encoded = get_native_pointer(address, (void **)context->mem_pointers, &opts->gen);
+			if (!encoded) {
+				code_info stub = z80_make_interp_stub(context, address);
+				z80_map_native_address(context, address, stub.cur, 1, stub.last - stub.cur);
 				break;
 			}
 			//make sure prologue is in a contiguous chunk of code
@@ -1956,33 +1918,22 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 			translate_z80inst(&inst, context, address, 0);
 			z80_map_native_address(context, address, start, next-encoded, opts->gen.code.cur - start);
 			address += next-encoded;
-			if (address > 0xFFFF) {
-				address &= 0xFFFF;
-
-			} else {
-				encoded = next;
-			}
+			address &= 0xFFFF;
 		} while (!z80_is_terminal(&inst));
 		process_deferred(&opts->gen.deferred, context, (native_addr_func)z80_get_native_address);
 		if (opts->gen.deferred) {
 			address = opts->gen.deferred->address;
 			dprintf("defferred address: %X\n", address);
-			if (address < 0x4000) {
-				encoded = context->mem_pointers[0] + (address & 0x1FFF);
-			} else {
-				encoded = NULL;
-			}
-		} else {
-			encoded = NULL;
-			address = 0;
 		}
-	}
+	} while (opts->gen.deferred);
 }
 
 void init_x86_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t num_chunks)
 {
 	memset(options, 0, sizeof(*options));
 
+	options->gen.memmap = chunks;
+	options->gen.memmap_chunks = num_chunks;
 	options->gen.address_size = SZ_W;
 	options->gen.address_mask = 0xFFFF;
 	options->gen.max_address = 0x10000;

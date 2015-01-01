@@ -59,7 +59,7 @@ typedef struct {
 	uint16_t        reserved;
 
 	native_map_slot *native_code_map;
-	void            *options;
+	m68k_options    *options;
 	uint8_t         ram_code_flags[32/8];
 	void            *system;
 } m68k_context;
