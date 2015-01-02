@@ -1956,9 +1956,6 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	options->regs[Z80_IX] = RDX;
 	options->regs[Z80_IY] = R8;
 
-	options->bank_reg = R15;
-	options->bank_pointer = R12;
-
 	options->gen.context_reg = RSI;
 	options->gen.cycles = RBP;
 	options->gen.limit = RDI;
@@ -2003,8 +2000,6 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	}
 	mov_rrdisp(code, options->gen.limit, options->gen.context_reg, offsetof(z80_context, target_cycle), SZ_D);
 	mov_rrdisp(code, options->gen.cycles, options->gen.context_reg, offsetof(z80_context, current_cycle), SZ_D);
-	mov_rrdisp(code, options->bank_reg, options->gen.context_reg, offsetof(z80_context, bank_reg), SZ_W);
-	mov_rrdisp(code, options->bank_pointer, options->gen.context_reg, offsetof(z80_context, mem_pointers) + sizeof(uint8_t *) * 1, SZ_PTR);
 	retn(code);
 
 	options->load_context_scratch = code->cur;
@@ -2034,8 +2029,6 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	}
 	mov_rdispr(code, options->gen.context_reg, offsetof(z80_context, target_cycle), options->gen.limit, SZ_D);
 	mov_rdispr(code, options->gen.context_reg, offsetof(z80_context, current_cycle), options->gen.cycles, SZ_D);
-	mov_rdispr(code, options->gen.context_reg, offsetof(z80_context, bank_reg), options->bank_reg, SZ_W);
-	mov_rdispr(code, options->gen.context_reg, offsetof(z80_context, mem_pointers) + sizeof(uint8_t *) * 1, options->bank_pointer, SZ_PTR);
 	retn(code);
 
 	options->native_addr = code->cur;
