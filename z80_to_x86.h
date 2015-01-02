@@ -42,8 +42,6 @@ typedef struct {
 
 	uint32_t        flags;
 	int8_t          regs[Z80_UNUSED];
-	int8_t          bank_reg;
-	int8_t          bank_pointer;
 	z80_run_fun     run;
 } z80_options;
 
