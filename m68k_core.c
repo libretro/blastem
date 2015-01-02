@@ -761,6 +761,7 @@ void translate_m68k_stream(uint32_t address, m68k_context * context)
 	do {
 		if (opts->address_log) {
 			fprintf(opts->address_log, "%X\n", address);
+			fflush(opts->address_log);
 		}
 		do {
 			encoded = get_native_pointer(address, (void **)context->mem_pointers, &opts->gen);
@@ -813,18 +814,19 @@ void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
 	if (orig_size != MAX_NATIVE_SIZE) {
 		deferred_addr * orig_deferred = opts->gen.deferred;
 
-		//make sure the beginning of the code for an instruction is contiguous
-		check_code_prologue(code);
+		//make sure we have enough code space for the max size instruction
+		check_alloc_code(code, MAX_NATIVE_SIZE);
 		code_ptr native_start = code->cur;
 		translate_m68k(opts, &instbuf);
 		code_ptr native_end = code->cur;
-		uint8_t is_terminal = m68k_is_terminal(&instbuf);
+		/*uint8_t is_terminal = m68k_is_terminal(&instbuf);
 		if ((native_end - native_start) <= orig_size) {
 			code_ptr native_next;
 			if (!is_terminal) {
 				native_next = get_native_address(context->native_code_map, orig + (after-inst)*2);
 			}
 			if (is_terminal || (native_next && ((native_next == orig_start + orig_size) || (orig_size - (native_end - native_start)) > 5))) {
+				printf("Using original location: %p\n", orig_code.cur);
 				remove_deferred_until(&opts->gen.deferred, orig_deferred);
 				code_info tmp;
 				tmp.cur = code->cur;
@@ -841,7 +843,7 @@ void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
 				m68k_handle_deferred(context);
 				return orig_start;
 			}
-		}
+		}*/
 
 		map_native_address(context, instbuf.address, native_start, (after-inst)*2, MAX_NATIVE_SIZE);
 
@@ -860,17 +862,14 @@ void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
 		m68k_handle_deferred(context);
 		return native_start;
 	} else {
-		code_info tmp;
-		tmp.cur = code->cur;
-		tmp.last = code->last;
-		code->cur = orig_code.cur;
-		code->last = orig_code.last;
+		code_info tmp = *code;
+		*code = orig_code;
 		translate_m68k(opts, &instbuf);
+		orig_code = *code;
+		*code = tmp;
 		if (!m68k_is_terminal(&instbuf)) {
-			jmp(code, get_native_address_trans(context, orig + (after-inst)*2));
+			jmp(&orig_code, get_native_address_trans(context, orig + (after-inst)*2));
 		}
-		code->cur = tmp.cur;
-		code->last = tmp.last;
 		m68k_handle_deferred(context);
 		return orig_start;
 	}
