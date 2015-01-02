@@ -307,6 +307,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			vdp_run_context(v_context, mclks);
 		}
 		mclk_target = vdp_cycles_to_frame_end(v_context);
+		context->sync_cycle = mclk_target/MCLKS_PER_68K;
 	} else {
 		//printf("running VDP for %d cycles\n", mclks - v_context->cycles);
 		vdp_run_context(v_context, mclks);
