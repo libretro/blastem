@@ -2052,13 +2052,7 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	sub_ir(code, 5, RAX, SZ_PTR); //adjust return address to point to the call that got us here
 	mov_rrdisp(code, RBX, options->gen.context_reg, offsetof(z80_context, extra_pc), SZ_PTR);
 	mov_rrind(code, RAX, options->gen.context_reg, SZ_PTR);
-	//restore callee saved registers
-	pop_r(code, R15);
-	pop_r(code, R14);
-	pop_r(code, R13);
-	pop_r(code, R12);
-	pop_r(code, RBP);
-	pop_r(code, RBX);
+	restore_callee_save_regs(code);
 	*no_sync = code->cur - (no_sync + 1);
 	//return to caller of z80_run
 	retn(code);
@@ -2104,13 +2098,7 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	mov_ir(code, 0x38, options->gen.scratch1, SZ_W);
 	call(code, options->native_addr);
 	mov_rrind(code, options->gen.scratch1, options->gen.context_reg, SZ_PTR);
-	//restore callee saved registers
-	pop_r(code, R15);
-	pop_r(code, R14);
-	pop_r(code, R13);
-	pop_r(code, R12);
-	pop_r(code, RBP);
-	pop_r(code, RBX);
+	restore_callee_save_regs(code);
 	//return to caller of z80_run to sync
 	retn(code);
 	*skip_int = code->cur - (skip_int+1);
@@ -2121,12 +2109,7 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	call(code, options->gen.save_context);
 	pop_rind(code, options->gen.context_reg);
 	//restore callee saved registers
-	pop_r(code, R15);
-	pop_r(code, R14);
-	pop_r(code, R13);
-	pop_r(code, R12);
-	pop_r(code, RBP);
-	pop_r(code, RBX);
+	restore_callee_save_regs(code);
 	//return to caller of z80_run
 	*skip_sync = code->cur - (skip_sync+1);
 	retn(code);
@@ -2207,13 +2190,7 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	jmp_r(code, options->gen.scratch1);
 
 	options->run = (z80_run_fun)code->cur;
-	//save callee save registers
-	push_r(code, RBX);
-	push_r(code, RBP);
-	push_r(code, R12);
-	push_r(code, R13);
-	push_r(code, R14);
-	push_r(code, R15);
+	save_callee_save_regs(code);
 	mov_rr(code, RDI, options->gen.context_reg, SZ_PTR);
 	call(code, options->load_context_scratch);
 	cmp_irdisp(code, 0, options->gen.context_reg, offsetof(z80_context, extra_pc), SZ_PTR);
