@@ -220,8 +220,6 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 		fprintf(stderr, "Unable to init SDL: %s\n", SDL_GetError());
 		exit(1);
 	}
-	atexit(SDL_Quit);
-	atexit(render_close_audio);
 	printf("width: %d, height: %d\n", width, height);
 	uint32_t flags = SDL_ANYFORMAT;
 
@@ -250,10 +248,12 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	screen = SDL_SetVideoMode(width, height, 32, flags);
 	if (!screen) {
 		fprintf(stderr, "Unable to get SDL surface: %s\n", SDL_GetError());
+		SDL_Quit();
 		exit(1);
 	}
 	if (!use_gl && screen->format->BytesPerPixel != 2 && screen->format->BytesPerPixel != 4) {
 		fprintf(stderr, "BlastEm requires a 16-bit or 32-bit surface, SDL returned a %d-bit surface\n", screen->format->BytesPerPixel * 8);
+		SDL_Quit();
 		exit(1);
 	}
 #ifndef DISABLE_OPENGL
@@ -263,10 +263,12 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 		GLenum res = glewInit();
 		if (res != GLEW_OK) {
 			fprintf(stderr, "Initialization of GLEW failed with code %d\n", res);
+			SDL_Quit();
 			exit(1);
 		}
 		if (!GLEW_VERSION_2_0) {
 			fputs("OpenGL 2.0 is unable, falling back to standard SDL rendering\n", stderr);
+			SDL_Quit();
 			exit(1);
 		}
 		float aspect = (float)width / height;
@@ -327,6 +329,7 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 
 	if (SDL_OpenAudio(&desired, &actual) < 0) {
 		fprintf(stderr, "Unable to open SDL audio: %s\n", SDL_GetError());
+		SDL_Quit();
 		exit(1);
 	}
 	buffer_samples = actual.samples;
@@ -345,6 +348,9 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 		}
 	}
 	SDL_JoystickEventState(SDL_ENABLE);
+	
+	atexit(SDL_Quit);
+	atexit(render_close_audio);
 }
 #ifndef DISABLE_OPENGL
 void render_context_gl(vdp_context * context)
