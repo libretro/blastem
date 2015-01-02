@@ -14,12 +14,6 @@
 
 #define MODE_UNUSED (MODE_IMMED-1)
 
-#define ZCYCLES RBP
-#define ZLIMIT RDI
-#define SCRATCH1 R13
-#define SCRATCH2 R14
-#define CONTEXT RSI
-
 //#define DO_DEBUG_PRINT
 
 #ifdef DO_DEBUG_PRINT
@@ -138,7 +132,7 @@ void translate_z80_ea(z80inst * inst, host_ea * ea, z80_options * opts, uint8_t 
 			}
 		} else {
 			ea->mode = MODE_REG_DISPLACE8;
-			ea->base = CONTEXT;
+			ea->base = opts->gen.context_reg;
 			ea->disp = offsetof(z80_context, regs) + inst->ea_reg;
 		}
 		break;
@@ -368,7 +362,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
 			setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
 			mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);;
-			mov_rdispr(code, opts->gen.context_reg, offsetof(z80_context, iff2), SCRATCH1, SZ_B);
+			mov_rdispr(code, opts->gen.context_reg, offsetof(z80_context, iff2), opts->gen.scratch1, SZ_B);
 			mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zf_off(ZF_PV), SZ_B);
 		}
 		z80_save_reg(inst, opts);
@@ -1926,7 +1920,7 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 	} while (opts->gen.deferred);
 }
 
-void init_x86_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t num_chunks)
+void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t num_chunks)
 {
 	memset(options, 0, sizeof(*options));
 
@@ -2263,7 +2257,7 @@ void z80_reset(z80_context * context)
 uint32_t zbreakpoint_patch(z80_context * context, uint16_t address, code_ptr dst)
 {
 	code_info code = {dst, dst+16};
-	mov_ir(&code, address, SCRATCH1, SZ_W);
+	mov_ir(&code, address, context->options->gen.scratch1, SZ_W);
 	call(&code, context->bp_stub);
 	return code.cur-dst;
 }
