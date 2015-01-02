@@ -53,7 +53,7 @@ int main(int argc, char ** argv)
 	fseek(f, 0, SEEK_SET);
 	fread(z80_ram, 1, filesize < sizeof(z80_ram) ? filesize : sizeof(z80_ram), f);
 	fclose(f);
-	init_x86_z80_opts(&opts, z80_map, 2);
+	init_z80_opts(&opts, z80_map, 2);
 	init_z80_context(&context, &opts);
 	//Z80 RAM
 	context.mem_pointers[0] = z80_ram;
