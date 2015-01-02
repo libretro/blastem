@@ -2039,3 +2039,33 @@ void call_args_abi(code_info *code, code_ptr fun, uint32_t num_args, ...)
 	*no_adjust_rsp = code->cur - (no_adjust_rsp+1);
 #endif
 }
+
+void save_callee_save_regs(code_info *code)
+{
+	push_r(code, RBX);
+	push_r(code, RBP);
+#ifdef X86_64
+	push_r(code, R12);
+	push_r(code, R13);
+	push_r(code, R14);
+	push_r(code, R15);
+#else
+	push_r(code, RDI);
+	push_r(code, RSI);
+#endif
+}
+
+void restore_callee_save_regs(code_info *code)
+{
+#ifdef X86_64
+	pop_r(code, R15);
+	pop_r(code, R14);
+	pop_r(code, R13);
+	pop_r(code, R12);
+#else
+	pop_r(code, RSI);
+	pop_r(code, RDI);
+#endif
+	pop_r(code, RBP);
+	pop_r(code, RBX);
+}
