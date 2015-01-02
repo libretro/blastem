@@ -53,7 +53,7 @@ void process_deferred(deferred_addr ** head_ptr, void * context, native_addr_fun
 
 void * get_native_pointer(uint32_t address, void ** mem_pointers, cpu_options * opts)
 {
-	memmap_chunk * memmap = opts->memmap;
+	memmap_chunk const * memmap = opts->memmap;
 	address &= opts->address_mask;
 	for (uint32_t chunk = 0; chunk < opts->memmap_chunks; chunk++)
 	{

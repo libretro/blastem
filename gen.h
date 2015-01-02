@@ -17,6 +17,8 @@ typedef struct {
 	code_ptr last;
 } code_info;
 
+void check_alloc_code(code_info *code, uint32_t inst_size);
+
 void init_code_info(code_info *code);
 void call(code_info *code, code_ptr fun);
 void jmp(code_info *code, code_ptr dest);
