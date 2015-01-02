@@ -2103,7 +2103,16 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	//TODO: Support interrupt mode 0 and 2
 	mov_ir(code, 0x38, options->gen.scratch1, SZ_W);
 	call(code, options->native_addr);
-	jmp_r(code, options->gen.scratch1);
+	mov_rrind(code, options->gen.scratch1, options->gen.context_reg, SZ_PTR);
+	//restore callee saved registers
+	pop_r(code, R15);
+	pop_r(code, R14);
+	pop_r(code, R13);
+	pop_r(code, R12);
+	pop_r(code, RBP);
+	pop_r(code, RBX);
+	//return to caller of z80_run to sync
+	retn(code);
 	*skip_int = code->cur - (skip_int+1);
 	cmp_rdispr(code, options->gen.context_reg, offsetof(z80_context, sync_cycle), options->gen.cycles, SZ_D);
 	code_ptr skip_sync = code->cur + 1;
