@@ -8,6 +8,8 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
+#include <string.h>
 
 #define REX_RM_FIELD 0x1
 #define REX_SIB_FIELD 0x2
@@ -1953,3 +1955,87 @@ void loop(code_info *code, code_ptr dst)
 	code->cur = out;
 }
 
+uint32_t prep_args(code_info *code, uint32_t num_args, va_list args)
+{
+	uint8_t *arg_arr = malloc(num_args);
+	for (int i = 0; i < num_args; i ++)
+	{
+		arg_arr[i] = va_arg(args, int);
+	}
+#ifdef X86_64
+	uint32_t stack_args = 0;
+	uint8_t abi_regs[] = {RDI, RSI, RDX, RCX, R8, R9};
+	int8_t reg_swap[R15+1];
+	uint32_t usage = 0;
+	memset(reg_swap, -1, sizeof(reg_swap));
+	for (int i = 0; i < num_args; i ++)
+	{
+		usage |= 1 << arg_arr[i];
+	}
+	for (int i = 0; i < num_args; i ++)
+	{
+		uint8_t reg_arg = arg_arr[i];
+		if (i < sizeof(abi_regs)) {
+			if (reg_swap[reg_arg] >= 0) {
+				reg_arg = reg_swap[reg_arg];
+			}
+			if (reg_arg != abi_regs[i]) {
+				if (usage & (1 << abi_regs[i])) {
+					xchg_rr(code, reg_arg, abi_regs[i], SZ_PTR);
+					reg_swap[abi_regs[i]] = reg_arg;
+				} else {
+					mov_rr(code, reg_arg, abi_regs[i], SZ_PTR);
+				}
+			}
+		} else {
+			arg_arr[stack_args++] = reg_arg;
+		}
+	}
+#else
+#define stack_args num_args
+#endif
+	for (int i = stack_args -1; i >= 0; i--)
+	{
+		push_r(code, arg_arr[i]);
+	}
+
+	return stack_args * sizeof(void *);
+}
+
+void call_args(code_info *code, code_ptr fun, uint32_t num_args, ...)
+{
+	va_list args;
+	va_start(args, num_args);
+	uint32_t adjust = prep_args(code, num_args, args);
+	va_end(args);
+	call(code, fun);
+	if (adjust) {
+		add_ir(code, adjust, RSP, SZ_PTR);
+	}
+}
+
+void call_args_abi(code_info *code, code_ptr fun, uint32_t num_args, ...)
+{
+	va_list args;
+	va_start(args, num_args);
+	uint32_t adjust = prep_args(code, num_args, args);
+	va_end(args);
+#ifdef X86_64
+	test_ir(code, 8, RSP, SZ_PTR); //check stack alignment
+	code_ptr do_adjust_rsp = code->cur + 1;
+	jcc(code, CC_NZ, code->cur + 2);
+#endif
+	call(code, fun);
+	if (adjust) {
+		add_ir(code, adjust, RSP, SZ_PTR);
+	}
+#ifdef X86_64
+	code_ptr no_adjust_rsp = code->cur + 1;
+	jmp(code, code->cur + 2);
+	*do_adjust_rsp = code->cur - (do_adjust_rsp+1);
+	sub_ir(code, 8, RSP, SZ_PTR);
+	call(code, fun);
+	add_ir(code, adjust + 8 , RSP, SZ_PTR);
+	*no_adjust_rsp = code->cur - (no_adjust_rsp+1);
+#endif
+}
