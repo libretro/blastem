@@ -93,7 +93,6 @@ void z80_run(z80_context * context);
 void z80_reset(z80_context * context);
 void zinsert_breakpoint(z80_context * context, uint16_t address, uint8_t * bp_handler);
 void zremove_breakpoint(z80_context * context, uint16_t address);
-void * z80_gen_bank_write(uint32_t start_address, void * voptions);
 
 #endif //Z80_TO_X86_H_
 
