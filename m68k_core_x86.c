@@ -14,17 +14,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define CYCLES RAX
-#define LIMIT RBP
-#define CONTEXT RSI
-#define SCRATCH1 RCX
-
-#ifdef X86_64
-#define SCRATCH2 RDI
-#else
-#define SCRATCH2 RBX
-#endif
-
 enum {
 	FLAG_X,
 	FLAG_N,
@@ -1077,8 +1066,8 @@ void translate_shift(m68k_options * opts, m68kinst * inst, host_ea *src_op, host
 			jmp(code, code->cur + 2);
 			*nz_off = code->cur - (nz_off + 1);
 			//add 2 cycles for every bit shifted
-			add_rr(code, RCX, CYCLES, SZ_D);
-			add_rr(code, RCX, CYCLES, SZ_D);
+			add_rr(code, RCX, opts->gen.cycles, SZ_D);
+			add_rr(code, RCX, opts->gen.cycles, SZ_D);
 			if (inst->op == M68K_ASL) {
 				//ASL has Overflow flag behavior that depends on all of the bits shifted through the MSB
 				//Easiest way to deal with this is to shift one bit at a time
@@ -1876,8 +1865,8 @@ void translate_m68k_rot(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 			and_ir(code, 63, opts->gen.scratch1, SZ_D);
 			code_ptr zero_off = code->cur + 1;
 			jcc(code, CC_Z, code->cur + 2);
-			add_rr(code, opts->gen.scratch1, CYCLES, SZ_D);
-			add_rr(code, opts->gen.scratch1, CYCLES, SZ_D);
+			add_rr(code, opts->gen.scratch1, opts->gen.cycles, SZ_D);
+			add_rr(code, opts->gen.scratch1, opts->gen.cycles, SZ_D);
 			cmp_ir(code, 32, opts->gen.scratch1, SZ_B);
 			code_ptr norm_off = code->cur + 1;
 			jcc(code, CC_L, code->cur + 2);
@@ -1933,12 +1922,7 @@ void translate_m68k_illegal(m68k_options *opts, m68kinst *inst)
 {
 	code_info *code = &opts->gen.code;
 	call(code, opts->gen.save_context);
-#ifdef X86_64
-	mov_rr(code, opts->gen.context_reg, RDI, SZ_PTR);
-#else
-	push_r(code, opts->gen.context_reg);
-#endif
-	call(code, (code_ptr)print_regs_exit);
+	call_args(code, (code_ptr)print_regs_exit, 1, opts->gen.context_reg);
 }
 
 #define BIT_SUPERVISOR 5
@@ -2088,12 +2072,7 @@ void translate_m68k_reset(m68k_options *opts, m68kinst *inst)
 {
 	code_info *code = &opts->gen.code;
 	call(code, opts->gen.save_context);
-#ifdef X86_64
-	mov_rr(code, opts->gen.context_reg, RDI, SZ_PTR);
-#else
-	push_r(code, opts->gen.context_reg);
-#endif
-	call(code, (code_ptr)print_regs_exit);
+	call_args(code, (code_ptr)print_regs_exit, 1, opts->gen.context_reg);
 }
 
 void translate_m68k_rte(m68k_options *opts, m68kinst *inst)
@@ -2123,10 +2102,7 @@ void translate_m68k_rte(m68k_options *opts, m68kinst *inst)
 void translate_out_of_bounds(code_info *code)
 {
 	xor_rr(code, RDI, RDI, SZ_D);
-#ifdef X86_32
-	push_r(code, RDI);
-#endif
-	call(code, (code_ptr)exit);
+	call_args(code, (code_ptr)exit, 1, RDI);
 }
 
 void nop_fill_or_jmp_next(code_info *code, code_ptr old_end, code_ptr next_inst)
@@ -2156,14 +2132,7 @@ m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context)
 			options->retrans_stub = code->cur;
 			call(code, options->gen.save_context);
 			push_r(code, options->gen.context_reg);
-#ifdef X86_32
-			push_r(code, options->gen.context_reg);
-			push_r(code, options->gen.scratch2);
-#endif
-			call(code, (code_ptr)m68k_retranslate_inst);
-#ifdef X86_32
-			add_ir(code, 8, RSP, SZ_D);
-#endif
+			call_args(code,(code_ptr)m68k_retranslate_inst, 2, options->gen.scratch2, options->gen.context_reg);
 			pop_r(code, options->gen.context_reg);
 			mov_rr(code, RAX, options->gen.scratch1, SZ_PTR);
 			call(code, options->gen.load_context);
@@ -2197,17 +2166,7 @@ void insert_breakpoint(m68k_context * context, uint32_t address, code_ptr bp_han
 		//Save context and call breakpoint handler
 		call(code, opts->gen.save_context);
 		push_r(code, opts->gen.scratch1);
-#ifdef X86_64
-		mov_rr(code, opts->gen.context_reg, RDI, SZ_PTR);
-		mov_rr(code, opts->gen.scratch1, RSI, SZ_D);
-#else
-		push_r(code, opts->gen.scratch1);
-		push_r(code, opts->gen.context_reg);
-#endif
-		call(code, bp_handler);
-#ifdef X86_32
-		add_ir(code, 8, RSP, SZ_D);
-#endif
+		call_args(code, bp_handler, 2, opts->gen.context_reg, opts->gen.scratch1);
 		mov_rr(code, RAX, opts->gen.context_reg, SZ_PTR);
 		//Restore context
 		call(code, opts->gen.load_context);
@@ -2317,8 +2276,8 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 			mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, aregs) + sizeof(uint32_t) * i, opts->aregs[i], SZ_D);
 		}
 	}
-	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, current_cycle), CYCLES, SZ_D);
-	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, target_cycle), LIMIT, SZ_D);
+	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, current_cycle), opts->gen.cycles, SZ_D);
+	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, target_cycle), opts->gen.limit, SZ_D);
 	retn(code);
 
 	opts->start_context = (start_fun)code->cur;
@@ -2363,17 +2322,7 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	opts->native_addr = code->cur;
 	call(code, opts->gen.save_context);
 	push_r(code, opts->gen.context_reg);
-#ifdef X86_64
-	mov_rr(code, opts->gen.context_reg, RDI, SZ_PTR); //move context to 1st arg reg
-	mov_rr(code, opts->gen.scratch1, RSI, SZ_D); //move address to 2nd arg reg
-#else
-	push_r(code, opts->gen.scratch1);
-	push_r(code, opts->gen.context_reg);
-#endif
-	call(code, (code_ptr)get_native_address_trans);
-#ifdef X86_32
-	add_ir(code, 8, RSP, SZ_D);
-#endif
+	call_args(code, (code_ptr)get_native_address_trans, 2, opts->gen.context_reg, opts->gen.scratch1);
 	mov_rr(code, RAX, opts->gen.scratch1, SZ_PTR); //move result to scratch reg
 	pop_r(code, opts->gen.context_reg);
 	call(code, opts->gen.load_context);
@@ -2382,74 +2331,27 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	opts->native_addr_and_sync = code->cur;
 	call(code, opts->gen.save_context);
 	push_r(code, opts->gen.scratch1);
-#ifdef X86_64
-	mov_rr(code, opts->gen.context_reg, RDI, SZ_PTR);
-	xor_rr(code, RSI, RSI, SZ_D);
-	test_ir(code, 8, RSP, SZ_PTR); //check stack alignment
-	code_ptr do_adjust_rsp = code->cur + 1;
-	jcc(code, CC_NZ, code->cur + 2);
-	call(code, (code_ptr)sync_components);
-	code_ptr no_adjust_rsp = code->cur + 1;
-	jmp(code, code->cur + 2);
-	*do_adjust_rsp = code->cur - (do_adjust_rsp+1);
-	sub_ir(code, 8, RSP, SZ_PTR);
-	call(code, (code_ptr)sync_components);
-	add_ir(code, 8, RSP, SZ_PTR);
-	*no_adjust_rsp = code->cur - (no_adjust_rsp+1);
-	pop_r(code, RSI);
-	push_r(code, RAX);
-	mov_rr(code, RAX, RDI, SZ_PTR);
-	call(code, (code_ptr)get_native_address_trans);
-#else
-	//TODO: Add support for pushing a constant in gen_x86
-	xor_rr(code, RAX, RAX, SZ_D);
-	push_r(code, RAX);
-	push_r(code, opts->gen.context_reg);
-	call(code, (code_ptr)sync_components);
-	add_ir(code, 8, RSP, SZ_D);
+	
+	xor_rr(code, opts->gen.scratch1, opts->gen.scratch1, SZ_D);
+	call_args_abi(code, (code_ptr)sync_components, 2, opts->gen.context_reg, opts->gen.scratch1);
 	pop_r(code, RSI); //restore saved address from opts->gen.scratch1
 	push_r(code, RAX); //save context pointer for later
-	push_r(code, RSI); //2nd arg -- address
-	push_r(code, RAX); //1st arg -- context pointer
-	call(code, (code_ptr)get_native_address_trans);
-	add_ir(code, 8, RSP, SZ_D);
-#endif
-
+	call_args(code, (code_ptr)get_native_address_trans, 2, RAX, RSI);
 	mov_rr(code, RAX, opts->gen.scratch1, SZ_PTR); //move result to scratch reg
 	pop_r(code, opts->gen.context_reg);
 	call(code, opts->gen.load_context);
 	retn(code);
 
 	opts->gen.handle_cycle_limit = code->cur;
-	cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, sync_cycle), CYCLES, SZ_D);
+	cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, sync_cycle), opts->gen.cycles, SZ_D);
 	code_ptr skip_sync = code->cur + 1;
 	jcc(code, CC_C, code->cur + 2);
 	opts->do_sync = code->cur;
 	push_r(code, opts->gen.scratch1);
 	push_r(code, opts->gen.scratch2);
 	call(code, opts->gen.save_context);
-#ifdef X86_64
-	mov_rr(code, opts->gen.context_reg, RDI, SZ_PTR);
-	xor_rr(code, RSI, RSI, SZ_D);
-	test_ir(code, 8, RSP, SZ_D);
-	code_ptr adjust_rsp = code->cur + 1;
-	jcc(code, CC_NZ, code->cur + 2);
-	call(code, (code_ptr)sync_components);
-	code_ptr no_adjust = code->cur + 1;
-	jmp(code, code->cur + 2);
-	*adjust_rsp = code->cur - (adjust_rsp + 1);
-	sub_ir(code, 8, RSP, SZ_PTR);
-	call(code, (code_ptr)sync_components);
-	add_ir(code, 8, RSP, SZ_PTR);
-	*no_adjust = code->cur - (no_adjust+1);
-#else
-	//TODO: Add support for pushing a constant in gen_x86
-	xor_rr(code, RAX, RAX, SZ_D);
-	push_r(code, RAX);
-	push_r(code, opts->gen.context_reg);
-	call(code, (code_ptr)sync_components);
-	add_ir(code, 8, RSP, SZ_D);
-#endif
+	xor_rr(code, opts->gen.scratch1, opts->gen.scratch1, SZ_D);
+	call_args_abi(code, (code_ptr)sync_components, 2, opts->gen.context_reg, opts->gen.scratch1);
 	mov_rr(code, RAX, opts->gen.context_reg, SZ_PTR);
 	call(code, opts->gen.load_context);
 	pop_r(code, opts->gen.scratch2);
@@ -2559,40 +2461,21 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	retn(code);
 
 	opts->gen.handle_cycle_limit_int = code->cur;
-	cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_cycle), CYCLES, SZ_D);
+	cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_cycle), opts->gen.cycles, SZ_D);
 	code_ptr do_int = code->cur + 1;
 	jcc(code, CC_NC, code->cur + 2);
-	cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, sync_cycle), CYCLES, SZ_D);
+	cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, sync_cycle), opts->gen.cycles, SZ_D);
 	skip_sync = code->cur + 1;
 	jcc(code, CC_C, code->cur + 2);
 	call(code, opts->gen.save_context);
-#ifdef X86_64
-	mov_rr(code, opts->gen.context_reg, RDI, SZ_PTR);
-	mov_rr(code, opts->gen.scratch1, RSI, SZ_D);
-	test_ir(code, 8, RSP, SZ_D);
-	adjust_rsp = code->cur + 1;
-	jcc(code, CC_NZ, code->cur + 2);
-	call(code, (code_ptr)sync_components);
-	no_adjust = code->cur + 1;
-	jmp(code, code->cur + 2);
-	*adjust_rsp = code->cur - (adjust_rsp + 1);
-	sub_ir(code, 8, RSP, SZ_PTR);
-	call(code, (code_ptr)sync_components);
-	add_ir(code, 8, RSP, SZ_PTR);
-	*no_adjust = code->cur - (no_adjust+1);
-#else
-	push_r(code, opts->gen.scratch1);
-	push_r(code, opts->gen.context_reg);
-	call(code, (code_ptr)sync_components);
-	add_ir(code, 8, RSP, SZ_D);
-#endif
+	call_args_abi(code, (code_ptr)sync_components, 2, opts->gen.context_reg, opts->gen.scratch1);
 	mov_rr(code, RAX, opts->gen.context_reg, SZ_PTR);
 	jmp(code, opts->gen.load_context);
 	*skip_sync = code->cur - (skip_sync+1);
 	retn(code);
 	*do_int = code->cur - (do_int+1);
 	//set target cycle to sync cycle
-	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, sync_cycle), LIMIT, SZ_D);
+	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, sync_cycle), opts->gen.limit, SZ_D);
 	//swap USP and SSP if not already in supervisor mode
 	bt_irdisp(code, 5, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
 	code_ptr already_supervisor = code->cur + 1;
