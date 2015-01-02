@@ -2223,13 +2223,6 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	jmp_rind(code, options->gen.context_reg);
 }
 
-void * z80_gen_bank_write(uint32_t start_address, void * voptions)
-{
-	z80_options * options = voptions;
-	//TODO: Handle writes to bank register
-	return options;
-}
-
 void init_z80_context(z80_context * context, z80_options * options)
 {
 	memset(context, 0, sizeof(*context));

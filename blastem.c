@@ -419,6 +419,7 @@ void * z80_vdp_port_write(uint32_t vdp_port, void * vcontext, uint8_t value)
 {
 	z80_context * context = vcontext;
 	genesis_context * gen = context->system;
+	vdp_port &= 0xFF;
 	if (vdp_port & 0xE0) {
 		printf("machine freeze due to write to Z80 address %X\n", 0x7F00 | vdp_port);
 		exit(1);
@@ -761,11 +762,20 @@ uint8_t z80_read_ym(uint32_t location, void * vcontext)
 uint8_t z80_read_bank(uint32_t location, void * vcontext)
 {
 	z80_context * context = vcontext;
+	//typical delay from bus arbitration
+	context->current_cycle += 3;
+	
+	location &= 0x7FFF;
+	//TODO: add cycle for an access right after a previous one
+	//TODO: block Z80 if VDP has the bus or the 68K is blocked on a VDP access
+	if (context->mem_pointers[1]) {
+		return context->mem_pointers[1][location ^ 1];
+	}
 	uint32_t address = context->bank_reg << 15 | location;
 	if (address >= 0xC00000 && address < 0xE00000) {
 		return z80_vdp_port_read(location & 0xFF, context);
 	} else {
-		fprintf(stderr, "Unhandled read by Z80 from address %X through banked memory area\n", address);
+		fprintf(stderr, "Unhandled read by Z80 from address %X through banked memory area (%X)\n", address, context->bank_reg << 15);
 	}
 	return 0;
 }
@@ -773,6 +783,11 @@ uint8_t z80_read_bank(uint32_t location, void * vcontext)
 void *z80_write_bank(uint32_t location, void * vcontext, uint8_t value)
 {
 	z80_context * context = vcontext;
+	//typical delay from bus arbitration
+	context->current_cycle += 3;
+	location &= 0x7FFF;
+	//TODO: add cycle for an access right after a previous one
+	//TODO: block Z80 if VDP has the bus or the 68K is blocked on a VDP access
 	uint32_t address = context->bank_reg << 15 | location;
 	if (address >= 0xE00000) {
 		address &= 0xFFFF;
@@ -791,7 +806,8 @@ void *z80_write_bank_reg(uint32_t location, void * vcontext, uint8_t value)
 	
 	context->bank_reg = (context->bank_reg >> 1 | value << 8) & 0x1FF;
 	if (context->bank_reg < 0x80) {
-		context->mem_pointers[1] = context->mem_pointers[2] + (context->bank_reg << 15);
+		genesis_context *gen = context->system;
+		context->mem_pointers[1] = get_native_pointer(context->bank_reg << 15, (void **)gen->m68k->mem_pointers, &gen->m68k->options->gen);
 	} else {
 		context->mem_pointers[1] = NULL;
 	}
@@ -1178,11 +1194,11 @@ void detect_region()
 }
 #ifndef NO_Z80
 const memmap_chunk z80_map[] = {
-	{ 0x0000, 0x4000,  0x1FFF, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE,                         z80_ram, NULL, NULL, NULL,              NULL },
-	{ 0x8000, 0x10000, 0x7FFF, 1, MMAP_READ | MMAP_PTR_IDX | MMAP_FUNC_NULL | MMAP_BYTESWAP,  NULL,    NULL, NULL, z80_read_bank,     z80_write_bank},
-	{ 0x4000, 0x6000,  0x0003, 0, 0,                                                          NULL,    NULL, NULL, z80_read_ym,       z80_write_ym},
-	{ 0x6000, 0x6100,  0xFFFF, 0, 0,                                                          NULL,    NULL, NULL, NULL,              z80_write_bank_reg},
-	{ 0x7F00, 0x8000,  0x00FF, 0, 0,                                                          NULL,    NULL, NULL, z80_vdp_port_read, z80_vdp_port_write}
+	{ 0x0000, 0x4000,  0x1FFF, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE, z80_ram, NULL, NULL, NULL,              NULL },
+	{ 0x8000, 0x10000, 0x7FFF, 0, 0,                                  NULL,    NULL, NULL, z80_read_bank,     z80_write_bank},
+	{ 0x4000, 0x6000,  0x0003, 0, 0,                                  NULL,    NULL, NULL, z80_read_ym,       z80_write_ym},
+	{ 0x6000, 0x6100,  0xFFFF, 0, 0,                                  NULL,    NULL, NULL, NULL,              z80_write_bank_reg},
+	{ 0x7F00, 0x8000,  0x00FF, 0, 0,                                  NULL,    NULL, NULL, z80_vdp_port_read, z80_vdp_port_write}
 };
 #endif
 
