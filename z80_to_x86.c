@@ -1671,7 +1671,7 @@ code_info z80_make_interp_stub(z80_context * context, uint16_t address)
 	mov_irdisp(code, address, opts->gen.context_reg, offsetof(z80_context, pc), SZ_W);
 	push_r(code, opts->gen.context_reg);
 	call_args(code, (code_ptr)z80_interp_handler, 2, opts->gen.scratch1, opts->gen.scratch2);
-	mov_rr(code, RAX, opts->gen.scratch1, SZ_Q);
+	mov_rr(code, RAX, opts->gen.scratch1, SZ_PTR);
 	pop_r(code, opts->gen.context_reg);
 	call(code, opts->gen.load_context);
 	jmp_r(code, opts->gen.scratch1);
@@ -2276,7 +2276,7 @@ void zcreate_stub(z80_context * context)
 	call(code, opts->gen.save_context);
 	push_r(code, opts->gen.scratch1);
 	call_args_abi(code, context->bp_handler, 2, opts->gen.context_reg, opts->gen.scratch1);
-	mov_rr(code, RAX, opts->gen.context_reg, SZ_Q);
+	mov_rr(code, RAX, opts->gen.context_reg, SZ_PTR);
 	//Restore context
 	call(code, opts->gen.load_context);
 	pop_r(code, opts->gen.scratch1);
@@ -2285,13 +2285,13 @@ void zcreate_stub(z80_context * context)
 	uint8_t * jmp_off = code->cur+1;
 	jcc(code, CC_NC, code->cur + 7);
 	pop_r(code, opts->gen.scratch1);
-	add_ir(code, check_int_size - patch_size, opts->gen.scratch1, SZ_Q);
+	add_ir(code, check_int_size - patch_size, opts->gen.scratch1, SZ_PTR);
 	push_r(code, opts->gen.scratch1);
 	jmp(code, opts->gen.handle_cycle_limit_int);
 	*jmp_off = code->cur - (jmp_off+1);
 	//jump back to body of translated instruction
 	pop_r(code, opts->gen.scratch1);
-	add_ir(code, check_int_size - patch_size, opts->gen.scratch1, SZ_Q);
+	add_ir(code, check_int_size - patch_size, opts->gen.scratch1, SZ_PTR);
 	jmp_r(code, opts->gen.scratch1);
 }
 
