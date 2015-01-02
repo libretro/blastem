@@ -44,7 +44,6 @@ else
 ifeq ($(CPU),i686)
 M68KOBJS+= runtime_32.o m68k_core_x86.o
 TRANSOBJS+= gen_x86.o backend_x86.o
-NOZ80:=1
 endif
 endif
 
