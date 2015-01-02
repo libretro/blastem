@@ -91,41 +91,12 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 					code_ptr not_null = code->cur + 1;
 					jcc(code, CC_NZ, code->cur + 2);
 					call(code, opts->save_context);
-#ifdef X86_64
 					if (is_write) {
-						if (opts->scratch2 != RDI) {
-							mov_rr(code, opts->scratch2, RDI, opts->address_size);
-						}
-						mov_rr(code, opts->scratch1, RDX, size);
-					} else {
-						push_r(code, opts->context_reg);
-						mov_rr(code, opts->scratch1, RDI, opts->address_size);
-					}
-					test_ir(code, 8, RSP, opts->address_size);
-					code_ptr adjust_rsp = code->cur + 1;
-					jcc(code, CC_NZ, code->cur + 2);
-					call(code, cfun);
-					code_ptr no_adjust = code->cur + 1;
-					jmp(code, code->cur + 2);
-					*adjust_rsp = code->cur - (adjust_rsp + 1);
-					sub_ir(code, 8, RSP, SZ_PTR);
-					call(code, cfun);
-					add_ir(code, 8, RSP, SZ_PTR);
-					*no_adjust = code->cur - (no_adjust + 1);
-#else
-					if (is_write) {
-						push_r(code, opts->scratch1);
-					} else {
-						push_r(code, opts->context_reg);//save opts->context_reg for later
-					}
-					push_r(code, opts->context_reg);
-					push_r(code, is_write ? opts->scratch2 : opts->scratch1);
-					call(code, cfun);
-					add_ir(code, is_write ? 12 : 8, RSP, opts->address_size);
-#endif
-					if (is_write) {
+						call_args_abi(code, cfun, 3, opts->scratch2, opts->context_reg, opts->scratch1);
 						mov_rr(code, RAX, opts->context_reg, SZ_PTR);
 					} else {
+						push_r(code, opts->context_reg);
+						call_args_abi(code, cfun, 2, opts->scratch1, opts->context_reg);
 						pop_r(code, opts->context_reg);
 						mov_rr(code, RAX, opts->scratch1, size);
 					}
@@ -206,18 +177,7 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 				code_ptr not_code = code->cur + 1;
 				jcc(code, CC_NC, code->cur + 2);
 				call(code, opts->save_context);
-#ifdef X86_32
-				push_r(code, opts->context_reg);
-				push_r(code, opts->scratch2);
-#else
-				if (opts->scratch2 != RDI) {
-					mov_rr(code, opts->scratch2, RDI, opts->address_size);
-				}
-#endif
-				call(code, opts->handle_code_write);
-#ifdef X86_32
-				add_ir(code, 8, RSP, SZ_D);
-#endif
+				call_args(code, opts->handle_code_write, 2, opts->scratch2, opts->context_reg);
 				mov_rr(code, RAX, opts->context_reg, SZ_PTR);
 				call(code, opts->load_context);
 				*not_code = code->cur - (not_code+1);
@@ -225,41 +185,12 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 			retn(code);
 		} else if (cfun) {
 			call(code, opts->save_context);
-#ifdef X86_64
 			if (is_write) {
-				if (opts->scratch2 != RDI) {
-					mov_rr(code, opts->scratch2, RDI, opts->address_size);
-				}
-				mov_rr(code, opts->scratch1, RDX, size);
-			} else {
-				push_r(code, opts->context_reg);
-				mov_rr(code, opts->scratch1, RDI, opts->address_size);
-			}
-			test_ir(code, 8, RSP, SZ_D);
-			code_ptr adjust_rsp = code->cur + 1;
-			jcc(code, CC_NZ, code->cur + 2);
-			call(code, cfun);
-			code_ptr no_adjust = code->cur + 1;
-			jmp(code, code->cur + 2);
-			*adjust_rsp = code->cur - (adjust_rsp + 1);
-			sub_ir(code, 8, RSP, SZ_PTR);
-			call(code, cfun);
-			add_ir(code, 8, RSP, SZ_PTR);
-			*no_adjust = code->cur - (no_adjust+1);
-#else
-			if (is_write) {
-				push_r(code, opts->scratch1);
-			} else {
-				push_r(code, opts->context_reg);//save opts->context_reg for later
-			}
-			push_r(code, opts->context_reg);
-			push_r(code, is_write ? opts->scratch2 : opts->scratch1);
-			call(code, cfun);
-			add_ir(code, is_write ? 12 : 8, RSP, SZ_D);
-#endif
-			if (is_write) {
+				call_args_abi(code, cfun, 3, opts->scratch2, opts->context_reg, opts->scratch1);
 				mov_rr(code, RAX, opts->context_reg, SZ_PTR);
 			} else {
+				push_r(code, opts->context_reg);
+				call_args_abi(code, cfun, 2, opts->scratch1, opts->context_reg);
 				pop_r(code, opts->context_reg);
 				mov_rr(code, RAX, opts->scratch1, size);
 			}
