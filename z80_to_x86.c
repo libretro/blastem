@@ -875,8 +875,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 	case Z80_NOP:
 		if (inst->immed == 42) {
 			call(code, opts->gen.save_context);
-			mov_rr(code, opts->gen.context_reg, RDI, SZ_Q);
-			jmp(code, (uint8_t *)z80_print_regs_exit);
+			call_args(code, (code_ptr)z80_print_regs_exit, 1, opts->gen.context_reg);
 		} else {
 			cycles(&opts->gen, 4 * inst->immed);
 		}
@@ -1675,10 +1674,9 @@ code_info z80_make_interp_stub(z80_context * context, uint16_t address)
 	cycles(&opts->gen, -3);
 	check_cycles_int(&opts->gen, address);
 	call(code, opts->gen.save_context);
-	mov_rr(code, opts->gen.scratch1, RDI, SZ_B);
 	mov_irdisp(code, address, opts->gen.context_reg, offsetof(z80_context, pc), SZ_W);
 	push_r(code, opts->gen.context_reg);
-	call(code, (code_ptr)z80_interp_handler);
+	call_args(code, (code_ptr)z80_interp_handler, 2, opts->gen.scratch1, opts->gen.scratch2);
 	mov_rr(code, RAX, opts->gen.scratch1, SZ_Q);
 	pop_r(code, opts->gen.context_reg);
 	call(code, opts->gen.load_context);
@@ -2049,9 +2047,8 @@ void init_x86_z80_opts(z80_options * options, memmap_chunk const * chunks, uint3
 	options->native_addr = code->cur;
 	call(code, options->gen.save_context);
 	push_r(code, options->gen.context_reg);
-	mov_rr(code, options->gen.context_reg, RDI, SZ_PTR);
-	movzx_rr(code, options->gen.scratch1, RSI, SZ_W, SZ_D);
-	call(code, (code_ptr)z80_get_native_address_trans);
+	movzx_rr(code, options->gen.scratch1, options->gen.scratch1, SZ_W, SZ_D);
+	call_args(code, (code_ptr)z80_get_native_address_trans, 2, options->gen.context_reg, options->gen.scratch1);
 	mov_rr(code, RAX, options->gen.scratch1, SZ_PTR);
 	pop_r(code, options->gen.context_reg);
 	call(code, options->gen.load_context);
@@ -2155,7 +2152,7 @@ void init_x86_z80_opts(z80_options * options, memmap_chunk const * chunks, uint3
 	cycles(&options->gen, 3);
 	check_cycles(&options->gen);
 	//TODO: figure out how to handle the extra wait state for word reads to bank area
-	//may also need special handling to avoid too much stack depth when acces is blocked
+	//may also need special handling to avoid too much stack depth when access is blocked
 	push_r(code, options->gen.scratch1);
 	call(code, options->read_8_noinc);
 	mov_rr(code, options->gen.scratch1, options->gen.scratch2, SZ_B);
@@ -2206,10 +2203,8 @@ void init_x86_z80_opts(z80_options * options, memmap_chunk const * chunks, uint3
 	call(code, options->gen.save_context);
 	//adjust pointer before move and call instructions that got us here
 	sub_ir(code, 11, options->gen.scratch2, SZ_PTR);
-	mov_rr(code, options->gen.scratch1, RDI, SZ_D);
-	mov_rr(code, options->gen.scratch2, RDX, SZ_PTR);
 	push_r(code, options->gen.context_reg);
-	call(code, (code_ptr)z80_retranslate_inst);
+	call_args(code, (code_ptr)z80_retranslate_inst, 3, options->gen.scratch1, options->gen.context_reg, options->gen.scratch2);
 	pop_r(code, options->gen.context_reg);
 	mov_rr(code, RAX, options->gen.scratch1, SZ_PTR);
 	call(code, options->gen.load_context);
@@ -2291,9 +2286,7 @@ void zcreate_stub(z80_context * context)
 	//Save context and call breakpoint handler
 	call(code, opts->gen.save_context);
 	push_r(code, opts->gen.scratch1);
-	mov_rr(code, opts->gen.context_reg, RDI, SZ_Q);
-	mov_rr(code, opts->gen.scratch1, RSI, SZ_W);
-	call(code, context->bp_handler);
+	call_args_abi(code, context->bp_handler, 2, opts->gen.context_reg, opts->gen.scratch1);
 	mov_rr(code, RAX, opts->gen.context_reg, SZ_Q);
 	//Restore context
 	call(code, opts->gen.load_context);
