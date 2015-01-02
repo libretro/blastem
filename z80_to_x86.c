@@ -124,11 +124,13 @@ void translate_z80_ea(z80inst * inst, host_ea * ea, z80_options * opts, uint8_t 
 			ea->base = opts->regs[inst->ea_reg];
 			if (ea->base >= AH && ea->base <= BH && inst->reg != Z80_UNUSED && inst->reg != Z80_USE_IMMED) {
 				uint8_t other_reg = opts->regs[inst->reg];
+#ifdef X86_64
 				if (other_reg >= R8 || (other_reg >= RSP && other_reg <= RDI)) {
 					//we can't mix an *H reg with a register that requires the REX prefix
 					ea->base = opts->regs[z80_low_reg(inst->ea_reg)];
 					ror_ir(code, 8, ea->base, SZ_W);
 				}
+#endif
 			}
 		} else {
 			ea->mode = MODE_REG_DISPLACE8;
@@ -224,10 +226,12 @@ void z80_save_ea(code_info *code, z80inst * inst, z80_options * opts)
 			}
 		} else if (inst->reg != Z80_UNUSED && inst->reg != Z80_USE_IMMED && opts->regs[inst->ea_reg] >= AH && opts->regs[inst->ea_reg] <= BH) {
 			uint8_t other_reg = opts->regs[inst->reg];
+#ifdef X86_64
 			if (other_reg >= R8 || (other_reg >= RSP && other_reg <= RDI)) {
 				//we can't mix an *H reg with a register that requires the REX prefix
 				ror_ir(code, 8, opts->regs[z80_low_reg(inst->ea_reg)], SZ_W);
 			}
+#endif
 		}
 	}
 }
@@ -1255,13 +1259,17 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		bts_ir(code, bit, src_op.base, size);
 		if (inst->reg != Z80_USE_IMMED) {
 			if (size == SZ_W) {
+#ifdef X86_64
 				if (dst_op.base >= R8) {
 					ror_ir(code, 8, src_op.base, SZ_W);
 					mov_rr(code, opts->regs[z80_low_reg(inst->ea_reg)], dst_op.base, SZ_B);
 					ror_ir(code, 8, src_op.base, SZ_W);
 				} else {
+#endif
 					mov_rr(code, opts->regs[inst->ea_reg], dst_op.base, SZ_B);
+#ifdef X86_64
 				}
+#endif
 			} else {
 				mov_rr(code, src_op.base, dst_op.base, SZ_B);
 			}
@@ -1297,13 +1305,17 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		btr_ir(code, bit, src_op.base, size);
 		if (inst->reg != Z80_USE_IMMED) {
 			if (size == SZ_W) {
+#ifdef X86_64
 				if (dst_op.base >= R8) {
 					ror_ir(code, 8, src_op.base, SZ_W);
 					mov_rr(code, opts->regs[z80_low_reg(inst->ea_reg)], dst_op.base, SZ_B);
 					ror_ir(code, 8, src_op.base, SZ_W);
 				} else {
+#endif
 					mov_rr(code, opts->regs[inst->ea_reg], dst_op.base, SZ_B);
+#ifdef X86_64
 				}
+#endif
 			} else {
 				mov_rr(code, src_op.base, dst_op.base, SZ_B);
 			}
@@ -1935,6 +1947,7 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	options->gen.ram_flags_shift = 7;
 
 	options->flags = 0;
+#ifdef X86_64
 	options->regs[Z80_B] = BH;
 	options->regs[Z80_C] = RBX;
 	options->regs[Z80_D] = CH;
@@ -1955,12 +1968,21 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	options->regs[Z80_AF] = -1;
 	options->regs[Z80_IX] = RDX;
 	options->regs[Z80_IY] = R8;
-
+	
+	options->gen.scratch1 = R13;
+	options->gen.scratch2 = R14;
+#else
+	memset(options->regs, -1, sizeof(options->regs));
+	options->regs[Z80_A] = RAX;
+	options->regx[Z80_SP] = RBX;
+	
+	options->gen.scratch1 = RCX;
+	options->gen.scratch2 = RDX;
+#endif
+	
 	options->gen.context_reg = RSI;
 	options->gen.cycles = RBP;
 	options->gen.limit = RDI;
-	options->gen.scratch1 = R13;
-	options->gen.scratch2 = R14;
 
 	options->gen.native_code_map = malloc(sizeof(native_map_slot));
 	memset(options->gen.native_code_map, 0, sizeof(native_map_slot));
