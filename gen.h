@@ -27,5 +27,7 @@ void jmp_r(code_info *code, uint8_t dst);
 void call_args(code_info *code, code_ptr fun, uint32_t num_args, ...);
 //like the above, but follows other aspects of the ABI like stack alignment
 void call_args_abi(code_info *code, code_ptr fun, uint32_t num_args, ...);
+void save_callee_save_regs(code_info *code);
+void restore_callee_save_regs(code_info *code);
 
 #endif //GEN_H_

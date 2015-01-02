@@ -2281,42 +2281,19 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	retn(code);
 
 	opts->start_context = (start_fun)code->cur;
+	save_callee_save_regs(code);
 #ifdef X86_64
 	if (opts->gen.scratch2 != RDI) {
 		mov_rr(code, RDI, opts->gen.scratch2, SZ_PTR);
 	}
-	//save callee save registers
-	push_r(code, RBP);
-	push_r(code, R12);
-	push_r(code, R13);
-	push_r(code, R14);
-	push_r(code, R15);
 #else
-	//save callee save registers
-	push_r(code, RBP);
-	push_r(code, RBX);
-	push_r(code, RSI);
-	push_r(code, RDI);
-
 	mov_rdispr(code, RSP, 20, opts->gen.scratch2, SZ_D);
 	mov_rdispr(code, RSP, 24, opts->gen.context_reg, SZ_D);
 #endif
 	call(code, opts->gen.load_context);
 	call_r(code, opts->gen.scratch2);
 	call(code, opts->gen.save_context);
-#ifdef X86_64
-	//restore callee save registers
-	pop_r(code, R15);
-	pop_r(code, R14);
-	pop_r(code, R13);
-	pop_r(code, R12);
-	pop_r(code, RBP);
-#else
-	pop_r(code, RDI);
-	pop_r(code, RSI);
-	pop_r(code, RBX);
-	pop_r(code, RBP);
-#endif
+	restore_callee_save_regs(code);
 	retn(code);
 
 	opts->native_addr = code->cur;
