@@ -1352,7 +1352,7 @@ int main(int argc, char ** argv)
 	z80_context z_context;
 #ifndef NO_Z80
 	z80_options z_opts;
-	init_x86_z80_opts(&z_opts, z80_map, 5);
+	init_z80_opts(&z_opts, z80_map, 5);
 	init_z80_context(&z_context, &z_opts);
 #endif
 
