@@ -80,8 +80,6 @@ enum {
 	MODE_IMMED = 0xFF
 } x86_modes;
 
-void check_alloc_code(code_info *code, uint32_t inst_size);
-
 void rol_ir(code_info *code, uint8_t val, uint8_t dst, uint8_t size);
 void ror_ir(code_info *code, uint8_t val, uint8_t dst, uint8_t size);
 void rcl_ir(code_info *code, uint8_t val, uint8_t dst, uint8_t size);

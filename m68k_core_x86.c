@@ -2185,7 +2185,7 @@ void insert_breakpoint(m68k_context * context, uint32_t address, code_ptr bp_han
 	mov_ir(&native, address, opts->gen.scratch1, SZ_D);
 	if (!bp_stub) {
 		code_info *code = &opts->gen.code;
-		check_alloc_code(code, 5);
+		check_code_prologue(code);
 		bp_stub = code->cur;
 		call(&native, bp_stub);
 
