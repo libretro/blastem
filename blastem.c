@@ -514,6 +514,8 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 					dputs("bus requesting Z80");
 					if (z80_enabled) {
 						z80_assert_busreq(gen->z80, context->current_cycle);
+					} else {
+						gen->z80->busack = 1;
 					}
 				} else {
 					if (gen->z80->busreq) {
@@ -528,6 +530,8 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 					}
 					if (z80_enabled) {
 						z80_clear_busreq(gen->z80, context->current_cycle);
+					} else {
+						gen->z80->busack = 0;
 					}
 				}
 			} else if (location == 0x1200) {
@@ -616,7 +620,7 @@ uint8_t io_read(uint32_t location, m68k_context * context)
 			}
 		} else {
 			if (location == 0x1100) {
-				value = z80_enabled ? !z80_get_busack(gen->z80, context->current_cycle) : 0;
+				value = z80_enabled ? !z80_get_busack(gen->z80, context->current_cycle) : !gen->z80->busack;
 				dprintf("Byte read of BUSREQ returned %d @ %d (reset: %d)\n", value, context->current_cycle, gen->z80->reset);
 			} else if (location == 0x1200) {
 				value = !gen->z80->reset;
