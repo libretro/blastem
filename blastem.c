@@ -217,8 +217,8 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 		if (gen->ym->write_cycle != CYCLE_NEVER) {
 			gen->ym->write_cycle = gen->ym->write_cycle >= mclk_target ? gen->ym->write_cycle - mclk_target : 0;
 		}
-		//printf("reached frame end | 68K Cycles: %d, MCLK Cycles: %d\n", context->current_cycle, mclks);
 		vdp_run_context(v_context, mclk_target);
+		//printf("reached frame end | MCLK Cycles: %d, Target: %d, VDP cycles: %d\n", mclks, mclk_target, v_context->cycles);
 
 		if (!headless) {
 			break_on_sync |= wait_render_frame(v_context, frame_limit);
@@ -290,9 +290,6 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 					vdp_run_dma_done(v_context, mclk_target);
 					if (v_context->cycles >= mclk_target) {
 						context->current_cycle = v_context->cycles;
-						if (context->current_cycle < mclk_target) {
-							context->current_cycle += MCLKS_PER_68K;
-						}
 						sync_components(context, 0);
 					}
 				}
@@ -307,9 +304,6 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 						vdp_run_dma_done(v_context, mclk_target);
 						if (v_context->cycles >= mclk_target) {
 							context->current_cycle = v_context->cycles;
-							if (context->current_cycle < mclk_target) {
-								context->current_cycle += MCLKS_PER_68K;
-							}
 							sync_components(context, 0);
 						}
 					}
