@@ -12,12 +12,6 @@
 
 uint8_t z80_ram[0x2000];
 
-#define MCLKS_PER_Z80 15
-//TODO: Figure out the exact value for this
-#define MCLKS_PER_FRAME (MCLKS_LINE*262)
-#define VINT_CYCLE ((MCLKS_LINE * 226)/MCLKS_PER_Z80)
-#define CYCLE_NEVER 0xFFFFFFFF
-
 uint8_t z80_unmapped_read(uint32_t location, void * context)
 {
 	return 0xFF;
@@ -33,6 +27,11 @@ const memmap_chunk z80_map[] = {
 	{ 0x4000, 0x10000, 0xFFFF, 0, 0,                                  NULL,    NULL, NULL, z80_unmapped_read, z80_unmapped_write}
 };
 
+void z80_next_int_pulse(z80_context * context)
+{
+	context->int_pulse_start = context->int_pulse_end = CYCLE_NEVER;
+}
+
 int main(int argc, char ** argv)
 {
 	long filesize;
@@ -40,7 +39,7 @@ int main(int argc, char ** argv)
 	z80_options opts;
 	z80_context context;
 	if (argc < 2) {
-		fputs("usage: transz80 zrom [cartrom]\n", stderr);
+		fputs("usage: ztestrun zrom [cartrom]\n", stderr);
 		exit(1);
 	}
 	FILE * f = fopen(argv[1], "rb");
@@ -53,16 +52,12 @@ int main(int argc, char ** argv)
 	fseek(f, 0, SEEK_SET);
 	fread(z80_ram, 1, filesize < sizeof(z80_ram) ? filesize : sizeof(z80_ram), f);
 	fclose(f);
-	init_z80_opts(&opts, z80_map, 2);
+	init_z80_opts(&opts, z80_map, 2, 1);
 	init_z80_context(&context, &opts);
 	//Z80 RAM
 	context.mem_pointers[0] = z80_ram;
-	context.sync_cycle = context.target_cycle = 1000;
 	context.int_cycle = CYCLE_NEVER;
-	z80_reset(&context);
-	while (context.current_cycle < 1000) {
-		context.run(&context);
-	}
+	z80_run(&context, 1000);
 	printf("A: %X\nB: %X\nC: %X\nD: %X\nE: %X\nHL: %X\nIX: %X\nIY: %X\nSP: %X\n\nIM: %d, IFF1: %d, IFF2: %d\n",
 		context.regs[Z80_A], context.regs[Z80_B], context.regs[Z80_C],
 		context.regs[Z80_D], context.regs[Z80_E],
