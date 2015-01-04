@@ -125,26 +125,18 @@ uint16_t read_dma_value(uint32_t address)
 	return 0;
 }
 
-//TODO: Make these dependent on the video mode
-//#define VINT_CYCLE ((MCLKS_LINE * 225 + (148 + 40) * 4)/MCLKS_PER_68K)
-#define ZVINT_CYCLE ((MCLKS_LINE * 225 + (148 + 40) * 4)/MCLKS_PER_Z80)
-//#define VINT_CYCLE ((MCLKS_LINE * 226)/MCLKS_PER_68K)
-//#define ZVINT_CYCLE ((MCLKS_LINE * 226)/MCLKS_PER_Z80)
-
 void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 {
 	context->int_cycle = CYCLE_NEVER;
 	if ((context->status & 0x7) < 6) {
 		uint32_t next_vint = vdp_next_vint(v_context);
 		if (next_vint != CYCLE_NEVER) {
-			next_vint /= MCLKS_PER_68K;
 			context->int_cycle = next_vint;
 			context->int_num = 6;
 		}
 		if ((context->status & 0x7) < 4) {
 			uint32_t next_hint = vdp_next_hint(v_context);
 			if (next_hint != CYCLE_NEVER) {
-				next_hint /= MCLKS_PER_68K;
 				if (next_hint < context->int_cycle) {
 					context->int_cycle = next_hint;
 					context->int_num = 4;
@@ -185,7 +177,7 @@ void sync_z80(z80_context * z_context, uint32_t mclks)
 #ifndef NO_Z80
 	if (z80_enabled && !reset && !busreq) {
 		genesis_context * gen = z_context->system;
-		z_context->sync_cycle = mclks / MCLKS_PER_Z80;
+		z_context->sync_cycle = mclks;
 		if (z_context->current_cycle < z_context->sync_cycle) {
 			if (need_reset) {
 				z80_reset(z_context);
@@ -194,7 +186,7 @@ void sync_z80(z80_context * z_context, uint32_t mclks)
 
 			while (z_context->current_cycle < z_context->sync_cycle) {
 				if (z_context->int_pulse_end < z_context->current_cycle || z_context->int_pulse_end == CYCLE_NEVER) {
-					z_context->int_pulse_start = vdp_next_vint_z80(gen->vdp) / MCLKS_PER_Z80;
+					z_context->int_pulse_start = vdp_next_vint_z80(gen->vdp);
 					z_context->int_pulse_end = z_context->int_pulse_start + Z80_VINT_DURATION;
 				}
 				if (z_context->iff1) {
@@ -211,7 +203,7 @@ void sync_z80(z80_context * z_context, uint32_t mclks)
 	} else
 #endif
 	{
-		z_context->current_cycle = mclks / MCLKS_PER_Z80;
+		z_context->current_cycle = mclks;
 	}
 }
 
@@ -238,14 +230,14 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	genesis_context * gen = context->system;
 	vdp_context * v_context = gen->vdp;
 	z80_context * z_context = gen->z80;
-	uint32_t mclks = context->current_cycle * MCLKS_PER_68K;
+	uint32_t mclks = context->current_cycle;
 	sync_z80(z_context, mclks);
 	if (mclks >= mclk_target) {
 		sync_sound(gen, mclks);
 		gen->ym->current_cycle -= mclk_target;
 		gen->psg->cycles -= mclk_target;
 		if (gen->ym->write_cycle != CYCLE_NEVER) {
-			gen->ym->write_cycle = gen->ym->write_cycle >= mclk_target/MCLKS_PER_68K ? gen->ym->write_cycle - mclk_target/MCLKS_PER_68K : 0;
+			gen->ym->write_cycle = gen->ym->write_cycle >= mclk_target ? gen->ym->write_cycle - mclk_target : 0;
 		}
 		//printf("reached frame end | 68K Cycles: %d, MCLK Cycles: %d\n", context->current_cycle, mclks);
 		vdp_run_context(v_context, mclk_target);
@@ -261,35 +253,35 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 		frame++;
 		mclks -= mclk_target;
 		vdp_adjust_cycles(v_context, mclk_target);
-		io_adjust_cycles(gen->ports, context->current_cycle, mclk_target/MCLKS_PER_68K);
-		io_adjust_cycles(gen->ports+1, context->current_cycle, mclk_target/MCLKS_PER_68K);
-		io_adjust_cycles(gen->ports+2, context->current_cycle, mclk_target/MCLKS_PER_68K);
+		io_adjust_cycles(gen->ports, context->current_cycle, mclk_target);
+		io_adjust_cycles(gen->ports+1, context->current_cycle, mclk_target);
+		io_adjust_cycles(gen->ports+2, context->current_cycle, mclk_target);
 		if (busack_cycle != CYCLE_NEVER) {
-			if (busack_cycle > mclk_target/MCLKS_PER_68K) {
-				busack_cycle -= mclk_target/MCLKS_PER_68K;
+			if (busack_cycle > mclk_target) {
+				busack_cycle -= mclk_target;
 			} else {
 				busack_cycle = CYCLE_NEVER;
 				busack = new_busack;
 			}
 		}
-		context->current_cycle -= mclk_target/MCLKS_PER_68K;
-		if (z_context->current_cycle >= mclk_target/MCLKS_PER_Z80) {
-			z_context->current_cycle -= mclk_target/MCLKS_PER_Z80;
+		context->current_cycle -= mclk_target;
+		if (z_context->current_cycle >= mclk_target) {
+			z_context->current_cycle -= mclk_target;
 		} else {
 			z_context->current_cycle = 0;
 		}
 		if (z_context->int_cycle != CYCLE_NEVER) {
-			if (z_context->int_cycle >= mclk_target/MCLKS_PER_Z80) {
-				z_context->int_cycle -= mclk_target/MCLKS_PER_Z80;
+			if (z_context->int_cycle >= mclk_target) {
+				z_context->int_cycle -= mclk_target;
 			} else {
 				z_context->int_cycle = 0;
 			}
 		}
 		if (z_context->int_pulse_start != CYCLE_NEVER) {
-			if (z_context->int_pulse_end >= mclk_target/MCLKS_PER_Z80) {
-				z_context->int_pulse_end -= mclk_target/MCLKS_PER_Z80;
-				if (z_context->int_pulse_start >= mclk_target/MCLKS_PER_Z80) {
-					z_context->int_pulse_start -= mclk_target/MCLKS_PER_Z80;
+			if (z_context->int_pulse_end >= mclk_target) {
+				z_context->int_pulse_end -= mclk_target;
+				if (z_context->int_pulse_start >= mclk_target) {
+					z_context->int_pulse_start -= mclk_target;
 				} else {
 					z_context->int_pulse_start = 0;
 				}
@@ -298,8 +290,8 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			z_context->int_pulse_start = CYCLE_NEVER;
 			z_context->int_pulse_end = CYCLE_NEVER;
 		}
-		if (z_context->int_enable_cycle >= mclk_target/MCLKS_PER_Z80) {
-			z_context->int_enable_cycle -= mclk_target/MCLKS_PER_Z80;
+		if (z_context->int_enable_cycle >= mclk_target) {
+			z_context->int_enable_cycle -= mclk_target;
 		} else {
 			z_context->int_enable_cycle = 0;
 		}
@@ -307,7 +299,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			vdp_run_context(v_context, mclks);
 		}
 		mclk_target = vdp_cycles_to_frame_end(v_context);
-		context->sync_cycle = mclk_target/MCLKS_PER_68K;
+		context->sync_cycle = mclk_target;
 	} else {
 		//printf("running VDP for %d cycles\n", mclks - v_context->cycles);
 		vdp_run_context(v_context, mclks);
@@ -325,9 +317,10 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	}
 		if (save_state) {
 			save_state = 0;
+			//advance Z80 core to the start of an instruction
 			while (!z_context->pc)
 			{
-				sync_z80(z_context, z_context->current_cycle * MCLKS_PER_Z80 + MCLKS_PER_Z80);
+				sync_z80(z_context, z_context->current_cycle + MCLKS_PER_Z80);
 			}
 			save_gst(gen, "savestate.gst", address);
 		}
@@ -355,14 +348,14 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 				while(v_context->flags & FLAG_DMA_RUN) {
 					vdp_run_dma_done(v_context, mclk_target);
 					if (v_context->cycles >= mclk_target) {
-						context->current_cycle = v_context->cycles / MCLKS_PER_68K;
-						if (context->current_cycle * MCLKS_PER_68K < mclk_target) {
-							++context->current_cycle;
+						context->current_cycle = v_context->cycles;
+						if (context->current_cycle < mclk_target) {
+							context->current_cycle += MCLKS_PER_68K;
 						}
 						sync_components(context, 0);
 					}
 				}
-				//context->current_cycle = v_context->cycles / MCLKS_PER_68K;
+				//context->current_cycle = v_context->cycles;
 			}
 		} else if(vdp_port < 8) {
 			gen->bus_busy = 1;
@@ -372,9 +365,9 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 					while(v_context->flags & FLAG_DMA_RUN) {
 						vdp_run_dma_done(v_context, mclk_target);
 						if (v_context->cycles >= mclk_target) {
-							context->current_cycle = v_context->cycles / MCLKS_PER_68K;
-							if (context->current_cycle * MCLKS_PER_68K < mclk_target) {
-								++context->current_cycle;
+							context->current_cycle = v_context->cycles;
+							if (context->current_cycle < mclk_target) {
+								context->current_cycle += MCLKS_PER_68K;
 							}
 							sync_components(context, 0);
 						}
@@ -393,11 +386,11 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 			exit(1);
 		}
 		if (v_context->cycles != before_cycle) {
-			//printf("68K paused for %d (%d) cycles at cycle %d (%d) for write\n", v_context->cycles / MCLKS_PER_68K - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
-			context->current_cycle = v_context->cycles / MCLKS_PER_68K;
+			//printf("68K paused for %d (%d) cycles at cycle %d (%d) for write\n", v_context->cycles - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
+			context->current_cycle = v_context->cycles;
 		}
 	} else if (vdp_port < 0x18) {
-		sync_sound(gen, context->current_cycle * MCLKS_PER_68K);
+		sync_sound(gen, context->current_cycle);
 		psg_write(gen->psg, value);
 	} else {
 		//TODO: Implement undocumented test register(s)
@@ -427,7 +420,7 @@ void * z80_vdp_port_write(uint32_t vdp_port, void * vcontext, uint8_t value)
 	}
 	if (vdp_port < 0x10) {
 		//These probably won't currently interact well with the 68K accessing the VDP
-		vdp_run_context(gen->vdp, context->current_cycle * MCLKS_PER_Z80);
+		vdp_run_context(gen->vdp, context->current_cycle);
 		if (vdp_port < 4) {
 			vdp_data_port_write(gen->vdp, value << 8 | value);
 		} else if (vdp_port < 8) {
@@ -437,7 +430,7 @@ void * z80_vdp_port_write(uint32_t vdp_port, void * vcontext, uint8_t value)
 			exit(1);
 		}
 	} else if (vdp_port < 0x18) {
-		sync_sound(gen, context->current_cycle * MCLKS_PER_Z80);
+		sync_sound(gen, context->current_cycle);
 		psg_write(gen->psg, value);
 	} else {
 		vdp_test_port_write(gen->vdp, value);
@@ -472,8 +465,8 @@ uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 		value = vdp_test_port_read(v_context);
 	}
 	if (v_context->cycles != before_cycle) {
-		//printf("68K paused for %d (%d) cycles at cycle %d (%d) for read\n", v_context->cycles / MCLKS_PER_68K - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
-		context->current_cycle = v_context->cycles / MCLKS_PER_68K;
+		//printf("68K paused for %d (%d) cycles at cycle %d (%d) for read\n", v_context->cycles - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
+		context->current_cycle = v_context->cycles;
 	}
 	return value;
 }
@@ -500,7 +493,7 @@ uint8_t z80_vdp_port_read(uint32_t vdp_port, void * vcontext)
 	uint16_t ret;
 	if (vdp_port < 0x10) {
 		//These probably won't currently interact well with the 68K accessing the VDP
-		vdp_run_context(gen->vdp, context->current_cycle * MCLKS_PER_Z80);
+		vdp_run_context(gen->vdp, context->current_cycle);
 		if (vdp_port < 4) {
 			ret = vdp_data_port_read(gen->vdp);
 		} else if (vdp_port < 8) {
@@ -539,7 +532,7 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 				z80_handle_code_write(location & 0x1FFF, gen->z80);
 #endif
 			} else if (location < 0x6000) {
-				sync_sound(gen, context->current_cycle * MCLKS_PER_68K);
+				sync_sound(gen, context->current_cycle);
 				if (location & 1) {
 					ym_data_write(gen->ym, value);
 				} else if(location & 2) {
@@ -593,13 +586,13 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 					dputs("bus requesting Z80");
 
 					if(!reset && !busreq) {
-						sync_z80(gen->z80, context->current_cycle * MCLKS_PER_68K + Z80_ACK_DELAY*MCLKS_PER_Z80);
-						busack_cycle = (gen->z80->current_cycle * MCLKS_PER_Z80) / MCLKS_PER_68K;//context->current_cycle + Z80_ACK_DELAY;
+						sync_z80(gen->z80, context->current_cycle + Z80_ACK_DELAY*MCLKS_PER_Z80);
+						busack_cycle = gen->z80->current_cycle;//context->current_cycle + Z80_ACK_DELAY;
 						new_busack = Z80_REQ_ACK;
 					}
 					busreq = 1;
 				} else {
-					sync_z80(gen->z80, context->current_cycle * MCLKS_PER_68K);
+					sync_z80(gen->z80, context->current_cycle);
 					if (busreq) {
 						dputs("releasing z80 bus");
 						#ifdef DO_DEBUG_PRINT
@@ -609,7 +602,7 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 						fwrite(z80_ram, 1, sizeof(z80_ram), f);
 						fclose(f);
 						#endif
-						busack_cycle = ((gen->z80->current_cycle + Z80_BUSY_DELAY) * MCLKS_PER_Z80) / MCLKS_PER_68K;
+						busack_cycle = gen->z80->current_cycle + Z80_BUSY_DELAY;
 						new_busack = Z80_REQ_BUSY;
 						busreq = 0;
 					}
@@ -618,17 +611,17 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 
 				}
 			} else if (location == 0x1200) {
-				sync_z80(gen->z80, context->current_cycle * MCLKS_PER_68K);
+				sync_z80(gen->z80, context->current_cycle);
 				if (value & 1) {
 					if (reset && busreq) {
 						new_busack = 0;
-						busack_cycle = ((gen->z80->current_cycle + Z80_ACK_DELAY) * MCLKS_PER_Z80) / MCLKS_PER_68K;//context->current_cycle + Z80_ACK_DELAY;
+						busack_cycle = gen->z80->current_cycle + Z80_ACK_DELAY;//context->current_cycle + Z80_ACK_DELAY;
 					}
 					//TODO: Deal with the scenario in which reset is not asserted long enough
 					if (reset) {
 						need_reset = 1;
 						//TODO: Add necessary delay between release of reset and start of execution
-						gen->z80->current_cycle = (context->current_cycle * MCLKS_PER_68K) / MCLKS_PER_Z80 + 16;
+						gen->z80->current_cycle = context->current_cycle + 16 * MCLKS_PER_Z80;
 					}
 					reset = 0;
 				} else {
@@ -669,7 +662,7 @@ uint8_t io_read(uint32_t location, m68k_context * context)
 			if (location < 0x4000) {
 				value = z80_ram[location & 0x1FFF];
 			} else if (location < 0x6000) {
-				sync_sound(gen, context->current_cycle * MCLKS_PER_68K);
+				sync_sound(gen, context->current_cycle);
 				value = ym_read_status(gen->ym);
 			} else {
 				value = 0xFF;
@@ -741,7 +734,7 @@ void * z80_write_ym(uint32_t location, void * vcontext, uint8_t value)
 {
 	z80_context * context = vcontext;
 	genesis_context * gen = context->system;
-	sync_sound(gen, context->current_cycle * MCLKS_PER_Z80);
+	sync_sound(gen, context->current_cycle);
 	if (location & 1) {
 		ym_data_write(gen->ym, value);
 	} else if (location & 2) {
@@ -756,7 +749,7 @@ uint8_t z80_read_ym(uint32_t location, void * vcontext)
 {
 	z80_context * context = vcontext;
 	genesis_context * gen = context->system;
-	sync_sound(gen, context->current_cycle * MCLKS_PER_Z80);
+	sync_sound(gen, context->current_cycle);
 	return ym_read_status(gen->ym);
 }
 
@@ -765,7 +758,7 @@ uint8_t z80_read_bank(uint32_t location, void * vcontext)
 	z80_context * context = vcontext;
 	//typical delay from bus arbitration
 	context->current_cycle += 3;
-	
+
 	location &= 0x7FFF;
 	//TODO: add cycle for an access right after a previous one
 	//TODO: block Z80 if VDP has the bus or the 68K is blocked on a VDP access
@@ -804,7 +797,7 @@ void *z80_write_bank(uint32_t location, void * vcontext, uint8_t value)
 void *z80_write_bank_reg(uint32_t location, void * vcontext, uint8_t value)
 {
 	z80_context * context = vcontext;
-	
+
 	context->bank_reg = (context->bank_reg >> 1 | value << 8) & 0x1FF;
 	if (context->bank_reg < 0x80) {
 		genesis_context *gen = context->system;
@@ -812,7 +805,7 @@ void *z80_write_bank_reg(uint32_t location, void * vcontext, uint8_t value)
 	} else {
 		context->mem_pointers[1] = NULL;
 	}
-	
+
 	return context;
 }
 
@@ -1084,7 +1077,7 @@ void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, u
 		}
 		atexit(save_sram);
 	}
-	init_m68k_opts(&opts, memmap, num_chunks);
+	init_m68k_opts(&opts, memmap, num_chunks, MCLKS_PER_68K);
 	opts.address_log = address_log;
 	init_68k_context(&context, opts.gen.native_code_map, &opts);
 
@@ -1092,7 +1085,7 @@ void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, u
 	context.system = gen;
 	//cartridge ROM
 	context.mem_pointers[0] = cart;
-	context.target_cycle = context.sync_cycle = mclk_target/MCLKS_PER_68K;
+	context.target_cycle = context.sync_cycle = mclk_target;
 	//work RAM
 	context.mem_pointers[1] = ram;
 	//save RAM/map
@@ -1369,13 +1362,13 @@ int main(int argc, char ** argv)
 	z80_context z_context;
 #ifndef NO_Z80
 	z80_options z_opts;
-	init_z80_opts(&z_opts, z80_map, 5);
+	init_z80_opts(&z_opts, z80_map, 5, MCLKS_PER_Z80);
 	init_z80_context(&z_context, &z_opts);
 #endif
 
 	z_context.system = &gen;
 	z_context.mem_pointers[0] = z80_ram;
-	z_context.sync_cycle = z_context.target_cycle = mclk_target/MCLKS_PER_Z80;
+	z_context.sync_cycle = z_context.target_cycle = mclk_target;
 	z_context.int_cycle = CYCLE_NEVER;
 	z_context.mem_pointers[1] = z_context.mem_pointers[2] = (uint8_t *)cart;
 

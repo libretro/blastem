@@ -89,6 +89,7 @@ typedef struct {
 	uint32_t           address_mask;
 	uint32_t           max_address;
 	uint32_t           bus_cycles;
+	uint32_t           clock_divider;
 	int32_t            mem_ptr_off;
 	int32_t            ram_flags_off;
 	uint8_t            ram_flags_shift;
