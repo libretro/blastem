@@ -451,11 +451,6 @@ uint8_t z80_vdp_port_read(uint32_t vdp_port, void * vcontext)
 }
 
 uint32_t zram_counter = 0;
-#define Z80_ACK_DELAY 3
-#define Z80_BUSY_DELAY 1//TODO: Find the actual value for this
-#define Z80_REQ_BUSY 1
-#define Z80_REQ_ACK 0
-#define Z80_RES_BUSACK reset
 
 m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value)
 {
@@ -1281,8 +1276,6 @@ int main(int argc, char ** argv)
 
 	z_context.system = &gen;
 	z_context.mem_pointers[0] = z80_ram;
-	z_context.sync_cycle = z_context.target_cycle = mclk_target;
-	z_context.int_cycle = CYCLE_NEVER;
 	z_context.mem_pointers[1] = z_context.mem_pointers[2] = (uint8_t *)cart;
 
 	gen.z80 = &z_context;
