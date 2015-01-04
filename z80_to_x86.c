@@ -879,20 +879,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		}
 		break;
 	case Z80_HALT: {
+		code_ptr loop_top = code->cur;
+		//this isn't terribly efficient, but it's good enough for now
 		cycles(&opts->gen, 4);
-		mov_ir(code, address, opts->gen.scratch1, SZ_W);
-		uint8_t * call_inst = code->cur;
-		mov_rr(code, opts->gen.limit, opts->gen.scratch2, SZ_D);
-		sub_rr(code, opts->gen.cycles, opts->gen.scratch2, SZ_D);
-		and_ir(code, 0xFFFFFFFC, opts->gen.scratch2, SZ_D);
-		add_rr(code, opts->gen.scratch2, opts->gen.cycles, SZ_D);
-		cmp_rr(code, opts->gen.limit, opts->gen.cycles, SZ_D);
-		code_ptr skip_last = code->cur+1;
-		jcc(code, CC_NB, code->cur+2);
-		cycles(&opts->gen, 4);
-		*skip_last = code->cur - (skip_last+1);
-		call(code, opts->gen.handle_cycle_limit_int);
-		jmp(code, call_inst);
+		check_cycles_int(&opts->gen, address);
+		jmp(code, loop_top);
 		break;
 	}
 	case Z80_DI:
@@ -908,7 +899,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		mov_irdisp(code, 1, opts->gen.context_reg, offsetof(z80_context, iff1), SZ_B);
 		mov_irdisp(code, 1, opts->gen.context_reg, offsetof(z80_context, iff2), SZ_B);
 		//interrupt enable has a one-instruction latency, minimum instruction duration is 4 cycles
-		add_irdisp(code, 4, opts->gen.context_reg, offsetof(z80_context, int_enable_cycle), SZ_D);
+		add_irdisp(code, 4*opts->gen.clock_divider, opts->gen.context_reg, offsetof(z80_context, int_enable_cycle), SZ_D);
 		call(code, opts->do_sync);
 		break;
 	case Z80_IM:
@@ -1932,7 +1923,7 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 	} while (opts->gen.deferred);
 }
 
-void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t num_chunks)
+void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t num_chunks, uint32_t clock_divider)
 {
 	memset(options, 0, sizeof(*options));
 
@@ -1942,6 +1933,7 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	options->gen.address_mask = 0xFFFF;
 	options->gen.max_address = 0x10000;
 	options->gen.bus_cycles = 3;
+	options->gen.clock_divider = clock_divider;
 	options->gen.mem_ptr_off = offsetof(z80_context, mem_pointers);
 	options->gen.ram_flags_off = offsetof(z80_context, ram_code_flags);
 	options->gen.ram_flags_shift = 7;
@@ -1968,18 +1960,18 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	options->regs[Z80_AF] = -1;
 	options->regs[Z80_IX] = RDX;
 	options->regs[Z80_IY] = R8;
-	
+
 	options->gen.scratch1 = R13;
 	options->gen.scratch2 = R14;
 #else
 	memset(options->regs, -1, sizeof(options->regs));
 	options->regs[Z80_A] = RAX;
 	options->regx[Z80_SP] = RBX;
-	
+
 	options->gen.scratch1 = RCX;
 	options->gen.scratch2 = RDX;
 #endif
-	
+
 	options->gen.context_reg = RSI;
 	options->gen.cycles = RBP;
 	options->gen.limit = RDI;

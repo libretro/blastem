@@ -3,7 +3,7 @@
 
 void cycles(cpu_options *opts, uint32_t num)
 {
-	add_ir(&opts->code, num, opts->cycles, SZ_D);
+	add_ir(&opts->code, num*opts->clock_divider, opts->cycles, SZ_D);
 }
 
 void check_cycles_int(cpu_options *opts, uint32_t address)
