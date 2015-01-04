@@ -1777,7 +1777,7 @@ z80_context * z80_handle_code_write(uint32_t address, z80_context * context)
 		code_ptr dst = z80_get_native_address(context, inst_start);
 		code_info code = {dst, dst+16};
 		z80_options * opts = context->options;
-		dprintf("patching code at %p for Z80 instruction at %X due to write to %X\n", code, inst_start, address);
+		dprintf("patching code at %p for Z80 instruction at %X due to write to %X\n", code.cur, inst_start, address);
 		mov_ir(&code, inst_start, opts->gen.scratch1, SZ_D);
 		call(&code, opts->retrans_stub);
 	}
@@ -2226,18 +2226,112 @@ void init_z80_context(z80_context * context, z80_options * options)
 	context->banked_code_map = malloc(sizeof(native_map_slot));
 	memset(context->banked_code_map, 0, sizeof(native_map_slot));
 	context->options = options;
-	context->int_cycle = 0xFFFFFFFF;
-	context->int_pulse_start = 0xFFFFFFFF;
-	context->int_pulse_end = 0xFFFFFFFF;
-	context->run = options->run;
+	context->int_cycle = CYCLE_NEVER;
+	context->int_pulse_start = CYCLE_NEVER;
+	context->int_pulse_end = CYCLE_NEVER;
 }
 
-void z80_reset(z80_context * context)
+void z80_run(z80_context * context, uint32_t target_cycle)
 {
-	context->im = 0;
-	context->iff1 = context->iff2 = 0;
-	context->native_pc = z80_get_native_address_trans(context, 0);
-	context->extra_pc = NULL;
+	if (context->reset || context->busack) {
+		context->current_cycle = target_cycle;
+	} else {
+		if (context->current_cycle < target_cycle) {
+			//busreq is sampled at the end of an m-cycle
+			//we can approximate that by running for a single m-cycle after a bus request
+			context->sync_cycle = context->busreq ? context->current_cycle + 3*context->options->gen.clock_divider : target_cycle;
+			if (!context->native_pc) {
+				context->native_pc = z80_get_native_address_trans(context, context->pc);
+			}
+			while (context->current_cycle < context->sync_cycle)
+			{
+				if (context->int_pulse_end < context->current_cycle || context->int_pulse_end == CYCLE_NEVER) {
+					z80_next_int_pulse(context);
+				}
+				if (context->iff1) {
+					context->int_cycle = context->int_pulse_start < context->int_enable_cycle ? context->int_enable_cycle : context->int_pulse_start;
+				} else {
+					context->int_cycle = CYCLE_NEVER;
+				}
+				context->target_cycle = context->sync_cycle < context->int_cycle ? context->sync_cycle : context->int_cycle;
+				dprintf("Running Z80 from cycle %d to cycle %d. Int cycle: %d\n", context->current_cycle, context->sync_cycle, context->int_cycle);
+				context->options->run(context);
+				dprintf("Z80 ran to cycle %d\n", context->current_cycle);
+			}
+			if (context->busreq) {
+				context->busack = 1;
+				context->current_cycle = target_cycle;
+			}
+		}
+	}
+}
+
+void z80_assert_reset(z80_context * context, uint32_t cycle)
+{
+	z80_run(context, cycle);
+	context->reset = 1;
+}
+
+void z80_clear_reset(z80_context * context, uint32_t cycle)
+{
+	z80_run(context, cycle);
+	if (context->reset) {
+		//TODO: Handle case where reset is not asserted long enough
+		context->im = 0;
+		context->iff1 = context->iff2 = 0;
+		context->native_pc = NULL;
+		context->extra_pc = NULL;
+		context->pc = 0;
+		context->reset = 0;
+	}
+}
+
+void z80_assert_busreq(z80_context * context, uint32_t cycle)
+{
+	z80_run(context, cycle);
+	context->busreq = 1;
+}
+
+void z80_clear_busreq(z80_context * context, uint32_t cycle)
+{
+	z80_run(context, cycle);
+	context->busreq = 0;
+	context->busack = 0;
+}
+
+uint8_t z80_get_busack(z80_context * context, uint32_t cycle)
+{
+	z80_run(context, cycle);
+	return context->busack;
+}
+
+void z80_adjust_cycles(z80_context * context, uint32_t deduction)
+{
+	if (context->current_cycle < deduction) {
+		fprintf(stderr, "WARNING: Deduction of %u cycles when Z80 cycle counter is only %u\n", deduction, context->current_cycle);
+		context->current_cycle = 0;
+	} else {
+		context->current_cycle -= deduction;
+	}
+	if (context->int_enable_cycle != CYCLE_NEVER) {
+		if (context->int_enable_cycle < deduction) {
+			context->int_enable_cycle = 0;
+		} else {
+			context->int_enable_cycle -= deduction;
+		}
+	}
+	if (context->int_pulse_start != CYCLE_NEVER) {
+		if (context->int_pulse_end < deduction) {
+			context->int_pulse_start = context->int_pulse_end = CYCLE_NEVER;
+		} else {
+			context->int_pulse_end -= deduction;
+			if (context->int_pulse_start < deduction) {
+				context->int_pulse_start = 0;
+			} else {
+				context->int_pulse_start -= deduction;
+			}
+		}
+	}
 }
 
 uint32_t zbreakpoint_patch(z80_context * context, uint16_t address, code_ptr dst)
