@@ -2283,6 +2283,10 @@ void z80_clear_reset(z80_context * context, uint32_t cycle)
 		context->extra_pc = NULL;
 		context->pc = 0;
 		context->reset = 0;
+		if (context->busreq) {
+			//TODO: Figure out appropriate delay
+			context->busack = 1;
+		}
 	}
 }
 
