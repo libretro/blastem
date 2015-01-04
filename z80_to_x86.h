@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #ifndef Z80_TO_X86_H_
@@ -82,7 +82,7 @@ typedef struct {
 } z80_context;
 
 void translate_z80_stream(z80_context * context, uint32_t address);
-void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t num_chunks);
+void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t num_chunks, uint32_t clock_divider);
 void init_z80_context(z80_context * context, z80_options * options);
 code_ptr z80_get_native_address(z80_context * context, uint32_t address);
 code_ptr z80_get_native_address_trans(z80_context * context, uint32_t address);

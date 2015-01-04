@@ -1012,8 +1012,8 @@ void translate_shift(m68k_options * opts, m68kinst * inst, host_ea *src_op, host
 		//Memory shift
 		shift_ir(code, 1, dst_op->base, SZ_W);
 	} else {
-		cycles(&opts->gen, inst->extra.size == OPSIZE_LONG ? 8 : 6);
 		if (src_op->mode == MODE_IMMED) {
+			cycles(&opts->gen, (inst->extra.size == OPSIZE_LONG ? 8 : 6) + 2 * src_op->disp);
 			if (src_op->disp != 1 && inst->op == M68K_ASL) {
 				set_flag(opts, 0, FLAG_V);
 				for (int i = 0; i < src_op->disp; i++) {
@@ -1037,6 +1037,7 @@ void translate_shift(m68k_options * opts, m68kinst * inst, host_ea *src_op, host
 				set_flag_cond(opts, CC_O, FLAG_V);
 			}
 		} else {
+			cycles(&opts->gen, inst->extra.size == OPSIZE_LONG ? 8 : 6);
 			if (src_op->base != RCX) {
 				if (src_op->mode == MODE_REG_DIRECT) {
 					mov_rr(code, src_op->base, RCX, SZ_B);
@@ -1066,8 +1067,9 @@ void translate_shift(m68k_options * opts, m68kinst * inst, host_ea *src_op, host
 			jmp(code, code->cur + 2);
 			*nz_off = code->cur - (nz_off + 1);
 			//add 2 cycles for every bit shifted
-			add_rr(code, RCX, opts->gen.cycles, SZ_D);
-			add_rr(code, RCX, opts->gen.cycles, SZ_D);
+			mov_ir(code, 2 * opts->gen.clock_divider, opts->gen.scratch2, SZ_D);
+			imul_rr(code, RCX, opts->gen.scratch2, SZ_D);
+			add_rr(code, opts->gen.scratch2, opts->gen.cycles, SZ_D);
 			if (inst->op == M68K_ASL) {
 				//ASL has Overflow flag behavior that depends on all of the bits shifted through the MSB
 				//Easiest way to deal with this is to shift one bit at a time
@@ -1865,8 +1867,10 @@ void translate_m68k_rot(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 			and_ir(code, 63, opts->gen.scratch1, SZ_D);
 			code_ptr zero_off = code->cur + 1;
 			jcc(code, CC_Z, code->cur + 2);
-			add_rr(code, opts->gen.scratch1, opts->gen.cycles, SZ_D);
-			add_rr(code, opts->gen.scratch1, opts->gen.cycles, SZ_D);
+			//add 2 cycles for every bit shifted
+			mov_ir(code, 2 * opts->gen.clock_divider, opts->gen.scratch2, SZ_D);
+			imul_rr(code, RCX, opts->gen.scratch2, SZ_D);
+			add_rr(code, opts->gen.scratch2, opts->gen.cycles, SZ_D);
 			cmp_ir(code, 32, opts->gen.scratch1, SZ_B);
 			code_ptr norm_off = code->cur + 1;
 			jcc(code, CC_L, code->cur + 2);
@@ -2186,7 +2190,7 @@ void insert_breakpoint(m68k_context * context, uint32_t address, code_ptr bp_han
 	}
 }
 
-void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks)
+void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks, uint32_t clock_divider)
 {
 	memset(opts, 0, sizeof(*opts));
 	opts->gen.memmap = memmap;
@@ -2196,6 +2200,7 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	opts->gen.byte_swap = 1;
 	opts->gen.max_address = 0x1000000;
 	opts->gen.bus_cycles = BUS;
+	opts->gen.clock_divider = clock_divider;
 	opts->gen.mem_ptr_off = offsetof(m68k_context, mem_pointers);
 	opts->gen.ram_flags_off = offsetof(m68k_context, ram_code_flags);
 	opts->gen.ram_flags_shift = 11;
@@ -2308,7 +2313,7 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	opts->native_addr_and_sync = code->cur;
 	call(code, opts->gen.save_context);
 	push_r(code, opts->gen.scratch1);
-	
+
 	xor_rr(code, opts->gen.scratch1, opts->gen.scratch1, SZ_D);
 	call_args_abi(code, (code_ptr)sync_components, 2, opts->gen.context_reg, opts->gen.scratch1);
 	pop_r(code, RSI); //restore saved address from opts->gen.scratch1
