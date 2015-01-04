@@ -170,7 +170,7 @@ void z80_next_int_pulse(z80_context * z_context)
 {
 	genesis_context * gen = z_context->system;
 	z_context->int_pulse_start = vdp_next_vint_z80(gen->vdp);
-	z_context->int_pulse_end = z_context->int_pulse_start + Z80_VINT_DURATION;
+	z_context->int_pulse_end = z_context->int_pulse_start + Z80_VINT_DURATION * MCLKS_PER_Z80;
 }
 
 void sync_z80(z80_context * z_context, uint32_t mclks)

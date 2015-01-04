@@ -2254,7 +2254,7 @@ void z80_run(z80_context * context, uint32_t target_cycle)
 					context->int_cycle = CYCLE_NEVER;
 				}
 				context->target_cycle = context->sync_cycle < context->int_cycle ? context->sync_cycle : context->int_cycle;
-				dprintf("Running Z80 from cycle %d to cycle %d. Int cycle: %d\n", context->current_cycle, context->sync_cycle, context->int_cycle);
+				dprintf("Running Z80 from cycle %d to cycle %d. Int cycle: %d (%d - %d)\n", context->current_cycle, context->sync_cycle, context->int_cycle, context->int_pulse_start, context->int_pulse_end);
 				context->options->run(context);
 				dprintf("Z80 ran to cycle %d\n", context->current_cycle);
 			}
