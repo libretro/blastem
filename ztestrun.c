@@ -9,6 +9,7 @@
 #include "vdp.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stddef.h>
 
 uint8_t z80_ram[0x2000];
 
@@ -38,25 +39,57 @@ int main(int argc, char ** argv)
 	uint8_t *filebuf;
 	z80_options opts;
 	z80_context context;
-	if (argc < 2) {
+	char *fname = NULL;
+	uint8_t retranslate = 0;
+	for (int i = 1; i < argc; i++)
+	{
+		if (argv[i][0] == '-') {
+			switch(argv[i][1])
+			{
+			case 'r':
+				retranslate = 1;
+				break;
+			default:
+				fprintf(stderr, "Unrecognized switch -%c\n", argv[i][1]);
+				exit(1);
+			}
+		} else if (!fname) {
+			fname = argv[i];
+		}
+	}
+	if (!fname) {
 		fputs("usage: ztestrun zrom [cartrom]\n", stderr);
 		exit(1);
 	}
-	FILE * f = fopen(argv[1], "rb");
+	FILE * f = fopen(fname, "rb");
 	if (!f) {
-		fprintf(stderr, "unable to open file %s\n", argv[2]);
+		fprintf(stderr, "unable to open file %s\n", fname);
 		exit(1);
 	}
 	fseek(f, 0, SEEK_END);
 	filesize = ftell(f);
 	fseek(f, 0, SEEK_SET);
-	fread(z80_ram, 1, filesize < sizeof(z80_ram) ? filesize : sizeof(z80_ram), f);
+	filesize = filesize < sizeof(z80_ram) ? filesize : sizeof(z80_ram);
+	if (fread(z80_ram, 1, filesize, f) != filesize) {
+		fprintf(stderr, "error reading %s\n",fname);
+		exit(1);
+	}
 	fclose(f);
 	init_z80_opts(&opts, z80_map, 2, 1);
 	init_z80_context(&context, &opts);
 	//Z80 RAM
 	context.mem_pointers[0] = z80_ram;
-	context.int_cycle = CYCLE_NEVER;
+	if (retranslate) {
+		//run core long enough to translate code
+		z80_run(&context, 1);
+		for (int i = 0; i < filesize; i++)
+		{
+			z80_handle_code_write(i, &context);
+		}
+		z80_assert_reset(&context, context.current_cycle);
+		z80_clear_reset(&context, context.current_cycle + 3);
+		z80_adjust_cycles(&context, context.current_cycle);
+	}
 	z80_run(&context, 1000);
 	printf("A: %X\nB: %X\nC: %X\nD: %X\nE: %X\nHL: %X\nIX: %X\nIY: %X\nSP: %X\n\nIM: %d, IFF1: %d, IFF2: %d\n",
 		context.regs[Z80_A], context.regs[Z80_B], context.regs[Z80_C],
