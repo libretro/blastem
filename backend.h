@@ -12,6 +12,7 @@
 
 #define INVALID_OFFSET 0xFFFFFFFF
 #define EXTENSION_WORD 0xFFFFFFFE
+#define CYCLE_NEVER 0xFFFFFFFF
 
 #if defined(X86_32) || defined(X86_64)
 typedef struct {
