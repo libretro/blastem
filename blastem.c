@@ -666,12 +666,15 @@ uint8_t z80_read_ym(uint32_t location, void * vcontext)
 uint8_t z80_read_bank(uint32_t location, void * vcontext)
 {
 	z80_context * context = vcontext;
+	genesis_context *gen = context->system;
+	if (gen->bus_busy) {
+		context->current_cycle = context->sync_cycle;
+	}
 	//typical delay from bus arbitration
 	context->current_cycle += 3 * MCLKS_PER_Z80;
+	//TODO: add cycle for an access right after a previous one
 
 	location &= 0x7FFF;
-	//TODO: add cycle for an access right after a previous one
-	//TODO: block Z80 if VDP has the bus or the 68K is blocked on a VDP access
 	if (context->mem_pointers[1]) {
 		return context->mem_pointers[1][location ^ 1];
 	}
@@ -687,11 +690,15 @@ uint8_t z80_read_bank(uint32_t location, void * vcontext)
 void *z80_write_bank(uint32_t location, void * vcontext, uint8_t value)
 {
 	z80_context * context = vcontext;
+	genesis_context *gen = context->system;
+	if (gen->bus_busy) {
+		context->current_cycle = context->sync_cycle;
+	}
 	//typical delay from bus arbitration
 	context->current_cycle += 3 * MCLKS_PER_Z80;
-	location &= 0x7FFF;
 	//TODO: add cycle for an access right after a previous one
-	//TODO: block Z80 if VDP has the bus or the 68K is blocked on a VDP access
+
+	location &= 0x7FFF;
 	uint32_t address = context->bank_reg << 15 | location;
 	if (address >= 0xE00000) {
 		address &= 0xFFFF;
