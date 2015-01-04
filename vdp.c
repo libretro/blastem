@@ -1420,7 +1420,7 @@ void check_render_bg(vdp_context * context, int32_t line, uint32_t slot)
 	}
 }
 
-uint32_t h40_hsync_cycles[] = {19, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20, 20, 19};
+uint32_t const h40_hsync_cycles[] = {19, 20, 20, 20, 19, 20, 20, 20, 19, 20, 20, 20, 19, 20, 20, 20, 19};
 
 void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 {
@@ -1827,6 +1827,15 @@ uint32_t vdp_cycles_next_line(vdp_context * context)
 			return (HBLANK_START_H40 - context->hslot) * MCLKS_SLOT_H40;
 		} else if (context->hslot < 183) {
 			return MCLKS_LINE - (context->hslot - LINE_CHANGE_H40) * MCLKS_SLOT_H40;
+		} else if (context->hslot < HSYNC_END_H40){
+			uint32_t before_hsync = context->hslot < HSYNC_SLOT_H40 ? (HSYNC_SLOT_H40 - context->hslot) * MCLKS_SLOT_H40 : 0;
+			uint32_t hsync = 0;
+			for (int i = context->hslot <= HSYNC_SLOT_H40 ? 0 : context->hslot - HSYNC_SLOT_H40; i < sizeof(h40_hsync_cycles)/sizeof(uint32_t); i++)
+			{
+				hsync += h40_hsync_cycles[i];
+			}
+			uint32_t after_hsync = (256- HSYNC_END_H40 + LINE_CHANGE_H40) * MCLKS_SLOT_H40;
+			return before_hsync + hsync + after_hsync;
 		} else {
 			return (256-context->hslot + LINE_CHANGE_H40) * MCLKS_SLOT_H40;
 		}
