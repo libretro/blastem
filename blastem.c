@@ -667,7 +667,7 @@ uint8_t z80_read_bank(uint32_t location, void * vcontext)
 {
 	z80_context * context = vcontext;
 	//typical delay from bus arbitration
-	context->current_cycle += 3;
+	context->current_cycle += 3 * MCLKS_PER_Z80;
 
 	location &= 0x7FFF;
 	//TODO: add cycle for an access right after a previous one
@@ -688,7 +688,7 @@ void *z80_write_bank(uint32_t location, void * vcontext, uint8_t value)
 {
 	z80_context * context = vcontext;
 	//typical delay from bus arbitration
-	context->current_cycle += 3;
+	context->current_cycle += 3 * MCLKS_PER_Z80;
 	location &= 0x7FFF;
 	//TODO: add cycle for an access right after a previous one
 	//TODO: block Z80 if VDP has the bus or the 68K is blocked on a VDP access
