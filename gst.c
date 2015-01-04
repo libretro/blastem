@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "gst.h"
@@ -207,8 +207,8 @@ uint8_t z80_load_gst(z80_context * context, FILE * gstfile)
 	curpos += 2;
 	context->iff1 = context->iff2 = *curpos;
 	curpos += 2;
-	reset = !*(curpos++);
-	busreq = *curpos;
+	context->reset = !*(curpos++);
+	context->busreq = *curpos;
 	curpos += 3;
 	uint32_t bank = read_le_32(curpos);
 	if (bank < 0x400000) {
@@ -350,8 +350,8 @@ uint8_t z80_save_gst(z80_context * context, FILE * gstfile)
 	curpos += 2;
 	*curpos = context->iff1;
 	curpos += 2;
-	*(curpos++) = !reset;
-	*curpos = busreq;
+	*(curpos++) = !context->reset;
+	*curpos = context->busreq;
 	curpos += 3;
 	uint32_t bank = context->bank_reg << 15;
 	write_le_32(curpos, bank);

@@ -70,15 +70,16 @@ typedef struct {
 	void *            system;
 	uint8_t           ram_code_flags[(8 * 1024)/128/8];
 	uint32_t          int_enable_cycle;
-	z80_run_fun       run;
-  uint16_t          pc;
+	uint16_t          pc;
 	uint32_t          int_pulse_start;
 	uint32_t          int_pulse_end;
 	uint8_t           breakpoint_flags[(16 * 1024)/sizeof(uint8_t)];
 	uint8_t *         bp_handler;
 	uint8_t *         bp_stub;
 	uint8_t *         interp_code[256];
-
+	uint8_t           reset;
+	uint8_t           busreq;
+	uint8_t           busack;
 } z80_context;
 
 void translate_z80_stream(z80_context * context, uint32_t address);
@@ -87,10 +88,18 @@ void init_z80_context(z80_context * context, z80_options * options);
 code_ptr z80_get_native_address(z80_context * context, uint32_t address);
 code_ptr z80_get_native_address_trans(z80_context * context, uint32_t address);
 z80_context * z80_handle_code_write(uint32_t address, z80_context * context);
-void z80_run(z80_context * context);
 void z80_reset(z80_context * context);
 void zinsert_breakpoint(z80_context * context, uint16_t address, uint8_t * bp_handler);
 void zremove_breakpoint(z80_context * context, uint16_t address);
+void z80_run(z80_context * context, uint32_t target_cycle);
+void z80_assert_reset(z80_context * context, uint32_t cycle);
+void z80_clear_reset(z80_context * context, uint32_t cycle);
+void z80_assert_busreq(z80_context * context, uint32_t cycle);
+void z80_clear_busreq(z80_context * context, uint32_t cycle);
+uint8_t z80_get_busack(z80_context * context, uint32_t cycle);
+void z80_adjust_cycles(z80_context * context, uint32_t deduction);
+//to be provided by system code
+void z80_next_int_pulse(z80_context * z_context);
 
 #endif //Z80_TO_X86_H_
 
