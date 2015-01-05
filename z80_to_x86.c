@@ -1377,11 +1377,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		cycles(&opts->gen, 5);//T States: 5
 		uint16_t dest_addr = inst->immed;
 		code_ptr call_dst = z80_get_native_address(context, dest_addr);
-		if (!call_dst) {
+			if (!call_dst) {
 			opts->gen.deferred = defer_address(opts->gen.deferred, dest_addr, code->cur + 1);
-			//fake address to force large displacement
+				//fake address to force large displacement
 			call_dst = code->cur + 256;
-		}
+			}
 		jmp(code, call_dst);
 		*no_jump_off = code->cur - (no_jump_off+1);
 		break;
@@ -1390,11 +1390,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		cycles(&opts->gen, 12);//T States: 4,3,5
 		uint16_t dest_addr = address + inst->immed + 2;
 		code_ptr call_dst = z80_get_native_address(context, dest_addr);
-		if (!call_dst) {
+			if (!call_dst) {
 			opts->gen.deferred = defer_address(opts->gen.deferred, dest_addr, code->cur + 1);
-			//fake address to force large displacement
+				//fake address to force large displacement
 			call_dst = code->cur + 256;
-		}
+			}
 		jmp(code, call_dst);
 		break;
 	}
@@ -1419,11 +1419,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		cycles(&opts->gen, 5);//T States: 5
 		uint16_t dest_addr = address + inst->immed + 2;
 		code_ptr call_dst = z80_get_native_address(context, dest_addr);
-		if (!call_dst) {
+			if (!call_dst) {
 			opts->gen.deferred = defer_address(opts->gen.deferred, dest_addr, code->cur + 1);
-			//fake address to force large displacement
+				//fake address to force large displacement
 			call_dst = code->cur + 256;
-		}
+			}
 		jmp(code, call_dst);
 		*no_jump_off = code->cur - (no_jump_off+1);
 		break;
@@ -1436,15 +1436,15 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		cycles(&opts->gen, 5);//T States: 5
 		uint16_t dest_addr = address + inst->immed + 2;
 		code_ptr call_dst = z80_get_native_address(context, dest_addr);
-		if (!call_dst) {
+			if (!call_dst) {
 			opts->gen.deferred = defer_address(opts->gen.deferred, dest_addr, code->cur + 1);
-			//fake address to force large displacement
+				//fake address to force large displacement
 			call_dst = code->cur + 256;
-		}
+			}
 		jmp(code, call_dst);
 		*no_jump_off = code->cur - (no_jump_off+1);
 		break;
-	}
+		}
 	case Z80_CALL: {
 		cycles(&opts->gen, 11);//T States: 4,3,4
 		sub_ir(code, 2, opts->regs[Z80_SP], SZ_W);
@@ -1452,11 +1452,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		mov_rr(code, opts->regs[Z80_SP], opts->gen.scratch2, SZ_W);
 		call(code, opts->write_16_highfirst);//T States: 3, 3
 		code_ptr call_dst = z80_get_native_address(context, inst->immed);
-		if (!call_dst) {
+			if (!call_dst) {
 			opts->gen.deferred = defer_address(opts->gen.deferred, inst->immed, code->cur + 1);
-			//fake address to force large displacement
+				//fake address to force large displacement
 			call_dst = code->cur + 256;
-		}
+			}
 		jmp(code, call_dst);
 		break;
 	}
@@ -1494,15 +1494,15 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		mov_rr(code, opts->regs[Z80_SP], opts->gen.scratch2, SZ_W);
 		call(code, opts->write_16_highfirst);//T States: 3, 3
 		code_ptr call_dst = z80_get_native_address(context, inst->immed);
-		if (!call_dst) {
+			if (!call_dst) {
 			opts->gen.deferred = defer_address(opts->gen.deferred, inst->immed, code->cur + 1);
-			//fake address to force large displacement
+				//fake address to force large displacement
 			call_dst = code->cur + 256;
-		}
+			}
 		jmp(code, call_dst);
 		*no_call_off = code->cur - (no_call_off+1);
 		break;
-	}
+		}
 	case Z80_RET:
 		cycles(&opts->gen, 4);//T States: 4
 		mov_rr(code, opts->regs[Z80_SP], opts->gen.scratch1, SZ_W);
@@ -1806,6 +1806,7 @@ void z80_handle_deferred(z80_context * context)
 	}
 }
 
+extern void * z80_retranslate_inst(uint32_t address, z80_context * context, uint8_t * orig_start) asm("z80_retranslate_inst");
 void * z80_retranslate_inst(uint32_t address, z80_context * context, uint8_t * orig_start)
 {
 	char disbuf[80];
@@ -1913,13 +1914,13 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 			translate_z80inst(&inst, context, address, 0);
 			z80_map_native_address(context, address, start, next-encoded, opts->gen.code.cur - start);
 			address += next-encoded;
-			address &= 0xFFFF;
+				address &= 0xFFFF;
 		} while (!z80_is_terminal(&inst));
 		process_deferred(&opts->gen.deferred, context, (native_addr_func)z80_get_native_address);
 		if (opts->gen.deferred) {
 			address = opts->gen.deferred->address;
 			dprintf("defferred address: %X\n", address);
-		}
+			}
 	} while (opts->gen.deferred);
 }
 
@@ -2277,10 +2278,10 @@ void z80_clear_reset(z80_context * context, uint32_t cycle)
 	z80_run(context, cycle);
 	if (context->reset) {
 		//TODO: Handle case where reset is not asserted long enough
-		context->im = 0;
-		context->iff1 = context->iff2 = 0;
+	context->im = 0;
+	context->iff1 = context->iff2 = 0;
 		context->native_pc = NULL;
-		context->extra_pc = NULL;
+	context->extra_pc = NULL;
 		context->pc = 0;
 		context->reset = 0;
 		if (context->busreq) {
@@ -2294,7 +2295,7 @@ void z80_assert_busreq(z80_context * context, uint32_t cycle)
 {
 	z80_run(context, cycle);
 	context->busreq = 1;
-}
+		}
 
 void z80_clear_busreq(z80_context * context, uint32_t cycle)
 {
@@ -2353,7 +2354,7 @@ void zcreate_stub(z80_context * context)
 	check_code_prologue(code);
 	context->bp_stub = code->cur;
 
-	//Calculate length of prologue
+		//Calculate length of prologue
 	check_cycles_int(&opts->gen, 0);
 	int check_int_size = code->cur-context->bp_stub;
 	code->cur = context->bp_stub;
@@ -2361,15 +2362,15 @@ void zcreate_stub(z80_context * context)
 	//Calculate length of patch
 	int patch_size = zbreakpoint_patch(context, 0, code->cur);
 
-	//Save context and call breakpoint handler
+		//Save context and call breakpoint handler
 	call(code, opts->gen.save_context);
 	push_r(code, opts->gen.scratch1);
 	call_args_abi(code, context->bp_handler, 2, opts->gen.context_reg, opts->gen.scratch1);
 	mov_rr(code, RAX, opts->gen.context_reg, SZ_PTR);
-	//Restore context
+		//Restore context
 	call(code, opts->gen.load_context);
 	pop_r(code, opts->gen.scratch1);
-	//do prologue stuff
+		//do prologue stuff
 	cmp_rr(code, opts->gen.cycles, opts->gen.limit, SZ_D);
 	uint8_t * jmp_off = code->cur+1;
 	jcc(code, CC_NC, code->cur + 7);
@@ -2378,7 +2379,7 @@ void zcreate_stub(z80_context * context)
 	push_r(code, opts->gen.scratch1);
 	jmp(code, opts->gen.handle_cycle_limit_int);
 	*jmp_off = code->cur - (jmp_off+1);
-	//jump back to body of translated instruction
+		//jump back to body of translated instruction
 	pop_r(code, opts->gen.scratch1);
 	add_ir(code, check_int_size - patch_size, opts->gen.scratch1, SZ_PTR);
 	jmp_r(code, opts->gen.scratch1);
@@ -2411,6 +2412,6 @@ void zremove_breakpoint(z80_context * context, uint16_t address)
 		opts->gen.code.last = native + 16;
 		check_cycles_int(&opts->gen, address);
 		opts->gen.code = tmp_code;
-	}
+}
 }
 
