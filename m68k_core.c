@@ -766,6 +766,7 @@ void translate_m68k_stream(uint32_t address, m68k_context * context)
 		do {
 			encoded = get_native_pointer(address, (void **)context->mem_pointers, &opts->gen);
 			if (!encoded) {
+				map_native_address(context, address, code->cur, 2, 1);
 				translate_out_of_bounds(code);
 				break;
 			}
