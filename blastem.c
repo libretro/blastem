@@ -210,41 +210,45 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	z80_context * z_context = gen->z80;
 	uint32_t mclks = context->current_cycle;
 	sync_z80(z_context, mclks);
+	sync_sound(gen, mclks);
 	if (mclks >= mclk_target) {
-		sync_sound(gen, mclks);
-		gen->ym->current_cycle -= mclk_target;
-		gen->psg->cycles -= mclk_target;
-		if (gen->ym->write_cycle != CYCLE_NEVER) {
-			gen->ym->write_cycle = gen->ym->write_cycle >= mclk_target ? gen->ym->write_cycle - mclk_target : 0;
-		}
 		vdp_run_context(v_context, mclk_target);
-		//printf("reached frame end | MCLK Cycles: %d, Target: %d, VDP cycles: %d\n", mclks, mclk_target, v_context->cycles);
+		if (vdp_is_frame_over(v_context)) {
+			//printf("reached frame end | MCLK Cycles: %d, Target: %d, VDP cycles: %d\n", mclks, mclk_target, v_context->cycles);
 
-		if (!headless) {
-			break_on_sync |= wait_render_frame(v_context, frame_limit);
-		} else if(exit_after){
-			--exit_after;
-			if (!exit_after) {
-				exit(0);
+			if (!headless) {
+				break_on_sync |= wait_render_frame(v_context, frame_limit);
+			} else if(exit_after){
+				--exit_after;
+				if (!exit_after) {
+					exit(0);
+				}
 			}
-		}
-		frame++;
-		mclks -= mclk_target;
-		vdp_adjust_cycles(v_context, mclk_target);
-		io_adjust_cycles(gen->ports, context->current_cycle, mclk_target);
-		io_adjust_cycles(gen->ports+1, context->current_cycle, mclk_target);
-		io_adjust_cycles(gen->ports+2, context->current_cycle, mclk_target);
-		context->current_cycle -= mclk_target;
-		z80_adjust_cycles(z_context, mclk_target);
-		if (mclks) {
+			frame++;
+			mclks -= mclk_target;
+			vdp_adjust_cycles(v_context, mclk_target);
+			io_adjust_cycles(gen->ports, context->current_cycle, mclk_target);
+			io_adjust_cycles(gen->ports+1, context->current_cycle, mclk_target);
+			io_adjust_cycles(gen->ports+2, context->current_cycle, mclk_target);
+			context->current_cycle -= mclk_target;
+			z80_adjust_cycles(z_context, mclk_target);
+			gen->ym->current_cycle -= mclk_target;
+			gen->psg->cycles -= mclk_target;
+			if (gen->ym->write_cycle != CYCLE_NEVER) {
+				gen->ym->write_cycle = gen->ym->write_cycle >= mclk_target ? gen->ym->write_cycle - mclk_target : 0;
+			}
+			if (mclks) {
+				vdp_run_context(v_context, mclks);
+			}
+			mclk_target = vdp_cycles_to_frame_end(v_context);
+			context->sync_cycle = mclk_target;
+		} else {
 			vdp_run_context(v_context, mclks);
+			mclk_target = vdp_cycles_to_frame_end(v_context);
 		}
-		mclk_target = vdp_cycles_to_frame_end(v_context);
-		context->sync_cycle = mclk_target;
 	} else {
 		//printf("running VDP for %d cycles\n", mclks - v_context->cycles);
 		vdp_run_context(v_context, mclks);
-		sync_sound(gen, mclks);
 	}
 	if (context->int_ack) {
 		vdp_int_ack(v_context, context->int_ack);
@@ -284,7 +288,6 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 		int blocked;
 		uint32_t before_cycle = v_context->cycles;
 		if (vdp_port < 4) {
-			gen->bus_busy = 1;
 			while (vdp_data_port_write(v_context, value) < 0) {
 				while(v_context->flags & FLAG_DMA_RUN) {
 					vdp_run_dma_done(v_context, mclk_target);
@@ -296,7 +299,6 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 				//context->current_cycle = v_context->cycles;
 			}
 		} else if(vdp_port < 8) {
-			gen->bus_busy = 1;
 			blocked = vdp_control_port_write(v_context, value);
 			if (blocked) {
 				while (blocked) {
@@ -323,18 +325,15 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 		if (v_context->cycles != before_cycle) {
 			//printf("68K paused for %d (%d) cycles at cycle %d (%d) for write\n", v_context->cycles - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
 			context->current_cycle = v_context->cycles;
+			//Lock the Z80 out of the bus until the VDP access is complete
+			gen->bus_busy = 1;
+			sync_z80(gen->z80, v_context->cycles);
+			gen->bus_busy = 0;
 		}
 	} else if (vdp_port < 0x18) {
-		sync_sound(gen, context->current_cycle);
 		psg_write(gen->psg, value);
 	} else {
 		//TODO: Implement undocumented test register(s)
-	}
-	if (gen->bus_busy)
-	{
-		//Lock the Z80 out of the bus until the VDP access is complete
-		sync_z80(gen->z80, v_context->cycles);
-		gen->bus_busy = 0;
 	}
 	return context;
 }
@@ -402,6 +401,11 @@ uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 	if (v_context->cycles != before_cycle) {
 		//printf("68K paused for %d (%d) cycles at cycle %d (%d) for read\n", v_context->cycles - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
 		context->current_cycle = v_context->cycles;
+		//Lock the Z80 out of the bus until the VDP access is complete
+		genesis_context *gen = context->system;
+		gen->bus_busy = 1;
+		sync_z80(gen->z80, v_context->cycles);
+		gen->bus_busy = 0;
 	}
 	return value;
 }

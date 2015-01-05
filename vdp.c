@@ -1627,7 +1627,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 					if (!context->double_res) {
 						context->framebuf = context->oddbuf;
 					}
-				}
+					}
 				context->cd &= 0x3C;
 			}
 		} else {
@@ -1892,7 +1892,7 @@ uint32_t vdp_cycles_to_line(vdp_context * context, uint32_t target)
 	return MCLKS_LINE * (lines - 1) + vdp_cycles_next_line(context);
 }
 
-uint32_t vdp_cycles_to_frame_end(vdp_context * context)
+uint32_t vdp_frame_end_line(vdp_context * context)
 {
 	uint32_t frame_end;
 	if (context->flags2 & FLAG2_REGION_PAL) {
@@ -1908,7 +1908,18 @@ uint32_t vdp_cycles_to_frame_end(vdp_context * context)
 			frame_end = NTSC_INACTIVE_START + 8;
 		}
 	}
-	return context->cycles + vdp_cycles_to_line(context, frame_end);
+	return frame_end;
+}
+
+uint32_t vdp_cycles_to_frame_end(vdp_context * context)
+{
+	return context->cycles + vdp_cycles_to_line(context, vdp_frame_end_line(context));
+}
+
+uint8_t vdp_is_frame_over(vdp_context * context)
+{
+	uint32_t frame_end = vdp_frame_end_line(context);
+	return context->vcounter >= frame_end && context->vcounter < (frame_end + 8);
 }
 
 uint32_t vdp_next_hint(vdp_context * context)
