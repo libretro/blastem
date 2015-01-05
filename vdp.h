@@ -194,6 +194,7 @@ void vdp_print_sprite_table(vdp_context * context);
 void vdp_print_reg_explain(vdp_context * context);
 void latch_mode(vdp_context * context);
 uint32_t vdp_cycles_to_frame_end(vdp_context * context);
+uint8_t vdp_is_frame_over(vdp_context * context);
 
 extern int32_t color_map[1 << 12];
 
