@@ -271,7 +271,7 @@ void x86_rrdisp_sizedir(code_info *code, uint16_t opcode, uint8_t reg, uint8_t b
 		*(out++) = opcode;
 	}
 	if (disp < 128 && disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | base | (reg << 3);
+	*(out++) = MODE_REG_DISPLACE8 | base | (reg << 3);
 	} else {
 		*(out++) = MODE_REG_DISPLACE32 | base | (reg << 3);
 	}
@@ -281,9 +281,9 @@ void x86_rrdisp_sizedir(code_info *code, uint16_t opcode, uint8_t reg, uint8_t b
 	}
 	*(out++) = disp;
 	if (disp >= 128 || disp < -128) {
-		*(out++) = disp >> 8;
-		*(out++) = disp >> 16;
-		*(out++) = disp >> 24;
+	*(out++) = disp >> 8;
+	*(out++) = disp >> 16;
+	*(out++) = disp >> 24;
 	}
 	code->cur = out;
 }
@@ -330,11 +330,11 @@ void x86_rrind_sizedir(code_info *code, uint8_t opcode, uint8_t reg, uint8_t bas
 		*(out++) = MODE_REG_DISPLACE8 | base | (reg << 3);
 		*(out++) = 0;
 	} else {
-		*(out++) = MODE_REG_INDIRECT | base | (reg << 3);
-		if (base == RSP) {
-			//add SIB byte, with no index and RSP as base
-			*(out++) = (RSP << 3) | RSP;
-		}
+	*(out++) = MODE_REG_INDIRECT | base | (reg << 3);
+	if (base == RSP) {
+		//add SIB byte, with no index and RSP as base
+		*(out++) = (RSP << 3) | RSP;
+	}
 	}
 	code->cur = out;
 }
@@ -383,7 +383,7 @@ void x86_rrindex_sizedir(code_info *code, uint8_t opcode, uint8_t reg, uint8_t b
 	if (scale == 4) {
 		scale = 2;
 	} else if(scale == 8) {
-		scale = 3;
+			scale = 3;
 	} else {
 		scale--;
 	}
@@ -450,8 +450,8 @@ void x86_rdisp_size(code_info *code, uint8_t opcode, uint8_t opex, uint8_t dst, 
 	}
 	*(out++) = opcode;
 	if (disp < 128 && disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | dst | (opex << 3);
-		*(out++) = disp;
+	*(out++) = MODE_REG_DISPLACE8 | dst | (opex << 3);
+	*(out++) = disp;
 	} else {
 		*(out++) = MODE_REG_DISPLACE32 | dst | (opex << 3);
 		*(out++) = disp;
@@ -546,17 +546,17 @@ void x86_irdisp(code_info *code, uint8_t opcode, uint8_t op_ex, int32_t val, uin
 	}
 	*(out++) = opcode;
 	if (disp < 128 && disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | dst | (op_ex << 3);
-		*(out++) = disp;
+	*(out++) = MODE_REG_DISPLACE8 | dst | (op_ex << 3);
+	*(out++) = disp;
 	} else {
-		*(out++) = MODE_REG_DISPLACE32 | dst | (op_ex << 3);
-		*(out++) = disp;
-		disp >>= 8;
-		*(out++) = disp;
-		disp >>= 8;
-		*(out++) = disp;
-		disp >>= 8;
-		*(out++) = disp;
+	*(out++) = MODE_REG_DISPLACE32 | dst | (op_ex << 3);
+	*(out++) = disp;
+	disp >>= 8;
+	*(out++) = disp;
+	disp >>= 8;
+	*(out++) = disp;
+	disp >>= 8;
+	*(out++) = disp;
 	}
 	*(out++) = val;
 	if (size != SZ_B && !sign_extend) {
@@ -626,8 +626,8 @@ void x86_shiftrot_irdisp(code_info *code, uint8_t op_ex, uint8_t val, uint8_t ds
 
 	*(out++) = (val == 1 ? OP_SHIFTROT_1: OP_SHIFTROT_IR) | (size == SZ_B ? 0 : BIT_SIZE);
 	if (disp < 128 && disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | dst | (op_ex << 3);
-		*(out++) = disp;
+	*(out++) = MODE_REG_DISPLACE8 | dst | (op_ex << 3);
+	*(out++) = disp;
 	} else {
 		*(out++) = MODE_REG_DISPLACE32 | dst | (op_ex << 3);
 		*(out++) = disp;
@@ -692,15 +692,15 @@ void x86_shiftrot_clrdisp(code_info *code, uint8_t op_ex, uint8_t dst, int32_t d
 
 	*(out++) = OP_SHIFTROT_CL | (size == SZ_B ? 0 : BIT_SIZE);
 	if (disp < 128 && disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | dst | (op_ex << 3);
-		*(out++) = disp;
+	*(out++) = MODE_REG_DISPLACE8 | dst | (op_ex << 3);
+	*(out++) = disp;
 	} else {
 		*(out++) = MODE_REG_DISPLACE32 | dst | (op_ex << 3);
 		*(out++) = disp;
 		*(out++) = disp >> 8;
 		*(out++) = disp >> 16;
 		*(out++) = disp >> 24;
-	}
+}
 	code->cur = out;
 }
 
@@ -1253,8 +1253,8 @@ void mov_irdisp(code_info *code, int32_t val, uint8_t dst, int32_t disp, uint8_t
 	}
 	*(out++) = OP_MOV_IEA | (size == SZ_B ? 0 : BIT_SIZE);
 	if (disp < 128 && disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | dst;
-		*(out++) = disp;
+	*(out++) = MODE_REG_DISPLACE8 | dst;
+	*(out++) = disp;
 	} else {
 		*(out++) = MODE_REG_DISPLACE32 | dst;
 		*(out++) = disp;
@@ -1376,8 +1376,8 @@ void movsx_rdispr(code_info *code, uint8_t src, int32_t disp, uint8_t dst, uint8
 		*(out++) = OP2_MOVSX | (src_size == SZ_B ? 0 : BIT_SIZE);
 	}
 	if (disp < 128 && disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | src | (dst << 3);
-		*(out++) = disp;
+	*(out++) = MODE_REG_DISPLACE8 | src | (dst << 3);
+	*(out++) = disp;
 	} else {
 		*(out++) = MODE_REG_DISPLACE32 | src | (dst << 3);
 		*(out++) = disp;
@@ -1441,8 +1441,8 @@ void movzx_rdispr(code_info *code, uint8_t src, int32_t disp, uint8_t dst, uint8
 	*(out++) = PRE_2BYTE;
 	*(out++) = OP2_MOVZX | (src_size == SZ_B ? 0 : BIT_SIZE);
 	if (disp < 128 && disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | src | (dst << 3);
-		*(out++) = disp;
+	*(out++) = MODE_REG_DISPLACE8 | src | (dst << 3);
+	*(out++) = disp;
 	} else {
 		*(out++) = MODE_REG_DISPLACE32 | src | (dst << 3);
 		*(out++) = disp;
@@ -1601,8 +1601,8 @@ void setcc_rdisp(code_info *code, uint8_t cc, uint8_t dst, int32_t disp)
 	*(out++) = PRE_2BYTE;
 	*(out++) = OP2_SETCC | cc;
 	if (disp < 128 && disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | dst;
-		*(out++) = disp;
+	*(out++) = MODE_REG_DISPLACE8 | dst;
+	*(out++) = disp;
 	} else {
 		*(out++) = MODE_REG_DISPLACE32 | dst;
 		*(out++) = disp;
@@ -1666,14 +1666,14 @@ void bit_rrdisp(code_info *code, uint8_t op2, uint8_t src, uint8_t dst_base, int
 	*(out++) = PRE_2BYTE;
 	*(out++) = op2;
 	if (dst_disp < 128 && dst_disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | dst_base | (src << 3);
-		*(out++) = dst_disp;
+	*(out++) = MODE_REG_DISPLACE8 | dst_base | (src << 3);
+	*(out++) = dst_disp;
 	} else {
-		*(out++) = MODE_REG_DISPLACE32 | dst_base | (src << 3);
-		*(out++) = dst_disp;
-		*(out++) = dst_disp >> 8;
-		*(out++) = dst_disp >> 16;
-		*(out++) = dst_disp >> 24;
+	*(out++) = MODE_REG_DISPLACE32 | dst_base | (src << 3);
+	*(out++) = dst_disp;
+	*(out++) = dst_disp >> 8;
+	*(out++) = dst_disp >> 16;
+	*(out++) = dst_disp >> 24;
 	}
 	code->cur = out;
 }
@@ -1724,8 +1724,8 @@ void bit_irdisp(code_info *code, uint8_t op_ex, uint8_t val, uint8_t dst_base, i
 	*(out++) = PRE_2BYTE;
 	*(out++) = OP2_BTX_I;
 	if (dst_disp < 128 && dst_disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | dst_base | (op_ex << 3);
-		*(out++) = dst_disp;
+	*(out++) = MODE_REG_DISPLACE8 | dst_base | (op_ex << 3);
+	*(out++) = dst_disp;
 	} else {
 		*(out++) = MODE_REG_DISPLACE32 | dst_base | (op_ex << 3);
 		*(out++) = dst_disp;

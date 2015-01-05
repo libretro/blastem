@@ -1,8 +1,17 @@
+ifndef OS
+OS:=$(shell uname -s)
+endif
+
 ifdef NOGL
 LIBS=sdl
 else
+ifeq ($(OS),Darwin)
+LIBS=sdl glew
+else
 LIBS=sdl glew gl
 endif
+endif
+
 ifdef DEBUG
 CFLAGS:=-ggdb -std=gnu99 $(shell pkg-config --cflags-only-I $(LIBS)) -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration
 LDFLAGS:=-ggdb -lm $(shell pkg-config --libs $(LIBS))
@@ -33,7 +42,9 @@ ifndef CPU
 CPU:=$(shell uname -m)
 endif
 
-
+ifeq ($(OS),Darwin)
+LDFLAGS+= -framework OpenGL
+endif
 
 TRANSOBJS=gen.o backend.o mem.o
 M68KOBJS=68kinst.o m68k_core.o

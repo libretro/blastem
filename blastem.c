@@ -168,10 +168,10 @@ int save_state = 0;
 
 void z80_next_int_pulse(z80_context * z_context)
 {
-	genesis_context * gen = z_context->system;
+		genesis_context * gen = z_context->system;
 	z_context->int_pulse_start = vdp_next_vint_z80(gen->vdp);
 	z_context->int_pulse_end = z_context->int_pulse_start + Z80_VINT_DURATION * MCLKS_PER_Z80;
-}
+			}
 
 void sync_z80(z80_context * z_context, uint32_t mclks)
 {
@@ -210,21 +210,21 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	z80_context * z_context = gen->z80;
 	uint32_t mclks = context->current_cycle;
 	sync_z80(z_context, mclks);
-	sync_sound(gen, mclks);
+		sync_sound(gen, mclks);
 	if (mclks >= mclk_target) {
 		vdp_run_context(v_context, mclk_target);
 		if (vdp_is_frame_over(v_context)) {
 			//printf("reached frame end | MCLK Cycles: %d, Target: %d, VDP cycles: %d\n", mclks, mclk_target, v_context->cycles);
 
-			if (!headless) {
-				break_on_sync |= wait_render_frame(v_context, frame_limit);
-			} else if(exit_after){
-				--exit_after;
-				if (!exit_after) {
-					exit(0);
-				}
+		if (!headless) {
+			break_on_sync |= wait_render_frame(v_context, frame_limit);
+		} else if(exit_after){
+			--exit_after;
+			if (!exit_after) {
+				exit(0);
 			}
-			frame++;
+		}
+		frame++;
 			mclks -= mclk_target;
 			vdp_adjust_cycles(v_context, mclk_target);
 			io_adjust_cycles(gen->ports, context->current_cycle, mclk_target);
@@ -239,7 +239,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			}
 			if (mclks) {
 				vdp_run_context(v_context, mclks);
-			}
+		}
 			mclk_target = vdp_cycles_to_frame_end(v_context);
 			context->sync_cycle = mclk_target;
 		} else {
@@ -392,7 +392,7 @@ uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 			value = vdp_hv_counter_read(v_context);
 			//printf("HV Counter: %X at cycle %d\n", value, v_context->cycles);
 		}
-	} else if (vdp_port < 0x18) {
+	} else if (vdp_port < 0x18){
 		printf("Illegal read from PSG  port %X\n", vdp_port);
 		exit(1);
 	} else {
@@ -518,13 +518,13 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 				} else {
 					if (gen->z80->busreq) {
 						dputs("releasing z80 bus");
-#ifdef DO_DEBUG_PRINT
+						#ifdef DO_DEBUG_PRINT
 						char fname[20];
 						sprintf(fname, "zram-%d", zram_counter++);
 						FILE * f = fopen(fname, "wb");
 						fwrite(z80_ram, 1, sizeof(z80_ram), f);
 						fclose(f);
-#endif
+						#endif
 					}
 					if (z80_enabled) {
 						z80_clear_busreq(gen->z80, context->current_cycle);
