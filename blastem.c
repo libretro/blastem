@@ -1120,7 +1120,6 @@ int main(int argc, char ** argv)
 	}
 	set_exe_str(argv[0]);
 	config = load_config();
-	detect_region();
 	int width = -1;
 	int height = -1;
 	int debug = 0;
@@ -1242,6 +1241,8 @@ int main(int argc, char ** argv)
 	}
 	if (force_version) {
 		version_reg = force_version;
+	} else {
+		detect_region();
 	}
 	update_title();
 	int def_width = 0;
