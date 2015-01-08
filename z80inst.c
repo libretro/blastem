@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "z80inst.h"
@@ -433,7 +433,7 @@ z80inst z80_tbl_extd[0xC0-0x40] = {
 	{op, Z80_L, Z80_UNUSED, Z80_UNUSED, 1},\
 	{op, Z80_UNUSED, Z80_REG_INDIRECT, Z80_HL, 1},\
 	{op, Z80_A, Z80_UNUSED, Z80_UNUSED, 1}
-	
+
 #define BIT_BLOCK(op, bit) \
 	{op, Z80_USE_IMMED, Z80_REG, Z80_B, bit},\
 	{op, Z80_USE_IMMED, Z80_REG, Z80_C, bit},\
@@ -771,14 +771,14 @@ z80inst z80_tbl_ix[256] = {
 };
 
 #define SHIFT_BLOCK_IX(op) \
-	{op, Z80_B, Z80_IX_DISPLACE | Z80_DIR, 0, 0},\
-	{op, Z80_C, Z80_IX_DISPLACE | Z80_DIR, 0, 0},\
-	{op, Z80_D, Z80_IX_DISPLACE | Z80_DIR, 0, 0},\
-	{op, Z80_E, Z80_IX_DISPLACE | Z80_DIR, 0, 0},\
-	{op, Z80_H, Z80_IX_DISPLACE | Z80_DIR, 0, 0},\
-	{op, Z80_L, Z80_IX_DISPLACE | Z80_DIR, 0, 0},\
-	{op, Z80_UNUSED, Z80_IX_DISPLACE | Z80_DIR, 0, 0},\
-	{op, Z80_A, Z80_IX_DISPLACE | Z80_DIR, 0, 0}
+	{op, Z80_B, Z80_IX_DISPLACE | Z80_DIR, 0, 1},\
+	{op, Z80_C, Z80_IX_DISPLACE | Z80_DIR, 0, 1},\
+	{op, Z80_D, Z80_IX_DISPLACE | Z80_DIR, 0, 1},\
+	{op, Z80_E, Z80_IX_DISPLACE | Z80_DIR, 0, 1},\
+	{op, Z80_H, Z80_IX_DISPLACE | Z80_DIR, 0, 1},\
+	{op, Z80_L, Z80_IX_DISPLACE | Z80_DIR, 0, 1},\
+	{op, Z80_UNUSED, Z80_IX_DISPLACE | Z80_DIR, 0, 1},\
+	{op, Z80_A, Z80_IX_DISPLACE | Z80_DIR, 0, 1}
 
 #define BIT_BLOCK_IX(bit) \
 	{Z80_BIT, Z80_USE_IMMED, Z80_IX_DISPLACE, 0, bit},\
@@ -1129,14 +1129,14 @@ z80inst z80_tbl_iy[256] = {
 };
 
 #define SHIFT_BLOCK_IY(op) \
-	{op, Z80_B, Z80_IY_DISPLACE | Z80_DIR, 0, 0},\
-	{op, Z80_C, Z80_IY_DISPLACE | Z80_DIR, 0, 0},\
-	{op, Z80_D, Z80_IY_DISPLACE | Z80_DIR, 0, 0},\
-	{op, Z80_E, Z80_IY_DISPLACE | Z80_DIR, 0, 0},\
-	{op, Z80_H, Z80_IY_DISPLACE | Z80_DIR, 0, 0},\
-	{op, Z80_L, Z80_IY_DISPLACE | Z80_DIR, 0, 0},\
-	{op, Z80_UNUSED, Z80_IY_DISPLACE | Z80_DIR, 0, 0},\
-	{op, Z80_A, Z80_IY_DISPLACE | Z80_DIR, 0, 0}
+	{op, Z80_B, Z80_IY_DISPLACE | Z80_DIR, 0, 1},\
+	{op, Z80_C, Z80_IY_DISPLACE | Z80_DIR, 0, 1},\
+	{op, Z80_D, Z80_IY_DISPLACE | Z80_DIR, 0, 1},\
+	{op, Z80_E, Z80_IY_DISPLACE | Z80_DIR, 0, 1},\
+	{op, Z80_H, Z80_IY_DISPLACE | Z80_DIR, 0, 1},\
+	{op, Z80_L, Z80_IY_DISPLACE | Z80_DIR, 0, 1},\
+	{op, Z80_UNUSED, Z80_IY_DISPLACE | Z80_DIR, 0, 1},\
+	{op, Z80_A, Z80_IY_DISPLACE | Z80_DIR, 0, 1}
 
 #define BIT_BLOCK_IY(bit) \
 	{Z80_BIT, Z80_USE_IMMED, Z80_IY_DISPLACE, 0, bit},\
@@ -1250,7 +1250,7 @@ uint8_t * z80_decode(uint8_t * istream, z80inst * decoded)
 		}
 	} else {
 		memcpy(decoded, z80_tbl_a + *istream, sizeof(z80inst));
-		
+
 	}
 	if ((decoded->addr_mode & 0x1F) == Z80_IMMED && decoded->op != Z80_RST && decoded->op != Z80_IM) {
 		decoded->immed = *(++istream);

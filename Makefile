@@ -1,8 +1,17 @@
+ifndef OS
+OS:=$(shell uname -s)
+endif
+
 ifdef NOGL
 LIBS=sdl
 else
+ifeq ($(OS),Darwin)
+LIBS=sdl glew
+else
 LIBS=sdl glew gl
 endif
+endif
+
 ifdef DEBUG
 CFLAGS:=-ggdb -std=gnu99 $(shell pkg-config --cflags-only-I $(LIBS)) -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration
 LDFLAGS:=-ggdb -lm $(shell pkg-config --libs $(LIBS))
@@ -19,11 +28,23 @@ ifdef NOGL
 CFLAGS+= -DDISABLE_OPENGL
 endif
 
+ifdef M68030
+CFLAGS+= -DM68030
+endif
+ifdef M68020
+CFLAGS+= -DM68020
+endif
+ifdef M68010
+CFLAGS+= -DM68010
+endif
+
 ifndef CPU
 CPU:=$(shell uname -m)
 endif
 
-
+ifeq ($(OS),Darwin)
+LDFLAGS+= -framework OpenGL
+endif
 
 TRANSOBJS=gen.o backend.o mem.o
 M68KOBJS=68kinst.o m68k_core.o
@@ -34,11 +55,10 @@ else
 ifeq ($(CPU),i686)
 M68KOBJS+= runtime_32.o m68k_core_x86.o
 TRANSOBJS+= gen_x86.o backend_x86.o
-NOZ80:=1
 endif
 endif
 
-Z80OBJS=z80inst.o z80_to_x86.o zruntime.o
+Z80OBJS=z80inst.o z80_to_x86.o
 AUDIOOBJS=ym2612.o psg.o wave.o
 CONFIGOBJS=config.o tern.o util.o
 
@@ -64,8 +84,8 @@ all : dis zdis stateview vgmplay blastem
 blastem : $(MAINOBJS)
 	$(CC) -o blastem $(MAINOBJS) $(LDFLAGS)
 
-dis : dis.o 68kinst.o
-	$(CC) -o dis dis.o 68kinst.o
+dis : dis.o 68kinst.o tern.o vos_program_module.o
+	$(CC) -o dis dis.o 68kinst.o tern.o vos_program_module.o
 
 zdis : zdis.o z80inst.o
 	$(CC) -o zdis zdis.o z80inst.o
@@ -106,6 +126,9 @@ gen_fib : gen_fib.o gen_x86.o mem.o
 offsets : offsets.c z80_to_x86.h m68k_core.h
 	$(CC) -o offsets offsets.c
 
+vos_prog_info : vos_prog_info.o vos_program_module.o
+	$(CC) -o vos_prog_info vos_prog_info.o vos_program_module.o
+
 %.o : %.S
 	$(CC) -c -o $@ $<
 
@@ -113,7 +136,7 @@ offsets : offsets.c z80_to_x86.h m68k_core.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 %.bin : %.s68
-	vasmm68k_mot -Fbin -m68000 -no-opt -spaces -o $@ $<
+	vasmm68k_mot -Fbin -m68000 -no-opt -spaces -o $@ -L $@.list $<
 
 %.bin : %.sz8
 	vasmz80_mot -Fbin -spaces -o $@ $<

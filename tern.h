@@ -8,6 +8,8 @@
 
 #include <stdint.h>
 
+#define MAX_INT_KEY_SIZE (sizeof(uint32_t) + 2)
+
 typedef union {
 	void     *ptrval;
 	intptr_t intval;
@@ -31,5 +33,6 @@ tern_node * tern_insert_int(tern_node * head, char * key, intptr_t value);
 void * tern_find_ptr_default(tern_node * head, char * key, void * def);
 void * tern_find_ptr(tern_node * head, char * key);
 tern_node * tern_insert_ptr(tern_node * head, char * key, void * value);
+char * tern_int_key(uint32_t key, char * buf);
 
 #endif //TERN_H_

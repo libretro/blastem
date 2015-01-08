@@ -19,8 +19,6 @@
 #define RAM_FLAG_EVEN 0x1000
 #define RAM_FLAG_BOTH 0x0000
 
-#define CYCLE_NEVER 0xFFFFFFFF
-
 typedef struct {
 	m68k_context   *m68k;
 	z80_context    *z80;
@@ -42,8 +40,6 @@ extern int headless;
 extern int break_on_sync;
 extern int save_state;
 extern tern_node * config;
-extern uint8_t busreq;
-extern uint8_t reset;
 
 #define CARTRIDGE_WORDS 0x200000
 #define RAM_WORDS 32 * 1024
