@@ -521,28 +521,6 @@ void translate_m68k_op(m68kinst * inst, host_ea * ea, m68k_options * opts, uint8
 	}
 }
 
-void m68k_save_result(m68kinst * inst, m68k_options * opts)
-{
-	code_info *code = &opts->gen.code;
-	if (inst->dst.addr_mode != MODE_REG && inst->dst.addr_mode != MODE_AREG && inst->dst.addr_mode != MODE_UNUSED) {
-		if (inst->dst.addr_mode == MODE_AREG_PREDEC && inst->src.addr_mode == MODE_AREG_PREDEC && inst->op != M68K_MOVE) {
-			areg_to_native(opts, inst->dst.params.regs.pri, opts->gen.scratch2);
-		}
-		switch (inst->extra.size)
-		{
-		case OPSIZE_BYTE:
-			call(code, opts->write_8);
-			break;
-		case OPSIZE_WORD:
-			call(code, opts->write_16);
-			break;
-		case OPSIZE_LONG:
-			call(code, opts->write_32_lowfirst);
-			break;
-		}
-	}
-}
-
 void check_user_mode_swap_ssp_usp(m68k_options *opts)
 {
 	code_info * code = &opts->gen.code;

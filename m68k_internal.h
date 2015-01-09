@@ -42,6 +42,7 @@ void translate_m68k_op(m68kinst * inst, host_ea * ea, m68k_options * opts, uint8
 void print_regs_exit(m68k_context * context);
 void m68k_read_size(m68k_options *opts, uint8_t size);
 void m68k_write_size(m68k_options *opts, uint8_t size);
+void m68k_save_result(m68kinst * inst, m68k_options * opts);
 void push_const(m68k_options *opts, int32_t value);
 void jump_m68k_abs(m68k_options * opts, uint32_t address);
 void swap_ssp_usp(m68k_options * opts);
