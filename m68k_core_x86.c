@@ -543,6 +543,17 @@ void m68k_save_result(m68kinst * inst, m68k_options * opts)
 	}
 }
 
+void check_user_mode_swap_ssp_usp(m68k_options *opts)
+{
+	code_info * code = &opts->gen.code;
+	//Check if we've switched to user mode and swap stack pointers if needed
+	bt_irdisp(code, 5, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
+	code_ptr end_off = code->cur + 1;
+	jcc(code, CC_C, code->cur + 2);
+	swap_ssp_usp(opts);
+	*end_off = code->cur - (end_off + 1);
+}
+
 void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
@@ -2072,37 +2083,6 @@ void translate_m68k_move_from_sr(m68k_options *opts, m68kinst *inst, host_ea *sr
 	m68k_save_result(inst, opts);
 }
 
-void translate_m68k_reset(m68k_options *opts, m68kinst *inst)
-{
-	code_info *code = &opts->gen.code;
-	call(code, opts->gen.save_context);
-	call_args(code, (code_ptr)print_regs_exit, 1, opts->gen.context_reg);
-}
-
-void translate_m68k_rte(m68k_options *opts, m68kinst *inst)
-{
-	code_info *code = &opts->gen.code;
-	//TODO: Trap if not in system mode
-	//Read saved SR
-	areg_to_native(opts, 7, opts->gen.scratch1);
-	call(code, opts->read_16);
-	addi_areg(opts, 2, 7);
-	call(code, opts->set_sr);
-	//Read saved PC
-	areg_to_native(opts, 7, opts->gen.scratch1);
-	call(code, opts->read_32);
-	addi_areg(opts, 4, 7);
-	//Check if we've switched to user mode and swap stack pointers if needed
-	bt_irdisp(code, 5, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
-	code_ptr end_off = code->cur + 1;
-	jcc(code, CC_C, code->cur + 2);
-	swap_ssp_usp(opts);
-	*end_off = code->cur - (end_off+1);
-	//Get native address, sync components, recalculate integer points and jump to returned address
-	call(code, opts->native_addr_and_sync);
-	jmp_r(code, opts->gen.scratch1);
-}
-
 void translate_out_of_bounds(code_info *code)
 {
 	xor_rr(code, RDI, RDI, SZ_D);
@@ -2459,11 +2439,7 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	//set target cycle to sync cycle
 	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, sync_cycle), opts->gen.limit, SZ_D);
 	//swap USP and SSP if not already in supervisor mode
-	bt_irdisp(code, 5, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
-	code_ptr already_supervisor = code->cur + 1;
-	jcc(code, CC_C, code->cur + 2);
-	swap_ssp_usp(opts);
-	*already_supervisor = code->cur - (already_supervisor+1);
+	check_user_mode_swap_ssp_usp(opts);
 	//save PC
 	subi_areg(opts, 4, 7);
 	areg_to_native(opts, 7, opts->gen.scratch2);
@@ -2493,11 +2469,7 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	opts->trap = code->cur;
 	push_r(code, opts->gen.scratch2);
 	//swap USP and SSP if not already in supervisor mode
-	bt_irdisp(code, 5, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
-	already_supervisor = code->cur + 1;
-	jcc(code, CC_C, code->cur + 2);
-	swap_ssp_usp(opts);
-	*already_supervisor = code->cur - (already_supervisor+1);
+	check_user_mode_swap_ssp_usp(opts);
 	//save PC
 	subi_areg(opts, 4, 7);
 	areg_to_native(opts, 7, opts->gen.scratch2);
