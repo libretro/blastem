@@ -503,6 +503,32 @@ void swap_ssp_usp(m68k_options * opts)
 	native_to_areg(opts, opts->gen.scratch2, 8);
 }
 
+void translate_m68k_reset(m68k_options *opts, m68kinst *inst)
+{
+	code_info *code = &opts->gen.code;
+	call(code, opts->gen.save_context);
+	call_args(code, (code_ptr)print_regs_exit, 1, opts->gen.context_reg);
+}
+
+void translate_m68k_rte(m68k_options *opts, m68kinst *inst)
+{
+	code_info *code = &opts->gen.code;
+	//TODO: Trap if not in system mode
+	//Read saved SR
+	areg_to_native(opts, 7, opts->gen.scratch1);
+	call(code, opts->read_16);
+	addi_areg(opts, 2, 7);
+	call(code, opts->set_sr);
+	//Read saved PC
+	areg_to_native(opts, 7, opts->gen.scratch1);
+	call(code, opts->read_32);
+	addi_areg(opts, 4, 7);
+	check_user_mode_swap_ssp_usp(opts);
+	//Get native address, sync components, recalculate integer points and jump to returned address
+	call(code, opts->native_addr_and_sync);
+	jmp_r(code, opts->gen.scratch1);
+}
+
 code_ptr get_native_address(native_map_slot * native_code_map, uint32_t address)
 {
 	address &= 0xFFFFFF;
