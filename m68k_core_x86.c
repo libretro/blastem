@@ -649,7 +649,7 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 		mov_ir(code, inst->address, opts->gen.scratch2, SZ_D);
 		if (src.base == opts->gen.scratch1 && !(inst->dst.params.regs.sec & 1)) {
 			push_r(code, opts->gen.scratch1);
-				}
+		}
 		calc_index_disp8(opts, &inst->dst, opts->gen.scratch2);
 		if (src.base == opts->gen.scratch1 && !(inst->dst.params.regs.sec & 1)) {
 			pop_r(code, opts->gen.scratch1);
@@ -691,7 +691,7 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 	if (inst->dst.addr_mode != MODE_AREG) {
 		cmp_ir(code, 0, flags_reg, inst->extra.size);
 		update_flags(opts, N|Z|V0|C0);
-}
+	}
 	if (inst->dst.addr_mode != MODE_REG && inst->dst.addr_mode != MODE_AREG) {
 		m68k_write_size(opts, inst->extra.size);
 		if (inst->dst.addr_mode == MODE_AREG_POSTINC) {
