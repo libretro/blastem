@@ -31,6 +31,7 @@ void calc_areg_displace(m68k_options *opts, m68k_op_info *op, uint8_t native_reg
 void calc_index_disp8(m68k_options *opts, m68k_op_info *op, uint8_t native_reg);
 void calc_areg_index_disp8(m68k_options *opts, m68k_op_info *op, uint8_t native_reg);
 void nop_fill_or_jmp_next(code_info *code, code_ptr old_end, code_ptr next_inst);
+void check_user_mode_swap_ssp_usp(m68k_options *opts);
 
 //functions implemented in m68k_core.c
 int8_t native_reg(m68k_op_info * op, m68k_options * opts);
@@ -83,8 +84,6 @@ void translate_m68k_eori_ccr_sr(m68k_options *opts, m68kinst *inst);
 void translate_m68k_move_ccr_sr(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op);
 void translate_m68k_stop(m68k_options *opts, m68kinst *inst);
 void translate_m68k_move_from_sr(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op);
-void translate_m68k_reset(m68k_options *opts, m68kinst *inst);
-void translate_m68k_rte(m68k_options *opts, m68kinst *inst);
 
 //flag update bits
 #define X0  0x0001
