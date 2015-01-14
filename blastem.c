@@ -901,9 +901,7 @@ void save_sram()
 
 void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, uint8_t * debugger)
 {
-	m68k_context context;
 	m68k_options opts;
-	gen->m68k = &context;
 	memmap_chunk memmap[MAX_MAP_CHUNKS];
 	uint32_t num_chunks;
 	void * initial_mapped = NULL;
@@ -998,21 +996,22 @@ void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, u
 	}
 	init_m68k_opts(&opts, memmap, num_chunks, MCLKS_PER_68K);
 	opts.address_log = address_log;
-	init_68k_context(&context, opts.gen.native_code_map, &opts);
+	m68k_context *context = init_68k_context(&opts);
+	gen->m68k = context;
 
-	context.video_context = gen->vdp;
-	context.system = gen;
+	context->video_context = gen->vdp;
+	context->system = gen;
 	//cartridge ROM
-	context.mem_pointers[0] = cart;
-	context.target_cycle = context.sync_cycle = mclk_target;
+	context->mem_pointers[0] = cart;
+	context->target_cycle = context->sync_cycle = mclk_target;
 	//work RAM
-	context.mem_pointers[1] = ram;
+	context->mem_pointers[1] = ram;
 	//save RAM/map
-	context.mem_pointers[2] = initial_mapped;
-	context.mem_pointers[3] = (uint16_t *)gen->save_ram;
+	context->mem_pointers[2] = initial_mapped;
+	context->mem_pointers[3] = (uint16_t *)gen->save_ram;
 	uint32_t address;
 	address = cart[2] << 16 | cart[3];
-	translate_m68k_stream(address, &context);
+	translate_m68k_stream(address, context);
 	if (statefile) {
 		uint32_t pc = load_gst(gen, statefile);
 		if (!pc) {
@@ -1021,15 +1020,15 @@ void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, u
 		}
 		printf("Loaded %s\n", statefile);
 		if (debugger) {
-			insert_breakpoint(&context, pc, debugger);
+			insert_breakpoint(context, pc, debugger);
 		}
 		adjust_int_cycle(gen->m68k, gen->vdp);
-		start_68k_context(&context, pc);
+		start_68k_context(context, pc);
 	} else {
 		if (debugger) {
-			insert_breakpoint(&context, address, debugger);
+			insert_breakpoint(context, address, debugger);
 		}
-		m68k_reset(&context);
+		m68k_reset(context);
 	}
 }
 
