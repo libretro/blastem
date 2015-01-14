@@ -2202,8 +2202,10 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	opts->gen.native_code_map = malloc(sizeof(native_map_slot) * NATIVE_MAP_CHUNKS);
 	memset(opts->gen.native_code_map, 0, sizeof(native_map_slot) * NATIVE_MAP_CHUNKS);
 	opts->gen.deferred = NULL;
-	opts->gen.ram_inst_sizes = malloc(sizeof(uint8_t *) * 64);
-	memset(opts->gen.ram_inst_sizes, 0, sizeof(uint8_t *) * 64);
+
+	uint32_t inst_size_size = sizeof(uint8_t *) * ram_size(&opts->gen) / 1024;
+	opts->gen.ram_inst_sizes = malloc(inst_size_size);
+	memset(opts->gen.ram_inst_sizes, 0, inst_size_size);
 
 	code_info *code = &opts->gen.code;
 	init_code_info(code);
@@ -2227,9 +2229,11 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 
 	opts->gen.load_context = code->cur;
 	for (int i = 0; i < 5; i++)
+	{
 		if (opts->flag_regs[i] >= 0) {
 			mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, flags) + i, opts->flag_regs[i], SZ_B);
 		}
+	}
 	for (int i = 0; i < 8; i++)
 	{
 		if (opts->dregs[i] >= 0) {
