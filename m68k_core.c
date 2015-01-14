@@ -553,6 +553,7 @@ void translate_m68k_rte(m68k_options *opts, m68kinst *inst)
 
 code_ptr get_native_address(native_map_slot * native_code_map, uint32_t address)
 {
+	//FIXME: Use opts->gen.address_mask
 	address &= 0xFFFFFF;
 	address /= 2;
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
@@ -573,6 +574,7 @@ code_ptr get_native_from_context(m68k_context * context, uint32_t address)
 
 uint32_t get_instruction_start(native_map_slot * native_code_map, uint32_t address)
 {
+	//FIXME: Use opts->gen.address_mask
 	address &= 0xFFFFFF;
 	address /= 2;
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
@@ -595,17 +597,34 @@ void map_native_address(m68k_context * context, uint32_t address, code_ptr nativ
 {
 	native_map_slot * native_code_map = context->native_code_map;
 	m68k_options * opts = context->options;
-	address &= 0xFFFFFF;
-	if (address > 0xE00000) {
-		context->ram_code_flags[(address & 0xC000) >> 14] |= 1 << ((address & 0x3800) >> 11);
-		if (((address & 0x3FFF) + size) & 0xC000) {
-			context->ram_code_flags[((address+size) & 0xC000) >> 14] |= 1 << (((address+size) & 0x3800) >> 11);
+	address &= opts->gen.address_mask;
+	uint32_t meta_off = 0;
+	//TODO: Refactor part of this loop into some kind of get_ram_chunk function
+	for (int i = 0; i < opts->gen.memmap_chunks; i++) {
+		if (address >= opts->gen.memmap[i].start && address < opts->gen.memmap[i].end) {
+			if ((opts->gen.memmap[i].flags & (MMAP_WRITE | MMAP_CODE)) == (MMAP_WRITE | MMAP_CODE)) {
+				uint32_t masked = (address & opts->gen.memmap[i].mask);
+				uint32_t final_off = masked + meta_off;
+				uint32_t ram_flags_off = final_off >> (opts->gen.ram_flags_shift + 3);
+				context->ram_code_flags[ram_flags_off] |= 1 << ((final_off >> opts->gen.ram_flags_shift) & 3);
+
+				uint32_t slot = final_off / 1024;
+				if (!opts->gen.ram_inst_sizes[slot]) {
+					opts->gen.ram_inst_sizes[slot] = malloc(sizeof(uint8_t) * 512);
+				}
+				opts->gen.ram_inst_sizes[slot][(final_off/2) & 511] = native_size;
+
+				//TODO: Deal with case in which end of instruction is in a different memory chunk
+				masked = (address + size - 1) & opts->gen.memmap[i].mask;
+				final_off = masked + meta_off;
+				ram_flags_off = final_off >> (opts->gen.ram_flags_shift + 3);
+				context->ram_code_flags[ram_flags_off] |= 1 << ((final_off >> opts->gen.ram_flags_shift) & 3);
+			}
+			break;
+		} else if ((opts->gen.memmap[i].flags & (MMAP_WRITE | MMAP_CODE)) == (MMAP_WRITE | MMAP_CODE)) {
+			uint32_t size = chunk_size(&opts->gen, opts->gen.memmap + i);
+			meta_off += size;
 		}
-		uint32_t slot = (address & 0xFFFF)/1024;
-		if (!opts->gen.ram_inst_sizes[slot]) {
-			opts->gen.ram_inst_sizes[slot] = malloc(sizeof(uint8_t) * 512);
-		}
-		opts->gen.ram_inst_sizes[slot][((address & 0xFFFF)/2)%512] = native_size;
 	}
 	address/= 2;
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
@@ -630,11 +649,22 @@ void map_native_address(m68k_context * context, uint32_t address, code_ptr nativ
 
 uint8_t get_native_inst_size(m68k_options * opts, uint32_t address)
 {
-	if (address < 0xE00000) {
-		return 0;
+	address &= opts->gen.address_mask;
+	uint32_t meta_off = 0;
+	for (int i = 0; i < opts->gen.memmap_chunks; i++) {
+		if (address >= opts->gen.memmap[i].start && address < opts->gen.memmap[i].end) {
+			if ((opts->gen.memmap[i].flags & (MMAP_WRITE | MMAP_CODE)) != (MMAP_WRITE | MMAP_CODE)) {
+				return 0;
+			}
+			meta_off += address & opts->gen.memmap[i].mask;
+			break;
+		} else if ((opts->gen.memmap[i].flags & (MMAP_WRITE | MMAP_CODE)) == (MMAP_WRITE | MMAP_CODE)) {
+			uint32_t size = chunk_size(&opts->gen, opts->gen.memmap + i);
+			meta_off += size;
+		}
 	}
-	uint32_t slot = (address & 0xFFFF)/1024;
-	return opts->gen.ram_inst_sizes[slot][((address & 0xFFFF)/2)%512];
+	uint32_t slot = meta_off/1024;
+	return opts->gen.ram_inst_sizes[slot][(meta_off/2)%512];
 }
 
 uint8_t m68k_is_terminal(m68kinst * inst)
@@ -926,6 +956,7 @@ void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
 
 code_ptr get_native_address_trans(m68k_context * context, uint32_t address)
 {
+	//FIXME: Use opts->gen.address_mask
 	address &= 0xFFFFFF;
 	code_ptr ret = get_native_address(context->native_code_map, address);
 	if (!ret) {
@@ -962,11 +993,13 @@ void m68k_reset(m68k_context * context)
 }
 
 
-void init_68k_context(m68k_context * context, native_map_slot * native_code_map, void * opts)
+m68k_context * init_68k_context(m68k_options * opts)
 {
+	m68k_context * context = malloc(sizeof(m68k_context) + ram_size(&opts->gen) / (1 << opts->gen.ram_flags_shift) / 8);
 	memset(context, 0, sizeof(m68k_context));
-	context->native_code_map = native_code_map;
+	context->native_code_map = opts->gen.native_code_map;
 	context->options = opts;
-	context->int_cycle = 0xFFFFFFFF;
+	context->int_cycle = CYCLE_NEVER;
 	context->status = 0x27;
+	return context;
 }
