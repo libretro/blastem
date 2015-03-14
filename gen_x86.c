@@ -2069,3 +2069,78 @@ void restore_callee_save_regs(code_info *code)
 	pop_r(code, RBP);
 	pop_r(code, RBX);
 }
+
+uint8_t has_modrm(uint8_t prefix, uint8_t opcode)
+{
+	if (!prefix) {
+		switch (opcode)
+		{
+		case OP_JMP:
+		case OP_JMP_BYTE:
+		case OP_JCC:
+		case OP_CALL:
+		case OP_RETN:
+		case OP_LOOP:
+		case OP_MOV_I8R:
+		case OP_MOV_IR:
+		case OP_PUSHF:
+		case OP_POPF:
+		case OP_PUSH:
+		case OP_POP:
+		case OP_CDQ:
+			return 0;
+		}
+	} else if (prefix == PRE_2BYTE) {
+		switch (opcode)
+		{
+		case OP2_JCC:
+			return 0;
+		}
+	}
+	return 1;
+}
+
+uint8_t has_sib(uint8_t mod_rm)
+{
+	uint8_t mode = mod_rm & 0xC0;
+	uint8_t rm = mod_rm & 3;
+
+	return mode != MODE_REG_DIRECT && rm == RSP;
+}
+
+uint32_t x86_inst_size(code_ptr start)
+{
+	code_ptr code = start;
+	uint8_t cont = 1;
+	uint8_t prefix = 0;
+	uint8_t op_size = SZ_B;
+	uint8_t main_op;
+
+	while (cont)
+	{
+		if (*code == PRE_SIZE) {
+			op_size = SZ_W;
+		} else if (*code == PRE_REX) {
+			if (*code & REX_QUAD) {
+				op_size = SZ_Q;
+			}
+		} else if(*code == PRE_2BYTE || PRE_XOP) {
+			prefix = *code;
+		} else {
+			main_op = *code;
+			cont = 0;
+		}
+		code++;
+	}
+	if (has_modrm(prefix, main_op)) {
+		uint8_t mod_rm = *(code++);
+		if (has_sib(mod_rm)) {
+			uint8_t sib = *(code++);
+		} else {
+
+		}
+	} else {
+	}
+
+	return code-start;
+}
