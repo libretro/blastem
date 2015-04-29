@@ -606,7 +606,7 @@ void map_native_address(m68k_context * context, uint32_t address, code_ptr nativ
 				uint32_t masked = (address & opts->gen.memmap[i].mask);
 				uint32_t final_off = masked + meta_off;
 				uint32_t ram_flags_off = final_off >> (opts->gen.ram_flags_shift + 3);
-				context->ram_code_flags[ram_flags_off] |= 1 << ((final_off >> opts->gen.ram_flags_shift) & 3);
+				context->ram_code_flags[ram_flags_off] |= 1 << ((final_off >> opts->gen.ram_flags_shift) & 7);
 
 				uint32_t slot = final_off / 1024;
 				if (!opts->gen.ram_inst_sizes[slot]) {
@@ -618,7 +618,7 @@ void map_native_address(m68k_context * context, uint32_t address, code_ptr nativ
 				masked = (address + size - 1) & opts->gen.memmap[i].mask;
 				final_off = masked + meta_off;
 				ram_flags_off = final_off >> (opts->gen.ram_flags_shift + 3);
-				context->ram_code_flags[ram_flags_off] |= 1 << ((final_off >> opts->gen.ram_flags_shift) & 3);
+				context->ram_code_flags[ram_flags_off] |= 1 << ((final_off >> opts->gen.ram_flags_shift) & 7);
 			}
 			break;
 		} else if ((opts->gen.memmap[i].flags & (MMAP_WRITE | MMAP_CODE)) == (MMAP_WRITE | MMAP_CODE)) {

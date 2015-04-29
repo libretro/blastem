@@ -2135,9 +2135,15 @@ uint32_t x86_inst_size(code_ptr start)
 	if (has_modrm(prefix, main_op)) {
 		uint8_t mod_rm = *(code++);
 		if (has_sib(mod_rm)) {
-			uint8_t sib = *(code++);
-		} else {
-
+			//sib takes up a byte, but can't add any additional ones beyond that
+			code++;
+		}
+		uint8_t mode = mod_rm & 0xC0;
+		uint8_t rm = mod_rm & 3;
+		if (mode == MODE_REG_DISPLACE8) {
+			code++;
+		} else if (mode == MODE_REG_DISPLACE32 || (mode == MODE_REG_INDIRECT && rm == RBP)) {
+			code += 4;
 		}
 	} else {
 	}

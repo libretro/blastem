@@ -175,6 +175,7 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 				mov_rr(code, opts->scratch2, opts->scratch1, opts->address_size);
 				shr_ir(code, opts->ram_flags_shift, opts->scratch1, opts->address_size);
 				bt_rrdisp(code, opts->scratch1, opts->context_reg, ram_flags_off, opts->address_size);
+				//FIXME: These adjustments to ram_flags_off need to take into account bits vs bytes and ram_flags_shift
 				if (memmap[chunk].mask == opts->address_mask) {
 					ram_flags_off += memmap[chunk].end - memmap[chunk].start;
 				} else {
