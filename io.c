@@ -750,7 +750,7 @@ void set_keybindings(io_port *ports)
 }
 
 #define TH 0x40
-#define TH_TIMEOUT 8000
+#define TH_TIMEOUT 56000
 
 void io_adjust_cycles(io_port * port, uint32_t current_cycle, uint32_t deduction)
 {
