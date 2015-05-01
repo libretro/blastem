@@ -1292,6 +1292,7 @@ int main(int argc, char ** argv)
 	gen.ym = &y_context;
 	gen.psg = &p_context;
 	genesis = &gen;
+	setup_io_devices(config, gen.ports);
 
 	int fname_size = strlen(romfname);
 	sram_filename = malloc(fname_size+6);
