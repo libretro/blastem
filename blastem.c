@@ -210,21 +210,21 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	z80_context * z_context = gen->z80;
 	uint32_t mclks = context->current_cycle;
 	sync_z80(z_context, mclks);
-		sync_sound(gen, mclks);
+	sync_sound(gen, mclks);
 	if (mclks >= mclk_target) {
 		vdp_run_context(v_context, mclk_target);
 		if (vdp_is_frame_over(v_context)) {
 			//printf("reached frame end | MCLK Cycles: %d, Target: %d, VDP cycles: %d\n", mclks, mclk_target, v_context->cycles);
 
-		if (!headless) {
-			break_on_sync |= wait_render_frame(v_context, frame_limit);
-		} else if(exit_after){
-			--exit_after;
-			if (!exit_after) {
-				exit(0);
+			if (!headless) {
+				break_on_sync |= wait_render_frame(v_context, frame_limit);
+			} else if(exit_after){
+				--exit_after;
+				if (!exit_after) {
+					exit(0);
+				}
 			}
-		}
-		frame++;
+			frame++;
 			mclks -= mclk_target;
 			vdp_adjust_cycles(v_context, mclk_target);
 			io_adjust_cycles(gen->ports, context->current_cycle, mclk_target);
@@ -239,7 +239,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			}
 			if (mclks) {
 				vdp_run_context(v_context, mclks);
-		}
+			}
 			mclk_target = vdp_cycles_to_frame_end(v_context);
 			context->sync_cycle = mclk_target;
 		} else {
@@ -257,9 +257,9 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	adjust_int_cycle(context, v_context);
 	if (address) {
 		if (break_on_sync) {
-		break_on_sync = 0;
-		debugger(context, address);
-	}
+			break_on_sync = 0;
+			debugger(context, address);
+		}
 		if (save_state) {
 			save_state = 0;
 			//advance Z80 core to the start of an instruction
