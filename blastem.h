@@ -30,6 +30,8 @@ typedef struct {
 	uint32_t       save_flags;
 	uint32_t       master_clock; //Current master clock value
 	uint32_t       normal_clock; //Normal master clock (used to restore master clock after turbo mode)
+	uint32_t       frame_end;
+	uint32_t       max_cycles;
 	uint8_t        bank_regs[8];
 	io_port        ports[3];
 	uint8_t        bus_busy;
