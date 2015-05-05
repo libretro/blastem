@@ -33,8 +33,6 @@
 
 #define MAX_SOUND_CYCLES 100000
 
-uint32_t mclk_target = 0;
-
 uint16_t cart[CARTRIDGE_WORDS];
 uint16_t ram[RAM_WORDS];
 uint8_t z80_ram[Z80_RAM_BYTES];
@@ -127,6 +125,10 @@ uint16_t read_dma_value(uint32_t address)
 
 void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 {
+	genesis_context *gen = context->system;
+	if (context->sync_cycle - context->current_cycle > gen->max_cycles) {
+		context->sync_cycle = context->current_cycle + gen->max_cycles;
+	}
 	context->int_cycle = CYCLE_NEVER;
 	if ((context->status & 0x7) < 6) {
 		uint32_t next_vint = vdp_next_vint(v_context);
@@ -204,17 +206,16 @@ void sync_sound(genesis_context * gen, uint32_t target)
 uint32_t frame=0;
 m68k_context * sync_components(m68k_context * context, uint32_t address)
 {
-	//TODO: Handle sync targets smaller than a single frame
 	genesis_context * gen = context->system;
 	vdp_context * v_context = gen->vdp;
 	z80_context * z_context = gen->z80;
 	uint32_t mclks = context->current_cycle;
 	sync_z80(z_context, mclks);
 	sync_sound(gen, mclks);
-	if (mclks >= mclk_target) {
-		vdp_run_context(v_context, mclk_target);
+	if (mclks >= gen->frame_end) {
+		vdp_run_context(v_context, gen->frame_end);
 		if (vdp_is_frame_over(v_context)) {
-			//printf("reached frame end | MCLK Cycles: %d, Target: %d, VDP cycles: %d\n", mclks, mclk_target, v_context->cycles);
+			//printf("reached frame end | MCLK Cycles: %d, Target: %d, VDP cycles: %d\n", mclks, gen->frame_end, v_context->cycles);
 
 			if (!headless) {
 				break_on_sync |= wait_render_frame(v_context, frame_limit);
@@ -225,27 +226,27 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 				}
 			}
 			frame++;
-			mclks -= mclk_target;
-			vdp_adjust_cycles(v_context, mclk_target);
-			io_adjust_cycles(gen->ports, context->current_cycle, mclk_target);
-			io_adjust_cycles(gen->ports+1, context->current_cycle, mclk_target);
-			io_adjust_cycles(gen->ports+2, context->current_cycle, mclk_target);
-			context->current_cycle -= mclk_target;
-			z80_adjust_cycles(z_context, mclk_target);
-			gen->ym->current_cycle -= mclk_target;
-			gen->psg->cycles -= mclk_target;
+			mclks -= gen->frame_end;
+			vdp_adjust_cycles(v_context, gen->frame_end);
+			io_adjust_cycles(gen->ports, context->current_cycle, gen->frame_end);
+			io_adjust_cycles(gen->ports+1, context->current_cycle, gen->frame_end);
+			io_adjust_cycles(gen->ports+2, context->current_cycle, gen->frame_end);
+			context->current_cycle -= gen->frame_end;
+			z80_adjust_cycles(z_context, gen->frame_end);
+			gen->ym->current_cycle -= gen->frame_end;
+			gen->psg->cycles -= gen->frame_end;
 			if (gen->ym->write_cycle != CYCLE_NEVER) {
-				gen->ym->write_cycle = gen->ym->write_cycle >= mclk_target ? gen->ym->write_cycle - mclk_target : 0;
+				gen->ym->write_cycle = gen->ym->write_cycle >= gen->frame_end ? gen->ym->write_cycle - gen->frame_end : 0;
 			}
 			if (mclks) {
 				vdp_run_context(v_context, mclks);
 			}
-			mclk_target = vdp_cycles_to_frame_end(v_context);
-			context->sync_cycle = mclk_target;
+			gen->frame_end = vdp_cycles_to_frame_end(v_context);
 		} else {
 			vdp_run_context(v_context, mclks);
-			mclk_target = vdp_cycles_to_frame_end(v_context);
+			gen->frame_end = vdp_cycles_to_frame_end(v_context);
 		}
+		context->sync_cycle = gen->frame_end;
 	} else {
 		//printf("running VDP for %d cycles\n", mclks - v_context->cycles);
 		vdp_run_context(v_context, mclks);
@@ -290,8 +291,8 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 		if (vdp_port < 4) {
 			while (vdp_data_port_write(v_context, value) < 0) {
 				while(v_context->flags & FLAG_DMA_RUN) {
-					vdp_run_dma_done(v_context, mclk_target);
-					if (v_context->cycles >= mclk_target) {
+					vdp_run_dma_done(v_context, gen->frame_end);
+					if (v_context->cycles >= gen->frame_end) {
 						context->current_cycle = v_context->cycles;
 						sync_components(context, 0);
 					}
@@ -303,8 +304,8 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 			if (blocked) {
 				while (blocked) {
 					while(v_context->flags & FLAG_DMA_RUN) {
-						vdp_run_dma_done(v_context, mclk_target);
-						if (v_context->cycles >= mclk_target) {
+						vdp_run_dma_done(v_context, gen->frame_end);
+						if (v_context->cycles >= gen->frame_end) {
 							context->current_cycle = v_context->cycles;
 							sync_components(context, 0);
 						}
@@ -1003,7 +1004,7 @@ void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, u
 	context->system = gen;
 	//cartridge ROM
 	context->mem_pointers[0] = cart;
-	context->target_cycle = context->sync_cycle = mclk_target;
+	context->target_cycle = context->sync_cycle = gen->frame_end > gen->max_cycles ? gen->frame_end : gen->max_cycles;
 	//work RAM
 	context->mem_pointers[1] = ram;
 	//save RAM/map
@@ -1267,7 +1268,9 @@ int main(int argc, char ** argv)
 	gen.master_clock = gen.normal_clock = fps == 60 ? MCLKS_NTSC : MCLKS_PAL;
 
 	init_vdp_context(&v_context, version_reg & 0x40);
-	mclk_target = vdp_cycles_to_frame_end(&v_context);
+	gen.frame_end = vdp_cycles_to_frame_end(&v_context);
+	char * config_cycles = tern_find_ptr(config, "clocksmax_cycles");
+	gen.max_cycles = config_cycles ? atoi(config_cycles) : 10000000;
 
 	ym2612_context y_context;
 	ym_init(&y_context, render_sample_rate(), gen.master_clock, MCLKS_PER_YM, render_audio_buffer(), ym_log ? YM_OPT_WAVE_LOG : 0);
