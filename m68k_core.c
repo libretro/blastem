@@ -801,6 +801,7 @@ impl_info m68k_impls[] = {
 void translate_m68k(m68k_options * opts, m68kinst * inst)
 {
 	check_cycles_int(&opts->gen, inst->address);
+	log_address(&opts->gen, inst->address, "M68K: %X @ %d\n");
 	impl_info * info = m68k_impls + inst->op;
 	if (info->itype == RAW_FUNC) {
 		info->impl.raw(opts, inst);

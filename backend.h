@@ -113,6 +113,7 @@ void cycles(cpu_options *opts, uint32_t num);
 void check_cycles_int(cpu_options *opts, uint32_t address);
 void check_cycles(cpu_options * opts);
 void check_code_prologue(code_info *code);
+void log_address(cpu_options *opts, uint32_t address, char * format);
 
 code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t num_chunks, ftype fun_type, code_ptr *after_inc);
 void * get_native_pointer(uint32_t address, void ** mem_pointers, cpu_options * opts);

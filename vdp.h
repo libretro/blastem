@@ -143,6 +143,7 @@ typedef struct {
 	uint32_t    colors[CRAM_SIZE*3];
 	uint32_t    debugcolors[1 << (3 + 1 + 1 + 1)];//3 bits for source, 1 bit for priority, 1 bit for shadow, 1 bit for hilight
 	uint16_t    vsram[VSRAM_SIZE];
+	uint32_t    frame;
 	uint16_t    vcounter;
 	uint16_t    hslot; //hcounter/2
 	uint16_t    hscroll_a;
@@ -194,7 +195,7 @@ void vdp_print_sprite_table(vdp_context * context);
 void vdp_print_reg_explain(vdp_context * context);
 void latch_mode(vdp_context * context);
 uint32_t vdp_cycles_to_frame_end(vdp_context * context);
-uint8_t vdp_is_frame_over(vdp_context * context);
+uint32_t vdp_frame_end_line(vdp_context *context);
 
 extern int32_t color_map[1 << 12];
 
