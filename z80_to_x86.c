@@ -309,6 +309,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		if (context->breakpoint_flags[address / sizeof(uint8_t)] & (1 << (address % sizeof(uint8_t)))) {
 			zbreakpoint_patch(context, address, start);
 		}
+		//log_address(&opts->gen, address, "Z80: %X @ %d\n");
 	}
 	switch(inst->op)
 	{
@@ -2293,7 +2294,9 @@ void z80_clear_reset(z80_context * context, uint32_t cycle)
 
 void z80_assert_busreq(z80_context * context, uint32_t cycle)
 {
+	printf("bus requested at %d\n", cycle);
 	z80_run(context, cycle);
+	printf("asserted busreq at %d\n", context->current_cycle);
 	context->busreq = 1;
 		}
 

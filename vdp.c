@@ -24,8 +24,8 @@
 #define MCLKS_SLOT_H32  20
 #define VINT_SLOT_H40  4 //21 slots before HSYNC, 16 during, 10 after
 #define VINT_SLOT_H32  23  //33 slots before HSYNC, 20 during, 7 after  TODO: confirm final number
-#define HSYNC_SLOT_H40  240
-#define HSYNC_END_H40  (240+17)
+#define HSYNC_SLOT_H40  234
+#define HSYNC_END_H40  (HSYNC_SLOT_H40+17)
 #define HSYNC_END_H32   (33 * MCLKS_SLOT_H32)
 #define HBLANK_START_H40 178 //should be 179 according to Nemesis, but 178 seems to fit slightly better with my test ROM results
 #define HBLANK_END_H40  0 //should be 5.5 according to Nemesis, but 0 seems to fit better with my test ROM results
@@ -1420,7 +1420,7 @@ void check_render_bg(vdp_context * context, int32_t line, uint32_t slot)
 	}
 }
 
-uint32_t const h40_hsync_cycles[] = {19, 20, 20, 20, 19, 20, 20, 20, 19, 20, 20, 20, 19, 20, 20, 20, 19};
+uint32_t const h40_hsync_cycles[] = {19, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20, 20, 19};
 
 void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 {
@@ -1428,12 +1428,13 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 	{
 		context->flags &= ~FLAG_UNUSED_SLOT;
 		uint32_t line = context->vcounter;
-		uint32_t inactive_start = context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START;
 		uint32_t slot = context->hslot;
-		//TODO: Figure out when this actually happens
+		
 		if (!line && !slot) {
+			//TODO: Figure out when this actually happens
 			latch_mode(context);
 		}
+		uint32_t inactive_start = context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START;
 
 		uint8_t is_h40 = context->regs[REG_MODE_4] & BIT_H40;
 		if (is_h40) {
@@ -1455,6 +1456,9 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 		}
 		if (is_h40 && slot == LINE_CHANGE_H40 || !is_h40 && slot == LINE_CHANGE_H32) {
 			if (line >= inactive_start) {
+				if (line == (inactive_start + 8)) {
+					context->frame++;
+				}
 				context->hint_counter = context->regs[REG_HINT];
 			} else if (context->hint_counter) {
 				context->hint_counter--;
@@ -1824,7 +1828,7 @@ uint32_t vdp_cycles_next_line(vdp_context * context)
 {
 	if (context->regs[REG_MODE_4] & BIT_H40) {
 		if (context->hslot < LINE_CHANGE_H40) {
-			return (HBLANK_START_H40 - context->hslot) * MCLKS_SLOT_H40;
+			return (LINE_CHANGE_H40 - context->hslot) * MCLKS_SLOT_H40;
 		} else if (context->hslot < 183) {
 			return MCLKS_LINE - (context->hslot - LINE_CHANGE_H40) * MCLKS_SLOT_H40;
 		} else if (context->hslot < HSYNC_END_H40){
@@ -1914,12 +1918,6 @@ uint32_t vdp_frame_end_line(vdp_context * context)
 uint32_t vdp_cycles_to_frame_end(vdp_context * context)
 {
 	return context->cycles + vdp_cycles_to_line(context, vdp_frame_end_line(context));
-}
-
-uint8_t vdp_is_frame_over(vdp_context * context)
-{
-	uint32_t frame_end = vdp_frame_end_line(context);
-	return context->vcounter >= frame_end && context->vcounter < (frame_end + 8);
 }
 
 uint32_t vdp_next_hint(vdp_context * context)

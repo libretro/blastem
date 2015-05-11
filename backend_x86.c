@@ -11,7 +11,7 @@ void check_cycles_int(cpu_options *opts, uint32_t address)
 	code_info *code = &opts->code;
 	cmp_rr(code, opts->cycles, opts->limit, SZ_D);
 	code_ptr jmp_off = code->cur+1;
-	jcc(code, CC_NC, jmp_off+1);
+	jcc(code, CC_A, jmp_off+1);
 	mov_ir(code, address, opts->scratch1, SZ_D);
 	call(code, opts->handle_cycle_limit_int);
 	*jmp_off = code->cur - (jmp_off+1);
@@ -23,9 +23,22 @@ void check_cycles(cpu_options * opts)
 	cmp_rr(code, opts->cycles, opts->limit, SZ_D);
 	check_alloc_code(code, MAX_INST_LEN*2);
 	code_ptr jmp_off = code->cur+1;
-	jcc(code, CC_NC, jmp_off+1);
+	jcc(code, CC_A, jmp_off+1);
 	call(code, opts->handle_cycle_limit);
 	*jmp_off = code->cur - (jmp_off+1);
+}
+
+void log_address(cpu_options *opts, uint32_t address, char * format)
+{
+	code_info *code = &opts->code;
+	call(code, opts->save_context);
+	push_r(code, opts->context_reg);
+	mov_rr(code, opts->cycles, RDX, SZ_D);
+	mov_ir(code, (int64_t)format, RDI, SZ_PTR);
+	mov_ir(code, address, RSI, SZ_D);
+	call_args_abi(code, (code_ptr)printf, 3, RDI, RSI, RDX);
+	pop_r(code, opts->context_reg);
+	call(code, opts->load_context);
 }
 
 void check_code_prologue(code_info *code)
