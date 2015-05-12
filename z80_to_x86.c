@@ -2279,10 +2279,10 @@ void z80_clear_reset(z80_context * context, uint32_t cycle)
 	z80_run(context, cycle);
 	if (context->reset) {
 		//TODO: Handle case where reset is not asserted long enough
-	context->im = 0;
-	context->iff1 = context->iff2 = 0;
+		context->im = 0;
+		context->iff1 = context->iff2 = 0;
 		context->native_pc = NULL;
-	context->extra_pc = NULL;
+		context->extra_pc = NULL;
 		context->pc = 0;
 		context->reset = 0;
 		if (context->busreq) {
@@ -2294,11 +2294,9 @@ void z80_clear_reset(z80_context * context, uint32_t cycle)
 
 void z80_assert_busreq(z80_context * context, uint32_t cycle)
 {
-	printf("bus requested at %d\n", cycle);
 	z80_run(context, cycle);
-	printf("asserted busreq at %d\n", context->current_cycle);
 	context->busreq = 1;
-		}
+}
 
 void z80_clear_busreq(z80_context * context, uint32_t cycle)
 {
