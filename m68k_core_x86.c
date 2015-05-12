@@ -2013,7 +2013,12 @@ void translate_m68k_move_ccr_sr(m68k_options *opts, m68kinst *inst, host_ea *src
 				mov_rdispr(code, src_op->base, src_op->disp, opts->gen.scratch1, SZ_W);
 			}
 		}
-		call(code, inst->op == M68K_MOVE_SR ? opts->set_sr : opts->set_ccr);
+		if (inst->op == M68K_MOVE_SR) {
+			call(code, opts->set_sr);
+			call(code, opts->do_sync);
+		} else {
+			call(code, opts->set_ccr);
+		}
 		cycles(&opts->gen, 12);
 	}
 }
