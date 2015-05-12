@@ -1456,9 +1456,6 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 		}
 		if (is_h40 && slot == LINE_CHANGE_H40 || !is_h40 && slot == LINE_CHANGE_H32) {
 			if (line >= inactive_start) {
-				if (line == (inactive_start + 8)) {
-					context->frame++;
-				}
 				context->hint_counter = context->regs[REG_HINT];
 			} else if (context->hint_counter) {
 				context->hint_counter--;
@@ -1524,12 +1521,18 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 			if (is_h40) {
 				if (context->hslot == LINE_CHANGE_H40) {
 					context->vcounter++;
+					if (context->vcounter == (inactive_start + 8)) {
+						context->frame++;
+					}
 				} else if (context->hslot == 183) {
 					context->hslot = 229;
 				}
 			} else {
 				if (context->hslot == LINE_CHANGE_H32) {
 					context->vcounter++;
+					if (context->vcounter == (inactive_start + 8)) {
+						context->frame++;
+					}
 				} else if (context->hslot == 148) {
 					context->hslot = 233;
 				}
@@ -1957,7 +1960,7 @@ uint32_t vdp_next_vint_z80(vdp_context * context)
 	uint32_t inactive_start = context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START;
 	if (context->vcounter == inactive_start) {
 		if (context->regs[REG_MODE_4] & BIT_H40) {
-			if (context->hslot >= HBLANK_START_H40) {
+			if (context->hslot >= LINE_CHANGE_H40) {
 				if (context->hslot < 183) {
 					return context->cycles + (VINT_SLOT_H40 + 183 - context->hslot + 256 - 229) * MCLKS_SLOT_H40;
 				} else {
@@ -1967,7 +1970,7 @@ uint32_t vdp_next_vint_z80(vdp_context * context)
 				return context->cycles + (VINT_SLOT_H40 - context->hslot) * MCLKS_SLOT_H40;
 			}
 		} else {
-			if (context->hslot >= HBLANK_START_H32) {
+			if (context->hslot >= LINE_CHANGE_H32) {
 				if (context->hslot < 148) {
 					return context->cycles + (VINT_SLOT_H32 + 148 - context->hslot + 256 - 233) * MCLKS_SLOT_H32;
 				} else {
@@ -1980,9 +1983,9 @@ uint32_t vdp_next_vint_z80(vdp_context * context)
 	}
 	int32_t cycles_to_vint = vdp_cycles_to_line(context, inactive_start);
 	if (context->regs[REG_MODE_4] & BIT_H40) {
-		cycles_to_vint += (VINT_SLOT_H40 + 183 - HBLANK_START_H40 + 256 - 229) * MCLKS_SLOT_H40;
+		cycles_to_vint += (VINT_SLOT_H40 + 183 - LINE_CHANGE_H40 + 256 - 229) * MCLKS_SLOT_H40;
 	} else {
-		cycles_to_vint += (VINT_SLOT_H32 + 148 - HBLANK_START_H32 + 256 - 233) * MCLKS_SLOT_H32;
+		cycles_to_vint += (VINT_SLOT_H32 + 148 - LINE_CHANGE_H32 + 256 - 233) * MCLKS_SLOT_H32;
 	}
 	return context->cycles + cycles_to_vint;
 }
