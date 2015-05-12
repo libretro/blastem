@@ -237,10 +237,8 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 		if (gen->ym->write_cycle != CYCLE_NEVER) {
 			gen->ym->write_cycle = gen->ym->write_cycle >= mclks ? gen->ym->write_cycle - mclks : 0;
 		}
-		gen->frame_end = vdp_cycles_to_frame_end(v_context);
-	} else {
-		gen->frame_end = vdp_cycles_to_frame_end(v_context);
 	}
+	gen->frame_end = vdp_cycles_to_frame_end(v_context);
 	context->sync_cycle = gen->frame_end;
 	//printf("Set sync cycle to: %d @ %d, vcounter: %d, hslot: %d\n", context->sync_cycle, context->current_cycle, v_context->vcounter, v_context->hslot);
 	if (context->int_ack) {
