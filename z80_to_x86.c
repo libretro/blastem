@@ -2121,6 +2121,8 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	cmp_rdispr(code, options->gen.context_reg, offsetof(z80_context, sync_cycle), options->gen.cycles, SZ_D);
 	code_ptr skip_sync = code->cur + 1;
 	jcc(code, CC_B, skip_sync);
+	//save PC
+	mov_rrdisp(code, options->gen.scratch1, options->gen.context_reg, offsetof(z80_context, pc), SZ_D);
 	options->do_sync = code->cur;
 	call(code, options->gen.save_context);
 	pop_rind(code, options->gen.context_reg);
