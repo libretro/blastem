@@ -972,7 +972,7 @@ void remove_breakpoint(m68k_context * context, uint32_t address)
 	code_ptr native = get_native_address(context->native_code_map, address);
 	code_info tmp = context->options->gen.code;
 	context->options->gen.code.cur = native;
-	context->options->gen.code.last = native + 16;
+	context->options->gen.code.last = native + MAX_NATIVE_SIZE;
 	check_cycles_int(&context->options->gen, address);
 	context->options->gen.code = tmp;
 }
