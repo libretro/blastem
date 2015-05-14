@@ -471,6 +471,7 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 	static uint32_t branch_t;
 	static uint32_t branch_f;
 	m68kinst inst;
+	sync_components(context, 0);
 	//probably not necessary, but let's play it safe
 	address &= 0xFFFFFF;
 	if (address == branch_t) {
