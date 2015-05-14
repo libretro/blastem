@@ -209,6 +209,45 @@ void vdp_print_sprite_table(vdp_context * context)
 	} while (current_index != 0 && count < 80);
 }
 
+#define VRAM_READ 0 //0000
+#define VRAM_WRITE 1 //0001
+//2 would trigger register write 0010
+#define CRAM_WRITE 3 //0011
+#define VSRAM_READ 4 //0100
+#define VSRAM_WRITE 5//0101
+//6 would trigger regsiter write 0110
+//7 is a mystery
+#define CRAM_READ 8  //1000
+//9 is also a mystery //1001
+//A would trigger register write 1010
+//B is a mystery 1011
+#define VRAM_READ8 0xC //1100
+//D is a mystery 1101
+//E would trigger register write 1110
+//F is a mystery 1111
+#define DMA_START 0x20
+
+const char * cd_name(uint8_t cd)
+{
+	switch (cd & 0xF)
+	{
+	case VRAM_READ:
+		return "VRAM read";
+	case VRAM_WRITE:
+		return "VRAM write";
+	case CRAM_WRITE:
+		return "CRAM write";
+	case VSRAM_READ:
+		return "VSRAM read";
+	case VSRAM_WRITE:
+		return "VSRAM write";
+	case VRAM_READ8:
+		return "VRAM read (undocumented 8-bit mode)";
+	default:
+		return "invalid";
+	}
+}
+
 void vdp_print_reg_explain(vdp_context * context)
 {
 	char * hscroll[] = {"full", "7-line", "cell", "line"};
@@ -261,11 +300,11 @@ void vdp_print_reg_explain(vdp_context * context)
 			   src_types[context->regs[REG_DMASRC_H] >> 6 & 3]);
 	printf("\n**Internal Group**\n"
 	       "Address: %X\n"
-	       "CD:      %X\n"
+	       "CD:      %X - %s\n"
 	       "Pending: %s\n"
 		   "VCounter: %d\n"
 		   "HCounter: %d\n",
-	       context->address, context->cd, (context->flags & FLAG_PENDING) ? "true" : "false",
+	       context->address, context->cd, cd_name(context->cd), (context->flags & FLAG_PENDING) ? "true" : "false",
 		   context->vcounter, context->hslot*2);
 
 	//TODO: Window Group, DMA Group
@@ -415,24 +454,6 @@ void write_cram(vdp_context * context, uint16_t address, uint16_t value)
 	context->colors[addr + CRAM_SIZE] = color_map[(value & 0xEEE) | FBUF_SHADOW];
 	context->colors[addr + CRAM_SIZE*2] = color_map[(value & 0xEEE) | FBUF_HILIGHT];
 }
-
-#define VRAM_READ 0 //0000
-#define VRAM_WRITE 1 //0001
-//2 would trigger register write 0010
-#define CRAM_WRITE 3 //0011
-#define VSRAM_READ 4 //0100
-#define VSRAM_WRITE 5//0101
-//6 would trigger regsiter write 0110
-//7 is a mystery
-#define CRAM_READ 8  //1000
-//9 is also a mystery //1001
-//A would trigger register write 1010
-//B is a mystery 1011
-#define VRAM_READ8 0xC //1100
-//D is a mystery 1101
-//E would trigger register write 1110
-//F is a mystery 1111
-#define DMA_START 0x20
 
 void external_slot(vdp_context * context)
 {
