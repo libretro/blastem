@@ -317,7 +317,15 @@ int main(int argc, char ** argv)
 			}
 		}
 		for (address = filesize; address < (16*1024*1024); address++) {
-			if (is_label(address)) {
+			char key[MAX_INT_KEY_SIZE];
+			tern_int_key(address, key);
+			label_names *names = tern_find_ptr(named_labels, key);
+			if (names) {
+				for (int i = 0; i < names->num_labels; i++)
+				{
+					printf("%s equ $%X\n", names->labels[i], address);
+				}
+			} else if (is_label(address)) {
 				printf("ADR_%X equ $%X\n", address, address);
 			}
 		}
