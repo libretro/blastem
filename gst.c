@@ -423,7 +423,7 @@ uint32_t load_gst(genesis_context * gen, char * fname)
 		fprintf(stderr, "Could not read ident code from %s\n", fname);
 		goto error_close;
 	}
-	if (memcmp(ident, "GST\x40\xE0", 5) != 0) {
+	if (memcmp(ident, "GST\x40\xE0", 3) != 0) {
 		fprintf(stderr, "%s doesn't appear to be a GST savestate. The ident code is %c%c%c\\x%X\\x%X instead of GST\\x40\\xE0.\n", fname, ident[0], ident[1], ident[2], ident[3], ident[4]);
 		goto error_close;
 	}

@@ -1476,7 +1476,7 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 			}
 		}
 		if (is_h40 && slot == LINE_CHANGE_H40 || !is_h40 && slot == LINE_CHANGE_H32) {
-			if (line >= inactive_start) {
+			if (line > inactive_start) {
 				context->hint_counter = context->regs[REG_HINT];
 			} else if (context->hint_counter) {
 				context->hint_counter--;
@@ -1954,7 +1954,7 @@ uint32_t vdp_next_hint(vdp_context * context)
 	}
 	uint32_t inactive_start = context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START;
 	uint32_t hint_line;
-	if (context->vcounter >= inactive_start) {
+	if (context->vcounter + context->hint_counter >= inactive_start) {
 		hint_line = context->regs[REG_HINT];
 	} else {
 		hint_line = context->vcounter + context->hint_counter + 1;
