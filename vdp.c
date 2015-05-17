@@ -1757,7 +1757,7 @@ uint16_t vdp_control_port_read(vdp_context * context)
 	if (context->flags & FLAG_DMA_RUN) {
 		value |= 0x2;
 	}
-	if (context->latched_mode & BIT_PAL) {//Not sure about this, need to verify
+	if (context->flags2 & FLAG2_REGION_PAL) {
 		value |= 0x1;
 	}
 	//printf("status read at cycle %d returned %X\n", context->cycles, value);
