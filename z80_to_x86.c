@@ -1674,7 +1674,7 @@ code_info z80_make_interp_stub(z80_context * context, uint16_t address)
 	call(code, opts->gen.save_context);
 	mov_irdisp(code, address, opts->gen.context_reg, offsetof(z80_context, pc), SZ_W);
 	push_r(code, opts->gen.context_reg);
-	call_args(code, (code_ptr)z80_interp_handler, 2, opts->gen.scratch1, opts->gen.scratch2);
+	call_args(code, (code_ptr)z80_interp_handler, 2, opts->gen.scratch1, opts->gen.context_reg);
 	mov_rr(code, RAX, opts->gen.scratch1, SZ_PTR);
 	pop_r(code, opts->gen.context_reg);
 	call(code, opts->gen.load_context);
