@@ -657,7 +657,12 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 		vscroll <<= 1;
 		vscroll |= 1;
 	}
-	vscroll &= (context->vsram[(context->regs[REG_MODE_3] & BIT_VSCROLL ? (column-2)&63 : 0) + vsram_off] + line);
+	//TODO: Further research on vscroll latch behavior and the "first column bug" seen in Gynoug
+	//this should be close, but won't match the exact behavior Eke-Eke has written about
+	if (column == 2 || (column && (context->regs[REG_MODE_3] & BIT_VSCROLL))) {
+		context->vscroll_latch[vsram_off] = context->vsram[column - 2 + vsram_off];
+	}
+	vscroll &= context->vscroll_latch[vsram_off] + line;
 	context->v_offset = vscroll & v_offset_mask;
 	//printf("%s | line %d, vsram: %d, vscroll: %d, v_offset: %d\n",(vsram_off ? "B" : "A"), line, context->vsram[context->regs[REG_MODE_3] & 0x4 ? column : 0], vscroll, context->v_offset);
 	vscroll >>= vscroll_shift;
