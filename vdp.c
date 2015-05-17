@@ -23,7 +23,7 @@
 #define MCLKS_SLOT_H40  16
 #define MCLKS_SLOT_H32  20
 #define VINT_SLOT_H40  4 //21 slots before HSYNC, 16 during, 10 after
-#define VINT_SLOT_H32  23  //33 slots before HSYNC, 20 during, 7 after  TODO: confirm final number
+#define VINT_SLOT_H32  4  //old value was 23, but recent tests suggest the actual value is close to the H40 one
 #define HSYNC_SLOT_H40  234
 #define HSYNC_END_H40  (HSYNC_SLOT_H40+17)
 #define HSYNC_END_H32   (33 * MCLKS_SLOT_H32)
