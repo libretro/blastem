@@ -643,7 +643,10 @@ void map_native_address(m68k_context * context, uint32_t address, code_ptr nativ
 			native_code_map[chunk].offsets = malloc(sizeof(int32_t) * NATIVE_CHUNK_SIZE);
 			memset(native_code_map[chunk].offsets, 0xFF, sizeof(int32_t) * NATIVE_CHUNK_SIZE);
 		}
-		native_code_map[chunk].offsets[offset] = EXTENSION_WORD;
+		if (native_code_map[chunk].offsets[offset] == INVALID_OFFSET) {
+			//TODO: Better handling of overlapping instructions
+			native_code_map[chunk].offsets[offset] = EXTENSION_WORD;
+		}
 	}
 }
 
