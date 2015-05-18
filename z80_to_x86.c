@@ -81,6 +81,9 @@ void translate_z80_reg(z80inst * inst, host_ea * ea, z80_options * opts)
 void z80_save_reg(z80inst * inst, z80_options * opts)
 {
 	code_info *code = &opts->gen.code;
+	if (inst->reg == Z80_USE_IMMED || inst->reg == Z80_UNUSED) {
+		return;
+	}
 	if (inst->reg == Z80_IYH) {
 		if ((inst->addr_mode & 0x1F) == Z80_REG && inst->ea_reg == Z80_IYL) {
 			ror_ir(code, 8, opts->regs[Z80_IY], SZ_W);
