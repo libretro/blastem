@@ -23,6 +23,7 @@
 #endif
 
 uint32_t zbreakpoint_patch(z80_context * context, uint16_t address, code_ptr dst);
+void z80_handle_deferred(z80_context * context);
 
 uint8_t z80_size(z80inst * inst)
 {
@@ -1653,6 +1654,7 @@ uint8_t * z80_interp_handler(uint8_t opcode, z80_context * context)
 		add_ir(code, after - codebuf, opts->gen.scratch1, SZ_W);
 		call(code, opts->native_addr);
 		jmp_r(code, opts->gen.scratch1);
+		z80_handle_deferred(context);
 	}
 	return context->interp_code[opcode];
 }
