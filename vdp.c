@@ -487,7 +487,7 @@ void external_slot(vdp_context * context)
 		}
 		case VSRAM_WRITE:
 			if (((start->address/2) & 63) < VSRAM_SIZE) {
-				//printf("VSRAM Write: %X to %X\n", start->value, context->address);
+				//printf("VSRAM Write: %X to %X @ vcounter: %d, hslot: %d, cycle: %d\n", start->value, context->address, context->vcounter, context->hslot, context->cycles);
 				context->vsram[(start->address/2) & 63] = start->partial == 2 ? context->fifo[context->fifo_write].value : start->value;
 			}
 
@@ -659,9 +659,24 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 		vscroll <<= 1;
 		vscroll |= 1;
 	}
-	//TODO: Further research on vscroll latch behavior and the "first column bug" seen in Gynoug
-	//this should be close, but won't match the exact behavior Eke-Eke has written about
-	if (column == 2 || (column && (context->regs[REG_MODE_3] & BIT_VSCROLL))) {
+	//TODO: Further research on vscroll latch behavior and the "first column bug"
+	if (!column) {
+		if (context->regs[REG_MODE_3] & BIT_VSCROLL) {
+			if (context->regs[REG_MODE_4] & BIT_H40) {
+				//Based on observed behavior documented by Eke-Eke, I'm guessing the VDP
+				//ends up fetching the last value on the VSRAM bus in the H40 case
+				//getting the last latched value should be close enough for now
+				if (!vsram_off) {
+					context->vscroll_latch[0] = context->vscroll_latch[1];
+				}
+			} else {
+				//supposedly it's always forced to 0 in the H32 case
+				context->vscroll_latch[0] = context->vscroll_latch[1] = 0;
+			}
+		} else {
+			context->vscroll_latch[vsram_off] = context->vsram[vsram_off];
+		}
+	} else if (context->regs[REG_MODE_3] & BIT_VSCROLL) {
 		context->vscroll_latch[vsram_off] = context->vsram[column - 2 + vsram_off];
 	}
 	vscroll &= context->vscroll_latch[vsram_off] + line;
@@ -1664,9 +1679,9 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 				if (reg == REG_BG_COLOR) {
 					value &= 0x3F;
 				}
-				if (reg == REG_MODE_4 && ((value ^ context->regs[reg]) & BIT_H40)) {
+				/*if (reg == REG_MODE_4 && ((value ^ context->regs[reg]) & BIT_H40)) {
 					printf("Mode changed from H%d to H%d @ %d, frame: %d\n", context->regs[reg] & BIT_H40 ? 40 : 32, value & BIT_H40 ? 40 : 32, context->cycles, context->frame);
-				}
+				}*/
 				context->regs[reg] = value;
 				if (reg == REG_MODE_4) {
 					context->double_res = (value & (BIT_INTERLACE | BIT_DOUBLE_RES)) == (BIT_INTERLACE | BIT_DOUBLE_RES);
@@ -1952,9 +1967,9 @@ uint32_t vdp_cycles_to_line(vdp_context * context, uint32_t target)
 		}
 	} else {
 		if (context->vcounter < jump_start) {
-			lines = jump_start - context->vcounter + 512 - jump_dst + 1;
+			lines = jump_start - context->vcounter + 512 - jump_dst;
 		} else {
-			lines = 512 - context->vcounter + 1;
+			lines = 512 - context->vcounter;
 		}
 		if (target < jump_start) {
 			lines += target;
