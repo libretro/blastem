@@ -132,6 +132,8 @@ typedef struct {
 	uint8_t     regs[VDP_REGS];
 	//cycle count in MCLKs
 	uint32_t    cycles;
+	uint32_t    pending_vint_start;
+	uint32_t    pending_hint_start;
 	uint8_t     *vdpmem;
 	//stores 2-bit palette + 4-bit palette index + priority for current sprite line
 	uint8_t     *linebuf;
