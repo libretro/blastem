@@ -125,6 +125,7 @@ uint16_t read_dma_value(uint32_t address)
 
 void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 {
+	//static int old_int_cycle = CYCLE_NEVER;
 	genesis_context *gen = context->system;
 	if (context->sync_cycle - context->current_cycle > gen->max_cycles) {
 		context->sync_cycle = context->current_cycle + gen->max_cycles;
@@ -147,6 +148,10 @@ void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 			}
 		}
 	}
+	/*if (context->int_cycle != old_int_cycle) {
+		printf("int cycle changed to: %d, level: %d @ %d(%d), frame: %d, vcounter: %d, hslot: %d, mask: %d, hint_counter: %d\n", context->int_cycle, context->int_num, v_context->cycles, context->current_cycle, v_context->frame, v_context->vcounter, v_context->hslot, context->status & 0x7, v_context->hint_counter);
+		old_int_cycle = context->int_cycle;
+	}*/
 
 	context->target_cycle = context->int_cycle < context->sync_cycle ? context->int_cycle : context->sync_cycle;
 	/*printf("Cyc: %d, Trgt: %d, Int Cyc: %d, Int: %d, Mask: %X, V: %d, H: %d, HICount: %d, HReg: %d, Line: %d\n",
@@ -242,6 +247,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	context->sync_cycle = gen->frame_end;
 	//printf("Set sync cycle to: %d @ %d, vcounter: %d, hslot: %d\n", context->sync_cycle, context->current_cycle, v_context->vcounter, v_context->hslot);
 	if (context->int_ack) {
+		printf("acknowledging %d @ %d:%d, vcounter: %d, hslot: %d\n", context->int_ack, context->current_cycle, v_context->cycles, v_context->vcounter, v_context->hslot);
 		vdp_int_ack(v_context, context->int_ack);
 		context->int_ack = 0;
 	}
