@@ -251,6 +251,9 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 		vdp_int_ack(v_context, context->int_ack);
 		context->int_ack = 0;
 	}
+	if (!address && (break_on_sync || save_state)) {
+		context->sync_cycle = context->current_cycle + 1;
+	}
 	adjust_int_cycle(context, v_context);
 	if (address) {
 		if (break_on_sync) {
@@ -265,6 +268,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 				sync_z80(z_context, z_context->current_cycle + MCLKS_PER_Z80);
 			}
 			save_gst(gen, "savestate.gst", address);
+			puts("Saved state to savestate.gst");
 		}
 	}
 	return context;
