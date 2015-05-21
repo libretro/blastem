@@ -2,14 +2,10 @@ ifndef OS
 OS:=$(shell uname -s)
 endif
 
-ifdef NOGL
-LIBS=sdl
-else
 ifeq ($(OS),Darwin)
-LIBS=sdl glew
+LIBS=sdl2 glew
 else
-LIBS=sdl glew gl
-endif
+LIBS=sdl2 glew gl
 endif
 
 ifdef DEBUG
