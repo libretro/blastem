@@ -255,7 +255,7 @@ void handle_binding_up(keybinding * binding)
 			if (ui_debug_pal == 4) {
 				ui_debug_pal = 0;
 			}
-			render_debug_pal(ui_debug_pal);
+			genesis->vdp->debug_pal = ui_debug_pal;
 			break;
 		case UI_ENTER_DEBUGGER:
 			break_on_sync = 1;
