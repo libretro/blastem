@@ -1263,7 +1263,7 @@ int main(int argc, char ** argv)
 		fps = 50;
 	}
 	if (!headless) {
-		render_init(width, height, title, fps, fullscreen, use_gl);
+		render_init(width, height, title, fps, fullscreen);
 	}
 	vdp_context v_context;
 	genesis_context gen;
