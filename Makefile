@@ -106,6 +106,9 @@ stateview : stateview.o vdp.o render_sdl.o $(CONFIGOBJS) gst.o
 
 vgmplay : vgmplay.o render_sdl.o $(CONFIGOBJS) $(AUDIOOBJS)
 	$(CC) -o vgmplay vgmplay.o render_sdl.o $(CONFIGOBJS) $(AUDIOOBJS) $(LDFLAGS)
+	
+test : test.o vdp.o
+	$(CC) -o test test.o vdp.o
 
 testgst : testgst.o gst.o
 	$(CC) -o testgst testgst.o gst.o

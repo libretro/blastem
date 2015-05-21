@@ -1443,6 +1443,19 @@ uint32_t const h40_hsync_cycles[] = {19, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20,
 void vdp_advance_line(vdp_context *context)
 {
 	context->vcounter++;
+	context->vcounter &= 0x1FF;
+	if (context->flags2 & FLAG2_REGION_PAL) {
+		if (context->latched_mode & BIT_PAL) {
+			if (context->vcounter == 0x10B) {
+				context->vcounter = 0x1D2;
+			}
+		} else if (context->vcounter == 0x103){
+			context->vcounter = 0x1CA;
+		}
+	} else if (!(context->latched_mode & BIT_PAL) &&  context->vcounter == 0xEB) {
+		context->vcounter = 0x1E5;
+	}
+	
 	if (context->vcounter > (context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START)) {
 		context->hint_counter = context->regs[REG_HINT];
 	} else if (context->hint_counter) {
@@ -1565,19 +1578,6 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 		} else {
 			vdp_advance_line(context);
 		}
-		context->vcounter &= 0x1FF;
-		if (context->flags2 & FLAG2_REGION_PAL) {
-			if (context->latched_mode & BIT_PAL) {
-				if (context->vcounter == 0x10B) {
-					context->vcounter = 0x1D2;
-				}
-			} else if (context->vcounter == 0x103){
-				context->vcounter = 0x1CA;
-			}
-		} else if (!(context->latched_mode & BIT_PAL) &&  context->vcounter == 0xEB) {
-			context->vcounter = 0x1E5;
-		}
-		
 	}
 }
 
