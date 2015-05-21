@@ -170,6 +170,7 @@ typedef struct {
 	uint8_t     buf_a_off;
 	uint8_t     buf_b_off;
 	uint8_t     debug;
+	uint8_t     debug_pal;
 	uint8_t     *tmp_buf_a;
 	uint8_t     *tmp_buf_b;
 } vdp_context;
