@@ -62,10 +62,8 @@ void init_vdp_context(vdp_context * context, uint8_t region_pal)
 		memset(context->framebuf, 0, FRAMEBUF_ENTRIES * (32 / 8));
 		context->evenbuf = malloc(FRAMEBUF_ENTRIES * (32 / 8));
 		memset(context->evenbuf, 0, FRAMEBUF_ENTRIES * (32 / 8));
-		context->b32 = 1;
 	} else {
 		render_alloc_surfaces(context);
-		context->b32 = render_depth() == 32;
 	}
 	context->framebuf = context->oddbuf;
 	context->linebuf = malloc(LINEBUF_SIZE + SCROLL_BUFFER_SIZE*2);
@@ -788,20 +786,14 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		return;
 	}
 	render_map(context->col_2, context->tmp_buf_b, context->buf_b_off+8, context);
-	uint16_t *dst;
-	uint32_t *dst32;
+	uint32_t *dst;
 	uint8_t *sprite_buf,  *plane_a, *plane_b;
 	int plane_a_off, plane_b_off;
 	if (col)
 	{
 		col-=2;
-		if (context->b32) {
-			dst32 = context->framebuf;
-			dst32 += line * 320 + col * 8;
-		} else {
-			dst = context->framebuf;
-			dst += line * 320 + col * 8;
-		}
+		dst = context->framebuf;
+		dst += line * 320 + col * 8;
 		sprite_buf = context->linebuf + col * 8;
 		uint8_t a_src, src;
 		if (context->flags & FLAG_WINDOW) {
@@ -859,11 +851,7 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 				} else {
 					outpixel = colors[pixel];
 				}
-				if (context->b32) {
-					*(dst32++) = outpixel;
-				} else {
-					*(dst++) = outpixel;
-				}
+				*(dst++) = outpixel;
 				//*dst = (context->cram[pixel & 0x3F] & 0xEEE) | ((pixel & BUF_BIT_PRIORITY) ? FBUF_BIT_PRIORITY : 0) | src;
 			}
 		} else {
@@ -890,11 +878,7 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 				} else {
 					outpixel = context->colors[pixel & 0x3F];
 				}
-				if (context->b32) {
-					*(dst32++) = outpixel;
-				} else {
-					*(dst++) = outpixel;
-				}
+				*(dst++) = outpixel;
 			}
 		}
 	}
@@ -1445,20 +1429,11 @@ void check_render_bg(vdp_context * context, int32_t line, uint32_t slot)
 		}
 	}
 	if (starti >= 0) {
-		if (context->b32) {
-			uint32_t color = context->colors[context->regs[REG_BG_COLOR]];
-			uint32_t * start = context->framebuf;
-			start += starti;
-			for (int i = 0; i < 2; i++) {
-				*(start++) = color;
-			}
-		} else {
-			uint16_t color = context->colors[context->regs[REG_BG_COLOR]];
-			uint16_t * start = context->framebuf;
-			start += starti;
-			for (int i = 0; i < 2; i++) {
-				*(start++) = color;
-			}
+		uint32_t color = context->colors[context->regs[REG_BG_COLOR]];
+		uint32_t * start = context->framebuf;
+		start += starti;
+		for (int i = 0; i < 2; i++) {
+			*(start++) = color;
 		}
 	}
 }
