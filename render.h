@@ -33,6 +33,7 @@ void process_events();
 int render_joystick_num_buttons(int joystick);
 int render_joystick_num_hats(int joystick);
 int render_num_joysticks();
+void process_events();
 
 //TODO: Throw an ifdef in here once there's more than one renderer
 #include <SDL.h>
