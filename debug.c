@@ -3,6 +3,8 @@
 #include "68kinst.h"
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
+#include "render.h"
 
 static bp_def * breakpoints = NULL;
 static bp_def * zbreakpoints = NULL;
@@ -508,8 +510,25 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 	printf("%X: %s\n", address, input_buf);
 	uint32_t after = address + (after_pc-pc)*2;
 	int debugging = 1;
+	int prompt = 1;
+	fd_set read_fds;
+	FD_ZERO(&read_fds);
+	struct timeval timeout;
 	while (debugging) {
-		fputs(">", stdout);
+		if (prompt) {
+			fputs(">", stdout);
+			fflush(stdout);
+		}
+		process_events();
+		timeout.tv_sec = 0;
+		timeout.tv_usec = 16667;
+		FD_SET(fileno(stdin), &read_fds);
+		if(select(fileno(stdin) + 1, &read_fds, NULL, NULL, &timeout) < 1) {
+			prompt = 0;
+			continue;
+		} else {
+			prompt = 1;
+		}
 		if (!fgets(input_buf, sizeof(input_buf), stdin)) {
 			fputs("fgets failed", stderr);
 			break;
