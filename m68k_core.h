@@ -34,6 +34,7 @@ typedef struct {
 	code_ptr        write_32_highfirst;
 	code_ptr        do_sync;
 	code_ptr        trap;
+	code_ptr        odd_address;
 	start_fun       start_context;
 	code_ptr        retrans_stub;
 	code_ptr        native_addr;

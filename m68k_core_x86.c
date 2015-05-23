@@ -801,7 +801,7 @@ void translate_m68k_bcc(m68k_options * opts, m68kinst * inst)
 	if (inst->extra.cond == COND_TRUE) {
 		jump_m68k_abs(opts, after + disp);
 	} else {
-		code_ptr dest_addr = get_native_address(opts->gen.native_code_map, after + disp);
+		code_ptr dest_addr = get_native_address(opts, after + disp);
 		uint8_t cond = m68k_eval_cond(opts, inst->extra.cond);
 		if (!dest_addr) {
 			opts->gen.deferred = defer_address(opts->gen.deferred, after + disp, code->cur + 2);
@@ -2089,7 +2089,7 @@ m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context)
 	if (inst_start) {
 		m68k_options * options = context->options;
 		code_info *code = &options->gen.code;
-		code_ptr dst = get_native_address(context->native_code_map, inst_start);
+		code_ptr dst = get_native_address(context->options, inst_start);
 		code_info orig;
 		orig.cur = dst;
 		orig.last = dst + 128;
@@ -2475,4 +2475,11 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	call(code, opts->native_addr_and_sync);
 	cycles(&opts->gen, 18);
 	jmp_r(code, opts->gen.scratch1);
+	
+	opts->odd_address = code->cur;
+	mov_ir(code, (int64_t)stderr, RDI, SZ_PTR);
+	mov_ir(code, (int64_t)"Attempt to execute code at odd address\n", RSI, SZ_PTR);
+	call_args_abi(code, (code_ptr)fprintf, 2, RDI, RSI, RDX);
+	xor_rr(code, RDI, RDI, SZ_D);
+	call_args(code, (code_ptr)exit, 1, RDI);
 }
