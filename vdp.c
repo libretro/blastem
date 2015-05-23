@@ -2034,6 +2034,9 @@ uint32_t vdp_next_hint(vdp_context * context)
 	uint32_t inactive_start = context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START;
 	uint32_t hint_line;
 	if (context->vcounter + context->hint_counter >= inactive_start) {
+		if (context->regs[REG_HINT] > inactive_start) {
+			return 0xFFFFFFFF;
+		}
 		hint_line = context->regs[REG_HINT];
 	} else {
 		hint_line = context->vcounter + context->hint_counter + 1;
