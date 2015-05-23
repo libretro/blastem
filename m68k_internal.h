@@ -46,7 +46,7 @@ void m68k_save_result(m68kinst * inst, m68k_options * opts);
 void push_const(m68k_options *opts, int32_t value);
 void jump_m68k_abs(m68k_options * opts, uint32_t address);
 void swap_ssp_usp(m68k_options * opts);
-code_ptr get_native_address(native_map_slot * native_code_map, uint32_t address);
+code_ptr get_native_address(m68k_options *opts, uint32_t address);
 void map_native_address(m68k_context * context, uint32_t address, code_ptr native_addr, uint8_t size, uint8_t native_size);
 uint8_t get_native_inst_size(m68k_options * opts, uint32_t address);
 uint8_t m68k_is_terminal(m68kinst * inst);
