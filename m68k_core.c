@@ -636,6 +636,7 @@ void map_native_address(m68k_context * context, uint32_t address, code_ptr nativ
 	uint32_t offset = address % NATIVE_CHUNK_SIZE;
 	native_code_map[chunk].offsets[offset] = native_addr-native_code_map[chunk].base;
 	for(address++,size-=2; size; address++,size-=2) {
+		address &= opts->gen.address_mask >> 1;
 		chunk = address / NATIVE_CHUNK_SIZE;
 		offset = address % NATIVE_CHUNK_SIZE;
 		if (!native_code_map[chunk].base) {
