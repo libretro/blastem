@@ -130,6 +130,44 @@ enum {
 	X86_R15
 } x86_regs_enc;
 
+char * x86_reg_names[] = {
+#ifdef X86_64
+	"rax",
+	"rcx",
+	"rdx",
+	"rbx",
+	"rsp",
+	"rbp",
+	"rsi",
+	"rdi",
+#else
+	"eax",
+	"ecx",
+	"edx",
+	"ebx",
+	"esp",
+	"ebp",
+	"esi",
+	"edi",
+#endif
+	"ah",
+	"ch",
+	"dh",
+	"bh",
+	"r8",
+	"r9",
+	"r10",
+	"r11",
+	"r12",
+	"r13",
+	"r14",
+	"r15",
+};
+
+char * x86_sizes[] = {
+	"b", "w", "d", "q"
+};
+
 void jmp_nocheck(code_info *code, code_ptr dest)
 {
 	code_ptr out = code->cur;
@@ -190,6 +228,7 @@ void x86_rr_sizedir(code_info *code, uint16_t opcode, uint8_t src, uint8_t dst, 
 		src = tmp;
 	}
 	if (size == SZ_Q || src >= R8 || dst >= R8 || (size == SZ_B && src >= RSP && src <= RDI)) {
+#ifdef X86_64
 		*out = PRE_REX;
 		if (src >= AH && src <= BH || dst >= AH && dst <= BH) {
 			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
@@ -207,6 +246,10 @@ void x86_rr_sizedir(code_info *code, uint16_t opcode, uint8_t src, uint8_t dst, 
 			dst -= (R8 - X86_R8);
 		}
 		out++;
+#else
+		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X, src: %s, dst: %s, size: %s\n", opcode, x86_reg_names[src], x86_reg_names[dst], x86_sizes[size]);
+		exit(1);
+#endif
 	}
 	if (size == SZ_B) {
 		if (src >= AH && src <= BH) {
@@ -238,6 +281,7 @@ void x86_rrdisp_sizedir(code_info *code, uint16_t opcode, uint8_t reg, uint8_t b
 		*(out++) = PRE_SIZE;
 	}
 	if (size == SZ_Q || reg >= R8 || base >= R8 || (size == SZ_B && reg >= RSP && reg <= RDI)) {
+#ifdef X86_64
 		*out = PRE_REX;
 		if (reg >= AH && reg <= BH) {
 			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
@@ -255,6 +299,10 @@ void x86_rrdisp_sizedir(code_info *code, uint16_t opcode, uint8_t reg, uint8_t b
 			base -= (R8 - X86_R8);
 		}
 		out++;
+#else
+		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X, reg: %s, base: %s, size: %s\n", opcode, x86_reg_names[reg], x86_reg_names[base], x86_sizes[size]);
+		exit(1);
+#endif
 	}
 	if (size == SZ_B) {
 		if (reg >= AH && reg <= BH) {
@@ -298,6 +346,7 @@ void x86_rrind_sizedir(code_info *code, uint8_t opcode, uint8_t reg, uint8_t bas
 		*(out++) = PRE_SIZE;
 	}
 	if (size == SZ_Q || reg >= R8 || base >= R8 || (size == SZ_B && reg >= RSP && reg <= RDI)) {
+#ifdef X86_64
 		*out = PRE_REX;
 		if (reg >= AH && reg <= BH) {
 			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
@@ -315,6 +364,10 @@ void x86_rrind_sizedir(code_info *code, uint8_t opcode, uint8_t reg, uint8_t bas
 			base -= (R8 - X86_R8);
 		}
 		out++;
+#else
+		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X, reg: %s, base: %s, size: %s\n", opcode, x86_reg_names[reg], x86_reg_names[base], x86_sizes[size]);
+		exit(1);
+#endif
 	}
 	if (size == SZ_B) {
 		if (reg >= AH && reg <= BH) {
@@ -349,6 +402,7 @@ void x86_rrindex_sizedir(code_info *code, uint8_t opcode, uint8_t reg, uint8_t b
 		*(out++) = PRE_SIZE;
 	}
 	if (size == SZ_Q || reg >= R8 || base >= R8 || (size == SZ_B && reg >= RSP && reg <= RDI)) {
+#ifdef X86_64
 		*out = PRE_REX;
 		if (reg >= AH && reg <= BH) {
 			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
@@ -370,6 +424,10 @@ void x86_rrindex_sizedir(code_info *code, uint8_t opcode, uint8_t reg, uint8_t b
 			index -= (R8 - X86_R8);
 		}
 		out++;
+#else
+		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X, reg: %s, base: %s, size: %s\n", opcode, x86_reg_names[reg], x86_reg_names[base], x86_sizes[size]);
+		exit(1);
+#endif
 	}
 	if (size == SZ_B) {
 		if (reg >= AH && reg <= BH) {
@@ -400,6 +458,7 @@ void x86_r_size(code_info *code, uint8_t opcode, uint8_t opex, uint8_t dst, uint
 		*(out++) = PRE_SIZE;
 	}
 	if (size == SZ_Q || dst >= R8) {
+#ifdef X86_64
 		*out = PRE_REX;
 		if (dst >= AH && dst <= BH) {
 			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
@@ -413,6 +472,10 @@ void x86_r_size(code_info *code, uint8_t opcode, uint8_t opex, uint8_t dst, uint
 			dst -= (R8 - X86_R8);
 		}
 		out++;
+#else
+		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X:%X, reg: %s, size: %s\n", opcode, opex, x86_reg_names[dst], x86_sizes[size]);
+		exit(1);
+#endif
 	}
 	if (size == SZ_B) {
 		if (dst >= AH && dst <= BH) {
@@ -435,6 +498,7 @@ void x86_rdisp_size(code_info *code, uint8_t opcode, uint8_t opex, uint8_t dst, 
 		*(out++) = PRE_SIZE;
 	}
 	if (size == SZ_Q || dst >= R8) {
+#ifdef X86_64
 		*out = PRE_REX;
 		if (size == SZ_Q) {
 			*out |= REX_QUAD;
@@ -444,6 +508,10 @@ void x86_rdisp_size(code_info *code, uint8_t opcode, uint8_t opex, uint8_t dst, 
 			dst -= (R8 - X86_R8);
 		}
 		out++;
+#else
+		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X:%X, reg: %s, size: %s\n", opcode, opex, x86_reg_names[dst], x86_sizes[size]);
+		exit(1);
+#endif
 	}
 	if (size != SZ_B) {
 		opcode |= BIT_SIZE;
@@ -478,12 +546,18 @@ void x86_ir(code_info *code, uint8_t opcode, uint8_t op_ex, uint8_t al_opcode, i
 		if (size != SZ_B) {
 			al_opcode |= BIT_SIZE;
 			if (size == SZ_Q) {
+#ifdef X86_64
 				*out = PRE_REX | REX_QUAD;
+#else
+		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X, reg: %s, size: %s\n", al_opcode, x86_reg_names[dst], x86_sizes[size]);
+		exit(1);
+#endif
 			}
 		}
 		*(out++) = al_opcode | BIT_IMMED_RAX;
 	} else {
 		if (size == SZ_Q || dst >= R8 || (size == SZ_B && dst >= RSP && dst <= RDI)) {
+#ifdef X86_64
 			*out = PRE_REX;
 			if (size == SZ_Q) {
 				*out |= REX_QUAD;
@@ -493,6 +567,10 @@ void x86_ir(code_info *code, uint8_t opcode, uint8_t op_ex, uint8_t al_opcode, i
 				dst -= (R8 - X86_R8);
 			}
 			out++;
+#else
+		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X:%X, reg: %s, size: %s\n", opcode, op_ex, x86_reg_names[dst], x86_sizes[size]);
+		exit(1);
+#endif
 		}
 		if (dst >= AH && dst <= BH) {
 			dst -= (AH-X86_AH);
@@ -531,6 +609,7 @@ void x86_irdisp(code_info *code, uint8_t opcode, uint8_t op_ex, int32_t val, uin
 	}
 
 	if (size == SZ_Q || dst >= R8) {
+#ifdef X86_64
 		*out = PRE_REX;
 		if (size == SZ_Q) {
 			*out |= REX_QUAD;
@@ -540,6 +619,10 @@ void x86_irdisp(code_info *code, uint8_t opcode, uint8_t op_ex, int32_t val, uin
 			dst -= (R8 - X86_R8);
 		}
 		out++;
+#else
+		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X:%X, reg: %s, size: %s\n", opcode, op_ex, x86_reg_names[dst], x86_sizes[size]);
+		exit(1);
+#endif
 	}
 	if (size != SZ_B) {
 		opcode |= BIT_SIZE;
