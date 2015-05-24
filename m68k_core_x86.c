@@ -1363,8 +1363,12 @@ void translate_m68k_invalid(m68k_options *opts, m68kinst *inst)
 		retn(code);
 		return;
 	}
-	mov_ir(code, inst->address, opts->gen.scratch1, SZ_D);
-	call(code, (code_ptr)m68k_invalid);
+	mov_ir(code, (int64_t)stderr, RDI, SZ_PTR);
+	mov_ir(code, (int64_t)"Invalid instruction at %X\n", RSI, SZ_PTR);
+	mov_ir(code, inst->address, RDX, SZ_D);
+	call_args_abi(code, (code_ptr)fprintf, 3, RDI, RSI, RDX);
+	mov_ir(code, 1, RDI, SZ_D);
+	call_args(code, (code_ptr)exit, 1, RDI);
 }
 
 void translate_m68k_abcd_sbcd(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op)
