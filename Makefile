@@ -45,11 +45,11 @@ endif
 TRANSOBJS=gen.o backend.o mem.o
 M68KOBJS=68kinst.o m68k_core.o
 ifeq ($(CPU),x86_64)
-M68KOBJS+= runtime.o m68k_core_x86.o
+M68KOBJS+= m68k_core_x86.o
 TRANSOBJS+= gen_x86.o backend_x86.o
 else
 ifeq ($(CPU),i686)
-M68KOBJS+= runtime_32.o m68k_core_x86.o
+M68KOBJS+= m68k_core_x86.o
 TRANSOBJS+= gen_x86.o backend_x86.o
 endif
 endif
@@ -61,10 +61,12 @@ CONFIGOBJS=config.o tern.o util.o
 MAINOBJS=blastem.o debug.o gdb_remote.o vdp.o render_sdl.o io.o $(CONFIGOBJS) gst.o $(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS)
 
 ifeq ($(CPU),x86_64)
-CFLAGS+=-DX86_64
+CFLAGS+=-DX86_64 -m64
+LDFLAGS+=-m64
 else
 ifeq ($(CPU),i686)
-CFLAGS+=-DX86_32
+CFLAGS+=-DX86_32 -m32
+LDFLAGS+=-m32
 endif
 endif
 
