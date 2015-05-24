@@ -115,7 +115,7 @@ void translate_z80_ea(z80inst * inst, host_ea * ea, z80_options * opts, uint8_t 
 	switch(inst->addr_mode & 0x1F)
 	{
 	case Z80_REG:
-		if (inst->ea_reg == Z80_IYH) {
+		if (inst->ea_reg == Z80_IYH && opts->regs[Z80_IY] >= 0) {
 			if (inst->reg == Z80_IYL) {
 				mov_rr(code, opts->regs[Z80_IY], opts->gen.scratch1, SZ_W);
 				ror_ir(code, 8, opts->gen.scratch1, SZ_W);
@@ -143,7 +143,11 @@ void translate_z80_ea(z80inst * inst, host_ea * ea, z80_options * opts, uint8_t 
 		}
 		break;
 	case Z80_REG_INDIRECT:
-		mov_rr(code, opts->regs[inst->ea_reg], areg, SZ_W);
+		if (opts->regs[inst->ea_reg] >= 0) {
+			mov_rr(code, opts->regs[inst->ea_reg], areg, SZ_W);
+		} else {
+			mov_rdispr(code, opts->gen.context_reg, offsetof(z80_context, regs) + z80_low_reg(inst->ea_reg), areg, SZ_W);
+		}
 		size = z80_size(inst);
 		if (read) {
 			if (modify) {
@@ -188,7 +192,11 @@ void translate_z80_ea(z80inst * inst, host_ea * ea, z80_options * opts, uint8_t 
 	case Z80_IX_DISPLACE:
 	case Z80_IY_DISPLACE:
 		reg = opts->regs[(inst->addr_mode & 0x1F) == Z80_IX_DISPLACE ? Z80_IX : Z80_IY];
-		mov_rr(code, reg, areg, SZ_W);
+		if (reg >= 0) {
+			mov_rr(code, reg, areg, SZ_W);
+		} else {
+			mov_rdispr(code, opts->gen.context_reg, offsetof(z80_context, regs) + (inst->addr_mode & 0x1F) == Z80_IX_DISPLACE ? Z80_IXL : Z80_IYL, areg, SZ_W);
+		}
 		add_ir(code, inst->ea_reg & 0x80 ? inst->ea_reg - 256 : inst->ea_reg, areg, SZ_W);
 		size = z80_size(inst);
 		if (read) {
@@ -276,9 +284,38 @@ uint8_t zaf_off(uint8_t flag)
 	return offsetof(z80_context, alt_flags) + flag;
 }
 
+uint8_t zr_off(uint8_t reg)
+{
+	if (reg > Z80_A) {
+		reg = z80_low_reg(reg);
+	}
+	return offsetof(z80_context, regs) + reg;
+}
+
 uint8_t zar_off(uint8_t reg)
 {
+	if (reg > Z80_A) {
+		reg = z80_low_reg(reg);
+	}
 	return offsetof(z80_context, alt_regs) + reg;
+}
+
+void zreg_to_native(z80_options *opts, uint8_t reg, uint8_t native_reg)
+{
+	if (opts->regs[reg] >= 0) {
+		mov_rr(&opts->gen.code, opts->regs[reg], native_reg, reg > Z80_A ? SZ_W : SZ_B);
+	} else {
+		mov_rdispr(&opts->gen.code, opts->gen.context_reg, zr_off(reg), native_reg, reg > Z80_A ? SZ_W : SZ_B);
+	}
+}
+
+void native_to_zreg(z80_options *opts, uint8_t native_reg, uint8_t reg)
+{
+	if (opts->regs[reg] >= 0) {
+		mov_rr(&opts->gen.code, native_reg, opts->regs[reg], reg > Z80_A ? SZ_W : SZ_B);
+	} else {
+		mov_rrdisp(&opts->gen.code, native_reg, opts->gen.context_reg, zr_off(reg), reg > Z80_A ? SZ_W : SZ_B);
+	}
 }
 
 void z80_print_regs_exit(z80_context * context)
@@ -384,7 +421,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		cycles(&opts->gen, (inst->reg == Z80_IX || inst->reg == Z80_IY) ? 9 : 5);
 		sub_ir(code, 2, opts->regs[Z80_SP], SZ_W);
 		if (inst->reg == Z80_AF) {
-			mov_rr(code, opts->regs[Z80_A], opts->gen.scratch1, SZ_B);
+			zreg_to_native(opts, Z80_A, opts->gen.scratch1);
 			shl_ir(code, 8, opts->gen.scratch1, SZ_W);
 			mov_rdispr(code, opts->gen.context_reg, zf_off(ZF_S), opts->gen.scratch1, SZ_B);
 			shl_ir(code, 1, opts->gen.scratch1, SZ_B);
@@ -426,7 +463,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			bt_ir(code, 7, opts->gen.scratch1, SZ_W);
 			setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_S));
 			shr_ir(code, 8, opts->gen.scratch1, SZ_W);
-			mov_rr(code, opts->gen.scratch1, opts->regs[Z80_A], SZ_B);
+			native_to_zreg(opts, opts->gen.scratch1, Z80_A);
 		} else {
 			translate_z80_reg(inst, &src_op, opts);
 			mov_rr(code, opts->gen.scratch1, src_op.base, SZ_W);
@@ -443,9 +480,10 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		cycles(&opts->gen, num_cycles);
 		if (inst->addr_mode == Z80_REG) {
 			if(inst->reg == Z80_AF) {
-				mov_rr(code, opts->regs[Z80_A], opts->gen.scratch1, SZ_B);
-				mov_rdispr(code, opts->gen.context_reg, zar_off(Z80_A), opts->regs[Z80_A], SZ_B);
+				zreg_to_native(opts, Z80_A, opts->gen.scratch1);
+				mov_rdispr(code, opts->gen.context_reg, zar_off(Z80_A), opts->gen.scratch2, SZ_B);
 				mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zar_off(Z80_A), SZ_B);
+				native_to_zreg(opts, opts->gen.scratch2, Z80_A);
 
 				//Flags are currently word aligned, so we can move
 				//them efficiently a word at a time
@@ -456,56 +494,91 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 					mov_rrdisp(code, opts->gen.scratch2, opts->gen.context_reg, zf_off(f), SZ_W);
 				}
 			} else {
-				xchg_rr(code, opts->regs[Z80_DE], opts->regs[Z80_HL], SZ_W);
+				if (opts->regs[Z80_DE] >= 0 && opts->regs[Z80_HL] >= 0) {
+					xchg_rr(code, opts->regs[Z80_DE], opts->regs[Z80_HL], SZ_W);
+				} else {
+					zreg_to_native(opts, Z80_DE, opts->gen.scratch1);
+					zreg_to_native(opts, Z80_HL, opts->gen.scratch2);
+					native_to_zreg(opts, opts->gen.scratch1, Z80_HL);
+					native_to_zreg(opts, opts->gen.scratch2, Z80_DE);
+				}
 			}
 		} else {
 			mov_rr(code, opts->regs[Z80_SP], opts->gen.scratch1, SZ_W);
 			call(code, opts->read_8);
-			xchg_rr(code, opts->regs[inst->reg], opts->gen.scratch1, SZ_B);
+			if (opts->regs[inst->reg] >= 0) {
+				xchg_rr(code, opts->regs[inst->reg], opts->gen.scratch1, SZ_B);
+			} else {
+				zreg_to_native(opts, inst->reg, opts->gen.scratch2);
+				xchg_rr(code, opts->gen.scratch1, opts->gen.scratch2, SZ_B);
+				native_to_zreg(opts, opts->gen.scratch2, inst->reg);
+			}
 			mov_rr(code, opts->regs[Z80_SP], opts->gen.scratch2, SZ_W);
 			call(code, opts->write_8);
 			cycles(&opts->gen, 1);
 			uint8_t high_reg = z80_high_reg(inst->reg);
-			uint8_t use_reg;
-			//even though some of the upper halves can be used directly
-			//the limitations on mixing *H regs with the REX prefix
-			//prevent us from taking advantage of it
-			use_reg = opts->regs[inst->reg];
-			ror_ir(code, 8, use_reg, SZ_W);
 			mov_rr(code, opts->regs[Z80_SP], opts->gen.scratch1, SZ_W);
 			add_ir(code, 1, opts->gen.scratch1, SZ_W);
 			call(code, opts->read_8);
-			xchg_rr(code, use_reg, opts->gen.scratch1, SZ_B);
+			if (opts->regs[inst->reg] >= 0) {
+				//even though some of the upper halves can be used directly
+				//the limitations on mixing *H regs with the REX prefix
+				//prevent us from taking advantage of it
+				uint8_t use_reg = opts->regs[inst->reg];
+				ror_ir(code, 8, use_reg, SZ_W);
+				xchg_rr(code, use_reg, opts->gen.scratch1, SZ_B);
+				//restore reg to normal rotation
+				ror_ir(code, 8, use_reg, SZ_W);
+			} else {
+				zreg_to_native(opts, high_reg, opts->gen.scratch2);
+				xchg_rr(code, opts->gen.scratch1, opts->gen.scratch2, SZ_B);
+				native_to_zreg(opts, opts->gen.scratch2, high_reg);
+			}
 			mov_rr(code, opts->regs[Z80_SP], opts->gen.scratch2, SZ_W);
 			add_ir(code, 1, opts->gen.scratch2, SZ_W);
 			call(code, opts->write_8);
-			//restore reg to normal rotation
-			ror_ir(code, 8, use_reg, SZ_W);
 			cycles(&opts->gen, 2);
 		}
 		break;
 	case Z80_EXX:
 		cycles(&opts->gen, 4);
-		mov_rr(code, opts->regs[Z80_BC], opts->gen.scratch1, SZ_W);
-		mov_rr(code, opts->regs[Z80_HL], opts->gen.scratch2, SZ_W);
-		mov_rdispr(code, opts->gen.context_reg, zar_off(Z80_C), opts->regs[Z80_BC], SZ_W);
-		mov_rdispr(code, opts->gen.context_reg, zar_off(Z80_L), opts->regs[Z80_HL], SZ_W);
-		mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zar_off(Z80_C), SZ_W);
-		mov_rrdisp(code, opts->gen.scratch2, opts->gen.context_reg, zar_off(Z80_L), SZ_W);
-		mov_rr(code, opts->regs[Z80_DE], opts->gen.scratch1, SZ_W);
-		mov_rdispr(code, opts->gen.context_reg, zar_off(Z80_E), opts->regs[Z80_DE], SZ_W);
-		mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zar_off(Z80_E), SZ_W);
+		zreg_to_native(opts, Z80_BC, opts->gen.scratch1);
+		mov_rdispr(code, opts->gen.context_reg, zar_off(Z80_BC), opts->gen.scratch2, SZ_W);
+		mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zar_off(Z80_BC), SZ_W);
+		native_to_zreg(opts, opts->gen.scratch2, Z80_BC);
+		
+		zreg_to_native(opts, Z80_HL, opts->gen.scratch1);
+		mov_rdispr(code, opts->gen.context_reg, zar_off(Z80_HL), opts->gen.scratch2, SZ_W);
+		mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zar_off(Z80_HL), SZ_W);
+		native_to_zreg(opts, opts->gen.scratch2, Z80_HL);
+		
+		zreg_to_native(opts, Z80_DE, opts->gen.scratch1);
+		mov_rdispr(code, opts->gen.context_reg, zar_off(Z80_DE), opts->gen.scratch2, SZ_W);
+		mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zar_off(Z80_DE), SZ_W);
+		native_to_zreg(opts, opts->gen.scratch2, Z80_DE);
 		break;
 	case Z80_LDI: {
 		cycles(&opts->gen, 8);
-		mov_rr(code, opts->regs[Z80_HL], opts->gen.scratch1, SZ_W);
+		zreg_to_native(opts, Z80_HL, opts->gen.scratch1);
 		call(code, opts->read_8);
-		mov_rr(code, opts->regs[Z80_DE], opts->gen.scratch2, SZ_W);
+		zreg_to_native(opts, Z80_DE, opts->gen.scratch2);
 		call(code, opts->write_8);
 		cycles(&opts->gen, 2);
-		add_ir(code, 1, opts->regs[Z80_DE], SZ_W);
-		add_ir(code, 1, opts->regs[Z80_HL], SZ_W);
-		sub_ir(code, 1, opts->regs[Z80_BC], SZ_W);
+		if (opts->regs[Z80_DE] >= 0) {
+			add_ir(code, 1, opts->regs[Z80_DE], SZ_W);
+		} else {
+			add_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_DE), SZ_W);
+		}
+		if (opts->regs[Z80_HL] >= 0) {
+			add_ir(code, 1, opts->regs[Z80_HL], SZ_W);
+		} else {
+			add_irdisp(code, 1, opts->gen.context_reg,  zr_off(Z80_HL), SZ_W);
+		}
+		if (opts->regs[Z80_BC] >= 0) {
+			sub_ir(code, 1, opts->regs[Z80_BC], SZ_W);
+		} else {
+			sub_irdisp(code, 1, opts->gen.context_reg,  zr_off(Z80_BC), SZ_W);
+		}
 		//TODO: Implement half-carry
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		setcc_rdisp(code, CC_NZ, opts->gen.context_reg, zf_off(ZF_PV));
@@ -513,14 +586,25 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 	}
 	case Z80_LDIR: {
 		cycles(&opts->gen, 8);
-		mov_rr(code, opts->regs[Z80_HL], opts->gen.scratch1, SZ_W);
+		zreg_to_native(opts, Z80_HL, opts->gen.scratch1);
 		call(code, opts->read_8);
-		mov_rr(code, opts->regs[Z80_DE], opts->gen.scratch2, SZ_W);
+		zreg_to_native(opts, Z80_DE, opts->gen.scratch2);
 		call(code, opts->write_8);
-		add_ir(code, 1, opts->regs[Z80_DE], SZ_W);
-		add_ir(code, 1, opts->regs[Z80_HL], SZ_W);
-
-		sub_ir(code, 1, opts->regs[Z80_BC], SZ_W);
+		if (opts->regs[Z80_DE] >= 0) {
+			add_ir(code, 1, opts->regs[Z80_DE], SZ_W);
+		} else {
+			add_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_DE), SZ_W);
+		}
+		if (opts->regs[Z80_HL] >= 0) {
+			add_ir(code, 1, opts->regs[Z80_HL], SZ_W);
+		} else {
+			add_irdisp(code, 1, opts->gen.context_reg,  zr_off(Z80_HL), SZ_W);
+		}
+		if (opts->regs[Z80_BC] >= 0) {
+			sub_ir(code, 1, opts->regs[Z80_BC], SZ_W);
+		} else {
+			sub_irdisp(code, 1, opts->gen.context_reg,  zr_off(Z80_BC), SZ_W);
+		}
 		uint8_t * cont = code->cur+1;
 		jcc(code, CC_Z, code->cur+2);
 		cycles(&opts->gen, 7);
@@ -536,14 +620,26 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 	}
 	case Z80_LDD: {
 		cycles(&opts->gen, 8);
-		mov_rr(code, opts->regs[Z80_HL], opts->gen.scratch1, SZ_W);
+		zreg_to_native(opts, Z80_HL, opts->gen.scratch1);
 		call(code, opts->read_8);
-		mov_rr(code, opts->regs[Z80_DE], opts->gen.scratch2, SZ_W);
+		zreg_to_native(opts, Z80_DE, opts->gen.scratch2);
 		call(code, opts->write_8);
 		cycles(&opts->gen, 2);
-		sub_ir(code, 1, opts->regs[Z80_DE], SZ_W);
-		sub_ir(code, 1, opts->regs[Z80_HL], SZ_W);
-		sub_ir(code, 1, opts->regs[Z80_BC], SZ_W);
+		if (opts->regs[Z80_DE] >= 0) {
+			sub_ir(code, 1, opts->regs[Z80_DE], SZ_W);
+		} else {
+			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_DE), SZ_W);
+		}
+		if (opts->regs[Z80_HL] >= 0) {
+			add_ir(code, 1, opts->regs[Z80_HL], SZ_W);
+		} else {
+			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_HL), SZ_W);
+		}
+		if (opts->regs[Z80_BC] >= 0) {
+			sub_ir(code, 1, opts->regs[Z80_BC], SZ_W);
+		} else {
+			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_BC), SZ_W);
+		}
 		//TODO: Implement half-carry
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		setcc_rdisp(code, CC_NZ, opts->gen.context_reg, zf_off(ZF_PV));
@@ -551,14 +647,25 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 	}
 	case Z80_LDDR: {
 		cycles(&opts->gen, 8);
-		mov_rr(code, opts->regs[Z80_HL], opts->gen.scratch1, SZ_W);
+		zreg_to_native(opts, Z80_HL, opts->gen.scratch1);
 		call(code, opts->read_8);
-		mov_rr(code, opts->regs[Z80_DE], opts->gen.scratch2, SZ_W);
+		zreg_to_native(opts, Z80_DE, opts->gen.scratch2);
 		call(code, opts->write_8);
-		sub_ir(code, 1, opts->regs[Z80_DE], SZ_W);
-		sub_ir(code, 1, opts->regs[Z80_HL], SZ_W);
-
-		sub_ir(code, 1, opts->regs[Z80_BC], SZ_W);
+		if (opts->regs[Z80_DE] >= 0) {
+			sub_ir(code, 1, opts->regs[Z80_DE], SZ_W);
+		} else {
+			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_DE), SZ_W);
+		}
+		if (opts->regs[Z80_HL] >= 0) {
+			add_ir(code, 1, opts->regs[Z80_HL], SZ_W);
+		} else {
+			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_HL), SZ_W);
+		}
+		if (opts->regs[Z80_BC] >= 0) {
+			sub_ir(code, 1, opts->regs[Z80_BC], SZ_W);
+		} else {
+			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_BC), SZ_W);
+		}
 		uint8_t * cont = code->cur+1;
 		jcc(code, CC_Z, code->cur+2);
 		cycles(&opts->gen, 7);
@@ -1342,7 +1449,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			jmp(code, call_dst);
 		} else {
 			if (inst->addr_mode == Z80_REG_INDIRECT) {
-				mov_rr(code, opts->regs[inst->ea_reg], opts->gen.scratch1, SZ_W);
+				zreg_to_native(opts, inst->ea_reg, opts->gen.scratch1);
 			} else {
 				mov_ir(code, inst->immed, opts->gen.scratch1, SZ_W);
 			}
@@ -1973,7 +2080,7 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 #else
 	memset(options->regs, -1, sizeof(options->regs));
 	options->regs[Z80_A] = RAX;
-	options->regx[Z80_SP] = RBX;
+	options->regs[Z80_SP] = RBX;
 
 	options->gen.scratch1 = RCX;
 	options->gen.scratch2 = RDX;
@@ -2214,7 +2321,11 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 
 	options->run = (z80_run_fun)code->cur;
 	save_callee_save_regs(code);
+#ifdef X86_64
 	mov_rr(code, RDI, options->gen.context_reg, SZ_PTR);
+#else
+	mov_rdispr(code, RSP, 5 * sizeof(int32_t), options->gen.context_reg, SZ_PTR);
+#endif
 	call(code, options->load_context_scratch);
 	cmp_irdisp(code, 0, options->gen.context_reg, offsetof(z80_context, extra_pc), SZ_PTR);
 	code_ptr no_extra = code->cur+1;
