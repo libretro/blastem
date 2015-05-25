@@ -1698,8 +1698,13 @@ void translate_m68k_div(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 	}
 	cmp_ir(code, 0, RAX, SZ_W);
 	pop_r(code, RAX);
-	pop_r(code, RDX);
-	update_flags(opts, V0|Z|N);
+	if (dst_op->base == RDX) {
+		update_flags(opts, V0|Z|N);
+		add_ir(code, sizeof(void *), RSP, SZ_D);
+	} else {
+		pop_r(code, RDX);
+		update_flags(opts, V0|Z|N);
+	}
 	code_ptr end_off = code->cur + 1;
 	jmp(code, code->cur + 2);
 	*norm_off = code->cur - (norm_off + 1);
