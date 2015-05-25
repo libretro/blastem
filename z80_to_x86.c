@@ -35,6 +35,50 @@ uint8_t z80_size(z80inst * inst)
 	return SZ_B;
 }
 
+uint8_t zf_off(uint8_t flag)
+{
+	return offsetof(z80_context, flags) + flag;
+}
+
+uint8_t zaf_off(uint8_t flag)
+{
+	return offsetof(z80_context, alt_flags) + flag;
+}
+
+uint8_t zr_off(uint8_t reg)
+{
+	if (reg > Z80_A) {
+		reg = z80_low_reg(reg);
+	}
+	return offsetof(z80_context, regs) + reg;
+}
+
+uint8_t zar_off(uint8_t reg)
+{
+	if (reg > Z80_A) {
+		reg = z80_low_reg(reg);
+	}
+	return offsetof(z80_context, alt_regs) + reg;
+}
+
+void zreg_to_native(z80_options *opts, uint8_t reg, uint8_t native_reg)
+{
+	if (opts->regs[reg] >= 0) {
+		mov_rr(&opts->gen.code, opts->regs[reg], native_reg, reg > Z80_A ? SZ_W : SZ_B);
+	} else {
+		mov_rdispr(&opts->gen.code, opts->gen.context_reg, zr_off(reg), native_reg, reg > Z80_A ? SZ_W : SZ_B);
+	}
+}
+
+void native_to_zreg(z80_options *opts, uint8_t native_reg, uint8_t reg)
+{
+	if (opts->regs[reg] >= 0) {
+		mov_rr(&opts->gen.code, native_reg, opts->regs[reg], reg > Z80_A ? SZ_W : SZ_B);
+	} else {
+		mov_rrdisp(&opts->gen.code, native_reg, opts->gen.context_reg, zr_off(reg), reg > Z80_A ? SZ_W : SZ_B);
+	}
+}
+
 void translate_z80_reg(z80inst * inst, host_ea * ea, z80_options * opts)
 {
 	code_info *code = &opts->gen.code;
@@ -45,7 +89,7 @@ void translate_z80_reg(z80inst * inst, host_ea * ea, z80_options * opts)
 		ea->mode = MODE_UNUSED;
 	} else {
 		ea->mode = MODE_REG_DIRECT;
-		if (inst->reg == Z80_IYH) {
+		if (inst->reg == Z80_IYH && opts->regs[Z80_IYL] >= 0) {
 			if ((inst->addr_mode & 0x1F) == Z80_REG && inst->ea_reg == Z80_IYL) {
 				mov_rr(code, opts->regs[Z80_IY], opts->gen.scratch1, SZ_W);
 				ror_ir(code, 8, opts->gen.scratch1, SZ_W);
@@ -73,7 +117,7 @@ void translate_z80_reg(z80inst * inst, host_ea * ea, z80_options * opts)
 		} else {
 			ea->mode = MODE_REG_DISPLACE8;
 			ea->base = opts->gen.context_reg;
-			ea->disp = offsetof(z80_context, regs) + inst->reg;
+			ea->disp = zr_off(inst->reg);
 		}
 	}
 }
@@ -84,7 +128,7 @@ void z80_save_reg(z80inst * inst, z80_options * opts)
 	if (inst->reg == Z80_USE_IMMED || inst->reg == Z80_UNUSED) {
 		return;
 	}
-	if (inst->reg == Z80_IYH) {
+	if (inst->reg == Z80_IYH && opts->regs[Z80_IYL] >= 0) {
 		if ((inst->addr_mode & 0x1F) == Z80_REG && inst->ea_reg == Z80_IYL) {
 			ror_ir(code, 8, opts->regs[Z80_IY], SZ_W);
 			mov_rr(code, opts->gen.scratch1, opts->regs[Z80_IYL], SZ_B);
@@ -116,7 +160,7 @@ void translate_z80_ea(z80inst * inst, host_ea * ea, z80_options * opts, uint8_t 
 	switch(inst->addr_mode & 0x1F)
 	{
 	case Z80_REG:
-		if (inst->ea_reg == Z80_IYH && opts->regs[Z80_IY] >= 0) {
+		if (inst->ea_reg == Z80_IYH && opts->regs[Z80_IYL] >= 0) {
 			if (inst->reg == Z80_IYL) {
 				mov_rr(code, opts->regs[Z80_IY], opts->gen.scratch1, SZ_W);
 				ror_ir(code, 8, opts->gen.scratch1, SZ_W);
@@ -140,15 +184,11 @@ void translate_z80_ea(z80inst * inst, host_ea * ea, z80_options * opts, uint8_t 
 		} else {
 			ea->mode = MODE_REG_DISPLACE8;
 			ea->base = opts->gen.context_reg;
-			ea->disp = offsetof(z80_context, regs) + inst->ea_reg;
+			ea->disp = zr_off(inst->ea_reg);
 		}
 		break;
 	case Z80_REG_INDIRECT:
-		if (opts->regs[inst->ea_reg] >= 0) {
-			mov_rr(code, opts->regs[inst->ea_reg], areg, SZ_W);
-		} else {
-			mov_rdispr(code, opts->gen.context_reg, offsetof(z80_context, regs) + z80_low_reg(inst->ea_reg), areg, SZ_W);
-		}
+		zreg_to_native(opts, inst->ea_reg, areg);
 		size = z80_size(inst);
 		if (read) {
 			if (modify) {
@@ -192,12 +232,7 @@ void translate_z80_ea(z80inst * inst, host_ea * ea, z80_options * opts, uint8_t 
 		break;
 	case Z80_IX_DISPLACE:
 	case Z80_IY_DISPLACE:
-		reg = opts->regs[(inst->addr_mode & 0x1F) == Z80_IX_DISPLACE ? Z80_IX : Z80_IY];
-		if (reg >= 0) {
-			mov_rr(code, reg, areg, SZ_W);
-		} else {
-			mov_rdispr(code, opts->gen.context_reg, offsetof(z80_context, regs) + (inst->addr_mode & 0x1F) == Z80_IX_DISPLACE ? Z80_IXL : Z80_IYL, areg, SZ_W);
-		}
+		zreg_to_native(opts, (inst->addr_mode & 0x1F) == Z80_IX_DISPLACE ? Z80_IX : Z80_IY, areg);
 		add_ir(code, inst->ea_reg & 0x80 ? inst->ea_reg - 256 : inst->ea_reg, areg, SZ_W);
 		size = z80_size(inst);
 		if (read) {
@@ -229,7 +264,7 @@ void translate_z80_ea(z80inst * inst, host_ea * ea, z80_options * opts, uint8_t 
 void z80_save_ea(code_info *code, z80inst * inst, z80_options * opts)
 {
 	if ((inst->addr_mode & 0x1F) == Z80_REG) {
-		if (inst->ea_reg == Z80_IYH) {
+		if (inst->ea_reg == Z80_IYH && opts->regs[Z80_IYL] >= 0) {
 			if (inst->reg == Z80_IYL) {
 				ror_ir(code, 8, opts->regs[Z80_IY], SZ_W);
 				mov_rr(code, opts->gen.scratch1, opts->regs[Z80_IYL], SZ_B);
@@ -274,50 +309,6 @@ enum {
 	DONT_MODIFY=0,
 	MODIFY
 };
-
-uint8_t zf_off(uint8_t flag)
-{
-	return offsetof(z80_context, flags) + flag;
-}
-
-uint8_t zaf_off(uint8_t flag)
-{
-	return offsetof(z80_context, alt_flags) + flag;
-}
-
-uint8_t zr_off(uint8_t reg)
-{
-	if (reg > Z80_A) {
-		reg = z80_low_reg(reg);
-	}
-	return offsetof(z80_context, regs) + reg;
-}
-
-uint8_t zar_off(uint8_t reg)
-{
-	if (reg > Z80_A) {
-		reg = z80_low_reg(reg);
-	}
-	return offsetof(z80_context, alt_regs) + reg;
-}
-
-void zreg_to_native(z80_options *opts, uint8_t reg, uint8_t native_reg)
-{
-	if (opts->regs[reg] >= 0) {
-		mov_rr(&opts->gen.code, opts->regs[reg], native_reg, reg > Z80_A ? SZ_W : SZ_B);
-	} else {
-		mov_rdispr(&opts->gen.code, opts->gen.context_reg, zr_off(reg), native_reg, reg > Z80_A ? SZ_W : SZ_B);
-	}
-}
-
-void native_to_zreg(z80_options *opts, uint8_t native_reg, uint8_t reg)
-{
-	if (opts->regs[reg] >= 0) {
-		mov_rr(&opts->gen.code, native_reg, opts->regs[reg], reg > Z80_A ? SZ_W : SZ_B);
-	} else {
-		mov_rrdisp(&opts->gen.code, native_reg, opts->gen.context_reg, zr_off(reg), reg > Z80_A ? SZ_W : SZ_B);
-	}
-}
 
 void z80_print_regs_exit(z80_context * context)
 {
@@ -445,8 +436,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			shl_ir(code, 1, opts->gen.scratch1, SZ_B);
 			or_rdispr(code, opts->gen.context_reg, zf_off(ZF_C), opts->gen.scratch1, SZ_B);
 		} else {
-			translate_z80_reg(inst, &src_op, opts);
-			mov_rr(code, src_op.base, opts->gen.scratch1, SZ_W);
+			zreg_to_native(opts, inst->reg, opts->gen.scratch1);
 		}
 		mov_rr(code, opts->regs[Z80_SP], opts->gen.scratch2, SZ_W);
 		call(code, opts->write_16_highfirst);
@@ -475,8 +465,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			shr_ir(code, 8, opts->gen.scratch1, SZ_W);
 			native_to_zreg(opts, opts->gen.scratch1, Z80_A);
 		} else {
-			translate_z80_reg(inst, &src_op, opts);
-			mov_rr(code, opts->gen.scratch1, src_op.base, SZ_W);
+			native_to_zreg(opts, opts->gen.scratch1, inst->reg);
 		}
 		//no call to save_z80_reg needed since there's no chance we'll use the only
 		//the upper half of a register pair
@@ -1123,7 +1112,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		//TODO: Implement half-carry flag
 		if (inst->immed) {
 			//rlca does not set these flags
-			cmp_ir(code, 0, dst_op.base, SZ_B);
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				cmp_ir(code, 0, dst_op.base, SZ_B);
+			} else {
+				cmp_irdisp(code, 0, dst_op.base, dst_op.disp, SZ_B);
+			}
 			setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
 			setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
 			setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
@@ -1164,7 +1157,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		//TODO: Implement half-carry flag
 		if (inst->immed) {
 			//rla does not set these flags
-			cmp_ir(code, 0, dst_op.base, SZ_B);
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				cmp_ir(code, 0, dst_op.base, SZ_B);
+			} else {
+				cmp_irdisp(code, 0, dst_op.base, dst_op.disp, SZ_B);
+			}
 			setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
 			setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
 			setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
@@ -1204,7 +1201,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		//TODO: Implement half-carry flag
 		if (inst->immed) {
 			//rrca does not set these flags
-			cmp_ir(code, 0, dst_op.base, SZ_B);
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				cmp_ir(code, 0, dst_op.base, SZ_B);
+			} else {
+				cmp_irdisp(code, 0, dst_op.base, dst_op.disp, SZ_B);
+			}
 			setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
 			setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
 			setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
@@ -1245,7 +1246,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		//TODO: Implement half-carry flag
 		if (inst->immed) {
 			//rra does not set these flags
-			cmp_ir(code, 0, dst_op.base, SZ_B);
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				cmp_ir(code, 0, dst_op.base, SZ_B);
+			} else {
+				cmp_irdisp(code, 0, dst_op.base, dst_op.disp, SZ_B);
+			}
 			setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
 			setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
 			setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
@@ -1278,7 +1283,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		}
 		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
 		if (inst->op == Z80_SLL) {
-			or_ir(code, 1, dst_op.base, SZ_B);
+			if (dst_op.mode == MODE_REG_DIRECT) {
+				or_ir(code, 1, dst_op.base, SZ_B);
+			} else {
+				or_irdisp(code, 1, dst_op.base, dst_op.disp, SZ_B);
+			}
 		}
 		if (src_op.mode == MODE_REG_DIRECT) {
 			mov_rr(code, dst_op.base, src_op.base, SZ_B);
@@ -1287,7 +1296,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		}
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		//TODO: Implement half-carry flag
-		cmp_ir(code, 0, dst_op.base, SZ_B);
+		if (dst_op.mode == MODE_REG_DIRECT) {
+			cmp_ir(code, 0, dst_op.base, SZ_B);
+		} else {
+			cmp_irdisp(code, 0, dst_op.base, dst_op.disp, SZ_B);
+		}
 		setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
 		setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
 		setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
@@ -1324,7 +1337,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		//TODO: Implement half-carry flag
-		cmp_ir(code, 0, dst_op.base, SZ_B);
+		if (dst_op.mode == MODE_REG_DIRECT) {
+			cmp_ir(code, 0, dst_op.base, SZ_B);
+		} else {
+			cmp_irdisp(code, 0, dst_op.base, dst_op.disp, SZ_B);
+		}
 		setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
 		setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
 		setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
@@ -1361,7 +1378,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		//TODO: Implement half-carry flag
-		cmp_ir(code, 0, dst_op.base, SZ_B);
+		if (dst_op.mode == MODE_REG_DIRECT) {
+			cmp_ir(code, 0, dst_op.base, SZ_B);
+		} else {
+			cmp_irdisp(code, 0, dst_op.base, dst_op.disp, SZ_B);
+		}
 		setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
 		setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
 		setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
@@ -1448,12 +1469,20 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			//Reads normally take 3 cycles, but the read at the end of a bit instruction takes 4
 			cycles(&opts->gen, 1);
 		}
-		bt_ir(code, bit, src_op.base, size);
+		if (src_op.mode == MODE_REG_DIRECT) {
+			bt_ir(code, bit, src_op.base, size);
+		} else {
+			bt_irdisp(code, bit, src_op.base, src_op.disp, size);
+		}
 		setcc_rdisp(code, CC_NC, opts->gen.context_reg, zf_off(ZF_Z));
 		setcc_rdisp(code, CC_NC, opts->gen.context_reg, zf_off(ZF_PV));
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		if (inst->immed == 7) {
-			cmp_ir(code, 0, src_op.base, size);
+			if (src_op.mode == MODE_REG_DIRECT) {
+				cmp_ir(code, 0, src_op.base, size);
+			} else {
+				cmp_irdisp(code, 0, src_op.base, src_op.disp, size);
+			}
 			setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
 		} else {
 			mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_S), SZ_B);
@@ -1480,7 +1509,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			//Reads normally take 3 cycles, but the read in the middle of a set instruction takes 4
 			cycles(&opts->gen, 1);
 		}
-		bts_ir(code, bit, src_op.base, size);
+		if (src_op.mode == MODE_REG_DIRECT) {
+			bts_ir(code, bit, src_op.base, size);
+		} else {
+			bts_irdisp(code, bit, src_op.base, src_op.disp, size);
+		}
 		if (inst->reg != Z80_USE_IMMED) {
 			if (size == SZ_W) {
 #ifdef X86_64
@@ -1490,12 +1523,28 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 					ror_ir(code, 8, src_op.base, SZ_W);
 				} else {
 #endif
-					mov_rr(code, opts->regs[inst->ea_reg], dst_op.base, SZ_B);
+					if (dst_op.mode == MODE_REG_DIRECT) {
+						zreg_to_native(opts, inst->ea_reg, dst_op.base);
+					} else {
+						zreg_to_native(opts, inst->ea_reg, opts->gen.scratch1);
+						mov_rrdisp(code, opts->gen.scratch1, dst_op.base, dst_op.disp, SZ_B);
+					}
 #ifdef X86_64
 				}
 #endif
 			} else {
-				mov_rr(code, src_op.base, dst_op.base, SZ_B);
+				if (dst_op.mode == MODE_REG_DIRECT) {
+					if (src_op.mode == MODE_REG_DIRECT) {
+						mov_rr(code, src_op.base, dst_op.base, SZ_B);
+					} else {
+						mov_rdispr(code, src_op.base, src_op.disp, dst_op.base, SZ_B);
+					}
+				} else if (src_op.mode == MODE_REG_DIRECT) {
+					mov_rrdisp(code, src_op.base, dst_op.base, dst_op.disp, SZ_B);
+				} else {
+					mov_rdispr(code, src_op.base, src_op.disp, opts->gen.scratch1, SZ_B);
+					mov_rrdisp(code, opts->gen.scratch1, dst_op.base, dst_op.disp, SZ_B);
+				}
 			}
 		}
 		if ((inst->addr_mode & 0x1F) != Z80_REG) {
@@ -1526,7 +1575,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			//Reads normally take 3 cycles, but the read in the middle of a set instruction takes 4
 			cycles(&opts->gen, 1);
 		}
-		btr_ir(code, bit, src_op.base, size);
+		if (src_op.mode == MODE_REG_DIRECT) {
+			btr_ir(code, bit, src_op.base, size);
+		} else {
+			btr_irdisp(code, bit, src_op.base, src_op.disp, size);
+		}
 		if (inst->reg != Z80_USE_IMMED) {
 			if (size == SZ_W) {
 #ifdef X86_64
@@ -1536,12 +1589,28 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 					ror_ir(code, 8, src_op.base, SZ_W);
 				} else {
 #endif
-					mov_rr(code, opts->regs[inst->ea_reg], dst_op.base, SZ_B);
+					if (dst_op.mode == MODE_REG_DIRECT) {
+						zreg_to_native(opts, inst->ea_reg, dst_op.base);
+					} else {
+						zreg_to_native(opts, inst->ea_reg, opts->gen.scratch1);
+						mov_rrdisp(code, opts->gen.scratch1, dst_op.base, dst_op.disp, SZ_B);
+					}
 #ifdef X86_64
 				}
 #endif
 			} else {
-				mov_rr(code, src_op.base, dst_op.base, SZ_B);
+				if (dst_op.mode == MODE_REG_DIRECT) {
+					if (src_op.mode == MODE_REG_DIRECT) {
+						mov_rr(code, src_op.base, dst_op.base, SZ_B);
+					} else {
+						mov_rdispr(code, src_op.base, src_op.disp, dst_op.base, SZ_B);
+					}
+				} else if (src_op.mode == MODE_REG_DIRECT) {
+					mov_rrdisp(code, src_op.base, dst_op.base, dst_op.disp, SZ_B);
+				} else {
+					mov_rdispr(code, src_op.base, src_op.disp, opts->gen.scratch1, SZ_B);
+					mov_rrdisp(code, opts->gen.scratch1, dst_op.base, dst_op.disp, SZ_B);
+				}
 			}
 		}
 		if (inst->addr_mode != Z80_REG) {
