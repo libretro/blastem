@@ -1451,8 +1451,10 @@ void translate_m68k_abcd_sbcd(m68k_options *opts, m68kinst *inst, host_ea *src_o
 
 	cmp_ir(code, 0, opts->gen.scratch1, SZ_B);
 	set_flag_cond(opts, CC_S, FLAG_N);
-	jcc(code, CC_Z, code->cur + 4);
+	code_ptr no_setz = code->cur+1;
+	jcc(code, CC_Z, no_setz);
 	set_flag(opts, 0, FLAG_Z);
+	*no_setz = code->cur - (no_setz + 1);
 	if (dst_op->base != opts->gen.scratch1) {
 		if (dst_op->mode == MODE_REG_DIRECT) {
 			mov_rr(code, opts->gen.scratch1, dst_op->base, SZ_B);
