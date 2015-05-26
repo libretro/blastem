@@ -1397,11 +1397,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		break;
 	case Z80_RLD:
 		cycles(&opts->gen, 8);
-		mov_rr(code, opts->regs[Z80_HL], opts->gen.scratch1, SZ_W);
+		zreg_to_native(opts, Z80_HL, opts->gen.scratch1);
 		call(code, opts->read_8);
 		//Before: (HL) = 0x12, A = 0x34
 		//After: (HL) = 0x24, A = 0x31
-		mov_rr(code, opts->regs[Z80_A], opts->gen.scratch2, SZ_B);
+		zreg_to_native(opts, Z80_A, opts->gen.scratch2);
 		shl_ir(code, 4, opts->gen.scratch1, SZ_W);
 		and_ir(code, 0xF, opts->gen.scratch2, SZ_W);
 		and_ir(code, 0xFFF, opts->gen.scratch1, SZ_W);
@@ -1418,17 +1418,17 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
 		setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
 
-		mov_rr(code, opts->regs[Z80_HL], opts->gen.scratch2, SZ_W);
+		zreg_to_native(opts, Z80_HL, opts->gen.scratch2);
 		ror_ir(code, 8, opts->gen.scratch1, SZ_W);
 		call(code, opts->write_8);
 		break;
 	case Z80_RRD:
 		cycles(&opts->gen, 8);
-		mov_rr(code, opts->regs[Z80_HL], opts->gen.scratch1, SZ_W);
+		zreg_to_native(opts, Z80_HL, opts->gen.scratch1);
 		call(code, opts->read_8);
 		//Before: (HL) = 0x12, A = 0x34
 		//After: (HL) = 0x41, A = 0x32
-		movzx_rr(code, opts->regs[Z80_A], opts->gen.scratch2, SZ_B, SZ_W);
+		zreg_to_native(opts, Z80_A, opts->gen.scratch2);
 		ror_ir(code, 4, opts->gen.scratch1, SZ_W);
 		shl_ir(code, 4, opts->gen.scratch2, SZ_W);
 		and_ir(code, 0xF00F, opts->gen.scratch1, SZ_W);
@@ -1448,7 +1448,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
 		setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
 
-		mov_rr(code, opts->regs[Z80_HL], opts->gen.scratch2, SZ_W);
+		zreg_to_native(opts, Z80_HL, opts->gen.scratch2);
 		ror_ir(code, 8, opts->gen.scratch1, SZ_W);
 		call(code, opts->write_8);
 		break;
