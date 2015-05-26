@@ -217,6 +217,11 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	uint32_t mclks = context->current_cycle;
 	sync_z80(z_context, mclks);
 	sync_sound(gen, mclks);
+	while (context->current_cycle > mclks) {
+		mclks = context->current_cycle;
+		sync_z80(z_context, mclks);
+		sync_sound(gen, mclks);
+	}
 	vdp_run_context(v_context, mclks);
 	if (v_context->frame != last_frame_num) {
 		//printf("reached frame end %d | MCLK Cycles: %d, Target: %d, VDP cycles: %d, vcounter: %d, hslot: %d\n", last_frame_num, mclks, gen->frame_end, v_context->cycles, v_context->vcounter, v_context->hslot);
@@ -260,7 +265,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			break_on_sync = 0;
 			debugger(context, address);
 		}
-		if (save_state) {
+		if (save_state && (z_context->pc || (!z_context->reset && !z_context->busreq))) {
 			save_state = 0;
 			//advance Z80 core to the start of an instruction
 			while (!z_context->pc)
@@ -269,6 +274,8 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			}
 			save_gst(gen, "savestate.gst", address);
 			puts("Saved state to savestate.gst");
+		} else if(save_state) {
+			context->sync_cycle = context->current_cycle + 1;
 		}
 	}
 	return context;
@@ -436,6 +443,15 @@ uint8_t z80_vdp_port_read(uint32_t vdp_port, void * vcontext)
 		exit(1);
 	}
 	genesis_context * gen = context->system;
+	//VDP access goes over the 68K bus like a bank area access
+	//typical delay from bus arbitration
+	context->current_cycle += 3 * MCLKS_PER_Z80;
+	//TODO: add cycle for an access right after a previous one
+	//TODO: Below cycle time is an estimate based on the time between 68K !BG goes low and Z80 !MREQ goes high
+	//      Needs a new logic analyzer capture to get the actual delay on the 68K side
+	gen->m68k->current_cycle += 8 * MCLKS_PER_68K;
+	
+	
 	vdp_port &= 0x1F;
 	uint16_t ret;
 	if (vdp_port < 0x10) {
@@ -683,6 +699,9 @@ uint8_t z80_read_bank(uint32_t location, void * vcontext)
 	//typical delay from bus arbitration
 	context->current_cycle += 3 * MCLKS_PER_Z80;
 	//TODO: add cycle for an access right after a previous one
+	//TODO: Below cycle time is an estimate based on the time between 68K !BG goes low and Z80 !MREQ goes high
+	//      Needs a new logic analyzer capture to get the actual delay on the 68K side
+	gen->m68k->current_cycle += 8 * MCLKS_PER_68K;
 
 	location &= 0x7FFF;
 	if (context->mem_pointers[1]) {
@@ -707,6 +726,9 @@ void *z80_write_bank(uint32_t location, void * vcontext, uint8_t value)
 	//typical delay from bus arbitration
 	context->current_cycle += 3 * MCLKS_PER_Z80;
 	//TODO: add cycle for an access right after a previous one
+	//TODO: Below cycle time is an estimate based on the time between 68K !BG goes low and Z80 !MREQ goes high
+	//      Needs a new logic analyzer capture to get the actual delay on the 68K side
+	gen->m68k->current_cycle += 8 * MCLKS_PER_68K;
 
 	location &= 0x7FFF;
 	uint32_t address = context->bank_reg << 15 | location;
