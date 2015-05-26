@@ -9,7 +9,11 @@
 #include "backend.h"
 
 #define ZNUM_MEM_AREAS 4
+#ifdef Z80_LOG_ADDRESS
+#define ZMAX_NATIVE_SIZE 255
+#else
 #define ZMAX_NATIVE_SIZE 128
+#endif
 
 enum {
 	ZF_C = 0,

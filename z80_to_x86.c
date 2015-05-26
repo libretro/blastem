@@ -342,7 +342,9 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		if (context->breakpoint_flags[address / sizeof(uint8_t)] & (1 << (address % sizeof(uint8_t)))) {
 			zbreakpoint_patch(context, address, start);
 		}
-		//log_address(&opts->gen, address, "Z80: %X @ %d\n");
+#ifdef Z80_LOG_ADDRESS
+		log_address(&opts->gen, address, "Z80: %X @ %d\n");
+#endif
 	}
 	switch(inst->op)
 	{
@@ -1897,7 +1899,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		}
 		call(code, opts->read_io);
 		translate_z80_reg(inst, &dst_op, opts);
-		mov_rr(code, opts->gen.scratch1, dst_op.base, SZ_B);
+		if (dst_op.mode == MODE_REG_DIRECT) {
+			mov_rr(code, opts->gen.scratch1, dst_op.base, SZ_B);
+		} else {
+			mov_rrdisp(code, opts->gen.scratch1, dst_op.base, dst_op.disp, SZ_B);
+		}
 		z80_save_reg(inst, opts);
 		break;
 	/*case Z80_INI:
@@ -1909,10 +1915,17 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		if ((inst->addr_mode & 0x1F) == Z80_IMMED_INDIRECT) {
 			mov_ir(code, inst->immed, opts->gen.scratch2, SZ_B);
 		} else {
+			zreg_to_native(opts, Z80_C, opts->gen.scratch2);
 			mov_rr(code, opts->regs[Z80_C], opts->gen.scratch2, SZ_B);
 		}
 		translate_z80_reg(inst, &src_op, opts);
-		mov_rr(code, dst_op.base, opts->gen.scratch1, SZ_B);
+		if (src_op.mode == MODE_REG_DIRECT) {
+			mov_rr(code, src_op.base, opts->gen.scratch1, SZ_B);
+		} else if (src_op.mode == MODE_IMMED) {
+			mov_ir(code, src_op.disp, opts->gen.scratch1, SZ_B);
+		} else {
+			mov_rdispr(code, src_op.base, src_op.disp, opts->gen.scratch1, SZ_B);
+		}
 		call(code, opts->write_io);
 		z80_save_reg(inst, opts);
 		break;
@@ -2459,13 +2472,21 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	push_r(code, options->gen.scratch1);
 	call(code, options->read_8_noinc);
 	mov_rr(code, options->gen.scratch1, options->gen.scratch2, SZ_B);
+#ifndef X86_64
+	//scratch 2 is a caller save register in 32-bit builds and may be clobbered by something called from the read8 fun
+	mov_rrdisp(code, options->gen.scratch1, options->gen.context_reg, offsetof(z80_context, scratch2), SZ_B);
+#endif
 	pop_r(code, options->gen.scratch1);
 	add_ir(code, 1, options->gen.scratch1, SZ_W);
 	cycles(&options->gen, 3);
 	check_cycles(&options->gen);
 	call(code, options->read_8_noinc);
 	shl_ir(code, 8, options->gen.scratch1, SZ_W);
+#ifdef X86_64
 	mov_rr(code, options->gen.scratch2, options->gen.scratch1, SZ_B);
+#else
+	mov_rdispr(code, options->gen.context_reg, offsetof(z80_context, scratch2), options->gen.scratch1, SZ_B);
+#endif
 	retn(code);
 
 	options->write_16_highfirst = code->cur;

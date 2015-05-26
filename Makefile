@@ -16,6 +16,10 @@ CFLAGS:=-O2 -flto -std=gnu99 $(shell pkg-config  --cflags-only-I $(LIBS)) -Wretu
 LDFLAGS:=-O2 -flto -lm $(shell pkg-config --libs $(LIBS))
 endif
 
+ifdef Z80_LOG_ADDRESS
+CFLAGS+= -DZ80_LOG_ADDRESS
+endif
+
 ifdef PROFILE
 CFLAGS+= -pg
 LDFLAGS+= -pg
