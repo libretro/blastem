@@ -1460,6 +1460,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		uint8_t bit;
 		if ((inst->addr_mode & 0x1F) == Z80_REG && opts->regs[inst->ea_reg] >= AH && opts->regs[inst->ea_reg] <= BH) {
 			src_op.base = opts->regs[z80_word_reg(inst->ea_reg)];
+			src_op.mode = MODE_REG_DIRECT;
 			size = SZ_W;
 			bit = inst->immed + 8;
 		} else {
@@ -1497,6 +1498,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		uint8_t bit;
 		if ((inst->addr_mode & 0x1F) == Z80_REG && opts->regs[inst->ea_reg] >= AH && opts->regs[inst->ea_reg] <= BH) {
 			src_op.base = opts->regs[z80_word_reg(inst->ea_reg)];
+			src_op.mode = MODE_REG_DIRECT;
 			size = SZ_W;
 			bit = inst->immed + 8;
 		} else {
@@ -1563,6 +1565,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		uint8_t bit;
 		if ((inst->addr_mode & 0x1F) == Z80_REG && opts->regs[inst->ea_reg] >= AH && opts->regs[inst->ea_reg] <= BH) {
 			src_op.base = opts->regs[z80_word_reg(inst->ea_reg)];
+			src_op.mode = MODE_REG_DIRECT;
 			size = SZ_W;
 			bit = inst->immed + 8;
 		} else {
