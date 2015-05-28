@@ -760,6 +760,23 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 				}
 				break;
 			}
+			case 'y': {
+				genesis_context * gen = context->system;
+				//YM-2612 debug commands
+				switch(input_buf[1])
+				{
+				case 'c':
+					if (input_buf[2] == ' ') {
+						int channel = atoi(input_buf+3)-1;
+						ym_print_channel_info(gen->ym, channel);
+					} else {
+						for (int i = 0; i < 6; i++) {
+							ym_print_channel_info(gen->ym, i);
+						}
+					}
+				}
+				break;
+			}
 #ifndef NO_Z80
 			case 'z': {
 				genesis_context * gen = context->system;
