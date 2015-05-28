@@ -108,6 +108,8 @@ uint8_t lfo_pm_base[][8] = {
 };
 int16_t lfo_pm_table[128 * 32 * 8];
 
+uint16_t ams_shift[] = {8, 3, 1, 0};
+
 #define MAX_ENVELOPE 0xFFC
 #define YM_DIVIDER 2
 #define CYCLE_NEVER 0xFFFFFFFF
@@ -268,16 +270,16 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 					context->timer_b = context->timer_b_load;
 				}
 			}
-		}
-		//Update LFO
-		if (context->lfo_enable) {
-			if (context->lfo_counter) {
-				context->lfo_counter--;
-			} else {
-				context->lfo_counter = lfo_timer_values[context->lfo_freq];
-				context->lfo_am_step += 2;
-				context->lfo_am_step &= 0xFE;
-				context->lfo_pm_step = context->lfo_am_step / 8;
+			//Update LFO
+			if (context->lfo_enable) {
+				if (context->lfo_counter) {
+					context->lfo_counter--;
+				} else {
+					context->lfo_counter = lfo_timer_values[context->lfo_freq];
+					context->lfo_am_step += 2;
+					context->lfo_am_step &= 0xFE;
+					context->lfo_pm_step = context->lfo_am_step / 8;
+				}
 			}
 		}
 		//Update Envelope Generator
@@ -427,6 +429,10 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				break;
 			}
 			uint16_t env = operator->envelope + operator->total_level;
+			if (operator->am) {
+				uint16_t base_am = (context->lfo_am_step & 0x80 ? context->lfo_am_step : ~context->lfo_am_step) & 0x7E;
+				env += base_am >> ams_shift[chan->ams];
+			}
 			if (env > MAX_ENVELOPE) {
 				env = MAX_ENVELOPE;
 			}
