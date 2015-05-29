@@ -34,6 +34,7 @@ typedef struct {
 	code_ptr        write_32_highfirst;
 	code_ptr        do_sync;
 	code_ptr        trap;
+	code_ptr        odd_address;
 	start_fun       start_context;
 	code_ptr        retrans_stub;
 	code_ptr        native_addr;
@@ -59,16 +60,16 @@ typedef struct {
 	uint16_t        reserved;
 
 	native_map_slot *native_code_map;
-	void            *options;
-	uint8_t         ram_code_flags[32/8];
+	m68k_options    *options;
 	void            *system;
+	uint8_t         ram_code_flags[];
 } m68k_context;
 
 void translate_m68k(m68k_options * opts, struct m68kinst * inst);
 void translate_m68k_stream(uint32_t address, m68k_context * context);
 void start_68k_context(m68k_context * context, uint32_t address);
-void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks);
-void init_68k_context(m68k_context * context, native_map_slot * native_code_map, void * opts);
+void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks, uint32_t clock_divider);
+m68k_context * init_68k_context(m68k_options * opts);
 void m68k_reset(m68k_context * context);
 void insert_breakpoint(m68k_context * context, uint32_t address, uint8_t * bp_handler);
 void remove_breakpoint(m68k_context * context, uint32_t address);

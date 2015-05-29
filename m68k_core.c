@@ -86,6 +86,28 @@ void m68k_write_size(m68k_options *opts, uint8_t size)
 	}
 }
 
+void m68k_save_result(m68kinst * inst, m68k_options * opts)
+{
+	code_info *code = &opts->gen.code;
+	if (inst->dst.addr_mode != MODE_REG && inst->dst.addr_mode != MODE_AREG && inst->dst.addr_mode != MODE_UNUSED) {
+		if (inst->dst.addr_mode == MODE_AREG_PREDEC && inst->src.addr_mode == MODE_AREG_PREDEC && inst->op != M68K_MOVE) {
+			areg_to_native(opts, inst->dst.params.regs.pri, opts->gen.scratch2);
+		}
+		switch (inst->extra.size)
+		{
+		case OPSIZE_BYTE:
+			call(code, opts->write_8);
+			break;
+		case OPSIZE_WORD:
+			call(code, opts->write_16);
+			break;
+		case OPSIZE_LONG:
+			call(code, opts->write_32_lowfirst);
+			break;
+		}
+	}
+}
+
 void translate_m68k_lea_pea(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
@@ -173,7 +195,7 @@ void push_const(m68k_options *opts, int32_t value)
 void jump_m68k_abs(m68k_options * opts, uint32_t address)
 {
 	code_info *code = &opts->gen.code;
-	code_ptr dest_addr = get_native_address(opts->gen.native_code_map, address);
+	code_ptr dest_addr = get_native_address(opts, address);
 	if (!dest_addr) {
 		opts->gen.deferred = defer_address(opts->gen.deferred, address, code->cur + 1);
 		//dummy address to be replaced later, make sure it generates a 4-byte displacement
@@ -503,9 +525,39 @@ void swap_ssp_usp(m68k_options * opts)
 	native_to_areg(opts, opts->gen.scratch2, 8);
 }
 
-code_ptr get_native_address(native_map_slot * native_code_map, uint32_t address)
+void translate_m68k_reset(m68k_options *opts, m68kinst *inst)
 {
-	address &= 0xFFFFFF;
+	code_info *code = &opts->gen.code;
+	call(code, opts->gen.save_context);
+	call_args(code, (code_ptr)print_regs_exit, 1, opts->gen.context_reg);
+}
+
+void translate_m68k_rte(m68k_options *opts, m68kinst *inst)
+{
+	code_info *code = &opts->gen.code;
+	//TODO: Trap if not in system mode
+	//Read saved SR
+	areg_to_native(opts, 7, opts->gen.scratch1);
+	call(code, opts->read_16);
+	addi_areg(opts, 2, 7);
+	call(code, opts->set_sr);
+	//Read saved PC
+	areg_to_native(opts, 7, opts->gen.scratch1);
+	call(code, opts->read_32);
+	addi_areg(opts, 4, 7);
+	check_user_mode_swap_ssp_usp(opts);
+	//Get native address, sync components, recalculate integer points and jump to returned address
+	call(code, opts->native_addr_and_sync);
+	jmp_r(code, opts->gen.scratch1);
+}
+
+code_ptr get_native_address(m68k_options *opts, uint32_t address)
+{
+	native_map_slot * native_code_map = opts->gen.native_code_map;
+	address &= opts->gen.address_mask;
+	if (address & 1) {
+		return opts->odd_address;
+	}
 	address /= 2;
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
 	if (!native_code_map[chunk].base) {
@@ -520,11 +572,12 @@ code_ptr get_native_address(native_map_slot * native_code_map, uint32_t address)
 
 code_ptr get_native_from_context(m68k_context * context, uint32_t address)
 {
-	return get_native_address(context->native_code_map, address);
+	return get_native_address(context->options, address);
 }
 
 uint32_t get_instruction_start(native_map_slot * native_code_map, uint32_t address)
 {
+	//FIXME: Use opts->gen.address_mask
 	address &= 0xFFFFFF;
 	address /= 2;
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
@@ -547,17 +600,34 @@ void map_native_address(m68k_context * context, uint32_t address, code_ptr nativ
 {
 	native_map_slot * native_code_map = context->native_code_map;
 	m68k_options * opts = context->options;
-	address &= 0xFFFFFF;
-	if (address > 0xE00000) {
-		context->ram_code_flags[(address & 0xC000) >> 14] |= 1 << ((address & 0x3800) >> 11);
-		if (((address & 0x3FFF) + size) & 0xC000) {
-			context->ram_code_flags[((address+size) & 0xC000) >> 14] |= 1 << (((address+size) & 0x3800) >> 11);
+	address &= opts->gen.address_mask;
+	uint32_t meta_off = 0;
+	//TODO: Refactor part of this loop into some kind of get_ram_chunk function
+	for (int i = 0; i < opts->gen.memmap_chunks; i++) {
+		if (address >= opts->gen.memmap[i].start && address < opts->gen.memmap[i].end) {
+			if ((opts->gen.memmap[i].flags & (MMAP_WRITE | MMAP_CODE)) == (MMAP_WRITE | MMAP_CODE)) {
+				uint32_t masked = (address & opts->gen.memmap[i].mask);
+				uint32_t final_off = masked + meta_off;
+				uint32_t ram_flags_off = final_off >> (opts->gen.ram_flags_shift + 3);
+				context->ram_code_flags[ram_flags_off] |= 1 << ((final_off >> opts->gen.ram_flags_shift) & 7);
+
+				uint32_t slot = final_off / 1024;
+				if (!opts->gen.ram_inst_sizes[slot]) {
+					opts->gen.ram_inst_sizes[slot] = malloc(sizeof(uint8_t) * 512);
+				}
+				opts->gen.ram_inst_sizes[slot][(final_off/2) & 511] = native_size;
+
+				//TODO: Deal with case in which end of instruction is in a different memory chunk
+				masked = (address + size - 1) & opts->gen.memmap[i].mask;
+				final_off = masked + meta_off;
+				ram_flags_off = final_off >> (opts->gen.ram_flags_shift + 3);
+				context->ram_code_flags[ram_flags_off] |= 1 << ((final_off >> opts->gen.ram_flags_shift) & 7);
+			}
+			break;
+		} else if ((opts->gen.memmap[i].flags & (MMAP_WRITE | MMAP_CODE)) == (MMAP_WRITE | MMAP_CODE)) {
+			uint32_t size = chunk_size(&opts->gen, opts->gen.memmap + i);
+			meta_off += size;
 		}
-		uint32_t slot = (address & 0xFFFF)/1024;
-		if (!opts->gen.ram_inst_sizes[slot]) {
-			opts->gen.ram_inst_sizes[slot] = malloc(sizeof(uint8_t) * 512);
-		}
-		opts->gen.ram_inst_sizes[slot][((address & 0xFFFF)/2)%512] = native_size;
 	}
 	address/= 2;
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
@@ -569,6 +639,7 @@ void map_native_address(m68k_context * context, uint32_t address, code_ptr nativ
 	uint32_t offset = address % NATIVE_CHUNK_SIZE;
 	native_code_map[chunk].offsets[offset] = native_addr-native_code_map[chunk].base;
 	for(address++,size-=2; size; address++,size-=2) {
+		address &= opts->gen.address_mask >> 1;
 		chunk = address / NATIVE_CHUNK_SIZE;
 		offset = address % NATIVE_CHUNK_SIZE;
 		if (!native_code_map[chunk].base) {
@@ -576,17 +647,31 @@ void map_native_address(m68k_context * context, uint32_t address, code_ptr nativ
 			native_code_map[chunk].offsets = malloc(sizeof(int32_t) * NATIVE_CHUNK_SIZE);
 			memset(native_code_map[chunk].offsets, 0xFF, sizeof(int32_t) * NATIVE_CHUNK_SIZE);
 		}
-		native_code_map[chunk].offsets[offset] = EXTENSION_WORD;
+		if (native_code_map[chunk].offsets[offset] == INVALID_OFFSET) {
+			//TODO: Better handling of overlapping instructions
+			native_code_map[chunk].offsets[offset] = EXTENSION_WORD;
+		}
 	}
 }
 
 uint8_t get_native_inst_size(m68k_options * opts, uint32_t address)
 {
-	if (address < 0xE00000) {
-		return 0;
+	address &= opts->gen.address_mask;
+	uint32_t meta_off = 0;
+	for (int i = 0; i < opts->gen.memmap_chunks; i++) {
+		if (address >= opts->gen.memmap[i].start && address < opts->gen.memmap[i].end) {
+			if ((opts->gen.memmap[i].flags & (MMAP_WRITE | MMAP_CODE)) != (MMAP_WRITE | MMAP_CODE)) {
+				return 0;
+			}
+			meta_off += address & opts->gen.memmap[i].mask;
+			break;
+		} else if ((opts->gen.memmap[i].flags & (MMAP_WRITE | MMAP_CODE)) == (MMAP_WRITE | MMAP_CODE)) {
+			uint32_t size = chunk_size(&opts->gen, opts->gen.memmap + i);
+			meta_off += size;
+		}
 	}
-	uint32_t slot = (address & 0xFFFF)/1024;
-	return opts->gen.ram_inst_sizes[slot][((address & 0xFFFF)/2)%512];
+	uint32_t slot = meta_off/1024;
+	return opts->gen.ram_inst_sizes[slot][(meta_off/2)%512];
 }
 
 uint8_t m68k_is_terminal(m68kinst * inst)
@@ -649,7 +734,7 @@ impl_info m68k_impls[] = {
 	RAW_IMPL(M68K_EXT, translate_m68k_ext),
 	UNARY_IMPL(M68K_NEG, X|N|Z|V|C),
 	OP_IMPL(M68K_NEGX, translate_m68k_negx),
-	UNARY_IMPL(M68K_NOT, X|N|Z|V|C),
+	UNARY_IMPL(M68K_NOT, N|Z|V|C),
 	UNARY_IMPL(M68K_TST, N|Z|V0|C0),
 
 	//shift/rotate
@@ -723,6 +808,7 @@ impl_info m68k_impls[] = {
 void translate_m68k(m68k_options * opts, m68kinst * inst)
 {
 	check_cycles_int(&opts->gen, inst->address);
+	//log_address(&opts->gen, inst->address, "M68K: %X @ %d\n");
 	impl_info * info = m68k_impls + inst->op;
 	if (info->itype == RAW_FUNC) {
 		info->impl.raw(opts, inst);
@@ -754,30 +840,26 @@ void translate_m68k_stream(uint32_t address, m68k_context * context)
 	m68kinst instbuf;
 	m68k_options * opts = context->options;
 	code_info *code = &opts->gen.code;
-	address &= 0xFFFFFF;
-	if(get_native_address(opts->gen.native_code_map, address)) {
+	if(get_native_address(opts, address)) {
 		return;
 	}
-	char disbuf[1024];
 	uint16_t *encoded, *next;
-	if ((address & 0xFFFFFF) < 0x400000) {
-		encoded = context->mem_pointers[0] + (address & 0xFFFFFF)/2;
-	} else if ((address & 0xFFFFFF) > 0xE00000) {
-		encoded = context->mem_pointers[1] + (address  & 0xFFFF)/2;
-	} else {
-		printf("attempt to translate non-memory address: %X\n", address);
-		exit(1);
-	}
 	do {
 		if (opts->address_log) {
 			fprintf(opts->address_log, "%X\n", address);
+			fflush(opts->address_log);
 		}
 		do {
-			if (address >= 0x400000 && address < 0xE00000) {
+			if (address & 1) {
+				break;
+			}
+			encoded = get_native_pointer(address, (void **)context->mem_pointers, &opts->gen);
+			if (!encoded) {
+				map_native_address(context, address, code->cur, 2, 1);
 				translate_out_of_bounds(code);
 				break;
 			}
-			code_ptr existing = get_native_address(opts->gen.native_code_map, address);
+			code_ptr existing = get_native_address(opts, address);
 			if (existing) {
 				jmp(code, existing);
 				break;
@@ -788,7 +870,7 @@ void translate_m68k_stream(uint32_t address, m68k_context * context)
 			}
 			uint16_t m68k_size = (next-encoded)*2;
 			address += m68k_size;
-			encoded = next;
+			//char disbuf[1024];
 			//m68k_disasm(&instbuf, disbuf);
 			//printf("%X: %s\n", instbuf.address, disbuf);
 
@@ -802,18 +884,8 @@ void translate_m68k_stream(uint32_t address, m68k_context * context)
 		process_deferred(&opts->gen.deferred, context, (native_addr_func)get_native_from_context);
 		if (opts->gen.deferred) {
 			address = opts->gen.deferred->address;
-			if ((address & 0xFFFFFF) < 0x400000) {
-				encoded = context->mem_pointers[0] + (address & 0xFFFFFF)/2;
-			} else if ((address & 0xFFFFFF) > 0xE00000) {
-				encoded = context->mem_pointers[1] + (address  & 0xFFFF)/2;
-			} else {
-				printf("attempt to translate non-memory address: %X\n", address);
-				exit(1);
-			}
-		} else {
-			encoded = NULL;
 		}
-	} while(encoded != NULL);
+	} while(opts->gen.deferred);
 }
 
 void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
@@ -821,30 +893,30 @@ void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
 	m68k_options * opts = context->options;
 	code_info *code = &opts->gen.code;
 	uint8_t orig_size = get_native_inst_size(opts, address);
-	code_ptr orig_start = get_native_address(context->native_code_map, address);
+	code_ptr orig_start = get_native_address(context->options, address);
 	uint32_t orig = address;
 	code_info orig_code;
 	orig_code.cur = orig_start;
 	orig_code.last = orig_start + orig_size + 5;
-	address &= 0xFFFF;
-	uint16_t *after, *inst = context->mem_pointers[1] + address/2;
+	uint16_t *after, *inst = get_native_pointer(address, (void **)context->mem_pointers, &opts->gen);
 	m68kinst instbuf;
 	after = m68k_decode(inst, &instbuf, orig);
 	if (orig_size != MAX_NATIVE_SIZE) {
 		deferred_addr * orig_deferred = opts->gen.deferred;
 
-		//make sure the beginning of the code for an instruction is contiguous
-		check_code_prologue(code);
+		//make sure we have enough code space for the max size instruction
+		check_alloc_code(code, MAX_NATIVE_SIZE);
 		code_ptr native_start = code->cur;
 		translate_m68k(opts, &instbuf);
 		code_ptr native_end = code->cur;
-		uint8_t is_terminal = m68k_is_terminal(&instbuf);
+		/*uint8_t is_terminal = m68k_is_terminal(&instbuf);
 		if ((native_end - native_start) <= orig_size) {
 			code_ptr native_next;
 			if (!is_terminal) {
 				native_next = get_native_address(context->native_code_map, orig + (after-inst)*2);
 			}
 			if (is_terminal || (native_next && ((native_next == orig_start + orig_size) || (orig_size - (native_end - native_start)) > 5))) {
+				printf("Using original location: %p\n", orig_code.cur);
 				remove_deferred_until(&opts->gen.deferred, orig_deferred);
 				code_info tmp;
 				tmp.cur = code->cur;
@@ -861,7 +933,7 @@ void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
 				m68k_handle_deferred(context);
 				return orig_start;
 			}
-		}
+		}*/
 
 		map_native_address(context, instbuf.address, native_start, (after-inst)*2, MAX_NATIVE_SIZE);
 
@@ -880,17 +952,14 @@ void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
 		m68k_handle_deferred(context);
 		return native_start;
 	} else {
-		code_info tmp;
-		tmp.cur = code->cur;
-		tmp.last = code->last;
-		code->cur = orig_code.cur;
-		code->last = orig_code.last;
+		code_info tmp = *code;
+		*code = orig_code;
 		translate_m68k(opts, &instbuf);
+		orig_code = *code;
+		*code = tmp;
 		if (!m68k_is_terminal(&instbuf)) {
-			jmp(code, get_native_address_trans(context, orig + (after-inst)*2));
+			jmp(&orig_code, get_native_address_trans(context, orig + (after-inst)*2));
 		}
-		code->cur = tmp.cur;
-		code->last = tmp.last;
 		m68k_handle_deferred(context);
 		return orig_start;
 	}
@@ -898,19 +967,22 @@ void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
 
 code_ptr get_native_address_trans(m68k_context * context, uint32_t address)
 {
-	address &= 0xFFFFFF;
-	code_ptr ret = get_native_address(context->native_code_map, address);
+	code_ptr ret = get_native_address(context->options, address);
 	if (!ret) {
 		translate_m68k_stream(address, context);
-		ret = get_native_address(context->native_code_map, address);
+		ret = get_native_address(context->options, address);
 	}
 	return ret;
 }
 
 void remove_breakpoint(m68k_context * context, uint32_t address)
 {
-	code_ptr native = get_native_address(context->native_code_map, address);
-	check_cycles_int(context->options, address);
+	code_ptr native = get_native_address(context->options, address);
+	code_info tmp = context->options->gen.code;
+	context->options->gen.code.cur = native;
+	context->options->gen.code.last = native + MAX_NATIVE_SIZE;
+	check_cycles_int(&context->options->gen, address);
+	context->options->gen.code = tmp;
 }
 
 void start_68k_context(m68k_context * context, uint32_t address)
@@ -922,18 +994,21 @@ void start_68k_context(m68k_context * context, uint32_t address)
 
 void m68k_reset(m68k_context * context)
 {
-	//TODO: Make this actually use the normal read functions
-	context->aregs[7] = context->mem_pointers[0][0] << 16 | context->mem_pointers[0][1];
-	uint32_t address = context->mem_pointers[0][2] << 16 | context->mem_pointers[0][3];
+	//TODO: Actually execute the M68K reset vector rather than simulating some of its behavior
+	uint16_t *reset_vec = get_native_pointer(0, (void **)context->mem_pointers, &context->options->gen);
+	context->aregs[7] = reset_vec[0] << 16 | reset_vec[1];
+	uint32_t address = reset_vec[2] << 16 | reset_vec[3];
 	start_68k_context(context, address);
 }
 
 
-void init_68k_context(m68k_context * context, native_map_slot * native_code_map, void * opts)
+m68k_context * init_68k_context(m68k_options * opts)
 {
+	m68k_context * context = malloc(sizeof(m68k_context) + ram_size(&opts->gen) / (1 << opts->gen.ram_flags_shift) / 8);
 	memset(context, 0, sizeof(m68k_context));
-	context->native_code_map = native_code_map;
+	context->native_code_map = opts->gen.native_code_map;
 	context->options = opts;
-	context->int_cycle = 0xFFFFFFFF;
+	context->int_cycle = CYCLE_NEVER;
 	context->status = 0x27;
+	return context;
 }

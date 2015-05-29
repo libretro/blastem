@@ -125,7 +125,7 @@ z80_read_bank:
 	add $3, %ebp
 	push %rsi
 	mov 144(%rsi), %rsi /* get system context pointer */
-	cmp $0, 120(%rsi) /* check bus busy flag */
+	cmpb $0, 120(%rsi) /* check bus busy flag */
 	pop %rsi
 	jne bus_busy
 z80_read_bank_cont:
@@ -150,7 +150,15 @@ z80_read_ym2612:
 	call z80_save_context
 	mov %r13w, %di
 	push %rsi
+	test $8, %rsp
+	jnz 0f
 	call z80_read_ym
+	jmp 1f
+0:
+	sub $8, %rsp
+	call z80_read_ym
+	add $8, %rsp
+1:
 	pop %rsi
 	mov %al, %r13b
 	call z80_load_context
@@ -196,7 +204,15 @@ z80_write_ym2612:
 	call z80_save_context
 	mov %r14w, %di
 	mov %r13b, %dl
+	test $8, %rsp
+	jnz 0f
 	call z80_write_ym
+	jmp 1f
+0:
+	sub $8, %rsp
+	call z80_write_ym
+	add $8, %rsp
+1:
 	mov %rax, %rsi
 	jmp z80_load_context
 z80_write_bank_reg:
@@ -219,7 +235,15 @@ z80_write_vdp:
 	call z80_save_context
 	mov %r14w, %di
 	mov %r13b, %dl
+	test $8, %rsp
+	jnz 0f
 	call z80_vdp_port_write
+	jmp 1f
+0:
+	sub $8, %rsp
+	call z80_vdp_port_write
+	add $8, %rsp
+1:
 	mov %rax, %rsi
 	jmp z80_load_context
 
@@ -243,7 +267,7 @@ z80_read_bank_word:
 	add $3, %ebp /* first read typically has 3 wait states */
 	push %rsi
 	mov 144(%rsi), %rsi /* get system context pointer */
-	cmp $0, 120(%rsi) /* check bus busy flag */
+	cmpb $0, 120(%rsi) /* check bus busy flag */
 	pop %rsi
 	jne bus_busy_word
 z80_read_bank_word_cont:
@@ -256,7 +280,7 @@ z80_read_bank_word_cont:
 	add $4, %ebp /* second read typically has 4 wait states */
 	push %rsi
 	mov 144(%rsi), %rsi /* get system context pointer */
-	cmp $0, 120(%rsi) /* check bus busy flag */
+	cmpb $0, 120(%rsi) /* check bus busy flag */
 	pop %rsi
 	jne bus_busy_word2
 z80_read_bank_word_cont2:
