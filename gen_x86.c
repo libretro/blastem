@@ -8,6 +8,8 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
+#include <string.h>
 
 #define REX_RM_FIELD 0x1
 #define REX_SIB_FIELD 0x2
@@ -33,6 +35,7 @@
 #define OP_TEST 0x84
 #define OP_XCHG 0x86
 #define OP_MOV 0x88
+#define PRE_XOP 0x8F
 #define OP_XCHG_AX 0x90
 #define OP_CDQ 0x99
 #define OP_PUSHF 0x9C
@@ -127,6 +130,44 @@ enum {
 	X86_R15
 } x86_regs_enc;
 
+char * x86_reg_names[] = {
+#ifdef X86_64
+	"rax",
+	"rcx",
+	"rdx",
+	"rbx",
+	"rsp",
+	"rbp",
+	"rsi",
+	"rdi",
+#else
+	"eax",
+	"ecx",
+	"edx",
+	"ebx",
+	"esp",
+	"ebp",
+	"esi",
+	"edi",
+#endif
+	"ah",
+	"ch",
+	"dh",
+	"bh",
+	"r8",
+	"r9",
+	"r10",
+	"r11",
+	"r12",
+	"r13",
+	"r14",
+	"r15",
+};
+
+char * x86_sizes[] = {
+	"b", "w", "d", "q"
+};
+
 void jmp_nocheck(code_info *code, code_ptr dest)
 {
 	code_ptr out = code->cur;
@@ -187,6 +228,7 @@ void x86_rr_sizedir(code_info *code, uint16_t opcode, uint8_t src, uint8_t dst, 
 		src = tmp;
 	}
 	if (size == SZ_Q || src >= R8 || dst >= R8 || (size == SZ_B && src >= RSP && src <= RDI)) {
+#ifdef X86_64
 		*out = PRE_REX;
 		if (src >= AH && src <= BH || dst >= AH && dst <= BH) {
 			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
@@ -204,6 +246,10 @@ void x86_rr_sizedir(code_info *code, uint16_t opcode, uint8_t src, uint8_t dst, 
 			dst -= (R8 - X86_R8);
 		}
 		out++;
+#else
+		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X, src: %s, dst: %s, size: %s\n", opcode, x86_reg_names[src], x86_reg_names[dst], x86_sizes[size]);
+		exit(1);
+#endif
 	}
 	if (size == SZ_B) {
 		if (src >= AH && src <= BH) {
@@ -235,6 +281,7 @@ void x86_rrdisp_sizedir(code_info *code, uint16_t opcode, uint8_t reg, uint8_t b
 		*(out++) = PRE_SIZE;
 	}
 	if (size == SZ_Q || reg >= R8 || base >= R8 || (size == SZ_B && reg >= RSP && reg <= RDI)) {
+#ifdef X86_64
 		*out = PRE_REX;
 		if (reg >= AH && reg <= BH) {
 			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
@@ -252,6 +299,10 @@ void x86_rrdisp_sizedir(code_info *code, uint16_t opcode, uint8_t reg, uint8_t b
 			base -= (R8 - X86_R8);
 		}
 		out++;
+#else
+		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X, reg: %s, base: %s, size: %s\n", opcode, x86_reg_names[reg], x86_reg_names[base], x86_sizes[size]);
+		exit(1);
+#endif
 	}
 	if (size == SZ_B) {
 		if (reg >= AH && reg <= BH) {
@@ -268,7 +319,7 @@ void x86_rrdisp_sizedir(code_info *code, uint16_t opcode, uint8_t reg, uint8_t b
 		*(out++) = opcode;
 	}
 	if (disp < 128 && disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | base | (reg << 3);
+	*(out++) = MODE_REG_DISPLACE8 | base | (reg << 3);
 	} else {
 		*(out++) = MODE_REG_DISPLACE32 | base | (reg << 3);
 	}
@@ -278,9 +329,9 @@ void x86_rrdisp_sizedir(code_info *code, uint16_t opcode, uint8_t reg, uint8_t b
 	}
 	*(out++) = disp;
 	if (disp >= 128 || disp < -128) {
-		*(out++) = disp >> 8;
-		*(out++) = disp >> 16;
-		*(out++) = disp >> 24;
+	*(out++) = disp >> 8;
+	*(out++) = disp >> 16;
+	*(out++) = disp >> 24;
 	}
 	code->cur = out;
 }
@@ -295,6 +346,7 @@ void x86_rrind_sizedir(code_info *code, uint8_t opcode, uint8_t reg, uint8_t bas
 		*(out++) = PRE_SIZE;
 	}
 	if (size == SZ_Q || reg >= R8 || base >= R8 || (size == SZ_B && reg >= RSP && reg <= RDI)) {
+#ifdef X86_64
 		*out = PRE_REX;
 		if (reg >= AH && reg <= BH) {
 			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
@@ -312,6 +364,10 @@ void x86_rrind_sizedir(code_info *code, uint8_t opcode, uint8_t reg, uint8_t bas
 			base -= (R8 - X86_R8);
 		}
 		out++;
+#else
+		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X, reg: %s, base: %s, size: %s\n", opcode, x86_reg_names[reg], x86_reg_names[base], x86_sizes[size]);
+		exit(1);
+#endif
 	}
 	if (size == SZ_B) {
 		if (reg >= AH && reg <= BH) {
@@ -321,10 +377,17 @@ void x86_rrind_sizedir(code_info *code, uint8_t opcode, uint8_t reg, uint8_t bas
 		opcode |= BIT_SIZE;
 	}
 	*(out++) = opcode | dir;
+	if (base == RBP) {
+		//add a dummy 8-bit displacement since MODE_REG_INDIRECT with
+		//an R/M field of RBP selects RIP, relative addressing
+		*(out++) = MODE_REG_DISPLACE8 | base | (reg << 3);
+		*(out++) = 0;
+	} else {
 	*(out++) = MODE_REG_INDIRECT | base | (reg << 3);
 	if (base == RSP) {
 		//add SIB byte, with no index and RSP as base
 		*(out++) = (RSP << 3) | RSP;
+	}
 	}
 	code->cur = out;
 }
@@ -339,6 +402,7 @@ void x86_rrindex_sizedir(code_info *code, uint8_t opcode, uint8_t reg, uint8_t b
 		*(out++) = PRE_SIZE;
 	}
 	if (size == SZ_Q || reg >= R8 || base >= R8 || (size == SZ_B && reg >= RSP && reg <= RDI)) {
+#ifdef X86_64
 		*out = PRE_REX;
 		if (reg >= AH && reg <= BH) {
 			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
@@ -360,6 +424,10 @@ void x86_rrindex_sizedir(code_info *code, uint8_t opcode, uint8_t reg, uint8_t b
 			index -= (R8 - X86_R8);
 		}
 		out++;
+#else
+		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X, reg: %s, base: %s, size: %s\n", opcode, x86_reg_names[reg], x86_reg_names[base], x86_sizes[size]);
+		exit(1);
+#endif
 	}
 	if (size == SZ_B) {
 		if (reg >= AH && reg <= BH) {
@@ -373,7 +441,7 @@ void x86_rrindex_sizedir(code_info *code, uint8_t opcode, uint8_t reg, uint8_t b
 	if (scale == 4) {
 		scale = 2;
 	} else if(scale == 8) {
-		scale = 3;
+			scale = 3;
 	} else {
 		scale--;
 	}
@@ -390,6 +458,7 @@ void x86_r_size(code_info *code, uint8_t opcode, uint8_t opex, uint8_t dst, uint
 		*(out++) = PRE_SIZE;
 	}
 	if (size == SZ_Q || dst >= R8) {
+#ifdef X86_64
 		*out = PRE_REX;
 		if (dst >= AH && dst <= BH) {
 			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
@@ -403,6 +472,10 @@ void x86_r_size(code_info *code, uint8_t opcode, uint8_t opex, uint8_t dst, uint
 			dst -= (R8 - X86_R8);
 		}
 		out++;
+#else
+		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X:%X, reg: %s, size: %s\n", opcode, opex, x86_reg_names[dst], x86_sizes[size]);
+		exit(1);
+#endif
 	}
 	if (size == SZ_B) {
 		if (dst >= AH && dst <= BH) {
@@ -425,6 +498,7 @@ void x86_rdisp_size(code_info *code, uint8_t opcode, uint8_t opex, uint8_t dst, 
 		*(out++) = PRE_SIZE;
 	}
 	if (size == SZ_Q || dst >= R8) {
+#ifdef X86_64
 		*out = PRE_REX;
 		if (size == SZ_Q) {
 			*out |= REX_QUAD;
@@ -434,14 +508,18 @@ void x86_rdisp_size(code_info *code, uint8_t opcode, uint8_t opex, uint8_t dst, 
 			dst -= (R8 - X86_R8);
 		}
 		out++;
+#else
+		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X:%X, reg: %s, size: %s\n", opcode, opex, x86_reg_names[dst], x86_sizes[size]);
+		exit(1);
+#endif
 	}
 	if (size != SZ_B) {
 		opcode |= BIT_SIZE;
 	}
 	*(out++) = opcode;
 	if (disp < 128 && disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | dst | (opex << 3);
-		*(out++) = disp;
+	*(out++) = MODE_REG_DISPLACE8 | dst | (opex << 3);
+	*(out++) = disp;
 	} else {
 		*(out++) = MODE_REG_DISPLACE32 | dst | (opex << 3);
 		*(out++) = disp;
@@ -468,12 +546,18 @@ void x86_ir(code_info *code, uint8_t opcode, uint8_t op_ex, uint8_t al_opcode, i
 		if (size != SZ_B) {
 			al_opcode |= BIT_SIZE;
 			if (size == SZ_Q) {
+#ifdef X86_64
 				*out = PRE_REX | REX_QUAD;
+#else
+		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X, reg: %s, size: %s\n", al_opcode, x86_reg_names[dst], x86_sizes[size]);
+		exit(1);
+#endif
 			}
 		}
 		*(out++) = al_opcode | BIT_IMMED_RAX;
 	} else {
 		if (size == SZ_Q || dst >= R8 || (size == SZ_B && dst >= RSP && dst <= RDI)) {
+#ifdef X86_64
 			*out = PRE_REX;
 			if (size == SZ_Q) {
 				*out |= REX_QUAD;
@@ -483,6 +567,10 @@ void x86_ir(code_info *code, uint8_t opcode, uint8_t op_ex, uint8_t al_opcode, i
 				dst -= (R8 - X86_R8);
 			}
 			out++;
+#else
+		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X:%X, reg: %s, size: %s\n", opcode, op_ex, x86_reg_names[dst], x86_sizes[size]);
+		exit(1);
+#endif
 		}
 		if (dst >= AH && dst <= BH) {
 			dst -= (AH-X86_AH);
@@ -521,6 +609,7 @@ void x86_irdisp(code_info *code, uint8_t opcode, uint8_t op_ex, int32_t val, uin
 	}
 
 	if (size == SZ_Q || dst >= R8) {
+#ifdef X86_64
 		*out = PRE_REX;
 		if (size == SZ_Q) {
 			*out |= REX_QUAD;
@@ -530,23 +619,27 @@ void x86_irdisp(code_info *code, uint8_t opcode, uint8_t op_ex, int32_t val, uin
 			dst -= (R8 - X86_R8);
 		}
 		out++;
+#else
+		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X:%X, reg: %s, size: %s\n", opcode, op_ex, x86_reg_names[dst], x86_sizes[size]);
+		exit(1);
+#endif
 	}
 	if (size != SZ_B) {
 		opcode |= BIT_SIZE;
 	}
 	*(out++) = opcode;
 	if (disp < 128 && disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | dst | (op_ex << 3);
-		*(out++) = disp;
+	*(out++) = MODE_REG_DISPLACE8 | dst | (op_ex << 3);
+	*(out++) = disp;
 	} else {
-		*(out++) = MODE_REG_DISPLACE32 | dst | (op_ex << 3);
-		*(out++) = disp;
-		disp >>= 8;
-		*(out++) = disp;
-		disp >>= 8;
-		*(out++) = disp;
-		disp >>= 8;
-		*(out++) = disp;
+	*(out++) = MODE_REG_DISPLACE32 | dst | (op_ex << 3);
+	*(out++) = disp;
+	disp >>= 8;
+	*(out++) = disp;
+	disp >>= 8;
+	*(out++) = disp;
+	disp >>= 8;
+	*(out++) = disp;
 	}
 	*(out++) = val;
 	if (size != SZ_B && !sign_extend) {
@@ -616,8 +709,8 @@ void x86_shiftrot_irdisp(code_info *code, uint8_t op_ex, uint8_t val, uint8_t ds
 
 	*(out++) = (val == 1 ? OP_SHIFTROT_1: OP_SHIFTROT_IR) | (size == SZ_B ? 0 : BIT_SIZE);
 	if (disp < 128 && disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | dst | (op_ex << 3);
-		*(out++) = disp;
+	*(out++) = MODE_REG_DISPLACE8 | dst | (op_ex << 3);
+	*(out++) = disp;
 	} else {
 		*(out++) = MODE_REG_DISPLACE32 | dst | (op_ex << 3);
 		*(out++) = disp;
@@ -682,15 +775,15 @@ void x86_shiftrot_clrdisp(code_info *code, uint8_t op_ex, uint8_t dst, int32_t d
 
 	*(out++) = OP_SHIFTROT_CL | (size == SZ_B ? 0 : BIT_SIZE);
 	if (disp < 128 && disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | dst | (op_ex << 3);
-		*(out++) = disp;
+	*(out++) = MODE_REG_DISPLACE8 | dst | (op_ex << 3);
+	*(out++) = disp;
 	} else {
 		*(out++) = MODE_REG_DISPLACE32 | dst | (op_ex << 3);
 		*(out++) = disp;
 		*(out++) = disp >> 8;
 		*(out++) = disp >> 16;
 		*(out++) = disp >> 24;
-	}
+}
 	code->cur = out;
 }
 
@@ -1243,8 +1336,8 @@ void mov_irdisp(code_info *code, int32_t val, uint8_t dst, int32_t disp, uint8_t
 	}
 	*(out++) = OP_MOV_IEA | (size == SZ_B ? 0 : BIT_SIZE);
 	if (disp < 128 && disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | dst;
-		*(out++) = disp;
+	*(out++) = MODE_REG_DISPLACE8 | dst;
+	*(out++) = disp;
 	} else {
 		*(out++) = MODE_REG_DISPLACE32 | dst;
 		*(out++) = disp;
@@ -1366,8 +1459,8 @@ void movsx_rdispr(code_info *code, uint8_t src, int32_t disp, uint8_t dst, uint8
 		*(out++) = OP2_MOVSX | (src_size == SZ_B ? 0 : BIT_SIZE);
 	}
 	if (disp < 128 && disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | src | (dst << 3);
-		*(out++) = disp;
+	*(out++) = MODE_REG_DISPLACE8 | src | (dst << 3);
+	*(out++) = disp;
 	} else {
 		*(out++) = MODE_REG_DISPLACE32 | src | (dst << 3);
 		*(out++) = disp;
@@ -1431,8 +1524,8 @@ void movzx_rdispr(code_info *code, uint8_t src, int32_t disp, uint8_t dst, uint8
 	*(out++) = PRE_2BYTE;
 	*(out++) = OP2_MOVZX | (src_size == SZ_B ? 0 : BIT_SIZE);
 	if (disp < 128 && disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | src | (dst << 3);
-		*(out++) = disp;
+	*(out++) = MODE_REG_DISPLACE8 | src | (dst << 3);
+	*(out++) = disp;
 	} else {
 		*(out++) = MODE_REG_DISPLACE32 | src | (dst << 3);
 		*(out++) = disp;
@@ -1516,6 +1609,13 @@ void push_r(code_info *code, uint8_t reg)
 	code->cur = out;
 }
 
+void push_rdisp(code_info *code, uint8_t base, int32_t disp)
+{
+	//This instruction has no explicit size, so we pass SZ_B
+	//to avoid any prefixes or bits being set
+	x86_rdisp_size(code, OP_SINGLE_EA, OP_EX_PUSH_EA, base, disp, SZ_B);
+}
+
 void pop_r(code_info *code, uint8_t reg)
 {
 	check_alloc_code(code, 2);
@@ -1525,6 +1625,19 @@ void pop_r(code_info *code, uint8_t reg)
 		reg -= R8 - X86_R8;
 	}
 	*(out++) = OP_POP | reg;
+	code->cur = out;
+}
+
+void pop_rind(code_info *code, uint8_t reg)
+{
+	check_alloc_code(code, 3);
+	code_ptr out = code->cur;
+	if (reg >= R8) {
+		*(out++) = PRE_REX | REX_RM_FIELD;
+		reg -= R8 - X86_R8;
+	}
+	*(out++) = PRE_XOP;
+	*(out++) = MODE_REG_INDIRECT | reg;
 	code->cur = out;
 }
 
@@ -1571,8 +1684,8 @@ void setcc_rdisp(code_info *code, uint8_t cc, uint8_t dst, int32_t disp)
 	*(out++) = PRE_2BYTE;
 	*(out++) = OP2_SETCC | cc;
 	if (disp < 128 && disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | dst;
-		*(out++) = disp;
+	*(out++) = MODE_REG_DISPLACE8 | dst;
+	*(out++) = disp;
 	} else {
 		*(out++) = MODE_REG_DISPLACE32 | dst;
 		*(out++) = disp;
@@ -1636,14 +1749,14 @@ void bit_rrdisp(code_info *code, uint8_t op2, uint8_t src, uint8_t dst_base, int
 	*(out++) = PRE_2BYTE;
 	*(out++) = op2;
 	if (dst_disp < 128 && dst_disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | dst_base | (src << 3);
-		*(out++) = dst_disp;
+	*(out++) = MODE_REG_DISPLACE8 | dst_base | (src << 3);
+	*(out++) = dst_disp;
 	} else {
-		*(out++) = MODE_REG_DISPLACE32 | dst_base | (src << 3);
-		*(out++) = dst_disp;
-		*(out++) = dst_disp >> 8;
-		*(out++) = dst_disp >> 16;
-		*(out++) = dst_disp >> 24;
+	*(out++) = MODE_REG_DISPLACE32 | dst_base | (src << 3);
+	*(out++) = dst_disp;
+	*(out++) = dst_disp >> 8;
+	*(out++) = dst_disp >> 16;
+	*(out++) = dst_disp >> 24;
 	}
 	code->cur = out;
 }
@@ -1694,8 +1807,8 @@ void bit_irdisp(code_info *code, uint8_t op_ex, uint8_t val, uint8_t dst_base, i
 	*(out++) = PRE_2BYTE;
 	*(out++) = OP2_BTX_I;
 	if (dst_disp < 128 && dst_disp >= -128) {
-		*(out++) = MODE_REG_DISPLACE8 | dst_base | (op_ex << 3);
-		*(out++) = dst_disp;
+	*(out++) = MODE_REG_DISPLACE8 | dst_base | (op_ex << 3);
+	*(out++) = dst_disp;
 	} else {
 		*(out++) = MODE_REG_DISPLACE32 | dst_base | (op_ex << 3);
 		*(out++) = dst_disp;
@@ -1855,6 +1968,19 @@ void jmp_r(code_info *code, uint8_t dst)
 	code->cur = out;
 }
 
+void jmp_rind(code_info *code, uint8_t dst)
+{
+	check_alloc_code(code, 3);
+	code_ptr out = code->cur;
+	if (dst >= R8) {
+		dst -= R8 - X86_R8;
+		*(out++) = PRE_REX | REX_RM_FIELD;
+	}
+	*(out++) = OP_SINGLE_EA;
+	*(out++) = MODE_REG_INDIRECT | dst | (OP_EX_JMP_EA << 3);
+	code->cur = out;
+}
+
 void call(code_info *code, code_ptr fun)
 {
 	check_alloc_code(code, 5);
@@ -1912,3 +2038,198 @@ void loop(code_info *code, code_ptr dst)
 	code->cur = out;
 }
 
+uint32_t prep_args(code_info *code, uint32_t num_args, va_list args)
+{
+	uint8_t *arg_arr = malloc(num_args);
+	for (int i = 0; i < num_args; i ++)
+	{
+		arg_arr[i] = va_arg(args, int);
+	}
+#ifdef X86_64
+	uint32_t stack_args = 0;
+	uint8_t abi_regs[] = {RDI, RSI, RDX, RCX, R8, R9};
+	int8_t reg_swap[R15+1];
+	uint32_t usage = 0;
+	memset(reg_swap, -1, sizeof(reg_swap));
+	for (int i = 0; i < num_args; i ++)
+	{
+		usage |= 1 << arg_arr[i];
+	}
+	for (int i = 0; i < num_args; i ++)
+	{
+		uint8_t reg_arg = arg_arr[i];
+		if (i < sizeof(abi_regs)) {
+			if (reg_swap[reg_arg] >= 0) {
+				reg_arg = reg_swap[reg_arg];
+			}
+			if (reg_arg != abi_regs[i]) {
+				if (usage & (1 << abi_regs[i])) {
+					xchg_rr(code, reg_arg, abi_regs[i], SZ_PTR);
+					reg_swap[abi_regs[i]] = reg_arg;
+				} else {
+					mov_rr(code, reg_arg, abi_regs[i], SZ_PTR);
+				}
+			}
+		} else {
+			arg_arr[stack_args++] = reg_arg;
+		}
+	}
+#else
+#define stack_args num_args
+#endif
+	for (int i = stack_args -1; i >= 0; i--)
+	{
+		push_r(code, arg_arr[i]);
+	}
+
+	return stack_args * sizeof(void *);
+}
+
+void call_args(code_info *code, code_ptr fun, uint32_t num_args, ...)
+{
+	va_list args;
+	va_start(args, num_args);
+	uint32_t adjust = prep_args(code, num_args, args);
+	va_end(args);
+	call(code, fun);
+	if (adjust) {
+		add_ir(code, adjust, RSP, SZ_PTR);
+	}
+}
+
+void call_args_abi(code_info *code, code_ptr fun, uint32_t num_args, ...)
+{
+	va_list args;
+	va_start(args, num_args);
+	uint32_t adjust = prep_args(code, num_args, args);
+	va_end(args);
+#ifdef X86_64
+	test_ir(code, 8, RSP, SZ_PTR); //check stack alignment
+	code_ptr do_adjust_rsp = code->cur + 1;
+	jcc(code, CC_NZ, code->cur + 2);
+#endif
+	call(code, fun);
+	if (adjust) {
+		add_ir(code, adjust, RSP, SZ_PTR);
+	}
+#ifdef X86_64
+	code_ptr no_adjust_rsp = code->cur + 1;
+	jmp(code, code->cur + 2);
+	*do_adjust_rsp = code->cur - (do_adjust_rsp+1);
+	sub_ir(code, 8, RSP, SZ_PTR);
+	call(code, fun);
+	add_ir(code, adjust + 8 , RSP, SZ_PTR);
+	*no_adjust_rsp = code->cur - (no_adjust_rsp+1);
+#endif
+}
+
+void save_callee_save_regs(code_info *code)
+{
+	push_r(code, RBX);
+	push_r(code, RBP);
+#ifdef X86_64
+	push_r(code, R12);
+	push_r(code, R13);
+	push_r(code, R14);
+	push_r(code, R15);
+#else
+	push_r(code, RDI);
+	push_r(code, RSI);
+#endif
+}
+
+void restore_callee_save_regs(code_info *code)
+{
+#ifdef X86_64
+	pop_r(code, R15);
+	pop_r(code, R14);
+	pop_r(code, R13);
+	pop_r(code, R12);
+#else
+	pop_r(code, RSI);
+	pop_r(code, RDI);
+#endif
+	pop_r(code, RBP);
+	pop_r(code, RBX);
+}
+
+uint8_t has_modrm(uint8_t prefix, uint8_t opcode)
+{
+	if (!prefix) {
+		switch (opcode)
+		{
+		case OP_JMP:
+		case OP_JMP_BYTE:
+		case OP_JCC:
+		case OP_CALL:
+		case OP_RETN:
+		case OP_LOOP:
+		case OP_MOV_I8R:
+		case OP_MOV_IR:
+		case OP_PUSHF:
+		case OP_POPF:
+		case OP_PUSH:
+		case OP_POP:
+		case OP_CDQ:
+			return 0;
+		}
+	} else if (prefix == PRE_2BYTE) {
+		switch (opcode)
+		{
+		case OP2_JCC:
+			return 0;
+		}
+	}
+	return 1;
+}
+
+uint8_t has_sib(uint8_t mod_rm)
+{
+	uint8_t mode = mod_rm & 0xC0;
+	uint8_t rm = mod_rm & 3;
+
+	return mode != MODE_REG_DIRECT && rm == RSP;
+}
+
+uint32_t x86_inst_size(code_ptr start)
+{
+	code_ptr code = start;
+	uint8_t cont = 1;
+	uint8_t prefix = 0;
+	uint8_t op_size = SZ_B;
+	uint8_t main_op;
+
+	while (cont)
+	{
+		if (*code == PRE_SIZE) {
+			op_size = SZ_W;
+		} else if (*code == PRE_REX) {
+			if (*code & REX_QUAD) {
+				op_size = SZ_Q;
+			}
+		} else if(*code == PRE_2BYTE || PRE_XOP) {
+			prefix = *code;
+		} else {
+			main_op = *code;
+			cont = 0;
+		}
+		code++;
+	}
+	if (has_modrm(prefix, main_op)) {
+		uint8_t mod_rm = *(code++);
+		if (has_sib(mod_rm)) {
+			//sib takes up a byte, but can't add any additional ones beyond that
+			code++;
+		}
+		uint8_t mode = mod_rm & 0xC0;
+		uint8_t rm = mod_rm & 3;
+		if (mode == MODE_REG_DISPLACE8) {
+			code++;
+		} else if (mode == MODE_REG_DISPLACE32 || (mode == MODE_REG_INDIRECT && rm == RBP)) {
+			code += 4;
+		}
+	} else {
+	}
+
+	return code-start;
+}

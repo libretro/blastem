@@ -53,6 +53,7 @@ void handle_joy_dpad(int joystick, int dpadnum, uint8_t value)
 }
 
 tern_node * config;
+int headless = 0;
 
 int main(int argc, char ** argv)
 {
@@ -87,7 +88,7 @@ int main(int argc, char ** argv)
 
 	vdp_context context;
 	render_init(width, height, "GST State Viewer", 60, 0);
-	init_vdp_context(&context);
+	init_vdp_context(&context, 0);
 	vdp_load_gst(&context, state_file);
 	vdp_run_to_vblank(&context);
 	vdp_print_sprite_table(&context);

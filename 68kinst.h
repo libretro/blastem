@@ -8,6 +8,13 @@
 
 #include <stdint.h>
 
+#ifdef M68030
+#define M68020
+#endif
+#ifdef M68020
+#define M68010
+#endif
+
 typedef enum {
 	BIT_MOVEP_IMMED = 0,
 	MOVE_BYTE,
@@ -97,7 +104,43 @@ typedef enum {
 	M68K_TRAPV,
 	M68K_TST,
 	M68K_UNLK,
-	M68K_INVALID
+	M68K_INVALID,
+#ifdef M68010
+	M68K_BKPT,
+	M68K_MOVE_FROM_CCR,
+	M68K_MOVEC,
+	M68K_MOVES,
+	M68K_RTD,
+#endif
+#ifdef M68020
+	M68K_BFCHG,
+	M68K_BFCLR,
+	M68K_BFEXTS,
+	M68K_BFEXTU,
+	M68K_BFFFO,
+	M68K_BFINS,
+	M68K_BFSET,
+	M68K_BFTST,
+	M68K_CALLM,
+	M68K_CAS,
+	M68K_CAS2,
+	M68K_CHK2,
+	M68K_CMP2,
+	M68K_CP_BCC,
+	M68K_CP_DBCC,
+	M68K_CP_GEN,
+	M68K_CP_RESTORE,
+	M68K_CP_SAVE,
+	M68K_CP_SCC,
+	M68K_CP_TRAPCC,
+	M68K_DIVSL,
+	M68K_DIVUL,
+	M68K_EXTB,
+	M68K_PACK,
+	M68K_RTM,
+	M68K_TRAPCC,
+	M68K_UNPK,
+#endif
 } m68K_op;
 
 typedef enum {
@@ -130,19 +173,40 @@ typedef enum {
 //expanded values
 	MODE_AREG_INDEX_DISP8,
 #ifdef M68020
-	MODE_AREG_INDEX_DISP32,
+	MODE_AREG_INDEX_BASE_DISP,
+	MODE_AREG_PREINDEX,
+	MODE_AREG_POSTINDEX,
+	MODE_AREG_MEM_INDIRECT,
+	MODE_AREG_BASE_DISP,
+	MODE_INDEX_BASE_DISP,
+	MODE_PREINDEX,
+	MODE_POSTINDEX,
+	MODE_MEM_INDIRECT,
+	MODE_BASE_DISP,
 #endif
 	MODE_ABSOLUTE_SHORT,
 	MODE_ABSOLUTE,
 	MODE_PC_DISPLACE,
 	MODE_PC_INDEX_DISP8,
 #ifdef M68020
-	MODE_PC_INDEX_DISP32,
+	MODE_PC_INDEX_BASE_DISP,
+	MODE_PC_PREINDEX,
+	MODE_PC_POSTINDEX,
+	MODE_PC_MEM_INDIRECT,
+	MODE_PC_BASE_DISP,
+	MODE_ZPC_INDEX_BASE_DISP,
+	MODE_ZPC_PREINDEX,
+	MODE_ZPC_POSTINDEX,
+	MODE_ZPC_MEM_INDIRECT,
+	MODE_ZPC_BASE_DISP,
 #endif
 	MODE_IMMEDIATE,
 	MODE_IMMEDIATE_WORD,//used to indicate an immediate operand that only uses a single extension word even for a long operation
 	MODE_UNUSED
 } m68k_addr_modes;
+#ifdef M68020
+#define M68K_FLAG_BITFIELD 0x80
+#endif
 
 typedef enum {
 	COND_TRUE,
@@ -163,13 +227,49 @@ typedef enum {
 	COND_LESS_EQ
 } m68K_condition;
 
+#ifdef M68010
+typedef enum {
+	CR_SFC,
+	CR_DFC,
+#ifdef M68020
+	CR_CACR,
+#endif
+	CR_USP,
+	CR_VBR,
+#ifdef M68020
+	CR_CAAR,
+	CR_MSP,
+	CR_ISP
+#endif
+} m68k_control_reg;
+
+#ifdef M68020
+#define MAX_HIGH_CR 0x804
+#define MAX_LOW_CR 0x002
+#else
+#define MAX_HIGH_CR 0x801
+#define MAX_LOW_CR 0x001
+#endif
+
+#endif
+
 typedef struct {
-	uint8_t addr_mode;
+#ifdef M68020
+	uint16_t bitfield;
+#endif
+	uint8_t  addr_mode;
 	union {
 		struct {
 			uint8_t pri;
 			uint8_t sec;
+#ifdef M68020
+			uint8_t scale;
+			uint8_t disp_sizes;
+#endif
 			int32_t displacement;
+#ifdef M68020
+			int32_t outer_disp;
+#endif
 		} regs;
 		uint32_t immed;
 	} params;
@@ -229,12 +329,15 @@ typedef enum {
 	VECTOR_TRAP_15
 } m68k_vector;
 
+typedef int (*format_label_fun)(char * dst, uint32_t address, void * data);
+
 uint16_t * m68k_decode(uint16_t * istream, m68kinst * dst, uint32_t address);
 uint32_t m68k_branch_target(m68kinst * inst, uint32_t *dregs, uint32_t *aregs);
 uint8_t m68k_is_branch(m68kinst * inst);
 uint8_t m68k_is_noncall_branch(m68kinst * inst);
 int m68k_disasm(m68kinst * decoded, char * dst);
-int m68k_disasm_labels(m68kinst * decoded, char * dst);
+int m68k_disasm_labels(m68kinst * decoded, char * dst, format_label_fun label_fun, void * data);
+int m68k_default_label_fun(char * dst, uint32_t address, void * data);
 
 #endif
 

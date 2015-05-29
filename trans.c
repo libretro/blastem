@@ -25,7 +25,6 @@ int main(int argc, char ** argv)
 	char disbuf[1024];
 	unsigned short * cur;
 	m68k_options opts;
-	m68k_context context;
 	FILE * f = fopen(argv[1], "rb");
 	fseek(f, 0, SEEK_END);
 	filesize = ftell(f);
@@ -51,15 +50,15 @@ int main(int argc, char ** argv)
 	memmap[1].flags = MMAP_READ | MMAP_WRITE | MMAP_CODE;
 	memmap[1].buffer = malloc(64 * 1024);
 	memset(memmap[1].buffer, 0, 64 * 1024);
-	init_m68k_opts(&opts, memmap, 2);
-	init_68k_context(&context, opts.gen.native_code_map, &opts);
-	context.mem_pointers[0] = memmap[0].buffer;
-	context.mem_pointers[1] = memmap[1].buffer;
-	context.target_cycle = context.sync_cycle = 0x80000000;
+	init_m68k_opts(&opts, memmap, 2, 1);
+	m68k_context * context = init_68k_context(&opts);
+	context->mem_pointers[0] = memmap[0].buffer;
+	context->mem_pointers[1] = memmap[1].buffer;
+	context->target_cycle = context->sync_cycle = 0x80000000;
 	uint32_t address;
 	address = filebuf[2] << 16 | filebuf[3];
-	translate_m68k_stream(address, &context);
-	m68k_reset(&context);
+	translate_m68k_stream(address, context);
+	m68k_reset(context);
 	return 0;
 }
 

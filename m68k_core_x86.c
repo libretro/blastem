@@ -14,17 +14,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define CYCLES RAX
-#define LIMIT RBP
-#define CONTEXT RSI
-#define SCRATCH1 RCX
-
-#ifdef X86_64
-#define SCRATCH2 RDI
-#else
-#define SCRATCH2 RBX
-#endif
-
 enum {
 	FLAG_X,
 	FLAG_N,
@@ -233,7 +222,7 @@ void dreg_to_native_sx(m68k_options *opts, uint8_t reg, uint8_t native_reg)
 }
 
 void native_to_areg(m68k_options *opts, uint8_t native_reg, uint8_t reg)
-{
+	{
 	if (opts->aregs[reg] >= 0) {
 		mov_rr(&opts->gen.code, native_reg, opts->aregs[reg], SZ_D);
 	} else {
@@ -267,7 +256,7 @@ void ldi_native(m68k_options *opts, int32_t value, uint8_t reg)
 void addi_native(m68k_options *opts, int32_t value, uint8_t reg)
 {
 	add_ir(&opts->gen.code, value, reg, SZ_D);
-}
+			}
 
 void subi_native(m68k_options *opts, int32_t value, uint8_t reg)
 {
@@ -366,7 +355,7 @@ void translate_m68k_op(m68kinst * inst, host_ea * ea, m68k_options * opts, uint8
 	m68k_op_info *op = dst ? &inst->dst : &inst->src;
 	int8_t reg = native_reg(op, opts);
 	uint8_t sec_reg;
-	int32_t dec_amount,inc_amount;
+	int32_t dec_amount, inc_amount;
 	if (reg >= 0) {
 		ea->mode = MODE_REG_DIRECT;
 		if (!dst && inst->dst.addr_mode == MODE_AREG && inst->extra.size == OPSIZE_WORD) {
@@ -532,26 +521,15 @@ void translate_m68k_op(m68kinst * inst, host_ea * ea, m68k_options * opts, uint8
 	}
 }
 
-void m68k_save_result(m68kinst * inst, m68k_options * opts)
+void check_user_mode_swap_ssp_usp(m68k_options *opts)
 {
-	code_info *code = &opts->gen.code;
-	if (inst->dst.addr_mode != MODE_REG && inst->dst.addr_mode != MODE_AREG && inst->dst.addr_mode != MODE_UNUSED) {
-		if (inst->dst.addr_mode == MODE_AREG_PREDEC && inst->src.addr_mode == MODE_AREG_PREDEC && inst->op != M68K_MOVE) {
-			areg_to_native(opts, inst->dst.params.regs.pri, opts->gen.scratch2);
-		}
-		switch (inst->extra.size)
-		{
-		case OPSIZE_BYTE:
-			call(code, opts->write_8);
-			break;
-		case OPSIZE_WORD:
-			call(code, opts->write_16);
-			break;
-		case OPSIZE_LONG:
-			call(code, opts->write_32_lowfirst);
-			break;
-		}
-	}
+	code_info * code = &opts->gen.code;
+	//Check if we've switched to user mode and swap stack pointers if needed
+	bt_irdisp(code, 5, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
+	code_ptr end_off = code->cur + 1;
+	jcc(code, CC_C, code->cur + 2);
+	swap_ssp_usp(opts);
+	*end_off = code->cur - (end_off + 1);
 }
 
 void translate_m68k_move(m68k_options * opts, m68kinst * inst)
@@ -604,10 +582,8 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 		break;
 	case MODE_AREG_PREDEC:
 		dec_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (inst->dst.params.regs.pri == 7 ? 2 : 1));
-		subi_areg(opts, dec_amount, inst->dst.params.regs.pri);
 	case MODE_AREG_INDIRECT:
 	case MODE_AREG_POSTINC:
-		areg_to_native(opts, inst->dst.params.regs.pri, opts->gen.scratch2);
 		if (src.mode == MODE_REG_DIRECT) {
 			if (src.base != opts->gen.scratch1) {
 				mov_rr(code, src.base, opts->gen.scratch1, inst->extra.size);
@@ -617,6 +593,10 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 		} else {
 			mov_ir(code, src.disp, opts->gen.scratch1, inst->extra.size);
 		}
+		if (inst->dst.addr_mode == MODE_AREG_PREDEC) {
+			subi_areg(opts, dec_amount, inst->dst.params.regs.pri);
+		}
+		areg_to_native(opts, inst->dst.params.regs.pri, opts->gen.scratch2);
 		break;
 	case MODE_AREG_DISPLACE:
 		cycles(&opts->gen, BUS);
@@ -821,7 +801,7 @@ void translate_m68k_bcc(m68k_options * opts, m68kinst * inst)
 	if (inst->extra.cond == COND_TRUE) {
 		jump_m68k_abs(opts, after + disp);
 	} else {
-		code_ptr dest_addr = get_native_address(opts->gen.native_code_map, after + disp);
+		code_ptr dest_addr = get_native_address(opts, after + disp);
 		uint8_t cond = m68k_eval_cond(opts, inst->extra.cond);
 		if (!dest_addr) {
 			opts->gen.deferred = defer_address(opts->gen.deferred, after + disp, code->cur + 2);
@@ -1021,8 +1001,8 @@ void translate_shift(m68k_options * opts, m68kinst * inst, host_ea *src_op, host
 		//Memory shift
 		shift_ir(code, 1, dst_op->base, SZ_W);
 	} else {
-		cycles(&opts->gen, inst->extra.size == OPSIZE_LONG ? 8 : 6);
 		if (src_op->mode == MODE_IMMED) {
+			cycles(&opts->gen, (inst->extra.size == OPSIZE_LONG ? 8 : 6) + 2 * src_op->disp);
 			if (src_op->disp != 1 && inst->op == M68K_ASL) {
 				set_flag(opts, 0, FLAG_V);
 				for (int i = 0; i < src_op->disp; i++) {
@@ -1046,6 +1026,7 @@ void translate_shift(m68k_options * opts, m68kinst * inst, host_ea *src_op, host
 				set_flag_cond(opts, CC_O, FLAG_V);
 			}
 		} else {
+			cycles(&opts->gen, inst->extra.size == OPSIZE_LONG ? 8 : 6);
 			if (src_op->base != RCX) {
 				if (src_op->mode == MODE_REG_DIRECT) {
 					mov_rr(code, src_op->base, RCX, SZ_B);
@@ -1075,8 +1056,9 @@ void translate_shift(m68k_options * opts, m68kinst * inst, host_ea *src_op, host
 			jmp(code, code->cur + 2);
 			*nz_off = code->cur - (nz_off + 1);
 			//add 2 cycles for every bit shifted
-			add_rr(code, RCX, CYCLES, SZ_D);
-			add_rr(code, RCX, CYCLES, SZ_D);
+			mov_ir(code, 2 * opts->gen.clock_divider, opts->gen.scratch2, SZ_D);
+			imul_rr(code, RCX, opts->gen.scratch2, SZ_D);
+			add_rr(code, opts->gen.scratch2, opts->gen.cycles, SZ_D);
 			if (inst->op == M68K_ASL) {
 				//ASL has Overflow flag behavior that depends on all of the bits shifted through the MSB
 				//Easiest way to deal with this is to shift one bit at a time
@@ -1241,7 +1223,7 @@ void op_rr(code_info *code, m68kinst *inst, uint8_t src, uint8_t dst, uint8_t si
 
 void op_rrdisp(code_info *code, m68kinst *inst, uint8_t src, uint8_t dst, int32_t disp, uint8_t size)
 {
-	switch (inst->op)
+	switch(inst->op)
 	{
 	case M68K_ADD:  add_rrdisp(code, src, dst, disp, size); break;
 	case M68K_ADDX: adc_rrdisp(code, src, dst, disp, size); break;
@@ -1381,8 +1363,12 @@ void translate_m68k_invalid(m68k_options *opts, m68kinst *inst)
 		retn(code);
 		return;
 	}
-	mov_ir(code, inst->address, opts->gen.scratch1, SZ_D);
-	call(code, (code_ptr)m68k_invalid);
+	mov_ir(code, (int64_t)stderr, RDI, SZ_PTR);
+	mov_ir(code, (int64_t)"Invalid instruction at %X\n", RSI, SZ_PTR);
+	mov_ir(code, inst->address, RDX, SZ_D);
+	call_args_abi(code, (code_ptr)fprintf, 3, RDI, RSI, RDX);
+	mov_ir(code, 1, RDI, SZ_D);
+	call_args(code, (code_ptr)exit, 1, RDI);
 }
 
 void translate_m68k_abcd_sbcd(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op)
@@ -1402,19 +1388,73 @@ void translate_m68k_abcd_sbcd(m68k_options *opts, m68kinst *inst, host_ea *src_o
 			mov_rdispr(code, dst_op->base, dst_op->disp, opts->gen.scratch1, SZ_B);
 		}
 	}
-	flag_to_carry(opts, FLAG_X);
-	jcc(code, CC_NC, code->cur + 5);
-	if (inst->op == M68K_ABCD) {
-		add_ir(code, 1, opts->gen.scratch1, SZ_B);
+	uint8_t other_reg;
+	//WARNING: This may need adjustment if register assignments change
+	if (opts->gen.scratch2 > RBX) {
+		other_reg = RAX;
+		xchg_rr(code, opts->gen.scratch2, RAX, SZ_D);
 	} else {
-		sub_ir(code, 1, opts->gen.scratch1, SZ_B);
+		other_reg = opts->gen.scratch2;
 	}
-	call(code, (code_ptr) (inst->op == M68K_ABCD ? bcd_add : bcd_sub));
-	reg_to_flag(opts, CH, FLAG_C);
-	reg_to_flag(opts, CH, FLAG_X);
+	mov_rr(code, opts->gen.scratch1, opts->gen.scratch1 + (AH-RAX), SZ_B);
+	mov_rr(code, other_reg, other_reg + (AH-RAX), SZ_B);
+	and_ir(code, 0xF0, opts->gen.scratch1, SZ_B);
+	and_ir(code, 0xF0, other_reg, SZ_B);
+	and_ir(code, 0xF, opts->gen.scratch1 + (AH-RAX), SZ_B);
+	and_ir(code, 0xF, other_reg + (AH-RAX), SZ_B);
+	//do op on low nibble
+	flag_to_carry(opts, FLAG_X);
+	if (inst->op == M68K_ABCD) {
+		adc_rr(code, other_reg + (AH-RAX), opts->gen.scratch1 + (AH-RAX), SZ_B);
+	} else {
+		sbb_rr(code, other_reg + (AH-RAX), opts->gen.scratch1 + (AH-RAX), SZ_B);
+	}
+	cmp_ir(code, 0xA, opts->gen.scratch1 + (AH-RAX), SZ_B);
+	code_ptr no_adjust = code->cur+1;
+	//add correction factor if necessary
+	jcc(code, CC_B, no_adjust);
+	if (inst->op == M68K_ABCD) {
+		add_ir(code, 6, opts->gen.scratch1 + (AH-RAX), SZ_B);
+	} else {
+		sub_ir(code, 6, opts->gen.scratch1 + (AH-RAX), SZ_B);
+	}
+	*no_adjust = code->cur - (no_adjust+1);
+	//add low nibble result to one of the high nibble operands
+	add_rr(code, opts->gen.scratch1 + (AH-RAX), opts->gen.scratch1, SZ_B);
+	if (inst->op == M68K_ABCD) {
+		add_rr(code, other_reg, opts->gen.scratch1, SZ_B);
+	} else {
+		sub_rr(code, other_reg, opts->gen.scratch1, SZ_B);
+	}
+	if (opts->gen.scratch2 > RBX) {
+		mov_rr(code, opts->gen.scratch2, RAX, SZ_D);
+	}
+	set_flag(opts, 0, FLAG_C);
+	set_flag(opts, 0, FLAG_V);
+	code_ptr def_adjust = code->cur+1;
+	jcc(code, CC_C, def_adjust);
+	cmp_ir(code, 0xA0, opts->gen.scratch1, SZ_B);
+	no_adjust = code->cur+1;
+	jcc(code, CC_B, no_adjust);
+	*def_adjust = code->cur - (def_adjust + 1);
+	set_flag(opts, 1, FLAG_C);
+	if (inst->op == M68K_ABCD) {
+		add_ir(code, 0x60, opts->gen.scratch1, SZ_B);
+	} else {
+		sub_ir(code, 0x60, opts->gen.scratch1, SZ_B);
+	}
+	//V flag is set based on the result of the addition of the
+	//result and the correction factor
+	set_flag_cond(opts, CC_O, FLAG_V);
+	*no_adjust = code->cur - (no_adjust+1);
+	flag_to_flag(opts, FLAG_C, FLAG_X);
+
 	cmp_ir(code, 0, opts->gen.scratch1, SZ_B);
-	jcc(code, CC_Z, code->cur + 4);
+	set_flag_cond(opts, CC_S, FLAG_N);
+	code_ptr no_setz = code->cur+1;
+	jcc(code, CC_Z, no_setz);
 	set_flag(opts, 0, FLAG_Z);
+	*no_setz = code->cur - (no_setz + 1);
 	if (dst_op->base != opts->gen.scratch1) {
 		if (dst_op->mode == MODE_REG_DIRECT) {
 			mov_rr(code, opts->gen.scratch1, dst_op->base, SZ_B);
@@ -1444,7 +1484,7 @@ void translate_m68k_bit(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 {
 	code_info *code = &opts->gen.code;
 	cycles(&opts->gen, inst->extra.size == OPSIZE_BYTE ? 4 : (
-		inst->op == M68K_BTST ? 6 : (inst->op == M68K_BCLR ? 10 : 8))
+			inst->op == M68K_BTST ? 6 : (inst->op == M68K_BCLR ? 10 : 8))
 	);
 	if (src_op->mode == MODE_IMMED) {
 		if (inst->extra.size == OPSIZE_BYTE) {
@@ -1472,9 +1512,9 @@ void translate_m68k_bit(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 					mov_rdispr(code, src_op->base, src_op->disp, opts->gen.scratch1, SZ_B);
 				}
 				src_op->base = opts->gen.scratch1;
+				}
 			}
-		}
-		uint8_t size = inst->extra.size;
+			uint8_t size = inst->extra.size;
 		if (dst_op->mode == MODE_REG_DISPLACE8) {
 			if (src_op->base != opts->gen.scratch1 && src_op->base != opts->gen.scratch2) {
 				if (src_op->mode == MODE_REG_DIRECT) {
@@ -1514,7 +1554,7 @@ void translate_m68k_bit(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 }
 
 void translate_m68k_chk(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op)
-{
+	{
 	code_info *code = &opts->gen.code;
 	cycles(&opts->gen, 6);
 	if (dst_op->mode == MODE_REG_DIRECT) {
@@ -1602,6 +1642,20 @@ void translate_m68k_div(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 			movzx_rdispr(code, src_op->base, src_op->disp, opts->gen.scratch2, SZ_W, SZ_D);
 		}
 	}
+	uint32_t isize = 2;
+	switch(inst->src.addr_mode)
+	{
+	case MODE_AREG_DISPLACE:
+	case MODE_AREG_INDEX_DISP8:
+	case MODE_ABSOLUTE_SHORT:
+	case MODE_PC_INDEX_DISP8:
+	case MODE_IMMEDIATE:
+		isize = 4;
+		break;
+	case MODE_ABSOLUTE:
+		isize = 6;
+		break;
+	}
 	cmp_ir(code, 0, opts->gen.scratch2, SZ_D);
 	check_alloc_code(code, 6*MAX_INST_LEN);
 	code_ptr not_zero = code->cur + 1;
@@ -1609,7 +1663,7 @@ void translate_m68k_div(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 	pop_r(code, RAX);
 	pop_r(code, RDX);
 	mov_ir(code, VECTOR_INT_DIV_ZERO, opts->gen.scratch2, SZ_D);
-	mov_ir(code, inst->address+2, opts->gen.scratch1, SZ_D);
+	mov_ir(code, inst->address+isize, opts->gen.scratch1, SZ_D);
 	jmp(code, opts->trap);
 	*not_zero = code->cur - (not_zero+1);
 	if (inst->op == M68K_DIVS) {
@@ -1646,8 +1700,13 @@ void translate_m68k_div(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 	}
 	cmp_ir(code, 0, RAX, SZ_W);
 	pop_r(code, RAX);
-	pop_r(code, RDX);
-	update_flags(opts, V0|Z|N);
+	if (dst_op->base == RDX) {
+		update_flags(opts, V0|Z|N);
+		add_ir(code, sizeof(void *), RSP, SZ_D);
+	} else {
+		pop_r(code, RDX);
+		update_flags(opts, V0|Z|N);
+	}
 	code_ptr end_off = code->cur + 1;
 	jmp(code, code->cur + 2);
 	*norm_off = code->cur - (norm_off + 1);
@@ -1808,8 +1867,10 @@ void translate_m68k_rot(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 			and_ir(code, 63, opts->gen.scratch1, SZ_D);
 			code_ptr zero_off = code->cur + 1;
 			jcc(code, CC_Z, code->cur + 2);
-			add_rr(code, opts->gen.scratch1, CYCLES, SZ_D);
-			add_rr(code, opts->gen.scratch1, CYCLES, SZ_D);
+			//add 2 cycles for every bit shifted
+			mov_ir(code, 2 * opts->gen.clock_divider, opts->gen.scratch2, SZ_D);
+			imul_rr(code, RCX, opts->gen.scratch2, SZ_D);
+			add_rr(code, opts->gen.scratch2, opts->gen.cycles, SZ_D);
 			cmp_ir(code, 32, opts->gen.scratch1, SZ_B);
 			code_ptr norm_off = code->cur + 1;
 			jcc(code, CC_L, code->cur + 2);
@@ -1865,12 +1926,7 @@ void translate_m68k_illegal(m68k_options *opts, m68kinst *inst)
 {
 	code_info *code = &opts->gen.code;
 	call(code, opts->gen.save_context);
-#ifdef X86_64
-	mov_rr(code, opts->gen.context_reg, RDI, SZ_PTR);
-#else
-	push_r(code, opts->gen.context_reg);
-#endif
-	call(code, (code_ptr)print_regs_exit);
+	call_args(code, (code_ptr)print_regs_exit, 1, opts->gen.context_reg);
 }
 
 #define BIT_SUPERVISOR 5
@@ -1896,7 +1952,7 @@ void translate_m68k_andi_ori_ccr_sr(m68k_options *opts, m68kinst *inst)
 		} else {
 			or_irdisp(code, inst->src.params.immed >> 8, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
 		}
-		if ((base_flag == X0) ^ (((inst->src.params.immed >> 8) & (1 << BIT_SUPERVISOR)) > 0)) {
+		if (inst->op == M68K_ANDI_SR && !(inst->src.params.immed & (1 << (BIT_SUPERVISOR + 8)))) {
 			//leave supervisor mode
 			swap_ssp_usp(opts);
 		}
@@ -1968,7 +2024,12 @@ void translate_m68k_move_ccr_sr(m68k_options *opts, m68kinst *inst, host_ea *src
 				mov_rdispr(code, src_op->base, src_op->disp, opts->gen.scratch1, SZ_W);
 			}
 		}
-		call(code, inst->op == M68K_MOVE_SR ? opts->set_sr : opts->set_ccr);
+		if (inst->op == M68K_MOVE_SR) {
+			call(code, opts->set_sr);
+			call(code, opts->do_sync);
+		} else {
+			call(code, opts->set_ccr);
+		}
 		cycles(&opts->gen, 12);
 	}
 }
@@ -2016,55 +2077,11 @@ void translate_m68k_move_from_sr(m68k_options *opts, m68kinst *inst, host_ea *sr
 	m68k_save_result(inst, opts);
 }
 
-void translate_m68k_reset(m68k_options *opts, m68kinst *inst)
-{
-	code_info *code = &opts->gen.code;
-	call(code, opts->gen.save_context);
-#ifdef X86_64
-	mov_rr(code, opts->gen.context_reg, RDI, SZ_PTR);
-#else
-	push_r(code, opts->gen.context_reg);
-#endif
-	call(code, (code_ptr)print_regs_exit);
-}
-
-void translate_m68k_rte(m68k_options *opts, m68kinst *inst)
-{
-	code_info *code = &opts->gen.code;
-	//TODO: Trap if not in system mode
-	//Read saved SR
-	areg_to_native(opts, 7, opts->gen.scratch1);
-	call(code, opts->read_16);
-	addi_areg(opts, 2, 7);
-	call(code, opts->set_sr);
-	//Read saved PC
-	areg_to_native(opts, 7, opts->gen.scratch1);
-	call(code, opts->read_32);
-	addi_areg(opts, 4, 7);
-	//Check if we've switched to user mode and swap stack pointers if needed
-	bt_irdisp(code, 5, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
-	code_ptr end_off = code->cur + 1;
-	jcc(code, CC_C, code->cur + 2);
-	swap_ssp_usp(opts);
-	*end_off = code->cur - (end_off+1);
-	//Get native address, sync components, recalculate integer points and jump to returned address
-	call(code, opts->native_addr_and_sync);
-	jmp_r(code, opts->gen.scratch1);
-}
-
 void translate_out_of_bounds(code_info *code)
 {
 	xor_rr(code, RDI, RDI, SZ_D);
-#ifdef X86_32
-	push_r(code, RDI);
-#endif
-	call(code, (code_ptr)exit);
+	call_args(code, (code_ptr)exit, 1, RDI);
 }
-
-void check_code_prologue(code_info *code)
-{
-	check_alloc_code(code, MAX_INST_LEN*4);
-};
 
 void nop_fill_or_jmp_next(code_info *code, code_ptr old_end, code_ptr next_inst)
 {
@@ -2083,7 +2100,7 @@ m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context)
 	if (inst_start) {
 		m68k_options * options = context->options;
 		code_info *code = &options->gen.code;
-		code_ptr dst = get_native_address(context->native_code_map, inst_start);
+		code_ptr dst = get_native_address(context->options, inst_start);
 		code_info orig;
 		orig.cur = dst;
 		orig.last = dst + 128;
@@ -2093,14 +2110,7 @@ m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context)
 			options->retrans_stub = code->cur;
 			call(code, options->gen.save_context);
 			push_r(code, options->gen.context_reg);
-#ifdef X86_32
-			push_r(code, options->gen.context_reg);
-			push_r(code, options->gen.scratch2);
-#endif
-			call(code, (code_ptr)m68k_retranslate_inst);
-#ifdef X86_32
-			add_ir(code, 8, RSP, SZ_D);
-#endif
+			call_args(code,(code_ptr)m68k_retranslate_inst, 2, options->gen.scratch2, options->gen.context_reg);
 			pop_r(code, options->gen.context_reg);
 			mov_rr(code, RAX, options->gen.scratch1, SZ_PTR);
 			call(code, options->gen.load_context);
@@ -2122,7 +2132,7 @@ void insert_breakpoint(m68k_context * context, uint32_t address, code_ptr bp_han
 	mov_ir(&native, address, opts->gen.scratch1, SZ_D);
 	if (!bp_stub) {
 		code_info *code = &opts->gen.code;
-		check_alloc_code(code, 5);
+		check_code_prologue(code);
 		bp_stub = code->cur;
 		call(&native, bp_stub);
 
@@ -2134,17 +2144,7 @@ void insert_breakpoint(m68k_context * context, uint32_t address, code_ptr bp_han
 		//Save context and call breakpoint handler
 		call(code, opts->gen.save_context);
 		push_r(code, opts->gen.scratch1);
-#ifdef X86_64
-		mov_rr(code, opts->gen.context_reg, RDI, SZ_PTR);
-		mov_rr(code, opts->gen.scratch1, RSI, SZ_D);
-#else
-		push_r(code, opts->gen.scratch1);
-		push_r(code, opts->gen.context_reg);
-#endif
-		call(code, bp_handler);
-#ifdef X86_32
-		add_ir(code, 8, RSP, SZ_D);
-#endif
+		call_args_abi(code, bp_handler, 2, opts->gen.context_reg, opts->gen.scratch1);
 		mov_rr(code, RAX, opts->gen.context_reg, SZ_PTR);
 		//Restore context
 		call(code, opts->gen.load_context);
@@ -2164,15 +2164,20 @@ void insert_breakpoint(m68k_context * context, uint32_t address, code_ptr bp_han
 	}
 }
 
-void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks)
+void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks, uint32_t clock_divider)
 {
 	memset(opts, 0, sizeof(*opts));
+	opts->gen.memmap = memmap;
+	opts->gen.memmap_chunks = num_chunks;
 	opts->gen.address_size = SZ_D;
 	opts->gen.address_mask = 0xFFFFFF;
+	opts->gen.byte_swap = 1;
 	opts->gen.max_address = 0x1000000;
 	opts->gen.bus_cycles = BUS;
+	opts->gen.clock_divider = clock_divider;
 	opts->gen.mem_ptr_off = offsetof(m68k_context, mem_pointers);
 	opts->gen.ram_flags_off = offsetof(m68k_context, ram_code_flags);
+	opts->gen.ram_flags_shift = 11;
 	for (int i = 0; i < 8; i++)
 	{
 		opts->dregs[i] = opts->aregs[i] = -1;
@@ -2213,8 +2218,10 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	opts->gen.native_code_map = malloc(sizeof(native_map_slot) * NATIVE_MAP_CHUNKS);
 	memset(opts->gen.native_code_map, 0, sizeof(native_map_slot) * NATIVE_MAP_CHUNKS);
 	opts->gen.deferred = NULL;
-	opts->gen.ram_inst_sizes = malloc(sizeof(uint8_t *) * 64);
-	memset(opts->gen.ram_inst_sizes, 0, sizeof(uint8_t *) * 64);
+
+	uint32_t inst_size_size = sizeof(uint8_t *) * ram_size(&opts->gen) / 1024;
+	opts->gen.ram_inst_sizes = malloc(inst_size_size);
+	memset(opts->gen.ram_inst_sizes, 0, inst_size_size);
 
 	code_info *code = &opts->gen.code;
 	init_code_info(code);
@@ -2238,9 +2245,11 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 
 	opts->gen.load_context = code->cur;
 	for (int i = 0; i < 5; i++)
+	{
 		if (opts->flag_regs[i] >= 0) {
 			mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, flags) + i, opts->flag_regs[i], SZ_B);
 		}
+	}
 	for (int i = 0; i < 8; i++)
 	{
 		if (opts->dregs[i] >= 0) {
@@ -2250,63 +2259,30 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 			mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, aregs) + sizeof(uint32_t) * i, opts->aregs[i], SZ_D);
 		}
 	}
-	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, current_cycle), CYCLES, SZ_D);
-	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, target_cycle), LIMIT, SZ_D);
+	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, current_cycle), opts->gen.cycles, SZ_D);
+	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, target_cycle), opts->gen.limit, SZ_D);
 	retn(code);
 
 	opts->start_context = (start_fun)code->cur;
+	save_callee_save_regs(code);
 #ifdef X86_64
 	if (opts->gen.scratch2 != RDI) {
 		mov_rr(code, RDI, opts->gen.scratch2, SZ_PTR);
 	}
-	//save callee save registers
-	push_r(code, RBP);
-	push_r(code, R12);
-	push_r(code, R13);
-	push_r(code, R14);
-	push_r(code, R15);
 #else
-	//save callee save registers
-	push_r(code, RBP);
-	push_r(code, RBX);
-	push_r(code, RSI);
-	push_r(code, RDI);
-
 	mov_rdispr(code, RSP, 20, opts->gen.scratch2, SZ_D);
 	mov_rdispr(code, RSP, 24, opts->gen.context_reg, SZ_D);
 #endif
 	call(code, opts->gen.load_context);
 	call_r(code, opts->gen.scratch2);
 	call(code, opts->gen.save_context);
-#ifdef X86_64
-	//restore callee save registers
-	pop_r(code, R15);
-	pop_r(code, R14);
-	pop_r(code, R13);
-	pop_r(code, R12);
-	pop_r(code, RBP);
-#else
-	pop_r(code, RDI);
-	pop_r(code, RSI);
-	pop_r(code, RBX);
-	pop_r(code, RBP);
-#endif
+	restore_callee_save_regs(code);
 	retn(code);
 
 	opts->native_addr = code->cur;
 	call(code, opts->gen.save_context);
 	push_r(code, opts->gen.context_reg);
-#ifdef X86_64
-	mov_rr(code, opts->gen.context_reg, RDI, SZ_PTR); //move context to 1st arg reg
-	mov_rr(code, opts->gen.scratch1, RSI, SZ_D); //move address to 2nd arg reg
-#else
-	push_r(code, opts->gen.scratch1);
-	push_r(code, opts->gen.context_reg);
-#endif
-	call(code, (code_ptr)get_native_address_trans);
-#ifdef X86_32
-	add_ir(code, 8, RSP, SZ_D);
-#endif
+	call_args(code, (code_ptr)get_native_address_trans, 2, opts->gen.context_reg, opts->gen.scratch1);
 	mov_rr(code, RAX, opts->gen.scratch1, SZ_PTR); //move result to scratch reg
 	pop_r(code, opts->gen.context_reg);
 	call(code, opts->gen.load_context);
@@ -2315,74 +2291,27 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	opts->native_addr_and_sync = code->cur;
 	call(code, opts->gen.save_context);
 	push_r(code, opts->gen.scratch1);
-#ifdef X86_64
-	mov_rr(code, opts->gen.context_reg, RDI, SZ_PTR);
-	xor_rr(code, RSI, RSI, SZ_D);
-	test_ir(code, 8, RSP, SZ_PTR); //check stack alignment
-	code_ptr do_adjust_rsp = code->cur + 1;
-	jcc(code, CC_NZ, code->cur + 2);
-	call(code, (code_ptr)sync_components);
-	code_ptr no_adjust_rsp = code->cur + 1;
-	jmp(code, code->cur + 2);
-	*do_adjust_rsp = code->cur - (do_adjust_rsp+1);
-	sub_ir(code, 8, RSP, SZ_PTR);
-	call(code, (code_ptr)sync_components);
-	add_ir(code, 8, RSP, SZ_PTR);
-	*no_adjust_rsp = code->cur - (no_adjust_rsp+1);
-	pop_r(code, RSI);
-	push_r(code, RAX);
-	mov_rr(code, RAX, RDI, SZ_PTR);
-	call(code, (code_ptr)get_native_address_trans);
-#else
-	//TODO: Add support for pushing a constant in gen_x86
-	xor_rr(code, RAX, RAX, SZ_D);
-	push_r(code, RAX);
-	push_r(code, opts->gen.context_reg);
-	call(code, (code_ptr)sync_components);
-	add_ir(code, 8, RSP, SZ_D);
+
+	xor_rr(code, opts->gen.scratch1, opts->gen.scratch1, SZ_D);
+	call_args_abi(code, (code_ptr)sync_components, 2, opts->gen.context_reg, opts->gen.scratch1);
 	pop_r(code, RSI); //restore saved address from opts->gen.scratch1
 	push_r(code, RAX); //save context pointer for later
-	push_r(code, RSI); //2nd arg -- address
-	push_r(code, RAX); //1st arg -- context pointer
-	call(code, (code_ptr)get_native_address_trans);
-	add_ir(code, 8, RSP, SZ_D);
-#endif
-
+	call_args(code, (code_ptr)get_native_address_trans, 2, RAX, RSI);
 	mov_rr(code, RAX, opts->gen.scratch1, SZ_PTR); //move result to scratch reg
 	pop_r(code, opts->gen.context_reg);
 	call(code, opts->gen.load_context);
 	retn(code);
 
 	opts->gen.handle_cycle_limit = code->cur;
-	cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, sync_cycle), CYCLES, SZ_D);
+	cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, sync_cycle), opts->gen.cycles, SZ_D);
 	code_ptr skip_sync = code->cur + 1;
 	jcc(code, CC_C, code->cur + 2);
 	opts->do_sync = code->cur;
 	push_r(code, opts->gen.scratch1);
 	push_r(code, opts->gen.scratch2);
 	call(code, opts->gen.save_context);
-#ifdef X86_64
-	mov_rr(code, opts->gen.context_reg, RDI, SZ_PTR);
-	xor_rr(code, RSI, RSI, SZ_D);
-	test_ir(code, 8, RSP, SZ_D);
-	code_ptr adjust_rsp = code->cur + 1;
-	jcc(code, CC_NZ, code->cur + 2);
-	call(code, (code_ptr)sync_components);
-	code_ptr no_adjust = code->cur + 1;
-	jmp(code, code->cur + 2);
-	*adjust_rsp = code->cur - (adjust_rsp + 1);
-	sub_ir(code, 8, RSP, SZ_PTR);
-	call(code, (code_ptr)sync_components);
-	add_ir(code, 8, RSP, SZ_PTR);
-	*no_adjust = code->cur - (no_adjust+1);
-#else
-	//TODO: Add support for pushing a constant in gen_x86
-	xor_rr(code, RAX, RAX, SZ_D);
-	push_r(code, RAX);
-	push_r(code, opts->gen.context_reg);
-	call(code, (code_ptr)sync_components);
-	add_ir(code, 8, RSP, SZ_D);
-#endif
+	xor_rr(code, opts->gen.scratch1, opts->gen.scratch1, SZ_D);
+	call_args_abi(code, (code_ptr)sync_components, 2, opts->gen.context_reg, opts->gen.scratch1);
 	mov_rr(code, RAX, opts->gen.context_reg, SZ_PTR);
 	call(code, opts->gen.load_context);
 	pop_r(code, opts->gen.scratch2);
@@ -2390,10 +2319,12 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	*skip_sync = code->cur - (skip_sync+1);
 	retn(code);
 
-	opts->read_16 = gen_mem_fun(&opts->gen, memmap, num_chunks, READ_16);
-	opts->read_8 = gen_mem_fun(&opts->gen, memmap, num_chunks, READ_8);
-	opts->write_16 = gen_mem_fun(&opts->gen, memmap, num_chunks, WRITE_16);
-	opts->write_8 = gen_mem_fun(&opts->gen, memmap, num_chunks, WRITE_8);
+	opts->gen.handle_code_write = (code_ptr)m68k_handle_code_write;
+
+	opts->read_16 = gen_mem_fun(&opts->gen, memmap, num_chunks, READ_16, NULL);
+	opts->read_8 = gen_mem_fun(&opts->gen, memmap, num_chunks, READ_8, NULL);
+	opts->write_16 = gen_mem_fun(&opts->gen, memmap, num_chunks, WRITE_16, NULL);
+	opts->write_8 = gen_mem_fun(&opts->gen, memmap, num_chunks, WRITE_8, NULL);
 
 	opts->read_32 = code->cur;
 	push_r(code, opts->gen.scratch1);
@@ -2490,46 +2421,23 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	retn(code);
 
 	opts->gen.handle_cycle_limit_int = code->cur;
-	cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_cycle), CYCLES, SZ_D);
+	cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_cycle), opts->gen.cycles, SZ_D);
 	code_ptr do_int = code->cur + 1;
 	jcc(code, CC_NC, code->cur + 2);
-	cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, sync_cycle), CYCLES, SZ_D);
+	cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, sync_cycle), opts->gen.cycles, SZ_D);
 	skip_sync = code->cur + 1;
 	jcc(code, CC_C, code->cur + 2);
 	call(code, opts->gen.save_context);
-#ifdef X86_64
-	mov_rr(code, opts->gen.context_reg, RDI, SZ_PTR);
-	mov_rr(code, opts->gen.scratch1, RSI, SZ_D);
-	test_ir(code, 8, RSP, SZ_D);
-	adjust_rsp = code->cur + 1;
-	jcc(code, CC_NZ, code->cur + 2);
-	call(code, (code_ptr)sync_components);
-	no_adjust = code->cur + 1;
-	jmp(code, code->cur + 2);
-	*adjust_rsp = code->cur - (adjust_rsp + 1);
-	sub_ir(code, 8, RSP, SZ_PTR);
-	call(code, (code_ptr)sync_components);
-	add_ir(code, 8, RSP, SZ_PTR);
-	*no_adjust = code->cur - (no_adjust+1);
-#else
-	push_r(code, opts->gen.scratch1);
-	push_r(code, opts->gen.context_reg);
-	call(code, (code_ptr)sync_components);
-	add_ir(code, 8, RSP, SZ_D);
-#endif
+	call_args_abi(code, (code_ptr)sync_components, 2, opts->gen.context_reg, opts->gen.scratch1);
 	mov_rr(code, RAX, opts->gen.context_reg, SZ_PTR);
 	jmp(code, opts->gen.load_context);
 	*skip_sync = code->cur - (skip_sync+1);
 	retn(code);
 	*do_int = code->cur - (do_int+1);
 	//set target cycle to sync cycle
-	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, sync_cycle), LIMIT, SZ_D);
+	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, sync_cycle), opts->gen.limit, SZ_D);
 	//swap USP and SSP if not already in supervisor mode
-	bt_irdisp(code, 5, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
-	code_ptr already_supervisor = code->cur + 1;
-	jcc(code, CC_C, code->cur + 2);
-	swap_ssp_usp(opts);
-	*already_supervisor = code->cur - (already_supervisor+1);
+	check_user_mode_swap_ssp_usp(opts);
 	//save PC
 	subi_areg(opts, 4, 7);
 	areg_to_native(opts, 7, opts->gen.scratch2);
@@ -2559,11 +2467,7 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	opts->trap = code->cur;
 	push_r(code, opts->gen.scratch2);
 	//swap USP and SSP if not already in supervisor mode
-	bt_irdisp(code, 5, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
-	already_supervisor = code->cur + 1;
-	jcc(code, CC_C, code->cur + 2);
-	swap_ssp_usp(opts);
-	*already_supervisor = code->cur - (already_supervisor+1);
+	check_user_mode_swap_ssp_usp(opts);
 	//save PC
 	subi_areg(opts, 4, 7);
 	areg_to_native(opts, 7, opts->gen.scratch2);
@@ -2582,4 +2486,11 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	call(code, opts->native_addr_and_sync);
 	cycles(&opts->gen, 18);
 	jmp_r(code, opts->gen.scratch1);
+	
+	opts->odd_address = code->cur;
+	mov_ir(code, (int64_t)stderr, RDI, SZ_PTR);
+	mov_ir(code, (int64_t)"Attempt to execute code at odd address\n", RSI, SZ_PTR);
+	call_args_abi(code, (code_ptr)fprintf, 2, RDI, RSI, RDX);
+	xor_rr(code, RDI, RDI, SZ_D);
+	call_args(code, (code_ptr)exit, 1, RDI);
 }
