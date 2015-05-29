@@ -9,8 +9,8 @@ MEM:=mem_win.o
 BLASTEM:=blastem.exe
 
 CC:=wine gcc.exe
-CFLAGS:=-O2 -std=gnu99 -Wreturn-type -Werror=return-type -Werror=
-LDFLAGS:= -L"C:/MinGW/usr/lib" -lm -lmingw32 -lSDLmain -lSDL -mwindows
+CFLAGS:=-g -std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -I"C:/MinGW/usr/include/SDL2" -DGLEW_STATIC
+LDFLAGS:= -L"C:/MinGW/usr/lib" -lm -lmingw32 -lSDL2main -lSDL2 -lopengl32 -lglu32 -mwindows
 CPU:=i686
 
 else
@@ -63,7 +63,7 @@ ifeq ($(OS),Darwin)
 LDFLAGS+= -framework OpenGL
 endif
 
-TRANSOBJS=gen.o backend.o mem.o
+TRANSOBJS=gen.o backend.o $(MEM)
 M68KOBJS=68kinst.o m68k_core.o
 ifeq ($(CPU),x86_64)
 M68KOBJS+= m68k_core_x86.o
@@ -97,7 +97,7 @@ else
 MAINOBJS+= $(Z80OBJS)
 endif
 
-ifdef WINDOWS
+ifeq ($(OS),Windows)
 MAINOBJS+= glew32s.lib
 endif
 
