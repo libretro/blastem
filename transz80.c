@@ -38,7 +38,7 @@ int main(int argc, char ** argv)
 {
 	long filesize;
 	uint8_t *filebuf;
-	x86_z80_options opts;
+	z80_options opts;
 	z80_context context;
 	if (argc < 2) {
 		fputs("usage: transz80 zrom [cartrom]\n", stderr);
@@ -70,7 +70,7 @@ int main(int argc, char ** argv)
 			*cur = (*cur >> 8) | (*cur << 8);
 		}
 	}
-	init_x86_z80_opts(&opts);
+	init_z80_opts(&opts);
 	init_z80_context(&context, &opts);
 	//Z80 RAM
 	context.mem_pointers[0] = z80_ram;

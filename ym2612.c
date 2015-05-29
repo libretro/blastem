@@ -521,6 +521,7 @@ void ym_address_write_part1(ym2612_context * context, uint8_t address)
 	context->selected_part = 0;
 	context->write_cycle = context->current_cycle;
 	context->busy_cycles = BUSY_CYCLES_ADDRESS;
+	context->status |= 0x80;
 }
 
 void ym_address_write_part2(ym2612_context * context, uint8_t address)
@@ -530,6 +531,7 @@ void ym_address_write_part2(ym2612_context * context, uint8_t address)
 	context->selected_part = 1;
 	context->write_cycle = context->current_cycle;
 	context->busy_cycles = BUSY_CYCLES_ADDRESS;
+	context->status |= 0x80;
 }
 
 uint8_t fnum_to_keycode[] = {
@@ -583,14 +585,16 @@ void ym_update_phase_inc(ym2612_context * context, ym_operator * operator, uint3
 	ym_channel * channel = context->channels + chan_num;
 	uint32_t inc, detune;
 	if (chan_num == 2 && context->ch3_mode && (op < (2*4 + 3))) {
-		inc = context->ch3_supp[op-2*4].fnum;
-		if (!context->ch3_supp[op-2*4].block) {
+		//supplemental fnum registers are in a different order than normal slot paramters
+		int index = (op-2*4) ^ 2;
+		inc = context->ch3_supp[index].fnum;
+		if (!context->ch3_supp[index].block) {
 			inc >>= 1;
 		} else {
-			inc <<= (context->ch3_supp[op-2*4].block-1);
+			inc <<= (context->ch3_supp[index].block-1);
 		}
 		//detune
-		detune = detune_table[context->ch3_supp[op-2*4].keycode][operator->detune & 0x3];
+		detune = detune_table[context->ch3_supp[index].keycode][operator->detune & 0x3];
 	} else {
 		inc = channel->fnum;
 		if (!channel->block) {

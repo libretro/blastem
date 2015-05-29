@@ -19,8 +19,6 @@
 #define RAM_FLAG_EVEN 0x1000
 #define RAM_FLAG_BOTH 0x0000
 
-#define CYCLE_NEVER 0xFFFFFFFF
-
 typedef struct {
 	m68k_context   *m68k;
 	z80_context    *z80;
@@ -32,6 +30,8 @@ typedef struct {
 	uint32_t       save_flags;
 	uint32_t       master_clock; //Current master clock value
 	uint32_t       normal_clock; //Normal master clock (used to restore master clock after turbo mode)
+	uint32_t       frame_end;
+	uint32_t       max_cycles;
 	uint8_t        bank_regs[8];
 	io_port        ports[3];
 	uint8_t        bus_busy;
@@ -42,8 +42,6 @@ extern int headless;
 extern int break_on_sync;
 extern int save_state;
 extern tern_node * config;
-extern uint8_t busreq;
-extern uint8_t reset;
 
 #define CARTRIDGE_WORDS 0x200000
 #define RAM_WORDS 32 * 1024
@@ -54,6 +52,7 @@ extern uint16_t ram[RAM_WORDS];
 extern uint8_t z80_ram[Z80_RAM_BYTES];
 
 uint16_t read_dma_value(uint32_t address);
+m68k_context * sync_components(m68k_context *context, uint32_t address);
 m68k_context * debugger(m68k_context * context, uint32_t address);
 void set_speed_percent(genesis_context * context, uint32_t percent);
 

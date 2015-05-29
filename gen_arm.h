@@ -149,5 +149,9 @@ uint32_t pop(code_info *code, uint32_t reg);
 uint32_t pop_cc(code_info *code, uint32_t reg, uint32_t cc);
 uint32_t popm(code_info *code, uint32_t reglist);
 uint32_t popm_cc(code_info *code, uint32_t reglist, uint32_t cc);
+uint32_t ldr_cc(code_info *code, uint32_t dst, uint32_t base, int32_t offset, uint32_t cc);
+uint32_t ldr(code_info *code, uint32_t rst, uint32_t base, int32_t offset);
+uint32_t str_cc(code_info *code, uint32_t src, uint32_t base, int32_t offset, uint32_t cc);
+uint32_t str(code_info *code, uint32_t src, uint32_t base, int32_t offset);
 
 #endif //GEN_ARM_H_

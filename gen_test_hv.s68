@@ -1,0 +1,631 @@
+	dc.l $0, start
+	dc.l empty_handler
+	dc.l empty_handler
+	;$10
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	;$20
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	;$30
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	;$40
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	;$50
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	;$60
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	;$70
+	dc.l int_4
+	dc.l empty_handler
+	dc.l int_6
+	dc.l empty_handler
+	;$80
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	;$90
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	;$A0
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	;$B0
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	;$C0
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	;$D0
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	;$E0
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	;$F0
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.l empty_handler
+	dc.b "SEGA"
+empty_handler:
+int_6:
+	rte
+int_4:
+	move.w (a2), d0
+	ori.w #$8000, d0
+	move.w d0, (a4)+
+	rte
+
+start:
+	lea $C00000, a0
+	lea $C00004, a1
+	move.w #$8104, (a1) ;Mode 5, everything turned off
+	move.w #$8004, (a1)
+	move.w #$8220, (a1) ;Scroll a table $8000
+	move.w #$8404, (a1) ;Scroll b table $8000
+	move.w #$8560, (a1) ;SAT table $C000
+	move.w #$8700, (a1) ;backdrop color 0
+	move.w #$8B00, (a1) ;full screen scroll
+	move.w #$8C81, (a1) ;40 cell mode, no interlace
+	move.w #$8C81, (mode).w
+	move.w #$8D00, (a1) ;hscroll table at 0
+	move.w #$8F02, (a1) ;autoinc 2
+	move.w #$9011, (a1) ;64x64 scroll size
+	move.l #$C0000000, (a1)
+	move.w #$000, (a0)
+	move.w #$EEE, (a0)
+
+	;clear scroll table
+	move.l #$40000000, (a1)
+	move.l #0, (a0)
+
+	;load tiles
+	move.l #$44000000, (a1)
+	lea font(pc), a2
+	move.w #((fontend-font)/4 - 1), d0
+tloop:
+	move.l (a2)+, (a0)
+	dbra d0, tloop
+
+
+
+	;clear name table
+	move.l #$40000002, (a1)
+	moveq #32, d0
+	move.w #(64*64-1), d1
+ploop:
+	move.w d0, (a0)
+	dbra d1, ploop
+
+
+	lea $FF0000, a4
+	move.b #$40, (a4, 6)
+	move.w #$8144, (a1) ;enable display
+	move #$2300, sr
+
+	lea (4, a1), a2 ;hv counter line address
+	lea (2, a1), a3 ;second contro/status address
+
+	move.b #254, d0
+init_wait:
+	cmp.b (a2), d0
+	beq init_wait
+
+top:
+	move.b #254, d0
+	lea $FF0000, a4
+	move.w #$8F00, (a1)     ;autoinc of 0
+	move.l #$40040000, (a1) ;unused VRAM address
+wait_active:
+	cmp.b (a2), d0
+	bne.s wait_active
+
+	move.l #$8A718014, (a1) ;enable Hints
+
+	;sync to VDP by attempting to fill FIFO
+	;being in vblank makes this a bit difficult
+
+	rept 8
+	move.l d0, (a0)
+	endr
+
+	;sample data for vblank flag off
+	rept 82 ;two lines worth of move.l
+	move.l (a3), (a4)+
+	endr
+
+	move.l a4, a5 ;save end of first buffer
+
+	move.b (a2), d0
+wait_new_line:
+	cmp.b (a2), d0
+	beq.s wait_new_line
+
+	;sync to VDP by filling FIFO
+	move.l d0, (a0)
+	move.l d0, (a0)
+	move.w d0, (a0)
+
+	;sample data for line change HV value
+	rept 45 ;one line worth of move.l
+	move.l (a2), (a4)+
+	endr
+
+	move.l a4, usp ;save end of second buffer
+
+	moveq #$70, d0
+wait_hint_line:
+	cmp.b (a2), d0
+	bne.s wait_hint_line
+
+	;sample data for line change HV value
+	rept 45 ;one line worth of move.l
+	move.l (a2), (a4)+
+	endr
+
+	move.l a4, a6
+
+	move.b #223, d0
+wait_inactive:
+	cmp.b (a2), d0
+	bne.s wait_inactive
+
+	;sync to VDP by filling FIFO
+	move.l d0, (a0)
+	move.l d0, (a0)
+	move.w d0, (a0)
+
+	;sample data for vblank on
+	rept 82 ;two lines worth of move.l
+	move.l (a3), (a4)+
+	endr
+
+	move.l #$8AFF8004, (a1) ;disable Hints
+
+	rsset $FFFF8000
+vblank_start_min rs.w 1
+vblank_start_max rs.w 1
+vblank_end_min   rs.w 1
+vblank_end_max   rs.w 1
+hblank_start_min rs.w 1
+hblank_start_max rs.w 1
+hblank_end_min   rs.w 1
+hblank_end_max   rs.w 1
+line_change_min  rs.w 1
+line_change_max  rs.w 1
+hint_min         rs.w 1
+hint_max         rs.w 1
+mode             rs.w 1
+printed_hv_dump  rs.b 1
+button_state     rs.b 1
+
+	lea $FF0001, a4
+.loop:
+	btst.b #3, (a4)
+	beq.s found_vblank_off
+	move.w 1(a4), d6
+	addq #4, a4
+	bra.s .loop
+found_vblank_off:
+
+	move.w (vblank_end_max).w, d0
+	beq .new_max
+	cmp.w d0, d6
+	blo .no_new_max
+.new_max
+	move.w d6, (vblank_end_max).w
+.no_new_max:
+
+
+	move.w 1(a4), d6
+
+	move.w (vblank_end_min).w, d0
+	beq .new_min
+	cmp.w d0, d6
+	bhi .no_new_min
+.new_min
+	move.w d6, (vblank_end_min).w
+.no_new_min:
+
+	lea $FF0001, a4
+;first find a point where HBLANK is not set
+	bra.s .start
+.loop:
+	addq #4, a4
+.start
+	btst.b #2, (a4)
+	bne.s .loop
+
+;then find a point after that where it switches to on
+.loop2:
+	btst.b #2, (a4)
+	bne.s found_hblank_on
+	move.w 1(a4), d5
+	addq #4, a4
+	bra.s .loop2
+found_hblank_on:
+
+	move.w (hblank_start_max).w, d0
+	beq .new_max
+	cmp.w d0, d5
+	blo .no_new_max
+.new_max
+	move.w d5, (hblank_start_max).w
+.no_new_max:
+
+
+	move.w 1(a4), d5
+
+	move.w (hblank_start_min).w, d0
+	beq .new_min
+	cmp.w d0, d5
+	bhi .no_new_min
+.new_min
+	move.w d5, (hblank_start_min).w
+.no_new_min:
+
+;finally find a point after that where it switches back off
+.loop2:
+	btst.b #2, (a4)
+	beq.s found_hblank_off
+	move.w 1(a4), d5
+	addq #4, a4
+	bra.s .loop2
+found_hblank_off:
+
+	move.w (hblank_end_max).w, d0
+	beq .new_max
+	cmp.w d0, d5
+	blo .no_new_max
+.new_max
+	move.w d5, (hblank_end_max).w
+.no_new_max:
+
+
+	move.w 1(a4), d5
+
+	move.w (hblank_end_min).w, d0
+	beq .new_min
+	cmp.w d0, d5
+	bhi .no_new_min
+.new_min
+	move.w d5, (hblank_end_min).w
+.no_new_min:
+
+	move.l a5, a4 ;save line change buffer for later
+	move.b (a5), d0
+.loop
+	move.w (a5), d7
+	addq #2, a5
+	cmp.b (a5), d0
+	beq .loop
+found_line_change:
+
+	move.w (line_change_max).w, d0
+	beq .new_max
+	cmp.w d0, d7
+	blo .no_new_max
+.new_max
+	move.w d7, (line_change_max).w
+.no_new_max:
+
+	move.w (a5), d7
+
+	move.w (line_change_min).w, d0
+	beq .new_min
+	cmp.w d0, d7
+	bhi .no_new_min
+.new_min
+	move.w d7, (line_change_min).w
+.no_new_min:
+
+	addq #1, a6
+.loop:
+	btst.b #3, (a6)
+	bne.s found_vblank_on
+	move.w 1(a6), d5
+	addq #4, a6
+	bra.s .loop
+found_vblank_on:
+
+	move.w (vblank_start_max).w, d0
+	beq .new_max
+	cmp.w d0, d5
+	blo .no_new_max
+.new_max
+	move.w d5, (vblank_start_max).w
+.no_new_max:
+
+	move.w 1(a6), d5
+
+	move.w (vblank_start_min).w, d0
+	beq .new_min
+	cmp.b d0, d5
+	bhi .no_new_min
+.new_min
+	move.w d5, (vblank_start_min).w
+.no_new_min:
+
+	move usp, a5
+.loop:
+	btst.b #7, (a5)
+	bne.s found_hint
+	move.w (a5), d1
+	addq #2, a5
+	bra.s .loop
+found_hint:
+
+	move.w (hint_max).w, d0
+	beq .new_max
+	cmp.w d0, d1
+	blo .no_new_max
+.new_max
+	move.w d1, (hint_max).w
+.no_new_max:
+
+	move.w (a5), d1
+	and.w #$7FFF, d1
+
+	move.w (hint_min).w, d0
+	beq .new_min
+	cmp.b d0, d1
+	bhi .no_new_min
+.new_min
+	move.w d1, (hint_min).w
+.no_new_min:
+
+draw_info:
+	;draw data
+	move.w #$8F02, (a1)     ;autoinc of 2
+	move.l #$40840002, (a1)
+
+	moveq #0, d0
+	lea VBlankStart(pc), a6
+	bsr print_string
+
+
+	move.w (vblank_start_max), d0
+	moveq #0, d1
+	bsr print_hexw
+
+	move.w #32, (a0)
+	move.w d5, d0
+	bsr print_hexw
+
+	move.w #32, (a0)
+	move.w (vblank_start_min), d0
+	bsr print_hexw
+
+	moveq #0, d0
+	move.l #$41040002, (a1)
+	lea VBlankEnd(pc), a6
+	bsr print_string
+
+	;max value before vblank end
+	moveq #0, d1
+	move.w (vblank_end_max), d0
+	bsr print_hexw
+
+	move.w #32, (a0)
+	move.w d6, d0
+	bsr print_hexw
+
+	;min value after vblank end
+	move.w (vblank_end_min), d0
+	move.w #32, (a0)
+	bsr print_hexw
+
+	moveq #0, d0
+	move.l #$41840002, (a1)
+	lea LineChange(pc), a6
+	bsr print_string
+
+	move.w (line_change_max), d0
+	moveq #0, d1
+	bsr print_hexw
+
+	move.w #32, (a0)
+	move.w d7, d0
+	bsr print_hexw
+
+	move.w (line_change_min), d0
+	move.w #32, (a0)
+	bsr print_hexw
+
+	moveq #0, d0
+	move.l #$42040002, (a1)
+	lea HBlankStart(pc), a6
+	bsr print_string
+
+	move.w (hblank_start_max), d0
+	moveq #0, d1
+	bsr print_hexw
+
+	move.w (hblank_start_min), d0
+	move.w #32, (a0)
+	bsr print_hexw
+
+	moveq #0, d0
+	move.l #$42840002, (a1)
+	lea HBlankEnd(pc), a6
+	bsr print_string
+
+	move.w (hblank_end_max), d0
+	moveq #0, d1
+	bsr print_hexw
+
+	move.w (hblank_end_min), d0
+	move.w #32, (a0)
+	bsr print_hexw
+
+	moveq #0, d0
+	move.l #$43040002, (a1)
+	lea HInterrupt(pc), a6
+	bsr print_string
+
+	move.w (hint_max), d0
+	moveq #0, d1
+	bsr print_hexw
+
+	move.w (hint_min), d0
+	move.w #32, (a0)
+	bsr print_hexw
+
+	;read pad
+	move.b #$40, $A10003
+	move.b $A10003, d0
+	move.b #$00, $A10003
+	and.b #$3f, d0
+	move.b $A10003, d1
+	and.b #$30, d1
+	lsl.b #2, d1
+	or.b d1, d0
+	not.b d0
+	move.b (button_state).w, d2
+	eor.b d0, d2
+	and.b d0, d2
+	move.b d2, d3 ;d3 contains newly pressed buttons, SACBRLDU
+	move.b d0, (button_state).w
+
+	btst.l #7, d3
+	beq not_pressed
+
+	moveq #0, d0
+	move.l d0, (vblank_start_min).w
+	move.l d0, (vblank_end_min).w
+	move.l d0, (hblank_start_min).w
+	move.l d0, (hblank_end_min).w
+	move.l d0, (line_change_min).w
+	move.l d0, (hint_min).w
+	move.b d0, (printed_hv_dump).w
+	move.w (mode).w, d0
+	eor.w  #$81, d0
+	move.w d0, (mode).w
+	move.w d0, (a1)
+	bra top
+
+not_pressed
+
+	move.b (printed_hv_dump).w, d0
+	bne top
+	move.b #1, (printed_hv_dump).w
+
+	moveq #0, d1
+	moveq #89, d4
+	moveq #6, d5
+	move.l #$45820002, d6
+	move.l d6, (a1)
+
+print_loop:
+	dbra d5, .no_line_change
+		 ;#$45820002
+	add.l #$00800000, d6
+	move.l d6, (a1)
+	moveq #5, d5
+.no_line_change
+	move.w #32, (a0)
+	move.w (a4)+, d0
+	bsr print_hexw
+	dbra d4, print_loop
+
+	add.l #$01020000, d6
+	move.l d6, (a1)
+	moveq #0, d0
+	lea Instructions(pc), a6
+	bsr print_string
+
+	bra top
+
+VBlankStart:
+	dc.b "VBlank Start: ", 0
+VBlankEnd:
+	dc.b "VBlank End:   ", 0
+LineChange:
+	dc.b "Line Change:  ", 0
+HBlankStart:
+	dc.b "HBlank Start: ", 0
+HBlankEnd:
+	dc.b "HBlank End:   ", 0
+HInterrupt:
+	dc.b "HInterrupt:   ", 0
+Instructions:
+	dc.b "Press Start to switch modes", 0
+
+	align 1
+;Prints a number in hex format
+;d0.w - number to print
+;d1.w - base tile attribute
+;a0 - VDP data port
+;
+;Clobbers: d2.l, d3.l
+;
+print_hexw:
+	moveq #3, d3
+.digitloop
+	rol.w #4, d0
+	moveq #$F, d2
+	and.b d0, d2
+	cmp.b #$A, d2
+	bge .hex
+	add.w #$30, d2
+	bra .makeattrib
+.hex
+	add.w #($41-$A), d2
+.makeattrib
+	add.w d1, d2
+	move.w d2, (a0)
+	dbra d3, .digitloop
+	rts
+
+;Prints a null terminated string
+;a6 - pointer to string
+;a0 - VDP data port
+;d0 - base tile attribute
+;
+;Clobbers: d1.w
+print_string:
+.loop
+	moveq #0, d1
+	move.b (a6)+, d1
+	beq .end
+	add.w d0, d1
+	move.w d1, (a0)
+	bra .loop
+.end
+	rts
+
+	align 1
+font:
+	incbin font.tiles
+fontend
+

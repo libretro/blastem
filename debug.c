@@ -3,6 +3,8 @@
 #include "68kinst.h"
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
+#include "render.h"
 
 static bp_def * breakpoints = NULL;
 static bp_def * zbreakpoints = NULL;
@@ -471,6 +473,7 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 	static uint32_t branch_t;
 	static uint32_t branch_f;
 	m68kinst inst;
+	sync_components(context, 0);
 	//probably not necessary, but let's play it safe
 	address &= 0xFFFFFF;
 	if (address == branch_t) {
@@ -507,8 +510,25 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 	printf("%X: %s\n", address, input_buf);
 	uint32_t after = address + (after_pc-pc)*2;
 	int debugging = 1;
+	int prompt = 1;
+	fd_set read_fds;
+	FD_ZERO(&read_fds);
+	struct timeval timeout;
 	while (debugging) {
-		fputs(">", stdout);
+		if (prompt) {
+			fputs(">", stdout);
+			fflush(stdout);
+		}
+		process_events();
+		timeout.tv_sec = 0;
+		timeout.tv_usec = 16667;
+		FD_SET(fileno(stdin), &read_fds);
+		if(select(fileno(stdin) + 1, &read_fds, NULL, NULL, &timeout) < 1) {
+			prompt = 0;
+			continue;
+		} else {
+			prompt = 1;
+		}
 		if (!fgets(input_buf, sizeof(input_buf), stdin)) {
 			fputs("fgets failed", stderr);
 			break;
@@ -632,9 +652,14 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 					}
 				} else if(param[0] == 'c') {
 					value = context->current_cycle;
-				} else if (param[0] == '0' && param[1] == 'x') {
-					uint32_t p_addr = strtol(param+2, NULL, 16);
-					value = read_dma_value(p_addr/2);
+				} else if ((param[0] == '0' && param[1] == 'x') || param[0] == '$') {
+					uint32_t p_addr = strtol(param+(param[0] == '0' ? 2 : 1), NULL, 16);
+					if ((p_addr & 0xFFFFFF) == 0xC00004) {
+						genesis_context * gen = context->system;
+						value = vdp_hv_counter_read(gen->vdp);
+					} else {
+						value = read_dma_value(p_addr/2);
+					}
 				} else {
 					fprintf(stderr, "Unrecognized parameter to p: %s\n", param);
 					break;
