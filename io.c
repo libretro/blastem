@@ -3,6 +3,7 @@
  This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
+#ifndef _WIN32
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/socket.h>
@@ -10,7 +11,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
+#endif
 #include <string.h>
+#include <stdlib.h>
 
 #include "io.h"
 #include "blastem.h"
@@ -544,7 +547,7 @@ void setup_io_devices(tern_node * config, io_port * ports)
 
 	for (int i = 0; i < 3; i++)
 	{
-
+#ifndef _WIN32
 		if (ports[i].device_type == IO_SEGA_PARALLEL)
 		{
 			char *pipe_name = tern_find_ptr(config, "ioparallel_pipe");
@@ -606,7 +609,9 @@ cleanup_sock:
 				close(ports[i].device.stream.listen_fd);
 				ports[i].device_type = IO_NONE;
 			}
-		} else if (ports[i].device_type == IO_GAMEPAD3 || ports[i].device_type == IO_GAMEPAD6) {
+		} else 
+#endif
+		if (ports[i].device_type == IO_GAMEPAD3 || ports[i].device_type == IO_GAMEPAD6) {
 			printf("IO port %s connected to gamepad #%d with type '%s'\n", io_name(i), ports[i].device.pad.gamepad_num + 1, device_type_names[ports[i].device_type]);
 		} else {
 			printf("IO port %s connected to device '%s'\n", io_name(i), device_type_names[ports[i].device_type]);
@@ -770,6 +775,7 @@ void io_adjust_cycles(io_port * port, uint32_t current_cycle, uint32_t deduction
 	}
 }
 
+#ifndef _WIN32
 static void wait_for_connection(io_port * port)
 {
 	if (port->device.stream.data_fd == -1)
@@ -869,6 +875,7 @@ static void service_socket(io_port *port)
 		}
 	}
 }
+#endif
 
 void io_data_write(io_port * port, uint8_t value, uint32_t current_cycle)
 {
@@ -889,12 +896,14 @@ void io_data_write(io_port * port, uint8_t value, uint32_t current_cycle)
 		}
 		port->output = value;
 		break;
+#ifndef _WIN32
 	case IO_GENERIC:
 		wait_for_connection(port);
 		port->input[IO_STATE] = IO_WRITE_PENDING;
 		port->output = value;
 		service_socket(port);
 		break;
+#endif
 	default:
 		port->output = value;
 	}
@@ -938,6 +947,7 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 		}
 		break;
 	}
+#ifndef _WIN32
 	case IO_SEGA_PARALLEL:
 		if (!th)
 		{
@@ -954,6 +964,7 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 		service_socket(port);
 		input = ~port->input[IO_TH0];
 		break;
+#endif
 	default:
 		input = 0;
 		break;
