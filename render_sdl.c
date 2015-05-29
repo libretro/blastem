@@ -107,7 +107,7 @@ const GLushort element_data[] = {0, 1, 2, 3};
 
 GLuint load_shader(char * fname, GLenum shader_type)
 {
-	char * parts[] = {getenv("HOME"), "/.config/blastem/shaders/", fname};
+	char * parts[] = {get_home_dir(), "/.config/blastem/shaders/", fname};
 	char * shader_path = alloc_concat_m(3, parts);
 	FILE * f = fopen(shader_path, "r");
 	free(shader_path);
