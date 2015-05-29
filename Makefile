@@ -9,7 +9,7 @@ MEM:=mem_win.o
 BLASTEM:=blastem.exe
 
 CC:=wine gcc.exe
-CFLAGS:=-g -std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -I"C:/MinGW/usr/include/SDL2" -DGLEW_STATIC
+CFLAGS:=-O2 -std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -I"C:/MinGW/usr/include/SDL2" -DGLEW_STATIC
 LDFLAGS:= -L"C:/MinGW/usr/lib" -lm -lmingw32 -lSDL2main -lSDL2 -lopengl32 -lglu32 -mwindows
 CPU:=i686
 
