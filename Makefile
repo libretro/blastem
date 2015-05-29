@@ -82,7 +82,7 @@ endif
 
 ifdef WINDOWS
 ifndef NOGL
-MAINOBJS+= glew.o
+MAINOBJS+= glew32s.lib
 endif
 endif
 
