@@ -6,6 +6,22 @@
 #ifndef RENDER_H_
 #define RENDER_H_
 
+//TODO: Throw an ifdef in here once there's more than one renderer
+#include <SDL.h>
+#define RENDERKEY_UP      SDLK_UP
+#define RENDERKEY_DOWN    SDLK_DOWN
+#define RENDERKEY_LEFT    SDLK_LEFT
+#define RENDERKEY_RIGHT   SDLK_RIGHT
+#define RENDERKEY_ESC     SDLK_ESCAPE
+#define RENDERKEY_LSHIFT  SDLK_LSHIFT
+#define RENDERKEY_RSHIFT  SDLK_RSHIFT
+#define RENDER_DPAD_UP    SDL_HAT_UP
+#define RENDER_DPAD_DOWN  SDL_HAT_DOWN
+#define RENDER_DPAD_LEFT  SDL_HAT_LEFT
+#define RENDER_DPAD_RIGHT SDL_HAT_RIGHT
+
+#define MAX_JOYSTICKS 8
+
 #include "vdp.h"
 #include "psg.h"
 #include "ym2612.h"
@@ -35,21 +51,7 @@ int render_joystick_num_hats(int joystick);
 int render_num_joysticks();
 void process_events();
 
-//TODO: Throw an ifdef in here once there's more than one renderer
-#include <SDL.h>
-#define RENDERKEY_UP      SDLK_UP
-#define RENDERKEY_DOWN    SDLK_DOWN
-#define RENDERKEY_LEFT    SDLK_LEFT
-#define RENDERKEY_RIGHT   SDLK_RIGHT
-#define RENDERKEY_ESC     SDLK_ESCAPE
-#define RENDERKEY_LSHIFT  SDLK_LSHIFT
-#define RENDERKEY_RSHIFT  SDLK_RSHIFT
-#define RENDER_DPAD_UP    SDL_HAT_UP
-#define RENDER_DPAD_DOWN  SDL_HAT_DOWN
-#define RENDER_DPAD_LEFT  SDL_HAT_LEFT
-#define RENDER_DPAD_RIGHT SDL_HAT_RIGHT
 
-#define MAX_JOYSTICKS 8
 
 #endif //RENDER_H_
 

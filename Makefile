@@ -2,19 +2,36 @@ ifndef OS
 OS:=$(shell uname -s)
 endif
 
+ifeq ($(OS),Windows)
+CC:=wine gcc.exe
+
+MEM:=mem_win.o
+BLASTEM:=blastem.exe
+
+CC:=wine gcc.exe
+CFLAGS:=-O2 -std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -I"C:/MinGW/usr/include/SDL2" -DGLEW_STATIC
+LDFLAGS:= -L"C:/MinGW/usr/lib" -lm -lmingw32 -lSDL2main -lSDL2 -lopengl32 -lglu32 -mwindows
+CPU:=i686
+
+else
+
+MEM:=mem.o
+BLASTEM:=blastem
+
 ifeq ($(OS),Darwin)
 LIBS=sdl2 glew
 else
 LIBS=sdl2 glew gl
-endif
+endif #Darwin
 
-ifdef DEBUG
+ifdef DEBUGW
 CFLAGS:=-ggdb -std=gnu99 $(shell pkg-config --cflags-only-I $(LIBS)) -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration
 LDFLAGS:=-ggdb -lm $(shell pkg-config --libs $(LIBS))
 else
 CFLAGS:=-O2 -flto -std=gnu99 $(shell pkg-config  --cflags-only-I $(LIBS)) -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration
 LDFLAGS:=-O2 -flto -lm $(shell pkg-config --libs $(LIBS))
-endif
+endif #DEBUG
+endif #Windows
 
 ifdef Z80_LOG_ADDRESS
 CFLAGS+= -DZ80_LOG_ADDRESS
@@ -46,7 +63,7 @@ ifeq ($(OS),Darwin)
 LDFLAGS+= -framework OpenGL
 endif
 
-TRANSOBJS=gen.o backend.o mem.o
+TRANSOBJS=gen.o backend.o $(MEM)
 M68KOBJS=68kinst.o m68k_core.o
 ifeq ($(CPU),x86_64)
 M68KOBJS+= m68k_core_x86.o
@@ -80,11 +97,14 @@ else
 MAINOBJS+= $(Z80OBJS)
 endif
 
+ifeq ($(OS),Windows)
+MAINOBJS+= glew32s.lib
+endif
 
 all : dis zdis stateview vgmplay blastem
 
-blastem : $(MAINOBJS)
-	$(CC) -o blastem $(MAINOBJS) $(LDFLAGS)
+$(BLASTEM) : $(MAINOBJS)
+	$(CC) -o $(BLASTEM) $(MAINOBJS) $(LDFLAGS)
 
 dis : dis.o 68kinst.o tern.o vos_program_module.o
 	$(CC) -o dis dis.o 68kinst.o tern.o vos_program_module.o
