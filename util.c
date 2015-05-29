@@ -75,6 +75,41 @@ void set_exe_str(char * str)
 	exe_str = str;
 }
 
+#ifdef _WIN32
+#include "Shlobj.h"
+#include "Windows.h"
+
+char * get_home_dir()
+{
+	static char path[MAX_PATH];
+	SHGetFolderPathA(NULL, CSIDL_PROFILE, NULL, 0, path);
+	return path;
+}
+
+char * get_exe_dir()
+{
+	static char path[MAX_PATH];
+	HMODULE module = GetModuleHandleA(NULL);
+	GetModuleFileNameA(module, path, MAX_PATH);
+
+	int pathsize = strlen(path);
+	for(char * cur = path + pathsize - 1; cur != path; cur--)
+	{
+		if (*cur == '\\') {
+			*cur = 0;
+			break;
+		}
+	}
+	return path;
+}
+
+#else
+
+char * get_home_dir()
+{
+	return getenv("HOME");
+}
+
 char * readlink_alloc(char * path)
 {
 	char * linktext = NULL;
@@ -138,3 +173,5 @@ fallback:
 	}
 	return exe_dir;
 }
+
+#endif
