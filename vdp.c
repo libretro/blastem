@@ -809,51 +809,51 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 
 			if (context->regs[REG_MODE_4] & BIT_HILIGHT) {
 				for (int i = 0; i < 16; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i) {
-					uint8_t pixel;
 					plane_a = context->tmp_buf_a + (plane_a_off & SCROLL_BUFFER_MASK);
 					plane_b = context->tmp_buf_b + (plane_b_off & SCROLL_BUFFER_MASK);
-					uint32_t * colors = context->colors;
-					src = 0;
-					pixel = context->regs[REG_BG_COLOR];
+					uint8_t pixel = context->regs[REG_BG_COLOR];
+					uint32_t *colors = context->colors;
 					src = DBG_SRC_BG;
 					if (*plane_b & 0xF) {
 						pixel = *plane_b;
 						src = DBG_SRC_B;
 					}
+					uint8_t intensity = *plane_b & BUF_BIT_PRIORITY;
 					if (*plane_a & 0xF && (*plane_a & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
 						pixel = *plane_a;
 						src = DBG_SRC_A;
 					}
-					if (*sprite_buf & 0xF) {
-						uint8_t sprite_color = *sprite_buf & 0x3F;
-						if (sprite_color == 0x3E) {
-							colors += CRAM_SIZE*2;
-							src |= DBG_HILIGHT;
-						} else if (sprite_color == 0x3F) {
-							colors += CRAM_SIZE;
-							src |= DBG_SHADOW;
-						} else if ((*sprite_buf & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
+					intensity |= *plane_a & BUF_BIT_PRIORITY;
+					if (*sprite_buf & 0xF && (*sprite_buf & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
+						if ((*sprite_buf & 0x3F) == 0x3E) {
+							intensity += BUF_BIT_PRIORITY;
+						} else if ((*sprite_buf & 0x3F) == 0x3F) {
+							intensity = 0;
+						} else {
 							pixel = *sprite_buf;
 							src = DBG_SRC_S;
 							if ((pixel & 0xF) == 0xE) {
-								src |= DBG_SHADOW;
-								colors += CRAM_SIZE;
+								intensity = BUF_BIT_PRIORITY;
+							} else {
+								intensity |= pixel & BUF_BIT_PRIORITY;
 							}
-
 						}
-					} else if (!((*plane_a | *plane_b) & BUF_BIT_PRIORITY)) {
-						colors += CRAM_SIZE;
-						src |= DBG_SHADOW;
 					}
-					pixel &= 0x3F;
+					if (!intensity) {
+						src |= DBG_SHADOW;
+						colors += CRAM_SIZE;
+					} else if (intensity ==  BUF_BIT_PRIORITY*2) {
+						src |= DBG_HILIGHT;
+						colors += CRAM_SIZE*2;
+					}
+					
 					uint32_t outpixel;
 					if (context->debug) {
 						outpixel = context->debugcolors[src];
 					} else {
-						outpixel = colors[pixel];
+						outpixel = colors[pixel & 0x3F];
 					}
 					*(dst++) = outpixel;
-					//*dst = (context->cram[pixel & 0x3F] & 0xEEE) | ((pixel & BUF_BIT_PRIORITY) ? FBUF_BIT_PRIORITY : 0) | src;
 				}
 			} else {
 				for (int i = 0; i < 16; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i) {
