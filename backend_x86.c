@@ -55,12 +55,12 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 	if (after_inc) {
 		*after_inc = code->cur;
 	}
-	if (opts->address_size == SZ_D && opts->address_mask < 0xFFFFFFFF) {
-		and_ir(code, opts->address_mask, opts->scratch1, SZ_D);
-	}
-	code_ptr lb_jcc = NULL, ub_jcc = NULL;
 	uint8_t is_write = fun_type == WRITE_16 || fun_type == WRITE_8;
 	uint8_t adr_reg = is_write ? opts->scratch2 : opts->scratch1;
+	if (opts->address_size == SZ_D && opts->address_mask != 0xFFFFFFFF) {
+		and_ir(code, opts->address_mask, adr_reg, SZ_D);
+	}
+	code_ptr lb_jcc = NULL, ub_jcc = NULL;
 	uint16_t access_flag = is_write ? MMAP_WRITE : MMAP_READ;
 	uint8_t size =  (fun_type == READ_16 || fun_type == WRITE_16) ? SZ_W : SZ_B;
 	uint32_t ram_flags_off = opts->ram_flags_off;
