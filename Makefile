@@ -24,7 +24,7 @@ else
 LIBS=sdl2 glew gl
 endif #Darwin
 
-ifdef DEBUGW
+ifdef DEBUG
 CFLAGS:=-ggdb -std=gnu99 $(shell pkg-config --cflags-only-I $(LIBS)) -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration
 LDFLAGS:=-ggdb -lm $(shell pkg-config --libs $(LIBS))
 else
