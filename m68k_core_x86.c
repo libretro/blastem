@@ -317,7 +317,7 @@ void add_dreg_native(m68k_options *opts, uint8_t reg, uint8_t native_reg)
 void calc_areg_displace(m68k_options *opts, m68k_op_info *op, uint8_t native_reg)
 {
 	areg_to_native(opts, op->params.regs.pri, native_reg);
-	add_ir(&opts->gen.code, op->params.regs.displacement, native_reg, SZ_D);
+	add_ir(&opts->gen.code, op->params.regs.displacement & 0x8000 ? op->params.regs.displacement | 0xFFFF0000 : op->params.regs.displacement, native_reg, SZ_D);
 }
 
 void calc_index_disp8(m68k_options *opts, m68k_op_info *op, uint8_t native_reg)
