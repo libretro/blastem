@@ -1039,9 +1039,7 @@ void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, u
 	//save RAM/map
 	context->mem_pointers[2] = initial_mapped;
 	context->mem_pointers[3] = (uint16_t *)gen->save_ram;
-	uint32_t address;
-	address = cart[2] << 16 | cart[3];
-	translate_m68k_stream(address, context);
+	
 	if (statefile) {
 		uint32_t pc = load_gst(gen, statefile);
 		if (!pc) {
@@ -1056,6 +1054,7 @@ void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, u
 		start_68k_context(context, pc);
 	} else {
 		if (debugger) {
+			uint32_t address = cart[2] << 16 | cart[3];
 			insert_breakpoint(context, address, debugger);
 		}
 		m68k_reset(context);
