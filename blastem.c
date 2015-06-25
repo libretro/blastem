@@ -643,6 +643,8 @@ uint8_t io_read(uint32_t location, m68k_context * context)
 		} else {
 			if (location == 0x1100) {
 				value = z80_enabled ? !z80_get_busack(gen->z80, context->current_cycle) : !gen->z80->busack;
+				//TODO: actual pre-fetch emulation
+				value |= 0x4E;
 				dprintf("Byte read of BUSREQ returned %d @ %d (reset: %d)\n", value, context->current_cycle, gen->z80->reset);
 			} else if (location == 0x1200) {
 				value = !gen->z80->reset;
@@ -662,6 +664,8 @@ uint16_t io_read_w(uint32_t location, m68k_context * context)
 		value = value | (value << 8);
 	} else {
 		value <<= 8;
+		//TODO: actual pre-fetch emulation
+		value |= 0x73;
 	}
 	return value;
 }
