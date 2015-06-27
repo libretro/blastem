@@ -171,8 +171,10 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 						pop_r(code, opts->scratch1);
 						mov_rrind(code, opts->scratch1, opts->scratch2, tmp_size);
 					} else {
+						push_r(code, opts->scratch2);
 						mov_ir(code, (intptr_t)memmap[chunk].buffer, opts->scratch2, SZ_PTR);
 						mov_rindexr(code, opts->scratch2, opts->scratch1, 1, opts->scratch1, tmp_size);
+						pop_r(code, opts->scratch2);
 					}
 				}
 				if (size != tmp_size && !is_write) {
