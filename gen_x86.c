@@ -2003,6 +2003,27 @@ void call(code_info *code, code_ptr fun)
 	code->cur = out;
 }
 
+void call_raxfallback(code_info *code, code_ptr fun)
+{
+	check_alloc_code(code, 5);
+	code_ptr out = code->cur;
+	ptrdiff_t disp = fun-(out+5);
+	if (disp <= 0x7FFFFFFF && disp >= -2147483648) {
+		*(out++) = OP_CALL;
+		*(out++) = disp;
+		disp >>= 8;
+		*(out++) = disp;
+		disp >>= 8;
+		*(out++) = disp;
+		disp >>= 8;
+		*(out++) = disp;
+	} else {
+		mov_ir(code, fun, RAX, SZ_PTR);
+		call_r(code, RAX);
+	}
+	code->cur = out;
+}
+
 void call_r(code_info *code, uint8_t dst)
 {
 	check_alloc_code(code, 2);
@@ -2091,7 +2112,7 @@ void call_args(code_info *code, code_ptr fun, uint32_t num_args, ...)
 	va_start(args, num_args);
 	uint32_t adjust = prep_args(code, num_args, args);
 	va_end(args);
-	call(code, fun);
+	call_raxfallback(code, fun);
 	if (adjust) {
 		add_ir(code, adjust, RSP, SZ_PTR);
 	}
@@ -2108,7 +2129,7 @@ void call_args_abi(code_info *code, code_ptr fun, uint32_t num_args, ...)
 	code_ptr do_adjust_rsp = code->cur + 1;
 	jcc(code, CC_NZ, code->cur + 2);
 #endif
-	call(code, fun);
+	call_raxfallback(code, fun);
 	if (adjust) {
 		add_ir(code, adjust, RSP, SZ_PTR);
 	}
@@ -2117,7 +2138,7 @@ void call_args_abi(code_info *code, code_ptr fun, uint32_t num_args, ...)
 	jmp(code, code->cur + 2);
 	*do_adjust_rsp = code->cur - (do_adjust_rsp+1);
 	sub_ir(code, 8, RSP, SZ_PTR);
-	call(code, fun);
+	call_raxfallback(code, fun);
 	add_ir(code, adjust + 8 , RSP, SZ_PTR);
 	*no_adjust_rsp = code->cur - (no_adjust_rsp+1);
 #endif
