@@ -2018,7 +2018,7 @@ void call_raxfallback(code_info *code, code_ptr fun)
 		disp >>= 8;
 		*(out++) = disp;
 	} else {
-		mov_ir(code, fun, RAX, SZ_PTR);
+		mov_ir(code, (int64_t)fun, RAX, SZ_PTR);
 		call_r(code, RAX);
 	}
 	code->cur = out;
@@ -2228,7 +2228,7 @@ uint32_t x86_inst_size(code_ptr start)
 			if (*code & REX_QUAD) {
 				op_size = SZ_Q;
 			}
-		} else if(*code == PRE_2BYTE || PRE_XOP) {
+		} else if(*code == PRE_2BYTE || *code == PRE_XOP) {
 			prefix = *code;
 		} else {
 			main_op = *code;

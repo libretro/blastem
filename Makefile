@@ -25,10 +25,10 @@ LIBS=sdl2 glew gl
 endif #Darwin
 
 ifdef DEBUG
-CFLAGS:=-ggdb -std=gnu99 $(shell pkg-config --cflags-only-I $(LIBS)) -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration
+CFLAGS:=-ggdb -std=gnu99 $(shell pkg-config --cflags-only-I $(LIBS)) -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -Wno-unused-value -Wno-logical-op-parentheses
 LDFLAGS:=-ggdb -lm $(shell pkg-config --libs $(LIBS))
 else
-CFLAGS:=-O2 -flto -std=gnu99 $(shell pkg-config  --cflags-only-I $(LIBS)) -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration
+CFLAGS:=-O2 -flto -std=gnu99 $(shell pkg-config  --cflags-only-I $(LIBS)) -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -Wno-unused-value -Wno-logical-op-parentheses
 LDFLAGS:=-O2 -flto -lm $(shell pkg-config --libs $(LIBS))
 endif #DEBUG
 endif #Windows
