@@ -1951,7 +1951,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 uint8_t * z80_interp_handler(uint8_t opcode, z80_context * context)
 {
 	if (!context->interp_code[opcode]) {
-		if (opcode == 0xCB || (opcode >= 0xDD && opcode & 0xF == 0xD)) {
+		if (opcode == 0xCB || (opcode >= 0xDD && (opcode & 0xF) == 0xD)) {
 			fprintf(stderr, "Encountered prefix byte %X at address %X. Z80 interpeter doesn't support those yet.", opcode, context->pc);
 			exit(1);
 		}
