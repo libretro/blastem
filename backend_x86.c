@@ -165,11 +165,15 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 					}
 				} else {
 					if (is_write) {
-						push_r(code, opts->scratch1);
-						mov_ir(code, (intptr_t)memmap[chunk].buffer, opts->scratch1, SZ_PTR);
-						add_rr(code, opts->scratch1, opts->scratch2, SZ_PTR);
-						pop_r(code, opts->scratch1);
+						push_r(code, opts->scratch2);
+						mov_ir(code, (intptr_t)memmap[chunk].buffer, opts->scratch2, SZ_PTR);
+						add_rdispr(code, RSP, 0, opts->scratch2, SZ_PTR);
 						mov_rrind(code, opts->scratch1, opts->scratch2, tmp_size);
+						if (is_write && (memmap[chunk].flags & MMAP_CODE)) {
+							pop_r(code, opts->scratch2);
+						} else {
+							add_ir(code, sizeof(void*), RSP, SZ_D);
+						}
 					} else {
 						push_r(code, opts->scratch2);
 						mov_ir(code, (intptr_t)memmap[chunk].buffer, opts->scratch2, SZ_PTR);
