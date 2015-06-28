@@ -1940,7 +1940,7 @@ void translate_m68k_andi_ori_ccr_sr(m68k_options *opts, m68kinst *inst)
 	uint32_t base_flag = inst->op == M68K_ANDI_SR || inst->op == M68K_ANDI_CCR ? X0 : X1;
 	for (int i = 0; i < 5; i++)
 	{
-		if ((base_flag == X0) ^ (inst->src.params.immed & 1 << i) > 0)
+		if ((base_flag == X0) ^ ((inst->src.params.immed & 1 << i) > 0))
 		{
 			flag_mask |= base_flag << ((4 - i) * 3);
 		}
