@@ -283,8 +283,8 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 		char * rest;
 		uint32_t address = strtoul(command+1, &rest, 16);
 		uint32_t size = strtoul(rest+1, NULL, 16);
-		if (size > sizeof(send_buf-1)/2) {
-			size = sizeof(send_buf-1)/2;
+		if (size > (sizeof(send_buf)-1)/2) {
+			size = (sizeof(send_buf)-1)/2;
 		}
 		char *cur = send_buf;
 		while (size)
