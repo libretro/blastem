@@ -138,11 +138,12 @@ char * get_exe_dir()
 {
 	static char * exe_dir;
 	if (!exe_dir) {
+		char * cur;
+#ifndef HAS_PROC
 		char * linktext = readlink_alloc("/proc/self/exe");
 		if (!linktext) {
 			goto fallback;
 		}
-		char * cur;
 		int linksize = strlen(linktext);
 		for(cur = linktext + linksize - 1; cur != linktext; cur--)
 		{
@@ -154,6 +155,7 @@ char * get_exe_dir()
 		if (cur == linktext) {
 			free(linktext);
 fallback:
+#endif
 			if (!exe_str) {
 				fputs("/proc/self/exe is not available and set_exe_str was not called!", stderr);
 			}
@@ -167,9 +169,11 @@ fallback:
 					break;
 				}
 			}
+#ifndef HAS_PROC
 		} else {
 			exe_dir = linktext;
 		}
+#endif
 	}
 	return exe_dir;
 }
