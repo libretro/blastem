@@ -22,7 +22,8 @@ else
 LIBS=sdl2 glew gl
 endif #Darwin
 
-CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -Wno-unused-value -Wno-logical-op-parentheses
+HAS_PROC:=$(shell if [ -d /proc ]; then echo -e -DHAS_PROC; fi)
+CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -Wno-unused-value -Wno-logical-op-parentheses $(HAS_PROC)
 FIXUP:=
 ifdef PORTABLE
 CFLAGS+= -DGLEW_STATIC -Iglew/include
@@ -32,6 +33,9 @@ ifeq ($(OS),Darwin)
 CFLAGS+= -IFrameworks/SDL2.framework/Headers
 LDFLAGS+= -FFrameworks -framework SDL2 -framework OpenGL
 FIXUP:=install_name_tool -change @rpath/SDL2.framework/Versions/A/SDL2 @executable_path/Frameworks/SDL2.framework/Versions/A/SDL2 ./blastem
+else
+CFLAGS+= -Isdl/include
+LDFLAGS+= -Wl,-rpath='$$ORIGIN/lib' -Llib -lSDL2 $(shell pkg-config --libs gl)
 endif #Darwin
 
 else
