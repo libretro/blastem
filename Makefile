@@ -3,11 +3,9 @@ OS:=$(shell uname -s)
 endif
 
 ifeq ($(OS),Windows)
-CC:=wine gcc.exe
 
 MEM:=mem_win.o
 BLASTEM:=blastem.exe
-
 CC:=wine gcc.exe
 CFLAGS:=-O2 -std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -I"C:/MinGW/usr/include/SDL2" -DGLEW_STATIC
 LDFLAGS:= -L"C:/MinGW/usr/lib" -lm -lmingw32 -lSDL2main -lSDL2 -lopengl32 -lglu32 -mwindows
@@ -24,12 +22,34 @@ else
 LIBS=sdl2 glew gl
 endif #Darwin
 
-ifdef DEBUG
-CFLAGS:=-ggdb -std=gnu99 $(shell pkg-config --cflags-only-I $(LIBS)) -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -Wno-unused-value -Wno-logical-op-parentheses
-LDFLAGS:=-ggdb -lm $(shell pkg-config --libs $(LIBS))
+CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -Wno-unused-value -Wno-logical-op-parentheses
+FIXUP:=
+ifdef PORTABLE
+CFLAGS+= -DGLEW_STATIC -Iglew/include
+LDFLAGS:=-lm glew/lib/libGLEW.a
+
+ifeq ($(OS),Darwin)
+CFLAGS+= -IFrameworks/SDL2.framework/Headers
+LDFLAGS+= -FFrameworks -framework SDL2 -framework OpenGL
+FIXUP:=install_name_tool -change @rpath/SDL2.framework/Versions/A/SDL2 @executable_path/Frameworks/SDL2.framework/Versions/A/SDL2 ./blastem
+endif #Darwin
+
 else
-CFLAGS:=-O2 -flto -std=gnu99 $(shell pkg-config  --cflags-only-I $(LIBS)) -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -Wno-unused-value -Wno-logical-op-parentheses
-LDFLAGS:=-O2 -flto -lm $(shell pkg-config --libs $(LIBS))
+CFLAGS:=$(shell pkg-config --cflags-only-I $(LIBS)) $(CFLAGS)
+LDFLAGS:=-lm $(shell pkg-config --libs $(LIBS))
+
+ifeq ($(OS),Darwin)
+LDFLAGS+= -framework OpenGL
+endif
+
+endif #PORTABLE
+
+ifdef DEBUG
+CFLAGS:=-ggdb $(CFLAGS)
+LDFLAGS:=-ggdb $(LDFLAGS)
+else
+CFLAGS:=-O2 -flto $(CFLAGS)
+LDFLAGS:=-O2 -flto $(LDFLAGS)
 endif #DEBUG
 endif #Windows
 
@@ -57,10 +77,6 @@ endif
 
 ifndef CPU
 CPU:=$(shell uname -m)
-endif
-
-ifeq ($(OS),Darwin)
-LDFLAGS+= -framework OpenGL
 endif
 
 TRANSOBJS=gen.o backend.o $(MEM)
@@ -105,6 +121,7 @@ all : dis zdis stateview vgmplay blastem
 
 $(BLASTEM) : $(MAINOBJS)
 	$(CC) -o $(BLASTEM) $(MAINOBJS) $(LDFLAGS)
+	$(FIXUP)
 
 dis : dis.o 68kinst.o tern.o vos_program_module.o
 	$(CC) -o dis dis.o 68kinst.o tern.o vos_program_module.o
