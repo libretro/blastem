@@ -1071,9 +1071,6 @@ void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, u
 
 char *title;
 
-#define TITLE_START 0x150
-#define TITLE_END (TITLE_START+48)
-
 void update_title(char *rom_name)
 {
 	if (title) {
@@ -1083,42 +1080,25 @@ void update_title(char *rom_name)
 	title = alloc_concat(rom_name, " - BlastEm");
 }
 
-#define REGION_START 0x1F0
-
-int detect_specific_region(char region)
+void set_region(rom_info *info, uint8_t region)
 {
-	return (cart[REGION_START/2] & 0xFF) == region || (cart[REGION_START/2] >> 8) == region || (cart[REGION_START/2+1] & 0xFF) == region;
-}
-
-void detect_region()
-{
-	if (detect_specific_region('U')|| detect_specific_region('B') || detect_specific_region('4')) {
-		version_reg = NO_DISK | USA;
-	} else if (detect_specific_region('J')) {
-		version_reg = NO_DISK | JAP;
-	} else if (detect_specific_region('E') || detect_specific_region('A')) {
-		version_reg = NO_DISK | EUR;
-	} else {
+	if (!region) {
 		char * def_region = tern_find_ptr(config, "default_region");
-		if (def_region) {
-			switch(*def_region)
-			{
-			case 'j':
-			case 'J':
-				version_reg = NO_DISK | JAP;
-				break;
-			case 'u':
-			case 'U':
-				version_reg = NO_DISK | USA;
-				break;
-			case 'e':
-			case 'E':
-				version_reg = NO_DISK | EUR;
-				break;
-			}
+		if (def_region && (!info->regions || (info->regions & translate_region_char(toupper(*def_region))))) {
+			region = translate_region_char(toupper(*def_region));
+		} else {
+			region = info->regions;
 		}
 	}
+	if (region & REGION_E) {
+		version_reg = NO_DISK | EUR;
+	} else if (region & REGION_J) {
+		version_reg = NO_DISK | JAP;
+	} else {
+		version_reg = NO_DISK | USA;
+	}
 }
+
 #ifndef NO_Z80
 const memmap_chunk z80_map[] = {
 	{ 0x0000, 0x4000,  0x1FFF, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE, z80_ram, NULL, NULL, NULL,              NULL },
@@ -1189,21 +1169,8 @@ int main(int argc, char ** argv)
 					fputs("-r must be followed by region (J, U or E)\n", stderr);
 					return 1;
 				}
-				switch (argv[i][0])
-				{
-				case 'j':
-				case 'J':
-					force_version = NO_DISK | JAP;
-					break;
-				case 'u':
-				case 'U':
-					force_version = NO_DISK | USA;
-					break;
-				case 'e':
-				case 'E':
-					force_version = NO_DISK | EUR;
-					break;
-				default:
+				force_version = translate_region_char(toupper(argv[i][0]));
+				if (!force_version) {
 					fprintf(stderr, "'%c' is not a valid region character for the -r option\n", argv[i][0]);
 					return 1;
 				}
@@ -1259,11 +1226,7 @@ int main(int argc, char ** argv)
 	tern_node *rom_db = load_rom_db();
 	rom_info info = configure_rom(rom_db, cart);
 	byteswap_rom();
-	if (force_version) {
-		version_reg = force_version;
-	} else {
-		detect_region();
-	}
+	set_region(&info, force_version);
 	update_title(info.name);
 	int def_width = 0;
 	char *config_width = tern_find_ptr(config, "videowidth");
