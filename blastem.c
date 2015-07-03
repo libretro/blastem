@@ -13,6 +13,7 @@
 #include "gdb_remote.h"
 #include "gst.h"
 #include "util.h"
+#include "romdb.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -64,11 +65,19 @@ int load_smd_rom(long filesize, FILE * f)
 	while (filesize > 0) {
 		fread(block, 1, SMD_BLOCK_SIZE, f);
 		for (uint8_t *low = block, *high = (block+SMD_BLOCK_SIZE/2), *end = block+SMD_BLOCK_SIZE; high < end; high++, low++) {
-			*(dst++) = *high << 8 | *low;
+			*(dst++) = *low << 8 | *high;
 		}
 		filesize -= SMD_BLOCK_SIZE;
 	}
 	return 1;
+}
+
+void byteswap_rom()
+{
+	for(unsigned short * cur = cart; cur - cart < CARTRIDGE_WORDS; ++cur)
+	{
+		*cur = (*cur >> 8) | (*cur << 8);
+	}
 }
 
 int load_rom(char * filename)
@@ -103,11 +112,6 @@ int load_rom(char * filename)
 	}
 	fread(cart, 2, filesize/2, f);
 	fclose(f);
-	for(unsigned short * cur = cart; cur - cart < (filesize/2); ++cur)
-	{
-		*cur = (*cur >> 8) | (*cur << 8);
-	}
-	//TODO: Mirror ROM
 	return 1;
 }
 
@@ -1065,37 +1069,18 @@ void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, u
 	}
 }
 
-char title[64];
+char *title;
 
 #define TITLE_START 0x150
 #define TITLE_END (TITLE_START+48)
 
-void update_title()
+void update_title(char *rom_name)
 {
-	uint16_t *last = cart + TITLE_END/2 - 1;
-	while(last > cart + TITLE_START/2 && *last == 0x2020)
-	{
-		last--;
+	if (title) {
+		free(title);
+		title = NULL;
 	}
-	uint16_t *start = cart + TITLE_START/2;
-	char *cur = title;
-	char last_char = ' ';
-	for (; start != last; start++)
-	{
-		if ((last_char != ' ' || (*start >> 8) != ' ') && (*start >> 8) < 0x80) {
-			*(cur++) = *start >> 8;
-			last_char = *start >> 8;
-		}
-		if (last_char != ' ' || (*start & 0xFF) != ' ' && (*start & 0xFF) < 0x80) {
-			*(cur++) = *start;
-			last_char = *start & 0xFF;
-		}
-	}
-	*(cur++) = *start >> 8;
-	if ((*start & 0xFF) != ' ') {
-		*(cur++) = *start;
-	}
-	strcpy(cur, " - BlastEm");
+	title = alloc_concat(rom_name, " - BlastEm");
 }
 
 #define REGION_START 0x1F0
@@ -1271,12 +1256,15 @@ int main(int argc, char ** argv)
 		fputs("You must specify a ROM filename!\n", stderr);
 		return 1;
 	}
+	tern_node *rom_db = load_rom_db();
+	rom_info info = configure_rom(rom_db, cart);
+	byteswap_rom();
 	if (force_version) {
 		version_reg = force_version;
 	} else {
 		detect_region();
 	}
-	update_title();
+	update_title(info.name);
 	int def_width = 0;
 	char *config_width = tern_find_ptr(config, "videowidth");
 	if (config_width) {
