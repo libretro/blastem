@@ -16,5 +16,6 @@ typedef struct {
 
 tern_node *load_rom_db();
 rom_info configure_rom(tern_node *rom_db, void *vrom);
+uint8_t translate_region_char(uint8_t c);
 
 #endif //ROMDB_H_
