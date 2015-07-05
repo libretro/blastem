@@ -173,8 +173,10 @@ void render_alloc_surfaces(vdp_context * context)
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_data), vertex_data, GL_STATIC_DRAW);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[1]);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(element_data), element_data, GL_STATIC_DRAW);
-	vshader = load_shader(tern_find_ptr_default(config, "videovertex_shader", "default.v.glsl"), GL_VERTEX_SHADER);
-	fshader = load_shader(tern_find_ptr_default(config, "videofragment_shader", "default.f.glsl"), GL_FRAGMENT_SHADER);
+	tern_val def = {.ptrval = "default.v.glsl"};
+	vshader = load_shader(tern_find_path_default(config, "video\0vertex_shader\0", def).ptrval, GL_VERTEX_SHADER);
+	def.ptrval = "default.f.glsl";
+	fshader = load_shader(tern_find_path_default(config, "video\0fragment_shader\0", def).ptrval, GL_FRAGMENT_SHADER);
 	program = glCreateProgram();
 	glAttachShader(program, vshader);
 	glAttachShader(program, fshader);
@@ -239,7 +241,8 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 		exit(1);
 	}
 	float aspect = (float)width / height;
-	if (fabs(aspect - 4.0/3.0) > 0.01 && strcmp(tern_find_ptr_default(config, "videoaspect", "normal"), "stretch")) {
+	tern_val def = {.ptrval = "normal"};
+	if (fabs(aspect - 4.0/3.0) > 0.01 && strcmp(tern_find_path_default(config, "video\0aspect\0", def).ptrval, "stretch")) {
 		for (int i = 0; i < 4; i++)
 		{
 			if (aspect > 4.0/3.0) {
@@ -272,7 +275,7 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	audio_ready = SDL_CreateCond();
 
 	SDL_AudioSpec desired, actual;
-    char * rate_str = tern_find_ptr(config, "audiorate");
+    char * rate_str = tern_find_path(config, "audio\0rate\0").ptrval;
    	int rate = rate_str ? atoi(rate_str) : 0;
    	if (!rate) {
    		rate = 48000;
@@ -280,7 +283,7 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
     desired.freq = rate;
 	desired.format = AUDIO_S16SYS;
 	desired.channels = 2;
-    char * samples_str = tern_find_ptr(config, "audiobuffer");
+    char * samples_str = tern_find_path(config, "audio\0buffer\0").ptrval;
    	int samples = samples_str ? atoi(samples_str) : 0;
    	if (!samples) {
    		samples = 512;

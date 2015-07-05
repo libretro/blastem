@@ -9,8 +9,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_NEST 30 //way more than I'll ever need
-
 #ifdef _WIN32
 char * strtok_r(char * input, char * sep, char ** state)
 {
@@ -32,67 +30,57 @@ char * strtok_r(char * input, char * sep, char ** state)
 }
 #endif
 
-tern_node * parse_config(char * config_data)
+tern_node * parse_config_int(char **state, int started, int *line)
 {
-	char *state, *curline;
-	char *prefix = NULL;
-	int nest_level = 0;
-	char * prefix_parts[MAX_NEST];
-	int line = 1;
+	char *config_data, *curline;
 	tern_node * head = NULL;
-	while ((curline = strtok_r(config_data, "\n", &state)))
+	config_data = started ? NULL : *state;
+	while ((curline = strtok_r(config_data, "\n", state)))
 	{
+		
 		config_data = NULL;
 		curline = strip_ws(curline);
 		int len = strlen(curline);
 		if (!len) {
+			*line++;
 			continue;
 		}
 		if (curline[0] == '#') {
+			*line++;
 			continue;
 		}
 		if (curline[0] == '}') {
-			if (!nest_level) {
-				fprintf(stderr, "unexpected } on line %d\n", line);
-				exit(1);
+			if (started) {
+				return head;
 			}
-			if (prefix) {
-				free(prefix);
-				prefix = NULL;
-			}
-			nest_level--;
-			curline = strip_ws(curline+1);
+			fprintf(stderr, "unexpected } on line %d\n", *line);
+			exit(1);
 		}
+		
 		char * end = curline + len - 1;
 		if (*end == '{') {
 			*end = 0;
 			curline = strip_ws(curline);
-			prefix_parts[nest_level++] = curline;
-			if (prefix) {
-				free(prefix);
-				prefix = NULL;
-			}
+			*line++;
+			head = tern_insert_node(head, curline, parse_config_int(state, 1, line));
 		} else {
-			if (nest_level && !prefix) {
-				prefix = alloc_concat_m(nest_level, prefix_parts);
-			}
 			char * val = strip_ws(split_keyval(curline));
 			char * key = curline;
-			if (*key) {
-				if (prefix) {
-					key = alloc_concat(prefix, key);
-				}
+			if (*val) {
 				head = tern_insert_ptr(head, key, strdup(val));
-				if (prefix) {
-					free(key);
-				}
+			} else {
+				fprintf(stderr, "Key %s is missing a value on line %d\n", key, *line);
 			}
+			*line++;
 		}
 	}
-	if (prefix) {
-		free(prefix);
-	}
 	return head;
+}
+
+tern_node * parse_config(char * config_data)
+{
+	int line = 1;
+	return parse_config_int(&config_data, 0, &line);
 }
 
 tern_node * parse_config_file(char * config_path)
