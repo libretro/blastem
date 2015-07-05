@@ -536,7 +536,7 @@ static void cleanup_sockfile()
 
 void setup_io_devices(tern_node * config, io_port * ports)
 {
-	tern_node *io_nodes = tern_find_prefix(config, "iodevices");
+	tern_node *io_nodes = tern_get_node(tern_find_path(config, "io\0devices\0"));
 	char * io_1 = tern_find_ptr(io_nodes, "1");
 	char * io_2 = tern_find_ptr(io_nodes, "2");
 	char * io_ext = tern_find_ptr(io_nodes, "ext");
@@ -550,7 +550,7 @@ void setup_io_devices(tern_node * config, io_port * ports)
 #ifndef _WIN32
 		if (ports[i].device_type == IO_SEGA_PARALLEL)
 		{
-			char *pipe_name = tern_find_ptr(config, "ioparallel_pipe");
+			char *pipe_name = tern_find_path(config, "io\0parallel_pipe\0").ptrval;
 			if (!pipe_name)
 			{
 				fprintf(stderr, "IO port %s is configured to use the sega parallel board, but no paralell_pipe is set!\n", io_name(i));
@@ -576,7 +576,7 @@ void setup_io_devices(tern_node * config, io_port * ports)
 				}
 			}
 		} else if (ports[i].device_type == IO_GENERIC) {
-			char *sock_name = tern_find_ptr(config, "iosocket");
+			char *sock_name = tern_find_path(config, "io\0socket\0").ptrval;
 			if (!sock_name)
 			{
 				fprintf(stderr, "IO port %s is configured to use generic IO, but no socket is set!\n", io_name(i));
@@ -665,64 +665,73 @@ void set_keybindings(io_port *ports)
 	padbuttons = tern_insert_int(padbuttons, ".start", BUTTON_START);
 	padbuttons = tern_insert_int(padbuttons, ".mode", BUTTON_MODE);
 
-	tern_node * keys = tern_find_prefix(config, "bindingskeys");
+	tern_node * keys = tern_get_node(tern_find_path(config, "bindings\0keys\0"));
 	process_keys(keys, special, padbuttons, NULL);
-	char prefix[] = "bindingspads00";
-	for (int i = 0; i < 100 && i < render_num_joysticks(); i++)
-	{
-		if (i < 10) {
-			prefix[strlen("bindingspads")] = i + '0';
-			prefix[strlen("bindingspads")+1] = 0;
-		} else {
-			prefix[strlen("bindingspads")] = i/10 + '0';
-			prefix[strlen("bindingspads")+1] = i%10 + '0';
-		}
-		tern_node * pad = tern_find_prefix(config, prefix);
-		if (pad) {
-			char dprefix[] = "dpads0";
-			for (int dpad = 0; dpad < 10 && dpad < render_joystick_num_hats(i); dpad++)
-			{
-				dprefix[strlen("dpads")] = dpad + '0';
-				tern_node * pad_dpad = tern_find_prefix(pad, dprefix);
-				char * dirs[] = {"up", "down", "left", "right"};
-				int dirnums[] = {RENDER_DPAD_UP, RENDER_DPAD_DOWN, RENDER_DPAD_LEFT, RENDER_DPAD_RIGHT};
-				for (int dir = 0; dir < sizeof(dirs)/sizeof(dirs[0]); dir++) {
-					char * target = tern_find_ptr(pad_dpad, dirs[dir]);
-					if (target) {
-						int ui_func, padnum, button;
-						int bindtype = parse_binding_target(target, padbuttons, &ui_func, &padnum, &button);
-						if (bindtype == 1) {
-							bind_dpad_gamepad(i, dpad, dirnums[dir], padnum, button);
-						} else if (bindtype == 2) {
-							bind_dpad_ui(i, dpad, dirnums[dir], ui_func, button);
+	char numstr[] = "00";
+	tern_node * pads = tern_get_node(tern_find_path(config, "bindings\0pads\0"));
+	if (pads) {
+		for (int i = 0; i < 100 && i < render_num_joysticks(); i++)
+		{
+		
+			if (i < 10) {
+				numstr[0] = i + '0';
+				numstr[1] = 0;
+			} else {
+				numstr[0] = i/10 + '0';
+				numstr[1] = i%10 + '0';
+			}
+			tern_node * pad = tern_find_ptr(pads, numstr);
+			if (pad) {
+				tern_node * dpad_node = tern_find_ptr(pad, "dpads");
+				if (dpad_node) {
+					for (int dpad = 0; dpad < 10 && dpad < render_joystick_num_hats(i); dpad++)
+					{
+						numstr[0] = dpad + '0';
+						numstr[1] = 0;
+						tern_node * pad_dpad = tern_find_ptr(dpad_node, numstr);
+						char * dirs[] = {"up", "down", "left", "right"};
+						int dirnums[] = {RENDER_DPAD_UP, RENDER_DPAD_DOWN, RENDER_DPAD_LEFT, RENDER_DPAD_RIGHT};
+						for (int dir = 0; dir < sizeof(dirs)/sizeof(dirs[0]); dir++) {
+							char * target = tern_find_ptr(pad_dpad, dirs[dir]);
+							if (target) {
+								int ui_func, padnum, button;
+								int bindtype = parse_binding_target(target, padbuttons, &ui_func, &padnum, &button);
+								if (bindtype == 1) {
+									bind_dpad_gamepad(i, dpad, dirnums[dir], padnum, button);
+								} else if (bindtype == 2) {
+									bind_dpad_ui(i, dpad, dirnums[dir], ui_func, button);
+								}
+							}
 						}
 					}
 				}
-			}
-			char bprefix[] = "buttons00";
-			for (int but = 0; but < 100 && but < render_joystick_num_buttons(i); but++)
-			{
-				if (but < 10) {
-					bprefix[strlen("buttons")] = but + '0';
-					bprefix[strlen("buttons")+1] = 0;
-				} else {
-					bprefix[strlen("buttons")] = but/10 + '0';
-					bprefix[strlen("buttons")+1] = but%10 + '0';
-				}
-				char * target = tern_find_ptr(pad, bprefix);
-				if (target) {
-					int ui_func, padnum, button;
-					int bindtype = parse_binding_target(target, padbuttons, &ui_func, &padnum, &button);
-					if (bindtype == 1) {
-						bind_button_gamepad(i, but, padnum, button);
-					} else if (bindtype == 2) {
-						bind_button_ui(i, but, ui_func, button);
+				tern_node *button_node = tern_find_ptr(pad, "buttons");
+				if (button_node) {
+					for (int but = 0; but < 100 && but < render_joystick_num_buttons(i); but++)
+					{
+						if (but < 10) {
+							numstr[0] = but + '0';
+							numstr[1] = 0;
+						} else {
+							numstr[0] = but/10 + '0';
+							numstr[1] = but%10 + '0';
+						}
+						char * target = tern_find_ptr(button_node, numstr);
+						if (target) {
+							int ui_func, padnum, button;
+							int bindtype = parse_binding_target(target, padbuttons, &ui_func, &padnum, &button);
+							if (bindtype == 1) {
+								bind_button_gamepad(i, but, padnum, button);
+							} else if (bindtype == 2) {
+								bind_button_ui(i, but, ui_func, button);
+							}
+						}
 					}
 				}
 			}
 		}
 	}
-	tern_node * speed_nodes = tern_find_prefix(config, "clocksspeeds");
+	tern_node * speed_nodes = tern_get_node(tern_find_path(config, "clocks\0speeds\0"));
 	speeds = malloc(sizeof(uint32_t));
 	speeds[0] = 100;
 	process_speeds(speed_nodes, NULL);

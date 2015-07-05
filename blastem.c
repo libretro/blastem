@@ -62,6 +62,7 @@ int load_smd_rom(long filesize, FILE * f)
 	fseek(f, SMD_HEADER_SIZE, SEEK_SET);
 
 	uint16_t * dst = cart;
+	int rom_size = filesize;
 	while (filesize > 0) {
 		fread(block, 1, SMD_BLOCK_SIZE, f);
 		for (uint8_t *low = block, *high = (block+SMD_BLOCK_SIZE/2), *end = block+SMD_BLOCK_SIZE; high < end; high++, low++) {
@@ -69,7 +70,7 @@ int load_smd_rom(long filesize, FILE * f)
 		}
 		filesize -= SMD_BLOCK_SIZE;
 	}
-	return 1;
+	return filesize;
 }
 
 void byteswap_rom()
@@ -112,7 +113,7 @@ int load_rom(char * filename)
 	}
 	fread(cart, 2, filesize/2, f);
 	fclose(f);
-	return 1;
+	return filesize;
 }
 
 uint16_t read_dma_value(uint32_t address)
@@ -766,127 +767,6 @@ void *z80_write_bank_reg(uint32_t location, void * vcontext, uint8_t value)
 	return context;
 }
 
-uint16_t read_sram_w(uint32_t address, m68k_context * context)
-{
-	genesis_context * gen = context->system;
-	address &= gen->save_ram_mask;
-	switch(gen->save_flags)
-	{
-	case RAM_FLAG_BOTH:
-		return gen->save_ram[address] << 8 | gen->save_ram[address+1];
-	case RAM_FLAG_EVEN:
-		return gen->save_ram[address >> 1] << 8 | 0xFF;
-	case RAM_FLAG_ODD:
-		return gen->save_ram[address >> 1] | 0xFF00;
-	}
-	return 0xFFFF;//We should never get here
-}
-
-uint8_t read_sram_b(uint32_t address, m68k_context * context)
-{
-	genesis_context * gen = context->system;
-	address &= gen->save_ram_mask;
-	switch(gen->save_flags)
-	{
-	case RAM_FLAG_BOTH:
-		return gen->save_ram[address];
-	case RAM_FLAG_EVEN:
-		if (address & 1) {
-			return 0xFF;
-		} else {
-			return gen->save_ram[address >> 1];
-		}
-	case RAM_FLAG_ODD:
-		if (address & 1) {
-			return gen->save_ram[address >> 1];
-		} else {
-			return 0xFF;
-		}
-	}
-	return 0xFF;//We should never get here
-}
-
-m68k_context * write_sram_area_w(uint32_t address, m68k_context * context, uint16_t value)
-{
-	genesis_context * gen = context->system;
-	if ((gen->bank_regs[0] & 0x3) == 1) {
-		address &= gen->save_ram_mask;
-		switch(gen->save_flags)
-		{
-		case RAM_FLAG_BOTH:
-			gen->save_ram[address] = value >> 8;
-			gen->save_ram[address+1] = value;
-			break;
-		case RAM_FLAG_EVEN:
-			gen->save_ram[address >> 1] = value >> 8;
-			break;
-		case RAM_FLAG_ODD:
-			gen->save_ram[address >> 1] = value;
-			break;
-		}
-	}
-	return context;
-}
-
-m68k_context * write_sram_area_b(uint32_t address, m68k_context * context, uint8_t value)
-{
-	genesis_context * gen = context->system;
-	if ((gen->bank_regs[0] & 0x3) == 1) {
-		address &= gen->save_ram_mask;
-		switch(gen->save_flags)
-		{
-		case RAM_FLAG_BOTH:
-			gen->save_ram[address] = value;
-			break;
-		case RAM_FLAG_EVEN:
-			if (!(address & 1)) {
-				gen->save_ram[address >> 1] = value;
-			}
-			break;
-		case RAM_FLAG_ODD:
-			if (address & 1) {
-				gen->save_ram[address >> 1] = value;
-			}
-			break;
-		}
-	}
-	return context;
-}
-
-m68k_context * write_bank_reg_w(uint32_t address, m68k_context * context, uint16_t value)
-{
-	genesis_context * gen = context->system;
-	address &= 0xE;
-	address >>= 1;
-	gen->bank_regs[address] = value;
-	if (!address) {
-		if (value & 1) {
-			context->mem_pointers[2] = NULL;
-		} else {
-			context->mem_pointers[2] = cart + 0x200000/2;
-		}
-	}
-	return context;
-}
-
-m68k_context * write_bank_reg_b(uint32_t address, m68k_context * context, uint8_t value)
-{
-	if (address & 1) {
-		genesis_context * gen = context->system;
-		address &= 0xE;
-		address >>= 1;
-		gen->bank_regs[address] = value;
-		if (!address) {
-			if (value & 1) {
-				context->mem_pointers[2] = NULL;
-			} else {
-				context->mem_pointers[2] = cart + 0x200000/2;
-			}
-		}
-	}
-	return context;
-}
-
 void set_speed_percent(genesis_context * context, uint32_t percent)
 {
 	uint32_t old_clock = context->master_clock;
@@ -898,13 +778,7 @@ void set_speed_percent(genesis_context * context, uint32_t percent)
 	psg_adjust_master_clock(context->psg, context->master_clock);
 }
 
-#define ROM_END   0x1A4
-#define RAM_ID    0x1B0
-#define RAM_FLAGS 0x1B2
-#define RAM_START 0x1B4
-#define RAM_END   0x1B8
 #define MAX_MAP_CHUNKS (4+7+1)
-#define RAM_FLAG_MASK 0x1800
 
 const memmap_chunk static_map[] = {
 		{0,        0x400000,  0xFFFFFF, 0, MMAP_READ,                          cart,
@@ -947,6 +821,7 @@ void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, u
 	//TODO: Handle carts larger than 4MB
 	//TODO: Handle non-standard mappers
 	uint32_t size;
+	/*
 	if ((cart[RAM_ID/2] & 0xFF) == 'A' && (cart[RAM_ID/2] >> 8) == 'R') {
 		//Cart has save RAM
 		uint32_t rom_end = ((cart[ROM_END/2] << 16) | cart[ROM_END/2+1]) + 1;
@@ -1020,6 +895,7 @@ void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, u
 		memcpy(memmap, static_map, sizeof(static_map));
 		num_chunks = sizeof(static_map)/sizeof(memmap_chunk);
 	}
+	*/
 	if (gen->save_ram) {
 		memset(gen->save_ram, 0, size);
 		FILE * f = fopen(sram_filename, "rb");
@@ -1126,6 +1002,7 @@ int main(int argc, char ** argv)
 	char * romfname = NULL;
 	FILE *address_log = NULL;
 	char * statefile = NULL;
+	int rom_size;
 	uint8_t * debuggerfun = NULL;
 	uint8_t fullscreen = 0, use_gl = 1;
 	for (int i = 1; i < argc; i++) {
@@ -1207,7 +1084,7 @@ int main(int argc, char ** argv)
 				return 1;
 			}
 		} else if (!loaded) {
-			if(!load_rom(argv[i])) {
+			if(rom_size = load_rom(argv[i])) {
 				fprintf(stderr, "Failed to open %s for reading\n", argv[i]);
 				return 1;
 			}
@@ -1224,12 +1101,12 @@ int main(int argc, char ** argv)
 		return 1;
 	}
 	tern_node *rom_db = load_rom_db();
-	rom_info info = configure_rom(rom_db, cart);
+	rom_info info = configure_rom(rom_db, cart, rom_size, static_map+1, sizeof(static_map)/sizeof(static_map[0]) - 1);
 	byteswap_rom();
 	set_region(&info, force_version);
 	update_title(info.name);
 	int def_width = 0;
-	char *config_width = tern_find_ptr(config, "videowidth");
+	char *config_width = tern_find_path(config, "video\0width\0").ptrval;
 	if (config_width) {
 		def_width = atoi(config_width);
 	}
@@ -1252,7 +1129,7 @@ int main(int argc, char ** argv)
 
 	init_vdp_context(&v_context, version_reg & 0x40);
 	gen.frame_end = vdp_cycles_to_frame_end(&v_context);
-	char * config_cycles = tern_find_ptr(config, "clocksmax_cycles");
+	char * config_cycles = tern_find_path(config, "clocks\0max_cycles\0").ptrval;
 	gen.max_cycles = config_cycles ? atoi(config_cycles) : 10000000;
 
 	ym2612_context y_context;
