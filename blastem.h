@@ -21,14 +21,15 @@ typedef struct {
 	vdp_context    *vdp;
 	ym2612_context *ym;
 	psg_context    *psg;
-	uint8_t        *save_ram;
+	uint8_t        *save_storage;
+	uint32_t       save_size;
 	uint32_t       save_ram_mask;
-	uint32_t       save_flags;
 	uint32_t       master_clock; //Current master clock value
 	uint32_t       normal_clock; //Normal master clock (used to restore master clock after turbo mode)
 	uint32_t       frame_end;
 	uint32_t       max_cycles;
 	uint8_t        bank_regs[8];
+	uint8_t        save_type;
 	io_port        ports[3];
 	uint8_t        bus_busy;
 } genesis_context;
