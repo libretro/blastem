@@ -21,6 +21,7 @@ typedef struct {
 	uint8_t       *save_buffer;
 	uint32_t      map_chunks;
 	uint32_t      save_size;
+	uint32_t      save_mask;
 	uint8_t       save_type;
 	uint8_t       regions;
 } rom_info;

@@ -20,14 +20,14 @@ uint16_t read_sram_w(uint32_t address, m68k_context * context)
 {
 	genesis_context * gen = context->system;
 	address &= gen->save_ram_mask;
-	switch(gen->save_flags)
+	switch(gen->save_type)
 	{
 	case RAM_FLAG_BOTH:
-		return gen->save_ram[address] << 8 | gen->save_ram[address+1];
+		return gen->save_storage[address] << 8 | gen->save_storage[address+1];
 	case RAM_FLAG_EVEN:
-		return gen->save_ram[address >> 1] << 8 | 0xFF;
+		return gen->save_storage[address >> 1] << 8 | 0xFF;
 	case RAM_FLAG_ODD:
-		return gen->save_ram[address >> 1] | 0xFF00;
+		return gen->save_storage[address >> 1] | 0xFF00;
 	}
 	return 0xFFFF;//We should never get here
 }
@@ -36,19 +36,19 @@ uint8_t read_sram_b(uint32_t address, m68k_context * context)
 {
 	genesis_context * gen = context->system;
 	address &= gen->save_ram_mask;
-	switch(gen->save_flags)
+	switch(gen->save_type)
 	{
 	case RAM_FLAG_BOTH:
-		return gen->save_ram[address];
+		return gen->save_storage[address];
 	case RAM_FLAG_EVEN:
 		if (address & 1) {
 			return 0xFF;
 		} else {
-			return gen->save_ram[address >> 1];
+			return gen->save_storage[address >> 1];
 		}
 	case RAM_FLAG_ODD:
 		if (address & 1) {
-			return gen->save_ram[address >> 1];
+			return gen->save_storage[address >> 1];
 		} else {
 			return 0xFF;
 		}
@@ -61,17 +61,17 @@ m68k_context * write_sram_area_w(uint32_t address, m68k_context * context, uint1
 	genesis_context * gen = context->system;
 	if ((gen->bank_regs[0] & 0x3) == 1) {
 		address &= gen->save_ram_mask;
-		switch(gen->save_flags)
+		switch(gen->save_type)
 		{
 		case RAM_FLAG_BOTH:
-			gen->save_ram[address] = value >> 8;
-			gen->save_ram[address+1] = value;
+			gen->save_storage[address] = value >> 8;
+			gen->save_storage[address+1] = value;
 			break;
 		case RAM_FLAG_EVEN:
-			gen->save_ram[address >> 1] = value >> 8;
+			gen->save_storage[address >> 1] = value >> 8;
 			break;
 		case RAM_FLAG_ODD:
-			gen->save_ram[address >> 1] = value;
+			gen->save_storage[address >> 1] = value;
 			break;
 		}
 	}
@@ -83,19 +83,19 @@ m68k_context * write_sram_area_b(uint32_t address, m68k_context * context, uint8
 	genesis_context * gen = context->system;
 	if ((gen->bank_regs[0] & 0x3) == 1) {
 		address &= gen->save_ram_mask;
-		switch(gen->save_flags)
+		switch(gen->save_type)
 		{
 		case RAM_FLAG_BOTH:
-			gen->save_ram[address] = value;
+			gen->save_storage[address] = value;
 			break;
 		case RAM_FLAG_EVEN:
 			if (!(address & 1)) {
-				gen->save_ram[address >> 1] = value;
+				gen->save_storage[address >> 1] = value;
 			}
 			break;
 		case RAM_FLAG_ODD:
 			if (address & 1) {
-				gen->save_ram[address >> 1] = value;
+				gen->save_storage[address >> 1] = value;
 			}
 			break;
 		}
@@ -218,6 +218,13 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 		uint32_t ram_flags = info->save_type = rom[RAM_FLAGS] & RAM_FLAG_MASK;
 		ram_start &= 0xFFFFFE;
 		ram_end |= 1;
+		info->save_mask = ram_end - ram_start;
+		uint32_t size = info->save_mask + 1;
+		if (ram_flags != RAM_FLAG_BOTH) {
+			size /= 2;
+		}
+		info->save_size = size;
+		info->save_buffer = malloc(size);
 		
 		info->map_chunks = base_chunks + (ram_start >= rom_end ? 2 : 3);
 		info->map = malloc(sizeof(memmap_chunk) * info->map_chunks);
@@ -232,18 +239,16 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 			info->map[0].buffer = rom;
 			
 			info->map[1].start = ram_start;
-			info->map[1].mask = ram_end - ram_start;
+			info->map[1].mask = info->save_mask;
 			info->map[1].end = ram_end + 1;
 			info->map[1].flags = MMAP_READ | MMAP_WRITE;
-			uint32_t size = info->map[1].mask + 1;
+			
 			if (ram_flags == RAM_FLAG_ODD) {
 				info->map[1].flags |= MMAP_ONLY_ODD;
-				size /= 2;
 			} else if (ram_flags == RAM_FLAG_EVEN) {
 				info->map[1].flags |= MMAP_ONLY_EVEN;
-				size /= 2;
 			}
-			info->map[1].buffer = malloc(size);
+			info->map[1].buffer = info->save_buffer;
 		} else {
 			//Assume the standard Sega mapper
 			info->map[0].end = 0x200000;
