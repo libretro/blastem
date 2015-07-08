@@ -107,7 +107,11 @@ void * tern_find_ptr_default(tern_node * head, char * key, void * def)
 {
 	tern_val ret;
 	if (tern_find(head, key, &ret)) {
-		return ret.ptrval;
+		if (ret.intval & 1) {
+			return (void *)(ret.intval & ~1);
+		} else {
+			return ret.ptrval;
+		}
 	}
 	return def;
 }
@@ -193,7 +197,7 @@ void tern_foreach_int(tern_node *head, iter_fun fun, void *data, char *keybuf, i
 		tern_foreach_int(head->straight.next, fun, data, keybuf, pos+1);
 	}
 	if (head->right) {
-		tern_foreach_int(head->left, fun, data, keybuf, pos);
+		tern_foreach_int(head->right, fun, data, keybuf, pos);
 	}
 }
 

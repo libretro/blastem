@@ -1,6 +1,6 @@
 T-081326 {
 	name NBA Jam
-	eeprom {
+	EEPROM {
 		type i2c
 		size 256
 	}
@@ -10,7 +10,7 @@ T-081326 {
 			last 1FFFFF
 		}
 		200000 {
-			device eeprom
+			device EEPROM
 			last 3FFFFF
 			bits_read {
 				1 sda
@@ -24,7 +24,7 @@ T-081326 {
 }
 T-81033 {
 	name NBA Jam
-	eeprom {
+	EEPROM {
 		type i2c
 		size 256
 	}
@@ -34,7 +34,7 @@ T-81033 {
 			last 1FFFFF
 		}
 		200000 {
-			device eeprom
+			device EEPROM
 			last 3FFFFF
 			bits_read {
 				1 sda
@@ -48,7 +48,7 @@ T-81033 {
 }
 T-081276 {
 	name NFL Quarterback Club
-	eeprom {
+	EEPROM {
 		type i2c
 		size 256
 	}
@@ -58,7 +58,7 @@ T-081276 {
 			last 1FFFFF
 		}
 		200000 {
-			device eeprom
+			device EEPROM
 			last 3FFFFF
 			bits_read {
 				0 sda
@@ -72,7 +72,7 @@ T-081276 {
 }
 T-81406 {
 	name NBA Jam TE
-	eeprom {
+	EEPROM {
 		type i2c
 		size 512
 	}
@@ -82,7 +82,7 @@ T-81406 {
 			last 1FFFFF
 		}
 		200000 {
-			device eeprom
+			device EEPROM
 			last 3FFFFF
 			bits_read {
 				0 sda
@@ -96,7 +96,7 @@ T-81406 {
 }
 T-081586 {
 	name NFL Quarterback Club '96
-	eeprom {
+	EEPROM {
 		type i2c
 		size 2048
 	}
@@ -106,7 +106,7 @@ T-081586 {
 			last 1FFFFF
 		}
 		200000 {
-			device eeprom
+			device EEPROM
 			last 3FFFFF
 			bits_read {
 				0 sda
@@ -120,7 +120,7 @@ T-081586 {
 }
 T-81576 {
 	name College Slam
-	eeprom {
+	EEPROM {
 		type i2c
 		size 8192
 	}
@@ -130,7 +130,7 @@ T-81576 {
 			last 1FFFFF
 		}
 		200000 {
-			device eeprom
+			device EEPROM
 			last 3FFFFF
 			bits_read {
 				0 sda
@@ -144,7 +144,7 @@ T-81576 {
 }
 T-81476 {
 	name Frank Thomas Big Hurt Baseball
-	eeprom {
+	EEPROM {
 		type i2c
 		size 8192
 	}
@@ -154,7 +154,7 @@ T-81476 {
 			last 1FFFFF
 		}
 		200000 {
-			device eeprom
+			device EEPROM
 			last 3FFFFF
 			bits_read {
 				0 sda
