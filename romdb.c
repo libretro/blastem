@@ -209,6 +209,18 @@ uint32_t get_u32be(uint8_t *data)
 	return *data << 24 | data[1] << 16 | data[2] << 8 | data[3];
 }
 
+uint32_t calc_mask(uint32_t src_size, uint32_t start, uint32_t end)
+{
+	uint32_t map_size = end-start+1;
+	if (src_size < map_size) {
+		return nearest_pow2(src_size)-1;
+	} else if (!start) {
+		return 0xFFFFFF;
+	} else {
+		return nearest_pow2(map_size)-1;
+	}
+}
+
 void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk const *base_map, int base_chunks)
 {
 	if (rom[RAM_ID] == 'R' && rom[RAM_ID+1] == 'A') {
@@ -298,6 +310,77 @@ rom_info configure_rom_heuristics(uint8_t *rom, uint32_t rom_size, memmap_chunk 
 	return info;
 }
 
+typedef struct {
+	rom_info     *info;
+	uint8_t      *rom;
+	tern_node    *root;
+	uint32_t     rom_size;
+	int          index;
+} map_iter_state;
+
+void map_iter_fun(char *key, tern_val val, void *data)
+{
+	map_iter_state *state = data;
+	tern_node *node = tern_get_node(val);
+	if (!node) {
+		fprintf(stderr, "ROM DB map entry %d with address %s is not a node\n", state->index, key);
+		exit(1);
+	}
+	uint32_t start = strtol(key, NULL, 16);
+	uint32_t end = strtol(tern_find_ptr_default(node, "last", "0"), NULL, 16);
+	if (!end || end < start) {
+		fprintf(stderr, "'last' value is missing or invalid for ROM DB map entry %d with address %s\n", state->index, key);
+		exit(1);
+	}
+	char * dtype = tern_find_ptr_default(node, "device", "ROM");
+	uint32_t offset = strtol(tern_find_ptr_default(node, "offset", "0"), NULL, 0);
+	memmap_chunk *map = state->info->map + state->index;
+	map->start = start;
+	map->end = end;
+	if (!strcmp(dtype, "ROM")) {
+		map->buffer = state->rom + offset;
+		map->flags = MMAP_READ;
+		map->mask = calc_mask(state->rom_size, start, end);
+	} else if (!strcmp(dtype, "EEPROM")) {
+		
+	
+	} else if (!strcmp(dtype, "SRAM")) {
+		if (!state->info->save_size) {
+			char * size = tern_find_path(state->root, "SRAM\0size\0").ptrval;
+			if (!size) {
+				fprintf(stderr, "ROM DB map entry %d with address %s has device type SRAM, but the SRAM size is not defined\n", state->index, key);
+				exit(1);
+			}
+			state->info->save_size = atoi(size);
+			if (!state->info->save_size) {
+				fprintf(stderr, "SRAM size %s is invalid\n", size);
+				exit(1);
+			}
+			state->info->save_buffer = malloc(state->info->save_size);
+			char *bus = tern_find_path(state->root, "SRAM\0bus\0").ptrval;
+			if (!strcmp(bus, "odd")) {
+				state->info->save_type = RAM_FLAG_ODD;
+			} else if(!strcmp(bus, "even")) {
+				state->info->save_type = RAM_FLAG_EVEN;
+			} else {
+				state->info->save_type = RAM_FLAG_BOTH;
+			}
+		}
+		map->buffer = state->info->save_buffer + offset;
+		map->flags = MMAP_READ | MMAP_WRITE;
+		if (state->info->save_type == RAM_FLAG_ODD) {
+			map->flags |= MMAP_ONLY_ODD;
+		} else if(state->info->save_type == RAM_FLAG_EVEN) {
+			map->flags |= MMAP_ONLY_EVEN;
+		}
+		map->mask = calc_mask(state->info->save_size, start, end);
+	} else {
+		fprintf(stderr, "Invalid device type for ROM DB map entry %d with address %s\n", state->index, key);
+		exit(1);
+	}
+	state->index++;
+}
+
 rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, memmap_chunk const *base_map, uint32_t base_chunks)
 {
 	uint8_t product_id[GAME_ID_LEN+1];
@@ -312,13 +395,16 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, memmap_
 		product_id[i] = rom[GAME_ID_OFF + i];
 		
 	}
-	tern_node * entry = tern_find_prefix(rom_db, product_id);
+	printf("Product ID: %s\n", product_id);
+	tern_node * entry = tern_find_ptr(rom_db, product_id);
 	if (!entry) {
+		puts("Not found in ROM DB, examining header\n");
 		return configure_rom_heuristics(rom, rom_size, base_map, base_chunks);
 	}
 	rom_info info;
 	info.name = tern_find_ptr(entry, "name");
 	if (info.name) {
+		printf("Found name: %s\n", info.name);
 		info.name = strdup(info.name);
 	} else {
 		info.name = get_header_name(rom);
@@ -336,11 +422,18 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, memmap_
 		info.regions = get_header_regions(rom);
 	}
 	
-	tern_node *map = tern_find_prefix(entry, "map");
+	tern_node *map = tern_find_ptr(entry, "map");
 	if (map) {
-		uint32_t map_count = tern_count(map);
-		if (map_count) {
-			
+		info.map_chunks = tern_count(map);
+		if (info.map_chunks) {
+			info.map_chunks += base_chunks;
+			info.save_buffer = NULL;
+			info.save_size = 0;
+			info.map = malloc(sizeof(memmap_chunk) * info.map_chunks);
+			memset(info.map, 0, sizeof(memmap_chunk) * (info.map_chunks - base_chunks));
+			map_iter_state state = {&info, rom, entry, rom_size, 0};
+			tern_foreach(map, map_iter_fun, &state);
+			memcpy(info.map + state.index, base_map, sizeof(memmap_chunk) * base_chunks);
 		} else {
 			add_memmap_header(&info, rom, rom_size, base_map, base_chunks);
 		}

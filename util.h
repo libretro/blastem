@@ -15,6 +15,8 @@ long file_size(FILE * f);
 char * strip_ws(char * text);
 //Inserts a null after the first word, returns a pointer to the second word
 char * split_keyval(char * text);
+//Gets the smallest power of two that is >= a certain value, won't work for values > 0x80000000
+uint32_t nearest_pow2(uint32_t val);
 //Should be called by main with the value of argv[0] for use by get_exe_dir
 void set_exe_str(char * str);
 //Returns the directory the executable is in
