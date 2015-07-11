@@ -14,6 +14,7 @@
 #include "psg.h"
 #include "io.h"
 #include "config.h"
+#include "romdb.h"
 
 typedef struct {
 	m68k_context   *m68k;
@@ -22,6 +23,8 @@ typedef struct {
 	ym2612_context *ym;
 	psg_context    *psg;
 	uint8_t        *save_storage;
+	eeprom_map     *eeprom_map;
+	uint32_t       num_eeprom;
 	uint32_t       save_size;
 	uint32_t       save_ram_mask;
 	uint32_t       master_clock; //Current master clock value
@@ -32,6 +35,7 @@ typedef struct {
 	uint8_t        save_type;
 	io_port        ports[3];
 	uint8_t        bus_busy;
+	eeprom_state   eeprom;
 } genesis_context;
 
 extern genesis_context * genesis;
