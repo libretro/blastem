@@ -16,9 +16,25 @@
 #include "backend.h"
 
 typedef struct {
+	uint32_t     start;
+	uint32_t     end;
+	uint16_t     sda_write_mask;
+	uint16_t     scl_mask;
+	uint8_t      sda_read_bit;
+} eeprom_map;
+
+typedef struct {
+	uint8_t     host_sda;
+	uint8_t     slave_sda;
+	uint8_t     scl;
+} eeprom_state;
+
+typedef struct {
 	char          *name;
 	memmap_chunk  *map;
 	uint8_t       *save_buffer;
+	eeprom_map    *eeprom_map;
+	uint32_t      num_eeprom;
 	uint32_t      map_chunks;
 	uint32_t      save_size;
 	uint32_t      save_mask;
@@ -30,5 +46,6 @@ tern_node *load_rom_db();
 rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, memmap_chunk const *base_map, uint32_t base_chunks);
 rom_info configure_rom_heuristics(uint8_t *rom, uint32_t rom_size, memmap_chunk const *base_map, uint32_t base_chunks);
 uint8_t translate_region_char(uint8_t c);
+void eeprom_init(eeprom_state *state);
 
 #endif //ROMDB_H_

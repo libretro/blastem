@@ -814,6 +814,8 @@ void init_run_cpu(genesis_context * gen, rom_info *rom, FILE * address_log, char
 		gen->save_ram_mask = rom->save_mask;
 		gen->save_size = rom->save_size;
 		gen->save_storage = rom->save_buffer;
+		gen->eeprom_map = rom->eeprom_map;
+		gen->num_eeprom = rom->num_eeprom;
 		memset(gen->save_storage, 0, rom->save_size);
 		FILE * f = fopen(save_filename, "rb");
 		if (f) {
@@ -824,6 +826,9 @@ void init_run_cpu(genesis_context * gen, rom_info *rom, FILE * address_log, char
 			}
 		}
 		atexit(persist_save);
+		if (gen->save_type == SAVE_I2C) {
+			eeprom_init(&gen->eeprom);
+		}
 	} else {
 		gen->save_storage = NULL;
 	}
