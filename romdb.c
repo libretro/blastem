@@ -16,6 +16,37 @@
 #define RAM_END   0x1B8
 #define REGION_START 0x1F0
 
+void eeprom_init(eeprom_state *state)
+{
+	state->slave_sda = 1;
+	state->host_sda = state->scl = 0;
+}
+
+void set_host_sda(eeprom_state *state, uint8_t val)
+{
+	if (state->scl) {
+		if (val & ~state->host_sda) {
+			//stop condition
+		} else if (~val & state->host_sda) {
+			//start condition
+		}
+	}
+	state->host_sda = val;
+}
+
+void set_scl(eeprom_state *state, uint8_t val)
+{
+	if (val & ~state->scl) {
+		//latch sda
+	}
+	state->scl = val;
+}
+
+uint8_t get_sda(eeprom_state *state)
+{
+	return state->host_sda & state->slave_sda;
+}
+
 uint16_t read_sram_w(uint32_t address, m68k_context * context)
 {
 	genesis_context * gen = context->system;
@@ -135,6 +166,98 @@ m68k_context * write_bank_reg_b(uint32_t address, m68k_context * context, uint8_
 		}
 	}
 	return context;
+}
+eeprom_map *find_eeprom_map(uint32_t address, genesis_context *gen)
+{
+	for (int i = 0; i < gen->num_eeprom; i++)
+	{
+		if (address >= gen->eeprom_map[i].start && address <= gen->eeprom_map[i].end) {
+			return  gen->eeprom_map + i;
+		}
+	}
+	return NULL;
+}
+
+void * write_eeprom_i2c_w(uint32_t address, void * context, uint16_t value)
+{
+	genesis_context *gen = ((m68k_context *)context)->system;
+	eeprom_map *map = find_eeprom_map(address, gen);
+	if (!map) {
+		fprintf(stderr, "Could not find EEPROM map for address %X\n", address);
+		exit(1);
+	}
+	printf("EEPROM word write: %X - %X\n", address, value);
+	if (map->sda_write_mask) {
+		printf("sda: %d\n", (value & map->sda_write_mask) != 0);
+		set_host_sda(&gen->eeprom, (value & map->sda_write_mask) != 0);
+	}
+	if (map->scl_mask) {
+		printf("scl: %d\n", (value & map->scl_mask) != 0);
+		set_scl(&gen->eeprom, (value & map->sda_write_mask) != 0);
+	}
+	return context;
+}
+
+void * write_eeprom_i2c_b(uint32_t address, void * context, uint8_t value)
+{
+	genesis_context *gen = ((m68k_context *)context)->system;
+	eeprom_map *map = find_eeprom_map(address, gen);
+	if (!map) {
+		fprintf(stderr, "Could not find EEPROM map for address %X\n", address);
+		exit(1);
+	}
+	
+	uint16_t expanded, mask;
+	if (address & 1) {
+		expanded = value;
+		mask = 0xFF;
+	} else {
+		expanded = value << 8;
+		mask = 0xFF00;
+	}
+	printf("EEPROM byte write: %X - %X (using mask %X and expanded val %X)\n", address, value, mask, expanded);
+	if (map->sda_write_mask & mask) {
+		printf("sda: %d\n", (expanded & map->sda_write_mask) != 0);
+		set_host_sda(&gen->eeprom, (expanded & map->sda_write_mask) != 0);
+	}
+	if (map->scl_mask & mask) {
+		printf("scl: %d\n", (expanded & map->scl_mask) != 0);
+		set_scl(&gen->eeprom, (expanded & map->scl_mask) != 0);
+	}
+	return context;
+}
+
+uint16_t read_eeprom_i2c_w(uint32_t address, void * context)
+{
+	genesis_context *gen = ((m68k_context *)context)->system;
+	eeprom_map *map = find_eeprom_map(address, gen);
+	if (!map) {
+		fprintf(stderr, "Could not find EEPROM map for address %X\n", address);
+		exit(1);
+	}
+	uint16_t ret = 0;
+	if (map->sda_read_bit < 16) {
+		ret = get_sda(&gen->eeprom) << map->sda_read_bit;
+	}
+	printf("EEPROM word read: %X - %X\n", address, ret);
+	return ret;
+}
+
+uint8_t read_eeprom_i2c_b(uint32_t address, void * context)
+{
+	genesis_context *gen = ((m68k_context *)context)->system;
+	eeprom_map *map = find_eeprom_map(address, gen);
+	if (!map) {
+		fprintf(stderr, "Could not find EEPROM map for address %X\n", address);
+		exit(1);
+	}
+	uint8_t bit = address & 1 ? map->sda_read_bit : map->sda_read_bit - 8;
+	uint8_t ret = 0;
+	if (bit < 8) {
+		ret = get_sda(&gen->eeprom) << bit;
+	}
+	printf("EEPROM byte read: %X - %X\n", address, ret);
+	return ret;
 }
 
 tern_node *load_rom_db()
@@ -316,7 +439,44 @@ typedef struct {
 	tern_node    *root;
 	uint32_t     rom_size;
 	int          index;
+	int          num_els;
 } map_iter_state;
+
+void eeprom_read_fun(char *key, tern_val val, void *data)
+{
+	int bit = atoi(key);
+	if (bit < 0 || bit > 15) {
+		fprintf(stderr, "bit %s is out of range", key);
+		return;
+	}
+	char *pin = val.ptrval;
+	if (strcmp(pin, "sda")) {
+		fprintf(stderr, "bit %s is connected to unrecognized read pin %s", key, pin);
+		return;
+	}
+	eeprom_map *map = data;
+	map->sda_read_bit = bit;
+}
+
+void eeprom_write_fun(char *key, tern_val val, void *data)
+{
+	int bit = atoi(key);
+	if (bit < 0 || bit > 15) {
+		fprintf(stderr, "bit %s is out of range", key);
+		return;
+	}
+	char *pin = val.ptrval;
+	eeprom_map *map = data;
+	if (!strcmp(pin, "sda")) {
+		map->sda_write_mask = 1 << bit;
+		return;
+	}
+	if (!strcmp(pin, "scl")) {
+		map->scl_mask = 1 << bit;
+		return;
+	}
+	fprintf(stderr, "bit %s is connected to unrecognized write pin %s", key, pin);
+}
 
 void map_iter_fun(char *key, tern_val val, void *data)
 {
@@ -342,8 +502,50 @@ void map_iter_fun(char *key, tern_val val, void *data)
 		map->flags = MMAP_READ;
 		map->mask = calc_mask(state->rom_size, start, end);
 	} else if (!strcmp(dtype, "EEPROM")) {
-		
-	
+		if (!state->info->save_size) {
+			char * size = tern_find_path(state->root, "EEPROM\0size\0").ptrval;
+			if (!size) {
+				fprintf(stderr, "ROM DB map entry %d with address %s has device type EEPROM, but the EEPROM size is not defined\n", state->index, key);
+				exit(1);
+			}
+			state->info->save_size = atoi(size);
+			if (!state->info->save_size) {
+				fprintf(stderr, "EEPROM size %s is invalid\n", size);
+				exit(1);
+			}
+			char *etype = tern_find_path(state->root, "EEPROM\0type\0").ptrval;
+			if (!etype) {
+				etype = "i2c";
+			}
+			if (!strcmp(etype, "i2c")) {
+				state->info->save_type = SAVE_I2C;
+			} else {
+				fprintf(stderr, "EEPROM type %s is invalid\n", etype);
+				exit(1);
+			}
+			state->info->save_buffer = malloc(state->info->save_size);
+			state->info->eeprom_map = malloc(sizeof(eeprom_map) * state->num_els);
+			memset(state->info->eeprom_map, 0, sizeof(eeprom_map) * state->num_els);
+		}
+		eeprom_map *eep_map = state->info->eeprom_map + state->info->num_eeprom;
+		eep_map->start = start;
+		eep_map->end = end;
+		eep_map->sda_read_bit = 0xFF;
+		tern_node * bits_read = tern_find_ptr(node, "bits_read");
+		if (bits_read) {
+			tern_foreach(bits_read, eeprom_read_fun, eep_map);
+		}
+		tern_node * bits_write = tern_find_ptr(node, "bits_write");
+		if (bits_write) {
+			tern_foreach(bits_write, eeprom_write_fun, eep_map);
+		}
+		printf("EEPROM address %X: sda read: %X, sda write: %X, scl: %X\n", start, eep_map->sda_read_bit, eep_map->sda_write_mask, eep_map->scl_mask);
+		state->info->num_eeprom++;
+		map->write_16 = write_eeprom_i2c_w;
+		map->write_8 = write_eeprom_i2c_b;
+		map->read_16 = read_eeprom_i2c_w;
+		map->read_8 = read_eeprom_i2c_b;
+		map->mask = 0xFFFFFF;
 	} else if (!strcmp(dtype, "SRAM")) {
 		if (!state->info->save_size) {
 			char * size = tern_find_path(state->root, "SRAM\0size\0").ptrval;
@@ -430,8 +632,10 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, memmap_
 			info.save_buffer = NULL;
 			info.save_size = 0;
 			info.map = malloc(sizeof(memmap_chunk) * info.map_chunks);
+			info.eeprom_map = NULL;
+			info.num_eeprom = 0;
 			memset(info.map, 0, sizeof(memmap_chunk) * (info.map_chunks - base_chunks));
-			map_iter_state state = {&info, rom, entry, rom_size, 0};
+			map_iter_state state = {&info, rom, entry, rom_size, 0, info.map_chunks - base_chunks};
 			tern_foreach(map, map_iter_fun, &state);
 			memcpy(info.map + state.index, base_map, sizeof(memmap_chunk) * base_chunks);
 		} else {
