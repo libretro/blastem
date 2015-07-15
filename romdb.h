@@ -24,9 +24,15 @@ typedef struct {
 } eeprom_map;
 
 typedef struct {
+	char        *buffer;
+	uint32_t    size;
+	uint16_t    address;
 	uint8_t     host_sda;
 	uint8_t     slave_sda;
 	uint8_t     scl;
+	uint8_t     state;
+	uint8_t     counter;
+	uint8_t     latch;
 } eeprom_state;
 
 typedef struct {
@@ -46,6 +52,6 @@ tern_node *load_rom_db();
 rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, memmap_chunk const *base_map, uint32_t base_chunks);
 rom_info configure_rom_heuristics(uint8_t *rom, uint32_t rom_size, memmap_chunk const *base_map, uint32_t base_chunks);
 uint8_t translate_region_char(uint8_t c);
-void eeprom_init(eeprom_state *state);
+void eeprom_init(eeprom_state *state, uint8_t *buffer, uint32_t size);
 
 #endif //ROMDB_H_

@@ -827,7 +827,7 @@ void init_run_cpu(genesis_context * gen, rom_info *rom, FILE * address_log, char
 		}
 		atexit(persist_save);
 		if (gen->save_type == SAVE_I2C) {
-			eeprom_init(&gen->eeprom);
+			eeprom_init(&gen->eeprom, gen->save_storage, gen->save_size);
 		}
 	} else {
 		gen->save_storage = NULL;
