@@ -910,15 +910,16 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 				}
 			}
 		} else {
-			uint32_t cell = (line / 8) * (context->regs[REG_MODE_4] & BIT_H40 ? 40 : 32) + col;
-			uint32_t address = cell * 32 + (line % 8) * 4;
+			uint32_t base = (context->debug - 3) * 0x200;
+			uint32_t cell = base + (line / 8) * (context->regs[REG_MODE_4] & BIT_H40 ? 40 : 32) + col;
+			uint32_t address = (cell * 32 + (line % 8) * 4) & 0xFFFF;
 			for (int32_t i = 0; i < 4; i ++) {
 				*(dst++) = context->colors[(context->debug_pal << 4) | (context->vdpmem[address] >> 4)];
 				*(dst++) = context->colors[(context->debug_pal << 4) | (context->vdpmem[address] & 0xF)];
 				address++;
 			}
 			cell++;
-			address = cell * 32 + (line % 8) * 4;
+			address = (cell * 32 + (line % 8) * 4) & 0xFFFF;
 			for (int32_t i = 0; i < 4; i ++) {
 				*(dst++) = context->colors[(context->debug_pal << 4) | (context->vdpmem[address] >> 4)];
 				*(dst++) = context->colors[(context->debug_pal << 4) | (context->vdpmem[address] & 0xF)];
@@ -1739,7 +1740,7 @@ int vdp_data_port_write(vdp_context * context, uint16_t value)
 	cur->cycle = context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20)*FIFO_LATENCY;
 	cur->address = context->address;
 	cur->value = value;
-	if (context->cd & 0x20 && (context->regs[REG_DMASRC_H] & 0xC0) == 0x80) {
+	if (context->cd & 0x20 && (context->regs[REG_DMASRC_H] & 0xC0) == 0x80 && (context->regs[REG_MODE_2] & BIT_DMA_ENABLE)) {
 		context->flags |= FLAG_DMA_RUN;
 	}
 	cur->cd = context->cd;
