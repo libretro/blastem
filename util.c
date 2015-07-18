@@ -150,7 +150,7 @@ char * get_exe_dir()
 	static char * exe_dir;
 	if (!exe_dir) {
 		char * cur;
-#ifndef HAS_PROC
+#ifdef HAS_PROC
 		char * linktext = readlink_alloc("/proc/self/exe");
 		if (!linktext) {
 			goto fallback;
@@ -180,7 +180,7 @@ fallback:
 					break;
 				}
 			}
-#ifndef HAS_PROC
+#ifdef HAS_PROC
 		} else {
 			exe_dir = linktext;
 		}
