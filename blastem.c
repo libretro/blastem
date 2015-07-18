@@ -13,6 +13,7 @@
 #include "gdb_remote.h"
 #include "gst.h"
 #include "util.h"
+#include "romdb.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -61,14 +62,23 @@ int load_smd_rom(long filesize, FILE * f)
 	fseek(f, SMD_HEADER_SIZE, SEEK_SET);
 
 	uint16_t * dst = cart;
+	int rom_size = filesize;
 	while (filesize > 0) {
 		fread(block, 1, SMD_BLOCK_SIZE, f);
 		for (uint8_t *low = block, *high = (block+SMD_BLOCK_SIZE/2), *end = block+SMD_BLOCK_SIZE; high < end; high++, low++) {
-			*(dst++) = *high << 8 | *low;
+			*(dst++) = *low << 8 | *high;
 		}
 		filesize -= SMD_BLOCK_SIZE;
 	}
-	return 1;
+	return filesize;
+}
+
+void byteswap_rom()
+{
+	for(unsigned short * cur = cart; cur - cart < CARTRIDGE_WORDS; ++cur)
+	{
+		*cur = (*cur >> 8) | (*cur << 8);
+	}
 }
 
 int load_rom(char * filename)
@@ -103,12 +113,7 @@ int load_rom(char * filename)
 	}
 	fread(cart, 2, filesize/2, f);
 	fclose(f);
-	for(unsigned short * cur = cart; cur - cart < (filesize/2); ++cur)
-	{
-		*cur = (*cur >> 8) | (*cur << 8);
-	}
-	//TODO: Mirror ROM
-	return 1;
+	return filesize;
 }
 
 uint16_t read_dma_value(uint32_t address)
@@ -762,127 +767,6 @@ void *z80_write_bank_reg(uint32_t location, void * vcontext, uint8_t value)
 	return context;
 }
 
-uint16_t read_sram_w(uint32_t address, m68k_context * context)
-{
-	genesis_context * gen = context->system;
-	address &= gen->save_ram_mask;
-	switch(gen->save_flags)
-	{
-	case RAM_FLAG_BOTH:
-		return gen->save_ram[address] << 8 | gen->save_ram[address+1];
-	case RAM_FLAG_EVEN:
-		return gen->save_ram[address >> 1] << 8 | 0xFF;
-	case RAM_FLAG_ODD:
-		return gen->save_ram[address >> 1] | 0xFF00;
-	}
-	return 0xFFFF;//We should never get here
-}
-
-uint8_t read_sram_b(uint32_t address, m68k_context * context)
-{
-	genesis_context * gen = context->system;
-	address &= gen->save_ram_mask;
-	switch(gen->save_flags)
-	{
-	case RAM_FLAG_BOTH:
-		return gen->save_ram[address];
-	case RAM_FLAG_EVEN:
-		if (address & 1) {
-			return 0xFF;
-		} else {
-			return gen->save_ram[address >> 1];
-		}
-	case RAM_FLAG_ODD:
-		if (address & 1) {
-			return gen->save_ram[address >> 1];
-		} else {
-			return 0xFF;
-		}
-	}
-	return 0xFF;//We should never get here
-}
-
-m68k_context * write_sram_area_w(uint32_t address, m68k_context * context, uint16_t value)
-{
-	genesis_context * gen = context->system;
-	if ((gen->bank_regs[0] & 0x3) == 1) {
-		address &= gen->save_ram_mask;
-		switch(gen->save_flags)
-		{
-		case RAM_FLAG_BOTH:
-			gen->save_ram[address] = value >> 8;
-			gen->save_ram[address+1] = value;
-			break;
-		case RAM_FLAG_EVEN:
-			gen->save_ram[address >> 1] = value >> 8;
-			break;
-		case RAM_FLAG_ODD:
-			gen->save_ram[address >> 1] = value;
-			break;
-		}
-	}
-	return context;
-}
-
-m68k_context * write_sram_area_b(uint32_t address, m68k_context * context, uint8_t value)
-{
-	genesis_context * gen = context->system;
-	if ((gen->bank_regs[0] & 0x3) == 1) {
-		address &= gen->save_ram_mask;
-		switch(gen->save_flags)
-		{
-		case RAM_FLAG_BOTH:
-			gen->save_ram[address] = value;
-			break;
-		case RAM_FLAG_EVEN:
-			if (!(address & 1)) {
-				gen->save_ram[address >> 1] = value;
-			}
-			break;
-		case RAM_FLAG_ODD:
-			if (address & 1) {
-				gen->save_ram[address >> 1] = value;
-			}
-			break;
-		}
-	}
-	return context;
-}
-
-m68k_context * write_bank_reg_w(uint32_t address, m68k_context * context, uint16_t value)
-{
-	genesis_context * gen = context->system;
-	address &= 0xE;
-	address >>= 1;
-	gen->bank_regs[address] = value;
-	if (!address) {
-		if (value & 1) {
-			context->mem_pointers[2] = NULL;
-		} else {
-			context->mem_pointers[2] = cart + 0x200000/2;
-		}
-	}
-	return context;
-}
-
-m68k_context * write_bank_reg_b(uint32_t address, m68k_context * context, uint8_t value)
-{
-	if (address & 1) {
-		genesis_context * gen = context->system;
-		address &= 0xE;
-		address >>= 1;
-		gen->bank_regs[address] = value;
-		if (!address) {
-			if (value & 1) {
-				context->mem_pointers[2] = NULL;
-			} else {
-				context->mem_pointers[2] = cart + 0x200000/2;
-			}
-		}
-	}
-	return context;
-}
-
 void set_speed_percent(genesis_context * context, uint32_t percent)
 {
 	uint32_t old_clock = context->master_clock;
@@ -894,17 +778,9 @@ void set_speed_percent(genesis_context * context, uint32_t percent)
 	psg_adjust_master_clock(context->psg, context->master_clock);
 }
 
-#define ROM_END   0x1A4
-#define RAM_ID    0x1B0
-#define RAM_FLAGS 0x1B2
-#define RAM_START 0x1B4
-#define RAM_END   0x1B8
 #define MAX_MAP_CHUNKS (4+7+1)
-#define RAM_FLAG_MASK 0x1800
 
-const memmap_chunk static_map[] = {
-		{0,        0x400000,  0xFFFFFF, 0, MMAP_READ,                          cart,
-		           NULL,          NULL,         NULL,            NULL},
+const memmap_chunk base_map[] = {
 		{0xE00000, 0x1000000, 0xFFFF,   0, MMAP_READ | MMAP_WRITE | MMAP_CODE, ram,
 		           NULL,          NULL,         NULL,            NULL},
 		{0xC00000, 0xE00000,  0x1FFFFF, 0, 0,                                  NULL,
@@ -915,120 +791,49 @@ const memmap_chunk static_map[] = {
 		           (read_8_fun)io_read,         (write_8_fun)io_write}
 	};
 
-char * sram_filename;
+char * save_filename;
 genesis_context * genesis;
-void save_sram()
+void persist_save()
 {
-	FILE * f = fopen(sram_filename, "wb");
+	FILE * f = fopen(save_filename, "wb");
 	if (!f) {
-		fprintf(stderr, "Failed to open SRAM file %s for writing\n", sram_filename);
+		fprintf(stderr, "Failed to open %s file %s for writing\n", genesis->save_type == SAVE_I2C ? "EEPROM" : "SRAM", save_filename);
 		return;
 	}
-	uint32_t size = genesis->save_ram_mask+1;
-	if (genesis->save_flags != RAM_FLAG_BOTH) {
-		size/= 2;
-	}
-	fwrite(genesis->save_ram, 1, size, f);
+	fwrite(genesis->save_storage, 1, genesis->save_size, f);
 	fclose(f);
-	printf("Saved SRAM to %s\n", sram_filename);
+	printf("Saved %s to %s\n", genesis->save_type == SAVE_I2C ? "EEPROM" : "SRAM", save_filename);
 }
 
-void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, uint8_t * debugger)
+void init_run_cpu(genesis_context * gen, rom_info *rom, FILE * address_log, char * statefile, uint8_t * debugger)
 {
 	m68k_options opts;
-	memmap_chunk memmap[MAX_MAP_CHUNKS];
-	uint32_t num_chunks;
-	void * initial_mapped = NULL;
-	gen->save_ram = NULL;
-	//TODO: Handle carts larger than 4MB
-	//TODO: Handle non-standard mappers
-	uint32_t size;
-	if ((cart[RAM_ID/2] & 0xFF) == 'A' && (cart[RAM_ID/2] >> 8) == 'R') {
-		//Cart has save RAM
-		uint32_t rom_end = ((cart[ROM_END/2] << 16) | cart[ROM_END/2+1]) + 1;
-		uint32_t ram_start = (cart[RAM_START/2] << 16) | cart[RAM_START/2+1];
-		uint32_t ram_end = (cart[RAM_END/2] << 16) | cart[RAM_END/2+1];
-		uint16_t ram_flags = cart[RAM_FLAGS/2];
-		gen->save_flags = ram_flags & RAM_FLAG_MASK;
-		memset(memmap, 0, sizeof(memmap_chunk)*2);
-		if (ram_start >= rom_end) {
-			memmap[0].end = rom_end;
-			memmap[0].mask = 0xFFFFFF;
-			memmap[0].flags = MMAP_READ;
-			memmap[0].buffer = cart;
-
-			ram_start &= 0xFFFFFE;
-			ram_end |= 1;
-			memmap[1].start = ram_start;
-			gen->save_ram_mask = memmap[1].mask = ram_end-ram_start;
-			ram_end += 1;
-			memmap[1].end = ram_end;
-			memmap[1].flags = MMAP_READ | MMAP_WRITE;
-			size = ram_end-ram_start;
-			if ((ram_flags & RAM_FLAG_MASK) == RAM_FLAG_ODD) {
-				memmap[1].flags |= MMAP_ONLY_ODD;
-				size /= 2;
-			} else if((ram_flags & RAM_FLAG_MASK) == RAM_FLAG_EVEN) {
-				memmap[1].flags |= MMAP_ONLY_EVEN;
-				size /= 2;
-			}
-			memmap[1].buffer = gen->save_ram = malloc(size);
-
-			memcpy(memmap+2, static_map+1, sizeof(static_map)-sizeof(static_map[0]));
-			num_chunks = sizeof(static_map)/sizeof(memmap_chunk)+1;
-		} else {
-			//Assume the standard Sega mapper for now
-			memmap[0].end = 0x200000;
-			memmap[0].mask = 0xFFFFFF;
-			memmap[0].flags = MMAP_READ;
-			memmap[0].buffer = cart;
-
-			memmap[1].start = 0x200000;
-			memmap[1].end = 0x400000;
-			memmap[1].mask = 0x1FFFFF;
-			ram_start &= 0xFFFFFE;
-			ram_end |= 1;
-			gen->save_ram_mask = ram_end-ram_start;
-			memmap[1].flags = MMAP_READ | MMAP_PTR_IDX | MMAP_FUNC_NULL;
-			memmap[1].ptr_index = 2;
-			memmap[1].read_16 = (read_16_fun)read_sram_w;//these will only be called when mem_pointers[2] == NULL
-			memmap[1].read_8 = (read_8_fun)read_sram_b;
-			memmap[1].write_16 = (write_16_fun)write_sram_area_w;//these will be called all writes to the area
-			memmap[1].write_8 = (write_8_fun)write_sram_area_b;
-			memcpy(memmap+2, static_map+1, sizeof(static_map)-sizeof(static_map[0]));
-			num_chunks = sizeof(static_map)/sizeof(memmap_chunk)+1;
-			memset(memmap+num_chunks, 0, sizeof(memmap[num_chunks]));
-			memmap[num_chunks].start = 0xA13000;
-			memmap[num_chunks].end = 0xA13100;
-			memmap[num_chunks].mask = 0xFF;
-			memmap[num_chunks].write_16 = (write_16_fun)write_bank_reg_w;
-			memmap[num_chunks].write_8 = (write_8_fun)write_bank_reg_b;
-			num_chunks++;
-			ram_end++;
-			size = ram_end-ram_start;
-			if ((ram_flags & RAM_FLAG_MASK) != RAM_FLAG_BOTH) {
-				size /= 2;
-			}
-			gen->save_ram = malloc(size);
-			memmap[1].buffer = initial_mapped = cart + 0x200000/2;
-		}
-	} else {
-		memcpy(memmap, static_map, sizeof(static_map));
-		num_chunks = sizeof(static_map)/sizeof(memmap_chunk);
-	}
-	if (gen->save_ram) {
-		memset(gen->save_ram, 0, size);
-		FILE * f = fopen(sram_filename, "rb");
+	
+	gen->save_type = rom->save_type;
+	if (gen->save_type != SAVE_NONE) {
+		gen->save_ram_mask = rom->save_mask;
+		gen->save_size = rom->save_size;
+		gen->save_storage = rom->save_buffer;
+		gen->eeprom_map = rom->eeprom_map;
+		gen->num_eeprom = rom->num_eeprom;
+		memset(gen->save_storage, 0, rom->save_size);
+		FILE * f = fopen(save_filename, "rb");
 		if (f) {
-			uint32_t read = fread(gen->save_ram, 1, size, f);
+			uint32_t read = fread(gen->save_storage, 1, rom->save_size, f);
 			fclose(f);
 			if (read > 0) {
-				printf("Loaded SRAM from %s\n", sram_filename);
+				printf("Loaded %s from %s\n", rom->save_type == SAVE_I2C ? "EEPROM" : "SRAM", save_filename);
 			}
 		}
-		atexit(save_sram);
+		atexit(persist_save);
+		if (gen->save_type == SAVE_I2C) {
+			eeprom_init(&gen->eeprom, gen->save_storage, gen->save_size);
+		}
+	} else {
+		gen->save_storage = NULL;
 	}
-	init_m68k_opts(&opts, memmap, num_chunks, MCLKS_PER_68K);
+	
+	init_m68k_opts(&opts, rom->map, rom->map_chunks, MCLKS_PER_68K);
 	opts.address_log = address_log;
 	m68k_context *context = init_68k_context(&opts);
 	gen->m68k = context;
@@ -1041,8 +846,8 @@ void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, u
 	//work RAM
 	context->mem_pointers[1] = ram;
 	//save RAM/map
-	context->mem_pointers[2] = initial_mapped;
-	context->mem_pointers[3] = (uint16_t *)gen->save_ram;
+	context->mem_pointers[2] = rom->map[1].buffer;
+	context->mem_pointers[3] = (uint16_t *)gen->save_storage;
 	
 	if (statefile) {
 		uint32_t pc = load_gst(gen, statefile);
@@ -1065,75 +870,36 @@ void init_run_cpu(genesis_context * gen, FILE * address_log, char * statefile, u
 	}
 }
 
-char title[64];
+char *title;
 
-#define TITLE_START 0x150
-#define TITLE_END (TITLE_START+48)
-
-void update_title()
+void update_title(char *rom_name)
 {
-	uint16_t *last = cart + TITLE_END/2 - 1;
-	while(last > cart + TITLE_START/2 && *last == 0x2020)
-	{
-		last--;
+	if (title) {
+		free(title);
+		title = NULL;
 	}
-	uint16_t *start = cart + TITLE_START/2;
-	char *cur = title;
-	char last_char = ' ';
-	for (; start != last; start++)
-	{
-		if ((last_char != ' ' || (*start >> 8) != ' ') && (*start >> 8) < 0x80) {
-			*(cur++) = *start >> 8;
-			last_char = *start >> 8;
-		}
-		if (last_char != ' ' || (*start & 0xFF) != ' ' && (*start & 0xFF) < 0x80) {
-			*(cur++) = *start;
-			last_char = *start & 0xFF;
-		}
-	}
-	*(cur++) = *start >> 8;
-	if ((*start & 0xFF) != ' ') {
-		*(cur++) = *start;
-	}
-	strcpy(cur, " - BlastEm");
+	title = alloc_concat(rom_name, " - BlastEm");
 }
 
-#define REGION_START 0x1F0
-
-int detect_specific_region(char region)
+void set_region(rom_info *info, uint8_t region)
 {
-	return (cart[REGION_START/2] & 0xFF) == region || (cart[REGION_START/2] >> 8) == region || (cart[REGION_START/2+1] & 0xFF) == region;
-}
-
-void detect_region()
-{
-	if (detect_specific_region('U')|| detect_specific_region('B') || detect_specific_region('4')) {
-		version_reg = NO_DISK | USA;
-	} else if (detect_specific_region('J')) {
-		version_reg = NO_DISK | JAP;
-	} else if (detect_specific_region('E') || detect_specific_region('A')) {
-		version_reg = NO_DISK | EUR;
-	} else {
+	if (!region) {
 		char * def_region = tern_find_ptr(config, "default_region");
-		if (def_region) {
-			switch(*def_region)
-			{
-			case 'j':
-			case 'J':
-				version_reg = NO_DISK | JAP;
-				break;
-			case 'u':
-			case 'U':
-				version_reg = NO_DISK | USA;
-				break;
-			case 'e':
-			case 'E':
-				version_reg = NO_DISK | EUR;
-				break;
-			}
+		if (def_region && (!info->regions || (info->regions & translate_region_char(toupper(*def_region))))) {
+			region = translate_region_char(toupper(*def_region));
+		} else {
+			region = info->regions;
 		}
 	}
+	if (region & REGION_E) {
+		version_reg = NO_DISK | EUR;
+	} else if (region & REGION_J) {
+		version_reg = NO_DISK | JAP;
+	} else {
+		version_reg = NO_DISK | USA;
+	}
 }
+
 #ifndef NO_Z80
 const memmap_chunk z80_map[] = {
 	{ 0x0000, 0x4000,  0x1FFF, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE, z80_ram, NULL, NULL, NULL,              NULL },
@@ -1161,6 +927,7 @@ int main(int argc, char ** argv)
 	char * romfname = NULL;
 	FILE *address_log = NULL;
 	char * statefile = NULL;
+	int rom_size;
 	uint8_t * debuggerfun = NULL;
 	uint8_t fullscreen = 0, use_gl = 1;
 	for (int i = 1; i < argc; i++) {
@@ -1204,21 +971,8 @@ int main(int argc, char ** argv)
 					fputs("-r must be followed by region (J, U or E)\n", stderr);
 					return 1;
 				}
-				switch (argv[i][0])
-				{
-				case 'j':
-				case 'J':
-					force_version = NO_DISK | JAP;
-					break;
-				case 'u':
-				case 'U':
-					force_version = NO_DISK | USA;
-					break;
-				case 'e':
-				case 'E':
-					force_version = NO_DISK | EUR;
-					break;
-				default:
+				force_version = translate_region_char(toupper(argv[i][0]));
+				if (!force_version) {
 					fprintf(stderr, "'%c' is not a valid region character for the -r option\n", argv[i][0]);
 					return 1;
 				}
@@ -1255,7 +1009,7 @@ int main(int argc, char ** argv)
 				return 1;
 			}
 		} else if (!loaded) {
-			if(!load_rom(argv[i])) {
+			if (!(rom_size = load_rom(argv[i]))) {
 				fprintf(stderr, "Failed to open %s for reading\n", argv[i]);
 				return 1;
 			}
@@ -1271,14 +1025,13 @@ int main(int argc, char ** argv)
 		fputs("You must specify a ROM filename!\n", stderr);
 		return 1;
 	}
-	if (force_version) {
-		version_reg = force_version;
-	} else {
-		detect_region();
-	}
-	update_title();
+	tern_node *rom_db = load_rom_db();
+	rom_info info = configure_rom(rom_db, cart, rom_size, base_map, sizeof(base_map)/sizeof(base_map[0]));
+	byteswap_rom();
+	set_region(&info, force_version);
+	update_title(info.name);
 	int def_width = 0;
-	char *config_width = tern_find_ptr(config, "videowidth");
+	char *config_width = tern_find_path(config, "video\0width\0").ptrval;
 	if (config_width) {
 		def_width = atoi(config_width);
 	}
@@ -1301,7 +1054,7 @@ int main(int argc, char ** argv)
 
 	init_vdp_context(&v_context, version_reg & 0x40);
 	gen.frame_end = vdp_cycles_to_frame_end(&v_context);
-	char * config_cycles = tern_find_ptr(config, "clocksmax_cycles");
+	char * config_cycles = tern_find_path(config, "clocks\0max_cycles\0").ptrval;
 	gen.max_cycles = config_cycles ? atoi(config_cycles) : 10000000;
 
 	ym2612_context y_context;
@@ -1330,20 +1083,22 @@ int main(int argc, char ** argv)
 	setup_io_devices(config, gen.ports);
 
 	int fname_size = strlen(romfname);
-	sram_filename = malloc(fname_size+6);
-	memcpy(sram_filename, romfname, fname_size);
+	char * ext = info.save_type == SAVE_I2C ? "eeprom" : "sram";
+	save_filename = malloc(fname_size+strlen(ext) + 2);
+	memcpy(save_filename, romfname, fname_size);
 	int i;
 	for (i = fname_size-1; fname_size >= 0; --i) {
-		if (sram_filename[i] == '.') {
-			strcpy(sram_filename + i + 1, "sram");
+		if (save_filename[i] == '.') {
+			strcpy(save_filename + i + 1, ext);
 			break;
 		}
 	}
 	if (i < 0) {
-		strcpy(sram_filename + fname_size, ".sram");
+		save_filename[fname_size] = '.';
+		strcpy(save_filename + fname_size + 1, ext);
 	}
 	set_keybindings(gen.ports);
 
-	init_run_cpu(&gen, address_log, statefile, debuggerfun);
+	init_run_cpu(&gen, &info, address_log, statefile, debuggerfun);
 	return 0;
 }

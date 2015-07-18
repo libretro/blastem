@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <stdint.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -66,6 +67,16 @@ char * split_keyval(char * text)
 	}
 	*text = 0;
 	return text+1;
+}
+
+uint32_t nearest_pow2(uint32_t val)
+{
+	uint32_t ret = 1;
+	while (ret < val)
+	{
+		ret = ret << 1;
+	}
+	return ret;
 }
 
 static char * exe_str;

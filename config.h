@@ -7,6 +7,7 @@
 #define CONFIG_H_
 #include "tern.h"
 
+tern_node * parse_config_file(char * config_path);
 tern_node * load_config();
 
 #endif //CONFIG_H_
