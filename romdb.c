@@ -80,7 +80,7 @@ void set_scl(eeprom_state *state, uint8_t val)
 		case I2C_ADDRESS_HI:
 		case I2C_ADDRESS:
 		case I2C_WRITE:
-			state->latch = state->host_sda << 7 | state->latch >> 1;
+			state->latch = state->host_sda | state->latch << 1;
 			state->counter--;
 			if (!state->counter) {
 				switch (state->state & 0x7F)
@@ -129,9 +129,11 @@ void set_scl(eeprom_state *state, uint8_t val)
 			break;
 		case I2C_ADDRESS_HI_ACK:
 			state->state = I2C_ADDRESS;
+			state->counter = 8;
 			break;
 		case I2C_ADDRESS_ACK:
 			state->state = I2C_WRITE;
+			state->counter = 8;
 			break;
 		case I2C_READ:
 			state->counter--;
@@ -141,9 +143,11 @@ void set_scl(eeprom_state *state, uint8_t val)
 			break;
 		case I2C_READ_ACK:
 			state->state = I2C_READ;
+			state->counter = 8;
 			break;
 		case I2C_WRITE_ACK:
 			state->state = I2C_WRITE;
+			state->counter = 8;
 			break;
 		}
 	} else if (~val & state->scl) {
@@ -314,13 +318,13 @@ void * write_eeprom_i2c_w(uint32_t address, void * context, uint16_t value)
 		exit(1);
 	}
 	printf("EEPROM word write: %X - %X\n", address, value);
+	if (map->scl_mask) {
+		set_scl(&gen->eeprom, (value & map->scl_mask) != 0);
+		printf("scl: %d, state: %s, counter: %d, latch: %X\n", (value & map->scl_mask) != 0, i2c_states[gen->eeprom.state], gen->eeprom.counter, gen->eeprom.latch);
+	}
 	if (map->sda_write_mask) {
 		printf("sda: %d\n", (value & map->sda_write_mask) != 0);
 		set_host_sda(&gen->eeprom, (value & map->sda_write_mask) != 0);
-	}
-	if (map->scl_mask) {
-		set_scl(&gen->eeprom, (value & map->scl_mask) != 0);
-		printf("scl: %d, state: %s, counter: %d\n", (value & map->scl_mask) != 0, i2c_states[gen->eeprom.state], gen->eeprom.counter);
 	}
 	return context;
 }
@@ -343,13 +347,13 @@ void * write_eeprom_i2c_b(uint32_t address, void * context, uint8_t value)
 		mask = 0xFF00;
 	}
 	printf("EEPROM byte write: %X - %X (using mask %X and expanded val %X)\n", address, value, mask, expanded);
-	if (map->sda_write_mask & mask) {
-		printf("sda: %d\n", (expanded & map->sda_write_mask) != 0);
-		set_host_sda(&gen->eeprom, (expanded & map->sda_write_mask) != 0);
-	}
 	if (map->scl_mask & mask) {
 		printf("scl: %d, state: %s\n", (expanded & map->scl_mask) != 0, i2c_states[gen->eeprom.state]);
 		set_scl(&gen->eeprom, (expanded & map->scl_mask) != 0);
+	}
+	if (map->sda_write_mask & mask) {
+		printf("sda: %d\n", (expanded & map->sda_write_mask) != 0);
+		set_host_sda(&gen->eeprom, (expanded & map->sda_write_mask) != 0);
 	}
 	return context;
 }
