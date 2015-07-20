@@ -622,6 +622,7 @@ void process_sram_def(char *key, map_iter_state *state)
 			fprintf(stderr, "SRAM size %s is invalid\n", size);
 			exit(1);
 		}
+		state->info->save_mask = nearest_pow2(state->info->save_size)-1;
 		state->info->save_buffer = malloc(state->info->save_size);
 		memset(state->info->save_buffer, 0, state->info->save_size);
 		char *bus = tern_find_path(state->root, "SRAM\0bus\0").ptrval;
