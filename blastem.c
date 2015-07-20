@@ -816,7 +816,6 @@ void init_run_cpu(genesis_context * gen, rom_info *rom, FILE * address_log, char
 		gen->save_storage = rom->save_buffer;
 		gen->eeprom_map = rom->eeprom_map;
 		gen->num_eeprom = rom->num_eeprom;
-		memset(gen->save_storage, 0, rom->save_size);
 		FILE * f = fopen(save_filename, "rb");
 		if (f) {
 			uint32_t read = fread(gen->save_storage, 1, rom->save_size, f);

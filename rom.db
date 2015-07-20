@@ -107,7 +107,10 @@ T-081586 {
 		}
 		200000 {
 			device EEPROM
-			last 3FFFFF
+			#This is almost certainly not correct based on the address pins
+			#available to the Acclaim mapper. It's probably available up to
+			#2FFFFF at least and just fights with D0 from the mask ROM
+			last 200001
 			bits_read {
 				0 sda
 			}
@@ -115,6 +118,11 @@ T-081586 {
 				0 sda
 				8 scl
 			}
+		}
+		200002 {
+			device ROM
+			last 3FFFFF
+			offset 200000
 		}
 	}
 }
