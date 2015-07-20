@@ -609,6 +609,80 @@ void eeprom_write_fun(char *key, tern_val val, void *data)
 	fprintf(stderr, "bit %s is connected to unrecognized write pin %s", key, pin);
 }
 
+void process_sram_def(char *key, map_iter_state *state)
+{
+	if (!state->info->save_size) {
+		char * size = tern_find_path(state->root, "SRAM\0size\0").ptrval;
+		if (!size) {
+			fprintf(stderr, "ROM DB map entry %d with address %s has device type SRAM, but the SRAM size is not defined\n", state->index, key);
+			exit(1);
+		}
+		state->info->save_size = atoi(size);
+		if (!state->info->save_size) {
+			fprintf(stderr, "SRAM size %s is invalid\n", size);
+			exit(1);
+		}
+		state->info->save_buffer = malloc(state->info->save_size);
+		memset(state->info->save_buffer, 0, state->info->save_size);
+		char *bus = tern_find_path(state->root, "SRAM\0bus\0").ptrval;
+		if (!strcmp(bus, "odd")) {
+			state->info->save_type = RAM_FLAG_ODD;
+		} else if(!strcmp(bus, "even")) {
+			state->info->save_type = RAM_FLAG_EVEN;
+		} else {
+			state->info->save_type = RAM_FLAG_BOTH;
+		}
+	}
+}
+
+void process_eeprom_def(char * key, map_iter_state *state)
+{
+	if (!state->info->save_size) {
+		char * size = tern_find_path(state->root, "EEPROM\0size\0").ptrval;
+		if (!size) {
+			fprintf(stderr, "ROM DB map entry %d with address %s has device type EEPROM, but the EEPROM size is not defined\n", state->index, key);
+			exit(1);
+		}
+		state->info->save_size = atoi(size);
+		if (!state->info->save_size) {
+			fprintf(stderr, "EEPROM size %s is invalid\n", size);
+			exit(1);
+		}
+		char *etype = tern_find_path(state->root, "EEPROM\0type\0").ptrval;
+		if (!etype) {
+			etype = "i2c";
+		}
+		if (!strcmp(etype, "i2c")) {
+			state->info->save_type = SAVE_I2C;
+		} else {
+			fprintf(stderr, "EEPROM type %s is invalid\n", etype);
+			exit(1);
+		}
+		state->info->save_buffer = malloc(state->info->save_size);
+		memset(state->info->save_buffer, 0xFF, state->info->save_size);
+		state->info->eeprom_map = malloc(sizeof(eeprom_map) * state->num_els);
+		memset(state->info->eeprom_map, 0, sizeof(eeprom_map) * state->num_els);
+	}
+}
+
+void add_eeprom_map(tern_node *node, uint32_t start, uint32_t end, map_iter_state *state)
+{
+	eeprom_map *eep_map = state->info->eeprom_map + state->info->num_eeprom;
+	eep_map->start = start;
+	eep_map->end = end;
+	eep_map->sda_read_bit = 0xFF;
+	tern_node * bits_read = tern_find_ptr(node, "bits_read");
+	if (bits_read) {
+		tern_foreach(bits_read, eeprom_read_fun, eep_map);
+	}
+	tern_node * bits_write = tern_find_ptr(node, "bits_write");
+	if (bits_write) {
+		tern_foreach(bits_write, eeprom_write_fun, eep_map);
+	}
+	printf("EEPROM address %X: sda read: %X, sda write: %X, scl: %X\n", start, eep_map->sda_read_bit, eep_map->sda_write_mask, eep_map->scl_mask);
+	state->info->num_eeprom++;
+}
+
 void map_iter_fun(char *key, tern_val val, void *data)
 {
 	map_iter_state *state = data;
@@ -624,81 +698,25 @@ void map_iter_fun(char *key, tern_val val, void *data)
 		exit(1);
 	}
 	char * dtype = tern_find_ptr_default(node, "device", "ROM");
-	uint32_t offset = strtol(tern_find_ptr_default(node, "offset", "0"), NULL, 0);
+	uint32_t offset = strtol(tern_find_ptr_default(node, "offset", "0"), NULL, 16);
 	memmap_chunk *map = state->info->map + state->index;
 	map->start = start;
-	map->end = end;
+	map->end = end + 1;
 	if (!strcmp(dtype, "ROM")) {
 		map->buffer = state->rom + offset;
 		map->flags = MMAP_READ;
-		map->mask = calc_mask(state->rom_size, start, end);
+		map->mask = calc_mask(state->rom_size - offset, start, end);
 	} else if (!strcmp(dtype, "EEPROM")) {
-		if (!state->info->save_size) {
-			char * size = tern_find_path(state->root, "EEPROM\0size\0").ptrval;
-			if (!size) {
-				fprintf(stderr, "ROM DB map entry %d with address %s has device type EEPROM, but the EEPROM size is not defined\n", state->index, key);
-				exit(1);
-			}
-			state->info->save_size = atoi(size);
-			if (!state->info->save_size) {
-				fprintf(stderr, "EEPROM size %s is invalid\n", size);
-				exit(1);
-			}
-			char *etype = tern_find_path(state->root, "EEPROM\0type\0").ptrval;
-			if (!etype) {
-				etype = "i2c";
-			}
-			if (!strcmp(etype, "i2c")) {
-				state->info->save_type = SAVE_I2C;
-			} else {
-				fprintf(stderr, "EEPROM type %s is invalid\n", etype);
-				exit(1);
-			}
-			state->info->save_buffer = malloc(state->info->save_size);
-			state->info->eeprom_map = malloc(sizeof(eeprom_map) * state->num_els);
-			memset(state->info->eeprom_map, 0, sizeof(eeprom_map) * state->num_els);
-		}
-		eeprom_map *eep_map = state->info->eeprom_map + state->info->num_eeprom;
-		eep_map->start = start;
-		eep_map->end = end;
-		eep_map->sda_read_bit = 0xFF;
-		tern_node * bits_read = tern_find_ptr(node, "bits_read");
-		if (bits_read) {
-			tern_foreach(bits_read, eeprom_read_fun, eep_map);
-		}
-		tern_node * bits_write = tern_find_ptr(node, "bits_write");
-		if (bits_write) {
-			tern_foreach(bits_write, eeprom_write_fun, eep_map);
-		}
-		printf("EEPROM address %X: sda read: %X, sda write: %X, scl: %X\n", start, eep_map->sda_read_bit, eep_map->sda_write_mask, eep_map->scl_mask);
-		state->info->num_eeprom++;
+		process_eeprom_def(key, state);
+		add_eeprom_map(node, start, end, state);
+		
 		map->write_16 = write_eeprom_i2c_w;
 		map->write_8 = write_eeprom_i2c_b;
 		map->read_16 = read_eeprom_i2c_w;
 		map->read_8 = read_eeprom_i2c_b;
 		map->mask = 0xFFFFFF;
 	} else if (!strcmp(dtype, "SRAM")) {
-		if (!state->info->save_size) {
-			char * size = tern_find_path(state->root, "SRAM\0size\0").ptrval;
-			if (!size) {
-				fprintf(stderr, "ROM DB map entry %d with address %s has device type SRAM, but the SRAM size is not defined\n", state->index, key);
-				exit(1);
-			}
-			state->info->save_size = atoi(size);
-			if (!state->info->save_size) {
-				fprintf(stderr, "SRAM size %s is invalid\n", size);
-				exit(1);
-			}
-			state->info->save_buffer = malloc(state->info->save_size);
-			char *bus = tern_find_path(state->root, "SRAM\0bus\0").ptrval;
-			if (!strcmp(bus, "odd")) {
-				state->info->save_type = RAM_FLAG_ODD;
-			} else if(!strcmp(bus, "even")) {
-				state->info->save_type = RAM_FLAG_EVEN;
-			} else {
-				state->info->save_type = RAM_FLAG_BOTH;
-			}
-		}
+		process_sram_def(key, state);
 		map->buffer = state->info->save_buffer + offset;
 		map->flags = MMAP_READ | MMAP_WRITE;
 		if (state->info->save_type == RAM_FLAG_ODD) {
@@ -707,6 +725,37 @@ void map_iter_fun(char *key, tern_val val, void *data)
 			map->flags |= MMAP_ONLY_EVEN;
 		}
 		map->mask = calc_mask(state->info->save_size, start, end);
+	} else if (!strcmp(dtype, "Sega mapper")) {
+		map->buffer = state->rom + offset;
+		//TODO: Calculate this
+		map->ptr_index = 2;
+		map->flags = MMAP_READ | MMAP_PTR_IDX | MMAP_FUNC_NULL;
+		map->mask = calc_mask(state->rom_size - offset, start, end);
+		char *save_device = tern_find_path(node, "save\0device\0").ptrval;
+		if (save_device && !strcmp(save_device, "SRAM")) {
+			process_sram_def(key, state);
+			map->read_16 = (read_16_fun)read_sram_w;//these will only be called when mem_pointers[2] == NULL
+			map->read_8 = (read_8_fun)read_sram_b;
+			map->write_16 = (write_16_fun)write_sram_area_w;//these will be called all writes to the area
+			map->write_8 = (write_8_fun)write_sram_area_b;
+		} else if (save_device && !strcmp(save_device, "EEPROM")) {
+			process_eeprom_def(key, state);
+			add_eeprom_map(node, start & map->mask, end & map->mask, state);
+			map->write_16 = write_eeprom_i2c_w;
+			map->write_8 = write_eeprom_i2c_b;
+			map->read_16 = read_eeprom_i2c_w;
+			map->read_8 = read_eeprom_i2c_b;
+		}
+		state->info->map_chunks++;
+		state->info->map = realloc(state->info->map, sizeof(memmap_chunk) * state->info->map_chunks);
+		state->index++;
+		memset(state->info->map + state->info->map_chunks - 1, 0, sizeof(memmap_chunk));
+		map = state->info->map + state->index;
+		map->start = 0xA13000;
+		map->end = 0xA13100;
+		map->mask = 0xFF;
+		map->write_16 = (write_16_fun)write_bank_reg_w;
+		map->write_8 = (write_8_fun)write_bank_reg_b;
 	} else {
 		fprintf(stderr, "Invalid device type for ROM DB map entry %d with address %s\n", state->index, key);
 		exit(1);
@@ -757,6 +806,7 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, memmap_
 	
 	tern_node *map = tern_find_ptr(entry, "map");
 	if (map) {
+		info.save_type = SAVE_NONE;
 		info.map_chunks = tern_count(map);
 		if (info.map_chunks) {
 			info.map_chunks += base_chunks;
@@ -765,7 +815,7 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, memmap_
 			info.map = malloc(sizeof(memmap_chunk) * info.map_chunks);
 			info.eeprom_map = NULL;
 			info.num_eeprom = 0;
-			memset(info.map, 0, sizeof(memmap_chunk) * (info.map_chunks - base_chunks));
+			memset(info.map, 0, sizeof(memmap_chunk) * info.map_chunks);
 			map_iter_state state = {&info, rom, entry, rom_size, 0, info.map_chunks - base_chunks};
 			tern_foreach(map, map_iter_fun, &state);
 			memcpy(info.map + state.index, base_map, sizeof(memmap_chunk) * base_chunks);
