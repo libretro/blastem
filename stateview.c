@@ -15,6 +15,9 @@ io_port gamepad_2;
 uint8_t reset = 1;
 uint8_t busreq = 0;
 
+uint16_t ram[RAM_WORDS];
+uint8_t z80_ram[Z80_RAM_BYTES];
+
 uint16_t read_dma_value(uint32_t address)
 {
 	return 0;
