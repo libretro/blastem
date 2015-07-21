@@ -143,6 +143,7 @@ void set_scl(eeprom_state *state, uint8_t val)
 			state->address++;
 			//TODO: page mask
 			state->address &= state->size-1;
+			state->latch = state->buffer[state->address];
 			break;
 		case I2C_WRITE_ACK:
 			state->state = I2C_WRITE;
