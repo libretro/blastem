@@ -44,6 +44,7 @@ typedef struct {
 	uint32_t      map_chunks;
 	uint32_t      save_size;
 	uint32_t      save_mask;
+	uint16_t      mapper_start_index;
 	uint8_t       save_type;
 	uint8_t       regions;
 } rom_info;

@@ -273,10 +273,21 @@ m68k_context * write_bank_reg_w(uint32_t address, m68k_context * context, uint16
 	gen->bank_regs[address] = value;
 	if (!address) {
 		if (value & 1) {
-			context->mem_pointers[2] = NULL;
+			for (int i = 0; i < 8; i++)
+			{
+				context->mem_pointers[gen->mapper_start_index + i] = NULL;
+			}
 		} else {
-			context->mem_pointers[2] = cart + 0x200000/2;
+			//Used for games that only use the mapper for SRAM
+			context->mem_pointers[gen->mapper_start_index] = cart + 0x200000/2;
+			//For games that need more than 4MB
+			for (int i = 1; i < 8; i++)
+			{
+				context->mem_pointers[gen->mapper_start_index + i] = cart + 0x40000*gen->bank_regs[i];
+			}
 		}
+	} else {
+		context->mem_pointers[gen->mapper_start_index + address] = cart + 0x40000*value;
 	}
 	return context;
 }
@@ -284,17 +295,7 @@ m68k_context * write_bank_reg_w(uint32_t address, m68k_context * context, uint16
 m68k_context * write_bank_reg_b(uint32_t address, m68k_context * context, uint8_t value)
 {
 	if (address & 1) {
-		genesis_context * gen = context->system;
-		address &= 0xE;
-		address >>= 1;
-		gen->bank_regs[address] = value;
-		if (!address) {
-			if (value & 1) {
-				context->mem_pointers[2] = NULL;
-			} else {
-				context->mem_pointers[2] = cart + 0x200000/2;
-			}
-		}
+		write_bank_reg_w(address, context, value);
 	}
 	return context;
 }
@@ -526,7 +527,7 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 			info->map[1].end = 0x400000;
 			info->map[1].mask = 0x1FFFFF;
 			info->map[1].flags = MMAP_READ | MMAP_PTR_IDX | MMAP_FUNC_NULL;
-			info->map[1].ptr_index = 2;
+			info->map[1].ptr_index = info->mapper_start_index = 0;
 			info->map[1].read_16 = (read_16_fun)read_sram_w;//these will only be called when mem_pointers[2] == NULL
 			info->map[1].read_8 = (read_8_fun)read_sram_b;
 			info->map[1].write_16 = (write_16_fun)write_sram_area_w;//these will be called all writes to the area
@@ -571,6 +572,7 @@ typedef struct {
 	uint32_t     rom_size;
 	int          index;
 	int          num_els;
+	uint16_t     ptr_index;
 } map_iter_state;
 
 void eeprom_read_fun(char *key, tern_val val, void *data)
@@ -727,31 +729,41 @@ void map_iter_fun(char *key, tern_val val, void *data)
 		}
 		map->mask = calc_mask(state->info->save_size, start, end);
 	} else if (!strcmp(dtype, "Sega mapper")) {
-		map->buffer = state->rom + offset;
-		//TODO: Calculate this
-		map->ptr_index = 2;
-		map->flags = MMAP_READ | MMAP_PTR_IDX | MMAP_FUNC_NULL;
-		map->mask = calc_mask(state->rom_size - offset, start, end);
+		state->info->mapper_start_index = state->ptr_index++;
+		state->info->map_chunks+=7;
+		state->info->map = realloc(state->info->map, sizeof(memmap_chunk) * state->info->map_chunks);
+		memset(state->info->map + state->info->map_chunks - 7, 0, sizeof(memmap_chunk) * 7);
+		map = state->info->map + state->index;
 		char *save_device = tern_find_path(node, "save\0device\0").ptrval;
-		if (save_device && !strcmp(save_device, "SRAM")) {
-			process_sram_def(key, state);
-			map->read_16 = (read_16_fun)read_sram_w;//these will only be called when mem_pointers[2] == NULL
-			map->read_8 = (read_8_fun)read_sram_b;
-			map->write_16 = (write_16_fun)write_sram_area_w;//these will be called all writes to the area
-			map->write_8 = (write_8_fun)write_sram_area_b;
-		} else if (save_device && !strcmp(save_device, "EEPROM")) {
+		if (save_device && !strcmp(save_device, "EEPROM")) {
 			process_eeprom_def(key, state);
 			add_eeprom_map(node, start & map->mask, end & map->mask, state);
-			map->write_16 = write_eeprom_i2c_w;
-			map->write_8 = write_eeprom_i2c_b;
-			map->read_16 = read_eeprom_i2c_w;
-			map->read_8 = read_eeprom_i2c_b;
 		}
-		state->info->map_chunks++;
-		state->info->map = realloc(state->info->map, sizeof(memmap_chunk) * state->info->map_chunks);
-		state->index++;
-		memset(state->info->map + state->info->map_chunks - 1, 0, sizeof(memmap_chunk));
-		map = state->info->map + state->index;
+		for (int i = 0; i < 7; i++, state->index++, map++)
+		{
+			map->start = start + i * 0x80000;
+			map->end = start + (i + 1) * 0x80000;
+			map->mask = 0x7FFFF;
+			map->buffer = state->rom + offset + i * 0x80000;
+			map->ptr_index = state->ptr_index++;
+			if (i < 3 || !save_device) {
+				map->flags = MMAP_READ | MMAP_PTR_IDX;
+			} else {
+				map->flags = MMAP_READ | MMAP_PTR_IDX | MMAP_FUNC_NULL;
+				if (!strcmp(save_device, "SRAM")) {
+					process_sram_def(key, state);
+					map->read_16 = (read_16_fun)read_sram_w;//these will only be called when mem_pointers[2] == NULL
+					map->read_8 = (read_8_fun)read_sram_b;
+					map->write_16 = (write_16_fun)write_sram_area_w;//these will be called all writes to the area
+					map->write_8 = (write_8_fun)write_sram_area_b;
+				} else if (!strcmp(save_device, "EEPROM")) {
+					map->write_16 = write_eeprom_i2c_w;
+					map->write_8 = write_eeprom_i2c_b;
+					map->read_16 = read_eeprom_i2c_w;
+					map->read_8 = read_eeprom_i2c_b;
+				}
+			}
+		}
 		map->start = 0xA13000;
 		map->end = 0xA13100;
 		map->mask = 0xFF;
@@ -817,7 +829,7 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, memmap_
 			info.eeprom_map = NULL;
 			info.num_eeprom = 0;
 			memset(info.map, 0, sizeof(memmap_chunk) * info.map_chunks);
-			map_iter_state state = {&info, rom, entry, rom_size, 0, info.map_chunks - base_chunks};
+			map_iter_state state = {&info, rom, entry, rom_size, 0, info.map_chunks - base_chunks, 0};
 			tern_foreach(map, map_iter_fun, &state);
 			memcpy(info.map + state.index, base_map, sizeof(memmap_chunk) * base_chunks);
 		} else {
