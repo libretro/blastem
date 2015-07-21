@@ -781,8 +781,6 @@ void set_speed_percent(genesis_context * context, uint32_t percent)
 	psg_adjust_master_clock(context->psg, context->master_clock);
 }
 
-#define MAX_MAP_CHUNKS (4+7+1)
-
 const memmap_chunk base_map[] = {
 		{0xE00000, 0x1000000, 0xFFFF,   0, MMAP_READ | MMAP_WRITE | MMAP_CODE, ram,
 		           NULL,          NULL,         NULL,            NULL},
