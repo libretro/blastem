@@ -59,7 +59,10 @@ T-081276 {
 		}
 		200000 {
 			device EEPROM
-			last 3FFFFF
+			#This is almost certainly not correct based on the address pins
+			#available to the Acclaim mapper. It's probably available up to
+			#2FFFFF at least and just fights with D0 from the mask ROM
+			last 200001
 			bits_read {
 				0 sda
 			}
@@ -67,6 +70,11 @@ T-081276 {
 				0 sda
 				8 scl
 			}
+		}
+		200002 {
+			device ROM
+			offset 200000
+			last 2FFFFF
 		}
 	}
 }
@@ -83,7 +91,10 @@ T-81406 {
 		}
 		200000 {
 			device EEPROM
-			last 3FFFFF
+			#This is almost certainly not correct based on the address pins
+			#available to the Acclaim mapper. It's probably available up to
+			#2FFFFF at least and just fights with D0 from the mask ROM
+			last 200001
 			bits_read {
 				0 sda
 			}
@@ -91,6 +102,11 @@ T-81406 {
 				0 sda
 				8 scl
 			}
+		}
+		200002 {
+			device ROM
+			offset 200000
+			last 2FFFFF
 		}
 	}
 }
@@ -139,7 +155,10 @@ T-81576 {
 		}
 		200000 {
 			device EEPROM
-			last 3FFFFF
+			#This is almost certainly not correct based on the address pins
+			#available to the Acclaim mapper. It's probably available up to
+			#2FFFFF at least and just fights with D0 from the mask ROM
+			last 200001
 			bits_read {
 				0 sda
 			}
@@ -147,6 +166,11 @@ T-81576 {
 				0 sda
 				8 scl
 			}
+		}
+		200002 {
+			device ROM
+			offset 200000
+			last 2FFFFF
 		}
 	}
 }
@@ -163,13 +187,141 @@ T-81476 {
 		}
 		200000 {
 			device EEPROM
-			last 3FFFFF
+			#This is almost certainly not correct based on the address pins
+			#available to the Acclaim mapper. It's probably available up to
+			#2FFFFF at least and just fights with D0 from the mask ROM
+			last 200001
 			bits_read {
 				0 sda
 			}
 			bits_write {
 				0 sda
 				8 scl
+			}
+		}
+		200002 {
+			device ROM
+			last 3FFFFF
+			offset 200000
+		}
+	}
+}
+T-50176 {
+	name Rings of Power
+	EEPROM {
+		type i2c
+		size 128
+	}
+	map {
+		0 {
+			device ROM
+			last FFFFF
+		}
+		200000 {
+			device EEPROM
+			last 3FFFFF
+			bits_read {
+				7 sda
+			}
+			bits_write {
+				6 scl
+				7 sda
+			}
+		}
+	}
+}
+T-50396 {
+	name NHLPA Hockey '93
+	EEPROM {
+		type i2c
+		size 128
+	}
+	map {
+		0 {
+			device ROM
+			last 7FFFF
+		}
+		200000 {
+			device EEPROM
+			last 3FFFFF
+			bits_read {
+				7 sda
+			}
+			bits_write {
+				6 scl
+				7 sda
+			}
+		}
+	}
+}
+T-50446 {
+	name John Madden Football '93
+	EEPROM {
+		type i2c
+		size 128
+	}
+	map {
+		0 {
+			device ROM
+			last FFFFF
+		}
+		200000 {
+			device EEPROM
+			last 3FFFFF
+			bits_read {
+				7 sda
+			}
+			bits_write {
+				6 scl
+				7 sda
+			}
+		}
+	}
+}
+T-50516 {
+	name John Madden Football '93: Championship Edition
+	EEPROM {
+		type i2c
+		size 128
+	}
+	map {
+		0 {
+			device ROM
+			last FFFFF
+		}
+		200000 {
+			device EEPROM
+			last 3FFFFF
+			bits_read {
+				7 sda
+			}
+			bits_write {
+				6 scl
+				7 sda
+			}
+		}
+	}
+}
+T-50606 {
+	name Bill Walsh College Football
+	EEPROM {
+		type i2c
+		size 128
+	}
+	map {
+		0 {
+			device ROM
+			last FFFFF
+		}
+		200000 {
+			device EEPROM
+			last 3FFFFF
+			bits_read {
+				7 sda
+			}
+			bits_write {
+				6 scl
+				7 sda
 			}
 		}
 	}
