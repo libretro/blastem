@@ -34,7 +34,7 @@
 
 #define MAX_SOUND_CYCLES 100000
 
-uint16_t cart[CARTRIDGE_WORDS];
+uint16_t *cart;
 uint16_t ram[RAM_WORDS];
 uint8_t z80_ram[Z80_RAM_BYTES];
 
@@ -73,9 +73,9 @@ int load_smd_rom(long filesize, FILE * f)
 	return filesize;
 }
 
-void byteswap_rom()
+void byteswap_rom(int filesize)
 {
-	for(unsigned short * cur = cart; cur - cart < CARTRIDGE_WORDS; ++cur)
+	for(unsigned short * cur = cart; cur - cart < filesize/2; ++cur)
 	{
 		*cur = (*cur >> 8) | (*cur << 8);
 	}
@@ -88,13 +88,12 @@ int load_rom(char * filename)
 	if (!f) {
 		return 0;
 	}
-	fread(header, 1, sizeof(header), f);
+	if (sizeof(header) != fread(header, 1, sizeof(header), f)) {
+		fprintf(stderr, "Error reading from %s\n", filename);
+		exit(1);
+	}
 	fseek(f, 0, SEEK_END);
 	long filesize = ftell(f);
-	if (filesize/2 > CARTRIDGE_WORDS) {
-		//carts bigger than 4MB not currently supported
-		filesize = CARTRIDGE_WORDS*2;
-	}
 	fseek(f, 0, SEEK_SET);
 	if (header[1] == SMD_MAGIC1 && header[8] == SMD_MAGIC2 && header[9] == SMD_MAGIC3) {
 		int i;
@@ -111,7 +110,11 @@ int load_rom(char * filename)
 			return load_smd_rom(filesize, f);
 		}
 	}
-	fread(cart, 2, filesize/2, f);
+	cart = malloc(filesize);
+	if (filesize != fread(cart, 1, filesize, f)) {
+		fprintf(stderr, "Error reading from %s\n", filename);
+		exit(1);
+	}
 	fclose(f);
 	return filesize;
 }
@@ -839,14 +842,12 @@ void init_run_cpu(genesis_context * gen, rom_info *rom, FILE * address_log, char
 
 	context->video_context = gen->vdp;
 	context->system = gen;
-	//cartridge ROM
-	context->mem_pointers[0] = cart;
-	context->target_cycle = context->sync_cycle = gen->frame_end > gen->max_cycles ? gen->frame_end : gen->max_cycles;
-	//work RAM
-	context->mem_pointers[1] = ram;
-	//save RAM/map
-	context->mem_pointers[2] = rom->map[1].buffer;
-	context->mem_pointers[3] = (uint16_t *)gen->save_storage;
+	for (int i = 0; i < rom->map_chunks; i++)
+	{
+		if (rom->map[i].flags & MMAP_PTR_IDX) {
+			context->mem_pointers[rom->map[i].ptr_index] = rom->map[i].buffer;
+		}
+	}
 	
 	if (statefile) {
 		uint32_t pc = load_gst(gen, statefile);
@@ -1026,7 +1027,7 @@ int main(int argc, char ** argv)
 	}
 	tern_node *rom_db = load_rom_db();
 	rom_info info = configure_rom(rom_db, cart, rom_size, base_map, sizeof(base_map)/sizeof(base_map[0]));
-	byteswap_rom();
+	byteswap_rom(rom_size);
 	set_region(&info, force_version);
 	update_title(info.name);
 	int def_width = 0;

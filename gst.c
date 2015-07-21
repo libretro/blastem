@@ -100,7 +100,7 @@ uint32_t m68k_load_gst(m68k_context * context, FILE * gstfile)
 			return 0;
 		}
 		for(curpos = buffer; curpos < (buffer + sizeof(buffer)); curpos += sizeof(uint16_t)) {
-			context->mem_pointers[1][i++] = read_be_16(curpos);
+			ram[i++] = read_be_16(curpos);
 		}
 	}
 	return pc;
@@ -141,7 +141,7 @@ uint8_t m68k_save_gst(m68k_context * context, uint32_t pc, FILE * gstfile)
 	fseek(gstfile, GST_68K_RAM, SEEK_SET);
 	for (int i = 0; i < (32*1024);) {
 		for(curpos = buffer; curpos < (buffer + sizeof(buffer)); curpos += sizeof(uint16_t)) {
-			write_be_16(curpos, context->mem_pointers[1][i++]);
+			write_be_16(curpos, ram[i++]);
 		}
 		if (fwrite(buffer, 1, sizeof(buffer), gstfile) != sizeof(buffer)) {
 			fputs("Failed to write 68K RAM to savestate\n", stderr);
