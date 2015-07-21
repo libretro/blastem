@@ -22,7 +22,7 @@ else
 LIBS=sdl2 glew gl
 endif #Darwin
 
-HAS_PROC:=$(shell if [ -d /proc ]; then echo -e -DHAS_PROC; fi)
+HAS_PROC:=$(shell if [ -d /proc ]; then /bin/echo -e -DHAS_PROC; fi)
 CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -Wno-unused-value -Wno-logical-op-parentheses $(HAS_PROC)
 FIXUP:=
 ifdef PORTABLE
