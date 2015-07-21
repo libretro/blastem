@@ -478,20 +478,25 @@ uint32_t calc_mask(uint32_t src_size, uint32_t start, uint32_t end)
 
 void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk const *base_map, int base_chunks)
 {
+	uint32_t rom_end = get_u32be(rom + ROM_END) + 1;
+	if (size > rom_end) {
+		rom_end = size;
+	} else if (rom_end > nearest_pow2(size)) {
+		rom_end = nearest_pow2(size);
+	}
 	if (rom[RAM_ID] == 'R' && rom[RAM_ID+1] == 'A') {
-		uint32_t rom_end = get_u32be(rom + ROM_END) + 1;
 		uint32_t ram_start = get_u32be(rom + RAM_START);
 		uint32_t ram_end = get_u32be(rom + RAM_END);
 		uint32_t ram_flags = info->save_type = rom[RAM_FLAGS] & RAM_FLAG_MASK;
 		ram_start &= 0xFFFFFE;
 		ram_end |= 1;
 		info->save_mask = ram_end - ram_start;
-		uint32_t size = info->save_mask + 1;
+		uint32_t save_size = info->save_mask + 1;
 		if (ram_flags != RAM_FLAG_BOTH) {
-			size /= 2;
+			save_size /= 2;
 		}
-		info->save_size = size;
-		info->save_buffer = malloc(size);
+		info->save_size = save_size;
+		info->save_buffer = malloc(save_size);
 		
 		info->map_chunks = base_chunks + (ram_start >= rom_end ? 2 : 3);
 		info->map = malloc(sizeof(memmap_chunk) * info->map_chunks);
@@ -499,7 +504,7 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 		memcpy(info->map+2, base_map, sizeof(memmap_chunk) * base_chunks);
 		
 		if (ram_start >= rom_end) {
-			info->map[0].end = rom_end;
+			info->map[0].end = rom_end > 0x400000 ? rom_end : 0x400000;
 			//TODO: ROM mirroring
 			info->map[0].mask = 0xFFFFFF;
 			info->map[0].flags = MMAP_READ;
@@ -548,7 +553,7 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 		memset(info->map, 0, sizeof(memmap_chunk));
 		memcpy(info->map+1, base_map, sizeof(memmap_chunk) * base_chunks);
 		
-		info->map[0].end = 0x400000;
+		info->map[0].end =rom_end > 0x400000 ? rom_end : 0x400000;
 		info->map[0].mask = 0xFFFFFF;
 		info->map[0].flags = MMAP_READ;
 		info->map[0].buffer = rom;

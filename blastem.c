@@ -110,7 +110,7 @@ int load_rom(char * filename)
 			return load_smd_rom(filesize, f);
 		}
 	}
-	cart = malloc(filesize);
+	cart = malloc(nearest_pow2(filesize));
 	if (filesize != fread(cart, 1, filesize, f)) {
 		fprintf(stderr, "Error reading from %s\n", filename);
 		exit(1);
@@ -760,7 +760,7 @@ void *z80_write_bank_reg(uint32_t location, void * vcontext, uint8_t value)
 	z80_context * context = vcontext;
 
 	context->bank_reg = (context->bank_reg >> 1 | value << 8) & 0x1FF;
-	if (context->bank_reg < 0x80) {
+	if (context->bank_reg < 0x100) {
 		genesis_context *gen = context->system;
 		context->mem_pointers[1] = get_native_pointer(context->bank_reg << 15, (void **)gen->m68k->mem_pointers, &gen->m68k->options->gen);
 	} else {
