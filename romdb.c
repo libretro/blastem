@@ -128,7 +128,6 @@ void set_scl(eeprom_state *state, uint8_t val)
 		case I2C_ADDRESS_ACK:
 			state->state = I2C_WRITE;
 			state->address &= state->size-1;
-			printf("EEPROM address is %X\n", state->address);
 			state->counter = 8;
 			break;
 		case I2C_READ:
@@ -321,13 +320,10 @@ void * write_eeprom_i2c_w(uint32_t address, void * context, uint16_t value)
 		fprintf(stderr, "Could not find EEPROM map for address %X\n", address);
 		exit(1);
 	}
-	printf("EEPROM word write: %X - %X\n", address, value);
 	if (map->scl_mask) {
 		set_scl(&gen->eeprom, (value & map->scl_mask) != 0);
-		printf("scl: %d, state: %s, counter: %d, latch: %X\n", (value & map->scl_mask) != 0, i2c_states[gen->eeprom.state], gen->eeprom.counter, gen->eeprom.latch);
 	}
 	if (map->sda_write_mask) {
-		printf("sda: %d\n", (value & map->sda_write_mask) != 0);
 		set_host_sda(&gen->eeprom, (value & map->sda_write_mask) != 0);
 	}
 	return context;
@@ -350,13 +346,10 @@ void * write_eeprom_i2c_b(uint32_t address, void * context, uint8_t value)
 		expanded = value << 8;
 		mask = 0xFF00;
 	}
-	printf("EEPROM byte write: %X - %X (using mask %X and expanded val %X)\n", address, value, mask, expanded);
 	if (map->scl_mask & mask) {
 		set_scl(&gen->eeprom, (expanded & map->scl_mask) != 0);
-		printf("scl: %d, state: %s, counter: %d, latch: %X\n", (expanded & map->scl_mask) != 0, i2c_states[gen->eeprom.state], gen->eeprom.counter, gen->eeprom.latch);
 	}
 	if (map->sda_write_mask & mask) {
-		printf("sda: %d\n", (expanded & map->sda_write_mask) != 0);
 		set_host_sda(&gen->eeprom, (expanded & map->sda_write_mask) != 0);
 	}
 	return context;
@@ -374,7 +367,6 @@ uint16_t read_eeprom_i2c_w(uint32_t address, void * context)
 	if (map->sda_read_bit < 16) {
 		ret = get_sda(&gen->eeprom) << map->sda_read_bit;
 	}
-	printf("EEPROM word read: %X - %X\n", address, ret);
 	return ret;
 }
 
@@ -391,7 +383,6 @@ uint8_t read_eeprom_i2c_b(uint32_t address, void * context)
 	if (bit < 8) {
 		ret = get_sda(&gen->eeprom) << bit;
 	}
-	printf("EEPROM byte read: %X - %X\n", address, ret);
 	return ret;
 }
 
