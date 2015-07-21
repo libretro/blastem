@@ -32,6 +32,7 @@ typedef struct {
 	uint32_t       frame_end;
 	uint32_t       max_cycles;
 	uint8_t        bank_regs[8];
+	uint16_t       mapper_start_index;
 	uint8_t        save_type;
 	io_port        ports[3];
 	uint8_t        bus_busy;
@@ -44,11 +45,10 @@ extern int break_on_sync;
 extern int save_state;
 extern tern_node * config;
 
-#define CARTRIDGE_WORDS 0x200000
 #define RAM_WORDS 32 * 1024
 #define Z80_RAM_BYTES 8 * 1024
 
-extern uint16_t cart[CARTRIDGE_WORDS];
+extern uint16_t *cart;
 extern uint16_t ram[RAM_WORDS];
 extern uint8_t z80_ram[Z80_RAM_BYTES];
 

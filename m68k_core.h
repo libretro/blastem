@@ -11,7 +11,7 @@
 //#include "68kinst.h"
 struct m68kinst;
 
-#define NUM_MEM_AREAS 4
+#define NUM_MEM_AREAS 8
 #define NATIVE_MAP_CHUNKS (64*1024)
 #define NATIVE_CHUNK_SIZE ((16 * 1024 * 1024 / NATIVE_MAP_CHUNKS)/2)
 #define MAX_NATIVE_SIZE 255
