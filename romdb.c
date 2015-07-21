@@ -99,9 +99,6 @@ void set_scl(eeprom_state *state, uint8_t val)
 				case I2C_WRITE:
 					state->buffer[state->address] = state->latch;
 					state->state = I2C_WRITE_ACK;
-					state->address++;
-					//TODO: page mask
-					state->address &= state->size-1;
 					break;
 				}
 			}
@@ -111,15 +108,12 @@ void set_scl(eeprom_state *state, uint8_t val)
 				state->state = I2C_READ;
 				state->counter = 8;
 				state->latch = state->buffer[state->address];
-				state->address++;
-				//TODO: page mask
-				state->address &= state->size-1;
 			} else {
 				if (state->size < 256) {
 					state->address = state->latch >> 1;
 					state->state = I2C_WRITE;
-				} else if (state->size < 8192) {
-					state->address = state->latch << 8;
+				} else if (state->size < 4096) {
+					state->address = (state->latch & 0xE) << 7;
 					state->state = I2C_ADDRESS;
 				} else {
 					state->state = I2C_ADDRESS_HI;
@@ -133,6 +127,8 @@ void set_scl(eeprom_state *state, uint8_t val)
 			break;
 		case I2C_ADDRESS_ACK:
 			state->state = I2C_WRITE;
+			state->address &= state->size-1;
+			printf("EEPROM address is %X\n", state->address);
 			state->counter = 8;
 			break;
 		case I2C_READ:
@@ -144,10 +140,16 @@ void set_scl(eeprom_state *state, uint8_t val)
 		case I2C_READ_ACK:
 			state->state = I2C_READ;
 			state->counter = 8;
+			state->address++;
+			//TODO: page mask
+			state->address &= state->size-1;
 			break;
 		case I2C_WRITE_ACK:
 			state->state = I2C_WRITE;
 			state->counter = 8;
+			state->address++;
+			//TODO: page mask
+			state->address &= state->size-1;
 			break;
 		}
 	} else if (~val & state->scl) {
@@ -349,8 +351,8 @@ void * write_eeprom_i2c_b(uint32_t address, void * context, uint8_t value)
 	}
 	printf("EEPROM byte write: %X - %X (using mask %X and expanded val %X)\n", address, value, mask, expanded);
 	if (map->scl_mask & mask) {
-		printf("scl: %d, state: %s\n", (expanded & map->scl_mask) != 0, i2c_states[gen->eeprom.state]);
 		set_scl(&gen->eeprom, (expanded & map->scl_mask) != 0);
+		printf("scl: %d, state: %s, counter: %d, latch: %X\n", (expanded & map->scl_mask) != 0, i2c_states[gen->eeprom.state], gen->eeprom.counter, gen->eeprom.latch);
 	}
 	if (map->sda_write_mask & mask) {
 		printf("sda: %d\n", (expanded & map->sda_write_mask) != 0);
