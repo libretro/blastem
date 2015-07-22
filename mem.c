@@ -8,6 +8,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <errno.h>
+#include <stdio.h>
 
 #include "mem.h"
 #ifndef MAP_ANONYMOUS
@@ -25,6 +27,10 @@ void * alloc_code(size_t *size)
 	static uint8_t *next = (uint8_t *)0x40000000;
 	*size += PAGE_SIZE - (*size & (PAGE_SIZE - 1));
 	uint8_t *ret = mmap(NULL, *size, PROT_EXEC | PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0);
+	if (ret == MAP_FAILED) {
+		perror("alloc_code");
+		return NULL;
+	}
 	next = ret + *size;
 	return ret;
 }
