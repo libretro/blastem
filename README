@@ -1,4 +1,4 @@
-BlastEm 0.2.0
+BlastEm 0.3.0
 -------------
 
 Installation
@@ -110,3 +110,5 @@ License version 3 or higher. This gives you the right to redistribute and/or
 modify the program as long as you follow the terms of the license. See the file
 COPYING for full license details.
 
+Binary releases of BlastEm are packaged with GLEW and SDL2 which have thier own
+licenses. See GLEW-LICENSE and SDL-LICENSE for details.
