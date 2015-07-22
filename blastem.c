@@ -18,7 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define BLASTEM_VERSION "0.2.0"
+#define BLASTEM_VERSION "0.3.0"
 
 #define MCLKS_NTSC 53693175
 #define MCLKS_PAL  53203395
@@ -27,6 +27,7 @@
 #define MCLKS_PER_YM  MCLKS_PER_68K
 #define MCLKS_PER_Z80 15
 #define MCLKS_PER_PSG (MCLKS_PER_Z80*16)
+#define DEFAULT_SYNC_INTERVAL MCLKS_LINE
 
 //TODO: Figure out the exact value for this
 #define LINES_NTSC 262
@@ -225,11 +226,6 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	uint32_t mclks = context->current_cycle;
 	sync_z80(z_context, mclks);
 	sync_sound(gen, mclks);
-	while (context->current_cycle > mclks) {
-		mclks = context->current_cycle;
-		sync_z80(z_context, mclks);
-		sync_sound(gen, mclks);
-	}
 	vdp_run_context(v_context, mclks);
 	if (v_context->frame != last_frame_num) {
 		//printf("reached frame end %d | MCLK Cycles: %d, Target: %d, VDP cycles: %d, vcounter: %d, hslot: %d\n", last_frame_num, mclks, gen->frame_end, v_context->cycles, v_context->vcounter, v_context->hslot);
@@ -1053,7 +1049,7 @@ int main(int argc, char ** argv)
 	init_vdp_context(&v_context, version_reg & 0x40);
 	gen.frame_end = vdp_cycles_to_frame_end(&v_context);
 	char * config_cycles = tern_find_path(config, "clocks\0max_cycles\0").ptrval;
-	gen.max_cycles = config_cycles ? atoi(config_cycles) : 10000000;
+	gen.max_cycles = config_cycles ? atoi(config_cycles) : DEFAULT_SYNC_INTERVAL;
 
 	ym2612_context y_context;
 	ym_init(&y_context, render_sample_rate(), gen.master_clock, MCLKS_PER_YM, render_audio_buffer(), ym_log ? YM_OPT_WAVE_LOG : 0);
