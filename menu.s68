@@ -76,7 +76,23 @@
 	dc.l empty_handler
 	dc.l empty_handler
 	dc.l empty_handler
-	dc.b "SEGA"
+	dc.b "SEGA GENESIS    "
+	dc.b "(c) 2015.JULY   "
+	dc.b "Menu            "
+	dc.b "                "
+	dc.b "                "
+	dc.b "Menu            "
+	dc.b "                "
+	dc.b "                "
+	dc.b "GM MK-00000-00", 0, 0
+	dc.b "                "
+	dc.l $0, rom_end-1, $FF0000, $FFFFFF
+	dc.b "                "
+	dc.b "                "
+	dc.b "                "
+	dc.b "                "
+	dc.b "JUE "
+	
 empty_handler:
 int_6:
 	rte
@@ -209,3 +225,5 @@ widths:
 	dc.b 0, 1, 0, 0, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1
 	dc.b 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
 	dc.b 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1
+	
+rom_end:
