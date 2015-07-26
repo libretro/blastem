@@ -34,8 +34,7 @@ typedef struct {
 
 uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b);
 void render_alloc_surfaces(vdp_context * context);
-uint8_t render_depth();
-void render_init(int width, int height, char * title, uint32_t fps, uint8_t fullscreen, uint8_t use_gl);
+void render_init(int width, int height, char * title, uint32_t fps, uint8_t fullscreen);
 void render_context(vdp_context * context);
 void render_wait_quit(vdp_context * context);
 void render_wait_psg(psg_context * context);
@@ -50,7 +49,10 @@ void process_events();
 int render_joystick_num_buttons(int joystick);
 int render_joystick_num_hats(int joystick);
 int render_num_joysticks();
-
+void process_events();
+void render_errorbox(char *title, char *message);
+void render_warnbox(char *title, char *message);
+void render_infobox(char *title, char *message);
 
 
 #endif //RENDER_H_

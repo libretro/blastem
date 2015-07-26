@@ -12,6 +12,7 @@
 
 #define INVALID_OFFSET 0xFFFFFFFF
 #define EXTENSION_WORD 0xFFFFFFFE
+#define CYCLE_NEVER 0xFFFFFFFF
 
 #if defined(X86_32) || defined(X86_64)
 typedef struct {
@@ -46,32 +47,6 @@ typedef enum {
 	WRITE_8
 } ftype;
 
-typedef struct {
-	uint32_t flags;
-	native_map_slot *native_code_map;
-	deferred_addr   *deferred;
-	code_info       code;
-	uint8_t         **ram_inst_sizes;
-	code_ptr        save_context;
-	code_ptr        load_context;
-	code_ptr        handle_cycle_limit;
-	code_ptr        handle_cycle_limit_int;
-	code_ptr        handle_code_write;
-	uint32_t        address_mask;
-	uint32_t        max_address;
-	uint32_t        bus_cycles;
-	int32_t         mem_ptr_off;
-	int32_t         ram_flags_off;
-	uint8_t         address_size;
-	uint8_t         byte_swap;
-	uint8_t         context_reg;
-	uint8_t         cycles;
-	uint8_t         limit;
-	uint8_t			scratch1;
-	uint8_t			scratch2;
-} cpu_options;
-
-
 #define MMAP_READ      0x01
 #define MMAP_WRITE     0x02
 #define MMAP_CODE      0x04
@@ -79,6 +54,7 @@ typedef struct {
 #define MMAP_ONLY_ODD  0x10
 #define MMAP_ONLY_EVEN 0x20
 #define MMAP_FUNC_NULL 0x40
+#define MMAP_BYTESWAP  0x80
 
 typedef uint16_t (*read_16_fun)(uint32_t address, void * context);
 typedef uint8_t (*read_8_fun)(uint32_t address, void * context);
@@ -98,6 +74,35 @@ typedef struct {
 	write_8_fun  write_8;
 } memmap_chunk;
 
+typedef struct {
+	uint32_t flags;
+	native_map_slot    *native_code_map;
+	deferred_addr      *deferred;
+	code_info          code;
+	uint8_t            **ram_inst_sizes;
+	memmap_chunk const *memmap;
+	code_ptr           save_context;
+	code_ptr           load_context;
+	code_ptr           handle_cycle_limit;
+	code_ptr           handle_cycle_limit_int;
+	code_ptr           handle_code_write;
+	uint32_t           memmap_chunks;
+	uint32_t           address_mask;
+	uint32_t           max_address;
+	uint32_t           bus_cycles;
+	uint32_t           clock_divider;
+	int32_t            mem_ptr_off;
+	int32_t            ram_flags_off;
+	uint8_t            ram_flags_shift;
+	uint8_t            address_size;
+	uint8_t            byte_swap;
+	uint8_t            context_reg;
+	uint8_t            cycles;
+	uint8_t            limit;
+	uint8_t			   scratch1;
+	uint8_t			   scratch2;
+} cpu_options;
+
 typedef uint8_t * (*native_addr_func)(void * context, uint32_t address);
 
 deferred_addr * defer_address(deferred_addr * old_head, uint32_t address, uint8_t *dest);
@@ -107,8 +112,13 @@ void process_deferred(deferred_addr ** head_ptr, void * context, native_addr_fun
 void cycles(cpu_options *opts, uint32_t num);
 void check_cycles_int(cpu_options *opts, uint32_t address);
 void check_cycles(cpu_options * opts);
+void check_code_prologue(code_info *code);
+void log_address(cpu_options *opts, uint32_t address, char * format);
 
-code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk * memmap, uint32_t num_chunks, ftype fun_type);
+code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t num_chunks, ftype fun_type, code_ptr *after_inc);
+void * get_native_pointer(uint32_t address, void ** mem_pointers, cpu_options * opts);
+uint32_t chunk_size(cpu_options *opts, memmap_chunk const *chunk);
+uint32_t ram_size(cpu_options *opts);
 
 #endif //BACKEND_H_
 

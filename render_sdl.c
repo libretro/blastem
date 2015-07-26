@@ -5,6 +5,7 @@
 */
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <math.h>
 #include "render.h"
 #include "blastem.h"
@@ -15,7 +16,12 @@
 #include <GL/glew.h>
 #endif
 
-SDL_Surface *screen;
+SDL_Window *main_window;
+SDL_Renderer *main_renderer;
+SDL_Texture  *main_texture;
+SDL_Rect      main_clip;
+SDL_GLContext *main_context;
+
 uint8_t render_dbg = 0;
 uint8_t debug_pal = 0;
 uint8_t render_gl = 1;
@@ -92,11 +98,7 @@ int render_num_joysticks()
 
 uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b)
 {
-	if (render_gl) {
-		return 255 << 24 | r << 16 | g << 8 | b;
-	} else {
-		return SDL_MapRGB(screen->format, r, g, b);
-	}
+	return 255 << 24 | r << 16 | g << 8 | b;
 }
 
 #ifndef DISABLE_OPENGL
@@ -115,48 +117,37 @@ GLuint load_shader(char * fname, GLenum shader_type)
 {
 	char * parts[] = {get_home_dir(), "/.config/blastem/shaders/", fname};
 	char * shader_path = alloc_concat_m(3, parts);
-	printf("Trying to find shader at %s\n", shader_path);
 	FILE * f = fopen(shader_path, "r");
 	free(shader_path);
 	if (!f) {
-#ifdef _WIN32
-		parts[0] = "shaders/";
-		parts[1] = fname;
-		shader_path = alloc_concat_m(2, parts);
-#else
 		parts[0] = get_exe_dir();
 		parts[1] = "/shaders/";
 		shader_path = alloc_concat_m(3, parts);
-#endif
-		printf("Trying to find shader at %s\n", shader_path);
 		f = fopen(shader_path, "r");
 		free(shader_path);
 		if (!f) {
-			fprintf(stderr, "Failed to open shader file %s for reading\n", fname);
+			warning("Failed to open shader file %s for reading\n", fname);
 			return 0;
 		}
 	}
-	puts("reading shader");
 	long fsize = file_size(f);
 	GLchar * text = malloc(fsize);
 	if (fread(text, 1, fsize, f) != fsize) {
-		fprintf(stderr, "Error reading from shader file %s\n", fname);
+		warning("Error reading from shader file %s\n", fname);
 		free(text);
 		return 0;
 	}
 	GLuint ret = glCreateShader(shader_type);
 	glShaderSource(ret, 1, (const GLchar **)&text, (const GLint *)&fsize);
 	free(text);
-	puts("compiling shader");
 	glCompileShader(ret);
 	GLint compile_status, loglen;
 	glGetShaderiv(ret, GL_COMPILE_STATUS, &compile_status);
 	if (!compile_status) {
-		fprintf(stderr, "Shader %s failed to compile\n", fname);
 		glGetShaderiv(ret, GL_INFO_LOG_LENGTH, &loglen);
 		text = malloc(loglen);
 		glGetShaderInfoLog(ret, loglen, NULL, text);
-		fputs(text, stderr);
+		warning("Shader %s failed to compile:\n%s\n", fname, text);
 		free(text);
 		glDeleteShader(ret);
 		return 0;
@@ -167,12 +158,12 @@ GLuint load_shader(char * fname, GLenum shader_type)
 
 void render_alloc_surfaces(vdp_context * context)
 {
+	context->oddbuf = context->framebuf = malloc(512 * 256 * 4 * 2);
+	memset(context->oddbuf, 0, 512 * 256 * 4 * 2);
+	context->evenbuf = ((char *)context->oddbuf) + 512 * 256 * 4;
+
 #ifndef DISABLE_OPENGL
 	if (render_gl) {
-		context->oddbuf = context->framebuf = malloc(512 * 256 * 4 * 2);
-		memset(context->oddbuf, 0, 512 * 256 * 4 * 2);
-		context->evenbuf = ((char *)context->oddbuf) + 512 * 256 * 4;
-		puts("generating textures");
 		glGenTextures(3, textures);
 		for (int i = 0; i < 3; i++)
 		{
@@ -193,15 +184,13 @@ void render_alloc_surfaces(vdp_context * context)
 		glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_data), vertex_data, GL_STATIC_DRAW);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[1]);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(element_data), element_data, GL_STATIC_DRAW);
-		puts("Loading vertex shader");
-		vshader = load_shader(tern_find_ptr_default(config, "videovertex_shader", "default.v.glsl"), GL_VERTEX_SHADER);
-		puts("loading fragment shader");
-		fshader = load_shader(tern_find_ptr_default(config, "videofragment_shader", "default.f.glsl"), GL_FRAGMENT_SHADER);
-		puts("creating program");
+		tern_val def = {.ptrval = "default.v.glsl"};
+		vshader = load_shader(tern_find_path_default(config, "video\0vertex_shader\0", def).ptrval, GL_VERTEX_SHADER);
+		def.ptrval = "default.f.glsl";
+		fshader = load_shader(tern_find_path_default(config, "video\0fragment_shader\0", def).ptrval, GL_FRAGMENT_SHADER);
 		program = glCreateProgram();
 		glAttachShader(program, vshader);
 		glAttachShader(program, fshader);
-		puts("linking program");
 		glLinkProgram(program);
 		GLint link_status;
 		glGetProgramiv(program, GL_LINK_STATUS, &link_status);
@@ -215,91 +204,113 @@ void render_alloc_surfaces(vdp_context * context)
 		at_pos = glGetAttribLocation(program, "pos");
 	} else {
 #endif
-		context->oddbuf = context->framebuf = malloc(320 * 240 * screen->format->BytesPerPixel * 2);
-		context->evenbuf = ((char *)context->oddbuf) + 320 * 240 * screen->format->BytesPerPixel;
+	/* height=480 to fit interlaced output */
+		main_texture = SDL_CreateTexture(main_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, 320, 480);
 #ifndef DISABLE_OPENGL
 	}
 #endif
-	puts("alloc surfaces done");
-}
-
-uint8_t render_depth()
-{
-	return screen->format->BytesPerPixel * 8;
 }
 
 char * caption = NULL;
 
-void render_init(int width, int height, char * title, uint32_t fps, uint8_t fullscreen, uint8_t use_gl)
+static void render_quit()
+{
+	render_close_audio();
+#ifdef DISABLE_OPENGL
+	SDL_DestroyTexture(main_texture);
+#endif
+}
+
+void render_init(int width, int height, char * title, uint32_t fps, uint8_t fullscreen)
 {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK) < 0) {
-		fprintf(stderr, "Unable to init SDL: %s\n", SDL_GetError());
-		exit(1);
+		fatal_error("Unable to init SDL: %s\n", SDL_GetError());
 	}
 	atexit(SDL_Quit);
-	atexit(render_close_audio);
 	printf("width: %d, height: %d\n", width, height);
-	uint32_t flags = SDL_ANYFORMAT;
+
+	uint32_t flags = 0;
+
+	if (fullscreen) {
+		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+		SDL_DisplayMode mode;
+		//TODO: Multiple monitor support
+		SDL_GetCurrentDisplayMode(0, &mode);
+		//the SDL2 migration guide suggests setting width and height to 0 when using SDL_WINDOW_FULLSCREEN_DESKTOP
+		//but that doesn't seem to work right when using OpenGL, at least on Linux anyway
+		width = mode.w;
+		height = mode.h;
+	}
+
+	render_gl = 0;
 
 #ifndef DISABLE_OPENGL
-	if (use_gl)
-	{
-		SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 5);
-		SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 5);
-		SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 5);
-		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
-		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-		flags = SDL_OPENGL;
-		if (fullscreen) {
-			flags |= SDL_FULLSCREEN;
-		}
+	flags |= SDL_WINDOW_OPENGL;
+	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 5);
+	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 5);
+	SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 5);
+	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
+	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+	main_window = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, flags);
+	if (!main_window) {
+		fatal_error("Unable to create SDL window: %s\n", SDL_GetError());
+	}
+	main_context = SDL_GL_CreateContext(main_window);
+	GLenum res = glewInit();
+	if (res != GLEW_OK) {
+		warning("Initialization of GLEW failed with code %d\n", res);
+	}
+
+	if (res == GLEW_OK && GLEW_VERSION_2_0) {
+		render_gl = 1;
 	} else {
-#else
-	{
+		SDL_DestroyWindow(main_window);
+		warning("OpenGL 2.0 is unavailable, falling back to SDL2 renderer\n", stderr);
 #endif
-		if (fullscreen) {
-			flags |= SDL_FULLSCREEN | SDL_HWSURFACE | SDL_DOUBLEBUF;
-		} else {
-			flags |= SDL_SWSURFACE;
+		SDL_CreateWindowAndRenderer(width, height, flags, &main_window, &main_renderer);
+
+		if (!main_window || !main_renderer) {
+			fatal_error("unable to create SDL window: %s\n", SDL_GetError());
 		}
-	}
-	screen = SDL_SetVideoMode(width, height, 32, flags);
-	if (!screen) {
-		fprintf(stderr, "Unable to get SDL surface: %s\n", SDL_GetError());
-		exit(1);
-	}
-	if (!use_gl && screen->format->BytesPerPixel != 2 && screen->format->BytesPerPixel != 4) {
-		fprintf(stderr, "BlastEm requires a 16-bit or 32-bit surface, SDL returned a %d-bit surface\n", screen->format->BytesPerPixel * 8);
-		exit(1);
-	}
+		main_clip.x = main_clip.y = 0;
+		main_clip.w = width;
+		main_clip.h = height;
 #ifndef DISABLE_OPENGL
-	//TODO: fallback on standard rendering if OpenGL 2.0 is unavailable or if init fails
-	if (use_gl)
-	{
-		GLenum res = glewInit();
-		if (res != GLEW_OK) {
-			fprintf(stderr, "Initialization of GLEW failed with code %d\n", res);
-			exit(1);
-		}
-		if (!GLEW_VERSION_2_0) {
-			fputs("OpenGL 2.0 is unable, falling back to standard SDL rendering\n", stderr);
-			exit(1);
-		}
-		float aspect = (float)width / height;
-		if (fabs(aspect - 4.0/3.0) > 0.01 && strcmp(tern_find_ptr_default(config, "videoaspect", "normal"), "stretch")) {
+	}
+#endif
+
+	SDL_GetWindowSize(main_window, &width, &height);
+	printf("Window created with size: %d x %d\n", width, height);
+	float src_aspect = 4.0/3.0;
+	float aspect     = (float)width / height;
+	tern_val def = {.ptrval = "normal"};
+	int stretch = fabs(aspect - src_aspect) > 0.01 && !strcmp(tern_find_path_default(config, "video\0aspect\0", def).ptrval, "stretch");
+
+	if (!stretch) {
+#ifndef DISABLE_OPENGL
+		if (render_gl) {
 			for (int i = 0; i < 4; i++)
 			{
-				if (aspect > 4.0/3.0) {
-					vertex_data[i*2] *= (4.0/3.0)/aspect;
+				if (aspect > src_aspect) {
+					vertex_data[i*2] *= src_aspect/aspect;
 				} else {
-					vertex_data[i*2+1] *= aspect/(4.0/3.0);
+					vertex_data[i*2+1] *= aspect/src_aspect;
 				}
 			}
-		}
-	}
-	render_gl = use_gl;
+		} else {
 #endif
-	SDL_WM_SetCaption(title, title);
+			float scale_x = (float)width / 320.0;
+			float scale_y = (float)height / 240.0;
+			float scale   = scale_x > scale_y ? scale_y : scale_x;
+			main_clip.w = 320.0 * scale;
+			main_clip.h = 240.0 * scale;
+			main_clip.x = (width  - main_clip.w) / 2;
+			main_clip.y = (height - main_clip.h) / 2;
+#ifndef DISABLE_OPENGL
+		}
+#endif
+	}
+
 	caption = title;
 	min_delay = 0;
 	for (int i = 0; i < 100; i++) {
@@ -323,7 +334,7 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	audio_ready = SDL_CreateCond();
 
 	SDL_AudioSpec desired, actual;
-    char * rate_str = tern_find_ptr(config, "audiorate");
+    char * rate_str = tern_find_path(config, "audio\0rate\0").ptrval;
    	int rate = rate_str ? atoi(rate_str) : 0;
    	if (!rate) {
    		rate = 48000;
@@ -331,7 +342,7 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
     desired.freq = rate;
 	desired.format = AUDIO_S16SYS;
 	desired.channels = 2;
-    char * samples_str = tern_find_ptr(config, "audiobuffer");
+    char * samples_str = tern_find_path(config, "audio\0buffer\0").ptrval;
    	int samples = samples_str ? atoi(samples_str) : 0;
    	if (!samples) {
    		samples = 512;
@@ -342,8 +353,7 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	desired.userdata = NULL;
 
 	if (SDL_OpenAudio(&desired, &actual) < 0) {
-		fprintf(stderr, "Unable to open SDL audio: %s\n", SDL_GetError());
-		exit(1);
+		fatal_error("Unable to open SDL audio: %s\n", SDL_GetError());
 	}
 	buffer_samples = actual.samples;
 	sample_rate = actual.freq;
@@ -354,120 +364,94 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 		num_joysticks = MAX_JOYSTICKS;
 	}
 	for (int i = 0; i < num_joysticks; i++) {
-		printf("Joystick %d: %s\n", i, SDL_JoystickName(i));
 		SDL_Joystick * joy = joysticks[i] = SDL_JoystickOpen(i);
+		printf("Joystick %d: %s\n", i, SDL_JoystickName(joy));
 		if (joy) {
 			printf("\tNum Axes: %d\n\tNum Buttons: %d\n\tNum Hats: %d\n", SDL_JoystickNumAxes(joy), SDL_JoystickNumButtons(joy), SDL_JoystickNumHats(joy));
 		}
 	}
 	SDL_JoystickEventState(SDL_ENABLE);
+	
+	atexit(render_quit);
 }
-#ifndef DISABLE_OPENGL
-void render_context_gl(vdp_context * context)
-{
-	glBindTexture(GL_TEXTURE_2D, textures[context->framebuf == context->oddbuf ? 0 : 1]);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 320, 240, GL_BGRA, GL_UNSIGNED_BYTE, context->framebuf);;
-
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
-
-	glUseProgram(program);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, textures[0]);
-	glUniform1i(un_textures[0], 0);
-
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, (context->regs[REG_MODE_4] & BIT_INTERLACE) ? textures[1] : textures[2]);
-	glUniform1i(un_textures[1], 1);
-
-	glUniform1f(un_width, context->latched_mode & BIT_H40 ? 320.0f : 256.0f);
-
-	glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
-	glVertexAttribPointer(at_pos, 2, GL_FLOAT, GL_FALSE, sizeof(GLfloat[2]), (void *)0);
-	glEnableVertexAttribArray(at_pos);
-
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[1]);
-	glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_SHORT, (void *)0);
-
-	glDisableVertexAttribArray(at_pos);
-
-	SDL_GL_SwapBuffers();
-	if (context->regs[REG_MODE_4] & BIT_INTERLACE)
-	{
-		context->framebuf = context->framebuf == context->oddbuf ? context->evenbuf : context->oddbuf;
-	}
-}
-#endif
-
-uint32_t blankbuf[320*240];
 
 void render_context(vdp_context * context)
 {
-	uint16_t *buf_16;
-	uint32_t *buf_32;
-	uint8_t b,g,r;
+	int width  = context->regs[REG_MODE_4] & BIT_H40 ? 320.0f : 256.0f;
+	int height = 240;
+
 	last_frame = SDL_GetTicks();
 #ifndef DISABLE_OPENGL
-	if (render_gl)
-	{
-		render_context_gl(context);
-		return;
+	if (render_gl) {
+		glBindTexture(GL_TEXTURE_2D, textures[context->framebuf == context->oddbuf ? 0 : 1]);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 320, 240, GL_BGRA, GL_UNSIGNED_BYTE, context->framebuf);;
+
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+
+		glUseProgram(program);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, textures[0]);
+		glUniform1i(un_textures[0], 0);
+
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, (context->regs[REG_MODE_4] & BIT_INTERLACE) ? textures[1] : textures[2]);
+		glUniform1i(un_textures[1], 1);
+
+		glUniform1f(un_width, width);
+
+		glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
+		glVertexAttribPointer(at_pos, 2, GL_FLOAT, GL_FALSE, sizeof(GLfloat[2]), (void *)0);
+		glEnableVertexAttribArray(at_pos);
+
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[1]);
+		glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_SHORT, (void *)0);
+
+		glDisableVertexAttribArray(at_pos);
+
+		SDL_GL_SwapWindow(main_window);
+	} else {
+#endif
+		SDL_Rect area;
+
+		area.x = area.y = 0;
+		area.w = width;
+		area.h = height;
+
+		if (context->regs[REG_MODE_4] & BIT_INTERLACE) {
+			unsigned skip;
+			uint32_t *src = (uint32_t*)context->framebuf;
+			uint8_t  *dst;
+			int i;
+
+			area.h *= 2;
+
+			SDL_LockTexture(main_texture, &area, (void**)&dst, &skip);
+
+			if (context->framebuf == context->evenbuf)
+				dst += skip;
+
+			skip *= 2;
+
+			for (i = 0; i < 240; ++i) {
+				memcpy(dst, src, width*sizeof(uint32_t));
+				src += 320;
+				dst += skip;
+			}
+
+			SDL_UnlockTexture(main_texture);
+		}
+		else /* possibly faster path for non-interlaced output */
+			SDL_UpdateTexture(main_texture, &area, context->framebuf, 320*sizeof(uint32_t));
+
+		SDL_RenderClear(main_renderer);
+		SDL_RenderCopy(main_renderer, main_texture, &area, &main_clip);
+		SDL_RenderPresent(main_renderer);
+#ifndef DISABLE_OPENGL
 	}
 #endif
-	if (SDL_MUSTLOCK(screen)) {
-		if (SDL_LockSurface(screen) < 0) {
-			return;
-		}
-	}
-	uint16_t repeat_x = screen->clip_rect.w / 320;
-	uint16_t repeat_y = screen->clip_rect.h / 240;
-	if (repeat_x > repeat_y) {
-		repeat_x = repeat_y;
-	} else {
-		repeat_y = repeat_x;
-	}
-	int othermask = repeat_y >> 1;
 
-	if (screen->format->BytesPerPixel == 2) {
-		uint16_t *otherbuf = (context->regs[REG_MODE_4] & BIT_INTERLACE) ? context->evenbuf : (uint16_t *)blankbuf;
-		uint16_t * oddbuf = context->oddbuf;
-		buf_16 = (uint16_t *)screen->pixels;
-		for (int y = 0; y < 240; y++) {
-			for (int i = 0; i < repeat_y; i++,buf_16 += screen->pitch/2) {
-				uint16_t *line = buf_16;
-				uint16_t *src_line = (i & othermask ? otherbuf : oddbuf) + y * 320;
-				for (int x = 0; x < 320; x++) {
-					uint16_t color = *(src_line++);
-					for (int j = 0; j < repeat_x; j++) {
-						*(line++) = color;
-					}
-				}
-			}
-		}
-	} else {
-		uint32_t *otherbuf = (context->regs[REG_MODE_4] & BIT_INTERLACE) ? context->evenbuf : (uint32_t *)blankbuf;
-		uint32_t * oddbuf = context->oddbuf;
-		buf_32 = (uint32_t *)screen->pixels;
-		for (int y = 0; y < 240; y++) {
-			for (int i = 0; i < repeat_y; i++,buf_32 += screen->pitch/4) {
-				uint32_t *line = buf_32;
-				uint32_t *src_line = (i & othermask ? otherbuf : oddbuf) + y * 320;
-				for (int x = 0; x < 320; x++) {
-					uint32_t color = *(src_line++);
-					for (int j = 0; j < repeat_x; j++) {
-						*(line++) = color;
-					}
-				}
-			}
-		}
-	}
-	if ( SDL_MUSTLOCK(screen) ) {
-		SDL_UnlockSurface(screen);
-	}
-    //SDL_UpdateRect(screen, 0, 0, screen->clip_rect.w, screen->clip_rect.h);
-    SDL_Flip(screen);
-	if (context->regs[REG_MODE_4] & BIT_INTERLACE)
-	{
+	if (context->regs[REG_MODE_4] & BIT_INTERLACE) {
 		context->framebuf = context->framebuf == context->oddbuf ? context->evenbuf : context->oddbuf;
 	}
 }
@@ -578,8 +562,6 @@ int wait_render_frame(vdp_context * context, int frame_limit)
 	}
 	render_context(context);
 
-
-	//TODO: Figure out why this causes segfaults
 	frame_counter++;
 	if ((last_frame - start) > 1000) {
 		if (start && (last_frame-start)) {
@@ -587,8 +569,7 @@ int wait_render_frame(vdp_context * context, int frame_limit)
 				fps_caption = malloc(strlen(caption) + strlen(" - 1000.1 fps") + 1);
 			}
 			sprintf(fps_caption, "%s - %.1f fps", caption, ((float)frame_counter) / (((float)(last_frame-start)) / 1000.0));
-			SDL_WM_SetCaption(fps_caption, caption);
-			fflush(stdout);
+			SDL_SetWindowTitle(main_window, fps_caption);
 		}
 		start = last_frame;
 		frame_counter = 0;
@@ -649,4 +630,18 @@ uint32_t render_sample_rate()
 	return sample_rate;
 }
 
+void render_errorbox(char *title, char *message)
+{
+	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title, message, NULL);
+}
+
+void render_warnbox(char *title, char *message)
+{
+	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, title, message, NULL);
+}
+
+void render_infobox(char *title, char *message)
+{
+	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, title, message, NULL);
+}
 

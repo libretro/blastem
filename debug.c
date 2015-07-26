@@ -3,6 +3,12 @@
 #include "68kinst.h"
 #include <stdlib.h>
 #include <string.h>
+#ifndef _WIN32
+#include <sys/select.h>
+#endif
+#include "render.h"
+#include "util.h"
+#include "terminal.h"
 
 static bp_def * breakpoints = NULL;
 static bp_def * zbreakpoints = NULL;
@@ -282,6 +288,7 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 	static uint16_t branch_t;
 	static uint16_t branch_f;
 	z80inst inst;
+	init_terminal();
 	//Check if this is a user set breakpoint, or just a temporary one
 	bp_def ** this_bp = find_breakpoint(&zbreakpoints, address);
 	if (*this_bp) {
@@ -294,15 +301,12 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 		pc = z80_ram + (address & 0x1FFF);
 	} else if (address >= 0x8000) {
 		if (context->bank_reg < (0x400000 >> 15)) {
-			fprintf(stderr, "Entered Z80 debugger in banked memory address %X, which is not yet supported\n", address);
-			exit(1);
+			fatal_error("Entered Z80 debugger in banked memory address %X, which is not yet supported\n", address);
 		} else {
-			fprintf(stderr, "Entered Z80 debugger in banked memory address %X, but the bank is not pointed to a cartridge address\n", address);
-			exit(1);
+			fatal_error("Entered Z80 debugger in banked memory address %X, but the bank is not pointed to a cartridge address\n", address);
 		}
 	} else {
-		fprintf(stderr, "Entered Z80 debugger at address %X\n", address);
-		exit(1);
+		fatal_error("Entered Z80 debugger at address %X\n", address);
 	}
 	for (disp_def * cur = zdisplays; cur; cur = cur->next) {
 		zdebugger_print(context, cur->format_char, cur->param);
@@ -471,6 +475,10 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 	static uint32_t branch_t;
 	static uint32_t branch_f;
 	m68kinst inst;
+	
+	init_terminal();
+	
+	sync_components(context, 0);
 	//probably not necessary, but let's play it safe
 	address &= 0xFFFFFF;
 	if (address == branch_t) {
@@ -499,16 +507,38 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 	} else if(address > 0xE00000) {
 		pc = ram + (address & 0xFFFF)/2;
 	} else {
-		fprintf(stderr, "Entered 68K debugger at address %X\n", address);
-		exit(1);
+		fatal_error("Entered 68K debugger at address %X\n", address);
 	}
 	uint16_t * after_pc = m68k_decode(pc, &inst, address);
 	m68k_disasm(&inst, input_buf);
 	printf("%X: %s\n", address, input_buf);
 	uint32_t after = address + (after_pc-pc)*2;
 	int debugging = 1;
+#ifdef _WIN32
+#define prompt 1
+#else
+	int prompt = 1;
+	fd_set read_fds;
+	FD_ZERO(&read_fds);
+	struct timeval timeout;
+#endif
 	while (debugging) {
-		fputs(">", stdout);
+		if (prompt) {
+			fputs(">", stdout);
+			fflush(stdout);
+		}
+		process_events();
+#ifndef _WIN32
+		timeout.tv_sec = 0;
+		timeout.tv_usec = 16667;
+		FD_SET(fileno(stdin), &read_fds);
+		if(select(fileno(stdin) + 1, &read_fds, NULL, NULL, &timeout) < 1) {
+			prompt = 0;
+			continue;
+		} else {
+			prompt = 1;
+		}
+#endif
 		if (!fgets(input_buf, sizeof(input_buf), stdin)) {
 			fputs("fgets failed", stderr);
 			break;
@@ -632,9 +662,14 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 					}
 				} else if(param[0] == 'c') {
 					value = context->current_cycle;
-				} else if (param[0] == '0' && param[1] == 'x') {
-					uint32_t p_addr = strtol(param+2, NULL, 16);
-					value = read_dma_value(p_addr/2);
+				} else if ((param[0] == '0' && param[1] == 'x') || param[0] == '$') {
+					uint32_t p_addr = strtol(param+(param[0] == '0' ? 2 : 1), NULL, 16);
+					if ((p_addr & 0xFFFFFF) == 0xC00004) {
+						genesis_context * gen = context->system;
+						value = vdp_hv_counter_read(gen->vdp);
+					} else {
+						value = read_dma_value(p_addr/2);
+					}
 				} else {
 					fprintf(stderr, "Unrecognized parameter to p: %s\n", param);
 					break;
@@ -732,6 +767,23 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 				case 'r':
 					vdp_print_reg_explain(gen->vdp);
 					break;
+				}
+				break;
+			}
+			case 'y': {
+				genesis_context * gen = context->system;
+				//YM-2612 debug commands
+				switch(input_buf[1])
+				{
+				case 'c':
+					if (input_buf[2] == ' ') {
+						int channel = atoi(input_buf+3)-1;
+						ym_print_channel_info(gen->ym, channel);
+					} else {
+						for (int i = 0; i < 6; i++) {
+							ym_print_channel_info(gen->ym, i);
+						}
+					}
 				}
 				break;
 			}

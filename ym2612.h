@@ -26,6 +26,7 @@ typedef struct {
 	uint8_t  key_scaling;
 	uint8_t  multiple;
 	uint8_t  detune;
+	uint8_t  am;
 	uint8_t  env_phase;
 } ym_operator;
 
@@ -105,6 +106,7 @@ void ym_data_write(ym2612_context * context, uint8_t value);
 uint8_t ym_read_status(ym2612_context * context);
 uint8_t ym_load_gst(ym2612_context * context, FILE * gstfile);
 uint8_t ym_save_gst(ym2612_context * context, FILE * gstfile);
+void ym_print_channel_info(ym2612_context *context, int channel);
 
 #endif //YM2612_H_
 

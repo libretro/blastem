@@ -2,10 +2,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <stdint.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#include "blastem.h" //for headless global
+#include "render.h" //for render_errorbox
 
 char * alloc_concat(char * first, char * second)
 {
@@ -68,6 +72,16 @@ char * split_keyval(char * text)
 	return text+1;
 }
 
+uint32_t nearest_pow2(uint32_t val)
+{
+	uint32_t ret = 1;
+	while (ret < val)
+	{
+		ret = ret << 1;
+	}
+	return ret;
+}
+
 static char * exe_str;
 
 void set_exe_str(char * str)
@@ -75,9 +89,94 @@ void set_exe_str(char * str)
 	exe_str = str;
 }
 
+void fatal_error(char *format, ...)
+{
+	va_list args;
+	va_start(args, format);
+	if (!headless) {
+		//take a guess at the final size
+		size_t size = strlen(format) * 2;
+		char *buf = malloc(size);
+		size_t actual = vsnprintf(buf, size, format, args);
+		if (actual >= size) {
+			actual++;
+			free(buf);
+			buf = malloc(actual);
+			va_end(args);
+			va_start(args, format);
+			vsnprintf(buf, actual, format, args);
+		}
+		fputs(buf, stderr);
+		render_errorbox("Fatal Error", buf);
+		free(buf);
+	} else {
+		vfprintf(stderr, format, args);
+	}
+	va_end(args);
+	exit(1);
+}
+
+void warning(char *format, ...)
+{
+	va_list args;
+	va_start(args, format);
+#ifndef _WIN32
+	if (headless || (isatty(STDERR_FILENO) && isatty(STDIN_FILENO))) {
+		vfprintf(stderr, format, args);
+	} else {
+#endif
+		size_t size = strlen(format) * 2;
+		char *buf = malloc(size);
+		size_t actual = vsnprintf(buf, size, format, args);
+		if (actual >= size) {
+			actual++;
+			free(buf);
+			buf = malloc(actual);
+			va_end(args);
+			va_start(args, format);
+			vsnprintf(buf, actual, format, args);
+		}
+		fputs(buf, stderr);
+		render_infobox("BlastEm Info", buf);
+		free(buf);
+#ifndef _WIN32
+	}
+#endif
+	va_end(args);
+}
+
+void info_message(char *format, ...)
+{
+	va_list args;
+	va_start(args, format);
+#ifndef _WIN32
+	if (headless || (isatty(STDOUT_FILENO) && isatty(STDIN_FILENO))) {
+		vprintf(format, args);
+	} else {
+#endif
+		size_t size = strlen(format) * 2;
+		char *buf = malloc(size);
+		size_t actual = vsnprintf(buf, size, format, args);
+		if (actual >= size) {
+			actual++;
+			free(buf);
+			buf = malloc(actual);
+			va_end(args);
+			va_start(args, format);
+			vsnprintf(buf, actual, format, args);
+		}
+		fputs(buf, stdout);
+		render_infobox("BlastEm Info", buf);
+		free(buf);
+#ifndef _WIN32
+	}
+#endif
+	va_end(args);
+}
+
 #ifdef _WIN32
-#include "Shlobj.h"
-#include "Windows.h"
+#include <windows.h>
+#include <shlobj.h>
 
 char * get_home_dir()
 {
@@ -127,7 +226,7 @@ char * readlink_alloc(char * path)
 		if (linksize == -1) {
 			perror("readlink");
 			free(linktext);
-			linktext = NULL;
+			return NULL;
 		}
 	} while ((linksize+1) > cursize);
 	linktext[linksize] = 0;
@@ -138,11 +237,12 @@ char * get_exe_dir()
 {
 	static char * exe_dir;
 	if (!exe_dir) {
+		char * cur;
+#ifdef HAS_PROC
 		char * linktext = readlink_alloc("/proc/self/exe");
 		if (!linktext) {
 			goto fallback;
 		}
-		char * cur;
 		int linksize = strlen(linktext);
 		for(cur = linktext + linksize - 1; cur != linktext; cur--)
 		{
@@ -154,6 +254,7 @@ char * get_exe_dir()
 		if (cur == linktext) {
 			free(linktext);
 fallback:
+#endif
 			if (!exe_str) {
 				fputs("/proc/self/exe is not available and set_exe_str was not called!", stderr);
 			}
@@ -167,9 +268,11 @@ fallback:
 					break;
 				}
 			}
+#ifdef HAS_PROC
 		} else {
 			exe_dir = linktext;
 		}
+#endif
 	}
 	return exe_dir;
 }

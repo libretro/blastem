@@ -76,8 +76,7 @@ void check_alloc_code(code_info *code)
 		size_t size = CODE_ALLOC_SIZE;
 		uint32_t *next_code = alloc_code(&size);
 		if (!next_code) {
-			fputs("Failed to allocate memory for generated code\n", stderr);
-			exit(1);
+			fatal_error("Failed to allocate memory for generated code\n");
 		}
 		if (next_code = code->last + RESERVE_WORDS) {
 			//new chunk is contiguous with the current one
@@ -547,4 +546,40 @@ uint32_t popm_cc(code_info *code, uint32_t reglist, uint32_t cc)
 	check_alloc_code(code);
 	*(code->cur++) = cc | POPM | reglist;
 	return CODE_OK;
+}
+
+uint32_t load_store_immoff(code_info *code, uint32_t op, uint32_t dst, uint32_t base, int32_t offset, uint32_t cc)
+{
+	if (offset >= 0x1000 || offset <= -0x1000) {
+		return INVALID_IMMED;
+	}
+	check_alloc_code(code);
+	uint32_t instruction = cc | op | POST_IND | OFF_IMM | SZ_W | base << 16 | dst << 12;
+	if (offset >= 0) {
+		instruction |= offset | DIR_UP;
+	} else {
+		instruction |= (-offset) | DIR_DOWN;
+	}
+	*(code->cur++) = instruction;
+	return CODE_OK;
+}
+
+uint32_t ldr_cc(code_info *code, uint32_t dst, uint32_t base, int32_t offset, uint32_t cc)
+{
+	return load_store_immoff(code, OP_LDR, dst, base, offset, cc);
+}
+
+uint32_t ldr(code_info *code, uint32_t dst, uint32_t base, int32_t offset)
+{
+	return ldr_cc(code, dst, base, offset, CC_AL);
+}
+
+uint32_t str_cc(code_info *code, uint32_t src, uint32_t base, int32_t offset, uint32_t cc)
+{
+	return load_store_immoff(code, OP_STR, src, base, offset, cc);
+}
+
+uint32_t str(code_info *code, uint32_t src, uint32_t base, int32_t offset)
+{
+	return str_cc(code, src, base, offset, CC_AL);
 }

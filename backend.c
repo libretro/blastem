@@ -51,3 +51,49 @@ void process_deferred(deferred_addr ** head_ptr, void * context, native_addr_fun
 	}
 }
 
+void * get_native_pointer(uint32_t address, void ** mem_pointers, cpu_options * opts)
+{
+	memmap_chunk const * memmap = opts->memmap;
+	address &= opts->address_mask;
+	for (uint32_t chunk = 0; chunk < opts->memmap_chunks; chunk++)
+	{
+		if (address >= memmap[chunk].start && address < memmap[chunk].end) {
+			if (!(memmap[chunk].flags & MMAP_READ)) {
+				return NULL;
+			}
+			uint8_t * base = memmap[chunk].flags & MMAP_PTR_IDX
+				? mem_pointers[memmap[chunk].ptr_index]
+				: memmap[chunk].buffer;
+			if (!base) {
+				return NULL;
+			}
+			return base + (address & memmap[chunk].mask);
+		}
+	}
+	return NULL;
+}
+
+uint32_t chunk_size(cpu_options *opts, memmap_chunk const *chunk)
+{
+	if (chunk->mask == opts->address_mask) {
+		return chunk->end - chunk->start;
+	} else {
+		return chunk->mask + 1;
+	}
+}
+
+uint32_t ram_size(cpu_options *opts)
+{
+	uint32_t size = 0;
+	for (int i = 0; i < opts->memmap_chunks; i++)
+	{
+		if ((opts->memmap[i].flags & (MMAP_WRITE | MMAP_CODE)) == (MMAP_WRITE | MMAP_CODE)) {
+			if (opts->memmap[i].mask == opts->address_mask) {
+				size += opts->memmap[i].end - opts->memmap[i].start;
+			} else {
+				size += opts->memmap[i].mask + 1;
+			}
+		}
+	}
+	return size;
+}

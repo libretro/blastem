@@ -23,6 +23,7 @@ int gdb_sock;
 #include "gdb_remote.h"
 #include "68kinst.h"
 #include "debug.h"
+#include "util.h"
 #include <unistd.h>
 #include <fcntl.h>
 #include <stddef.h>
@@ -95,8 +96,7 @@ void gdb_calc_checksum(char * command, char *out)
 void write_or_die(int fd, const void *buf, size_t count)
 {
 	if (GDB_WRITE(fd, buf, count) < count) {
-		fputs("Error writing to stdout\n", stderr);
-		exit(1);
+		fatal_error("Error writing to stdout\n");
 	}
 }
 
@@ -134,34 +134,40 @@ void update_status(m68k_context * context, uint16_t value)
 
 uint8_t read_byte(m68k_context * context, uint32_t address)
 {
-	uint16_t * word;
-	//TODO: Use generated read/write functions so that memory map is properly respected
-	if (address < 0x400000) {
-		word = context->mem_pointers[0] + address/2;
-	} else if (address >= 0xE00000) {
-		word = context->mem_pointers[1] + (address & 0xFFFF)/2;
-	} else if (address >= 0xA00000 && address < 0xA04000) {
-		return z80_ram[address & 0x1FFF];
-	} else {
-		return 0;
-	}
+	
+	genesis_context *gen = context->system;
+	//TODO: Use generated read/write functions to support access to hardware that is not ROM or RAM
+	uint16_t * word = get_native_pointer(address & 0xFFFFFFFE, (void **)context->mem_pointers, &context->options->gen);
+	if (word) {	
 	if (address & 1) {
 		return *word;
 	}
 	return *word >> 8;
 }
+	if (address >= 0xA00000 && address < 0xA04000) {
+		return gen->zram[address & 0x1FFF];
+	}
+	return 0;
+}
 
 void write_byte(m68k_context * context, uint32_t address, uint8_t value)
 {
-	uint16_t * word;
+	genesis_context *gen = context->system;
 	//TODO: Use generated read/write functions so that memory map is properly respected
-	if (address < 0x400000) {
-		//TODO: Invalidate translated code
-		word = context->mem_pointers[0] + address/2;
-	} else if (address >= 0xE00000) {
-		m68k_handle_code_write(address & 0xFFFF, context);
-		word = context->mem_pointers[1] + (address & 0xFFFF)/2;
-	} else if (address >= 0xA00000 && address < 0xA04000) {
+	uint16_t * word = get_native_pointer(address & 0xFFFFFFFE, (void **)context->mem_pointers, &context->options->gen);
+	if (word) {
+		if (address & 1) {
+			*word = (*word & 0xFF00) | value;
+		} else {
+			*word = (*word & 0xFF) | value << 8;
+		}
+		//TODO: Deal with this more generally once m68k_handle_code_write can handle it
+		if (address >= 0xE00000) {
+			m68k_handle_code_write(address, context);
+		}
+		return;
+	}
+	if (address >= 0xA00000 && address < 0xA04000) {
 		z80_ram[address & 0x1FFF] = value;
 		genesis_context * gen = context->system;
 #ifndef NO_Z80
@@ -170,11 +176,6 @@ void write_byte(m68k_context * context, uint32_t address, uint8_t value)
 		return;
 	} else {
 		return;
-	}
-	if (address & 1) {
-		*word = (*word & 0xFF00) | value;
-	} else {
-		*word = (*word & 0xFF) | value << 8;
 	}
 }
 
@@ -199,14 +200,10 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 			goto not_impl;
 		}
 		m68kinst inst;
-		uint16_t * pc_ptr;
-		if (pc < 0x400000) {
-			pc_ptr = cart + pc/2;
-		} else if(pc > 0xE00000) {
-			pc_ptr = ram + (pc & 0xFFFF)/2;
-		} else {
-			fprintf(stderr, "Entered gdb remote debugger stub at address %X\n", pc);
-			exit(1);
+		genesis_context *gen = context->system;
+		uint16_t * pc_ptr = get_native_pointer(pc, (void **)context->mem_pointers, &context->options->gen);
+		if (!pc_ptr) {
+			fatal_error("Entered gdb remote debugger stub at address %X\n", pc);
 		}
 		uint16_t * after_pc = m68k_decode(pc_ptr, &inst, pc & 0xFFFFFF);
 		uint32_t after = pc + (after_pc-pc_ptr)*2;
@@ -302,8 +299,8 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 		char * rest;
 		uint32_t address = strtoul(command+1, &rest, 16);
 		uint32_t size = strtoul(rest+1, NULL, 16);
-		if (size > sizeof(send_buf-1)/2) {
-			size = sizeof(send_buf-1)/2;
+		if (size > (sizeof(send_buf)-1)/2) {
+			size = (sizeof(send_buf)-1)/2;
 		}
 		char *cur = send_buf;
 		while (size)
@@ -420,14 +417,10 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 			case 's':
 			case 'S': {
 				m68kinst inst;
-				uint16_t * pc_ptr;
-				if (pc < 0x400000) {
-					pc_ptr = cart + pc/2;
-				} else if(pc > 0xE00000) {
-					pc_ptr = ram + (pc & 0xFFFF)/2;
-				} else {
-					fprintf(stderr, "Entered gdb remote debugger stub at address %X\n", pc);
-					exit(1);
+				genesis_context *gen = context->system;
+				uint16_t * pc_ptr = get_native_pointer(pc, (void **)context->mem_pointers, &context->options->gen);
+				if (!pc_ptr) {
+					fatal_error("Entered gdb remote debugger stub at address %X\n", pc);
 				}
 				uint16_t * after_pc = m68k_decode(pc_ptr, &inst, pc & 0xFFFFFF);
 				uint32_t after = pc + (after_pc-pc_ptr)*2;
@@ -471,8 +464,7 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 	}
 	return;
 not_impl:
-	fprintf(stderr, "Command %s is not implemented, exiting...\n", command);
-	exit(1);
+	fatal_error("Command %s is not implemented, exiting...\n", command);
 }
 
 m68k_context *  gdb_debug_enter(m68k_context * context, uint32_t pc)
@@ -540,8 +532,7 @@ m68k_context *  gdb_debug_enter(m68k_context * context, uint32_t pc)
 						*curbuf = 0;
 						//send acknowledgement
 						if (GDB_WRITE(GDB_OUT_FD, "+", 1) < 1) {
-							fputs("Error writing to stdout\n", stderr);
-							exit(1);
+							fatal_error("Error writing to stdout\n");
 						}
 						gdb_run_command(context, pc, start);
 						curbuf += 2;
