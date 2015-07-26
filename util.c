@@ -175,8 +175,8 @@ void info_message(char *format, ...)
 }
 
 #ifdef _WIN32
-#include "Shlobj.h"
-#include "Windows.h"
+#include <windows.h>
+#include <shlobj.h>
 
 char * get_home_dir()
 {

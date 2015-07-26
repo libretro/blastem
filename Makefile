@@ -3,13 +3,19 @@ OS:=$(shell uname -s)
 endif
 
 ifeq ($(OS),Windows)
+ifndef SDL2_PREFIX
+SDL2_PREFIX:="C:/MinGW/usr"
+endif
+ifndef GLEW32S_LIB
+GLEW32S_LIB=glew32s.lib
+endif
 
 MEM:=mem_win.o
 TERMINAL:=terminal_win.o
 BLASTEM:=blastem.exe
 CC:=wine gcc.exe
-CFLAGS:=-O2 -std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -I"C:/MinGW/usr/include/SDL2" -DGLEW_STATIC
-LDFLAGS:= -L"C:/MinGW/usr/lib" -lm -lmingw32 -lSDL2main -lSDL2 -lopengl32 -lglu32 -mwindows
+CFLAGS:=-O2 -std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -I"$(SDL2_PREFIX)/include/SDL2" -DGLEW_STATIC
+LDFLAGS:= $(GLEW32S_LIB) -L"$(SDL2_PREFIX)/lib" -lm -lmingw32 -lSDL2main -lSDL2 -lopengl32 -lglu32 -mwindows
 CPU:=i686
 
 else
@@ -120,7 +126,6 @@ MAINOBJS+= $(Z80OBJS)
 endif
 
 ifeq ($(OS),Windows)
-MAINOBJS+= glew32s.lib
 ALL=$(BLASTEM)
 else
 ALL= dis zdis stateview vgmplay blastem termhelper

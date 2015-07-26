@@ -12,12 +12,19 @@
 #include "io.h"
 #include "util.h"
 
+#ifndef DISABLE_OPENGL
 #include <GL/glew.h>
+#endif
 
 SDL_Window *main_window;
+SDL_Renderer *main_renderer;
+SDL_Texture  *main_texture;
+SDL_Rect      main_clip;
 SDL_GLContext *main_context;
+
 uint8_t render_dbg = 0;
 uint8_t debug_pal = 0;
+uint8_t render_gl = 1;
 
 uint32_t last_frame = 0;
 
@@ -94,6 +101,7 @@ uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b)
 	return 255 << 24 | r << 16 | g << 8 | b;
 }
 
+#ifndef DISABLE_OPENGL
 GLuint textures[3], buffers[2], vshader, fshader, program, un_textures[2], un_width, at_pos;
 
 GLfloat vertex_data[] = {
@@ -147,52 +155,72 @@ GLuint load_shader(char * fname, GLenum shader_type)
 	}
 	return ret;
 }
+#endif
 
 void render_alloc_surfaces(vdp_context * context)
 {
 	context->oddbuf = context->framebuf = malloc(512 * 256 * 4 * 2);
 	memset(context->oddbuf, 0, 512 * 256 * 4 * 2);
 	context->evenbuf = ((char *)context->oddbuf) + 512 * 256 * 4;
-	glGenTextures(3, textures);
-	for (int i = 0; i < 3; i++)
-	{
-		glBindTexture(GL_TEXTURE_2D, textures[i]);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		if (i < 2) {
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 512, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, i ? context->evenbuf : context->oddbuf);
-		} else {
-			uint32_t blank = 255 << 24;
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_BGRA, GL_UNSIGNED_BYTE, &blank);
+
+#ifndef DISABLE_OPENGL
+	if (render_gl) {
+		glGenTextures(3, textures);
+		for (int i = 0; i < 3; i++)
+		{
+			glBindTexture(GL_TEXTURE_2D, textures[i]);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			if (i < 2) {
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 512, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, i ? context->evenbuf : context->oddbuf);
+			} else {
+				uint32_t blank = 255 << 24;
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_BGRA, GL_UNSIGNED_BYTE, &blank);
+			}
 		}
+		glGenBuffers(2, buffers);
+		glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_data), vertex_data, GL_STATIC_DRAW);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[1]);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(element_data), element_data, GL_STATIC_DRAW);
+		tern_val def = {.ptrval = "default.v.glsl"};
+		vshader = load_shader(tern_find_path_default(config, "video\0vertex_shader\0", def).ptrval, GL_VERTEX_SHADER);
+		def.ptrval = "default.f.glsl";
+		fshader = load_shader(tern_find_path_default(config, "video\0fragment_shader\0", def).ptrval, GL_FRAGMENT_SHADER);
+		program = glCreateProgram();
+		glAttachShader(program, vshader);
+		glAttachShader(program, fshader);
+		glLinkProgram(program);
+		GLint link_status;
+		glGetProgramiv(program, GL_LINK_STATUS, &link_status);
+		if (!link_status) {
+			fputs("Failed to link shader program\n", stderr);
+			exit(1);
+		}
+		un_textures[0] = glGetUniformLocation(program, "textures[0]");
+		un_textures[1] = glGetUniformLocation(program, "textures[1]");
+		un_width = glGetUniformLocation(program, "width");
+		at_pos = glGetAttribLocation(program, "pos");
+	} else {
+#endif
+	/* height=480 to fit interlaced output */
+		main_texture = SDL_CreateTexture(main_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, 320, 480);
+#ifndef DISABLE_OPENGL
 	}
-	glGenBuffers(2, buffers);
-	glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_data), vertex_data, GL_STATIC_DRAW);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[1]);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(element_data), element_data, GL_STATIC_DRAW);
-	tern_val def = {.ptrval = "default.v.glsl"};
-	vshader = load_shader(tern_find_path_default(config, "video\0vertex_shader\0", def).ptrval, GL_VERTEX_SHADER);
-	def.ptrval = "default.f.glsl";
-	fshader = load_shader(tern_find_path_default(config, "video\0fragment_shader\0", def).ptrval, GL_FRAGMENT_SHADER);
-	program = glCreateProgram();
-	glAttachShader(program, vshader);
-	glAttachShader(program, fshader);
-	glLinkProgram(program);
-	GLint link_status;
-	glGetProgramiv(program, GL_LINK_STATUS, &link_status);
-	if (!link_status) {
-		fatal_error("Failed to link shader program\n");
-	}
-	un_textures[0] = glGetUniformLocation(program, "textures[0]");
-	un_textures[1] = glGetUniformLocation(program, "textures[1]");
-	un_width = glGetUniformLocation(program, "width");
-	at_pos = glGetAttribLocation(program, "pos");
+#endif
 }
 
 char * caption = NULL;
+
+static void render_quit()
+{
+	render_close_audio();
+#ifdef DISABLE_OPENGL
+	SDL_DestroyTexture(main_texture);
+#endif
+}
 
 void render_init(int width, int height, char * title, uint32_t fps, uint8_t fullscreen)
 {
@@ -201,14 +229,9 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	}
 	atexit(SDL_Quit);
 	printf("width: %d, height: %d\n", width, height);
-	uint32_t flags = SDL_WINDOW_OPENGL;
 
+	uint32_t flags = 0;
 
-	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 5);
-	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 5);
-	SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 5);
-	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
-	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	if (fullscreen) {
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 		SDL_DisplayMode mode;
@@ -219,32 +242,79 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 		width = mode.w;
 		height = mode.h;
 	}
+
+	render_gl = 0;
+
+#ifndef DISABLE_OPENGL
+	flags |= SDL_WINDOW_OPENGL;
+	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 5);
+	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 5);
+	SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 5);
+	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
+	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	main_window = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, flags);
 	if (!main_window) {
 		fatal_error("Unable to create SDL window: %s\n", SDL_GetError());
 	}
-	SDL_GetWindowSize(main_window, &width, &height);
-	printf("Window created with size: %d x %d\n", width, height);
 	main_context = SDL_GL_CreateContext(main_window);
 	GLenum res = glewInit();
 	if (res != GLEW_OK) {
-		fatal_error("Initialization of GLEW failed with code %d\n", res);
+		fprintf(stderr, "Initialization of GLEW failed with code %d\n", res);
 	}
-	if (!GLEW_VERSION_2_0) {
-		fatal_error("BlastEm requires at least OpenGL 2.0, but it is unavailable\n");
+
+	if (GLEW_VERSION_2_0) {
+		render_gl = 1;
 	}
-	float aspect = (float)width / height;
-	tern_val def = {.ptrval = "normal"};
-	if (fabs(aspect - 4.0/3.0) > 0.01 && strcmp(tern_find_path_default(config, "video\0aspect\0", def).ptrval, "stretch")) {
-		for (int i = 0; i < 4; i++)
-		{
-			if (aspect > 4.0/3.0) {
-				vertex_data[i*2] *= (4.0/3.0)/aspect;
-			} else {
-				vertex_data[i*2+1] *= aspect/(4.0/3.0);
-			}
+	else {
+		SDL_DestroyWindow(main_window);
+		fputs("OpenGL 2.0 is unavailable, falling back to SDL2 renderer\n", stderr);
+#endif
+		SDL_CreateWindowAndRenderer(width, height, flags, &main_window, &main_renderer);
+
+		if (!main_window || !main_renderer) {
+			fprintf(stderr, "unable to create SDL window: %s\n", SDL_GetError());
+			SDL_Quit();
+			exit(1);
 		}
+		main_clip.x = main_clip.y = 0;
+		main_clip.w = width;
+		main_clip.h = height;
+#ifndef DISABLE_OPENGL
 	}
+#endif
+
+	SDL_GetWindowSize(main_window, &width, &height);
+	printf("Window created with size: %d x %d\n", width, height);
+	float src_aspect = 4.0/3.0;
+	float aspect     = (float)width / height;
+	tern_val def = {.ptrval = "normal"};
+	int stretch = fabs(aspect - src_aspect) > 0.01 && !strcmp(tern_find_path_default(config, "video\0aspect\0", def).ptrval, "stretch");
+
+	if (!stretch) {
+#ifndef DISABLE_OPENGL
+		if (render_gl) {
+			for (int i = 0; i < 4; i++)
+			{
+				if (aspect > src_aspect) {
+					vertex_data[i*2] *= src_aspect/aspect;
+				} else {
+					vertex_data[i*2+1] *= aspect/src_aspect;
+				}
+			}
+		} else {
+#endif
+			float scale_x = (float)width / 320.0;
+			float scale_y = (float)height / 240.0;
+			float scale   = scale_x > scale_y ? scale_y : scale_x;
+			main_clip.w = 320.0 * scale;
+			main_clip.h = 240.0 * scale;
+			main_clip.x = (width  - main_clip.w) / 2;
+			main_clip.y = (height - main_clip.h) / 2;
+#ifndef DISABLE_OPENGL
+		}
+#endif
+	}
+
 	caption = title;
 	min_delay = 0;
 	for (int i = 0; i < 100; i++) {
@@ -306,42 +376,86 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	}
 	SDL_JoystickEventState(SDL_ENABLE);
 	
-	atexit(render_close_audio);
+	atexit(render_quit);
 }
 
 void render_context(vdp_context * context)
 {
+	int width  = context->regs[REG_MODE_4] & BIT_H40 ? 320.0f : 256.0f;
+	int height = 240;
+
 	last_frame = SDL_GetTicks();
-	
-	glBindTexture(GL_TEXTURE_2D, textures[context->framebuf == context->oddbuf ? 0 : 1]);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 320, 240, GL_BGRA, GL_UNSIGNED_BYTE, context->framebuf);;
+#ifndef DISABLE_OPENGL
+	if (render_gl) {
+		glBindTexture(GL_TEXTURE_2D, textures[context->framebuf == context->oddbuf ? 0 : 1]);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 320, 240, GL_BGRA, GL_UNSIGNED_BYTE, context->framebuf);;
 
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
 
-	glUseProgram(program);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, textures[0]);
-	glUniform1i(un_textures[0], 0);
+		glUseProgram(program);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, textures[0]);
+		glUniform1i(un_textures[0], 0);
 
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, (context->regs[REG_MODE_4] & BIT_INTERLACE) ? textures[1] : textures[2]);
-	glUniform1i(un_textures[1], 1);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, (context->regs[REG_MODE_4] & BIT_INTERLACE) ? textures[1] : textures[2]);
+		glUniform1i(un_textures[1], 1);
 
-	glUniform1f(un_width, context->regs[REG_MODE_4] & BIT_H40 ? 320.0f : 256.0f);
+		glUniform1f(un_width, width);
 
-	glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
-	glVertexAttribPointer(at_pos, 2, GL_FLOAT, GL_FALSE, sizeof(GLfloat[2]), (void *)0);
-	glEnableVertexAttribArray(at_pos);
+		glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
+		glVertexAttribPointer(at_pos, 2, GL_FLOAT, GL_FALSE, sizeof(GLfloat[2]), (void *)0);
+		glEnableVertexAttribArray(at_pos);
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[1]);
-	glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_SHORT, (void *)0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[1]);
+		glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_SHORT, (void *)0);
 
-	glDisableVertexAttribArray(at_pos);
+		glDisableVertexAttribArray(at_pos);
 
-	SDL_GL_SwapWindow(main_window);
-	if (context->regs[REG_MODE_4] & BIT_INTERLACE)
-	{
+		SDL_GL_SwapWindow(main_window);
+	} else {
+#endif
+		SDL_Rect area;
+
+		area.x = area.y = 0;
+		area.w = width;
+		area.h = height;
+
+		if (context->regs[REG_MODE_4] & BIT_INTERLACE) {
+			unsigned skip;
+			uint32_t *src = (uint32_t*)context->framebuf;
+			uint8_t  *dst;
+			int i;
+
+			area.h *= 2;
+
+			SDL_LockTexture(main_texture, &area, (void**)&dst, &skip);
+
+			if (context->framebuf == context->evenbuf)
+				dst += skip;
+
+			skip *= 2;
+
+			for (i = 0; i < 240; ++i) {
+				memcpy(dst, src, width*sizeof(uint32_t));
+				src += 320;
+				dst += skip;
+			}
+
+			SDL_UnlockTexture(main_texture);
+		}
+		else /* possibly faster path for non-interlaced output */
+			SDL_UpdateTexture(main_texture, &area, context->framebuf, 320*sizeof(uint32_t));
+
+		SDL_RenderClear(main_renderer);
+		SDL_RenderCopy(main_renderer, main_texture, &area, &main_clip);
+		SDL_RenderPresent(main_renderer);
+#ifndef DISABLE_OPENGL
+	}
+#endif
+
+	if (context->regs[REG_MODE_4] & BIT_INTERLACE) {
 		context->framebuf = context->framebuf == context->oddbuf ? context->evenbuf : context->oddbuf;
 	}
 }
