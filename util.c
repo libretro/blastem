@@ -116,6 +116,35 @@ void fatal_error(char *format, ...)
 	exit(1);
 }
 
+void warning(char *format, ...)
+{
+	va_list args;
+	va_start(args, format);
+#ifndef _WIN32
+	if (headless || (isatty(STDERR_FILENO) && isatty(STDIN_FILENO))) {
+		vfprintf(stderr, format, args);
+	} else {
+#endif
+		size_t size = strlen(format) * 2;
+		char *buf = malloc(size);
+		size_t actual = vsnprintf(buf, size, format, args);
+		if (actual >= size) {
+			actual++;
+			free(buf);
+			buf = malloc(actual);
+			va_end(args);
+			va_start(args, format);
+			vsnprintf(buf, actual, format, args);
+		}
+		fputs(buf, stderr);
+		render_infobox("BlastEm Info", buf);
+		free(buf);
+#ifndef _WIN32
+	}
+#endif
+	va_end(args);
+}
+
 void info_message(char *format, ...)
 {
 	va_list args;
