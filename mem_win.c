@@ -5,7 +5,7 @@
 */
 
 #include "mem.h"
-#include <Windows.h>
+#include <windows.h>
 
 void * alloc_code(size_t *size)
 {

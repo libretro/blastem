@@ -1,6 +1,6 @@
 /*
  Copyright 2013 Michael Pavone
- This file is part of BlastEm. 
+ This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "gst.h"
@@ -100,7 +100,7 @@ uint32_t m68k_load_gst(m68k_context * context, FILE * gstfile)
 			return 0;
 		}
 		for(curpos = buffer; curpos < (buffer + sizeof(buffer)); curpos += sizeof(uint16_t)) {
-			context->mem_pointers[1][i++] = read_be_16(curpos);
+			ram[i++] = read_be_16(curpos);
 		}
 	}
 	return pc;
@@ -141,7 +141,7 @@ uint8_t m68k_save_gst(m68k_context * context, uint32_t pc, FILE * gstfile)
 	fseek(gstfile, GST_68K_RAM, SEEK_SET);
 	for (int i = 0; i < (32*1024);) {
 		for(curpos = buffer; curpos < (buffer + sizeof(buffer)); curpos += sizeof(uint16_t)) {
-			write_be_16(curpos, context->mem_pointers[1][i++]);
+			write_be_16(curpos, ram[i++]);
 		}
 		if (fwrite(buffer, 1, sizeof(buffer), gstfile) != sizeof(buffer)) {
 			fputs("Failed to write 68K RAM to savestate\n", stderr);
@@ -207,8 +207,8 @@ uint8_t z80_load_gst(z80_context * context, FILE * gstfile)
 	curpos += 2;
 	context->iff1 = context->iff2 = *curpos;
 	curpos += 2;
-	reset = !*(curpos++);
-	busreq = *curpos;
+	context->reset = !*(curpos++);
+	context->busreq = *curpos;
 	curpos += 3;
 	uint32_t bank = read_le_32(curpos);
 	if (bank < 0x400000) {
@@ -350,8 +350,8 @@ uint8_t z80_save_gst(z80_context * context, FILE * gstfile)
 	curpos += 2;
 	*curpos = context->iff1;
 	curpos += 2;
-	*(curpos++) = !reset;
-	*curpos = busreq;
+	*(curpos++) = !context->reset;
+	*curpos = context->busreq;
 	curpos += 3;
 	uint32_t bank = context->bank_reg << 15;
 	write_le_32(curpos, bank);
@@ -423,7 +423,7 @@ uint32_t load_gst(genesis_context * gen, char * fname)
 		fprintf(stderr, "Could not read ident code from %s\n", fname);
 		goto error_close;
 	}
-	if (memcmp(ident, "GST\x40\xE0", 5) != 0) {
+	if (memcmp(ident, "GST\x40\xE0", 3) != 0) {
 		fprintf(stderr, "%s doesn't appear to be a GST savestate. The ident code is %c%c%c\\x%X\\x%X instead of GST\\x40\\xE0.\n", fname, ident[0], ident[1], ident[2], ident[3], ident[4]);
 		goto error_close;
 	}

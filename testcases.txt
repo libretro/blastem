@@ -1,88 +1,88 @@
 Name	Sizes	Src Modes														Dst Modes
-#add		bwl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
-#add		bwl		d																(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#adda	wl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	a
-#addi	bwl		#n																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#addq	bwl		#(1-8)															d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#addx	bwl		d																d
-#addx	bwl		-(a)															-(a)
-#and		bwl		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
-#and		bwl		d																(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#andi	bwl		#n																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#asl		bwl		d;#(1-8)														d
-#asr		bwl		d;#(1-8)														d
-#lsl		bwl		d;#(1-8)														d
-#lsr		bwl		d;#(1-8)														d
-#sub		bwl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
-#sub		bwl		d																(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#suba	wl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	a
-#subi	bwl		#n																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#subq	bwl		#(1-8)															d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#subx	bwl		d																d
-#subx	bwl		-(a)															-(a)
-#bchg	b		d;#(0-255)														(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#bchg	l		d;#(0-255)														d
-#bset	b		d;#(0-255)														(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#bset	l		d;#(0-255)														d
-#bclr	b		d;#(0-255)														(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#bclr	l		d;#(0-255)														d
-#btst	b		d;#(0-255)														(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#btst	l		d;#(0-255)														d
-#rol		bwl		d;#(1-8)														d
-#ror		bwl		d;#(1-8)														d
-#abcd	b		d																d
-#abcd	b		-(a)															-(a)
-#sbcd	b		d																d
-#sbcd	b		-(a)															-(a)
-#muls	w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
-#mulu	w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
-#move	bwl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#movea	wl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	a
-#moveq	l		#(-128-127)														d
-#roxl	bwl		d;#(1-8)														d
-#roxr	bwl		d;#(1-8)														d
-#divs	w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
-#divu	w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
-#chk		w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
-#cmp		bwl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
-#cmpa	wl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	a
-#cmpi	bwl		#n																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#cmpm	bwl		(a)+															(a)+
-#eor		bwl		d																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#eori	bwl		#n																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#exg		l		d																d;a
-#exg		l		a																a
-#link	w		a																#n
-#or		bwl		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
-#or		bwl		d																(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#ori		bwl		#n																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#clr		bwl		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#ext		wl		d
-#neg		bwl		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#negx	bwl		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#not		bwl		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#pea		l		(a);(n,a);(n,a,x);(n).w;(n).l;(n,pc);(n,pc,x)
-#rol		w		(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#ror		w		(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#roxl	w		(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#roxr	w		(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#st		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#sf		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#shi		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#sls		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#scc		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#scs		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#sne		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#seq		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#svc		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#svs		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#spl		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#smi		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#sge		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#slt		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#sgt		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#sle		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
-#swap	w		d
+add		bwl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
+add		bwl		d																(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+adda	wl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	a
+addi	bwl		#n																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+addq	bwl		#(1-8)															d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+addx	bwl		d																d
+addx	bwl		-(a)															-(a)
+and		bwl		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
+and		bwl		d																(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+andi	bwl		#n																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+asl		bwl		d;#(1-8)														d
+asr		bwl		d;#(1-8)														d
+lsl		bwl		d;#(1-8)														d
+lsr		bwl		d;#(1-8)														d
+sub		bwl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
+sub		bwl		d																(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+suba	wl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	a
+subi	bwl		#n																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+subq	bwl		#(1-8)															d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+subx	bwl		d																d
+subx	bwl		-(a)															-(a)
+bchg	b		d;#(0-255)														(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+bchg	l		d;#(0-255)														d
+bset	b		d;#(0-255)														(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+bset	l		d;#(0-255)														d
+bclr	b		d;#(0-255)														(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+bclr	l		d;#(0-255)														d
+btst	b		d;#(0-255)														(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+btst	l		d;#(0-255)														d
+rol		bwl		d;#(1-8)														d
+ror		bwl		d;#(1-8)														d
+abcd	b		d																d
+abcd	b		-(a)															-(a)
+sbcd	b		d																d
+sbcd	b		-(a)															-(a)
+muls	w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
+mulu	w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
+move	bwl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+movea	wl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	a
+moveq	l		#(-128-127)														d
+roxl	bwl		d;#(1-8)														d
+roxr	bwl		d;#(1-8)														d
+divs	w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
+divu	w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
+chk		w		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
+cmp		bwl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
+cmpa	wl		d;a;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	a
+cmpi	bwl		#n																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+cmpm	bwl		(a)+															(a)+
+eor		bwl		d																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+eori	bwl		#n																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+exg		l		d																d;a
+exg		l		a																a
+link	w		a																#n
+or		bwl		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l;#n;(n,pc);(n,pc,x)	d
+or		bwl		d																(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+ori		bwl		#n																d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+clr		bwl		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+ext		wl		d
+neg		bwl		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+negx	bwl		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+not		bwl		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+pea		l		(a);(n,a);(n,a,x);(n).w;(n).l;(n,pc);(n,pc,x)
+rol		w		(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+ror		w		(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+roxl	w		(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+roxr	w		(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+st		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+sf		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+shi		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+sls		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+scc		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+scs		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+sne		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+seq		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+svc		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+svs		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+spl		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+smi		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+sge		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+slt		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+sgt		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+sle		b		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
+swap	w		d
 tst		bwl		d;(a);(a)+;-(a);(n,a);(n,a,x);(n).w;(n).l
 lea		l		(a);(n,a);(n,a,x);(n).w;(n).l;(n,pc);(n,pc,x)					a
 

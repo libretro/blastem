@@ -8,33 +8,30 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <errno.h>
+#include <stdio.h>
+
 #include "mem.h"
+#ifndef MAP_ANONYMOUS
+#define MAP_ANONYMOUS MAP_ANON
+#endif
 
-/*
+#ifndef MAP_32BIT
+#define MAP_32BIT 0
+#endif
+
 void * alloc_code(size_t *size)
 {
+	//start at the 1GB mark to allow plenty of room for sbrk based malloc implementations
+	//while still keeping well within 32-bit displacement range for calling code compiled into the executable
+	static uint8_t *next = (uint8_t *)0x40000000;
 	*size += PAGE_SIZE - (*size & (PAGE_SIZE - 1));
-	return mmap(NULL, *size, PROT_EXEC | PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-}
-*/
-
-/*
-void * alloc_code(size_t *size)
-{
-	char * ret = malloc(*size);
-	char * base = (char *)(((intptr_t)ret) & (~(PAGE_SIZE-1)));
-	mprotect(base, (ret + *size) - base, PROT_EXEC | PROT_READ | PROT_WRITE);
-	return ret;
-}
-*/
-
-void * alloc_code(size_t *size)
-{
-	*size += PAGE_SIZE - (*size & (PAGE_SIZE - 1));
-	void * ret = sbrk(*size);
-	if (ret == ((void *)-1)) {
+	uint8_t *ret = mmap(NULL, *size, PROT_EXEC | PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0);
+	if (ret == MAP_FAILED) {
+		perror("alloc_code");
 		return NULL;
 	}
-	mprotect(ret, *size, PROT_EXEC | PROT_READ | PROT_WRITE);
+	next = ret + *size;
 	return ret;
 }
+
