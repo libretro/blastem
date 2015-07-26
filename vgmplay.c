@@ -7,6 +7,7 @@
 #include "ym2612.h"
 #include "psg.h"
 #include "config.h"
+#include "util.h"
 #include <stdint.h>
 #include <stdio.h>
 
