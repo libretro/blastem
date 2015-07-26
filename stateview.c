@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include "vdp.h"
 #include "render.h"
+#include "util.h"
 #include "blastem.h"
 
 //not used, but referenced by the renderer since it handles input
