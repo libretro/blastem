@@ -91,8 +91,7 @@ int load_rom(char * filename)
 		return 0;
 	}
 	if (sizeof(header) != fread(header, 1, sizeof(header), f)) {
-		fprintf(stderr, "Error reading from %s\n", filename);
-		exit(1);
+		fatal_error("Error reading from %s\n", filename);
 	}
 	fseek(f, 0, SEEK_END);
 	long filesize = ftell(f);
@@ -106,16 +105,14 @@ int load_rom(char * filename)
 		}
 		if (i == 8) {
 			if (header[2]) {
-				fprintf(stderr, "%s is a split SMD ROM which is not currently supported", filename);
-				exit(1);
+				fatal_error("%s is a split SMD ROM which is not currently supported", filename);
 			}
 			return load_smd_rom(filesize, f);
 		}
 	}
 	cart = malloc(nearest_pow2(filesize));
 	if (filesize != fread(cart, 1, filesize, f)) {
-		fprintf(stderr, "Error reading from %s\n", filename);
-		exit(1);
+		fatal_error("Error reading from %s\n", filename);
 	}
 	fclose(f);
 	return filesize;
@@ -289,8 +286,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_t value)
 {
 	if (vdp_port & 0x2700E0) {
-		printf("machine freeze due to write to address %X\n", 0xC00000 | vdp_port);
-		exit(1);
+		fatal_error("machine freeze due to write to address %X\n", 0xC00000 | vdp_port);
 	}
 	vdp_port &= 0x1F;
 	//printf("vdp_port write: %X, value: %X, cycle: %d\n", vdp_port, value, context->current_cycle);
@@ -339,8 +335,7 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 				adjust_int_cycle(context, v_context);
 			}
 		} else {
-			printf("Illegal write to HV Counter port %X\n", vdp_port);
-			exit(1);
+			fatal_error("Illegal write to HV Counter port %X\n", vdp_port);
 		}
 		if (v_context->cycles != before_cycle) {
 			//printf("68K paused for %d (%d) cycles at cycle %d (%d) for write\n", v_context->cycles - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
@@ -369,8 +364,7 @@ void * z80_vdp_port_write(uint32_t vdp_port, void * vcontext, uint8_t value)
 	genesis_context * gen = context->system;
 	vdp_port &= 0xFF;
 	if (vdp_port & 0xE0) {
-		printf("machine freeze due to write to Z80 address %X\n", 0x7F00 | vdp_port);
-		exit(1);
+		fatal_error("machine freeze due to write to Z80 address %X\n", 0x7F00 | vdp_port);
 	}
 	if (vdp_port < 0x10) {
 		//These probably won't currently interact well with the 68K accessing the VDP
@@ -380,8 +374,7 @@ void * z80_vdp_port_write(uint32_t vdp_port, void * vcontext, uint8_t value)
 		} else if (vdp_port < 8) {
 			vdp_control_port_write(gen->vdp, value << 8 | value);
 		} else {
-			printf("Illegal write to HV Counter port %X\n", vdp_port);
-			exit(1);
+			fatal_error("Illegal write to HV Counter port %X\n", vdp_port);
 		}
 	} else if (vdp_port < 0x18) {
 		sync_sound(gen, context->current_cycle);
@@ -395,8 +388,7 @@ void * z80_vdp_port_write(uint32_t vdp_port, void * vcontext, uint8_t value)
 uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 {
 	if (vdp_port & 0x2700E0) {
-		printf("machine freeze due to read from address %X\n", 0xC00000 | vdp_port);
-		exit(1);
+		fatal_error("machine freeze due to read from address %X\n", 0xC00000 | vdp_port);
 	}
 	vdp_port &= 0x1F;
 	uint16_t value;
@@ -413,8 +405,7 @@ uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 			//printf("HV Counter: %X at cycle %d\n", value, v_context->cycles);
 		}
 	} else if (vdp_port < 0x18){
-		printf("Illegal read from PSG  port %X\n", vdp_port);
-		exit(1);
+		fatal_error("Illegal read from PSG  port %X\n", vdp_port);
 	} else {
 		value = vdp_test_port_read(v_context);
 	}
@@ -444,8 +435,7 @@ uint8_t z80_vdp_port_read(uint32_t vdp_port, void * vcontext)
 {
 	z80_context * context = vcontext;
 	if (vdp_port & 0xE0) {
-		printf("machine freeze due to read from Z80 address %X\n", 0x7F00 | vdp_port);
-		exit(1);
+		fatal_error("machine freeze due to read from Z80 address %X\n", 0x7F00 | vdp_port);
 	}
 	genesis_context * gen = context->system;
 	//VDP access goes over the 68K bus like a bank area access
@@ -467,8 +457,7 @@ uint8_t z80_vdp_port_read(uint32_t vdp_port, void * vcontext)
 		} else if (vdp_port < 8) {
 			ret = vdp_control_port_read(gen->vdp);
 		} else {
-			printf("Illegal write to HV Counter port %X\n", vdp_port);
-			exit(1);
+			fatal_error("Illegal write to HV Counter port %X\n", vdp_port);
 		}
 	} else {
 		//TODO: Figure out the correct value today
@@ -507,8 +496,7 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 					gen->z80->mem_pointers[1] = NULL;
 				}
 			} else {
-				printf("68K write to unhandled Z80 address %X\n", location);
-				exit(1);
+				fatal_error("68K write to unhandled Z80 address %X\n", location);
 			}
 		}
 	} else {
@@ -847,8 +835,7 @@ void init_run_cpu(genesis_context * gen, rom_info *rom, FILE * address_log, char
 	if (statefile) {
 		uint32_t pc = load_gst(gen, statefile);
 		if (!pc) {
-			fprintf(stderr, "Failed to load save state %s\n", statefile);
-			exit(1);
+			fatal_error("Failed to load save state %s\n", statefile);
 		}
 		printf("Loaded %s\n", statefile);
 		if (debugger) {
@@ -907,10 +894,6 @@ const memmap_chunk z80_map[] = {
 
 int main(int argc, char ** argv)
 {
-	if (argc < 2) {
-		fputs("Usage: blastem [OPTIONS] ROMFILE [WIDTH] [HEIGHT]\n", stderr);
-		return 1;
-	}
 	set_exe_str(argv[0]);
 	config = load_config();
 	int width = -1;
@@ -931,8 +914,7 @@ int main(int argc, char ** argv)
 			case 'b':
 				i++;
 				if (i >= argc) {
-					fputs("-b must be followed by a frame count\n", stderr);
-					return 1;
+					fatal_error("-b must be followed by a frame count\n");
 				}
 				headless = 1;
 				exit_after = atoi(argv[i]);
@@ -954,7 +936,7 @@ int main(int argc, char ** argv)
 				address_log = fopen("address.log", "w");
 				break;
 			case 'v':
-				printf("blastem %s\n", BLASTEM_VERSION);
+				info_message("blastem %s\n", BLASTEM_VERSION);
 				return 0;
 				break;
 			case 'n':
@@ -963,20 +945,17 @@ int main(int argc, char ** argv)
 			case 'r':
 				i++;
 				if (i >= argc) {
-					fputs("-r must be followed by region (J, U or E)\n", stderr);
-					return 1;
+					fatal_error("-r must be followed by region (J, U or E)\n");
 				}
 				force_version = translate_region_char(toupper(argv[i][0]));
 				if (!force_version) {
-					fprintf(stderr, "'%c' is not a valid region character for the -r option\n", argv[i][0]);
-					return 1;
+					fatal_error("'%c' is not a valid region character for the -r option\n", argv[i][0]);
 				}
 				break;
 			case 's':
 				i++;
 				if (i >= argc) {
-					fputs("-s must be followed by a savestate filename\n", stderr);
-					return 1;
+					fatal_error("-s must be followed by a savestate filename\n");
 				}
 				statefile = argv[i];
 				break;
@@ -984,7 +963,7 @@ int main(int argc, char ** argv)
 				ym_log = 1;
 				break;
 			case 'h':
-				puts(
+				info_message(
 					"Usage: blastem [OPTIONS] ROMFILE [WIDTH] [HEIGHT]\n"
 					"Options:\n"
 					"	-h          Print this help text\n"
@@ -1000,13 +979,11 @@ int main(int argc, char ** argv)
 				);
 				return 0;
 			default:
-				fprintf(stderr, "Unrecognized switch %s\n", argv[i]);
-				return 1;
+				fatal_error("Unrecognized switch %s\n", argv[i]);
 			}
 		} else if (!loaded) {
 			if (!(rom_size = load_rom(argv[i]))) {
-				fprintf(stderr, "Failed to open %s for reading\n", argv[i]);
-				return 1;
+				fatal_error("Failed to open %s for reading\n", argv[i]);
 			}
 			romfname = argv[i];
 			loaded = 1;
@@ -1017,8 +994,7 @@ int main(int argc, char ** argv)
 		}
 	}
 	if (!loaded) {
-		fputs("You must specify a ROM filename!\n", stderr);
-		return 1;
+		fatal_error("Usage: blastem [OPTIONS] ROMFILE [WIDTH] [HEIGHT]\n");
 	}
 	tern_node *rom_db = load_rom_db();
 	rom_info info = configure_rom(rom_db, cart, rom_size, base_map, sizeof(base_map)/sizeof(base_map[0]));

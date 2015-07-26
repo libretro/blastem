@@ -317,8 +317,7 @@ void * write_eeprom_i2c_w(uint32_t address, void * context, uint16_t value)
 	genesis_context *gen = ((m68k_context *)context)->system;
 	eeprom_map *map = find_eeprom_map(address, gen);
 	if (!map) {
-		fprintf(stderr, "Could not find EEPROM map for address %X\n", address);
-		exit(1);
+		fatal_error("Could not find EEPROM map for address %X\n", address);
 	}
 	if (map->scl_mask) {
 		set_scl(&gen->eeprom, (value & map->scl_mask) != 0);
@@ -334,8 +333,7 @@ void * write_eeprom_i2c_b(uint32_t address, void * context, uint8_t value)
 	genesis_context *gen = ((m68k_context *)context)->system;
 	eeprom_map *map = find_eeprom_map(address, gen);
 	if (!map) {
-		fprintf(stderr, "Could not find EEPROM map for address %X\n", address);
-		exit(1);
+		fatal_error("Could not find EEPROM map for address %X\n", address);
 	}
 	
 	uint16_t expanded, mask;
@@ -360,8 +358,7 @@ uint16_t read_eeprom_i2c_w(uint32_t address, void * context)
 	genesis_context *gen = ((m68k_context *)context)->system;
 	eeprom_map *map = find_eeprom_map(address, gen);
 	if (!map) {
-		fprintf(stderr, "Could not find EEPROM map for address %X\n", address);
-		exit(1);
+		fatal_error("Could not find EEPROM map for address %X\n", address);
 	}
 	uint16_t ret = 0;
 	if (map->sda_read_bit < 16) {
@@ -375,8 +372,7 @@ uint8_t read_eeprom_i2c_b(uint32_t address, void * context)
 	genesis_context *gen = ((m68k_context *)context)->system;
 	eeprom_map *map = find_eeprom_map(address, gen);
 	if (!map) {
-		fprintf(stderr, "Could not find EEPROM map for address %X\n", address);
-		exit(1);
+		fatal_error("Could not find EEPROM map for address %X\n", address);
 	}
 	uint8_t bit = address & 1 ? map->sda_read_bit : map->sda_read_bit - 8;
 	uint8_t ret = 0;
@@ -390,14 +386,13 @@ tern_node *load_rom_db()
 {
 	char *exe_dir = get_exe_dir();
 	if (!exe_dir) {
-		fputs("Failed to find executable path\n", stderr);
-		exit(1);
+		fatal_error("Failed to find executable path\n");
 	}
 	char *path = alloc_concat(exe_dir, "/rom.db");
 	tern_node *db = parse_config_file(path);
 	free(path);
 	if (!db) {
-		fputs("Failed to load ROM DB\n", stderr);
+		fatal_error("Failed to load ROM DB\n");
 	}
 	return db;
 }
@@ -615,13 +610,11 @@ void process_sram_def(char *key, map_iter_state *state)
 	if (!state->info->save_size) {
 		char * size = tern_find_path(state->root, "SRAM\0size\0").ptrval;
 		if (!size) {
-			fprintf(stderr, "ROM DB map entry %d with address %s has device type SRAM, but the SRAM size is not defined\n", state->index, key);
-			exit(1);
+			fatal_error("ROM DB map entry %d with address %s has device type SRAM, but the SRAM size is not defined\n", state->index, key);
 		}
 		state->info->save_size = atoi(size);
 		if (!state->info->save_size) {
-			fprintf(stderr, "SRAM size %s is invalid\n", size);
-			exit(1);
+			fatal_error("SRAM size %s is invalid\n", size);
 		}
 		state->info->save_mask = nearest_pow2(state->info->save_size)-1;
 		state->info->save_buffer = malloc(state->info->save_size);
@@ -642,13 +635,11 @@ void process_eeprom_def(char * key, map_iter_state *state)
 	if (!state->info->save_size) {
 		char * size = tern_find_path(state->root, "EEPROM\0size\0").ptrval;
 		if (!size) {
-			fprintf(stderr, "ROM DB map entry %d with address %s has device type EEPROM, but the EEPROM size is not defined\n", state->index, key);
-			exit(1);
+			fatal_error("ROM DB map entry %d with address %s has device type EEPROM, but the EEPROM size is not defined\n", state->index, key);
 		}
 		state->info->save_size = atoi(size);
 		if (!state->info->save_size) {
-			fprintf(stderr, "EEPROM size %s is invalid\n", size);
-			exit(1);
+			fatal_error("EEPROM size %s is invalid\n", size);
 		}
 		char *etype = tern_find_path(state->root, "EEPROM\0type\0").ptrval;
 		if (!etype) {
@@ -657,8 +648,7 @@ void process_eeprom_def(char * key, map_iter_state *state)
 		if (!strcmp(etype, "i2c")) {
 			state->info->save_type = SAVE_I2C;
 		} else {
-			fprintf(stderr, "EEPROM type %s is invalid\n", etype);
-			exit(1);
+			fatal_error("EEPROM type %s is invalid\n", etype);
 		}
 		state->info->save_buffer = malloc(state->info->save_size);
 		memset(state->info->save_buffer, 0xFF, state->info->save_size);
@@ -690,14 +680,12 @@ void map_iter_fun(char *key, tern_val val, void *data)
 	map_iter_state *state = data;
 	tern_node *node = tern_get_node(val);
 	if (!node) {
-		fprintf(stderr, "ROM DB map entry %d with address %s is not a node\n", state->index, key);
-		exit(1);
+		fatal_error("ROM DB map entry %d with address %s is not a node\n", state->index, key);
 	}
 	uint32_t start = strtol(key, NULL, 16);
 	uint32_t end = strtol(tern_find_ptr_default(node, "last", "0"), NULL, 16);
 	if (!end || end < start) {
-		fprintf(stderr, "'last' value is missing or invalid for ROM DB map entry %d with address %s\n", state->index, key);
-		exit(1);
+		fatal_error("'last' value is missing or invalid for ROM DB map entry %d with address %s\n", state->index, key);
 	}
 	char * dtype = tern_find_ptr_default(node, "device", "ROM");
 	uint32_t offset = strtol(tern_find_ptr_default(node, "offset", "0"), NULL, 16);
@@ -769,8 +757,7 @@ void map_iter_fun(char *key, tern_val val, void *data)
 		map->write_16 = (write_16_fun)write_bank_reg_w;
 		map->write_8 = (write_8_fun)write_bank_reg_b;
 	} else {
-		fprintf(stderr, "Invalid device type for ROM DB map entry %d with address %s\n", state->index, key);
-		exit(1);
+		fatal_error("Invalid device type for ROM DB map entry %d with address %s\n", state->index, key);
 	}
 	state->index++;
 }

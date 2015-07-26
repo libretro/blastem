@@ -76,8 +76,7 @@ void check_alloc_code(code_info *code)
 		size_t size = CODE_ALLOC_SIZE;
 		uint32_t *next_code = alloc_code(&size);
 		if (!next_code) {
-			fputs("Failed to allocate memory for generated code\n", stderr);
-			exit(1);
+			fatal_error("Failed to allocate memory for generated code\n");
 		}
 		if (next_code = code->last + RESERVE_WORDS) {
 			//new chunk is contiguous with the current one

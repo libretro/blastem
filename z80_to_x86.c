@@ -7,6 +7,7 @@
 #include "z80_to_x86.h"
 #include "gen_x86.h"
 #include "mem.h"
+#include "util.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -256,8 +257,7 @@ void translate_z80_ea(z80inst * inst, host_ea * ea, z80_options * opts, uint8_t 
 		ea->mode = MODE_UNUSED;
 		break;
 	default:
-		fprintf(stderr, "Unrecognized Z80 addressing mode %d\n", inst->addr_mode & 0x1F);
-		exit(1);
+		fatal_error("Unrecognized Z80 addressing mode %d\n", inst->addr_mode & 0x1F);
 	}
 }
 
@@ -1939,11 +1939,10 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 	default: {
 		char disbuf[80];
 		z80_disasm(inst, disbuf, address);
-		fprintf(stderr, "unimplemented instruction: %s at %X\n", disbuf, address);
 		FILE * f = fopen("zram.bin", "wb");
 		fwrite(context->mem_pointers[0], 1, 8 * 1024, f);
 		fclose(f);
-		exit(1);
+		fatal_error("unimplemented Z80 instruction: %s at %X\nZ80 RAM has been saved to zram.bin for debugging", disbuf, address);
 	}
 	}
 }
@@ -1952,8 +1951,7 @@ uint8_t * z80_interp_handler(uint8_t opcode, z80_context * context)
 {
 	if (!context->interp_code[opcode]) {
 		if (opcode == 0xCB || (opcode >= 0xDD && (opcode & 0xF) == 0xD)) {
-			fprintf(stderr, "Encountered prefix byte %X at address %X. Z80 interpeter doesn't support those yet.", opcode, context->pc);
-			exit(1);
+			fatal_error("Encountered prefix byte %X at address %X. Z80 interpeter doesn't support those yet.", opcode, context->pc);
 		}
 		uint8_t codebuf[8];
 		memset(codebuf, 0, sizeof(codebuf));
@@ -1961,8 +1959,7 @@ uint8_t * z80_interp_handler(uint8_t opcode, z80_context * context)
 		z80inst inst;
 		uint8_t * after = z80_decode(codebuf, &inst);
 		if (after - codebuf > 1) {
-			fprintf(stderr, "Encountered multi-byte Z80 instruction at %X. Z80 interpeter doesn't support those yet.", context->pc);
-			exit(1);
+			fatal_error("Encountered multi-byte Z80 instruction at %X. Z80 interpeter doesn't support those yet.", context->pc);
 		}
 
 		z80_options * opts = context->options;
@@ -2243,7 +2240,7 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 		if (opts->gen.deferred) {
 			address = opts->gen.deferred->address;
 			dprintf("defferred address: %X\n", address);
-			}
+		}
 	} while (opts->gen.deferred);
 }
 
@@ -2749,6 +2746,6 @@ void zremove_breakpoint(z80_context * context, uint16_t address)
 		opts->gen.code.last = native + 16;
 		check_cycles_int(&opts->gen, address);
 		opts->gen.code = tmp_code;
-}
+	}
 }
 
