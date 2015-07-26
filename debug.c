@@ -8,6 +8,7 @@
 #endif
 #include "render.h"
 #include "util.h"
+#include "terminal.h"
 
 static bp_def * breakpoints = NULL;
 static bp_def * zbreakpoints = NULL;
@@ -287,6 +288,7 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 	static uint16_t branch_t;
 	static uint16_t branch_f;
 	z80inst inst;
+	init_terminal();
 	//Check if this is a user set breakpoint, or just a temporary one
 	bp_def ** this_bp = find_breakpoint(&zbreakpoints, address);
 	if (*this_bp) {
@@ -473,6 +475,9 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 	static uint32_t branch_t;
 	static uint32_t branch_f;
 	m68kinst inst;
+	
+	init_terminal();
+	
 	sync_components(context, 0);
 	//probably not necessary, but let's play it safe
 	address &= 0xFFFFFF;

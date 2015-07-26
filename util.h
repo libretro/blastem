@@ -29,5 +29,7 @@ char * readlink_alloc(char * path);
 void fatal_error(char *format, ...);
 //Prints an information message to stdout and to a message box if not in headless mode and not attached to a console
 void info_message(char *format, ...);
+//Prints an information message to stderr and to a message box if not in headless mode and not attached to a console
+void warning(char *format, ...);
 
 #endif //UTIL_H_
