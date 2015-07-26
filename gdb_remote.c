@@ -115,34 +115,40 @@ void update_status(m68k_context * context, uint16_t value)
 
 uint8_t read_byte(m68k_context * context, uint32_t address)
 {
-	uint16_t * word;
-	//TODO: Use generated read/write functions so that memory map is properly respected
-	if (address < 0x400000) {
-		word = context->mem_pointers[0] + address/2;
-	} else if (address >= 0xE00000) {
-		word = context->mem_pointers[1] + (address & 0xFFFF)/2;
-	} else if (address >= 0xA00000 && address < 0xA04000) {
-		return z80_ram[address & 0x1FFF];
-	} else {
-		return 0;
+	
+	genesis_context *gen = context->system;
+	//TODO: Use generated read/write functions to support access to hardware that is not ROM or RAM
+	uint16_t * word = get_native_pointer(address & 0xFFFFFFFE, (void **)context->mem_pointers, &context->options->gen);
+	if (word) {	
+		if (address & 1) {
+			return *word;
+		}
+		return *word >> 8;
 	}
-	if (address & 1) {
-		return *word;
+	if (address >= 0xA00000 && address < 0xA04000) {
+		return gen->zram[address & 0x1FFF];
 	}
-	return *word >> 8;
+	return 0;
 }
 
 void write_byte(m68k_context * context, uint32_t address, uint8_t value)
 {
-	uint16_t * word;
+	genesis_context *gen = context->system;
 	//TODO: Use generated read/write functions so that memory map is properly respected
-	if (address < 0x400000) {
-		//TODO: Invalidate translated code
-		word = context->mem_pointers[0] + address/2;
-	} else if (address >= 0xE00000) {
-		m68k_handle_code_write(address & 0xFFFF, context);
-		word = context->mem_pointers[1] + (address & 0xFFFF)/2;
-	} else if (address >= 0xA00000 && address < 0xA04000) {
+	uint16_t * word = get_native_pointer(address & 0xFFFFFFFE, (void **)context->mem_pointers, &context->options->gen);
+	if (word) {
+		if (address & 1) {
+			*word = (*word & 0xFF00) | value;
+		} else {
+			*word = (*word & 0xFF) | value << 8;
+		}
+		//TODO: Deal with this more generally once m68k_handle_code_write can handle it
+		if (address >= 0xE00000) {
+			m68k_handle_code_write(address, context);
+		}
+		return;
+	}
+	if (address >= 0xA00000 && address < 0xA04000) {
 		z80_ram[address & 0x1FFF] = value;
 		genesis_context * gen = context->system;
 #ifndef NO_Z80
@@ -151,11 +157,6 @@ void write_byte(m68k_context * context, uint32_t address, uint8_t value)
 		return;
 	} else {
 		return;
-	}
-	if (address & 1) {
-		*word = (*word & 0xFF00) | value;
-	} else {
-		*word = (*word & 0xFF) | value << 8;
 	}
 }
 
@@ -180,12 +181,9 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 			goto not_impl;
 		}
 		m68kinst inst;
-		uint16_t * pc_ptr;
-		if (pc < 0x400000) {
-			pc_ptr = cart + pc/2;
-		} else if(pc > 0xE00000) {
-			pc_ptr = ram + (pc & 0xFFFF)/2;
-		} else {
+		genesis_context *gen = context->system;
+		uint16_t * pc_ptr = get_native_pointer(pc, (void **)context->mem_pointers, &context->options->gen);
+		if (!pc_ptr) {
 			fatal_error("Entered gdb remote debugger stub at address %X\n", pc);
 		}
 		uint16_t * after_pc = m68k_decode(pc_ptr, &inst, pc & 0xFFFFFF);
@@ -400,12 +398,9 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 			case 's':
 			case 'S': {
 				m68kinst inst;
-				uint16_t * pc_ptr;
-				if (pc < 0x400000) {
-					pc_ptr = cart + pc/2;
-				} else if(pc > 0xE00000) {
-					pc_ptr = ram + (pc & 0xFFFF)/2;
-				} else {
+				genesis_context *gen = context->system;
+				uint16_t * pc_ptr = get_native_pointer(pc, (void **)context->mem_pointers, &context->options->gen);
+				if (!pc_ptr) {
 					fatal_error("Entered gdb remote debugger stub at address %X\n", pc);
 				}
 				uint16_t * after_pc = m68k_decode(pc_ptr, &inst, pc & 0xFFFFFF);
