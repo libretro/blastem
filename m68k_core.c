@@ -8,6 +8,7 @@
 #include "68kinst.h"
 #include "backend.h"
 #include "gen.h"
+#include "util.h"
 #include <stdio.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -174,8 +175,7 @@ void translate_m68k_lea_pea(m68k_options * opts, m68kinst * inst)
 		break;
 	default:
 		m68k_disasm(inst, disasm_buf);
-		printf("%X: %s\naddress mode %d not implemented (lea src)\n", inst->address, disasm_buf, inst->src.addr_mode);
-		exit(1);
+		fatal_error("%X: %s\naddress mode %d not implemented (lea src)\n", inst->address, disasm_buf, inst->src.addr_mode);
 	}
 	if (inst->op == M68K_PEA) {
 		subi_areg(opts, 4, 7);
@@ -283,8 +283,7 @@ void translate_m68k_jmp_jsr(m68k_options * opts, m68kinst * inst)
 		break;
 	default:
 		m68k_disasm(inst, disasm_buf);
-		printf("%s\naddress mode %d not yet supported (%s)\n", disasm_buf, inst->src.addr_mode, is_jsr ? "jsr" : "jmp");
-		exit(1);
+		fatal_error("%s\naddress mode %d not yet supported (%s)\n", disasm_buf, inst->src.addr_mode, is_jsr ? "jsr" : "jmp");
 	}
 }
 
@@ -410,8 +409,7 @@ void translate_m68k_movem(m68k_options * opts, m68kinst * inst)
 			break;
 		default:
 			m68k_disasm(inst, disasm_buf);
-			printf("%X: %s\naddress mode %d not implemented (movem dst)\n", inst->address, disasm_buf, inst->dst.addr_mode);
-			exit(1);
+			fatal_error("%X: %s\naddress mode %d not implemented (movem dst)\n", inst->address, disasm_buf, inst->dst.addr_mode);
 		}
 		if (inst->dst.addr_mode == MODE_AREG_PREDEC) {
 			reg = 15;
@@ -481,8 +479,7 @@ void translate_m68k_movem(m68k_options * opts, m68kinst * inst)
 			break;
 		default:
 			m68k_disasm(inst, disasm_buf);
-			printf("%X: %s\naddress mode %d not implemented (movem src)\n", inst->address, disasm_buf, inst->src.addr_mode);
-			exit(1);
+			fatal_error("%X: %s\naddress mode %d not implemented (movem src)\n", inst->address, disasm_buf, inst->src.addr_mode);
 		}
 		cycles(&opts->gen, early_cycles);
 		for(reg = 0; reg < 16; reg ++) {
@@ -830,8 +827,7 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 		translate_m68k_unary(opts, inst, info->impl.flag_mask, inst->dst.addr_mode != MODE_UNUSED ? &dst_op : &src_op);
 	} else {
 		m68k_disasm(inst, disasm_buf);
-		printf("%X: %s\ninstruction %d not yet implemented\n", inst->address, disasm_buf, inst->op);
-		exit(1);
+		fatal_error("%X: %s\ninstruction %d not yet implemented\n", inst->address, disasm_buf, inst->op);
 	}
 }
 

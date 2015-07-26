@@ -5,6 +5,7 @@
 */
 #include "gen_x86.h"
 #include "mem.h"
+#include "util.h"
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -187,8 +188,7 @@ void jmp_nocheck(code_info *code, code_ptr dest)
 			disp >>= 8;
 			*(out++) = disp;
 		} else {
-			fprintf(stderr, "jmp: %p - %p = %lX\n", dest, out + 6, (long)disp);
-			exit(1);
+			fatal_error("jmp: %p - %p = %l which is out of range of a 32-bit displacementX\n", dest, out + 6, (long)disp);
 		}
 	}
 	code->cur = out;
@@ -200,8 +200,7 @@ void check_alloc_code(code_info *code, uint32_t inst_size)
 		size_t size = CODE_ALLOC_SIZE;
 		code_ptr next_code = alloc_code(&size);
 		if (!next_code) {
-			fputs("Failed to allocate memory for generated code\n", stderr);
-			exit(1);
+			fatal_error("Failed to allocate memory for generated code\n");
 		}
 		if (next_code != code->last + RESERVE_WORDS) {
 			//new chunk is not contiguous with the current one
@@ -231,8 +230,7 @@ void x86_rr_sizedir(code_info *code, uint16_t opcode, uint8_t src, uint8_t dst, 
 #ifdef X86_64
 		*out = PRE_REX;
 		if (src >= AH && src <= BH || dst >= AH && dst <= BH) {
-			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
-			exit(1);
+			fatal_error("attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
 		}
 		if (size == SZ_Q) {
 			*out |= REX_QUAD;
@@ -247,8 +245,7 @@ void x86_rr_sizedir(code_info *code, uint16_t opcode, uint8_t src, uint8_t dst, 
 		}
 		out++;
 #else
-		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X, src: %s, dst: %s, size: %s\n", opcode, x86_reg_names[src], x86_reg_names[dst], x86_sizes[size]);
-		exit(1);
+		fatal_error("Instruction requires REX prefix but this is a 32-bit build | opcode: %X, src: %s, dst: %s, size: %s\n", opcode, x86_reg_names[src], x86_reg_names[dst], x86_sizes[size]);
 #endif
 	}
 	if (size == SZ_B) {
@@ -284,8 +281,7 @@ void x86_rrdisp_sizedir(code_info *code, uint16_t opcode, uint8_t reg, uint8_t b
 #ifdef X86_64
 		*out = PRE_REX;
 		if (reg >= AH && reg <= BH) {
-			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
-			exit(1);
+			fatal_error("attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
 		}
 		if (size == SZ_Q) {
 			*out |= REX_QUAD;
@@ -300,8 +296,7 @@ void x86_rrdisp_sizedir(code_info *code, uint16_t opcode, uint8_t reg, uint8_t b
 		}
 		out++;
 #else
-		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X, reg: %s, base: %s, size: %s\n", opcode, x86_reg_names[reg], x86_reg_names[base], x86_sizes[size]);
-		exit(1);
+		fatal_error("Instruction requires REX prefix but this is a 32-bit build | opcode: %X, reg: %s, base: %s, size: %s\n", opcode, x86_reg_names[reg], x86_reg_names[base], x86_sizes[size]);
 #endif
 	}
 	if (size == SZ_B) {
@@ -349,8 +344,7 @@ void x86_rrind_sizedir(code_info *code, uint8_t opcode, uint8_t reg, uint8_t bas
 #ifdef X86_64
 		*out = PRE_REX;
 		if (reg >= AH && reg <= BH) {
-			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
-			exit(1);
+			fatal_error("attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
 		}
 		if (size == SZ_Q) {
 			*out |= REX_QUAD;
@@ -365,8 +359,7 @@ void x86_rrind_sizedir(code_info *code, uint8_t opcode, uint8_t reg, uint8_t bas
 		}
 		out++;
 #else
-		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X, reg: %s, base: %s, size: %s\n", opcode, x86_reg_names[reg], x86_reg_names[base], x86_sizes[size]);
-		exit(1);
+		fatal_error("Instruction requires REX prefix but this is a 32-bit build | opcode: %X, reg: %s, base: %s, size: %s\n", opcode, x86_reg_names[reg], x86_reg_names[base], x86_sizes[size]);
 #endif
 	}
 	if (size == SZ_B) {
@@ -405,8 +398,7 @@ void x86_rrindex_sizedir(code_info *code, uint8_t opcode, uint8_t reg, uint8_t b
 #ifdef X86_64
 		*out = PRE_REX;
 		if (reg >= AH && reg <= BH) {
-			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
-			exit(1);
+			fatal_error("attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
 		}
 		if (size == SZ_Q) {
 			*out |= REX_QUAD;
@@ -425,8 +417,7 @@ void x86_rrindex_sizedir(code_info *code, uint8_t opcode, uint8_t reg, uint8_t b
 		}
 		out++;
 #else
-		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X, reg: %s, base: %s, size: %s\n", opcode, x86_reg_names[reg], x86_reg_names[base], x86_sizes[size]);
-		exit(1);
+		fatal_error("Instruction requires REX prefix but this is a 32-bit build | opcode: %X, reg: %s, base: %s, size: %s\n", opcode, x86_reg_names[reg], x86_reg_names[base], x86_sizes[size]);
 #endif
 	}
 	if (size == SZ_B) {
@@ -461,8 +452,7 @@ void x86_r_size(code_info *code, uint8_t opcode, uint8_t opex, uint8_t dst, uint
 #ifdef X86_64
 		*out = PRE_REX;
 		if (dst >= AH && dst <= BH) {
-			fprintf(stderr, "attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
-			exit(1);
+			fatal_error("attempt to use *H reg in an instruction requiring REX prefix. opcode = %X\n", opcode);
 		}
 		if (size == SZ_Q) {
 			*out |= REX_QUAD;
@@ -473,8 +463,7 @@ void x86_r_size(code_info *code, uint8_t opcode, uint8_t opex, uint8_t dst, uint
 		}
 		out++;
 #else
-		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X:%X, reg: %s, size: %s\n", opcode, opex, x86_reg_names[dst], x86_sizes[size]);
-		exit(1);
+		fatal_error("Instruction requires REX prefix but this is a 32-bit build | opcode: %X:%X, reg: %s, size: %s\n", opcode, opex, x86_reg_names[dst], x86_sizes[size]);
 #endif
 	}
 	if (size == SZ_B) {
@@ -509,8 +498,7 @@ void x86_rdisp_size(code_info *code, uint8_t opcode, uint8_t opex, uint8_t dst, 
 		}
 		out++;
 #else
-		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X:%X, reg: %s, size: %s\n", opcode, opex, x86_reg_names[dst], x86_sizes[size]);
-		exit(1);
+		fatal_error("Instruction requires REX prefix but this is a 32-bit build | opcode: %X:%X, reg: %s, size: %s\n", opcode, opex, x86_reg_names[dst], x86_sizes[size]);
 #endif
 	}
 	if (size != SZ_B) {
@@ -549,8 +537,7 @@ void x86_ir(code_info *code, uint8_t opcode, uint8_t op_ex, uint8_t al_opcode, i
 #ifdef X86_64
 				*out = PRE_REX | REX_QUAD;
 #else
-		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X, reg: %s, size: %s\n", al_opcode, x86_reg_names[dst], x86_sizes[size]);
-		exit(1);
+		fatal_error("Instruction requires REX prefix but this is a 32-bit build | opcode: %X, reg: %s, size: %s\n", al_opcode, x86_reg_names[dst], x86_sizes[size]);
 #endif
 			}
 		}
@@ -568,8 +555,7 @@ void x86_ir(code_info *code, uint8_t opcode, uint8_t op_ex, uint8_t al_opcode, i
 			}
 			out++;
 #else
-		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X:%X, reg: %s, size: %s\n", opcode, op_ex, x86_reg_names[dst], x86_sizes[size]);
-		exit(1);
+		fatal_error("Instruction requires REX prefix but this is a 32-bit build | opcode: %X:%X, reg: %s, size: %s\n", opcode, op_ex, x86_reg_names[dst], x86_sizes[size]);
 #endif
 		}
 		if (dst >= AH && dst <= BH) {
@@ -620,8 +606,7 @@ void x86_irdisp(code_info *code, uint8_t opcode, uint8_t op_ex, int32_t val, uin
 		}
 		out++;
 #else
-		fprintf(stderr, "Instruction requires REX prefix but this is a 32-bit build | opcode: %X:%X, reg: %s, size: %s\n", opcode, op_ex, x86_reg_names[dst], x86_sizes[size]);
-		exit(1);
+		fatal_error("Instruction requires REX prefix but this is a 32-bit build | opcode: %X:%X, reg: %s, size: %s\n", opcode, op_ex, x86_reg_names[dst], x86_sizes[size]);
 #endif
 	}
 	if (size != SZ_B) {
@@ -1921,8 +1906,7 @@ void jcc(code_info *code, uint8_t cc, code_ptr dest)
 			disp >>= 8;
 			*(out++) = disp;
 		} else {
-			fprintf(stderr, "jcc: %p - %p = %lX\n", dest, out + 6, (long)disp);
-			exit(1);
+			fatal_error("jcc: %p - %p = %lX which is out of range for a 32-bit displacement\n", dest, out + 6, (long)disp);
 		}
 	}
 	code->cur = out;
@@ -1948,8 +1932,7 @@ void jmp(code_info *code, code_ptr dest)
 			disp >>= 8;
 			*(out++) = disp;
 		} else {
-			fprintf(stderr, "jmp: %p - %p = %lX\n", dest, out + 6, (long)disp);
-			exit(1);
+			fatal_error("jmp: %p - %p = %lX which is out of range for a 32-bit displacement\n", dest, out + 6, (long)disp);
 		}
 	}
 	code->cur = out;
@@ -1997,8 +1980,7 @@ void call(code_info *code, code_ptr fun)
 		*(out++) = disp;
 	} else {
 		//TODO: Implement far call???
-		fprintf(stderr, "%p - %p = %lX\n", fun, out + 5, (long)disp);
-		exit(1);
+		fatal_error("call: %p - %p = %lX which is out of range for a 32-bit displacement\n", fun, out + 5, (long)disp);
 	}
 	code->cur = out;
 }

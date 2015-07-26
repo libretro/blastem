@@ -6,6 +6,7 @@
 #include "gdb_remote.h"
 #include "68kinst.h"
 #include "debug.h"
+#include "util.h"
 #include <unistd.h>
 #include <fcntl.h>
 #include <stddef.h>
@@ -76,8 +77,7 @@ void gdb_calc_checksum(char * command, char *out)
 void write_or_die(int fd, const void *buf, size_t count)
 {
 	if (write(fd, buf, count) < count) {
-		fputs("Error writing to stdout\n", stderr);
-		exit(1);
+		fatal_error("Error writing to stdout\n");
 	}
 }
 
@@ -186,8 +186,7 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 		} else if(pc > 0xE00000) {
 			pc_ptr = ram + (pc & 0xFFFF)/2;
 		} else {
-			fprintf(stderr, "Entered gdb remote debugger stub at address %X\n", pc);
-			exit(1);
+			fatal_error("Entered gdb remote debugger stub at address %X\n", pc);
 		}
 		uint16_t * after_pc = m68k_decode(pc_ptr, &inst, pc & 0xFFFFFF);
 		uint32_t after = pc + (after_pc-pc_ptr)*2;
@@ -407,8 +406,7 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 				} else if(pc > 0xE00000) {
 					pc_ptr = ram + (pc & 0xFFFF)/2;
 				} else {
-					fprintf(stderr, "Entered gdb remote debugger stub at address %X\n", pc);
-					exit(1);
+					fatal_error("Entered gdb remote debugger stub at address %X\n", pc);
 				}
 				uint16_t * after_pc = m68k_decode(pc_ptr, &inst, pc & 0xFFFFFF);
 				uint32_t after = pc + (after_pc-pc_ptr)*2;
@@ -452,8 +450,7 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 	}
 	return;
 not_impl:
-	fprintf(stderr, "Command %s is not implemented, exiting...\n", command);
-	exit(1);
+	fatal_error("Command %s is not implemented, exiting...\n", command);
 }
 
 m68k_context *  gdb_debug_enter(m68k_context * context, uint32_t pc)
@@ -516,8 +513,7 @@ m68k_context *  gdb_debug_enter(m68k_context * context, uint32_t pc)
 						*curbuf = 0;
 						//send acknowledgement
 						if (write(STDOUT_FILENO, "+", 1) < 1) {
-							fputs("Error writing to stdout\n", stderr);
-							exit(1);
+							fatal_error("Error writing to stdout\n");
 						}
 						gdb_run_command(context, pc, start);
 						curbuf += 2;
