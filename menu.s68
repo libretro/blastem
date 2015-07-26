@@ -196,7 +196,7 @@ print_string:
 	move.w d1, (a0)
 	addq #1, d2
 	move.l d2, d1
-	;add.w d1, d1
+	;switch to other plane
 	and.w #$FFFE, d1
 	swap d1
 	eor.l #$20000000, d3
@@ -205,7 +205,9 @@ print_string:
 	bra .loop
 .newline
 	moveq #0, d2
+	;switch back to plane A
 	and.l #$DFFFFFFF, d3
+	;skip to next row
 	add.l #$00800000, d3
 	move.l d3, (a1)
 	bra .loop
