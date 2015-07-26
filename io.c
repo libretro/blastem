@@ -340,7 +340,7 @@ void handle_joy_dpad(int joystick, int dpadnum, uint8_t value)
 int parse_binding_target(char * target, tern_node * padbuttons, int * ui_out, int * padnum_out, int * padbutton_out)
 {
 	int gpadslen = strlen("gamepads.");
-	if (!memcmp(target, "gamepads.", gpadslen)) {
+	if (!strncmp(target, "gamepads.", gpadslen)) {
 		if (target[gpadslen] >= '1' && target[gpadslen] <= '8') {
 			int padnum = target[gpadslen] - '0';
 			int button = tern_find_int(padbuttons, target + gpadslen + 1, 0);
@@ -358,7 +358,7 @@ int parse_binding_target(char * target, tern_node * padbuttons, int * ui_out, in
 		} else {
 			fprintf(stderr, "Gamepad mapping string '%s' refers to an invalid gamepad number %c\n", target, target[gpadslen]);
 		}
-	} else if(!memcmp(target, "ui.", strlen("ui."))) {
+	} else if(!strncmp(target, "ui.", strlen("ui."))) {
 		*padbutton_out = 0;
 		if (!strcmp(target + 3, "vdp_debug_mode")) {
 			*ui_out = UI_DEBUG_MODE_INC;
@@ -368,7 +368,7 @@ int parse_binding_target(char * target, tern_node * padbuttons, int * ui_out, in
 			*ui_out = UI_ENTER_DEBUGGER;
 		} else if(!strcmp(target + 3, "save_state")) {
 			*ui_out = UI_SAVE_STATE;
-		} else if(!memcmp(target + 3, "set_speed.", strlen("set_speed."))) {
+		} else if(!strncmp(target + 3, "set_speed.", strlen("set_speed."))) {
 			*ui_out = UI_SET_SPEED;
 			*padbutton_out = atoi(target + 3 + strlen("set_speed."));
 		} else if(!strcmp(target + 3, "next_speed")) {

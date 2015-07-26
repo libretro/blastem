@@ -1004,8 +1004,9 @@ void m68k_reset(m68k_context * context)
 
 m68k_context * init_68k_context(m68k_options * opts)
 {
-	m68k_context * context = malloc(sizeof(m68k_context) + ram_size(&opts->gen) / (1 << opts->gen.ram_flags_shift) / 8);
-	memset(context, 0, sizeof(m68k_context));
+	size_t ctx_size = sizeof(m68k_context) + ram_size(&opts->gen) / (1 << opts->gen.ram_flags_shift) / 8;
+	m68k_context * context = malloc(ctx_size);
+	memset(context, 0, ctx_size);
 	context->native_code_map = opts->gen.native_code_map;
 	context->options = opts;
 	context->int_cycle = CYCLE_NEVER;

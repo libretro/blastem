@@ -48,11 +48,11 @@ tern_node * parse_config_int(char **state, int started, int *line)
 		curline = strip_ws(curline);
 		int len = strlen(curline);
 		if (!len) {
-			*line++;
+			*line = *line + 1;
 			continue;
 		}
 		if (curline[0] == '#') {
-			*line++;
+			*line = *line + 1;
 			continue;
 		}
 		if (curline[0] == '}') {
@@ -67,7 +67,7 @@ tern_node * parse_config_int(char **state, int started, int *line)
 		if (*end == '{') {
 			*end = 0;
 			curline = strip_ws(curline);
-			*line++;
+			*line = *line + 1;
 			head = tern_insert_node(head, curline, parse_config_int(state, 1, line));
 		} else {
 			char * val = strip_ws(split_keyval(curline));
@@ -77,7 +77,7 @@ tern_node * parse_config_int(char **state, int started, int *line)
 			} else {
 				fprintf(stderr, "Key %s is missing a value on line %d\n", key, *line);
 			}
-			*line++;
+			*line = *line + 1;
 		}
 	}
 	return head;
@@ -100,10 +100,12 @@ tern_node * parse_config_file(char * config_path)
 	if (!config_size) {
 		goto config_empty;
 	}
-	char * config_data = malloc(config_size);
+	char * config_data = malloc(config_size+1);
 	if (fread(config_data, 1, config_size, config_file) != config_size) {
 		goto config_read_fail;
 	}
+	config_data[config_size] = '\0';
+
 	ret = parse_config(config_data);
 config_read_fail:
 	free(config_data);
