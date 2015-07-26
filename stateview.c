@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include "vdp.h"
 #include "render.h"
+#include "util.h"
 #include "blastem.h"
 
 //not used, but referenced by the renderer since it handles input
@@ -61,13 +62,11 @@ int headless = 0;
 int main(int argc, char ** argv)
 {
 	if (argc < 2) {
-		fprintf(stderr, "Usage: stateview FILENAME\n");
-		exit(1);
+		fatal_error("Usage: stateview FILENAME\n");
 	}
 	FILE * state_file = fopen(argv[1], "rb");
 	if (!state_file) {
-		fprintf(stderr, "Failed to open %s\n", argv[1]);
-		exit(1);
+		fatal_error("Failed to open %s\n", argv[1]);
 	}
 	config = load_config(argv[0]);
 	int width = -1;

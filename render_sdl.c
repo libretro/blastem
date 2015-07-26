@@ -220,15 +220,14 @@ static void render_quit()
 #ifdef DISABLE_OPENGL
 	SDL_DestroyTexture(main_texture);
 #endif
-	SDL_Quit();
 }
 
 void render_init(int width, int height, char * title, uint32_t fps, uint8_t fullscreen)
 {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK) < 0) {
-		fprintf(stderr, "Unable to init SDL: %s\n", SDL_GetError());
-		exit(1);
+		fatal_error("Unable to init SDL: %s\n", SDL_GetError());
 	}
+	atexit(SDL_Quit);
 	printf("width: %d, height: %d\n", width, height);
 
 	uint32_t flags = 0;
@@ -255,15 +254,12 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	main_window = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, flags);
 	if (!main_window) {
-		fprintf(stderr, "Unable to create SDL window: %s\n", SDL_GetError());
-		SDL_Quit();
-		exit(1);
+		fatal_error("Unable to create SDL window: %s\n", SDL_GetError());
 	}
 	main_context = SDL_GL_CreateContext(main_window);
 	GLenum res = glewInit();
 	if (res != GLEW_OK) {
 		fprintf(stderr, "Initialization of GLEW failed with code %d\n", res);
-		SDL_DestroyWindow(main_window);
 	}
 
 	if (GLEW_VERSION_2_0) {
@@ -361,9 +357,7 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	desired.userdata = NULL;
 
 	if (SDL_OpenAudio(&desired, &actual) < 0) {
-		fprintf(stderr, "Unable to open SDL audio: %s\n", SDL_GetError());
-		SDL_Quit();
-		exit(1);
+		fatal_error("Unable to open SDL audio: %s\n", SDL_GetError());
 	}
 	buffer_samples = actual.samples;
 	sample_rate = actual.freq;
@@ -640,4 +634,18 @@ uint32_t render_sample_rate()
 	return sample_rate;
 }
 
+void render_errorbox(char *title, char *message)
+{
+	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title, message, NULL);
+}
+
+void render_warnbox(char *title, char *message)
+{
+	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, title, message, NULL);
+}
+
+void render_infobox(char *title, char *message)
+{
+	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, title, message, NULL);
+}
 

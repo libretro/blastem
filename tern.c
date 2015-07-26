@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include "util.h"
 
 tern_node * tern_insert(tern_node * head, char * key, tern_val value)
 {
@@ -190,8 +191,7 @@ void tern_foreach_int(tern_node *head, iter_fun fun, void *data, char *keybuf, i
 	}
 	if (head->el) {
 		if (pos == MAX_ITER_KEY) {
-			fputs("exceeded maximum key size", stderr);
-			exit(1);
+			fatal_error("tern_foreach_int: exceeded maximum key size");
 		}
 		keybuf[pos] = head->el;
 		tern_foreach_int(head->straight.next, fun, data, keybuf, pos+1);

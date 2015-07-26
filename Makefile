@@ -11,6 +11,7 @@ GLEW32S_LIB=glew32s.lib
 endif
 
 MEM:=mem_win.o
+TERMINAL:=terminal_win.o
 BLASTEM:=blastem.exe
 CC:=wine gcc.exe
 CFLAGS:=-O2 -std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -I"$(SDL2_PREFIX)/include/SDL2" -DGLEW_STATIC
@@ -20,6 +21,7 @@ CPU:=i686
 else
 
 MEM:=mem.o
+TERMINAL:=terminal.o
 BLASTEM:=blastem
 
 ifeq ($(OS),Darwin)
@@ -105,7 +107,7 @@ Z80OBJS=z80inst.o z80_to_x86.o
 AUDIOOBJS=ym2612.o psg.o wave.o
 CONFIGOBJS=config.o tern.o util.o
 
-MAINOBJS=blastem.o debug.o gdb_remote.o vdp.o render_sdl.o io.o romdb.o $(CONFIGOBJS) gst.o $(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS)
+MAINOBJS=blastem.o debug.o gdb_remote.o vdp.o render_sdl.o io.o romdb.o $(TERMINAL) $(CONFIGOBJS) gst.o $(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS)
 
 ifeq ($(CPU),x86_64)
 CFLAGS+=-DX86_64 -m64
@@ -123,7 +125,13 @@ else
 MAINOBJS+= $(Z80OBJS)
 endif
 
-all : dis zdis stateview vgmplay $(BLASTEM)
+ifeq ($(OS),Windows)
+ALL=$(BLASTEM)
+else
+ALL= dis zdis stateview vgmplay blastem termhelper
+endif
+
+all : $(ALL)
 
 $(BLASTEM) : $(MAINOBJS)
 	$(CC) -o $(BLASTEM) $(MAINOBJS) $(LDFLAGS)
@@ -190,4 +198,4 @@ vos_prog_info : vos_prog_info.o vos_program_module.o
 	vasmz80_mot -Fbin -spaces -o $@ $<
 
 clean :
-	rm -rf dis trans stateview test_x86 gen_fib *.o
+	rm -rf $(ALL) trans ztestrun ztestgen *.o

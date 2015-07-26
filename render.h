@@ -50,7 +50,9 @@ int render_joystick_num_buttons(int joystick);
 int render_joystick_num_hats(int joystick);
 int render_num_joysticks();
 void process_events();
-
+void render_errorbox(char *title, char *message);
+void render_warnbox(char *title, char *message);
+void render_infobox(char *title, char *message);
 
 
 #endif //RENDER_H_
