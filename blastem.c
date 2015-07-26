@@ -1050,6 +1050,8 @@ int main(int argc, char ** argv)
 	gen.vdp = &v_context;
 	gen.ym = &y_context;
 	gen.psg = &p_context;
+	gen.work_ram = ram;
+	gen.zram = z80_ram;
 	genesis = &gen;
 	setup_io_devices(config, gen.ports);
 
