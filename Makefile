@@ -7,7 +7,7 @@ RUNTIME32:=runtime_win.S
 
 CC:=wine gcc.exe
 CFLAGS:=-O2 -std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -I"C:/MinGW/usr/include/SDL" -DGLEW_STATIC
-LDFLAGS:= -L"C:/MinGW/usr/lib" -lm -lmingw32 -lSDLmain -lSDL
+LDFLAGS:= -L"C:/MinGW/usr/lib" -lm -lmingw32 -lSDLmain -lSDL -lws2_32
 ifndef NOGL
 LDFLAGS+= -lopengl32 -lglu32
 endif
