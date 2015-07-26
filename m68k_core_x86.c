@@ -9,6 +9,7 @@
 #include "68kinst.h"
 #include "mem.h"
 #include "backend.h"
+#include "util.h"
 #include <stdio.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -507,8 +508,7 @@ void translate_m68k_op(m68kinst * inst, host_ea * ea, m68k_options * opts, uint8
 		return;
 	default:
 		m68k_disasm(inst, disasm_buf);
-		printf("%X: %s\naddress mode %d not implemented (%s)\n", inst->address, disasm_buf, op->addr_mode, dst ? "dst" : "src");
-		exit(1);
+		fatal_error("%X: %s\naddress mode %d not implemented (%s)\n", inst->address, disasm_buf, op->addr_mode, dst ? "dst" : "src");
 	}
 	if (!dst && inst->dst.addr_mode == MODE_AREG && inst->extra.size == OPSIZE_WORD) {
 		if (ea->mode == MODE_REG_DIRECT) {
@@ -684,8 +684,7 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 		break;
 	default:
 		m68k_disasm(inst, disasm_buf);
-		printf("%X: %s\naddress mode %d not implemented (move dst)\n", inst->address, disasm_buf, inst->dst.addr_mode);
-		exit(1);
+		fatal_error("%X: %s\naddress mode %d not implemented (move dst)\n", inst->address, disasm_buf, inst->dst.addr_mode);
 	}
 
 	if (inst->dst.addr_mode != MODE_AREG) {

@@ -184,8 +184,7 @@ void render_alloc_surfaces(vdp_context * context)
 	GLint link_status;
 	glGetProgramiv(program, GL_LINK_STATUS, &link_status);
 	if (!link_status) {
-		fputs("Failed to link shader program\n", stderr);
-		exit(1);
+		fatal_error("Failed to link shader program\n");
 	}
 	un_textures[0] = glGetUniformLocation(program, "textures[0]");
 	un_textures[1] = glGetUniformLocation(program, "textures[1]");
@@ -198,9 +197,9 @@ char * caption = NULL;
 void render_init(int width, int height, char * title, uint32_t fps, uint8_t fullscreen)
 {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK) < 0) {
-		fprintf(stderr, "Unable to init SDL: %s\n", SDL_GetError());
-		exit(1);
+		fatal_error("Unable to init SDL: %s\n", SDL_GetError());
 	}
+	atexit(SDL_Quit);
 	printf("width: %d, height: %d\n", width, height);
 	uint32_t flags = SDL_WINDOW_OPENGL;
 
@@ -222,23 +221,17 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	}
 	main_window = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, flags);
 	if (!main_window) {
-		fprintf(stderr, "Unable to create SDL window: %s\n", SDL_GetError());
-		SDL_Quit();
-		exit(1);
+		fatal_error("Unable to create SDL window: %s\n", SDL_GetError());
 	}
 	SDL_GetWindowSize(main_window, &width, &height);
 	printf("Window created with size: %d x %d\n", width, height);
 	main_context = SDL_GL_CreateContext(main_window);
 	GLenum res = glewInit();
 	if (res != GLEW_OK) {
-		fprintf(stderr, "Initialization of GLEW failed with code %d\n", res);
-		SDL_Quit();
-		exit(1);
+		fatal_error("Initialization of GLEW failed with code %d\n", res);
 	}
 	if (!GLEW_VERSION_2_0) {
-		fputs("BlastEm requires at least OpenGL 2.0, but it is unavailable\n", stderr);
-		SDL_Quit();
-		exit(1);
+		fatal_error("BlastEm requires at least OpenGL 2.0, but it is unavailable\n");
 	}
 	float aspect = (float)width / height;
 	tern_val def = {.ptrval = "normal"};
@@ -294,9 +287,7 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	desired.userdata = NULL;
 
 	if (SDL_OpenAudio(&desired, &actual) < 0) {
-		fprintf(stderr, "Unable to open SDL audio: %s\n", SDL_GetError());
-		SDL_Quit();
-		exit(1);
+		fatal_error("Unable to open SDL audio: %s\n", SDL_GetError());
 	}
 	buffer_samples = actual.samples;
 	sample_rate = actual.freq;
@@ -315,7 +306,6 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	}
 	SDL_JoystickEventState(SDL_ENABLE);
 	
-	atexit(SDL_Quit);
 	atexit(render_close_audio);
 }
 
@@ -530,4 +520,18 @@ uint32_t render_sample_rate()
 	return sample_rate;
 }
 
+void render_errorbox(char *title, char *message)
+{
+	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title, message, NULL);
+}
+
+void render_warnbox(char *title, char *message)
+{
+	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, title, message, NULL);
+}
+
+void render_infobox(char *title, char *message)
+{
+	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, title, message, NULL);
+}
 

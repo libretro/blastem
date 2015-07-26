@@ -8,6 +8,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "blastem.h" //for headless global
+#include "render.h" //for render_errorbox
+
 char * alloc_concat(char * first, char * second)
 {
 	int flen = strlen(first);
@@ -84,6 +87,62 @@ static char * exe_str;
 void set_exe_str(char * str)
 {
 	exe_str = str;
+}
+
+void fatal_error(char *format, ...)
+{
+	va_list args;
+	va_start(args, format);
+	if (!headless) {
+		//take a guess at the final size
+		size_t size = strlen(format) * 2;
+		char *buf = malloc(size);
+		size_t actual = vsnprintf(buf, size, format, args);
+		if (actual >= size) {
+			actual++;
+			free(buf);
+			buf = malloc(actual);
+			va_end(args);
+			va_start(args, format);
+			vsnprintf(buf, actual, format, args);
+		}
+		fputs(buf, stderr);
+		render_errorbox("Fatal Error", buf);
+		free(buf);
+	} else {
+		vfprintf(stderr, format, args);
+	}
+	va_end(args);
+	exit(1);
+}
+
+void info_message(char *format, ...)
+{
+	va_list args;
+	va_start(args, format);
+#ifndef _WIN32
+	if (headless || (isatty(STDOUT_FILENO) && isatty(STDIN_FILENO))) {
+		vprintf(format, args);
+	} else {
+#endif
+		size_t size = strlen(format) * 2;
+		char *buf = malloc(size);
+		size_t actual = vsnprintf(buf, size, format, args);
+		if (actual >= size) {
+			actual++;
+			free(buf);
+			buf = malloc(actual);
+			va_end(args);
+			va_start(args, format);
+			vsnprintf(buf, actual, format, args);
+		}
+		fputs(buf, stdout);
+		render_infobox("BlastEm Info", buf);
+		free(buf);
+#ifndef _WIN32
+	}
+#endif
+	va_end(args);
 }
 
 #ifdef _WIN32

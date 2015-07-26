@@ -7,6 +7,7 @@
 #include <sys/select.h>
 #endif
 #include "render.h"
+#include "util.h"
 
 static bp_def * breakpoints = NULL;
 static bp_def * zbreakpoints = NULL;
@@ -298,15 +299,12 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 		pc = z80_ram + (address & 0x1FFF);
 	} else if (address >= 0x8000) {
 		if (context->bank_reg < (0x400000 >> 15)) {
-			fprintf(stderr, "Entered Z80 debugger in banked memory address %X, which is not yet supported\n", address);
-			exit(1);
+			fatal_error("Entered Z80 debugger in banked memory address %X, which is not yet supported\n", address);
 		} else {
-			fprintf(stderr, "Entered Z80 debugger in banked memory address %X, but the bank is not pointed to a cartridge address\n", address);
-			exit(1);
+			fatal_error("Entered Z80 debugger in banked memory address %X, but the bank is not pointed to a cartridge address\n", address);
 		}
 	} else {
-		fprintf(stderr, "Entered Z80 debugger at address %X\n", address);
-		exit(1);
+		fatal_error("Entered Z80 debugger at address %X\n", address);
 	}
 	for (disp_def * cur = zdisplays; cur; cur = cur->next) {
 		zdebugger_print(context, cur->format_char, cur->param);
@@ -504,8 +502,7 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 	} else if(address > 0xE00000) {
 		pc = ram + (address & 0xFFFF)/2;
 	} else {
-		fprintf(stderr, "Entered 68K debugger at address %X\n", address);
-		exit(1);
+		fatal_error("Entered 68K debugger at address %X\n", address);
 	}
 	uint16_t * after_pc = m68k_decode(pc, &inst, address);
 	m68k_disasm(&inst, input_buf);
