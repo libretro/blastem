@@ -1,0 +1,356 @@
+T-081326 {
+	name NBA Jam
+	EEPROM {
+		type i2c
+		size 256
+	}
+	map {
+		0 {
+			device ROM
+			last 1FFFFF
+		}
+		200000 {
+			device EEPROM
+			last 3FFFFF
+			bits_read {
+				1 sda
+			}
+			bits_write {
+				0 sda
+				1 scl
+			}
+		}
+	}
+}
+T-81033 {
+	name NBA Jam
+	EEPROM {
+		type i2c
+		size 256
+	}
+	map {
+		0 {
+			device ROM
+			last 1FFFFF
+		}
+		200000 {
+			device EEPROM
+			last 3FFFFF
+			bits_read {
+				1 sda
+			}
+			bits_write {
+				0 sda
+				1 scl
+			}
+		}
+	}
+}
+T-081276 {
+	name NFL Quarterback Club
+	EEPROM {
+		type i2c
+		size 256
+	}
+	map {
+		0 {
+			device ROM
+			last 1FFFFF
+		}
+		200000 {
+			device EEPROM
+			#This is almost certainly not correct based on the address pins
+			#available to the Acclaim mapper. It's probably available up to
+			#2FFFFF at least and just fights with D0 from the mask ROM
+			last 200001
+			bits_read {
+				0 sda
+			}
+			bits_write {
+				0 sda
+				8 scl
+			}
+		}
+		200002 {
+			device ROM
+			offset 200000
+			last 2FFFFF
+		}
+	}
+}
+T-81406 {
+	name NBA Jam TE
+	EEPROM {
+		type i2c
+		size 512
+	}
+	map {
+		0 {
+			device ROM
+			last 1FFFFF
+		}
+		200000 {
+			device EEPROM
+			#This is almost certainly not correct based on the address pins
+			#available to the Acclaim mapper. It's probably available up to
+			#2FFFFF at least and just fights with D0 from the mask ROM
+			last 200001
+			bits_read {
+				0 sda
+			}
+			bits_write {
+				0 sda
+				8 scl
+			}
+		}
+		200002 {
+			device ROM
+			offset 200000
+			last 2FFFFF
+		}
+	}
+}
+T-081586 {
+	name NFL Quarterback Club '96
+	EEPROM {
+		type i2c
+		size 2048
+	}
+	map {
+		0 {
+			device ROM
+			last 1FFFFF
+		}
+		200000 {
+			device EEPROM
+			#This is almost certainly not correct based on the address pins
+			#available to the Acclaim mapper. It's probably available up to
+			#2FFFFF at least and just fights with D0 from the mask ROM
+			last 200001
+			bits_read {
+				0 sda
+			}
+			bits_write {
+				0 sda
+				8 scl
+			}
+		}
+		200002 {
+			device ROM
+			last 3FFFFF
+			offset 200000
+		}
+	}
+}
+T-81576 {
+	name College Slam
+	EEPROM {
+		type i2c
+		size 8192
+	}
+	map {
+		0 {
+			device ROM
+			last 1FFFFF
+		}
+		200000 {
+			device EEPROM
+			#This is almost certainly not correct based on the address pins
+			#available to the Acclaim mapper. It's probably available up to
+			#2FFFFF at least and just fights with D0 from the mask ROM
+			last 200001
+			bits_read {
+				0 sda
+			}
+			bits_write {
+				0 sda
+				8 scl
+			}
+		}
+		200002 {
+			device ROM
+			offset 200000
+			last 2FFFFF
+		}
+	}
+}
+T-81476 {
+	name Frank Thomas Big Hurt Baseball
+	EEPROM {
+		type i2c
+		size 8192
+	}
+	map {
+		0 {
+			device ROM
+			last 1FFFFF
+		}
+		200000 {
+			device EEPROM
+			#This is almost certainly not correct based on the address pins
+			#available to the Acclaim mapper. It's probably available up to
+			#2FFFFF at least and just fights with D0 from the mask ROM
+			last 200001
+			bits_read {
+				0 sda
+			}
+			bits_write {
+				0 sda
+				8 scl
+			}
+		}
+		200002 {
+			device ROM
+			last 3FFFFF
+			offset 200000
+		}
+	}
+}
+T-50176 {
+	name Rings of Power
+	EEPROM {
+		type i2c
+		size 128
+	}
+	map {
+		0 {
+			device ROM
+			last FFFFF
+		}
+		200000 {
+			device EEPROM
+			last 3FFFFF
+			bits_read {
+				7 sda
+			}
+			bits_write {
+				6 scl
+				7 sda
+			}
+		}
+	}
+}
+T-50396 {
+	name NHLPA Hockey '93
+	EEPROM {
+		type i2c
+		size 128
+	}
+	map {
+		0 {
+			device ROM
+			last 7FFFF
+		}
+		200000 {
+			device EEPROM
+			last 3FFFFF
+			bits_read {
+				7 sda
+			}
+			bits_write {
+				6 scl
+				7 sda
+			}
+		}
+	}
+}
+T-50446 {
+	name John Madden Football '93
+	EEPROM {
+		type i2c
+		size 128
+	}
+	map {
+		0 {
+			device ROM
+			last FFFFF
+		}
+		200000 {
+			device EEPROM
+			last 3FFFFF
+			bits_read {
+				7 sda
+			}
+			bits_write {
+				6 scl
+				7 sda
+			}
+		}
+	}
+}
+T-50516 {
+	name John Madden Football '93: Championship Edition
+	EEPROM {
+		type i2c
+		size 128
+	}
+	map {
+		0 {
+			device ROM
+			last FFFFF
+		}
+		200000 {
+			device EEPROM
+			last 3FFFFF
+			bits_read {
+				7 sda
+			}
+			bits_write {
+				6 scl
+				7 sda
+			}
+		}
+	}
+}
+T-50606 {
+	name Bill Walsh College Football
+	EEPROM {
+		type i2c
+		size 128
+	}
+	map {
+		0 {
+			device ROM
+			last FFFFF
+		}
+		200000 {
+			device EEPROM
+			last 3FFFFF
+			bits_read {
+				7 sda
+			}
+			bits_write {
+				6 scl
+				7 sda
+			}
+		}
+	}
+}
+MK-12056 {
+	name Super Street Fighter 2: The New Challengers
+	map {
+		0 {
+			device ROM
+			last 7FFFF
+		}
+		80000 {
+			device Sega mapper
+			last 3FFFFF
+			offset 80000
+		}
+	}
+}
+T-12056 {
+	name Super Street Fighter 2: The New Challengers
+	map {
+		0 {
+			device ROM
+			last 7FFFF
+		}
+		80000 {
+			device Sega mapper
+			last 3FFFFF
+			offset 80000
+		}
+	}
+}

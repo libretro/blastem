@@ -17,9 +17,17 @@ typedef struct {
 	code_ptr last;
 } code_info;
 
+void check_alloc_code(code_info *code, uint32_t inst_size);
+
 void init_code_info(code_info *code);
 void call(code_info *code, code_ptr fun);
 void jmp(code_info *code, code_ptr dest);
 void jmp_r(code_info *code, uint8_t dst);
+//call a function and put the arguments in the appropriate place according to the host ABI
+void call_args(code_info *code, code_ptr fun, uint32_t num_args, ...);
+//like the above, but follows other aspects of the ABI like stack alignment
+void call_args_abi(code_info *code, code_ptr fun, uint32_t num_args, ...);
+void save_callee_save_regs(code_info *code);
+void restore_callee_save_regs(code_info *code);
 
 #endif //GEN_H_

@@ -7,6 +7,7 @@
 #include "ym2612.h"
 #include "psg.h"
 #include "config.h"
+#include "util.h"
 #include <stdint.h>
 #include <stdio.h>
 
@@ -142,7 +143,7 @@ int main(int argc, char ** argv)
 
 	uint32_t fps = 60;
 	config = load_config(argv[0]);
-	render_init(320, 240, "vgm play", 60, 0, 0);
+	render_init(320, 240, "vgm play", 60, 0);
 
 	uint32_t opts = 0;
 	if (argc >= 3 && !strcmp(argv[2], "-y")) {
@@ -282,8 +283,7 @@ int main(int argc, char ** argv)
 					wait(&y_context, &p_context, &current_cycle, wait_time);
 				}
 			} else {
-				printf("unimplemented command: %X at offset %X\n", cmd, (unsigned int)(cur - data - 1));
-				exit(1);
+				fatal_error("unimplemented command: %X at offset %X\n", cmd, (unsigned int)(cur - data - 1));
 			}
 		}
 	}

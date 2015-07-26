@@ -108,6 +108,8 @@ uint8_t lfo_pm_base[][8] = {
 };
 int16_t lfo_pm_table[128 * 32 * 8];
 
+uint16_t ams_shift[] = {8, 3, 1, 0};
+
 #define MAX_ENVELOPE 0xFFC
 #define YM_DIVIDER 2
 #define CYCLE_NEVER 0xFFFFFFFF
@@ -268,16 +270,16 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 					context->timer_b = context->timer_b_load;
 				}
 			}
-		}
-		//Update LFO
-		if (context->lfo_enable) {
-			if (context->lfo_counter) {
-				context->lfo_counter--;
-			} else {
-				context->lfo_counter = lfo_timer_values[context->lfo_freq];
-				context->lfo_am_step += 2;
-				context->lfo_am_step &= 0xFE;
-				context->lfo_pm_step = context->lfo_am_step / 8;
+			//Update LFO
+			if (context->lfo_enable) {
+				if (context->lfo_counter) {
+					context->lfo_counter--;
+				} else {
+					context->lfo_counter = lfo_timer_values[context->lfo_freq];
+					context->lfo_am_step += 2;
+					context->lfo_am_step &= 0xFE;
+					context->lfo_pm_step = context->lfo_am_step / 8;
+				}
 			}
 		}
 		//Update Envelope Generator
@@ -427,6 +429,10 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				break;
 			}
 			uint16_t env = operator->envelope + operator->total_level;
+			if (operator->am) {
+				uint16_t base_am = (context->lfo_am_step & 0x80 ? context->lfo_am_step : ~context->lfo_am_step) & 0x7E;
+				env += base_am >> ams_shift[chan->ams];
+			}
 			if (env > MAX_ENVELOPE) {
 				env = MAX_ENVELOPE;
 			}
@@ -521,6 +527,7 @@ void ym_address_write_part1(ym2612_context * context, uint8_t address)
 	context->selected_part = 0;
 	context->write_cycle = context->current_cycle;
 	context->busy_cycles = BUSY_CYCLES_ADDRESS;
+	context->status |= 0x80;
 }
 
 void ym_address_write_part2(ym2612_context * context, uint8_t address)
@@ -530,6 +537,7 @@ void ym_address_write_part2(ym2612_context * context, uint8_t address)
 	context->selected_part = 1;
 	context->write_cycle = context->current_cycle;
 	context->busy_cycles = BUSY_CYCLES_ADDRESS;
+	context->status |= 0x80;
 }
 
 uint8_t fnum_to_keycode[] = {
@@ -583,14 +591,16 @@ void ym_update_phase_inc(ym2612_context * context, ym_operator * operator, uint3
 	ym_channel * channel = context->channels + chan_num;
 	uint32_t inc, detune;
 	if (chan_num == 2 && context->ch3_mode && (op < (2*4 + 3))) {
-		inc = context->ch3_supp[op-2*4].fnum;
-		if (!context->ch3_supp[op-2*4].block) {
+		//supplemental fnum registers are in a different order than normal slot paramters
+		int index = (op-2*4) ^ 2;
+		inc = context->ch3_supp[index].fnum;
+		if (!context->ch3_supp[index].block) {
 			inc >>= 1;
 		} else {
-			inc <<= (context->ch3_supp[op-2*4].block-1);
+			inc <<= (context->ch3_supp[index].block-1);
 		}
 		//detune
-		detune = detune_table[context->ch3_supp[op-2*4].keycode][operator->detune & 0x3];
+		detune = detune_table[context->ch3_supp[index].keycode][operator->detune & 0x3];
 	} else {
 		inc = channel->fnum;
 		if (!channel->block) {
@@ -601,7 +611,7 @@ void ym_update_phase_inc(ym2612_context * context, ym_operator * operator, uint3
 		//detune
 		detune = detune_table[channel->keycode][operator->detune & 0x3];
 	}
-	if (operator->detune & 0x40) {
+	if (operator->detune & 0x4) {
 		inc -= detune;
 		//this can underflow, mask to 17-bit result
 		inc &= 0x1FFFF;
@@ -611,6 +621,7 @@ void ym_update_phase_inc(ym2612_context * context, ym_operator * operator, uint3
 	//multiple
 	if (operator->multiple) {
 		inc *= operator->multiple;
+		inc &= 0xFFFFF;
 	} else {
 		//0.5
 		inc >>= 1;
@@ -744,6 +755,7 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 				break;
 			case REG_DECAY_AM:
 				//TODO: AM flag for LFO
+				operator->am = value & 0x80;
 				operator->rates[PHASE_DECAY] = value & 0x1F;
 				break;
 			case REG_SUSTAIN_RATE:
@@ -815,5 +827,44 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 uint8_t ym_read_status(ym2612_context * context)
 {
 	return context->status;
+}
+
+void ym_print_channel_info(ym2612_context *context, int channel)
+{
+	ym_channel *chan = context->channels + channel;
+	printf("\n***Channel %d***\n"
+	       "Algorithm: %d\n"
+		   "Feedback:  %d\n"
+		   "Pan:       %s\n"
+		   "AMS:       %d\n"
+		   "PMS:       %d\n", 
+		   channel+1, chan->algorithm, chan->feedback,
+		   chan->lr == 0xC0 ? "LR" : chan->lr == 0x80 ? "L" : chan->lr == 0x40 ? "R" : "",
+		   chan->ams, chan->pms);
+	for (int operator = channel * 4; operator < channel * 4+4; operator++)
+	{
+		int dispnum = operator - channel * 4 + 1;
+		if (dispnum == 2) {
+			dispnum = 3;
+		} else if (dispnum == 3) {
+			dispnum = 2;
+		}
+		ym_operator *op = context->operators + operator;
+		printf("\nOperator %d:\n"
+		       "    Multiple:      %d\n"
+			   "    Detune:        %d\n"
+			   "    Total Level:   %d\n"
+			   "    Attack Rate:   %d\n"
+			   "    Key Scaling:   %d\n"
+			   "    Decay Rate:    %d\n"
+			   "    Sustain Level: %d\n"
+			   "    Sustain Rate:  %d\n"
+			   "    Release Rate:  %d\n"
+			   "    Amplitude Modulation %s\n",
+			   dispnum, op->multiple, op->detune, op->total_level,
+			   op->rates[PHASE_ATTACK], op->key_scaling, op->rates[PHASE_DECAY],
+			   op->sustain_level, op->rates[PHASE_SUSTAIN], op->rates[PHASE_RELEASE],
+			   op->am ? "On" : "Off");
+	}
 }
 

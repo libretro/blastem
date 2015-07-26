@@ -49,6 +49,7 @@
 #define FLAG2_HINT_PENDING   0x02
 #define FLAG2_READ_PENDING   0x04
 #define FLAG2_SPRITE_COLLIDE 0x08
+#define FLAG2_REGION_PAL     0x10
 
 #define DISPLAY_ENABLE 0x40
 
@@ -131,6 +132,8 @@ typedef struct {
 	uint8_t     regs[VDP_REGS];
 	//cycle count in MCLKs
 	uint32_t    cycles;
+	uint32_t    pending_vint_start;
+	uint32_t    pending_hint_start;
 	uint8_t     *vdpmem;
 	//stores 2-bit palette + 4-bit palette index + priority for current sprite line
 	uint8_t     *linebuf;
@@ -142,9 +145,13 @@ typedef struct {
 	uint32_t    colors[CRAM_SIZE*3];
 	uint32_t    debugcolors[1 << (3 + 1 + 1 + 1)];//3 bits for source, 1 bit for priority, 1 bit for shadow, 1 bit for hilight
 	uint16_t    vsram[VSRAM_SIZE];
-	uint8_t     latched_mode;
+	uint16_t    vscroll_latch[2];
+	uint32_t    frame;
+	uint16_t    vcounter;
+	uint16_t    hslot; //hcounter/2
 	uint16_t    hscroll_a;
 	uint16_t    hscroll_b;
+	uint8_t     latched_mode;
 	uint8_t	    sprite_index;
 	uint8_t     sprite_draws;
 	int8_t      slot_counter;
@@ -163,11 +170,12 @@ typedef struct {
 	uint8_t     buf_a_off;
 	uint8_t     buf_b_off;
 	uint8_t     debug;
+	uint8_t     debug_pal;
 	uint8_t     *tmp_buf_a;
 	uint8_t     *tmp_buf_b;
 } vdp_context;
 
-void init_vdp_context(vdp_context * context);
+void init_vdp_context(vdp_context * context, uint8_t region_pal);
 void vdp_run_context(vdp_context * context, uint32_t target_cycles);
 //runs from current cycle count to VBLANK for the current mode, returns ending cycle count
 uint32_t vdp_run_to_vblank(vdp_context * context);
@@ -190,6 +198,8 @@ void vdp_int_ack(vdp_context * context, uint16_t int_num);
 void vdp_print_sprite_table(vdp_context * context);
 void vdp_print_reg_explain(vdp_context * context);
 void latch_mode(vdp_context * context);
+uint32_t vdp_cycles_to_frame_end(vdp_context * context);
+uint32_t vdp_frame_end_line(vdp_context *context);
 
 extern int32_t color_map[1 << 12];
 

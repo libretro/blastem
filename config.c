@@ -9,9 +9,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_NEST 30 //way more than I'll ever need
+#ifdef __MINGW64_VERSION_MAJOR
+#define MINGW_W64_VERSION (__MINGW64_VERSION_MAJOR * 1000 + __MINGW64_VERSION_MINOR)
+#else
+#define MINGW_W64_VERSION 0
+#endif
 
-#ifdef _WIN32
+#if defined(_WIN32) && (MINGW_W64_VERSION < 3003)
 char * strtok_r(char * input, char * sep, char ** state)
 {
 	if (input) {
@@ -32,67 +36,56 @@ char * strtok_r(char * input, char * sep, char ** state)
 }
 #endif
 
-tern_node * parse_config(char * config_data)
+tern_node * parse_config_int(char **state, int started, int *line)
 {
-	char *state, *curline;
-	char *prefix = NULL;
-	int nest_level = 0;
-	char * prefix_parts[MAX_NEST];
-	int line = 1;
+	char *config_data, *curline;
 	tern_node * head = NULL;
-	while ((curline = strtok_r(config_data, "\n", &state)))
+	config_data = started ? NULL : *state;
+	while ((curline = strtok_r(config_data, "\n", state)))
 	{
+		
 		config_data = NULL;
 		curline = strip_ws(curline);
 		int len = strlen(curline);
 		if (!len) {
+			*line = *line + 1;
 			continue;
 		}
 		if (curline[0] == '#') {
+			*line = *line + 1;
 			continue;
 		}
 		if (curline[0] == '}') {
-			if (!nest_level) {
-				fprintf(stderr, "unexpected } on line %d\n", line);
-				exit(1);
+			if (started) {
+				return head;
 			}
-			if (prefix) {
-				free(prefix);
-				prefix = NULL;
-			}
-			nest_level--;
-			curline = strip_ws(curline+1);
+			fatal_error("unexpected } on line %d\n", *line);
 		}
+		
 		char * end = curline + len - 1;
 		if (*end == '{') {
 			*end = 0;
 			curline = strip_ws(curline);
-			prefix_parts[nest_level++] = curline;
-			if (prefix) {
-				free(prefix);
-				prefix = NULL;
-			}
+			*line = *line + 1;
+			head = tern_insert_node(head, curline, parse_config_int(state, 1, line));
 		} else {
-			if (nest_level && !prefix) {
-				prefix = alloc_concat_m(nest_level, prefix_parts);
-			}
 			char * val = strip_ws(split_keyval(curline));
 			char * key = curline;
-			if (*key) {
-				if (prefix) {
-					key = alloc_concat(prefix, key);
-				}
+			if (*val) {
 				head = tern_insert_ptr(head, key, strdup(val));
-				if (prefix) {
-					free(key);
-				}
+			} else {
+				fprintf(stderr, "Key %s is missing a value on line %d\n", key, *line);
 			}
+			*line = *line + 1;
 		}
 	}
-	if (prefix) {
-		free(prefix);
-	}
 	return head;
+}
+
+tern_node * parse_config(char * config_data)
+{
+	int line = 1;
+	return parse_config_int(&config_data, 0, &line);
 }
 
 tern_node * parse_config_file(char * config_path)
@@ -106,10 +99,12 @@ tern_node * parse_config_file(char * config_path)
 	if (!config_size) {
 		goto config_empty;
 	}
-	char * config_data = malloc(config_size);
+	char * config_data = malloc(config_size+1);
 	if (fread(config_data, 1, config_size, config_file) != config_size) {
 		goto config_read_fail;
 	}
+	config_data[config_size] = '\0';
+
 	ret = parse_config(config_data);
 config_read_fail:
 	free(config_data);
@@ -145,7 +140,8 @@ success:
 		return ret;
 	}
 no_config:
-	fputs("Failed to find a config file in ~/.config/blastem/blastem.cfg or in the blastem executable directory\n", stderr);
-	exit(1);
+	fatal_error("Failed to find a config file in ~/.config/blastem/blastem.cfg or in the blastem executable directory\n");
+	//this will never get reached, but the compiler doesn't know that. Let's make it happy
+	return NULL;
 }
 
