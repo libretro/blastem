@@ -126,14 +126,14 @@ GLuint load_shader(char * fname, GLenum shader_type)
 		f = fopen(shader_path, "r");
 		free(shader_path);
 		if (!f) {
-			fprintf(stderr, "Failed to open shader file %s for reading\n", fname);
+			warning("Failed to open shader file %s for reading\n", fname);
 			return 0;
 		}
 	}
 	long fsize = file_size(f);
 	GLchar * text = malloc(fsize);
 	if (fread(text, 1, fsize, f) != fsize) {
-		fprintf(stderr, "Error reading from shader file %s\n", fname);
+		warning("Error reading from shader file %s\n", fname);
 		free(text);
 		return 0;
 	}
@@ -144,11 +144,10 @@ GLuint load_shader(char * fname, GLenum shader_type)
 	GLint compile_status, loglen;
 	glGetShaderiv(ret, GL_COMPILE_STATUS, &compile_status);
 	if (!compile_status) {
-		fprintf(stderr, "Shader %s failed to compile\n", fname);
 		glGetShaderiv(ret, GL_INFO_LOG_LENGTH, &loglen);
 		text = malloc(loglen);
 		glGetShaderInfoLog(ret, loglen, NULL, text);
-		fputs(text, stderr);
+		warning("Shader %s failed to compile:\n%s\n", fname, text);
 		free(text);
 		glDeleteShader(ret);
 		return 0;
@@ -259,22 +258,19 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	main_context = SDL_GL_CreateContext(main_window);
 	GLenum res = glewInit();
 	if (res != GLEW_OK) {
-		fprintf(stderr, "Initialization of GLEW failed with code %d\n", res);
+		warning("Initialization of GLEW failed with code %d\n", res);
 	}
 
-	if (GLEW_VERSION_2_0) {
+	if (res == GLEW_OK && GLEW_VERSION_2_0) {
 		render_gl = 1;
-	}
-	else {
+	} else {
 		SDL_DestroyWindow(main_window);
-		fputs("OpenGL 2.0 is unavailable, falling back to SDL2 renderer\n", stderr);
+		warning("OpenGL 2.0 is unavailable, falling back to SDL2 renderer\n", stderr);
 #endif
 		SDL_CreateWindowAndRenderer(width, height, flags, &main_window, &main_renderer);
 
 		if (!main_window || !main_renderer) {
-			fprintf(stderr, "unable to create SDL window: %s\n", SDL_GetError());
-			SDL_Quit();
-			exit(1);
+			fatal_error("unable to create SDL window: %s\n", SDL_GetError());
 		}
 		main_clip.x = main_clip.y = 0;
 		main_clip.w = width;
