@@ -87,8 +87,8 @@ void set_exe_str(char * str)
 }
 
 #ifdef _WIN32
-#include "Shlobj.h"
-#include "Windows.h"
+#include <windows.h>
+#include <shlobj.h>
 
 char * get_home_dir()
 {

@@ -9,7 +9,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef _WIN32
+#ifdef __MINGW64_VERSION_MAJOR
+#define MINGW_W64_VERSION (__MINGW64_VERSION_MAJOR * 1000 + __MINGW64_VERSION_MINOR)
+#else
+#define MINGW_W64_VERSION 0
+#endif
+
+#if defined(_WIN32) && (MINGW_W64_VERSION < 3003)
 char * strtok_r(char * input, char * sep, char ** state)
 {
 	if (input) {
