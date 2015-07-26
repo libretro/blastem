@@ -53,8 +53,7 @@ tern_node * parse_config_int(char **state, int started, int *line)
 			if (started) {
 				return head;
 			}
-			fprintf(stderr, "unexpected } on line %d\n", *line);
-			exit(1);
+			fatal_error("unexpected } on line %d\n", *line);
 		}
 		
 		char * end = curline + len - 1;
@@ -133,7 +132,8 @@ success:
 		return ret;
 	}
 no_config:
-	fputs("Failed to find a config file in ~/.config/blastem/blastem.cfg or in the blastem executable directory\n", stderr);
-	exit(1);
+	fatal_error("Failed to find a config file in ~/.config/blastem/blastem.cfg or in the blastem executable directory\n");
+	//this will never get reached, but the compiler doesn't know that. Let's make it happy
+	return NULL;
 }
 
