@@ -3,6 +3,23 @@
  This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
+#ifdef _WIN32
+#define WINVER 0x501
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
+int gdb_sock;
+#define GDB_IN_FD gdb_sock
+#define GDB_OUT_FD gdb_sock
+#define GDB_READ(fd, buf, bufsize) recv(fd, buf, bufsize, 0)
+#define GDB_WRITE(fd, buf, bufsize) send(fd, buf, bufsize, 0)
+#else
+#define GDB_IN_FD STDIN_FILENO
+#define GDB_OUT_FD STDOUT_FILENO
+#define GDB_READ read
+#define GDB_WRITE write
+#endif
+
 #include "gdb_remote.h"
 #include "68kinst.h"
 #include "debug.h"
@@ -12,6 +29,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+
 
 #define INITIAL_BUFFER_SIZE (16*1024)
 
@@ -75,7 +94,7 @@ void gdb_calc_checksum(char * command, char *out)
 
 void write_or_die(int fd, const void *buf, size_t count)
 {
-	if (write(fd, buf, count) < count) {
+	if (GDB_WRITE(fd, buf, count) < count) {
 		fputs("Error writing to stdout\n", stderr);
 		exit(1);
 	}
@@ -84,11 +103,11 @@ void write_or_die(int fd, const void *buf, size_t count)
 void gdb_send_command(char * command)
 {
 	char end[3];
-	write_or_die(STDOUT_FILENO, "$", 1);
-	write_or_die(STDOUT_FILENO, command, strlen(command));
+	write_or_die(GDB_OUT_FD, "$", 1);
+	write_or_die(GDB_OUT_FD, command, strlen(command));
 	end[0] = '#';
 	gdb_calc_checksum(command, end+1);
-	write_or_die(STDOUT_FILENO, end, 3);
+	write_or_die(GDB_OUT_FD, end, 3);
 	dfprintf(stderr, "Sent $%s#%c%c\n", command, end[1], end[2]);
 }
 
@@ -146,7 +165,7 @@ void write_byte(m68k_context * context, uint32_t address, uint8_t value)
 		z80_ram[address & 0x1FFF] = value;
 		genesis_context * gen = context->system;
 #ifndef NO_Z80
-		z80_handle_code_write(address & 0x1FFF, gen->z80);
+		z80_handle_code_GDB_WRITE(address & 0x1FFF, gen->z80);
 #endif
 		return;
 	} else {
@@ -487,7 +506,12 @@ m68k_context *  gdb_debug_enter(m68k_context * context, uint32_t pc)
 	while(!cont)
 	{
 		if (!curbuf) {
-			int numread = read(STDIN_FILENO, buf, bufsize);
+			int numread = GDB_READ(GDB_IN_FD, buf, bufsize);
+			if (numread < 0) {
+				fputs("Failed to read on GDB input file descriptor\n", stderr);
+				exit(1);
+			}
+			dfprintf(stderr, "read %d bytes\n", numread);
 			curbuf = buf;
 			end = buf + numread;
 		} else if (partial) {
@@ -495,7 +519,7 @@ m68k_context *  gdb_debug_enter(m68k_context * context, uint32_t pc)
 				memmove(curbuf, buf, end-curbuf);
 				end -= curbuf - buf;
 			}
-			int numread = read(STDIN_FILENO, end, bufsize - (end-buf));
+			int numread = read(GDB_IN_FD, end, bufsize - (end-buf));
 			end += numread;
 			curbuf = buf;
 		}
@@ -515,7 +539,7 @@ m68k_context *  gdb_debug_enter(m68k_context * context, uint32_t pc)
 						//Null terminate payload
 						*curbuf = 0;
 						//send acknowledgement
-						if (write(STDOUT_FILENO, "+", 1) < 1) {
+						if (GDB_WRITE(GDB_OUT_FD, "+", 1) < 1) {
 							fputs("Error writing to stdout\n", stderr);
 							exit(1);
 						}
@@ -538,9 +562,47 @@ m68k_context *  gdb_debug_enter(m68k_context * context, uint32_t pc)
 	return context;
 }
 
+#ifdef _WIN32
+void gdb_cleanup(void)
+{
+	WSACleanup();
+}
+WSADATA wsa_data;
+#endif
+
 void gdb_remote_init(void)
 {
 	buf = malloc(INITIAL_BUFFER_SIZE);
 	curbuf = NULL;
 	bufsize = INITIAL_BUFFER_SIZE;
+#ifdef _WIN32
+	WSAStartup(MAKEWORD(2,2), &wsa_data);
+
+	struct addrinfo request, *result;
+	memset(&request, 0, sizeof(request));
+	request.ai_family = AF_UNSPEC;
+	request.ai_socktype = SOCK_STREAM;
+	request.ai_flags = AI_PASSIVE;
+	getaddrinfo(NULL, "1234", &request, &result);
+
+	int listen_sock = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+	if (listen_sock < 0) {
+		fputs("Failed to open GDB remote debugging socket", stderr);
+		exit(1);
+	}
+	if (bind(listen_sock, result->ai_addr, result->ai_addrlen) < 0) {
+		fputs("Failed to bind GDB remote debugging socket", stderr);
+		exit(1);
+	}
+	if (listen(listen_sock, 1) < 0) {
+		fputs("Failed to listen on GDB remote debugging socket", stderr);
+		exit(1);
+	}
+	gdb_sock = accept(listen_sock, NULL, NULL);
+	if (gdb_sock < 0) {
+		fputs("accpet returned an error while listening on GDB remote debugging socket", stderr);
+		exit(1);
+	}
+	closesocket(listen_sock);
+#endif
 }
