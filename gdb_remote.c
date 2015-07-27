@@ -171,7 +171,7 @@ void write_byte(m68k_context * context, uint32_t address, uint8_t value)
 		z80_ram[address & 0x1FFF] = value;
 		genesis_context * gen = context->system;
 #ifndef NO_Z80
-		z80_handle_code_GDB_WRITE(address & 0x1FFF, gen->z80);
+		z80_handle_code_write(address & 0x1FFF, gen->z80);
 #endif
 		return;
 	} else {
@@ -500,8 +500,7 @@ m68k_context *  gdb_debug_enter(m68k_context * context, uint32_t pc)
 		if (!curbuf) {
 			int numread = GDB_READ(GDB_IN_FD, buf, bufsize);
 			if (numread < 0) {
-				fputs("Failed to read on GDB input file descriptor\n", stderr);
-				exit(1);
+				fatal_error("Failed to read on GDB input file descriptor\n");
 			}
 			dfprintf(stderr, "read %d bytes\n", numread);
 			curbuf = buf;
@@ -578,21 +577,17 @@ void gdb_remote_init(void)
 
 	int listen_sock = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
 	if (listen_sock < 0) {
-		fputs("Failed to open GDB remote debugging socket", stderr);
-		exit(1);
+		fatal_error("Failed to open GDB remote debugging socket");
 	}
 	if (bind(listen_sock, result->ai_addr, result->ai_addrlen) < 0) {
-		fputs("Failed to bind GDB remote debugging socket", stderr);
-		exit(1);
+		fatal_error("Failed to bind GDB remote debugging socket");
 	}
 	if (listen(listen_sock, 1) < 0) {
-		fputs("Failed to listen on GDB remote debugging socket", stderr);
-		exit(1);
+		fatal_error("Failed to listen on GDB remote debugging socket");
 	}
 	gdb_sock = accept(listen_sock, NULL, NULL);
 	if (gdb_sock < 0) {
-		fputs("accpet returned an error while listening on GDB remote debugging socket", stderr);
-		exit(1);
+		fatal_error("accept returned an error while listening on GDB remote debugging socket");
 	}
 	closesocket(listen_sock);
 #endif
