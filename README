@@ -1,20 +1,34 @@
-BlastEm 0.3.0
+BlastEm 0.3.1
 -------------
 
 Installation
 ------------
 
-Extract this tarball to a directory of your choosing. If you wish to change the
-configuration settings, copy default.cfg to ~/.config/blastem/blastem.cfg and
+Extract this archive to a directory of your choosing. If you wish to change the
+configuration settings, copy default.cfg to $HOME/.config/blastem/blastem.cfg and
 modify the copy. You may also whish to add the blastem directory to your PATH
 environment variable.
+
+Usage
+-----
+
+BlastEm does not have much of a GUI at the moment and expects a filename to be
+passed to it at startup. You can do this by either running it from the command
+line or associating it with a file type. To get a list of supported command
+line options on Linux or OSX type:
+
+	./blastem -h
+	
+From within your BlastEm directory. On Windows type:
+	
+	blastem.exe -h
 
 Configuration
 -------------
 
-Configuration is read from the file at ~/.config/blastem/blastem.cfg if it
-exists othwerise it is read from default.cfg from the same directory as the
-blastem executable. Sections are denoted by a section name followed by an open
+Configuration is read from the file at $HOME/.config/blastem/blastem.cfg if it
+exists, othwerise it is read from default.cfg from the same directory as the
+BlastEm executable. Sections are denoted by a section name followed by an open
 curly bracket, the section's contents and a closing curly bracket. Individual
 configuration values are set by entering the value's name followed by a space
 or tab and followed by the desired value.
@@ -65,6 +79,7 @@ interface. The interface is very rough at the moment. Available commands in the
 	                       lower addresses (good for breaking out of loops)
 	s                    - Advance to next instruction (follows bsr/jsr)
 	c                    - Continue
+	bt                   - Print a backtrace
 	p[/(x|X|d|c)] VALUE  - Print a register or memory location
 	vs                   - Print VDP sprite list
 	vr                   - Print VDP register info
@@ -83,7 +98,7 @@ Available commands in the Z80 debugger are:
 
 The -d flag can be used to cause BlastEm to start in the debugger.
 Alternatively, you can use the ui.enter_debugger action (mapped to the 'u' key
-by default)to enter the debugger while a game is running.
+by default) to enter the debugger while a game is running.
 
 GDB Remote Debugging
 --------------------
@@ -99,6 +114,14 @@ where BLASTEM_PATH is the relative or absolute path to your BlastEm
 installation and ROM_FILE.bin is the name of the raw binary for your program.
 BlastEm will halt at the beginning of your program's entry point and return
 control to GDB. This will allow you to set breakpoints before your code runs.
+
+On Windows, the procedure is slightly different. First run 
+	blastem.exe ROM_FILE.bin -D
+This will cause BlastEm to wait for a socket connection on port 1234. It will
+appear to be frozen until gdb connects to it. Now open the ELF file in gdb
+and type:
+
+	target remote :1234
 
 Trace points and watch points are not currently supported.
 
