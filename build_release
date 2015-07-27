@@ -1,0 +1,60 @@
+#!/bin/sh
+
+set -e
+
+if [ -z "$OS" ]; then
+	OS=`uname -s`
+fi
+
+if [ $OS = "Linux" ]; then
+	cd sdl
+	./configure
+	make clean all
+	cd ..
+	rm -rf lib
+	mkdir lib
+	cp sdl/build/.libs/libSDL2-*.so.*.*.* lib
+	sdl=`ls lib`
+	link=`echo $sdl | sed -E 's/(so\.[0-9]*).*/\1/'`
+	cd lib
+	ln -s "$sdl" "$link"
+	ln -s "$sdl" libSDL2.so
+	cd ..
+fi
+
+make PORTABLE=1 clean all
+if [ $OS = "Windows" ]; then
+	binaries="dis.exe zdis.exe stateview.exe vgmplay.exe blastem.exe SDL2.dll"
+	cmd="wine blastem.exe"
+	txt=".txt"
+else
+	binaries="dis zdis stateview vgmplay blastem termhelper lib"
+	cmd="./blastem"
+	txt=""
+fi
+ver=`$cmd -v | awk '/blastem/ { gsub(/\r/, "", $2); print $2 }'`
+if [ $OS = "Windows" ]; then
+	suffix='-win32'
+elif [ $OS = "Darwin" ]; then
+	suffix='-osx'
+else
+	suffix=`file ./blastem | sed -E 's/^[^:]*: [^ ]* ([0-9]*)-bit .*/\1/'`
+fi
+dir="blastem${suffix}-${ver}"
+echo $dir
+rm -rf "$dir"
+mkdir "$dir"
+cp -r $binaries shaders default.cfg rom.db "$dir"
+for file in README COPYING CHANGELOG; do
+	cp "$file" "$dir"/"$file$txt"
+done
+cp sdl/COPYING.txt "$dir"/SDL-LICENSE$txt
+cp glew/LICENSE.txt "$dir"/GLEW-LICENSE$txt
+
+if [ $OS = "Windows" ]; then
+	rm -f "${dir}.zip"
+	zip -r "${dir}.zip" "$dir"
+else
+	rm -f "${dir}.tar.gz"
+	tar -cvzf "${dir}.tar.gz" "$dir"
+fi
