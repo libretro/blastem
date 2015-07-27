@@ -9,6 +9,7 @@
 *Bugfixes*
 
  - GDB remote debugging works again
+ - Fixed a name conflict that prevented vgmplay from being built on OS X
  
 *Other Changes*
 
