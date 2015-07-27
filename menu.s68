@@ -93,6 +93,54 @@
 	dc.b "                "
 	dc.b "JUE "
 	
+;register addresses
+VDP_DATA equ $C00000
+VDP_CTRL equ $C00004
+VDP_HV   equ $C00008
+Z80_RAM  equ $A00000
+IO_AREA  equ $A10000
+
+MODE_0   equ 0
+MODE_1   equ 1
+SCROLL_A equ 2
+WINDOW   equ 3
+SCROLL_B equ 4
+SAT      equ 5
+BG_COLOR equ 7
+HINT     equ $A
+MODE_3   equ $B
+MODE_4   equ $C
+HSCROLL  equ $D
+AUTOINC  equ $F
+SCROLL   EQU $10
+WINDOW_H equ $11
+WINDOW_V equ $12
+DMALEN_L equ $13
+DMALEN_H equ $14
+DMASRC_L equ $15
+DMASRC_M equ $16
+DMASRC_H equ $17
+
+VDP_VRAM_WRITE equ $40000000
+VDP_CRAM_WRITE equ $C0000000
+VDP_VSRAM_WRITE equ $40000010
+VDP_DMA_FLAG equ $80
+
+vdpregset macro
+	move.w #(((\1) << 8) | $8000 | (\2)), (a1)
+	endm
+
+vdpreg macro
+	dc.w (((\1) << 8) | $8000 | (\2))
+	endm
+	
+;Writes a normal VDP command to the control port
+;\1 - VDP address
+;\2 - Access type
+vdpaccess macro
+	move.l #((\2) | (\1) << 16 & $3FFF0000 | (\1) >> 14 & 3), (a1)
+	endm
+	
 empty_handler:
 int_6:
 	rte
@@ -103,31 +151,42 @@ int_4:
 x_pos    rs.w 1
 base_cmd rs.l 1
 
+initial_regs:
+	vdpreg MODE_1, $4    ;Mode 5, everything turned off
+	vdpreg MODE_0, $4
+	vdpreg SCROLL_A, $20 ;Scroll a table $8000
+	vdpreg SCROLL_B, $05 ;Scroll b table $A000
+	vdpreg SAT, $60      ;SAT table $C000
+	vdpreg BG_COLOR, 0
+	vdpreg HINT, $FF
+	vdpreg MODE_3, 0     ;full screen scroll
+	vdpreg MODE_4, $87   ;40 cell mode, double-res interlace
+	vdpreg HSCROLL, 0
+	vdpreg AUTOINC, 2
+	vdpreg SCROLL, 1     ;64x32 scroll size
+end_initial_regs
+
 start:
 	lea $C00000, a0
 	lea $C00004, a1
-	move.w #$8104, (a1) ;Mode 5, everything turned off
-	move.w #$8004, (a1)
-	move.w #$8220, (a1) ;Scroll a table $8000
-	move.w #$8405, (a1) ;Scroll b table $A000
-	move.w #$8560, (a1) ;SAT table $C000
-	move.w #$8700, (a1) ;backdrop color 0
-	move.w #$8B00, (a1) ;full screen scroll
-	move.w #$8C87, (a1) ;40 cell mode, double-res interlace
-	move.w #$8D00, (a1) ;hscroll table at 0
-	move.w #$8F02, (a1) ;autoinc 2
-	move.w #$9001, (a1) ;64x32 scroll size
-	move.l #$C0000000, (a1)
+	
+	moveq #(end_initial_regs-initial_regs-1), d0
+	lea initial_regs.w, a2
+.regloop
+	move.w (a2)+, (a1)
+	dbra d0, .regloop
+	
+	vdpaccess $0, VDP_CRAM_WRITE
 	move.w #$000, (a0)
 	move.w #$EEE, (a0)
 
 	;init scroll table
-	move.l #$40000000, (a1)
+	vdpaccess $0, VDP_VRAM_WRITE
 	move.w #0, (a0)
 	move.w #4, (a0)
 
 	;load tiles
-	move.l #$48000000, (a1)
+	vdpaccess $800, VDP_VRAM_WRITE
 	lea font(pc), a2
 	move.w #((fontend-font)/4 - 1), d0
 tloop:
@@ -136,15 +195,15 @@ tloop:
 
 
 
-	;clear name table
-	move.l #$40000002, (a1)
+	;clear name tables
+	vdpaccess $8000, VDP_VRAM_WRITE
 	moveq #32, d0
 	move.w #(64*64-1), d1
 ploop:
-	move.w d0, (a0)
+	move.l d0, (a0)
 	dbra d1, ploop
 	
-	move.l #$40000002, d3,
+	move.l #$40000002, d3
 	move.l d3, (a1)
 	move.l d3, base_cmd.w
 
@@ -159,6 +218,7 @@ ploop:
 	
 
 wait_forever
+	stop #2500
 	bra wait_forever
 
 Message:
