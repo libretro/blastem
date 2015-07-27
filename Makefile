@@ -1,6 +1,7 @@
 ifndef OS
 OS:=$(shell uname -s)
 endif
+FIXUP:=true
 
 ifeq ($(OS),Windows)
 ifndef SDL2_PREFIX
@@ -12,7 +13,7 @@ endif
 
 MEM:=mem_win.o
 TERMINAL:=terminal_win.o
-BLASTEM:=blastem.exe
+EXE:=.exe
 CC:=wine gcc.exe
 CFLAGS:=-O2 -std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -I"$(SDL2_PREFIX)/include/SDL2" -DGLEW_STATIC
 LDFLAGS:= $(GLEW32S_LIB) -L"$(SDL2_PREFIX)/lib" -lm -lmingw32 -lSDL2main -lSDL2 -lws2_32 -lopengl32 -lglu32 -mwindows
@@ -22,7 +23,7 @@ else
 
 MEM:=mem.o
 TERMINAL:=terminal.o
-BLASTEM:=blastem
+EXE:=
 
 ifeq ($(OS),Darwin)
 LIBS=sdl2 glew
@@ -32,7 +33,6 @@ endif #Darwin
 
 HAS_PROC:=$(shell if [ -d /proc ]; then /bin/echo -e -DHAS_PROC; fi)
 CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -Wno-unused-value -Wno-logical-op-parentheses $(HAS_PROC)
-FIXUP:=
 ifdef PORTABLE
 CFLAGS+= -DGLEW_STATIC -Iglew/include
 LDFLAGS:=-lm glew/lib/libGLEW.a
@@ -40,7 +40,7 @@ LDFLAGS:=-lm glew/lib/libGLEW.a
 ifeq ($(OS),Darwin)
 CFLAGS+= -IFrameworks/SDL2.framework/Headers
 LDFLAGS+= -FFrameworks -framework SDL2 -framework OpenGL
-FIXUP:=install_name_tool -change @rpath/SDL2.framework/Versions/A/SDL2 @executable_path/Frameworks/SDL2.framework/Versions/A/SDL2 ./blastem
+FIXUP:=install_name_tool -change @rpath/SDL2.framework/Versions/A/SDL2 @executable_path/Frameworks/SDL2.framework/Versions/A/SDL2
 else
 CFLAGS+= -Isdl/include
 LDFLAGS+= -Wl,-rpath='$$ORIGIN/lib' -Llib -lSDL2 $(shell pkg-config --libs gl)
@@ -125,23 +125,22 @@ else
 MAINOBJS+= $(Z80OBJS)
 endif
 
-ifeq ($(OS),Windows)
-ALL=$(BLASTEM)
-else
-ALL= dis zdis stateview vgmplay blastem termhelper
+ALL=dis$(EXE) zdis$(EXE) stateview$(EXE) vgmplay$(EXE) blastem$(EXE)
+ifneq ($(OS),Windows)
+ALL+= termhelper
 endif
 
 all : $(ALL)
 
-$(BLASTEM) : $(MAINOBJS)
-	$(CC) -o $(BLASTEM) $(MAINOBJS) $(LDFLAGS)
-	$(FIXUP)
+blastem$(EXE) : $(MAINOBJS)
+	$(CC) -o $@ $^ $(LDFLAGS)
+	$(FIXUP) ./$@
 
-dis : dis.o 68kinst.o tern.o vos_program_module.o
-	$(CC) -o dis dis.o 68kinst.o tern.o vos_program_module.o
+dis$(EXE) : dis.o 68kinst.o tern.o vos_program_module.o
+	$(CC) -o $@ $^ 
 
-zdis : zdis.o z80inst.o
-	$(CC) -o zdis zdis.o z80inst.o
+zdis$(EXE) : zdis.o z80inst.o
+	$(CC) -o $@ $^ 
 
 libemu68k.a : $(M68KOBJS) $(TRANSOBJS)
 	ar rcs libemu68k.a $(M68KOBJS) $(TRANSOBJS)
@@ -158,11 +157,13 @@ ztestrun : ztestrun.o $(Z80OBJS) $(TRANSOBJS)
 ztestgen : ztestgen.o z80inst.o
 	$(CC) -ggdb -o ztestgen ztestgen.o z80inst.o
 
-stateview : stateview.o vdp.o render_sdl.o $(CONFIGOBJS) gst.o
-	$(CC) -o stateview stateview.o vdp.o render_sdl.o $(CONFIGOBJS) gst.o $(LDFLAGS)
+stateview$(EXE) : stateview.o vdp.o render_sdl.o $(CONFIGOBJS) gst.o
+	$(CC) -o $@ $^ $(LDFLAGS)
+	$(FIXUP) ./$@
 
-vgmplay : vgmplay.o render_sdl.o $(CONFIGOBJS) $(AUDIOOBJS)
-	$(CC) -o vgmplay vgmplay.o render_sdl.o $(CONFIGOBJS) $(AUDIOOBJS) $(LDFLAGS)
+vgmplay$(EXE) : vgmplay.o render_sdl.o $(CONFIGOBJS) $(AUDIOOBJS)
+	$(CC) -o $@ $^ $(LDFLAGS)
+	$(FIXUP) ./$@
 
 test : test.o vdp.o
 	$(CC) -o test test.o vdp.o

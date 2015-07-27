@@ -6,9 +6,19 @@
 #include "z80inst.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 uint8_t visited[(64*1024)/8];
 uint8_t label[(64*1024)/8];
+
+void fatal_error(char *format, ...)
+{
+	va_list args;
+	va_start(args, format);
+	vfprintf(stderr, format, args);
+	va_end(args);
+	exit(1);
+}
 
 void visit(uint16_t address)
 {
