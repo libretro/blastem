@@ -3,7 +3,7 @@
 
 void init_terminal()
 {
-	static init_done;
+	static char init_done;
 	if (!init_done) {
 		AllocConsole();
 		freopen("CONIN$", "r", stdin);
