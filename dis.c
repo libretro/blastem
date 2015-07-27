@@ -7,11 +7,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 #include "vos_program_module.h"
 #include "tern.h"
 
 uint8_t visited[(16*1024*1024)/16];
 uint16_t label[(16*1024*1024)/8];
+
+void fatal_error(char *format, ...)
+{
+	va_list args;
+	va_start(args, format);
+	vfprintf(stderr, format, args);
+	va_end(args);
+	exit(1);
+}
+
 
 void visit(uint32_t address)
 {
