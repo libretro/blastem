@@ -9,6 +9,10 @@
 *Bugfixes*
 
  - GDB remote debugging works again
+ 
+*Other Changes*
+
+ - Windows build now includes the disassemblers, VGM player and save state viewer
 
 0.3.0
 -----
