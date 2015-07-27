@@ -1,3 +1,40 @@
+0.3.0
+-----
+*New Features*
+
+ - 32-bit x86 CPUs are now supported
+ - BlastEm is now available for OS X and Windows
+ - Finished support for the Sega mapper used by Super Street Fighter 2
+ - Added support for EEPROM saves
+ - Added support for large flat-mapped ROMs (used by some homebrew ROMS)
+ - New 68K debugger command bt (backtrace)
+ - I/O devices (gamepads and other peripherals) can now be configured in blastem.cfg
+ - VDP Debugger views from before 0.1.0 have been restored
+ 
+*Bugfixes*
+
+ - Partial emulation of floating bus bits for certain I/O regs (fixes Super Offroad 2)
+ - Fixed shadow/highlight mode
+ - Implemented AM and fixed LFO update speed
+ - Fixed negative detune values
+ - Corrected register to operator mapping for channel 3 special mode
+ - Initial stab at emulating cycles being stolen from the 68K when the Z80 accesses its bus
+ - Better handling of creating a savestate in "uncooperative" games/demos
+ - Implemented VSCROLL latching
+ - Fixed a bug that would corrupt the Z80's SP register in some situations
+ - Fixed PAL flag in VDP status register
+ - Fixed HV counter
+ - Fixed flag calculation for RRA, RRCA, RLA and RLCA
+ - Fixed instruction timing for RR, RRC, RL and RLC when using the IX or IY registers
+ - Fixed access to the I and R registers
+
+*Other Changes*
+
+ - Upgraded to SDL2
+ - Dropped suport for the non-OpenGL render path
+ - Linux builds should now work on something other than the specific version of Ubuntu I happen to be using at build time
+ - BlastEm now syncs at least once per line by default. You can change this behavior with the max_clocks config value
+
 0.2.0
 -----
 *New Features*
