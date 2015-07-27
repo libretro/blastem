@@ -1,3 +1,15 @@
+0.3.1
+-----
+*New Features*
+
+ - BlastEm will now open a new terminal window when starting the debugger if it's not attached to one
+ - Errors are displayed in a message box if no terminal is attached
+ - Pure SDL render path for when OpenGL 2 is unavailable (thanks Higor Eurípedes)
+ 
+*Bugfixes*
+
+ - GDB remote debugging works again
+
 0.3.0
 -----
 *New Features*
