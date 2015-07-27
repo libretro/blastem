@@ -20,6 +20,9 @@ if [ $OS = "Linux" ]; then
 	ln -s "$sdl" "$link"
 	ln -s "$sdl" libSDL2.so
 	cd ..
+	cd glew
+	make clean all
+	cd ..
 fi
 
 make PORTABLE=1 clean all
