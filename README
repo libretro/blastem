@@ -125,6 +125,17 @@ and type:
 
 Trace points and watch points are not currently supported.
 
+Included Tools
+--------------
+
+BlastEm ships with a few small utilities that leverage portions of the emulator
+code.
+	
+	dis       - 68K disassembler
+	zdis      - Z80 disassembler
+	vgmplay   - Very basic VGM player
+	stateview - GST save state viewer
+
 License
 -------
 
