@@ -110,11 +110,11 @@ int headless = 0;
 #define MAX_SOUND_CYCLES 100000
 tern_node * config;
 
-void wait(ym2612_context * y_context, psg_context * p_context, uint32_t * current_cycle, uint32_t cycles)
+void vgm_wait(ym2612_context * y_context, psg_context * p_context, uint32_t * current_cycle, uint32_t cycles)
 {
 	while (cycles > MAX_SOUND_CYCLES)
 	{
-		wait(y_context, p_context, current_cycle, MAX_SOUND_CYCLES);
+		vgm_wait(y_context, p_context, current_cycle, MAX_SOUND_CYCLES);
 		cycles -= MAX_SOUND_CYCLES;
 	}
 	*current_cycle += cycles;
@@ -138,6 +138,7 @@ typedef struct {
 
 int main(int argc, char ** argv)
 {
+	set_exe_str(argv[0]);
 	data_block *blocks = NULL;
 	data_block *seek_block = NULL;
 	uint32_t seek_offset;
@@ -199,14 +200,14 @@ int main(int argc, char ** argv)
 			uint32_t wait_time = *(cur++);
 			wait_time |= *(cur++) << 8;
 			wait_time *= mclks_sample;
-			wait(&y_context, &p_context, &current_cycle, wait_time);
+			vgm_wait(&y_context, &p_context, &current_cycle, wait_time);
 			break;
 		}
 		case CMD_WAIT_60:
-			wait(&y_context, &p_context, &current_cycle, 735 * mclks_sample);
+			vgm_wait(&y_context, &p_context, &current_cycle, 735 * mclks_sample);
 			break;
 		case CMD_WAIT_50:
-			wait(&y_context, &p_context, &current_cycle, 882 * mclks_sample);
+			vgm_wait(&y_context, &p_context, &current_cycle, 882 * mclks_sample);
 			break;
 		case CMD_END:
 			if (header.loop_offset && --loop_count) {
@@ -265,7 +266,7 @@ int main(int argc, char ** argv)
 			if (cmd >= CMD_WAIT_SHORT && cmd < (CMD_WAIT_SHORT + 0x10)) {
 				uint32_t wait_time = (cmd & 0xF) + 1;
 				wait_time *= mclks_sample;
-				wait(&y_context, &p_context, &current_cycle, wait_time);
+				vgm_wait(&y_context, &p_context, &current_cycle, wait_time);
 			} else if (cmd >= CMD_YM2612_DAC && cmd < CMD_DAC_STREAM_SETUP) {
 				if (seek_block) {
 					ym_address_write_part1(&y_context, 0x2A);
@@ -282,7 +283,7 @@ int main(int argc, char ** argv)
 				if (wait_time)
 				{
 					wait_time *= mclks_sample;
-					wait(&y_context, &p_context, &current_cycle, wait_time);
+					vgm_wait(&y_context, &p_context, &current_cycle, wait_time);
 				}
 			} else {
 				fatal_error("unimplemented command: %X at offset %X\n", cmd, (unsigned int)(cur - data - 1));

@@ -31,7 +31,11 @@ if [ $OS = "Windows" ]; then
 	cmd="wine blastem.exe"
 	txt=".txt"
 else
-	binaries="dis zdis stateview vgmplay blastem termhelper lib"
+	if [ $OS = "Darwin" ]; then
+		binaries="dis zdis stateview vgmplay blastem termhelper Frameworks"
+	else
+		binaries="dis zdis stateview vgmplay blastem termhelper lib"
+	fi
 	cmd="./blastem"
 	txt=""
 fi
@@ -51,7 +55,11 @@ cp -r $binaries shaders default.cfg rom.db "$dir"
 for file in README COPYING CHANGELOG; do
 	cp "$file" "$dir"/"$file$txt"
 done
-cp sdl/COPYING.txt "$dir"/SDL-LICENSE$txt
+if [ $OS = "Darwin" ]; then
+	cp SDL-LICENSE "$dir"
+else
+	cp sdl/COPYING.txt "$dir"/SDL-LICENSE$txt
+fi
 cp glew/LICENSE.txt "$dir"/GLEW-LICENSE$txt
 
 if [ $OS = "Windows" ]; then

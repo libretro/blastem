@@ -68,6 +68,7 @@ int main(int argc, char ** argv)
 	if (!state_file) {
 		fatal_error("Failed to open %s\n", argv[1]);
 	}
+	set_exe_str(argv[0]);
 	config = load_config(argv[0]);
 	int width = -1;
 	int height = -1;
