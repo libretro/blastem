@@ -19,7 +19,7 @@
 #include <string.h>
 #include <ctype.h>
 
-#define BLASTEM_VERSION "0.3.1"
+#define BLASTEM_VERSION "0.3.X"
 
 #define MCLKS_NTSC 53693175
 #define MCLKS_PAL  53203395
