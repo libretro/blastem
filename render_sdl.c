@@ -117,13 +117,13 @@ GLuint load_shader(char * fname, GLenum shader_type)
 {
 	char * parts[] = {get_home_dir(), "/.config/blastem/shaders/", fname};
 	char * shader_path = alloc_concat_m(3, parts);
-	FILE * f = fopen(shader_path, "r");
+	FILE * f = fopen(shader_path, "rb");
 	free(shader_path);
 	if (!f) {
 		parts[0] = get_exe_dir();
 		parts[1] = "/shaders/";
 		shader_path = alloc_concat_m(3, parts);
-		f = fopen(shader_path, "r");
+		f = fopen(shader_path, "rb");
 		free(shader_path);
 		if (!f) {
 			warning("Failed to open shader file %s for reading\n", fname);

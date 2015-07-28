@@ -91,7 +91,7 @@ tern_node * parse_config(char * config_data)
 tern_node * parse_config_file(char * config_path)
 {
 	tern_node * ret = NULL;
-	FILE * config_file = fopen(config_path, "r");
+	FILE * config_file = fopen(config_path, "rb");
 	if (!config_file) {
 		goto open_fail;
 	}
