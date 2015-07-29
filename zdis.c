@@ -77,6 +77,7 @@ int main(int argc, char ** argv)
 	fread(filebuf, 1, filesize, f);
 	fclose(f);
 	deferred *def = NULL, *tmpd;
+	uint16_t offset = 0;
 	for(uint8_t opt = 2; opt < argc; ++opt) {
 		if (argv[opt][0] == '-') {
 			FILE * address_log;
@@ -111,6 +112,15 @@ int main(int argc, char ** argv)
 						}
 					}
 				}
+				break;
+			case 's':
+				opt++;
+				if (opt >= argc) {
+					fputs("-s must be followed by a start offset in hex\n", stderr);
+					exit(1);
+				}
+				offset = strtol(argv[opt], NULL, 16);
+				break;
 			}
 		} else {
 			uint16_t address = strtol(argv[opt], NULL, 16);
@@ -118,7 +128,7 @@ int main(int argc, char ** argv)
 			reference(address);
 		}
 	}
-	uint16_t start = 0;
+	uint16_t start = offset;
 	uint8_t *encoded, *next;
 	uint32_t size;
 	if (!def || !only) {
@@ -130,7 +140,7 @@ int main(int argc, char ** argv)
 			encoded = NULL;
 			address = def->address;
 			if (!is_visited(address)) {
-				encoded = filebuf + address;
+				encoded = filebuf + address - offset;
 			}
 			tmpd = def;
 			def = def->next;
@@ -140,7 +150,7 @@ int main(int argc, char ** argv)
 			break;
 		}
 		for(;;) {
-			if (address > filesize || is_visited(address)) {
+			if ((address - offset) > filesize || is_visited(address) || address < offset) {
 				break;
 			}
 			visit(address);
@@ -154,7 +164,7 @@ int main(int argc, char ** argv)
 			{
 			case Z80_JR:
 				address += instbuf.immed;
-				encoded = filebuf + address;
+				encoded = filebuf + address - offset;
 				break;
 			case Z80_JRCC:
 				reference(address + instbuf.immed);
@@ -162,7 +172,7 @@ int main(int argc, char ** argv)
 				break;
 			case Z80_JP:
 				address = instbuf.immed;
-				encoded = filebuf + address;
+				encoded = filebuf + address - offset;
 				break;
 			case Z80_JPCC:
 			case Z80_CALL:
@@ -186,9 +196,9 @@ int main(int argc, char ** argv)
 		}
 		puts("");
 	}
-	for (address = 0; address < filesize; address++) {
+	for (address = offset; address < filesize; address++) {
 		if (is_visited(address)) {
-			encoded = filebuf + address;
+			encoded = filebuf + address - offset;
 			z80_decode(encoded, &instbuf);
 			if (labels) {
 				/*m68k_disasm_labels(&instbuf, disbuf);
