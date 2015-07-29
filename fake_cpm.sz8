@@ -1,0 +1,105 @@
+CONSOLE_PORT equ 0
+STATUS_PORT  equ 1
+EXIT_PORT    equ 2
+	org $E400
+	jp handle_call
+	ld a, (should_exit)
+	dec a
+	jr z, do_exit
+	ld a, 1
+	ld (should_exit), a
+	jp $100
+do_exit:
+no_impl
+	out (EXIT_PORT), a
+should_exit:
+	dc.b 0
+	
+console_in:
+	in a, (CONSOLE_PORT)
+	ld l, a
+	ret
+console_out:
+	ld a, e
+	out (CONSOLE_PORT), a
+	ret
+get_iobyte:
+	ld a, (3)
+	ld l, a
+	ret
+set_iobyte:
+	ld a, e
+	ld (3), a
+	ret
+write_string:
+	ld c, '$'
+	jp .start
+.continue
+	out (CONSOLE_PORT), a
+	inc de
+.start
+	ld a, (de)
+	cp c
+	jr nz, .continue
+	;flush output
+	out (STATUS_PORT),a 
+	ret
+read_string:
+	ld a, (de)
+	ld c, a
+	ld b, $A ;newline
+	inc c
+	inc de
+	push de
+	inc de
+	jp .start
+.continue
+	in a, (CONSOLE_PORT)
+	cp b
+	jr z, .end
+	ld (de), a
+	inc de
+.start
+	dec c
+	jr nz, .continue
+	;todo: consume excess characters
+.end
+	pop hl
+	ex de, hl
+	sbc hl, de
+	ld a, l
+	ld (de), a
+	ret
+
+console_status:
+	in a, (STATUS_PORT)
+	ld l, a
+	ret
+
+handle_call:
+	ld a, c
+	or a
+	jr z, do_exit
+	dec a
+	jr z, console_in
+	dec a
+	jr z, console_out
+	dec a
+	jr z, no_impl ;aux reader input
+	dec a
+	jr z, no_impl ;aux punch output
+	dec a
+	jr z, no_impl ;printer output
+	dec a
+	jr z, no_impl ;direct console IO
+	dec a
+	jr z, get_iobyte
+	dec a
+	jr z, set_iobyte
+	dec a
+	jr z, write_string
+	dec a
+	jr z, read_string
+	dec a
+	jr z, console_status
+	jp no_impl

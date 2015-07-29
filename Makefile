@@ -164,6 +164,9 @@ stateview$(EXE) : stateview.o vdp.o render_sdl.o $(CONFIGOBJS) gst.o
 vgmplay$(EXE) : vgmplay.o render_sdl.o $(CONFIGOBJS) $(AUDIOOBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
 	$(FIXUP) ./$@
+	
+blastcpm : blastcpm.o util.o $(Z80OBJS) $(TRANSOBJS)
+	$(CC) -o $@ $^
 
 test : test.o vdp.o
 	$(CC) -o test test.o vdp.o
