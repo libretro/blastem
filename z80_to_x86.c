@@ -339,7 +339,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 	code_info *code = &opts->gen.code;
 	if (!interp) {
 		check_cycles_int(&opts->gen, address);
-		if (context->breakpoint_flags[address / sizeof(uint8_t)] & (1 << (address % sizeof(uint8_t)))) {
+		if (context->breakpoint_flags[address / 8] & (1 << (address % 8))) {
 			zbreakpoint_patch(context, address, start);
 		}
 #ifdef Z80_LOG_ADDRESS
@@ -2244,7 +2244,7 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 	} while (opts->gen.deferred);
 }
 
-void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t num_chunks, uint32_t clock_divider)
+void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t num_chunks, memmap_chunk const * io_chunks, uint32_t num_io_chunks, uint32_t clock_divider)
 {
 	memset(options, 0, sizeof(*options));
 
@@ -2451,18 +2451,13 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	*skip_sync = code->cur - (skip_sync+1);
 	retn(code);
 
-	options->read_io = code->cur;
-	check_cycles(&options->gen);
-	cycles(&options->gen, 4);
-	//Genesis has no IO hardware and always returns FF
-	//eventually this should use a second memory map array
-	mov_ir(code, 0xFF, options->gen.scratch1, SZ_B);
-	retn(code);
-
-	options->write_io = code->cur;
-	check_cycles(&options->gen);
-	cycles(&options->gen, 4);
-	retn(code);
+	//HACK
+	options->gen.address_size = SZ_D;
+	options->gen.address_mask = 0xFF;
+	options->read_io = gen_mem_fun(&options->gen, io_chunks, num_io_chunks, READ_8, NULL);
+	options->write_io = gen_mem_fun(&options->gen, io_chunks, num_io_chunks, WRITE_8, NULL);
+	options->gen.address_size = SZ_W;
+	options->gen.address_mask = 0xFFFF;
 
 	options->read_16 = code->cur;
 	cycles(&options->gen, 3);
@@ -2722,9 +2717,9 @@ void zcreate_stub(z80_context * context)
 void zinsert_breakpoint(z80_context * context, uint16_t address, uint8_t * bp_handler)
 {
 	context->bp_handler = bp_handler;
-	uint8_t bit = 1 << (address % sizeof(uint8_t));
-	if (!(bit & context->breakpoint_flags[address / sizeof(uint8_t)])) {
-		context->breakpoint_flags[address / sizeof(uint8_t)] |= bit;
+	uint8_t bit = 1 << (address % 8);
+	if (!(bit & context->breakpoint_flags[address / 8])) {
+		context->breakpoint_flags[address / 8] |= bit;
 		if (!context->bp_stub) {
 			zcreate_stub(context);
 		}
@@ -2737,7 +2732,7 @@ void zinsert_breakpoint(z80_context * context, uint16_t address, uint8_t * bp_ha
 
 void zremove_breakpoint(z80_context * context, uint16_t address)
 {
-	context->breakpoint_flags[address / sizeof(uint8_t)] &= ~(1 << (address % sizeof(uint8_t)));
+	context->breakpoint_flags[address / 8] &= ~(1 << (address % 8));
 	uint8_t * native = z80_get_native_address(context, address);
 	if (native) {
 		z80_options * opts = context->options;

@@ -1037,7 +1037,7 @@ int main(int argc, char ** argv)
 	z80_context z_context;
 #ifndef NO_Z80
 	z80_options z_opts;
-	init_z80_opts(&z_opts, z80_map, 5, MCLKS_PER_Z80);
+	init_z80_opts(&z_opts, z80_map, 5, NULL, 0, MCLKS_PER_Z80);
 	init_z80_context(&z_context, &z_opts);
 	z80_assert_reset(&z_context, 0);
 #endif
