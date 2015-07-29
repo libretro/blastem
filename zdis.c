@@ -196,7 +196,7 @@ int main(int argc, char ** argv)
 		}
 		puts("");
 	}
-	for (address = offset; address < filesize; address++) {
+	for (address = offset; address < filesize + offset; address++) {
 		if (is_visited(address)) {
 			encoded = filebuf + address - offset;
 			z80_decode(encoded, &instbuf);
