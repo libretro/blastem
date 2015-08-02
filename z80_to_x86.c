@@ -406,10 +406,10 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		}
 		if (inst->ea_reg == Z80_I && inst->addr_mode == Z80_REG) {
 			//ld a, i sets some flags
-			//TODO: Implement half-carry flag
 			cmp_ir(code, 0, dst_op.base, SZ_B);
 			setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
 			setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
+			mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_H), SZ_B);;
 			mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);;
 			mov_rdispr(code, opts->gen.context_reg, offsetof(z80_context, iff2), opts->gen.scratch1, SZ_B);
 			mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zf_off(ZF_PV), SZ_B);
@@ -580,7 +580,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		} else {
 			sub_irdisp(code, 1, opts->gen.context_reg,  zr_off(Z80_BC), SZ_W);
 		}
-		//TODO: Implement half-carry
+		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_H), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		setcc_rdisp(code, CC_NZ, opts->gen.context_reg, zf_off(ZF_PV));
 		break;
@@ -614,7 +614,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		jmp(code, start);
 		*cont = code->cur - (cont + 1);
 		cycles(&opts->gen, 2);
-		//TODO: Implement half-carry
+		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_H), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_PV), SZ_B);
 		break;
@@ -641,7 +641,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		} else {
 			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_BC), SZ_W);
 		}
-		//TODO: Implement half-carry
+		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_H), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		setcc_rdisp(code, CC_NZ, opts->gen.context_reg, zf_off(ZF_PV));
 		break;
@@ -671,11 +671,10 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		jcc(code, CC_Z, code->cur+2);
 		cycles(&opts->gen, 7);
 		//TODO: Figure out what the flag state should be here
-		//TODO: Figure out whether an interrupt can interrupt this
 		jmp(code, start);
 		*cont = code->cur - (cont + 1);
 		cycles(&opts->gen, 2);
-		//TODO: Implement half-carry
+		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_H), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_PV), SZ_B);
 		break;
