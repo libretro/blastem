@@ -15,7 +15,7 @@ MEM:=mem_win.o
 TERMINAL:=terminal_win.o
 EXE:=.exe
 CC:=wine gcc.exe
-CFLAGS:=-O2 -std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -I"$(SDL2_PREFIX)/include/SDL2" -DGLEW_STATIC
+CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -I"$(SDL2_PREFIX)/include/SDL2" -DGLEW_STATIC
 LDFLAGS:= $(GLEW32S_LIB) -L"$(SDL2_PREFIX)/lib" -lm -lmingw32 -lSDL2main -lSDL2 -lws2_32 -lopengl32 -lglu32 -mwindows
 CPU:=i686
 
@@ -55,6 +55,7 @@ LDFLAGS+= -framework OpenGL
 endif
 
 endif #PORTABLE
+endif #Windows
 
 ifdef DEBUG
 CFLAGS:=-ggdb $(CFLAGS)
@@ -63,7 +64,6 @@ else
 CFLAGS:=-O2 -flto $(CFLAGS)
 LDFLAGS:=-O2 -flto $(LDFLAGS)
 endif #DEBUG
-endif #Windows
 
 ifdef Z80_LOG_ADDRESS
 CFLAGS+= -DZ80_LOG_ADDRESS
