@@ -258,6 +258,22 @@ uint16_t *m68k_decode_op_ex(uint16_t *cur, uint8_t mode, uint8_t reg, uint8_t si
 	return cur;
 }
 
+uint8_t m68k_valid_immed_dst(m68k_op_info *dst)
+{
+	if (dst->addr_mode == MODE_AREG || dst->addr_mode == MODE_IMMEDIATE) {
+		return 0;
+	}
+	return 1;
+}
+
+uint8_t m68k_valid_immed_limited_dst(m68k_op_info *dst)
+{
+	if (dst->addr_mode == MODE_AREG || dst->addr_mode > MODE_ABSOLUTE) {
+		return 0;
+	}
+	return 1;
+}
+
 uint16_t *m68k_decode_op(uint16_t *cur, uint8_t size, m68k_op_info *dst)
 {
 	uint8_t mode = (*cur >> 3) & 0x7;
@@ -406,7 +422,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 						break;
 					}
 					istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
-					if (!istream) {
+					if (!istream || !m68k_valid_immed_limited_dst(&(decoded->dst))) {
 						decoded->op = M68K_INVALID;
 						break;
 					}
@@ -445,7 +461,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 						break;
 					}
 					istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
-					if (!istream) {
+					if (!istream || !m68k_valid_immed_limited_dst(&(decoded->dst))) {
 						decoded->op = M68K_INVALID;
 						break;
 					}
@@ -472,7 +488,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 					break;
 				}
 				istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
-				if (!istream) {
+				if (!istream || !m68k_valid_immed_limited_dst(&(decoded->dst))) {
 					decoded->op = M68K_INVALID;
 					break;
 				}
@@ -498,7 +514,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 					break;
 				}
 				istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
-				if (!istream) {
+				if (!istream || !m68k_valid_immed_limited_dst(&(decoded->dst))) {
 					decoded->op = M68K_INVALID;
 					break;
 				}
@@ -561,7 +577,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 						break;
 					}
 					istream = m68k_decode_op_ex(istream, opmode, reg, size, &(decoded->dst));
-					if (!istream) {
+					if (!istream || !m68k_valid_immed_limited_dst(&(decoded->dst))) {
 						decoded->op = M68K_INVALID;
 						break;
 					}
@@ -588,7 +604,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 					break;
 				}
 				istream = m68k_decode_op_ex(istream, opmode, reg, decoded->extra.size, &(decoded->dst));
-				if (!istream) {
+				if (!istream || !m68k_valid_immed_dst(&(decoded->dst))) {
 					decoded->op = M68K_INVALID;
 					break;
 				}
