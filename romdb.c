@@ -493,7 +493,7 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 		memcpy(info->map+2, base_map, sizeof(memmap_chunk) * base_chunks);
 		
 		if (ram_start >= rom_end) {
-			info->map[0].end = rom_end > 0x400000 ? rom_end : 0x400000;
+			info->map[0].end = rom_end < 0x400000 ? nearest_pow2(rom_end) - 1 : 0xFFFFFF;
 			//TODO: ROM mirroring
 			info->map[0].mask = 0xFFFFFF;
 			info->map[0].flags = MMAP_READ;
@@ -542,8 +542,8 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 		memset(info->map, 0, sizeof(memmap_chunk));
 		memcpy(info->map+1, base_map, sizeof(memmap_chunk) * base_chunks);
 		
-		info->map[0].end =rom_end > 0x400000 ? rom_end : 0x400000;
-		info->map[0].mask = 0xFFFFFF;
+		info->map[0].end = rom_end > 0x400000 ? rom_end : 0x400000;
+		info->map[0].mask = rom_end < 0x400000 ? nearest_pow2(rom_end) - 1 : 0xFFFFFF;
 		info->map[0].flags = MMAP_READ;
 		info->map[0].buffer = rom;
 		info->save_type = SAVE_NONE;
