@@ -94,14 +94,20 @@
 	dc.b "JUE "
 	
 ;register addresses
-VDP_DATA equ $C00000
-VDP_CTRL equ $C00004
-VDP_HV   equ $C00008
-Z80_RAM  equ $A00000
-IO_AREA  equ $A10000
+VDP_DATA  equ $C00000
+VDP_CTRL  equ $C00004
+VDP_HV    equ $C00008
+Z80_RAM   equ $A00000
+IO_AREA   equ $A10000
+PAD1_DATA equ (IO_AREA + 3)
+PAD2_DATA equ (IO_AREA + 5)
+EXT_DATA  equ (IO_AREA + 7)
+PAD1_CTRL equ (IO_AREA + 9)
+PAD2_CTRL equ (IO_AREA + 11)
+EXT_CTRL  equ (IO_AREA + 13)
 
-MODE_0   equ 0
-MODE_1   equ 1
+MODE_1   equ 0
+MODE_2   equ 1
 SCROLL_A equ 2
 WINDOW   equ 3
 SCROLL_B equ 4
@@ -141,19 +147,85 @@ vdpaccess macro
 	move.l #((\2) | (\1) << 16 & $3FFF0000 | (\1) >> 14 & 3), (a1)
 	endm
 	
-empty_handler:
-int_6:
-	rte
-int_4:
-	rte
+;Writes a DMA command to the control port
+;\1 - Destination address
+;\2 - Destination type
+startdma macro
+	move.l #(\2 | VDP_DMA_FLAG | (\1 << 16) & $3FFF0000 | (\1 >> 14) & 3), (a1)
+	endm
+	
+DMA_SRC_68K  equ 0
+DMA_SRC_VRAM equ $C0
+DMA_SRC_FILL equ $80
+
+dmasrc macro
+	move.l #($95009600 + (\1) << 15 & $FF0000 + (\1) >> 9 & $FF), (a1)
+	move.w #($9700 + (\1) >> 17 & $7F | (\2)), (a1)
+	endm
 	
 	rsset $FFFF8000
-x_pos    rs.w 1
-base_cmd rs.l 1
+x_pos       rs.w 1
+base_cmd    rs.l 1
+sprite_list rs.l 160
+num_sprites rs.b 1
+last_pad    rs.b 1
+	
+int_6:
+	dmasrc sprite_list, DMA_SRC_68K
+	;set DMA length
+	move.l #$94009300, d0
+	moveq #0, d1
+	move.b num_sprites.w, d1
+	add.w d1, d1
+	add.w d1, d1
+	move.b d1, d0
+	swap d0
+	lsr.w #8, d1
+	move.b d1, d0
+	move.l d0, (a1)
+	startdma $C000, VDP_VRAM_WRITE
+	
+	lea PAD1_DATA, a2
+	move.b #$40, (a2)
+	move.b (a2), d0
+	and.b #$3F, d0
+	move.b d0, (a2)
+	move.b (a2), d1
+	and.b #$30, d1
+	add.b d1, d1
+	add.b d1, d1
+	or.b d1, d0
+	not.b d0
+	move.b (last_pad).w, d1
+	eor.b d0, d1
+	and.b d0, d1
+	move.b d0, (last_pad).w
+	
+	moveq #16, d2
+	btst #1, d1
+	bne down
+	btst #0, d1
+	bne up
+	rte
+	
+down:
+	add.w d2, (sprite_list).w
+	add.w d2, (sprite_list+8).w
+	rte
+up:
+	sub.w d2, (sprite_list).w
+	sub.w d2, (sprite_list+8).w
+	rte
+	
+int_4:
+empty_handler:
+	rte
+	
+
 
 initial_regs:
-	vdpreg MODE_1, $4    ;Mode 5, everything turned off
-	vdpreg MODE_0, $4
+	vdpreg MODE_2, $4    ;Mode 5, everything turned off
+	vdpreg MODE_1, $4
 	vdpreg SCROLL_A, $20 ;Scroll a table $8000
 	vdpreg SCROLL_B, $05 ;Scroll b table $A000
 	vdpreg SAT, $60      ;SAT table $C000
@@ -177,8 +249,9 @@ start:
 	dbra d0, .regloop
 	
 	vdpaccess $0, VDP_CRAM_WRITE
-	move.w #$000, (a0)
+	move.w #$020, (a0)
 	move.w #$EEE, (a0)
+	move.w #$222, (a0)
 
 	;init scroll table
 	vdpaccess $0, VDP_VRAM_WRITE
@@ -188,7 +261,7 @@ start:
 	;load tiles
 	vdpaccess $800, VDP_VRAM_WRITE
 	lea font(pc), a2
-	move.w #((fontend-font)/4 - 1), d0
+	move.w #((arrowend-font)/4 - 1), d0
 tloop:
 	move.l (a2)+, (a0)
 	dbra d0, tloop
@@ -198,12 +271,27 @@ tloop:
 	;clear name tables
 	vdpaccess $8000, VDP_VRAM_WRITE
 	moveq #32, d0
+	swap d0
+	move.b #32, d0
 	move.w #(64*64-1), d1
 ploop:
 	move.l d0, (a0)
 	dbra d1, ploop
 	
-	move.l #$40000002, d3
+	;setup SAT
+	;;vdpaccess $C000, VDP_VRAM_WRITE
+	
+	lea sprite_list.w, a2
+	;left arrow
+	move.l #$01080501, (a2)+
+	move.l #$807F0086, (a2)+
+	
+	;right arrow
+	move.l #$01080500, (a2)+
+	move.l #$887F01AA, (a2)+
+	move.b #2, num_sprites.w
+	
+	move.l #$40860002, d3
 	move.l d3, (a1)
 	move.l d3, base_cmd.w
 
@@ -211,10 +299,10 @@ ploop:
 	moveq #0, d0
 	bsr print_string
 	
+	;setup gamepad in port 1
+	move.b #$40, PAD1_CTRL
 	
-	
-	move.w #$8144, (a1) ;enable display
-	move #$2300, sr
+	move.w #$8174, (a1) ;enable display, vertical interrupts, DMA
 	
 
 wait_forever
@@ -260,7 +348,7 @@ print_string:
 	and.w #$FFFE, d1
 	swap d1
 	eor.l #$20000000, d3
-	or.l d3, d1
+	add.l d3, d1
 	move.l d1, (a1)
 	bra .loop
 .newline
@@ -280,6 +368,9 @@ print_string:
 font:
 	incbin font_interlace_variable.tiles
 fontend
+arrow:
+	incbin arrow.tiles
+arrowend:
 
 widths:
 	dc.b 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 1
