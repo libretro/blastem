@@ -632,7 +632,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_DE), SZ_W);
 		}
 		if (opts->regs[Z80_HL] >= 0) {
-			add_ir(code, 1, opts->regs[Z80_HL], SZ_W);
+			sub_ir(code, 1, opts->regs[Z80_HL], SZ_W);
 		} else {
 			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_HL), SZ_W);
 		}
@@ -658,7 +658,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_DE), SZ_W);
 		}
 		if (opts->regs[Z80_HL] >= 0) {
-			add_ir(code, 1, opts->regs[Z80_HL], SZ_W);
+			sub_ir(code, 1, opts->regs[Z80_HL], SZ_W);
 		} else {
 			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_HL), SZ_W);
 		}
