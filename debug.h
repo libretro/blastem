@@ -12,9 +12,10 @@ typedef struct disp_def {
 } disp_def;
 
 typedef struct bp_def {
-	struct bp_def * next;
-	uint32_t address;
-	uint32_t index;
+	struct bp_def *next;
+	char          *commands;
+	uint32_t      address;
+	uint32_t      index;
 } bp_def;
 
 bp_def ** find_breakpoint(bp_def ** cur, uint32_t address);
