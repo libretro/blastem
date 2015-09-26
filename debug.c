@@ -88,6 +88,50 @@ void strip_nl(char * buf)
 	}
 }
 
+void debugger_print(m68k_context *context, char format_char, char *param)
+{
+	uint32_t value;
+	char format[8];
+	strcpy(format, "%s: %d\n");
+	switch (format_char)
+	{
+	case 'x':
+	case 'X':
+	case 'd':
+	case 'c':
+		format[5] = format_char;
+		break;
+	case '\0':
+		break;
+	default:
+		fprintf(stderr, "Unrecognized format character: %c\n", format_char);
+	}
+	if (param[0] == 'd' && param[1] >= '0' && param[1] <= '7') {
+		value = context->dregs[param[1]-'0'];
+	} else if (param[0] == 'a' && param[1] >= '0' && param[1] <= '7') {
+		value = context->aregs[param[1]-'0'];
+	} else if (param[0] == 'S' && param[1] == 'R') {
+		value = (context->status << 8);
+		for (int flag = 0; flag < 5; flag++) {
+			value |= context->flags[flag] << (4-flag);
+		}
+	} else if(param[0] == 'c') {
+		value = context->current_cycle;
+	} else if ((param[0] == '0' && param[1] == 'x') || param[0] == '$') {
+		uint32_t p_addr = strtol(param+(param[0] == '0' ? 2 : 1), NULL, 16);
+		if ((p_addr & 0xFFFFFF) == 0xC00004) {
+			genesis_context * gen = context->system;
+			value = vdp_hv_counter_read(gen->vdp);
+		} else {
+			value = read_dma_value(p_addr/2);
+		}
+	} else {
+		fprintf(stderr, "Unrecognized parameter to p: %s\n", param);
+		return;
+	}
+	printf(format, param, value);
+}
+
 #ifndef NO_Z80
 
 void zdebugger_print(z80_context * context, char format_char, char * param)
@@ -468,12 +512,280 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 
 #endif
 
+static uint32_t branch_t;
+static uint32_t branch_f;
+
+int run_debugger_command(m68k_context *context, char *input_buf)
+{
+	m68kinst inst;
+	char * param;
+	char format_char;
+	uint32_t value, after;
+	bp_def *new_bp, **this_bp;
+	switch(input_buf[0])
+	{
+		case 'c':
+			printf("%X, %X\n", input_buf[1], input_buf[2]);
+			puts("Continuing");
+			return 0;
+		case 'b':
+			if (input_buf[1] == 't') {
+				uint32_t stack = context->aregs[7];
+				if (stack >= 0xE00000) {
+					stack &= 0xFFFF;
+					uint8_t non_adr_count = 0;
+					do {
+						uint32_t bt_address = ram[stack/2] << 16 | ram[stack/2+1];
+						bt_address = get_instruction_start(context->native_code_map, bt_address - 2);
+						if (bt_address) {
+							stack += 4;
+							non_adr_count = 0;
+							uint16_t *bt_pc = NULL;
+							if (bt_address < 0x400000) {
+								bt_pc = cart + bt_address/2;
+							} else if(bt_address > 0xE00000) {
+								bt_pc = ram + (bt_address & 0xFFFF)/2;
+							}
+							m68k_decode(bt_pc, &inst, bt_address);
+							m68k_disasm(&inst, input_buf);
+							printf("%X: %s\n", bt_address, input_buf);
+						} else {
+							//non-return address value on stack can be word wide
+							stack += 2;
+							non_adr_count++;
+						}
+						stack &= 0xFFFF;
+					} while (stack && non_adr_count < 6);
+				}
+			} else {
+				param = find_param(input_buf);
+				if (!param) {
+					fputs("b command requires a parameter\n", stderr);
+					break;
+				}
+				value = strtol(param, NULL, 16);
+				insert_breakpoint(context, value, (uint8_t *)debugger);
+				new_bp = malloc(sizeof(bp_def));
+				new_bp->next = breakpoints;
+				new_bp->address = value;
+				new_bp->index = bp_index++;
+				breakpoints = new_bp;
+				printf("68K Breakpoint %d set at %X\n", new_bp->index, value);
+			}
+			break;
+		case 'a':
+			param = find_param(input_buf);
+			if (!param) {
+				fputs("a command requires a parameter\n", stderr);
+				break;
+			}
+			value = strtol(param, NULL, 16);
+			insert_breakpoint(context, value, (uint8_t *)debugger);
+			return 0;
+		case 'd':
+			if (input_buf[1] == 'i') {
+				format_char = 0;
+				for(int i = 2; input_buf[i] != 0 && input_buf[i] != ' '; i++) {
+					if (input_buf[i] == '/') {
+						format_char = input_buf[i+1];
+						break;
+					}
+				}
+				param = find_param(input_buf);
+				if (!param) {
+					fputs("display command requires a parameter\n", stderr);
+					break;
+				}
+				debugger_print(context, format_char, param);
+				add_display(&displays, &disp_index, format_char, param);
+			} else {
+				param = find_param(input_buf);
+				if (!param) {
+					fputs("d command requires a parameter\n", stderr);
+					break;
+				}
+				value = atoi(param);
+				this_bp = find_breakpoint_idx(&breakpoints, value);
+				if (!*this_bp) {
+					fprintf(stderr, "Breakpoint %d does not exist\n", value);
+					break;
+				}
+				new_bp = *this_bp;
+				*this_bp = (*this_bp)->next;
+				free(new_bp);
+			}
+			break;
+		case 'p':
+			format_char = 0;
+			for(int i = 2; input_buf[i] != 0 && input_buf[i] != ' '; i++) {
+				if (input_buf[i] == '/') {
+					format_char = input_buf[i+1];
+					break;
+				}
+			}
+			param = find_param(input_buf);
+			if (!param) {
+				fputs("p command requires a parameter\n", stderr);
+				break;
+			}
+			debugger_print(context, format_char, param);
+			break;
+		case 'n':
+			if (inst.op == M68K_RTS) {
+				after = (read_dma_value(context->aregs[7]/2) << 16) | read_dma_value(context->aregs[7]/2 + 1);
+			} else if (inst.op == M68K_RTE || inst.op == M68K_RTR) {
+				after = (read_dma_value((context->aregs[7]+2)/2) << 16) | read_dma_value((context->aregs[7]+2)/2 + 1);
+			} else if(m68k_is_noncall_branch(&inst)) {
+				if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
+					branch_f = after;
+					branch_t = m68k_branch_target(&inst, context->dregs, context->aregs);
+					insert_breakpoint(context, branch_t, (uint8_t *)debugger);
+				} else if(inst.op == M68K_DBCC) {
+					if ( inst.extra.cond == COND_FALSE) {
+						if (context->dregs[inst.dst.params.regs.pri] & 0xFFFF) {
+							after = m68k_branch_target(&inst, context->dregs, context->aregs);
+						}
+					} else {
+						branch_t = after;
+						branch_f = m68k_branch_target(&inst, context->dregs, context->aregs);
+						insert_breakpoint(context, branch_f, (uint8_t *)debugger);
+					}
+				} else {
+					after = m68k_branch_target(&inst, context->dregs, context->aregs);
+				}
+			}
+			insert_breakpoint(context, after, (uint8_t *)debugger);
+			return 0;
+		case 'o':
+			if (inst.op == M68K_RTS) {
+				after = (read_dma_value(context->aregs[7]/2) << 16) | read_dma_value(context->aregs[7]/2 + 1);
+			} else if (inst.op == M68K_RTE || inst.op == M68K_RTR) {
+				after = (read_dma_value((context->aregs[7]+2)/2) << 16) | read_dma_value((context->aregs[7]+2)/2 + 1);
+			} else if(m68k_is_noncall_branch(&inst)) {
+				if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
+					branch_t = m68k_branch_target(&inst, context->dregs, context->aregs)  & 0xFFFFFF;
+					if (branch_t < after) {
+							branch_t = 0;
+					} else {
+						branch_f = after;
+						insert_breakpoint(context, branch_t, (uint8_t *)debugger);
+					}
+				} else if(inst.op == M68K_DBCC) {
+					uint32_t target = m68k_branch_target(&inst, context->dregs, context->aregs)  & 0xFFFFFF;
+					if (target > after) {
+						if (inst.extra.cond == COND_FALSE) {
+							after = target;
+						} else {
+							branch_f = target;
+							branch_t = after;
+							insert_breakpoint(context, branch_f, (uint8_t *)debugger);
+						}
+					}
+				} else {
+					after = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
+				}
+			}
+			insert_breakpoint(context, after, (uint8_t *)debugger);
+			return 0;
+		case 's':
+			if (inst.op == M68K_RTS) {
+				after = (read_dma_value(context->aregs[7]/2) << 16) | read_dma_value(context->aregs[7]/2 + 1);
+			} else if (inst.op == M68K_RTE || inst.op == M68K_RTR) {
+				after = (read_dma_value((context->aregs[7]+2)/2) << 16) | read_dma_value((context->aregs[7]+2)/2 + 1);
+			} else if(m68k_is_branch(&inst)) {
+				if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
+					branch_f = after;
+					branch_t = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
+					insert_breakpoint(context, branch_t, (uint8_t *)debugger);
+				} else if(inst.op == M68K_DBCC && inst.extra.cond != COND_FALSE) {
+					branch_t = after;
+					branch_f = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
+					insert_breakpoint(context, branch_f, (uint8_t *)debugger);
+				} else {
+					after = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
+				}
+			}
+			insert_breakpoint(context, after, (uint8_t *)debugger);
+			return 0;
+		case 'v': {
+			genesis_context * gen = context->system;
+			//VDP debug commands
+			switch(input_buf[1])
+			{
+			case 's':
+				vdp_print_sprite_table(gen->vdp);
+				break;
+			case 'r':
+				vdp_print_reg_explain(gen->vdp);
+				break;
+			}
+			break;
+		}
+		case 'y': {
+			genesis_context * gen = context->system;
+			//YM-2612 debug commands
+			switch(input_buf[1])
+			{
+			case 'c':
+				if (input_buf[2] == ' ') {
+					int channel = atoi(input_buf+3)-1;
+					ym_print_channel_info(gen->ym, channel);
+				} else {
+					for (int i = 0; i < 6; i++) {
+						ym_print_channel_info(gen->ym, i);
+					}
+				}
+			}
+			break;
+		}
+#ifndef NO_Z80
+		case 'z': {
+			genesis_context * gen = context->system;
+			//Z80 debug commands
+			switch(input_buf[1])
+			{
+			case 'b':
+				param = find_param(input_buf);
+				if (!param) {
+					fputs("zb command requires a parameter\n", stderr);
+					break;
+				}
+				value = strtol(param, NULL, 16);
+				zinsert_breakpoint(gen->z80, value, (uint8_t *)zdebugger);
+				new_bp = malloc(sizeof(bp_def));
+				new_bp->next = zbreakpoints;
+				new_bp->address = value;
+				new_bp->index = zbp_index++;
+				zbreakpoints = new_bp;
+				printf("Z80 Breakpoint %d set at %X\n", new_bp->index, value);
+				break;
+			case 'p':
+				param = find_param(input_buf);
+				if (!param) {
+					fputs("zp command requires a parameter\n", stderr);
+					break;
+				}
+				zdebugger_print(gen->z80, input_buf[2] == '/' ? input_buf[3] : 0, param);
+			}
+			break;
+		}
+#endif
+		case 'q':
+			puts("Quitting");
+			exit(0);
+			break;
+		default:
+			fprintf(stderr, "Unrecognized debugger command %s\n", input_buf);
+			break;
+	}
+	return 1;
+}
+
+
 m68k_context * debugger(m68k_context * context, uint32_t address)
 {
 	static char last_cmd[1024];
 	char input_buf[1024];
-	static uint32_t branch_t;
-	static uint32_t branch_f;
 	m68kinst inst;
 	
 	init_terminal();
@@ -500,6 +812,9 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 		printf("68K Breakpoint %d hit\n", (*this_bp)->index);
 	} else {
 		remove_breakpoint(context, address);
+	}
+	for (disp_def * cur = displays; cur; cur = cur->next) {
+		debugger_print(context, cur->format_char, cur->param);
 	}
 	uint16_t * pc;
 	if (address < 0x400000) {
@@ -550,283 +865,7 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 		} else {
 			strcpy(input_buf, last_cmd);
 		}
-		char * param;
-		char format[8];
-		uint32_t value;
-		bp_def * new_bp;
-		switch(input_buf[0])
-		{
-			case 'c':
-				puts("Continuing");
-				debugging = 0;
-				break;
-			case 'b':
-				if (input_buf[1] == 't') {
-					uint32_t stack = context->aregs[7];
-					if (stack >= 0xE00000) {
-						stack &= 0xFFFF;
-						uint8_t non_adr_count = 0;
-						do {
-							uint32_t bt_address = ram[stack/2] << 16 | ram[stack/2+1];
-							bt_address = get_instruction_start(context->native_code_map, bt_address - 2);
-							if (bt_address) {
-								stack += 4;
-								non_adr_count = 0;
-								uint16_t *bt_pc = NULL;
-								if (bt_address < 0x400000) {
-									bt_pc = cart + bt_address/2;
-								} else if(bt_address > 0xE00000) {
-									bt_pc = ram + (bt_address & 0xFFFF)/2;
-								}
-								m68k_decode(bt_pc, &inst, bt_address);
-								m68k_disasm(&inst, input_buf);
-								printf("%X: %s\n", bt_address, input_buf);
-							} else {
-								//non-return address value on stack can be word wide
-								stack += 2;
-								non_adr_count++;
-							}
-							stack &= 0xFFFF;
-						} while (stack && non_adr_count < 6);
-					}
-				} else {
-					param = find_param(input_buf);
-					if (!param) {
-						fputs("b command requires a parameter\n", stderr);
-						break;
-					}
-					value = strtol(param, NULL, 16);
-					insert_breakpoint(context, value, (uint8_t *)debugger);
-					new_bp = malloc(sizeof(bp_def));
-					new_bp->next = breakpoints;
-					new_bp->address = value;
-					new_bp->index = bp_index++;
-					breakpoints = new_bp;
-					printf("68K Breakpoint %d set at %X\n", new_bp->index, value);
-				}
-				break;
-			case 'a':
-				param = find_param(input_buf);
-				if (!param) {
-					fputs("a command requires a parameter\n", stderr);
-					break;
-				}
-				value = strtol(param, NULL, 16);
-				insert_breakpoint(context, value, (uint8_t *)debugger);
-				debugging = 0;
-				break;
-			case 'd':
-				param = find_param(input_buf);
-				if (!param) {
-					fputs("d command requires a parameter\n", stderr);
-					break;
-				}
-				value = atoi(param);
-				this_bp = find_breakpoint_idx(&breakpoints, value);
-				if (!*this_bp) {
-					fprintf(stderr, "Breakpoint %d does not exist\n", value);
-					break;
-				}
-				new_bp = *this_bp;
-				*this_bp = (*this_bp)->next;
-				free(new_bp);
-				break;
-			case 'p':
-				strcpy(format, "%s: %d\n");
-				if (input_buf[1] == '/') {
-					switch (input_buf[2])
-					{
-					case 'x':
-					case 'X':
-					case 'd':
-					case 'c':
-						format[5] = input_buf[2];
-						break;
-					default:
-						fprintf(stderr, "Unrecognized format character: %c\n", input_buf[2]);
-					}
-				}
-				param = find_param(input_buf);
-				if (!param) {
-					fputs("p command requires a parameter\n", stderr);
-					break;
-				}
-				if (param[0] == 'd' && param[1] >= '0' && param[1] <= '7') {
-					value = context->dregs[param[1]-'0'];
-				} else if (param[0] == 'a' && param[1] >= '0' && param[1] <= '7') {
-					value = context->aregs[param[1]-'0'];
-				} else if (param[0] == 'S' && param[1] == 'R') {
-					value = (context->status << 8);
-					for (int flag = 0; flag < 5; flag++) {
-						value |= context->flags[flag] << (4-flag);
-					}
-				} else if(param[0] == 'c') {
-					value = context->current_cycle;
-				} else if ((param[0] == '0' && param[1] == 'x') || param[0] == '$') {
-					uint32_t p_addr = strtol(param+(param[0] == '0' ? 2 : 1), NULL, 16);
-					if ((p_addr & 0xFFFFFF) == 0xC00004) {
-						genesis_context * gen = context->system;
-						value = vdp_hv_counter_read(gen->vdp);
-					} else {
-						value = read_dma_value(p_addr/2);
-					}
-				} else {
-					fprintf(stderr, "Unrecognized parameter to p: %s\n", param);
-					break;
-				}
-				printf(format, param, value);
-				break;
-			case 'n':
-				if (inst.op == M68K_RTS) {
-					after = (read_dma_value(context->aregs[7]/2) << 16) | read_dma_value(context->aregs[7]/2 + 1);
-				} else if (inst.op == M68K_RTE || inst.op == M68K_RTR) {
-					after = (read_dma_value((context->aregs[7]+2)/2) << 16) | read_dma_value((context->aregs[7]+2)/2 + 1);
-				} else if(m68k_is_noncall_branch(&inst)) {
-					if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
-						branch_f = after;
-						branch_t = m68k_branch_target(&inst, context->dregs, context->aregs);
-						insert_breakpoint(context, branch_t, (uint8_t *)debugger);
-					} else if(inst.op == M68K_DBCC) {
-						if ( inst.extra.cond == COND_FALSE) {
-							if (context->dregs[inst.dst.params.regs.pri] & 0xFFFF) {
-								after = m68k_branch_target(&inst, context->dregs, context->aregs);
-							}
-						} else {
-							branch_t = after;
-							branch_f = m68k_branch_target(&inst, context->dregs, context->aregs);
-							insert_breakpoint(context, branch_f, (uint8_t *)debugger);
-						}
-					} else {
-						after = m68k_branch_target(&inst, context->dregs, context->aregs);
-					}
-				}
-				insert_breakpoint(context, after, (uint8_t *)debugger);
-				debugging = 0;
-				break;
-			case 'o':
-				if (inst.op == M68K_RTS) {
-					after = (read_dma_value(context->aregs[7]/2) << 16) | read_dma_value(context->aregs[7]/2 + 1);
-				} else if (inst.op == M68K_RTE || inst.op == M68K_RTR) {
-					after = (read_dma_value((context->aregs[7]+2)/2) << 16) | read_dma_value((context->aregs[7]+2)/2 + 1);
-				} else if(m68k_is_noncall_branch(&inst)) {
-					if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
-						branch_t = m68k_branch_target(&inst, context->dregs, context->aregs)  & 0xFFFFFF;
-						if (branch_t < after) {
-								branch_t = 0;
-						} else {
-							branch_f = after;
-							insert_breakpoint(context, branch_t, (uint8_t *)debugger);
-						}
-					} else if(inst.op == M68K_DBCC) {
-						uint32_t target = m68k_branch_target(&inst, context->dregs, context->aregs)  & 0xFFFFFF;
-						if (target > after) {
-							if (inst.extra.cond == COND_FALSE) {
-								after = target;
-							} else {
-								branch_f = target;
-								branch_t = after;
-								insert_breakpoint(context, branch_f, (uint8_t *)debugger);
-							}
-						}
-					} else {
-						after = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
-					}
-				}
-				insert_breakpoint(context, after, (uint8_t *)debugger);
-				debugging = 0;
-				break;
-			case 's':
-				if (inst.op == M68K_RTS) {
-					after = (read_dma_value(context->aregs[7]/2) << 16) | read_dma_value(context->aregs[7]/2 + 1);
-				} else if (inst.op == M68K_RTE || inst.op == M68K_RTR) {
-					after = (read_dma_value((context->aregs[7]+2)/2) << 16) | read_dma_value((context->aregs[7]+2)/2 + 1);
-				} else if(m68k_is_branch(&inst)) {
-					if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
-						branch_f = after;
-						branch_t = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
-						insert_breakpoint(context, branch_t, (uint8_t *)debugger);
-					} else if(inst.op == M68K_DBCC && inst.extra.cond != COND_FALSE) {
-						branch_t = after;
-						branch_f = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
-						insert_breakpoint(context, branch_f, (uint8_t *)debugger);
-					} else {
-						after = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
-					}
-				}
-				insert_breakpoint(context, after, (uint8_t *)debugger);
-				debugging = 0;
-				break;
-			case 'v': {
-				genesis_context * gen = context->system;
-				//VDP debug commands
-				switch(input_buf[1])
-				{
-				case 's':
-					vdp_print_sprite_table(gen->vdp);
-					break;
-				case 'r':
-					vdp_print_reg_explain(gen->vdp);
-					break;
-				}
-				break;
-			}
-			case 'y': {
-				genesis_context * gen = context->system;
-				//YM-2612 debug commands
-				switch(input_buf[1])
-				{
-				case 'c':
-					if (input_buf[2] == ' ') {
-						int channel = atoi(input_buf+3)-1;
-						ym_print_channel_info(gen->ym, channel);
-					} else {
-						for (int i = 0; i < 6; i++) {
-							ym_print_channel_info(gen->ym, i);
-						}
-					}
-				}
-				break;
-			}
-#ifndef NO_Z80
-			case 'z': {
-				genesis_context * gen = context->system;
-				//Z80 debug commands
-				switch(input_buf[1])
-				{
-				case 'b':
-					param = find_param(input_buf);
-					if (!param) {
-						fputs("zb command requires a parameter\n", stderr);
-						break;
-					}
-					value = strtol(param, NULL, 16);
-					zinsert_breakpoint(gen->z80, value, (uint8_t *)zdebugger);
-					new_bp = malloc(sizeof(bp_def));
-					new_bp->next = zbreakpoints;
-					new_bp->address = value;
-					new_bp->index = zbp_index++;
-					zbreakpoints = new_bp;
-					printf("Z80 Breakpoint %d set at %X\n", new_bp->index, value);
-					break;
-				case 'p':
-					param = find_param(input_buf);
-					if (!param) {
-						fputs("zp command requires a parameter\n", stderr);
-						break;
-					}
-					zdebugger_print(gen->z80, input_buf[2] == '/' ? input_buf[3] : 0, param);
-				}
-				break;
-			}
-#endif
-			case 'q':
-				puts("Quitting");
-				exit(0);
-				break;
-			default:
-				fprintf(stderr, "Unrecognized debugger command %s\n", input_buf);
-				break;
-		}
+		debugging = run_debugger_command(context, input_buf);
 	}
 	return context;
 }
