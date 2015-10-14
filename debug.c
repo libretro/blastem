@@ -525,9 +525,45 @@ int run_debugger_command(m68k_context *context, char *input_buf)
 	switch(input_buf[0])
 	{
 		case 'c':
-			printf("%X, %X\n", input_buf[1], input_buf[2]);
-			puts("Continuing");
-			return 0;
+			if (input_buf[1] == 0 || input_buf[1] == 'o' && input_buf[2] == 'n')
+			{
+				printf("%X, %X\n", input_buf[1], input_buf[2]);
+				puts("Continuing");
+				return 0;
+			} else if (input_buf[1] == 'o' && input_buf[2] == 'm') {
+				param = find_param(input_buf);
+				if (!param) {
+					fputs("com command requires a parameter\n", stderr);
+					break;
+				}
+				bp_def **target = find_breakpoint_idx(&breakpoints, atoi(param));
+				if (!target) {
+					fprintf(stderr, "Breakpoint %s does not exist!\n", param);
+					break;
+				}
+				printf("Enter commands for breakpoing %d, type end when done\n", atoi(param));
+				char cmd_buf[1024];
+				char *commands = NULL;
+				for (;;)
+				{
+					fputs(">>", stdout);
+					fflush(stdout);
+					fgets(cmd_buf, sizeof(cmd_buf), stdin);
+					if (strcmp(cmd_buf, "end\n")) {
+						if (commands) {
+							char *tmp = commands;
+							commands = alloc_concat(commands, cmd_buf);
+							free(tmp);
+						} else {
+							commands = strdup(cmd_buf);
+						}
+					} else {
+						break;
+					}
+				}
+				(*target)->commands = commands;
+			} else {
+			}
 		case 'b':
 			if (input_buf[1] == 't') {
 				uint32_t stack = context->aregs[7];
@@ -612,6 +648,9 @@ int run_debugger_command(m68k_context *context, char *input_buf)
 				}
 				new_bp = *this_bp;
 				*this_bp = (*this_bp)->next;
+				if (new_bp->commands) {
+					free(new_bp->commands);
+				}
 				free(new_bp);
 			}
 			break;
@@ -787,9 +826,9 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 	static char last_cmd[1024];
 	char input_buf[1024];
 	m68kinst inst;
-	
+
 	init_terminal();
-	
+
 	sync_components(context, 0);
 	//probably not necessary, but let's play it safe
 	address &= 0xFFFFFF;
@@ -806,10 +845,30 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 		}
 		branch_t = branch_f = 0;
 	}
+	int debugging = 1;
 	//Check if this is a user set breakpoint, or just a temporary one
 	bp_def ** this_bp = find_breakpoint(&breakpoints, address);
 	if (*this_bp) {
-		printf("68K Breakpoint %d hit\n", (*this_bp)->index);
+
+		if ((*this_bp)->commands)
+		{
+			char *commands = strdup((*this_bp)->commands);
+			char *copy = commands;
+
+			while (debugging && *commands)
+			{
+				char *cmd = commands;
+				strip_nl(cmd);
+				commands += strlen(cmd) + 1;
+				debugging = run_debugger_command(context, cmd);
+			}
+			free(copy);
+		}
+		if (debugging) {
+			printf("68K Breakpoint %d hit\n", (*this_bp)->index);
+		} else {
+			return context;
+		}
 	} else {
 		remove_breakpoint(context, address);
 	}
@@ -828,7 +887,6 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 	m68k_disasm(&inst, input_buf);
 	printf("%X: %s\n", address, input_buf);
 	uint32_t after = address + (after_pc-pc)*2;
-	int debugging = 1;
 #ifdef _WIN32
 #define prompt 1
 #else
