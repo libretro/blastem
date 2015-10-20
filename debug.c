@@ -656,7 +656,7 @@ int run_debugger_command(m68k_context *context, char *input_buf)
 			break;
 		case 'p':
 			format_char = 0;
-			for(int i = 2; input_buf[i] != 0 && input_buf[i] != ' '; i++) {
+			for(int i = 1; input_buf[i] != 0 && input_buf[i] != ' '; i++) {
 				if (input_buf[i] == '/') {
 					format_char = input_buf[i+1];
 					break;
