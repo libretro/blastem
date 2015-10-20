@@ -14,6 +14,7 @@
 #include "gst.h"
 #include "util.h"
 #include "romdb.h"
+#include "terminal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -237,7 +238,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 				exit(0);
 			}
 		}
-		
+
 		vdp_adjust_cycles(v_context, mclks);
 		io_adjust_cycles(gen->ports, context->current_cycle, mclks);
 		io_adjust_cycles(gen->ports+1, context->current_cycle, mclks);
@@ -297,7 +298,7 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 		int blocked;
 		uint32_t before_cycle = v_context->cycles;
 		if (vdp_port < 4) {
-			
+
 			while (vdp_data_port_write(v_context, value) < 0) {
 				while(v_context->flags & FLAG_DMA_RUN) {
 					vdp_run_dma_done(v_context, gen->frame_end);
@@ -445,8 +446,8 @@ uint8_t z80_vdp_port_read(uint32_t vdp_port, void * vcontext)
 	//TODO: Below cycle time is an estimate based on the time between 68K !BG goes low and Z80 !MREQ goes high
 	//      Needs a new logic analyzer capture to get the actual delay on the 68K side
 	gen->m68k->current_cycle += 8 * MCLKS_PER_68K;
-	
-	
+
+
 	vdp_port &= 0x1F;
 	uint16_t ret;
 	if (vdp_port < 0x10) {
@@ -794,7 +795,7 @@ void persist_save()
 void init_run_cpu(genesis_context * gen, rom_info *rom, FILE * address_log, char * statefile, uint8_t * debugger)
 {
 	m68k_options opts;
-	
+
 	gen->save_type = rom->save_type;
 	if (gen->save_type != SAVE_NONE) {
 		gen->save_ram_mask = rom->save_mask;
@@ -817,7 +818,7 @@ void init_run_cpu(genesis_context * gen, rom_info *rom, FILE * address_log, char
 	} else {
 		gen->save_storage = NULL;
 	}
-	
+
 	init_m68k_opts(&opts, rom->map, rom->map_chunks, MCLKS_PER_68K);
 	opts.address_log = address_log;
 	m68k_context *context = init_68k_context(&opts);
@@ -831,7 +832,7 @@ void init_run_cpu(genesis_context * gen, rom_info *rom, FILE * address_log, char
 			context->mem_pointers[rom->map[i].ptr_index] = rom->map[i].buffer;
 		}
 	}
-	
+
 	if (statefile) {
 		uint32_t pc = load_gst(gen, statefile);
 		if (!pc) {
@@ -958,6 +959,9 @@ int main(int argc, char ** argv)
 					fatal_error("-s must be followed by a savestate filename\n");
 				}
 				statefile = argv[i];
+				break;
+			case 't':
+				force_no_terminal();
 				break;
 			case 'y':
 				ym_log = 1;
