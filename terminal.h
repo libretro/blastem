@@ -2,6 +2,7 @@
 #define TERMINAL_H_
 
 void init_terminal();
+void force_no_terminal();
 
 #define INPUT_PATH "/tmp/blastem_input"
 #define OUTPUT_PATH "/tmp/blastem_output"
