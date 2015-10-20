@@ -1397,11 +1397,9 @@ void translate_m68k_abcd_sbcd(m68k_options *opts, m68kinst *inst, host_ea *src_o
 	}
 	mov_rr(code, opts->gen.scratch1, opts->gen.scratch1 + (AH-RAX), SZ_B);
 	mov_rr(code, other_reg, other_reg + (AH-RAX), SZ_B);
-	and_ir(code, 0xF0, opts->gen.scratch1, SZ_B);
-	and_ir(code, 0xF0, other_reg, SZ_B);
 	and_ir(code, 0xF, opts->gen.scratch1 + (AH-RAX), SZ_B);
 	and_ir(code, 0xF, other_reg + (AH-RAX), SZ_B);
-	//do op on low nibble
+	//do op on low nibble so we can determine if an adjustment is necessary
 	flag_to_carry(opts, FLAG_X);
 	if (inst->op == M68K_ABCD) {
 		adc_rr(code, other_reg + (AH-RAX), opts->gen.scratch1 + (AH-RAX), SZ_B);
@@ -1409,43 +1407,54 @@ void translate_m68k_abcd_sbcd(m68k_options *opts, m68kinst *inst, host_ea *src_o
 		sbb_rr(code, other_reg + (AH-RAX), opts->gen.scratch1 + (AH-RAX), SZ_B);
 	}
 	cmp_ir(code, 0xA, opts->gen.scratch1 + (AH-RAX), SZ_B);
+	mov_ir(code, 0xA0, other_reg + (AH-RAX), SZ_B);
 	code_ptr no_adjust = code->cur+1;
 	//add correction factor if necessary
 	jcc(code, CC_B, no_adjust);
-	if (inst->op == M68K_ABCD) {
-		add_ir(code, 6, opts->gen.scratch1 + (AH-RAX), SZ_B);
-	} else {
-		sub_ir(code, 6, opts->gen.scratch1 + (AH-RAX), SZ_B);
-	}
+	mov_ir(code, 6, opts->gen.scratch1 + (AH-RAX), SZ_B);
+	mov_ir(code, inst->op == M68K_ABCD ? 0x9A : 0xA6, other_reg + (AH-RAX), SZ_B);
+	code_ptr after_adjust = code->cur+1;
+	jmp(code, after_adjust);
+
 	*no_adjust = code->cur - (no_adjust+1);
-	//add low nibble result to one of the high nibble operands
-	add_rr(code, opts->gen.scratch1 + (AH-RAX), opts->gen.scratch1, SZ_B);
+	xor_rr(code, opts->gen.scratch1 + (AH-RAX), opts->gen.scratch1 + (AH-RAX), SZ_B);
+	*after_adjust = code->cur - (after_adjust+1);
+
+	//do op on full byte
+	flag_to_carry(opts, FLAG_X);
 	if (inst->op == M68K_ABCD) {
-		add_rr(code, other_reg, opts->gen.scratch1, SZ_B);
+		adc_rr(code, other_reg, opts->gen.scratch1, SZ_B);
 	} else {
-		sub_rr(code, other_reg, opts->gen.scratch1, SZ_B);
-	}
-	if (opts->gen.scratch2 > RBX) {
-		mov_rr(code, opts->gen.scratch2, RAX, SZ_D);
+		sbb_rr(code, other_reg, opts->gen.scratch1, SZ_B);
 	}
 	set_flag(opts, 0, FLAG_C);
-	set_flag(opts, 0, FLAG_V);
+	//determine if we need a correction on the upper nibble
 	code_ptr def_adjust = code->cur+1;
 	jcc(code, CC_C, def_adjust);
-	cmp_ir(code, 0xA0, opts->gen.scratch1, SZ_B);
+	cmp_rr(code, other_reg + (AH-RAX), opts->gen.scratch1, SZ_B);
 	no_adjust = code->cur+1;
 	jcc(code, CC_B, no_adjust);
 	*def_adjust = code->cur - (def_adjust + 1);
 	set_flag(opts, 1, FLAG_C);
+	or_ir(code, 0x60, opts->gen.scratch1 + (AH-RAX), SZ_B);
+	*no_adjust = code->cur - (no_adjust+1);
 	if (inst->op == M68K_ABCD) {
-		add_ir(code, 0x60, opts->gen.scratch1, SZ_B);
+		add_rr(code, opts->gen.scratch1 + (AH-RAX), opts->gen.scratch1, SZ_B);
 	} else {
-		sub_ir(code, 0x60, opts->gen.scratch1, SZ_B);
+		sub_rr(code, opts->gen.scratch1 + (AH-RAX), opts->gen.scratch1, SZ_B);
 	}
-	//V flag is set based on the result of the addition of the
+	code_ptr no_ensure_carry = code->cur+1;
+	jcc(code, CC_NC, no_ensure_carry);
+	set_flag(opts, 1, FLAG_C);
+	*no_ensure_carry = code->cur - (no_ensure_carry+1);
+	//restore RAX if necessary
+	if (opts->gen.scratch2 > RBX) {
+		mov_rr(code, opts->gen.scratch2, RAX, SZ_D);
+	}
+	//V flag is set based on the result of the addition/subtraction of the
 	//result and the correction factor
 	set_flag_cond(opts, CC_O, FLAG_V);
-	*no_adjust = code->cur - (no_adjust+1);
+
 	flag_to_flag(opts, FLAG_C, FLAG_X);
 
 	cmp_ir(code, 0, opts->gen.scratch1, SZ_B);
@@ -2485,7 +2494,7 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	call(code, opts->native_addr_and_sync);
 	cycles(&opts->gen, 18);
 	jmp_r(code, opts->gen.scratch1);
-	
+
 	opts->odd_address = code->cur;
 	mov_ir(code, (int64_t)stderr, RDI, SZ_PTR);
 	mov_ir(code, (int64_t)"Attempt to execute code at odd address\n", RSI, SZ_PTR);
