@@ -17,9 +17,15 @@ void cleanup_terminal()
 	unlink(OUTPUT_PATH);
 }
 
+static char init_done;
+
+void force_no_terminal()
+{
+	init_done = 1;
+}
+
 void init_terminal()
 {
-	static char init_done;
 	if (!init_done) {
 		if (!(isatty(STDIN_FILENO) && isatty(STDOUT_FILENO))) {
 #ifndef __APPLE__
@@ -32,7 +38,7 @@ void init_terminal()
 			//create FIFOs for talking to helper process in terminal app
 			mkfifo(INPUT_PATH, 0666);
 			mkfifo(OUTPUT_PATH, 0666);
-			
+
 			//close existing file descriptors
 			close(STDIN_FILENO);
 			close(STDOUT_FILENO);
@@ -59,7 +65,7 @@ void init_terminal()
 				}
 			}
 		}
-	
+
 		init_done = 1;
 	}
 }
