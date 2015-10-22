@@ -1373,18 +1373,29 @@ void translate_m68k_invalid(m68k_options *opts, m68kinst *inst)
 void translate_m68k_abcd_sbcd(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op)
 {
 	code_info *code = &opts->gen.code;
-	if (src_op->base != opts->gen.scratch2) {
-		if (src_op->mode == MODE_REG_DIRECT) {
-			mov_rr(code, src_op->base, opts->gen.scratch2, SZ_B);
-		} else {
-			mov_rdispr(code, src_op->base, src_op->disp, opts->gen.scratch2, SZ_B);
+	if (inst->op == M68K_NBCD) {
+		if (dst_op->base != opts->gen.scratch2) {
+			if (dst_op->mode == MODE_REG_DIRECT) {
+				mov_rr(code, dst_op->base, opts->gen.scratch2, SZ_B);
+			} else {
+				mov_rdispr(code, dst_op->base, dst_op->disp, opts->gen.scratch2, SZ_B);
+			}
 		}
-	}
-	if (dst_op->base != opts->gen.scratch1) {
-		if (dst_op->mode == MODE_REG_DIRECT) {
-			mov_rr(code, dst_op->base, opts->gen.scratch1, SZ_B);
-		} else {
-			mov_rdispr(code, dst_op->base, dst_op->disp, opts->gen.scratch1, SZ_B);
+		xor_rr(code, opts->gen.scratch1, opts->gen.scratch1, SZ_B);
+	} else {
+		if (src_op->base != opts->gen.scratch2) {
+			if (src_op->mode == MODE_REG_DIRECT) {
+				mov_rr(code, src_op->base, opts->gen.scratch2, SZ_B);
+			} else {
+				mov_rdispr(code, src_op->base, src_op->disp, opts->gen.scratch2, SZ_B);
+			}
+		}
+		if (dst_op->base != opts->gen.scratch1) {
+			if (dst_op->mode == MODE_REG_DIRECT) {
+				mov_rr(code, dst_op->base, opts->gen.scratch1, SZ_B);
+			} else {
+				mov_rdispr(code, dst_op->base, dst_op->disp, opts->gen.scratch1, SZ_B);
+			}
 		}
 	}
 	uint8_t other_reg;

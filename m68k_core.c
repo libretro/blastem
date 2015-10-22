@@ -720,6 +720,7 @@ impl_info m68k_impls[] = {
 	BINARY_IMPL(M68K_SUBX, X|N|V|C),
 	OP_IMPL(M68K_ABCD, translate_m68k_abcd_sbcd),
 	OP_IMPL(M68K_SBCD, translate_m68k_abcd_sbcd),
+	OP_IMPL(M68K_NBCD, translate_m68k_abcd_sbcd),
 	BINARY_IMPL(M68K_AND, N|Z|V0|C0),
 	BINARY_IMPL(M68K_EOR, N|Z|V0|C0),
 	BINARY_IMPL(M68K_OR, N|Z|V0|C0),
