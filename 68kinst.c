@@ -862,6 +862,12 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 						} else {
 							if (size == OPSIZE_INVALID) {
 								decoded->op = M68K_TAS;
+								decoded->extra.size = OPSIZE_BYTE;
+								istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->dst));
+								if (!istream) {
+									decoded->op = M68K_INVALID;
+									break;
+								}
 							} else {
 								decoded->op = M68K_TST;
 								decoded->extra.size = size;
