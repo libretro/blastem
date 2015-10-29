@@ -10,6 +10,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+int headless = 1;
+void render_errorbox(char * title, char * buf)
+{
+}
+
+void render_infobox(char * title, char * buf)
+{
+}
+
 m68k_context * sync_components(m68k_context * context, uint32_t address)
 {
 	if (context->current_cycle > 0x80000000) {

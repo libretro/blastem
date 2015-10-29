@@ -137,16 +137,16 @@ blastem$(EXE) : $(MAINOBJS)
 	$(FIXUP) ./$@
 
 dis$(EXE) : dis.o 68kinst.o tern.o vos_program_module.o
-	$(CC) -o $@ $^ 
+	$(CC) -o $@ $^
 
 zdis$(EXE) : zdis.o z80inst.o
-	$(CC) -o $@ $^ 
+	$(CC) -o $@ $^
 
 libemu68k.a : $(M68KOBJS) $(TRANSOBJS)
 	ar rcs libemu68k.a $(M68KOBJS) $(TRANSOBJS)
 
-trans : trans.o $(M68KOBJS) $(TRANSOBJS)
-	$(CC) -o trans trans.o $(M68KOBJS) $(TRANSOBJS)
+trans : trans.o $(M68KOBJS) $(TRANSOBJS) util.o
+	$(CC) -o trans trans.o $(M68KOBJS) $(TRANSOBJS) util.o
 
 transz80 : transz80.o $(Z80OBJS) $(TRANSOBJS)
 	$(CC) -o transz80 transz80.o $(Z80OBJS) $(TRANSOBJS)
@@ -164,7 +164,7 @@ stateview$(EXE) : stateview.o vdp.o render_sdl.o $(CONFIGOBJS) gst.o
 vgmplay$(EXE) : vgmplay.o render_sdl.o $(CONFIGOBJS) $(AUDIOOBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
 	$(FIXUP) ./$@
-	
+
 blastcpm : blastcpm.o util.o $(Z80OBJS) $(TRANSOBJS)
 	$(CC) -o $@ $^
 
