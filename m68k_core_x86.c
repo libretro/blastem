@@ -1312,6 +1312,39 @@ void translate_m68k_cmp(m68k_options * opts, m68kinst * inst)
 	translate_m68k_arith(opts, inst, N|Z|V|C, &src_op, &dst_op);
 }
 
+void translate_m68k_tas(m68k_options *opts, m68kinst *inst)
+{
+	code_info *code = &opts->gen.code;
+	host_ea op;
+	translate_m68k_op(inst, &op, opts, 1);
+	if (op.mode == MODE_REG_DIRECT) {
+		cmp_ir(code, 0, op.base, SZ_B);
+	} else {
+		cmp_irdisp(code, 0, op.base, op.disp, SZ_B);
+	}
+	update_flags(opts, N|Z|V0|C0);
+	if (inst->dst.addr_mode == MODE_REG) {
+		cycles(&opts->gen, BUS);
+		if (op.mode == MODE_REG_DIRECT) {
+			bts_ir(code, 7, op.base, SZ_B);
+		} else {
+			bts_irdisp(code, 7, op.base, op.disp, SZ_B);
+		}
+	} else {
+		if (opts->gen.flags & M68K_OPT_BROKEN_READ_MODIFY) {
+			//2 cycles for processing
+			//4 for failed writeback
+			//4 for prefetch
+			cycles(&opts->gen, BUS * 2 + 2);
+		} else {
+			cycles(&opts->gen, 2);
+			bts_ir(code, 7, op.base, SZ_B);
+			m68k_save_result(inst, opts);
+			cycles(&opts->gen, BUS);
+		}
+	}
+}
+
 void op_r(code_info *code, m68kinst *inst, uint8_t dst, uint8_t size)
 {
 	switch(inst->op)
