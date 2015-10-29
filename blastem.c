@@ -821,6 +821,7 @@ void init_run_cpu(genesis_context * gen, rom_info *rom, FILE * address_log, char
 
 	init_m68k_opts(&opts, rom->map, rom->map_chunks, MCLKS_PER_68K);
 	opts.address_log = address_log;
+	opts.gen.flags |= M68K_OPT_BROKEN_READ_MODIFY;
 	m68k_context *context = init_68k_context(&opts);
 	gen->m68k = context;
 
