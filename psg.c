@@ -8,6 +8,9 @@
 #include "blastem.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
+
+FILE *blah;
 
 void psg_init(psg_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t samples_frame)
 {
@@ -21,6 +24,7 @@ void psg_init(psg_context * context, uint32_t sample_rate, uint32_t master_clock
 	for (int i = 0; i < 4; i++) {
 		context->volume[i] = 0xF;
 	}
+	blah = fopen("psg.raw", "wb");
 }
 
 #define BUFFER_INC_RES 1000000000UL
@@ -105,20 +109,25 @@ void psg_run(psg_context * context, uint32_t cycles)
 				}
 			}
 		}
+
+		for (int i = 0; i < 3; i++) {
+			if (context->output_state[i]) {
+				context->accum += volume_table[context->volume[i]];
+			}
+		}
+		if (context->noise_out) {
+			context->accum += volume_table[context->volume[3]];
+		}
+		context->sample_count++;
+
 		context->buffer_fraction += context->buffer_inc;
 		if (context->buffer_fraction >= BUFFER_INC_RES) {
 			context->buffer_fraction -= BUFFER_INC_RES;
-			int16_t acc = 0;
-			for (int i = 0; i < 3; i++) {
-				if (context->output_state[i]) {
-					acc += volume_table[context->volume[i]];
-				}
-			}
-			if (context->noise_out) {
-				acc += volume_table[context->volume[3]];
-			}
-			context->audio_buffer[context->buffer_pos++] = acc;
+
+			context->audio_buffer[context->buffer_pos++] = context->accum / context->sample_count;
+			context->accum = context->sample_count = 0;
 			if (context->buffer_pos == context->samples_frame) {
+				fwrite(context->audio_buffer, 1, context->buffer_pos, blah);
 				if (!headless) {
 					render_wait_psg(context);
 				}
