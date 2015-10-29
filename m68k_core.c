@@ -796,10 +796,9 @@ impl_info m68k_impls[] = {
 	//misc
 	RAW_IMPL(M68K_NOP, translate_m68k_nop),
 	RAW_IMPL(M68K_RESET, translate_m68k_reset),
+	RAW_IMPL(M68K_TAS, translate_m68k_tas),
 
 	//currently unimplemented
-	//M68K_NBCD
-	//M68K_TAS
 	//M68K_TRAPV
 };
 
