@@ -355,10 +355,10 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		case Z80_REG:
 		case Z80_REG_INDIRECT:
  			num_cycles = size == SZ_B ? 4 : 6;
-			if (inst->ea_reg == Z80_IX || inst->ea_reg == Z80_IY) {
+			if (inst->ea_reg == Z80_IX || inst->ea_reg == Z80_IY || (inst->ea_reg >= Z80_IXL && inst->ea_reg <= Z80_IYH)) {
 				num_cycles += 4;
 			}
-			if (inst->reg == Z80_I || inst->ea_reg == Z80_I) {
+			if (inst->reg == Z80_I || inst->ea_reg == Z80_I || inst->reg == Z80_R || inst->ea_reg == Z80_R) {
 				num_cycles += 5;
 			}
 			break;
