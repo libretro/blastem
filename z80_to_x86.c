@@ -547,12 +547,12 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		mov_rdispr(code, opts->gen.context_reg, zar_off(Z80_BC), opts->gen.scratch2, SZ_W);
 		mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zar_off(Z80_BC), SZ_W);
 		native_to_zreg(opts, opts->gen.scratch2, Z80_BC);
-		
+
 		zreg_to_native(opts, Z80_HL, opts->gen.scratch1);
 		mov_rdispr(code, opts->gen.context_reg, zar_off(Z80_HL), opts->gen.scratch2, SZ_W);
 		mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zar_off(Z80_HL), SZ_W);
 		native_to_zreg(opts, opts->gen.scratch2, Z80_HL);
-		
+
 		zreg_to_native(opts, Z80_DE, opts->gen.scratch1);
 		mov_rdispr(code, opts->gen.context_reg, zar_off(Z80_DE), opts->gen.scratch2, SZ_W);
 		mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zar_off(Z80_DE), SZ_W);
@@ -1010,7 +1010,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		} else {
 			sub_irdisp(code, 1, dst_op.base, dst_op.disp, z80_size(inst));
 		}
-		
+
 		if (z80_size(inst) == SZ_B) {
 			mov_irdisp(code, 1, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 			//TODO: Implement half-carry flag
@@ -1084,7 +1084,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		call(code, opts->do_sync);
 		break;
 	case Z80_IM:
-		cycles(&opts->gen, 4);
+		cycles(&opts->gen, 8);
 		mov_irdisp(code, inst->immed, opts->gen.context_reg, offsetof(z80_context, im), SZ_B);
 		break;
 	case Z80_RLC:
