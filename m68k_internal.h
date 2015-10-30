@@ -60,6 +60,7 @@ void translate_m68k_scc(m68k_options * opts, m68kinst * inst);
 void translate_m68k_dbcc(m68k_options * opts, m68kinst * inst);
 void translate_m68k_rtr(m68k_options *opts, m68kinst * inst);
 void translate_m68k_trap(m68k_options *opts, m68kinst *inst);
+void translate_m68k_trapv(m68k_options *opts, m68kinst *inst);
 void translate_m68k_move(m68k_options * opts, m68kinst * inst);
 void translate_m68k_movep(m68k_options * opts, m68kinst * inst);
 void translate_m68k_arith(m68k_options *opts, m68kinst * inst, uint32_t flag_mask, host_ea *src_op, host_ea *dst_op);

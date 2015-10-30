@@ -790,6 +790,7 @@ impl_info m68k_impls[] = {
 	//traps
 	OP_IMPL(M68K_CHK, translate_m68k_chk),
 	RAW_IMPL(M68K_TRAP, translate_m68k_trap),
+	RAW_IMPL(M68K_TRAPV, translate_m68k_trapv),
 	RAW_IMPL(M68K_ILLEGAL, translate_m68k_illegal),
 	RAW_IMPL(M68K_INVALID, translate_m68k_invalid),
 
@@ -797,9 +798,6 @@ impl_info m68k_impls[] = {
 	RAW_IMPL(M68K_NOP, translate_m68k_nop),
 	RAW_IMPL(M68K_RESET, translate_m68k_reset),
 	RAW_IMPL(M68K_TAS, translate_m68k_tas),
-
-	//currently unimplemented
-	//M68K_TRAPV
 };
 
 void translate_m68k(m68k_options * opts, m68kinst * inst)
