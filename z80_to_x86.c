@@ -2630,6 +2630,9 @@ void z80_clear_busreq(z80_context * context, uint32_t cycle)
 	z80_run(context, cycle);
 	context->busreq = 0;
 	context->busack = 0;
+	//there appears to be at least a 1 Z80 cycle delay between busreq
+	//being released and resumption of execution
+	context->current_cycle += context->options->gen.clock_divider;
 }
 
 uint8_t z80_get_busack(z80_context * context, uint32_t cycle)
