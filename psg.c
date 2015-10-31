@@ -10,8 +10,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-FILE *blah;
-
 void psg_init(psg_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t samples_frame)
 {
 	memset(context, 0, sizeof(*context));
@@ -24,7 +22,6 @@ void psg_init(psg_context * context, uint32_t sample_rate, uint32_t master_clock
 	for (int i = 0; i < 4; i++) {
 		context->volume[i] = 0xF;
 	}
-	blah = fopen("psg.raw", "wb");
 }
 
 #define BUFFER_INC_RES 1000000000UL
@@ -127,7 +124,6 @@ void psg_run(psg_context * context, uint32_t cycles)
 			context->audio_buffer[context->buffer_pos++] = context->accum / context->sample_count;
 			context->accum = context->sample_count = 0;
 			if (context->buffer_pos == context->samples_frame) {
-				fwrite(context->audio_buffer, 1, context->buffer_pos, blah);
 				if (!headless) {
 					render_wait_psg(context);
 				}
