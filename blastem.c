@@ -473,6 +473,8 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 {
 	genesis_context * gen = context->system;
 	if (location < 0x10000) {
+		//Access to Z80 memory incurs a one 68K cycle wait state
+		context->current_cycle += MCLKS_PER_68K;
 		if (!z80_enabled || z80_get_busack(gen->z80, context->current_cycle)) {
 			location &= 0x7FFF;
 			if (location < 0x4000) {
@@ -591,6 +593,8 @@ uint8_t io_read(uint32_t location, m68k_context * context)
 	uint8_t value;
 	genesis_context *gen = context->system;
 	if (location < 0x10000) {
+		//Access to Z80 memory incurs a one 68K cycle wait state
+		context->current_cycle += MCLKS_PER_68K;
 		if (!z80_enabled || z80_get_busack(gen->z80, context->current_cycle)) {
 			location &= 0x7FFF;
 			if (location < 0x4000) {
