@@ -404,8 +404,8 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 				mov_rdispr(code, src_op.base, src_op.disp, dst_op.base, size);
 			}
 		}
-		if (inst->ea_reg == Z80_I && inst->addr_mode == Z80_REG) {
-			//ld a, i sets some flags
+		if ((inst->ea_reg == Z80_I || inst->ea_reg == Z80_R) && inst->addr_mode == Z80_REG) {
+			//ld a, i and ld a, r sets some flags
 			cmp_ir(code, 0, dst_op.base, SZ_B);
 			setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
 			setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
