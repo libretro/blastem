@@ -156,6 +156,9 @@ void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 			}
 		}
 	}
+	if (context->int_cycle > context->current_cycle) {
+		context->int_pending = 0;
+	}
 	/*if (context->int_cycle != old_int_cycle) {
 		printf("int cycle changed to: %d, level: %d @ %d(%d), frame: %d, vcounter: %d, hslot: %d, mask: %d, hint_counter: %d\n", context->int_cycle, context->int_num, v_context->cycles, context->current_cycle, v_context->frame, v_context->vcounter, v_context->hslot, context->status & 0x7, v_context->hint_counter);
 		old_int_cycle = context->int_cycle;

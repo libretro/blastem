@@ -2010,6 +2010,10 @@ void translate_m68k_andi_ori_ccr_sr(m68k_options *opts, m68kinst *inst)
 		}
 		if ((inst->op == M68K_ANDI_SR && (inst->src.params.immed  & 0x700) != 0x700)
 		    || (inst->op == M68K_ORI_SR && inst->src.params.immed & 0x700)) {
+			if (inst->op == M68K_ANDI_SR) {
+				//set int pending flag in case we trigger an interrupt as a result of the mask change
+				mov_irdisp(code, 1, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
+			}
 			call(code, opts->do_sync);
 		}
 	}
@@ -2035,9 +2039,11 @@ void translate_m68k_eori_ccr_sr(m68k_options *opts, m68kinst *inst)
 	if (inst->src.params.immed & 0x10) {
 		xor_flag(opts, 1, FLAG_X);
 	}
-	if (inst->op == M68K_ORI_SR) {
+	if (inst->op == M68K_EORI_SR) {
 		xor_irdisp(code, inst->src.params.immed >> 8, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
 		if (inst->src.params.immed & 0x700) {
+			//set int pending flag in case we trigger an interrupt as a result of the mask change
+			mov_irdisp(code, 1, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
 			call(code, opts->do_sync);
 		}
 	}
@@ -2064,6 +2070,10 @@ void translate_m68k_move_ccr_sr(m68k_options *opts, m68kinst *inst, host_ea *src
 			if (!((inst->src.params.immed >> 8) & (1 << BIT_SUPERVISOR))) {
 				//leave supervisor mode
 				swap_ssp_usp(opts);
+			}
+			if (((src_op->disp >> 8) & 7) < 7) {
+				//set int pending flag in case we trigger an interrupt as a result of the mask change
+				mov_irdisp(code, 1, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
 			}
 			call(code, opts->do_sync);
 		}
@@ -2466,6 +2476,8 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	}
 	shr_ir(code, 8, opts->gen.scratch1, SZ_W);
 	mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
+	//set int pending flag in case we trigger an interrupt as a result of the mask change
+	mov_irdisp(code, 1, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
 	retn(code);
 
 	opts->set_ccr = code->cur;
@@ -2499,6 +2511,13 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	*skip_sync = code->cur - (skip_sync+1);
 	retn(code);
 	*do_int = code->cur - (do_int+1);
+	//implement 1 instruction latency
+	cmp_irdisp(code, 0, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
+	do_int = code->cur + 1;
+	jcc(code, CC_NZ, do_int);
+	mov_irdisp(code, 1, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
+	retn(code);
+	*do_int = code->cur - (do_int + 1);
 	//set target cycle to sync cycle
 	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, sync_cycle), opts->gen.limit, SZ_D);
 	//swap USP and SSP if not already in supervisor mode
