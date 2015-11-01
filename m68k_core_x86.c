@@ -2518,24 +2518,61 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	mov_irdisp(code, 1, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
 	retn(code);
 	*do_int = code->cur - (do_int + 1);
+	//save PC as stored in scratch1 for later
+	push_r(code, opts->gen.scratch1);
 	//set target cycle to sync cycle
 	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, sync_cycle), opts->gen.limit, SZ_D);
 	//swap USP and SSP if not already in supervisor mode
 	check_user_mode_swap_ssp_usp(opts);
-	//save PC
-	subi_areg(opts, 4, 7);
-	areg_to_native(opts, 7, opts->gen.scratch2);
-	call(code, opts->write_32_lowfirst);
 	//save status register
-	subi_areg(opts, 2, 7);
+	subi_areg(opts, 6, 7);
 	call(code, opts->get_sr);
+	//6 cycles before SR gets saved
+	cycles(&opts->gen, 6);
+	//save SR to stack
 	areg_to_native(opts, 7, opts->gen.scratch2);
 	call(code, opts->write_16);
+	//interrupt ack cycle
+	//the Genesis responds to these exclusively with !VPA which means its a slow
+	//6800 operation. documentation says these can take between 10 and 19 cycles.
+	//actual results measurements seem to suggest it's actually between 9 and 18
+	//WARNING: this code might break with register assignment changes
+	//save RDX
+	push_r(code, RDX);
+	//save cycle count
+	mov_rr(code, RAX, opts->gen.scratch1, SZ_D);
+	//clear top doubleword of dividend
+	xor_rr(code, RDX, RDX, SZ_D);
+	//set divisor to clock divider
+	mov_ir(code, opts->gen.clock_divider, opts->gen.scratch2, SZ_D);
+	div_r(code, opts->gen.scratch2, SZ_D);
+	//discard remainder
+	xor_rr(code, RDX, RDX, SZ_D);
+	//set divisor to 10, the period of E
+	mov_ir(code, 10, opts->gen.scratch2, SZ_D);
+	div_r(code, opts->gen.scratch2, SZ_D);
+	//delay will be (9 + 4 + the remainder) * clock_divider
+	//the extra 4 is to cover the idle bus period after the ack
+	add_ir(code, 9 + 4, RDX, SZ_D);
+	mov_ir(code, opts->gen.clock_divider, RAX, SZ_D);
+	mul_r(code, RDX, SZ_D);
+	pop_r(code, RDX);
+	//add saved cycle count to result
+	add_rr(code, opts->gen.scratch1, RAX, SZ_D);
+
 	//update status register
 	and_irdisp(code, 0xF8, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
 	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_num), opts->gen.scratch1, SZ_B);
 	or_ir(code, 0x20, opts->gen.scratch1, SZ_B);
 	or_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
+
+	pop_r(code, opts->gen.scratch1);
+
+	//save PC
+	areg_to_native(opts, 7, opts->gen.scratch2);
+	add_ir(code, 2, opts->gen.scratch2, SZ_D);
+	call(code, opts->write_32_lowfirst);
+
 	//calculate interrupt vector address
 	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_num), opts->gen.scratch1, SZ_D);
 	mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, offsetof(m68k_context, int_ack), SZ_W);
@@ -2543,7 +2580,8 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	add_ir(code, 0x60, opts->gen.scratch1, SZ_D);
 	call(code, opts->read_32);
 	call(code, opts->native_addr_and_sync);
-	cycles(&opts->gen, 24);
+	//2 prefetch bus operations + 2 idle bus cycles
+	cycles(&opts->gen, 10);
 	//discard function return address
 	pop_r(code, opts->gen.scratch2);
 	jmp_r(code, opts->gen.scratch1);
