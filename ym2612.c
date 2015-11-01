@@ -58,6 +58,9 @@ enum {
 #define BIT_TIMERA_RESET  0x10
 #define BIT_TIMERB_RESET  0x20
 
+#define BIT_TIMERA_LOAD   0x40
+#define BIT_TIMERB_LOAD   0x80
+
 #define BIT_STATUS_TIMERA 0x1
 #define BIT_STATUS_TIMERB 0x2
 
@@ -241,7 +244,7 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clo
 #define YM_MOD_SHIFT 1
 
 #define TIMER_A_MAX 1023
-#define TIMER_B_MAX (255*16)
+#define TIMER_B_MAX 255
 
 void ym_run(ym2612_context * context, uint32_t to_cycle)
 {
@@ -254,22 +257,29 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				if (context->timer_a != TIMER_A_MAX) {
 					context->timer_a++;
 				} else {
-					if (context->timer_control & BIT_TIMERA_OVEREN) {
+					if (context->timer_control & BIT_TIMERA_LOAD) {
+						context->timer_control &= ~BIT_TIMERA_LOAD;
+					} else if (context->timer_control & BIT_TIMERA_OVEREN) {
 						context->status |= BIT_STATUS_TIMERA;
 					}
 					context->timer_a = context->timer_a_load;
 				}
 			}
-			if (context->timer_control & BIT_TIMERB_ENABLE) {
-				if (context->timer_b != TIMER_B_MAX) {
-					context->timer_b++;
-				} else {
-					if (context->timer_control & BIT_TIMERB_OVEREN) {
-						context->status |= BIT_STATUS_TIMERB;
+			if (!context->sub_timer_b) {
+				if (context->timer_control & BIT_TIMERB_ENABLE) {
+					if (context->timer_b != TIMER_B_MAX) {
+						context->timer_b++;
+					} else {
+						if (context->timer_control & BIT_TIMERB_LOAD) {
+							context->timer_control &= ~BIT_TIMERB_LOAD;
+						} else if (context->timer_control & BIT_TIMERB_OVEREN) {
+							context->status |= BIT_STATUS_TIMERB;
+						}
+						context->timer_b = context->timer_b_load;
 					}
-					context->timer_b = context->timer_b_load;
 				}
 			}
+			context->sub_timer_b += 0x10;
 			//Update LFO
 			if (context->lfo_enable) {
 				if (context->lfo_counter) {
@@ -672,16 +682,19 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 			context->timer_a_load |= value & 0x3;
 			break;
 		case REG_TIMERB:
-			context->timer_b_load = value * 16;
+			context->timer_b_load = value;
 			break;
 		case REG_TIME_CTRL: {
 			if (value & BIT_TIMERA_ENABLE && !(context->timer_control & BIT_TIMERA_ENABLE)) {
-				context->timer_a = context->timer_a_load;
+				context->timer_a = TIMER_A_MAX;
+				context->timer_control |= BIT_TIMERA_LOAD;
 			}
 			if (value & BIT_TIMERB_ENABLE && !(context->timer_control & BIT_TIMERB_ENABLE)) {
-				context->timer_b = context->timer_b_load;
+				context->timer_b = TIMER_B_MAX;
+				context->timer_control |= BIT_TIMERB_LOAD;
 			}
-			context->timer_control = value & 0xF;
+			context->timer_control &= (BIT_TIMERA_LOAD | BIT_TIMERB_LOAD);
+			context->timer_control |= value & 0xF;
 			if (value & BIT_TIMERA_RESET) {
 				context->status &= ~BIT_STATUS_TIMERA;
 			}
@@ -837,7 +850,7 @@ void ym_print_channel_info(ym2612_context *context, int channel)
 		   "Feedback:  %d\n"
 		   "Pan:       %s\n"
 		   "AMS:       %d\n"
-		   "PMS:       %d\n", 
+		   "PMS:       %d\n",
 		   channel+1, chan->algorithm, chan->feedback,
 		   chan->lr == 0xC0 ? "LR" : chan->lr == 0x80 ? "L" : chan->lr == 0x40 ? "R" : "",
 		   chan->ams, chan->pms);
