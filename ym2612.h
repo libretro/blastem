@@ -98,6 +98,31 @@ typedef struct {
 	uint8_t     part2_regs[YM_PART2_REGS];
 } ym2612_context;
 
+enum {
+	REG_LFO          = 0x22,
+	REG_TIMERA_HIGH  = 0x24,
+	REG_TIMERA_LOW,
+	REG_TIMERB,
+	REG_TIME_CTRL,
+	REG_KEY_ONOFF,
+	REG_DAC          = 0x2A,
+	REG_DAC_ENABLE,
+
+	REG_DETUNE_MULT  = 0x30,
+	REG_TOTAL_LEVEL  = 0x40,
+	REG_ATTACK_KS    = 0x50,
+	REG_DECAY_AM     = 0x60,
+	REG_SUSTAIN_RATE = 0x70,
+	REG_S_LVL_R_RATE = 0x80,
+
+	REG_FNUM_LOW     = 0xA0,
+	REG_BLOCK_FNUM_H = 0xA4,
+	REG_FNUM_LOW_CH3 = 0xA8,
+	REG_BLOCK_FN_CH3 = 0xAC,
+	REG_ALG_FEEDBACK = 0xB0,
+	REG_LR_AMS_PMS   = 0xB4
+};
+
 void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t sample_limit, uint32_t options);
 void ym_adjust_master_clock(ym2612_context * context, uint32_t master_clock);
 void ym_run(ym2612_context * context, uint32_t to_cycle);
