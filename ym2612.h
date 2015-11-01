@@ -75,10 +75,11 @@ typedef struct {
 	ym_channel  channels[NUM_CHANNELS];
 	uint16_t    timer_a;
 	uint16_t    timer_a_load;
-	uint16_t    timer_b;
-	uint16_t    timer_b_load;
 	uint16_t    env_counter;
 	ym_supp     ch3_supp[3];
+	uint8_t     timer_b;
+	uint8_t     sub_timer_b;
+	uint8_t     timer_b_load;
 	uint8_t     ch3_mode;
 	uint8_t     current_op;
 	uint8_t     current_env_op;
