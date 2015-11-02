@@ -515,12 +515,11 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 static uint32_t branch_t;
 static uint32_t branch_f;
 
-int run_debugger_command(m68k_context *context, char *input_buf)
+int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, uint32_t after)
 {
-	m68kinst inst;
 	char * param;
 	char format_char;
-	uint32_t value, after;
+	uint32_t value;
 	bp_def *new_bp, **this_bp;
 	switch(input_buf[0])
 	{
@@ -845,6 +844,17 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 		}
 		branch_t = branch_f = 0;
 	}
+
+	uint16_t * pc;
+	if (address < 0x400000) {
+		pc = cart + address/2;
+	} else if(address > 0xE00000) {
+		pc = ram + (address & 0xFFFF)/2;
+	} else {
+		fatal_error("Entered 68K debugger at address %X\n", address);
+	}
+	uint16_t * after_pc = m68k_decode(pc, &inst, address);
+	uint32_t after = address + (after_pc-pc)*2;
 	int debugging = 1;
 	//Check if this is a user set breakpoint, or just a temporary one
 	bp_def ** this_bp = find_breakpoint(&breakpoints, address);
@@ -860,7 +870,7 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 				char *cmd = commands;
 				strip_nl(cmd);
 				commands += strlen(cmd) + 1;
-				debugging = run_debugger_command(context, cmd);
+				debugging = run_debugger_command(context, cmd, inst, after);
 			}
 			free(copy);
 		}
@@ -875,18 +885,8 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 	for (disp_def * cur = displays; cur; cur = cur->next) {
 		debugger_print(context, cur->format_char, cur->param);
 	}
-	uint16_t * pc;
-	if (address < 0x400000) {
-		pc = cart + address/2;
-	} else if(address > 0xE00000) {
-		pc = ram + (address & 0xFFFF)/2;
-	} else {
-		fatal_error("Entered 68K debugger at address %X\n", address);
-	}
-	uint16_t * after_pc = m68k_decode(pc, &inst, address);
 	m68k_disasm(&inst, input_buf);
 	printf("%X: %s\n", address, input_buf);
-	uint32_t after = address + (after_pc-pc)*2;
 #ifdef _WIN32
 #define prompt 1
 #else
@@ -923,7 +923,7 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 		} else {
 			strcpy(input_buf, last_cmd);
 		}
-		debugging = run_debugger_command(context, input_buf);
+		debugging = run_debugger_command(context, input_buf, inst, after);
 	}
 	return context;
 }
