@@ -691,8 +691,9 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 				if (channel > 2) {
 					channel--;
 				}
-				for (uint8_t op = channel * 4, bit = 0x10; op < (channel + 1) * 4; op++, bit <<= 1) {
-					if (value & bit) {
+				uint8_t bits[] = {0x10, 0x40, 0x20, 0x80};
+				for (uint8_t op = channel * 4, bit = 0; op < (channel + 1) * 4; op++, bit++) {
+					if (value & bits[bit]) {
 						if (context->operators[op].env_phase == PHASE_RELEASE)
 						{
 							first_key_on = 1;
