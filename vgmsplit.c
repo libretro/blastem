@@ -15,6 +15,47 @@
 #define PSG_BASE 6
 #define SAMPLE_THRESHOLD 100
 
+uint32_t total_delay;
+void accum_wait(uint32_t *delays, uint32_t samples)
+{
+	total_delay += samples;
+	for (int i = 0; i < OUT_CHANNELS; i++)
+	{
+		delays[i] += samples;
+	}
+}
+
+void write_wait(uint8_t **out_buffer, uint32_t *delay)
+{
+	while (*delay >= 65535)
+	{
+		*((*out_buffer)++) = CMD_WAIT;
+		*((*out_buffer)++) = 0xFF;
+		*((*out_buffer)++) = 0xFF;
+		*delay -= 65535;
+	}
+	if (*delay) {
+		if (*delay == 735) {
+			*((*out_buffer)++) = CMD_WAIT_60;
+		} else if (*delay > 735 && *delay <= 751) {
+			*((*out_buffer)++) = CMD_WAIT_60;
+			*((*out_buffer)++) = CMD_WAIT_SHORT + *delay - 736;
+		} else if (*delay == 882) {
+			*((*out_buffer)++) = CMD_WAIT_50;
+		} else if (*delay > 882 && *delay <= 898) {
+			*((*out_buffer)++) = CMD_WAIT_50;
+			*((*out_buffer)++) = CMD_WAIT_SHORT + *delay - 882;
+		} else if (*delay <= 16) {
+			*((*out_buffer)++) = CMD_WAIT_SHORT + *delay - 1;
+		} else {
+			*((*out_buffer)++) = CMD_WAIT;
+			*((*out_buffer)++) = *delay;
+			*((*out_buffer)++) = *delay >> 8;
+		}
+		*delay = 0;
+	}
+}
+
 int main(int argc, char ** argv)
 {
 	data_block *blocks = NULL;
@@ -41,15 +82,18 @@ int main(int argc, char ** argv)
 	uint8_t *buffers[OUT_CHANNELS];
 	uint8_t *out_pos[OUT_CHANNELS];
 	uint8_t has_real_data[OUT_CHANNELS];
+	uint32_t delay[OUT_CHANNELS];
 
 	buffers[0] = malloc(data_size * OUT_CHANNELS);
 	out_pos[0] = buffers[0];
 	has_real_data[0] = 0;
+	delay[0] = 0;
 	for (int i = 1; i < OUT_CHANNELS; i++)
 	{
 		buffers[i] = buffers[i-1] + data_size;
 		out_pos[i] = buffers[i];
 		has_real_data[i] = 0;
+		delay[i] = 0;
 	}
 
 	uint8_t * end = data + data_size;
@@ -76,6 +120,7 @@ int main(int argc, char ** argv)
 			} else {
 				channel = psg_latch >> 5 & 3;
 			}
+			write_wait(out_pos + PSG_BASE+channel, delay + PSG_BASE+channel);
 			*(out_pos[PSG_BASE+channel]++) = cmd;
 			*(out_pos[PSG_BASE+channel]++) = param;
 			has_real_data[PSG_BASE+channel] = 1;
@@ -86,6 +131,7 @@ int main(int argc, char ** argv)
 			if (reg < REG_KEY_ONOFF) {
 				for (int i = 0; i < 6; i++)
 				{
+					write_wait(out_pos + i, delay + i);
 					*(out_pos[i]++) = cmd;
 					*(out_pos[i]++) = reg;
 					*(out_pos[i]++) = param;
@@ -125,27 +171,28 @@ int main(int argc, char ** argv)
 				}
 			}
 			if (channel < PSG_BASE) {
+				write_wait(out_pos + channel, delay + channel);
 				*(out_pos[channel]++) = cmd;
 				*(out_pos[channel]++) = reg;
 				*(out_pos[channel]++) = param;
 			}
 			break;
 		case CMD_WAIT: {
-			reg = *(cur++);
-			param = *(cur++);
-			for (int i = 0; i < OUT_CHANNELS; i++)
-			{
-				*(out_pos[i]++) = cmd;
-				*(out_pos[i]++) = reg;
-				*(out_pos[i]++) = param;
-			}
+			uint32_t wait_time = *(cur++);
+			wait_time |= *(cur++) << 8;
+			accum_wait(delay, wait_time);
 			break;
 		}
 		case CMD_WAIT_60:
+			accum_wait(delay, 735);
+			break;
 		case CMD_WAIT_50:
+			accum_wait(delay, 882);
+			break;
 		case CMD_END:
 			for (int i = 0; i < OUT_CHANNELS; i++)
 			{
+				write_wait(out_pos + i, delay + i);
 				*(out_pos[i]++) = cmd;
 			}
 			cur = end;
@@ -163,6 +210,7 @@ int main(int argc, char ** argv)
 			}
 			cur += data_size;
 			if (data_type == DATA_YM2612_PCM) {
+				write_wait(out_pos + DAC_CHANNEL, delay + DAC_CHANNEL);
 				memcpy(out_pos[DAC_CHANNEL], start, cur-start);
 				out_pos[DAC_CHANNEL] += cur-start;
 			} else {
@@ -171,6 +219,7 @@ int main(int argc, char ** argv)
 			break;
 		}
 		case CMD_DATA_SEEK: {
+			write_wait(out_pos + DAC_CHANNEL, delay + DAC_CHANNEL);
 			memcpy(out_pos[DAC_CHANNEL], cur-1, 5);
 			out_pos[DAC_CHANNEL] += 5;
 			cur += 4;
@@ -179,12 +228,17 @@ int main(int argc, char ** argv)
 
 		default:
 			if (cmd >= CMD_WAIT_SHORT && cmd < (CMD_WAIT_SHORT + 0x10)) {
+				accum_wait(delay, (cmd & 0xF) + 1);
+			} else if (cmd >= CMD_YM2612_DAC && cmd < CMD_DAC_STREAM_SETUP) {
+				write_wait(out_pos + DAC_CHANNEL, delay + DAC_CHANNEL);
+				*(out_pos[DAC_CHANNEL]++) = cmd;
 				for (int i = 0; i < OUT_CHANNELS; i++)
 				{
-					*(out_pos[i]++) = cmd;
+					if (i != DAC_CHANNEL)
+					{
+						delay[i] += cmd & 0xF;
+					}
 				}
-			} else if (cmd >= CMD_YM2612_DAC && cmd < CMD_DAC_STREAM_SETUP) {
-				*(out_pos[DAC_CHANNEL]++) = cmd;
 				sample_count++;
 			} else {
 				fprintf(stderr, "unimplemented command: %X at offset %X, last valid command was %X\n", cmd, (unsigned int)(cur - data - 1), last_cmd);
@@ -208,11 +262,13 @@ int main(int argc, char ** argv)
 			}
 			data_size = out_pos[i] - buffers[i];
 			header.eof_offset = (header.data_offset + 0x34) + data_size - 4;
+			header.gd3_offset = 0;
 			fwrite(&header, 1, sizeof(header), f);
 			fseek(f, header.data_offset + 0x34, SEEK_SET);
 			fwrite(buffers[i], 1, data_size, f);
 			fclose(f);
 		}
 	}
+	printf("total_delay: %d\n", total_delay);
 	return 0;
 }
