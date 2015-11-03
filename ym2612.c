@@ -344,7 +344,6 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			//printf("updating operator %d of channel %d\n", op, channel);
 			ym_operator * operator = context->operators + op;
 			ym_channel * chan = context->channels + channel;
-			//TODO: Modulate phase by LFO if necessary
 			uint16_t phase = operator->phase_counter >> 10 & 0x3FF;
 			operator->phase_counter += operator->phase_inc;
 			if (chan->pms) {
