@@ -298,15 +298,14 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			}
 			if (!(env_cyc & ((1 << cycle_shift) - 1))) {
 				uint32_t update_cycle = env_cyc >> cycle_shift & 0x7;
-				//envelope value is 10-bits, but it will be used as a 4.8 value
-				uint16_t envelope_inc = rate_table[rate * 8 + update_cycle] << 2;
+				uint16_t envelope_inc = rate_table[rate * 8 + update_cycle];
 				if (operator->env_phase == PHASE_ATTACK) {
 					//this can probably be optimized to a single shift rather than a multiply + shift
 					if (first_key_on) {
 						dfprintf(debug_file, "Changing op %d envelope %d by %d(%d * %d) in attack phase\n", op, operator->envelope, (~operator->envelope * envelope_inc) >> 4, ~operator->envelope, envelope_inc);
 					}
 					uint16_t old_env = operator->envelope;
-					operator->envelope += (~operator->envelope * envelope_inc) >> 4;
+					operator->envelope += ((~operator->envelope * envelope_inc) >> 4) & 0xFFFFFFFC;
 					if (operator->envelope > old_env) {
 						//Handle overflow
 						operator->envelope = 0;
@@ -319,7 +318,8 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 						dfprintf(debug_file, "Changing op %d envelope %d by %d in %s phase\n", op, operator->envelope, envelope_inc,
 							operator->env_phase == PHASE_SUSTAIN ? "sustain" : (operator->env_phase == PHASE_DECAY ? "decay": "release"));
 					}
-					operator->envelope += envelope_inc;
+					//envelope value is 10-bits, but it will be used as a 4.8 value
+					operator->envelope += envelope_inc << 2;
 					//clamp to max attenuation value
 					if (operator->envelope > MAX_ENVELOPE) {
 						operator->envelope = MAX_ENVELOPE;
@@ -752,7 +752,10 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 				break;
 			case REG_S_LVL_R_RATE:
 				operator->rates[PHASE_RELEASE] = (value & 0xF) << 1 | 1;
-				operator->sustain_level = (value & 0xF0) << 4;
+				operator->sustain_level = (value & 0xF0) << 3;
+				if (operator->sustain_level == 0x780) {
+					operator->sustain_level = MAX_ENVELOPE;
+				}
 				break;
 			}
 		}
