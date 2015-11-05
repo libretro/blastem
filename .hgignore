@@ -18,6 +18,12 @@ generated_tests/*
 ztests/*
 glew/*
 lib/*
+android/obj
+android/bin
+android/gen
+android/libs
+android/local.properties
+android/jni/SDL
 sdl
 *.o
 *.list
