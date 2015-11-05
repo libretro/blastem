@@ -3,7 +3,6 @@ syntax: glob
 *.asm
 *.bin
 *.md
-*.png
 *.jpg
 *.pdf
 *.tar.gz
