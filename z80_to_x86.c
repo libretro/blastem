@@ -14,6 +14,7 @@
 #include <string.h>
 
 #define MODE_UNUSED (MODE_IMMED-1)
+#define MAX_MCYCLE_LENGTH 6
 
 //#define DO_DEBUG_PRINT
 
@@ -2623,6 +2624,11 @@ void z80_assert_busreq(z80_context * context, uint32_t cycle)
 {
 	z80_run(context, cycle);
 	context->busreq = 1;
+	//this is an imperfect aproximation since most M-cycles take less tstates than the max
+	//and a short 3-tstate m-cycle can take an unbounded number due to wait states
+	if (context->current_cycle - cycle > MAX_MCYCLE_LENGTH * context->options->gen.clock_divider) {
+		context->busack = 1;
+	}
 }
 
 void z80_clear_busreq(z80_context * context, uint32_t cycle)
