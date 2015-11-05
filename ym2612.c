@@ -118,6 +118,10 @@ void ym_adjust_master_clock(ym2612_context * context, uint32_t master_clock)
 	context->buffer_inc = ((BUFFER_INC_RES * (uint64_t)context->sample_rate) / (uint64_t)master_clock) * (uint64_t)context->clock_inc;
 }
 
+#ifdef __ANDROID__
+#define log2(x) (log(x)/log(2))
+#endif
+
 void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t sample_limit, uint32_t options)
 {
 	dfopen(debug_file, "ym_debug.txt", "w");
