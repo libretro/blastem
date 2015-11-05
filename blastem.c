@@ -37,6 +37,12 @@
 
 #define MAX_SOUND_CYCLES 100000
 
+#ifdef __ANDROID__
+#define FULLSCREEN_DEFAULT 1
+#else
+#define FULLSCREEN_DEFAULT 0
+#endif
+
 uint16_t *cart;
 uint16_t ram[RAM_WORDS];
 uint8_t z80_ram[Z80_RAM_BYTES];
@@ -916,7 +922,7 @@ int main(int argc, char ** argv)
 	char * statefile = NULL;
 	int rom_size;
 	uint8_t * debuggerfun = NULL;
-	uint8_t fullscreen = 0, use_gl = 1;
+	uint8_t fullscreen = FULLSCREEN_DEFAULT, use_gl = 1;
 	for (int i = 1; i < argc; i++) {
 		if (argv[i][0] == '-') {
 			switch(argv[i][1]) {
@@ -936,7 +942,7 @@ int main(int argc, char ** argv)
 				debuggerfun = (uint8_t *)gdb_debug_enter;
 				break;
 			case 'f':
-				fullscreen = 1;
+				fullscreen = !fullscreen;
 				break;
 			case 'g':
 				use_gl = 0;
