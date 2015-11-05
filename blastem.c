@@ -1012,7 +1012,17 @@ int main(int argc, char ** argv)
 		}
 	}
 	if (!loaded) {
+#ifdef __ANDROID__
+		//Temporary hack until UI is in place
+		if (!(rom_size = load_rom("/mnt/sdcard/rom.bin"))) {
+			fatal_error("Failed to open /mnt/sdcard/rom.bin for reading");
+			
+		}
+		romfname = "/mnt/sdcard/rom.bin";
+		loaded = 1;
+#else
 		fatal_error("Usage: blastem [OPTIONS] ROMFILE [WIDTH] [HEIGHT]\n");
+#endif
 	}
 	tern_node *rom_db = load_rom_db();
 	rom_info info = configure_rom(rom_db, cart, rom_size, base_map, sizeof(base_map)/sizeof(base_map[0]));
