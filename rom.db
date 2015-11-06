@@ -354,3 +354,20 @@ T-12056 {
 		}
 	}
 }
+BlstMenu {
+	map {
+		0 {
+			device ROM
+			last FFFFF
+		}
+		100000 {
+			device RAM
+			size 80000
+			last 17FFFF
+		}
+		180000 {
+			device MENU
+			last 1FFFFF
+		}
+	}
+}
