@@ -194,12 +194,21 @@ vos_prog_info : vos_prog_info.o vos_program_module.o
 
 %.o : %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
+%.png : %.xcf
+	xcf2png $< > $@
+
+%.tiles : %.spec
+	./img2tiles.py -s $< $@
 
 %.bin : %.s68
 	vasmm68k_mot -Fbin -m68000 -no-opt -spaces -o $@ -L $@.list $<
 
 %.bin : %.sz8
 	vasmz80_mot -Fbin -spaces -o $@ $<
+
+arrow.tiles : arrow.png
+font_interlace_variable.tiles : font_interlace_variable.png
+menu.bin : font_interlace_variable.tiles arrow.tiles
 
 clean :
 	rm -rf $(ALL) trans ztestrun ztestgen *.o
