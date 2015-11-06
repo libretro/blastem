@@ -107,7 +107,7 @@ Z80OBJS=z80inst.o z80_to_x86.o
 AUDIOOBJS=ym2612.o psg.o wave.o
 CONFIGOBJS=config.o tern.o util.o
 
-MAINOBJS=blastem.o debug.o gdb_remote.o vdp.o render_sdl.o io.o romdb.o $(TERMINAL) $(CONFIGOBJS) gst.o $(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS)
+MAINOBJS=blastem.o debug.o gdb_remote.o vdp.o render_sdl.o io.o romdb.o menu.o $(TERMINAL) $(CONFIGOBJS) gst.o $(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS)
 
 ifeq ($(CPU),x86_64)
 CFLAGS+=-DX86_64 -m64

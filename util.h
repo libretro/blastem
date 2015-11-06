@@ -3,6 +3,11 @@
 
 #include <stdio.h>
 
+typedef struct {
+	char    *name;
+	uint8_t is_dir;
+} dir_entry;
+
 //Utility functions
 
 //Allocates a new string containing the concatenation of first and second
@@ -23,6 +28,10 @@ void set_exe_str(char * str);
 char * get_exe_dir();
 //Returns the user's home directory
 char * get_home_dir();
+//Retunrs an array of normal files and directories residing in a directory
+dir_entry *get_dir_list(char *path, size_t *numret);
+//Frees a dir list returned by get_dir_list
+void free_dir_list(dir_entry *list, size_t numentries);
 //Returns the contents of a symlink in a newly allocated string
 char * readlink_alloc(char * path);
 //Prints an error message to stderr and to a message box if not in headless mode and then exits
