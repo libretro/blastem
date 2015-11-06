@@ -123,7 +123,8 @@ void debugger_print(m68k_context *context, char format_char, char *param)
 			genesis_context * gen = context->system;
 			value = vdp_hv_counter_read(gen->vdp);
 		} else {
-			value = read_dma_value(p_addr/2);
+			uint16_t *word = get_native_pointer(p_addr & 0xFFFFFE, (void **)context->mem_pointers, &context->options->gen);
+			value = *word;
 		}
 	} else {
 		fprintf(stderr, "Unrecognized parameter to p: %s\n", param);
