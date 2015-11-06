@@ -402,6 +402,7 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 				new_bp->next = zbreakpoints;
 				new_bp->address = value;
 				new_bp->index = zbp_index++;
+				new_bp->commands = NULL;
 				zbreakpoints = new_bp;
 				printf("Z80 Breakpoint %d set at %X\n", new_bp->index, value);
 				break;
