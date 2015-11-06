@@ -11,6 +11,7 @@
 
 #include "blastem.h" //for headless global
 #include "render.h" //for render_errorbox
+#include "util.h"
 
 char * alloc_concat(char * first, char * second)
 {
@@ -276,6 +277,47 @@ fallback:
 #endif
 	}
 	return exe_dir;
+}
+#include <dirent.h>
+
+dir_entry *get_dir_list(char *path, size_t *numret)
+{
+	DIR *d = opendir(path);
+	if (!d) {
+		if (numret) {
+			*numret = 0;
+		}
+		return NULL;
+	}
+	size_t storage = 64;
+	dir_entry *ret = malloc(sizeof(dir_entry) * storage);
+	size_t pos = 0;
+	struct dirent* entry;
+	while (entry = readdir(d))
+	{
+		if (entry->d_type != DT_REG && entry->d_type != DT_LNK && entry->d_type != DT_DIR) {
+			continue;
+		}
+		if (pos == storage) {
+			storage = storage * 2;
+			ret = realloc(ret, sizeof(dir_entry) * storage);
+		}
+		ret[pos].name = strdup(entry->d_name);
+		ret[pos++].is_dir = entry->d_type == DT_DIR;
+	}
+	if (numret) {
+		*numret = pos;
+	}
+	return ret;
+}
+
+void free_dir_list(dir_entry *list, size_t numentries)
+{
+	for (size_t i = 0; i < numentries; i++)
+	{
+		free(list[i].name);
+	}
+	free(list);
 }
 
 #endif

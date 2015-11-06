@@ -84,7 +84,7 @@
 	dc.b "Menu            "
 	dc.b "                "
 	dc.b "                "
-	dc.b "GM MK-00000-00", 0, 0
+	dc.b "MP BlstMenu-00", 0, 0
 	dc.b "                "
 	dc.l $0, rom_end-1, $FF0000, $FFFFFF
 	dc.b "                "
@@ -92,7 +92,7 @@
 	dc.b "                "
 	dc.b "                "
 	dc.b "JUE "
-	
+
 ;register addresses
 VDP_DATA  equ $C00000
 VDP_CTRL  equ $C00004
@@ -139,21 +139,21 @@ vdpregset macro
 vdpreg macro
 	dc.w (((\1) << 8) | $8000 | (\2))
 	endm
-	
+
 ;Writes a normal VDP command to the control port
 ;\1 - VDP address
 ;\2 - Access type
 vdpaccess macro
 	move.l #((\2) | (\1) << 16 & $3FFF0000 | (\1) >> 14 & 3), (a1)
 	endm
-	
+
 ;Writes a DMA command to the control port
 ;\1 - Destination address
 ;\2 - Destination type
 startdma macro
 	move.l #(\2 | VDP_DMA_FLAG | (\1 << 16) & $3FFF0000 | (\1 >> 14) & 3), (a1)
 	endm
-	
+
 DMA_SRC_68K  equ 0
 DMA_SRC_VRAM equ $C0
 DMA_SRC_FILL equ $80
@@ -162,14 +162,19 @@ dmasrc macro
 	move.l #($95009600 + (\1) << 15 & $FF0000 + (\1) >> 9 & $FF), (a1)
 	move.w #($9700 + (\1) >> 17 & $7F | (\2)), (a1)
 	endm
-	
+
+dir_buffer equ $100000
+menu_port  equ $180000
+
+MAX_DISPLAY equ 24
+
 	rsset $FFFF8000
 x_pos       rs.w 1
 base_cmd    rs.l 1
 sprite_list rs.l 160
 num_sprites rs.b 1
 last_pad    rs.b 1
-	
+
 int_6:
 	dmasrc sprite_list, DMA_SRC_68K
 	;set DMA length
@@ -184,7 +189,7 @@ int_6:
 	move.b d1, d0
 	move.l d0, (a1)
 	startdma $C000, VDP_VRAM_WRITE
-	
+
 	lea PAD1_DATA, a2
 	move.b #$40, (a2)
 	move.b (a2), d0
@@ -200,14 +205,14 @@ int_6:
 	eor.b d0, d1
 	and.b d0, d1
 	move.b d0, (last_pad).w
-	
+
 	moveq #16, d2
 	btst #1, d1
 	bne down
 	btst #0, d1
 	bne up
 	rte
-	
+
 down:
 	add.w d2, (sprite_list).w
 	add.w d2, (sprite_list+8).w
@@ -216,11 +221,11 @@ up:
 	sub.w d2, (sprite_list).w
 	sub.w d2, (sprite_list+8).w
 	rte
-	
+
 int_4:
 empty_handler:
 	rte
-	
+
 
 
 initial_regs:
@@ -241,13 +246,13 @@ end_initial_regs
 start:
 	lea $C00000, a0
 	lea $C00004, a1
-	
+
 	moveq #(end_initial_regs-initial_regs-1), d0
 	lea initial_regs.w, a2
 .regloop
 	move.w (a2)+, (a1)
 	dbra d0, .regloop
-	
+
 	vdpaccess $0, VDP_CRAM_WRITE
 	move.w #$020, (a0)
 	move.w #$EEE, (a0)
@@ -277,43 +282,76 @@ tloop:
 ploop:
 	move.l d0, (a0)
 	dbra d1, ploop
-	
+
 	;setup SAT
 	;;vdpaccess $C000, VDP_VRAM_WRITE
-	
+
 	lea sprite_list.w, a2
 	;left arrow
 	move.l #$01080501, (a2)+
 	move.l #$807F0086, (a2)+
-	
+
 	;right arrow
 	move.l #$01080500, (a2)+
 	move.l #$887F01AA, (a2)+
 	move.b #2, num_sprites.w
-	
+
 	move.l #$40860002, d3
 	move.l d3, (a1)
 	move.l d3, base_cmd.w
 
-	lea Message(pc), a6
+	lea dir_buffer, a6
+	lea menu_port, a2
+	move.l a6, (a2)
+
+wait_complete:
+	tst.w (a2)
+	bne wait_complete
+
+	moveq #MAX_DISPLAY-1, d7
+file_loop:
+	tst.b (a6)+
+	addq #1, a6 ;TODO: Do something with directory flag
+
+	cmp.b #$2E, (a6)
+	bne normal
+	cmp.b #$2E, (1, a6)
+	beq normal
+	addq #1, a6
+.skip_loop:
+	tst.b (a6)+
+	bne .skip_loop
+	addq #1, d7
+	move.l a6, d6
+	bra skip
+normal:
 	moveq #0, d0
 	bsr print_string
-	
+	move.l a6, d6
+
+	lea Newline(pc), a6
+	bsr print_string
+
+skip:
+	;word align pointer
+	addq #1, d6
+	and.w #$FFFE, d6
+	move.l d6, a6
+
+	dbra d7, file_loop
+
 	;setup gamepad in port 1
 	move.b #$40, PAD1_CTRL
-	
+
 	move.w #$8174, (a1) ;enable display, vertical interrupts, DMA
-	
+
 
 wait_forever
 	stop #2500
 	bra wait_forever
 
-Message:
-	dc.b "Journey From Darkness - Strider Returns (U) [c][!].bin", $A
-	dc.b "Toejam & Earl in Panic on Funkotron (U) [!].bin", $A
-	dc.b "Fire Shark (U) [c][!].bin", $A
-	dc.b "Sonic and Knuckles (W) [!].bin", 0
+Newline:
+	dc.b $A, 0
 
 	align 1
 
@@ -378,5 +416,5 @@ widths:
 	dc.b 0, 1, 0, 0, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1
 	dc.b 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
 	dc.b 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1
-	
+
 rom_end:

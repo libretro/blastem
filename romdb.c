@@ -4,6 +4,7 @@
 #include "romdb.h"
 #include "util.h"
 #include "blastem.h"
+#include "menu.h"
 
 #define TITLE_START 0x150
 #define TITLE_END (TITLE_START+48)
@@ -335,7 +336,7 @@ void * write_eeprom_i2c_b(uint32_t address, void * context, uint8_t value)
 	if (!map) {
 		fatal_error("Could not find EEPROM map for address %X\n", address);
 	}
-	
+
 	uint16_t expanded, mask;
 	if (address & 1) {
 		expanded = value;
@@ -405,7 +406,7 @@ char *get_header_name(uint8_t *rom)
 {
 	uint8_t *last = rom + TITLE_END - 1;
 	uint8_t *src = rom + TITLE_START;
-	
+
 	while (last > src && (*last <=  0x20 || *last >= 0x80))
 	{
 		last--;
@@ -490,24 +491,24 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 		}
 		info->save_size = save_size;
 		info->save_buffer = malloc(save_size);
-		
+
 		info->map_chunks = base_chunks + (ram_start >= rom_end ? 2 : 3);
 		info->map = malloc(sizeof(memmap_chunk) * info->map_chunks);
 		memset(info->map, 0, sizeof(memmap_chunk)*2);
 		memcpy(info->map+2, base_map, sizeof(memmap_chunk) * base_chunks);
-		
+
 		if (ram_start >= rom_end) {
 			info->map[0].end = rom_end < 0x400000 ? nearest_pow2(rom_end) - 1 : 0xFFFFFF;
 			//TODO: ROM mirroring
 			info->map[0].mask = 0xFFFFFF;
 			info->map[0].flags = MMAP_READ;
 			info->map[0].buffer = rom;
-			
+
 			info->map[1].start = ram_start;
 			info->map[1].mask = info->save_mask;
 			info->map[1].end = ram_end + 1;
 			info->map[1].flags = MMAP_READ | MMAP_WRITE;
-			
+
 			if (ram_flags == RAM_FLAG_ODD) {
 				info->map[1].flags |= MMAP_ONLY_ODD;
 			} else if (ram_flags == RAM_FLAG_EVEN) {
@@ -520,7 +521,7 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 			info->map[0].mask = 0xFFFFFF;
 			info->map[0].flags = MMAP_READ;
 			info->map[0].buffer = rom;
-			
+
 			info->map[1].start = 0x200000;
 			info->map[1].end = 0x400000;
 			info->map[1].mask = 0x1FFFFF;
@@ -531,7 +532,7 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 			info->map[1].write_16 = (write_16_fun)write_sram_area_w;//these will be called all writes to the area
 			info->map[1].write_8 = (write_8_fun)write_sram_area_b;
 			info->map[1].buffer = cart + 0x200000;
-			
+
 			memmap_chunk *last = info->map + info->map_chunks - 1;
 			memset(last, 0, sizeof(memmap_chunk));
 			last->start = 0xA13000;
@@ -545,7 +546,7 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 		info->map = malloc(sizeof(memmap_chunk) * info->map_chunks);
 		memset(info->map, 0, sizeof(memmap_chunk));
 		memcpy(info->map+1, base_map, sizeof(memmap_chunk) * base_chunks);
-		
+
 		info->map[0].end = rom_end > 0x400000 ? rom_end : 0x400000;
 		info->map[0].mask = rom_end < 0x400000 ? nearest_pow2(rom_end) - 1 : 0xFFFFFF;
 		info->map[0].flags = MMAP_READ;
@@ -703,7 +704,7 @@ void map_iter_fun(char *key, tern_val val, void *data)
 	} else if (!strcmp(dtype, "EEPROM")) {
 		process_eeprom_def(key, state);
 		add_eeprom_map(node, start, end, state);
-		
+
 		map->write_16 = write_eeprom_i2c_w;
 		map->write_8 = write_eeprom_i2c_b;
 		map->read_16 = read_eeprom_i2c_w;
@@ -719,6 +720,22 @@ void map_iter_fun(char *key, tern_val val, void *data)
 			map->flags |= MMAP_ONLY_EVEN;
 		}
 		map->mask = calc_mask(state->info->save_size, start, end);
+	} else if (!strcmp(dtype, "RAM")) {
+		uint32_t size = strtol(tern_find_ptr_default(node, "size", "0"), NULL, 16);
+		if (!size || size > map->end - map->start) {
+			size = map->end - map->start;
+		}
+		map->buffer = malloc(size);
+		map->mask = calc_mask(size, start, end);
+		map->flags = MMAP_READ | MMAP_WRITE;
+		char *bus = tern_find_ptr_default(node, "bus", "both");
+		if (!strcmp(dtype, "odd")) {
+			map->flags |= MMAP_ONLY_ODD;
+		} else if (!strcmp(dtype, "even")) {
+			map->flags |= MMAP_ONLY_EVEN;
+		} else {
+			map->flags |= MMAP_CODE;
+		}
 	} else if (!strcmp(dtype, "Sega mapper")) {
 		state->info->mapper_start_index = state->ptr_index++;
 		state->info->map_chunks+=7;
@@ -760,6 +777,12 @@ void map_iter_fun(char *key, tern_val val, void *data)
 		map->mask = 0xFF;
 		map->write_16 = (write_16_fun)write_bank_reg_w;
 		map->write_8 = (write_8_fun)write_bank_reg_b;
+	} else if (!strcmp(dtype, "MENU")) {
+		//fake hardware for supporting menu
+		map->buffer = NULL;
+		map->mask = 0xFF;
+		map->write_16 = menu_write_w;
+		map->read_16 = menu_read_w;
 	} else {
 		fatal_error("Invalid device type for ROM DB map entry %d with address %s\n", state->index, key);
 	}
@@ -778,7 +801,7 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, memmap_
 			break;
 		}
 		product_id[i] = rom[GAME_ID_OFF + i];
-		
+
 	}
 	printf("Product ID: %s\n", product_id);
 	tern_node * entry = tern_find_ptr(rom_db, product_id);
@@ -794,7 +817,7 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, memmap_
 	} else {
 		info.name = get_header_name(rom);
 	}
-	
+
 	char *dbreg = tern_find_ptr(entry, "regions");
 	info.regions = 0;
 	if (dbreg) {
@@ -806,7 +829,7 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, memmap_
 	if (!info.regions) {
 		info.regions = get_header_regions(rom);
 	}
-	
+
 	tern_node *map = tern_find_ptr(entry, "map");
 	if (map) {
 		info.save_type = SAVE_NONE;
@@ -828,6 +851,6 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, memmap_
 	} else {
 		add_memmap_header(&info, rom, rom_size, base_map, base_chunks);
 	}
-	
+
 	return info;
 }
