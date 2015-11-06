@@ -17,6 +17,17 @@ uint16_t menu_read_w(uint32_t address, void * context)
 	return 0;
 }
 
+int menu_dir_sort(const void *a, const void *b)
+{
+	const dir_entry *da, *db;
+	da = a;
+	db = b;
+	if (da->is_dir != db->is_dir) {
+		return db->is_dir - da->is_dir;
+	}
+	return strcasecmp(((dir_entry *)a)->name, ((dir_entry *)b)->name);
+}
+
 void * menu_write_w(uint32_t address, void * context, uint16_t value)
 {
 	m68k_context *m68k = context;
@@ -33,9 +44,13 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 		case 0: {
 			size_t num_entries;
 			dir_entry *entries = get_dir_list(menu->curpath, &num_entries);
+			if (entries) {
+				qsort(entries, num_entries, sizeof(dir_entry), menu_dir_sort);
+			}
+			uint8_t *dest;
 			for (size_t i = 0; i < num_entries; i++)
 			{
-				uint8_t *dest = get_native_pointer(dst, (void **)m68k->mem_pointers, &m68k->options->gen);
+				dest = get_native_pointer(dst, (void **)m68k->mem_pointers, &m68k->options->gen);
 				if (!dest) {
 					break;
 				}
@@ -69,7 +84,36 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 					dst += 2;
 				}
 			}
-			free_dir_list(entries, num_entries);
+			//terminate list
+			dest = get_native_pointer(dst, (void **)m68k->mem_pointers, &m68k->options->gen);
+			if (dest) {
+				*dest = dest[1] = 0;
+				free_dir_list(entries, num_entries);
+			}
+			break;
+		}
+		case 1: {
+			char buf[4096];
+			char *cur;
+			char * dest = NULL;
+			for (cur = buf; cur < buf+sizeof(buf); cur+=2, dst+=2, dest+=2)
+			{
+				if (!dest || !(dst & 0xFFFF)) {
+					//we may have walked off the end of a memory block, get a fresh native pointer
+					dest = get_native_pointer(dst, (void **)m68k->mem_pointers, &m68k->options->gen);
+					if (!dest) {
+						break;
+					}
+				}
+				*cur = dest[1];
+				cur[1] = *dest;
+				if (!*dest || !dest[1]) {
+					break;
+				}
+			}
+			char *pieces[] = {menu->curpath, "/", buf};
+			menu->curpath = alloc_concat_m(3, pieces);
+			free(pieces[0]);
 			break;
 		}
 		default:

@@ -172,8 +172,10 @@ MAX_DISPLAY equ 24
 x_pos       rs.w 1
 base_cmd    rs.l 1
 sprite_list rs.l 160
+page_index  rs.l MAX_DISPLAY+1
 num_sprites rs.b 1
 last_pad    rs.b 1
+selected    rs.b 1
 
 int_6:
 	dmasrc sprite_list, DMA_SRC_68K
@@ -190,6 +192,7 @@ int_6:
 	move.l d0, (a1)
 	startdma $C000, VDP_VRAM_WRITE
 
+	;read gamepad in port 1
 	lea PAD1_DATA, a2
 	move.b #$40, (a2)
 	move.b (a2), d0
@@ -200,28 +203,69 @@ int_6:
 	add.b d1, d1
 	add.b d1, d1
 	or.b d1, d0
-	not.b d0
+	not.b d0   ;button state is inveterted
 	move.b (last_pad).w, d1
 	eor.b d0, d1
 	and.b d0, d1
 	move.b d0, (last_pad).w
 
 	moveq #16, d2
+	;d0 = SACBRLUD
+	;d1 = newly pressed buttons
 	btst #1, d1
 	bne down
 	btst #0, d1
 	bne up
+	btst #7, d1
+	bne start_pressed
+int_done:
 	rte
 
 down:
+	;check if we are already at the bottom of the page
+	moveq #1, d0
+	add.b (selected).w, d0
+	move.w d0, d1
+	add.w d0, d0
+	add.w d0, d0
+	lea page_index.w, a2
+	tst.l (0, a2, d0.w)
+	beq int_done
+	move.b d1, (selected).w
+
 	add.w d2, (sprite_list).w
 	add.w d2, (sprite_list+8).w
 	rte
 up:
+	;check if we are already at the top of the page
+	move.b (selected).w, d0
+	beq int_done
+	subq #1, d0
+	move.b d0, (selected).w
+
 	sub.w d2, (sprite_list).w
 	sub.w d2, (sprite_list+8).w
 	rte
 
+start_pressed:
+	moveq #0, d0
+	move.b (selected).w, d0
+	add.w d0, d0
+	add.w d0, d0
+	lea page_index.w, a2
+	lea (-1, a2, d0.w), a2
+	tst.b (a2)+
+	bne enter_dir
+	;regular file
+	rte
+enter_dir:
+	lea menu_port+4, a3
+	move.l (a2), (a3)
+.wait_complete
+	tst.w (a3)
+	bne .wait_complete
+	addq #6, a7
+	bra menu_start
 int_4:
 empty_handler:
 	rte
@@ -273,15 +317,7 @@ tloop:
 
 
 
-	;clear name tables
-	vdpaccess $8000, VDP_VRAM_WRITE
-	moveq #32, d0
-	swap d0
-	move.b #32, d0
-	move.w #(64*64-1), d1
-ploop:
-	move.l d0, (a0)
-	dbra d1, ploop
+
 
 	;setup SAT
 	;;vdpaccess $C000, VDP_VRAM_WRITE
@@ -296,6 +332,17 @@ ploop:
 	move.l #$887F01AA, (a2)+
 	move.b #2, num_sprites.w
 
+menu_start:
+	;clear name tables
+	vdpaccess $8000, VDP_VRAM_WRITE
+	moveq #32, d0
+	swap d0
+	move.b #32, d0
+	move.w #(64*64-1), d1
+ploop:
+	move.l d0, (a0)
+	dbra d1, ploop
+
 	move.l #$40860002, d3
 	move.l d3, (a1)
 	move.l d3, base_cmd.w
@@ -308,11 +355,14 @@ wait_complete:
 	tst.w (a2)
 	bne wait_complete
 
+	lea page_index.w, a3
 	moveq #MAX_DISPLAY-1, d7
 file_loop:
 	tst.b (a6)+
+	beq done_files
 	addq #1, a6 ;TODO: Do something with directory flag
 
+	;skip over entries starting with a dot except ..
 	cmp.b #$2E, (a6)
 	bne normal
 	cmp.b #$2E, (1, a6)
@@ -325,6 +375,9 @@ file_loop:
 	move.l a6, d6
 	bra skip
 normal:
+	;save entry pointer to page index
+	move.l a6, (a3)+
+	;print name on screen
 	moveq #0, d0
 	bsr print_string
 	move.l a6, d6
@@ -339,6 +392,11 @@ skip:
 	move.l d6, a6
 
 	dbra d7, file_loop
+done_files:
+
+	;null terminate page_index
+	moveq #0, d0
+	move.l d0, (a3)
 
 	;setup gamepad in port 1
 	move.b #$40, PAD1_CTRL
