@@ -169,13 +169,17 @@ menu_port  equ $180000
 MAX_DISPLAY equ 24
 
 	rsset $FFFF8000
-x_pos       rs.w 1
-base_cmd    rs.l 1
-sprite_list rs.l 160
-page_index  rs.l MAX_DISPLAY+1
-num_sprites rs.b 1
-last_pad    rs.b 1
-selected    rs.b 1
+x_pos         rs.w 1
+base_cmd      rs.l 1
+sprite_list   rs.l 160
+page_index    rs.l MAX_DISPLAY+1
+page_stack    rs.l 1
+page_pointers rs.l 1024
+num_sprites   rs.b 1
+last_pad      rs.b 1
+selected      rs.b 1
+more_pages    rs.b 1
+
 
 int_6:
 	dmasrc sprite_list, DMA_SRC_68K
@@ -216,6 +220,10 @@ int_6:
 	bne down
 	btst #0, d1
 	bne up
+	btst #3, d1
+	bne right
+	btst #2, d1
+	bne left
 	btst #7, d1
 	bne start_pressed
 int_done:
@@ -246,6 +254,30 @@ up:
 	sub.w d2, (sprite_list).w
 	sub.w d2, (sprite_list+8).w
 	rte
+
+right:
+	;check that we have another page to go to
+	tst.b more_pages.w
+	beq int_done
+	;switch to the next page
+	move.l page_stack.w, a6
+	move.l (-4, a6), a6
+
+	addq #6, a7
+	bra render_page
+
+left:
+	move.l page_stack.w, a5
+	;check if we're already on the first page
+	cmp.l #(page_pointers+8), a5
+	beq int_done
+	;switch to previous page
+	lea (-12, a5), a5
+	move.l (a5)+, a6
+	move.l a5, page_stack.w
+
+	addq #6, a7
+	bra render_page
 
 start_pressed:
 	moveq #0, d0
@@ -316,9 +348,6 @@ tloop:
 	dbra d0, tloop
 
 
-
-
-
 	;setup SAT
 	;;vdpaccess $C000, VDP_VRAM_WRITE
 
@@ -333,6 +362,18 @@ tloop:
 	move.b #2, num_sprites.w
 
 menu_start:
+	lea page_pointers.w, a5
+	lea dir_buffer, a6
+	move.l a6, (a5)+
+	move.l a5, page_stack.w
+	lea menu_port, a2
+	move.l a6, (a2)
+
+wait_complete:
+	tst.w (a2)
+	bne wait_complete
+
+render_page:
 	;clear name tables
 	vdpaccess $8000, VDP_VRAM_WRITE
 	moveq #32, d0
@@ -347,14 +388,7 @@ ploop:
 	move.l d3, (a1)
 	move.l d3, base_cmd.w
 
-	lea dir_buffer, a6
-	lea menu_port, a2
-	move.l a6, (a2)
-
-wait_complete:
-	tst.w (a2)
-	bne wait_complete
-
+	move.b #0, more_pages.w
 	lea page_index.w, a3
 	moveq #MAX_DISPLAY-1, d7
 file_loop:
@@ -392,7 +426,13 @@ skip:
 	move.l d6, a6
 
 	dbra d7, file_loop
+	tst.b (a6)
+	beq done_files
+	move.b #1, more_pages.w
 done_files:
+	move.l page_stack.w, a5
+	move.l a6, (a5)+
+	move.l a5, page_stack.w
 
 	;null terminate page_index
 	moveq #0, d0
