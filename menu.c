@@ -111,9 +111,20 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 					break;
 				}
 			}
-			char *pieces[] = {menu->curpath, "/", buf};
-			menu->curpath = alloc_concat_m(3, pieces);
-			free(pieces[0]);
+			if (!strcmp(buf, "..")) {
+				size_t len = strlen(menu->curpath);
+				while (len > 1) {
+					--len;
+					if (menu->curpath[len] == '/') {
+						menu->curpath[len] = 0;
+						break;
+					}
+				}
+			} else {
+				char *pieces[] = {menu->curpath, "/", buf};
+				menu->curpath = alloc_concat_m(3, pieces);
+				free(pieces[0]);
+			}
 			break;
 		}
 		default:
