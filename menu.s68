@@ -289,6 +289,8 @@ start_pressed:
 	tst.b (-1, a2)
 	bne enter_dir
 	;regular file
+	lea menu_port+8, a3
+	move.l a2, (a3)
 	rte
 enter_dir:
 	lea menu_port+4, a3
