@@ -28,6 +28,29 @@ int menu_dir_sort(const void *a, const void *b)
 	return strcasecmp(((dir_entry *)a)->name, ((dir_entry *)b)->name);
 }
 
+void copy_string_from_guest(m68k_context *m68k, uint32_t guest_addr, char *buf, size_t maxchars)
+{
+	char *cur;
+	char *src = NULL;
+	for (cur = buf; cur < buf+maxchars; cur+=2, guest_addr+=2, src+=2)
+	{
+		if (!src || !(guest_addr & 0xFFFF)) {
+			//we may have walked off the end of a memory block, get a fresh native pointer
+			src = get_native_pointer(guest_addr, (void **)m68k->mem_pointers, &m68k->options->gen);
+			if (!src) {
+				break;
+			}
+		}
+		*cur = src[1];
+		cur[1] = *src;
+		if (!*src || !src[1]) {
+			break;
+		}
+	}
+	//make sure we terminate the string even if we did not hit a null terminator in the source
+	buf[maxchars-1] = 0;
+}
+
 void * menu_write_w(uint32_t address, void * context, uint16_t value)
 {
 	m68k_context *m68k = context;
@@ -94,23 +117,7 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 		}
 		case 1: {
 			char buf[4096];
-			char *cur;
-			char * dest = NULL;
-			for (cur = buf; cur < buf+sizeof(buf); cur+=2, dst+=2, dest+=2)
-			{
-				if (!dest || !(dst & 0xFFFF)) {
-					//we may have walked off the end of a memory block, get a fresh native pointer
-					dest = get_native_pointer(dst, (void **)m68k->mem_pointers, &m68k->options->gen);
-					if (!dest) {
-						break;
-					}
-				}
-				*cur = dest[1];
-				cur[1] = *dest;
-				if (!*dest || !dest[1]) {
-					break;
-				}
-			}
+			copy_string_from_guest(m68k, dst, buf, sizeof(buf));
 			if (!strcmp(buf, "..")) {
 				size_t len = strlen(menu->curpath);
 				while (len > 1) {
@@ -127,9 +134,13 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			}
 			break;
 		}
-		case 2:
+		case 2: {
+			char buf[4096];
+			copy_string_from_guest(m68k, dst, buf, sizeof(buf));
 			m68k->should_return = 1;
+			fprintf(stderr, "MENU: Selected ROM %s\n", buf);
 			break;
+		}
 		default:
 			fprintf(stderr, "WARNING: write to undefined menu port %X\n", address);
 		}
