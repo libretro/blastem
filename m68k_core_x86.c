@@ -2509,7 +2509,14 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	mov_rr(code, RAX, opts->gen.context_reg, SZ_PTR);
 	jmp(code, opts->gen.load_context);
 	*skip_sync = code->cur - (skip_sync+1);
+	cmp_irdisp(code, 0, opts->gen.context_reg, offsetof(m68k_context, should_return), SZ_B);
+	code_ptr do_ret = code->cur + 1;
+	jcc(code, CC_NZ, do_ret);
 	retn(code);
+	*do_ret = code->cur - (do_ret+1);
+	pop_r(code, opts->gen.scratch1);
+	retn(code);
+	mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, offsetof(m68k_context, resume_pc), SZ_PTR);
 	*do_int = code->cur - (do_int+1);
 	//implement 1 instruction latency
 	cmp_irdisp(code, 0, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);

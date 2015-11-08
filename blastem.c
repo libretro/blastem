@@ -171,6 +171,9 @@ void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 	}*/
 
 	context->target_cycle = context->int_cycle < context->sync_cycle ? context->int_cycle : context->sync_cycle;
+	if (context->should_return) {
+		context->target_cycle = context->current_cycle;
+	}
 	/*printf("Cyc: %d, Trgt: %d, Int Cyc: %d, Int: %d, Mask: %X, V: %d, H: %d, HICount: %d, HReg: %d, Line: %d\n",
 		context->current_cycle, context->target_cycle, context->int_cycle, context->int_num, (context->status & 0x7),
 		v_context->regs[REG_MODE_2] & 0x20, v_context->regs[REG_MODE_1] & 0x10, v_context->hint_counter, v_context->regs[REG_HINT], v_context->cycles / MCLKS_LINE);*/
@@ -1016,7 +1019,7 @@ int main(int argc, char ** argv)
 		//Temporary hack until UI is in place
 		if (!(rom_size = load_rom("/mnt/sdcard/rom.bin"))) {
 			fatal_error("Failed to open /mnt/sdcard/rom.bin for reading");
-			
+
 		}
 		romfname = "/mnt/sdcard/rom.bin";
 		loaded = 1;

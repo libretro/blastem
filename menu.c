@@ -127,6 +127,9 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			}
 			break;
 		}
+		case 2:
+			m68k->should_return = 1;
+			break;
 		default:
 			fprintf(stderr, "WARNING: write to undefined menu port %X\n", address);
 		}
