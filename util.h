@@ -28,6 +28,10 @@ void set_exe_str(char * str);
 char * get_exe_dir();
 //Returns the user's home directory
 char * get_home_dir();
+//Returns an appropriate path for storing config files
+char *get_config_dir();
+//Reads a file bundled with the executable
+char *read_bundled_file(char *name, long *sizeret);
 //Retunrs an array of normal files and directories residing in a directory
 dir_entry *get_dir_list(char *path, size_t *numret);
 //Frees a dir list returned by get_dir_list

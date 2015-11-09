@@ -321,3 +321,94 @@ void free_dir_list(dir_entry *list, size_t numentries)
 }
 
 #endif
+
+#ifdef __ANDROID__
+
+#include <SDL.h>
+char *read_bundled_file(char *name, long *sizeret)
+{
+	SDL_RWops *rw = SDL_RWFromFile(config_path, "rb");
+	if (!rw) {
+		if (sizeret) {
+			*sizeret = -1;
+		}
+		return NULL;
+	}
+
+	long fsize = rw->size(rw);
+	if (sizeret) {
+		*sizeret = fsize;
+	}
+	char *ret;
+	if (fsize) {
+		ret = malloc(fsize);
+		if (SDL_RWread(rw, ret, 1, fsize) != fsize) {
+			free(ret);
+			ret = NULL;
+		}
+	} else {
+		ret = NULL;
+	}
+	SDL_RWclose(rw);
+	return ret;
+}
+
+char *get_config_dir()
+{
+	return SDL_AndroidGetInternalStoragePath();
+}
+
+#else
+
+char *read_bundled_file(char *name, long *sizeret)
+{
+	char *exe_dir = get_exe_dir();
+	if (!exe_dir) {
+		if (sizeret) {
+			*sizeret = -1;
+		}
+		return NULL;
+	}
+	char *pieces[] = {exe_dir, "/", name};
+	char *path = alloc_concat_m(3, pieces);
+	FILE *f = fopen(path, "rb");
+	free(path);
+	if (!f) {
+		if (sizeret) {
+			*sizeret = -1;
+		}
+		return NULL;
+	}
+
+	long fsize = file_size(f);
+	if (sizeret) {
+		*sizeret = fsize;
+	}
+	char *ret;
+	if (fsize) {
+		//reserve an extra byte in case caller wants
+		//to null terminate the data
+		ret = malloc(fsize+1);
+		if (fread(ret, 1, fsize, f) != fsize) {
+			free(ret);
+			ret = NULL;
+		}
+	} else {
+		ret = NULL;
+	}
+	return ret;
+}
+
+char *get_config_dir()
+{
+	static char* confdir;
+	if (!confdir) {
+		char *homedir = get_home_dir();
+		if (homedir) {
+			confdir = alloc_concat(homedir, "/.config/blastem");
+		}
+	}
+	return confdir;
+}
+
+#endif
