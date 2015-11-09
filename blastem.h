@@ -25,6 +25,7 @@ typedef struct {
 	uint16_t       *work_ram;
 	uint8_t        *zram;
 	void           *extra;
+	char           *next_rom;
 	uint8_t        *save_storage;
 	eeprom_map     *eeprom_map;
 	uint32_t       num_eeprom;

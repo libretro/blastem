@@ -58,7 +58,8 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 	menu_context *menu = gen->extra;
 	if (!menu) {
 		gen->extra = menu = calloc(1, sizeof(menu_context));
-		menu->curpath = strdup(get_home_dir());
+		menu->curpath = tern_find_path(config, "ui\0initial_path\0").ptrval;
+		menu->curpath = menu->curpath ? strdup(menu->curpath) : strdup(get_home_dir());
 	}
 	if (menu->state) {
 		uint32_t dst = menu->latch << 16 | value;
@@ -137,6 +138,8 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 		case 2: {
 			char buf[4096];
 			copy_string_from_guest(m68k, dst, buf, sizeof(buf));
+			char *pieces[] = {menu->curpath, "/", buf};
+			gen->next_rom = alloc_concat_m(3, pieces);
 			m68k->should_return = 1;
 			fprintf(stderr, "MENU: Selected ROM %s\n", buf);
 			break;
