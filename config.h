@@ -7,11 +7,9 @@
 #define CONFIG_H_
 #include "tern.h"
 
-tern_node * parse_config_file(char * config_path);
-tern_node * load_config();
-#ifdef __ANDROID__
-tern_node * parse_config_file_assets(char *config_path);
-#endif
+tern_node *parse_config_file(char *config_path);
+tern_node *parse_bundled_config(char *config_name);
+tern_node *load_config();
 
 #endif //CONFIG_H_
 

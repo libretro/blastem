@@ -59,7 +59,15 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 	if (!menu) {
 		gen->extra = menu = calloc(1, sizeof(menu_context));
 		menu->curpath = tern_find_path(config, "ui\0initial_path\0").ptrval;
-		menu->curpath = menu->curpath ? strdup(menu->curpath) : strdup(get_home_dir());
+		if (menu->curpath) {
+			menu->curpath = strdup(menu->curpath);
+		} else {
+#ifdef __ANDROID__
+			menu->curpath = strdup(SDL_AndroidGetExternalStoragePath());
+#else
+			menu->curpath = strdup(get_home_dir());
+#endif
+		}
 	}
 	if (menu->state) {
 		uint32_t dst = menu->latch << 16 | value;
@@ -141,7 +149,6 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			char *pieces[] = {menu->curpath, "/", buf};
 			gen->next_rom = alloc_concat_m(3, pieces);
 			m68k->should_return = 1;
-			fprintf(stderr, "MENU: Selected ROM %s\n", buf);
 			break;
 		}
 		default:

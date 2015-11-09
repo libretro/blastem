@@ -385,17 +385,7 @@ uint8_t read_eeprom_i2c_b(uint32_t address, void * context)
 
 tern_node *load_rom_db()
 {
-#ifdef __ANDROID__
-	tern_node *db = parse_config_file_assets("rom.db");
-#else
-	char *exe_dir = get_exe_dir();
-	if (!exe_dir) {
-		fatal_error("Failed to find executable path\n");
-	}
-	char *path = alloc_concat(exe_dir, "/rom.db");
-	tern_node *db = parse_config_file(path);
-	free(path);
-#endif
+	tern_node *db = parse_bundled_config("rom.db");
 	if (!db) {
 		fatal_error("Failed to load ROM DB\n");
 	}

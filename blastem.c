@@ -1061,11 +1061,23 @@ int main(int argc, char ** argv)
 		if (!romfname) {
 			romfname = "menu.bin";
 		}
-		//TODO: load relative to executable or from assets depending on platform
-		if (!(rom_size = load_rom(romfname))) {
-			fatal_error("Failed to open UI ROM %s for reading", romfname);
-
+		if (romfname[0] == '/') {
+			if (!(rom_size = load_rom(romfname))) {
+				fatal_error("Failed to open UI ROM %s for reading", romfname);
+			}
+		} else {
+			long fsize;
+			cart = (uint16_t *)read_bundled_file(romfname, &fsize);
+			if (!cart) {
+				fatal_error("Failed to open UI ROM %s for reading", romfname);
+			}
+			rom_size = nearest_pow2(fsize);
+			if (rom_size > fsize) {
+				cart = realloc(cart, rom_size);
+			}
 		}
+		//TODO: load relative to executable or from assets depending on platform
+
 		loaded = 1;
 	}
 	tern_node *rom_db = load_rom_db();
