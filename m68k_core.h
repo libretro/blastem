@@ -58,7 +58,6 @@ typedef struct {
 	uint32_t        int_cycle;
 	uint32_t        int_num;
 	uint16_t        *mem_pointers[NUM_MEM_AREAS];
-	void            *video_context;
 	void            *resume_pc;
 	native_map_slot *native_code_map;
 	m68k_options    *options;
