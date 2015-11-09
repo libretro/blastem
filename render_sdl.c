@@ -371,8 +371,13 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 		}
 	}
 	SDL_JoystickEventState(SDL_ENABLE);
-	
+
 	atexit(render_quit);
+}
+
+void render_update_caption(char *title)
+{
+	caption = title;
 }
 
 void render_context(vdp_context * context)

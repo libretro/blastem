@@ -304,8 +304,8 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 	vdp_port &= 0x1F;
 	//printf("vdp_port write: %X, value: %X, cycle: %d\n", vdp_port, value, context->current_cycle);
 	sync_components(context, 0);
-	vdp_context * v_context = context->video_context;
 	genesis_context * gen = context->system;
+	vdp_context *v_context = gen->vdp;
 	if (vdp_port < 0x10) {
 		int blocked;
 		uint32_t before_cycle = v_context->cycles;
@@ -406,7 +406,8 @@ uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 	vdp_port &= 0x1F;
 	uint16_t value;
 	sync_components(context, 0);
-	vdp_context * v_context = context->video_context;
+	genesis_context *gen = context->system;
+	vdp_context * v_context = gen->vdp;
 	uint32_t before_cycle = v_context->cycles;
 	if (vdp_port < 0x10) {
 		if (vdp_port < 4) {
@@ -795,7 +796,9 @@ const memmap_chunk base_map[] = {
 	};
 
 char * save_filename;
-genesis_context * genesis;
+genesis_context *genesis;
+genesis_context *menu_context;
+genesis_context *game_context;
 void persist_save()
 {
 	FILE * f = fopen(save_filename, "wb");
@@ -808,10 +811,50 @@ void persist_save()
 	printf("Saved %s to %s\n", genesis->save_type == SAVE_I2C ? "EEPROM" : "SRAM", save_filename);
 }
 
-void init_run_cpu(genesis_context * gen, rom_info *rom, FILE * address_log, char * statefile, uint8_t * debugger)
-{
-	m68k_options opts;
+#ifndef NO_Z80
+const memmap_chunk z80_map[] = {
+	{ 0x0000, 0x4000,  0x1FFF, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE, z80_ram, NULL, NULL, NULL,              NULL },
+	{ 0x8000, 0x10000, 0x7FFF, 0, 0,                                  NULL,    NULL, NULL, z80_read_bank,     z80_write_bank},
+	{ 0x4000, 0x6000,  0x0003, 0, 0,                                  NULL,    NULL, NULL, z80_read_ym,       z80_write_ym},
+	{ 0x6000, 0x6100,  0xFFFF, 0, 0,                                  NULL,    NULL, NULL, NULL,              z80_write_bank_reg},
+	{ 0x7F00, 0x8000,  0x00FF, 0, 0,                                  NULL,    NULL, NULL, z80_vdp_port_read, z80_vdp_port_write}
+};
+#endif
 
+genesis_context *alloc_init_genesis(rom_info *rom, int fps, uint32_t ym_opts)
+{
+	genesis_context *gen = calloc(1, sizeof(genesis_context));
+	gen->master_clock = gen->normal_clock = fps == 60 ? MCLKS_NTSC : MCLKS_PAL;
+
+	gen->vdp = malloc(sizeof(vdp_context));
+	init_vdp_context(gen->vdp, version_reg & 0x40);
+	gen->frame_end = vdp_cycles_to_frame_end(gen->vdp);
+	char * config_cycles = tern_find_path(config, "clocks\0max_cycles\0").ptrval;
+	gen->max_cycles = config_cycles ? atoi(config_cycles) : DEFAULT_SYNC_INTERVAL;
+
+	gen->ym = malloc(sizeof(ym2612_context));
+	ym_init(gen->ym, render_sample_rate(), gen->master_clock, MCLKS_PER_YM, render_audio_buffer(), ym_opts);
+
+	gen->psg = malloc(sizeof(psg_context));
+	psg_init(gen->psg, render_sample_rate(), gen->master_clock, MCLKS_PER_PSG, render_audio_buffer());
+
+	gen->z80 = calloc(1, sizeof(z80_context));
+#ifndef NO_Z80
+	z80_options *z_opts = malloc(sizeof(z80_options));
+	init_z80_opts(z_opts, z80_map, 5, NULL, 0, MCLKS_PER_Z80);
+	init_z80_context(gen->z80, z_opts);
+	z80_assert_reset(gen->z80, 0);
+#endif
+
+	gen->z80->system = gen;
+	gen->z80->mem_pointers[0] = z80_ram;
+	gen->z80->mem_pointers[1] = gen->z80->mem_pointers[2] = (uint8_t *)cart;
+
+	gen->work_ram = ram;
+	gen->zram = z80_ram;
+	setup_io_devices(config, gen->ports);
+
+	gen->save_type = rom->save_type;
 	gen->save_type = rom->save_type;
 	if (gen->save_type != SAVE_NONE) {
 		gen->save_ram_mask = rom->save_mask;
@@ -835,20 +878,26 @@ void init_run_cpu(genesis_context * gen, rom_info *rom, FILE * address_log, char
 		gen->save_storage = NULL;
 	}
 
-	init_m68k_opts(&opts, rom->map, rom->map_chunks, MCLKS_PER_68K);
-	opts.address_log = address_log;
-	opts.gen.flags |= M68K_OPT_BROKEN_READ_MODIFY;
-	m68k_context *context = init_68k_context(&opts);
-	gen->m68k = context;
+	m68k_options *opts = malloc(sizeof(m68k_options));
+	init_m68k_opts(opts, rom->map, rom->map_chunks, MCLKS_PER_68K);
+	//TODO: make this configurable
+	opts->gen.flags |= M68K_OPT_BROKEN_READ_MODIFY;
+	gen->m68k = init_68k_context(opts);
+	gen->m68k->system = gen;
 
-	context->video_context = gen->vdp;
-	context->system = gen;
 	for (int i = 0; i < rom->map_chunks; i++)
 	{
 		if (rom->map[i].flags & MMAP_PTR_IDX) {
-			context->mem_pointers[rom->map[i].ptr_index] = rom->map[i].buffer;
+			gen->m68k->mem_pointers[rom->map[i].ptr_index] = rom->map[i].buffer;
 		}
 	}
+
+	return gen;
+}
+
+void start_genesis(genesis_context *gen, char *statefile, uint8_t *debugger)
+{
+	set_keybindings(gen->ports);
 
 	if (statefile) {
 		uint32_t pc = load_gst(gen, statefile);
@@ -857,16 +906,16 @@ void init_run_cpu(genesis_context * gen, rom_info *rom, FILE * address_log, char
 		}
 		printf("Loaded %s\n", statefile);
 		if (debugger) {
-			insert_breakpoint(context, pc, debugger);
+			insert_breakpoint(gen->m68k, pc, debugger);
 		}
 		adjust_int_cycle(gen->m68k, gen->vdp);
-		start_68k_context(context, pc);
+		start_68k_context(gen->m68k, pc);
 	} else {
 		if (debugger) {
 			uint32_t address = cart[2] << 16 | cart[3];
-			insert_breakpoint(context, address, debugger);
+			insert_breakpoint(gen->m68k, address, debugger);
 		}
-		m68k_reset(context);
+		m68k_reset(gen->m68k);
 	}
 }
 
@@ -879,6 +928,7 @@ void update_title(char *rom_name)
 		title = NULL;
 	}
 	title = alloc_concat(rom_name, " - BlastEm");
+	render_update_caption(title);
 }
 
 void set_region(rom_info *info, uint8_t region)
@@ -899,16 +949,6 @@ void set_region(rom_info *info, uint8_t region)
 		version_reg = NO_DISK | USA;
 	}
 }
-
-#ifndef NO_Z80
-const memmap_chunk z80_map[] = {
-	{ 0x0000, 0x4000,  0x1FFF, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE, z80_ram, NULL, NULL, NULL,              NULL },
-	{ 0x8000, 0x10000, 0x7FFF, 0, 0,                                  NULL,    NULL, NULL, z80_read_bank,     z80_write_bank},
-	{ 0x4000, 0x6000,  0x0003, 0, 0,                                  NULL,    NULL, NULL, z80_read_ym,       z80_write_ym},
-	{ 0x6000, 0x6100,  0xFFFF, 0, 0,                                  NULL,    NULL, NULL, NULL,              z80_write_bank_reg},
-	{ 0x7F00, 0x8000,  0x00FF, 0, 0,                                  NULL,    NULL, NULL, z80_vdp_port_read, z80_vdp_port_write}
-};
-#endif
 
 int main(int argc, char ** argv)
 {
@@ -1014,18 +1054,19 @@ int main(int argc, char ** argv)
 			height = atoi(argv[i]);
 		}
 	}
+	uint8_t menu = !loaded;
 	if (!loaded) {
-#ifdef __ANDROID__
-		//Temporary hack until UI is in place
-		if (!(rom_size = load_rom("/mnt/sdcard/rom.bin"))) {
-			fatal_error("Failed to open /mnt/sdcard/rom.bin for reading");
+		//load menu
+		romfname = tern_find_path(config, "ui\rom\0").ptrval;
+		if (!romfname) {
+			romfname = "menu.bin";
+		}
+		//TODO: load relative to executable or from assets depending on platform
+		if (!(rom_size = load_rom(romfname))) {
+			fatal_error("Failed to open UI ROM %s for reading", romfname);
 
 		}
-		romfname = "/mnt/sdcard/rom.bin";
 		loaded = 1;
-#else
-		fatal_error("Usage: blastem [OPTIONS] ROMFILE [WIDTH] [HEIGHT]\n");
-#endif
 	}
 	tern_node *rom_db = load_rom_db();
 	rom_info info = configure_rom(rom_db, cart, rom_size, base_map, sizeof(base_map)/sizeof(base_map[0]));
@@ -1049,43 +1090,6 @@ int main(int argc, char ** argv)
 	if (!headless) {
 		render_init(width, height, title, fps, fullscreen);
 	}
-	vdp_context v_context;
-	genesis_context gen;
-	memset(&gen, 0, sizeof(gen));
-	gen.master_clock = gen.normal_clock = fps == 60 ? MCLKS_NTSC : MCLKS_PAL;
-
-	init_vdp_context(&v_context, version_reg & 0x40);
-	gen.frame_end = vdp_cycles_to_frame_end(&v_context);
-	char * config_cycles = tern_find_path(config, "clocks\0max_cycles\0").ptrval;
-	gen.max_cycles = config_cycles ? atoi(config_cycles) : DEFAULT_SYNC_INTERVAL;
-
-	ym2612_context y_context;
-	ym_init(&y_context, render_sample_rate(), gen.master_clock, MCLKS_PER_YM, render_audio_buffer(), ym_log ? YM_OPT_WAVE_LOG : 0);
-
-	psg_context p_context;
-	psg_init(&p_context, render_sample_rate(), gen.master_clock, MCLKS_PER_PSG, render_audio_buffer());
-
-	z80_context z_context;
-#ifndef NO_Z80
-	z80_options z_opts;
-	init_z80_opts(&z_opts, z80_map, 5, NULL, 0, MCLKS_PER_Z80);
-	init_z80_context(&z_context, &z_opts);
-	z80_assert_reset(&z_context, 0);
-#endif
-
-	z_context.system = &gen;
-	z_context.mem_pointers[0] = z80_ram;
-	z_context.mem_pointers[1] = z_context.mem_pointers[2] = (uint8_t *)cart;
-
-	gen.z80 = &z_context;
-	gen.vdp = &v_context;
-	gen.ym = &y_context;
-	gen.psg = &p_context;
-	gen.work_ram = ram;
-	gen.zram = z80_ram;
-	genesis = &gen;
-	setup_io_devices(config, gen.ports);
-
 	int fname_size = strlen(romfname);
 	char * ext = info.save_type == SAVE_I2C ? "eeprom" : "sram";
 	save_filename = malloc(fname_size+strlen(ext) + 2);
@@ -1101,8 +1105,44 @@ int main(int argc, char ** argv)
 		save_filename[fname_size] = '.';
 		strcpy(save_filename + fname_size + 1, ext);
 	}
-	set_keybindings(gen.ports);
 
-	init_run_cpu(&gen, &info, address_log, statefile, debuggerfun);
+	genesis = alloc_init_genesis(&info, fps, (ym_log && !menu) ? YM_OPT_WAVE_LOG : 0);
+	if (menu) {
+		menu_context = genesis;
+	} else {
+		genesis->m68k->options->address_log = address_log;
+		game_context = genesis;
+	}
+
+	start_genesis(genesis, menu ? NULL : statefile, menu ? NULL : debuggerfun);
+	if (menu && menu_context->next_rom) {
+		//TODO: Allow returning to menu
+		if (!(rom_size = load_rom(menu_context->next_rom))) {
+			fatal_error("Failed to open %s for reading\n", menu_context->next_rom);
+		}
+		info = configure_rom(rom_db, cart, rom_size, base_map, sizeof(base_map)/sizeof(base_map[0]));
+		byteswap_rom(rom_size);
+		set_region(&info, force_version);
+		update_title(info.name);
+		fname_size = strlen(romfname);
+		ext = info.save_type == SAVE_I2C ? "eeprom" : "sram";
+		save_filename = malloc(fname_size+strlen(ext) + 2);
+		memcpy(save_filename, romfname, fname_size);
+		for (i = fname_size-1; fname_size >= 0; --i) {
+			if (save_filename[i] == '.') {
+				strcpy(save_filename + i + 1, ext);
+				break;
+			}
+		}
+		if (i < 0) {
+			save_filename[fname_size] = '.';
+			strcpy(save_filename + fname_size + 1, ext);
+		}
+		game_context = alloc_init_genesis(&info, fps, ym_log ? YM_OPT_WAVE_LOG : 0);
+		genesis->m68k->options->address_log = address_log;
+		genesis = game_context;
+		start_genesis(genesis, statefile, debuggerfun);
+	}
+
 	return 0;
 }

@@ -35,6 +35,7 @@ typedef struct {
 uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b);
 void render_alloc_surfaces(vdp_context * context);
 void render_init(int width, int height, char * title, uint32_t fps, uint8_t fullscreen);
+void render_update_caption(char *title);
 void render_context(vdp_context * context);
 void render_wait_quit(vdp_context * context);
 void render_wait_psg(psg_context * context);
