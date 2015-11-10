@@ -51,6 +51,42 @@ void copy_string_from_guest(m68k_context *m68k, uint32_t guest_addr, char *buf, 
 	buf[maxchars-1] = 0;
 }
 
+#ifdef __ANDROID__
+#include <SDL.h>
+#include <jni.h>
+char *get_external_storage_path()
+{
+	static char *ret;
+	if (ret) {
+		return ret;
+	}
+	JNIEnv *env = SDL_AndroidGetJNIEnv();
+	if ((*env)->PushLocalFrame(env, 8) < 0) {
+		return NULL;
+	}
+	
+	jclass Environment = (*env)->FindClass(env, "android/os/Environment");
+	jmethodID getExternalStorageDirectory = 
+		(*env)->GetStaticMethodID(env, Environment, "getExternalStorageDirectory", "()Ljava/io/File;");
+	jobject file = (*env)->CallStaticObjectMethod(env, Environment, getExternalStorageDirectory);
+	if (!file) {
+		goto cleanup;
+	}
+	
+	jmethodID getAbsolutePath = (*env)->GetMethodID(env, (*env)->GetObjectClass(env, file),
+		"getAbsolutePath", "()Ljava/lang/String;");
+	jstring path = (*env)->CallObjectMethod(env, file, getAbsolutePath);
+	
+	char const *tmp = (*env)->GetStringUTFChars(env, path, NULL);
+	ret = strdup(tmp);
+	(*env)->ReleaseStringUTFChars(env, path, tmp);
+	
+cleanup:
+	(*env)->PopLocalFrame(env, NULL);
+	return ret;
+}
+#endif
+
 void * menu_write_w(uint32_t address, void * context, uint16_t value)
 {
 	m68k_context *m68k = context;
@@ -63,7 +99,7 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			menu->curpath = strdup(menu->curpath);
 		} else {
 #ifdef __ANDROID__
-			menu->curpath = strdup(SDL_AndroidGetExternalStoragePath());
+			menu->curpath = strdup(get_external_storage_path());
 #else
 			menu->curpath = strdup(get_home_dir());
 #endif
