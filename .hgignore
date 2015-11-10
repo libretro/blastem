@@ -1,7 +1,6 @@
 syntax: glob
 *.dis
 *.asm
-*.bin
 *.md
 *.jpg
 *.pdf
@@ -57,4 +56,5 @@ syntax: regexp
 ^ztestrun
 ^vgmplay
 ^vgmsplit
+^[^/]*\.bin
 
