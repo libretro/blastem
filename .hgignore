@@ -43,15 +43,18 @@ sdl
 *.out
 *.lib
 *.vgm
-blastem
-blastcpm
-dis
-stateview
-trans
-zdis
-ztestrun
-vgmplay
-vgmsplit
 log*.txt
 *report*.txt
 output*.txt
+
+syntax: regexp
+^blastem
+^blastcpm
+^dis
+^stateview
+^trans
+^zdis
+^ztestrun
+^vgmplay
+^vgmsplit
+
