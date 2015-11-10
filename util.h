@@ -11,9 +11,9 @@ typedef struct {
 //Utility functions
 
 //Allocates a new string containing the concatenation of first and second
-char * alloc_concat(char * first, char * second);
+char * alloc_concat(char const * first, char const * second);
 //Allocates a new string containing the concatenation of the strings pointed to by parts
-char * alloc_concat_m(int num_parts, char ** parts);
+char * alloc_concat_m(int num_parts, char const ** parts);
 //Returns the size of a file using fseek and ftell
 long file_size(FILE * f);
 //Strips whitespace and non-printable characters from the beginning and end of a string
@@ -29,7 +29,7 @@ char * get_exe_dir();
 //Returns the user's home directory
 char * get_home_dir();
 //Returns an appropriate path for storing config files
-char *get_config_dir();
+char const *get_config_dir();
 //Reads a file bundled with the executable
 char *read_bundled_file(char *name, long *sizeret);
 //Retunrs an array of normal files and directories residing in a directory

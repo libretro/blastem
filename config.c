@@ -129,7 +129,7 @@ tern_node *parse_bundled_config(char *config_name)
 
 tern_node *load_config()
 {
-	char *confdir = get_config_dir();
+	char const *confdir = get_config_dir();
 	char *confpath = NULL;
 	tern_node *ret;
 	if (confdir) {

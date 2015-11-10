@@ -13,7 +13,7 @@
 #include "render.h" //for render_errorbox
 #include "util.h"
 
-char * alloc_concat(char * first, char * second)
+char * alloc_concat(char const * first, char const * second)
 {
 	int flen = strlen(first);
 	int slen = strlen(second);
@@ -23,7 +23,7 @@ char * alloc_concat(char * first, char * second)
 	return ret;
 }
 
-char * alloc_concat_m(int num_parts, char ** parts)
+char * alloc_concat_m(int num_parts, char const ** parts)
 {
 	int total = 0;
 	for (int i = 0; i < num_parts; i++) {
@@ -327,7 +327,7 @@ void free_dir_list(dir_entry *list, size_t numentries)
 #include <SDL.h>
 char *read_bundled_file(char *name, long *sizeret)
 {
-	SDL_RWops *rw = SDL_RWFromFile(config_path, "rb");
+	SDL_RWops *rw = SDL_RWFromFile(name, "rb");
 	if (!rw) {
 		if (sizeret) {
 			*sizeret = -1;
@@ -353,7 +353,7 @@ char *read_bundled_file(char *name, long *sizeret)
 	return ret;
 }
 
-char *get_config_dir()
+char const *get_config_dir()
 {
 	return SDL_AndroidGetInternalStoragePath();
 }
@@ -399,7 +399,7 @@ char *read_bundled_file(char *name, long *sizeret)
 	return ret;
 }
 
-char *get_config_dir()
+char const *get_config_dir()
 {
 	static char* confdir;
 	if (!confdir) {
