@@ -9,6 +9,25 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#ifdef __ANDROID__
+#include <android/log.h>
+#define info_puts(msg) __android_log_write(ANDROID_LOG_INFO, "BlastEm", msg)
+#define warning_puts(msg) __android_log_write(ANDROID_LOG_WARN, "BlastEm", msg)
+#define fatal_puts(msg) __android_log_write(ANDROID_LOG_FATAL, "BlastEm", msg)
+
+#define info_printf(msg, args) __android_log_vprint(ANDROID_LOG_INFO, "BlastEm", msg, args)
+#define warning_printf(msg, args) __android_log_vprint(ANDROID_LOG_WARN, "BlastEm", msg, args)
+#define fatal_printf(msg, args) __android_log_vprint(ANDROID_LOG_FATAL, "BlastEm", msg, args)
+#else
+#define info_puts(msg) fputs(stdout, msg);
+#define warning_puts(msg) fputs(stderr, msg);
+#define fatal_puts(msg) fputs(stderr, msg);
+
+#define info_printf(msg, args vprintf(msg, args)
+#define warning_printf(msg, args vfprintf(stderr, msg, args)
+#define fatal_printf(msg, args vfprintf(stderr, msg, args)
+#endif
+
 #include "blastem.h" //for headless global
 #include "render.h" //for render_errorbox
 #include "util.h"
@@ -108,11 +127,11 @@ void fatal_error(char *format, ...)
 			va_start(args, format);
 			vsnprintf(buf, actual, format, args);
 		}
-		fputs(buf, stderr);
+		fatal_puts(buf);
 		render_errorbox("Fatal Error", buf);
 		free(buf);
 	} else {
-		vfprintf(stderr, format, args);
+		fatal_printf(format, args);
 	}
 	va_end(args);
 	exit(1);
@@ -124,7 +143,7 @@ void warning(char *format, ...)
 	va_start(args, format);
 #ifndef _WIN32
 	if (headless || (isatty(STDERR_FILENO) && isatty(STDIN_FILENO))) {
-		vfprintf(stderr, format, args);
+		warning_printf(format, args);
 	} else {
 #endif
 		size_t size = strlen(format) * 2;
@@ -138,7 +157,7 @@ void warning(char *format, ...)
 			va_start(args, format);
 			vsnprintf(buf, actual, format, args);
 		}
-		fputs(buf, stderr);
+		warning_puts(buf);
 		render_infobox("BlastEm Info", buf);
 		free(buf);
 #ifndef _WIN32
@@ -153,7 +172,7 @@ void info_message(char *format, ...)
 	va_start(args, format);
 #ifndef _WIN32
 	if (headless || (isatty(STDOUT_FILENO) && isatty(STDIN_FILENO))) {
-		vprintf(format, args);
+		info_printf(format, args);
 	} else {
 #endif
 		size_t size = strlen(format) * 2;
@@ -167,7 +186,7 @@ void info_message(char *format, ...)
 			va_start(args, format);
 			vsnprintf(buf, actual, format, args);
 		}
-		fputs(buf, stdout);
+		info_puts(buf);
 		render_infobox("BlastEm Info", buf);
 		free(buf);
 #ifndef _WIN32
