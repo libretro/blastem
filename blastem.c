@@ -969,6 +969,7 @@ int main(int argc, char ** argv)
 	int rom_size;
 	uint8_t * debuggerfun = NULL;
 	uint8_t fullscreen = FULLSCREEN_DEFAULT, use_gl = 1;
+	uint8_t debug_target = 0;
 	for (int i = 1; i < argc; i++) {
 		if (argv[i][0] == '-') {
 			switch(argv[i][1]) {
@@ -982,6 +983,10 @@ int main(int argc, char ** argv)
 				break;
 			case 'd':
 				debuggerfun = (uint8_t *)debugger;
+				//allow debugging the menu
+				if (argv[i][2] == 'm') {
+					debug_target = 1;
+				}
 				break;
 			case 'D':
 				gdb_remote_init();
@@ -1141,7 +1146,7 @@ int main(int argc, char ** argv)
 	}
 
 	set_keybindings(genesis->ports);
-	start_genesis(genesis, menu ? NULL : statefile, menu ? NULL : debuggerfun);
+	start_genesis(genesis, menu ? NULL : statefile, menu == debug_target ? debuggerfun : NULL);
 	for(;;)
 	{
 		if (menu && menu_context->next_rom) {
@@ -1193,7 +1198,7 @@ int main(int argc, char ** argv)
 			genesis = game_context;
 			genesis->m68k->options->address_log = address_log;
 			map_all_bindings(genesis->ports);
-			start_genesis(genesis, statefile, debuggerfun);
+			start_genesis(genesis, statefile, menu == debug_target ? debuggerfun : NULL);
 		}
 		else if (menu && game_context) {
 			genesis->arena = set_current_arena(game_context->arena);
