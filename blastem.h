@@ -15,6 +15,7 @@
 #include "io.h"
 #include "config.h"
 #include "romdb.h"
+#include "arena.h"
 
 typedef struct {
 	m68k_context   *m68k;
@@ -22,9 +23,11 @@ typedef struct {
 	vdp_context    *vdp;
 	ym2612_context *ym;
 	psg_context    *psg;
+	uint16_t       *cart;
 	uint16_t       *work_ram;
 	uint8_t        *zram;
 	void           *extra;
+	arena          *arena;
 	char           *next_rom;
 	uint8_t        *save_storage;
 	eeprom_map     *eeprom_map;
@@ -53,7 +56,7 @@ extern tern_node * config;
 #define Z80_RAM_BYTES 8 * 1024
 
 extern uint16_t *cart;
-extern uint16_t ram[RAM_WORDS];
+extern uint16_t *ram;
 extern uint8_t z80_ram[Z80_RAM_BYTES];
 
 uint16_t read_dma_value(uint32_t address);

@@ -23,9 +23,9 @@
 #define warning_puts(msg) fputs(stderr, msg);
 #define fatal_puts(msg) fputs(stderr, msg);
 
-#define info_printf(msg, args vprintf(msg, args)
-#define warning_printf(msg, args vfprintf(stderr, msg, args)
-#define fatal_printf(msg, args vfprintf(stderr, msg, args)
+#define info_printf(msg, args) vprintf(msg, args)
+#define warning_printf(msg, args) vfprintf(stderr, msg, args)
+#define fatal_printf(msg, args) vfprintf(stderr, msg, args)
 #endif
 
 #include "blastem.h" //for headless global
