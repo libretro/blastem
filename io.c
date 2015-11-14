@@ -293,7 +293,7 @@ void handle_binding_up(keybinding * binding)
 			}
 			break;
 		case UI_EXIT:
-			exit(0);
+			genesis->m68k->should_return = 1;
 		}
 		break;
 	}
@@ -609,7 +609,7 @@ cleanup_sock:
 				close(ports[i].device.stream.listen_fd);
 				ports[i].device_type = IO_NONE;
 			}
-		} else 
+		} else
 #endif
 		if (ports[i].device_type == IO_GAMEPAD3 || ports[i].device_type == IO_GAMEPAD6) {
 			printf("IO port %s connected to gamepad #%d with type '%s'\n", io_name(i), ports[i].device.pad.gamepad_num + 1, device_type_names[ports[i].device_type]);
@@ -672,7 +672,7 @@ void set_keybindings(io_port *ports)
 	if (pads) {
 		for (int i = 0; i < 100 && i < render_num_joysticks(); i++)
 		{
-		
+
 			if (i < 10) {
 				numstr[0] = i + '0';
 				numstr[1] = 0;

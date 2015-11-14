@@ -2515,8 +2515,8 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	retn(code);
 	*do_ret = code->cur - (do_ret+1);
 	pop_r(code, opts->gen.scratch1);
-	retn(code);
 	mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, offsetof(m68k_context, resume_pc), SZ_PTR);
+	retn(code);
 	*do_int = code->cur - (do_int+1);
 	//implement 1 instruction latency
 	cmp_irdisp(code, 0, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);

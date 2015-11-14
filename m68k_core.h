@@ -58,7 +58,7 @@ typedef struct {
 	uint32_t        int_cycle;
 	uint32_t        int_num;
 	uint16_t        *mem_pointers[NUM_MEM_AREAS];
-	void            *resume_pc;
+	code_ptr        resume_pc;
 	native_map_slot *native_code_map;
 	m68k_options    *options;
 	void            *system;
@@ -70,6 +70,7 @@ typedef struct {
 void translate_m68k(m68k_options * opts, struct m68kinst * inst);
 void translate_m68k_stream(uint32_t address, m68k_context * context);
 void start_68k_context(m68k_context * context, uint32_t address);
+void resume_68k(m68k_context *context);
 void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks, uint32_t clock_divider);
 m68k_context * init_68k_context(m68k_options * opts);
 void m68k_reset(m68k_context * context);
