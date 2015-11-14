@@ -2525,6 +2525,8 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	mov_irdisp(code, 1, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
 	retn(code);
 	*do_int = code->cur - (do_int + 1);
+	//save interrupt number so it can't change during interrupt processing
+	push_rdisp(code, opts->gen.context_reg, offsetof(m68k_context, int_num));
 	//save PC as stored in scratch1 for later
 	push_r(code, opts->gen.scratch1);
 	//set target cycle to sync cycle
@@ -2580,9 +2582,11 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	add_ir(code, 2, opts->gen.scratch2, SZ_D);
 	call(code, opts->write_32_lowfirst);
 
-	//calculate interrupt vector address
-	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_num), opts->gen.scratch1, SZ_D);
+	//restore saved interrupt number
+	pop_r(code, opts->gen.scratch1);
+	//ack the interrupt (happens earlier on hardware, but shouldn't be an observable difference)
 	mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, offsetof(m68k_context, int_ack), SZ_W);
+	//calculate the vector address
 	shl_ir(code, 2, opts->gen.scratch1, SZ_D);
 	add_ir(code, 0x60, opts->gen.scratch1, SZ_D);
 	call(code, opts->read_32);
