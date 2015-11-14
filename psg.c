@@ -24,6 +24,15 @@ void psg_init(psg_context * context, uint32_t sample_rate, uint32_t master_clock
 	}
 }
 
+void psg_free(psg_context *context)
+{
+	free(context->audio_buffer);
+	//TODO: Figure out how to make this 100% safe
+	//audio thread could still be using this
+	free(context->back_buffer);
+	free(context);
+}
+
 #define BUFFER_INC_RES 1000000000UL
 
 void psg_adjust_master_clock(psg_context * context, uint32_t master_clock)

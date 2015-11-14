@@ -887,9 +887,20 @@ genesis_context *alloc_init_genesis(rom_info *rom, int fps, uint32_t ym_opts)
 	return gen;
 }
 
+void free_genesis(genesis_context *gen)
+{
+	vdp_free(gen->vdp);
+	m68k_options_free(gen->m68k->options);
+	free(gen->m68k);
+	z80_options_free(gen->z80->options);
+	free(gen->z80);
+	ym_free(gen->ym);
+	psg_free(gen->psg);
+	free(gen->save_storage);
+}
+
 void start_genesis(genesis_context *gen, char *statefile, uint8_t *debugger)
 {
-	set_keybindings(gen->ports);
 
 	if (statefile) {
 		uint32_t pc = load_gst(gen, statefile);
@@ -1129,14 +1140,25 @@ int main(int argc, char ** argv)
 		game_context = genesis;
 	}
 
+	set_keybindings(genesis->ports);
 	start_genesis(genesis, menu ? NULL : statefile, menu ? NULL : debuggerfun);
 	for(;;)
 	{
 		if (menu && menu_context->next_rom) {
+			if (game_context) {
+				if (game_context->save_type != SAVE_NONE) {
+					persist_save();
+				}
+				free(game_context->cart);
+				free(save_filename);
+				base_map[0].buffer = ram = game_context->work_ram;
+			} else {
+				base_map[0].buffer = ram = malloc(RAM_WORDS * sizeof(uint16_t));
+			}
+			memset(ram, 0, RAM_WORDS * sizeof(uint16_t));
 			if (!(rom_size = load_rom(menu_context->next_rom))) {
 				fatal_error("Failed to open %s for reading\n", menu_context->next_rom);
 			}
-			base_map[0].buffer = ram = malloc(RAM_WORDS * sizeof(uint16_t));
 			info = configure_rom(rom_db, cart, rom_size, base_map, sizeof(base_map)/sizeof(base_map[0]));
 			byteswap_rom(rom_size);
 			set_region(&info, force_version);
@@ -1158,35 +1180,36 @@ int main(int argc, char ** argv)
 			if (!game_context) {
 				//start a new arena and save old one in suspended genesis context
 				genesis->arena = start_new_arena();
-				//allocate new genesis context
-				game_context = alloc_init_genesis(&info, fps, ym_log ? YM_OPT_WAVE_LOG : 0);
 			} else {
-				//TODO: hard reset of context with new ROM
+				genesis->arena = set_current_arena(game_context->arena);
+				mark_all_free();
+				free_genesis(game_context);
 			}
+			//allocate new genesis context
+			game_context = alloc_init_genesis(&info, fps, ym_log ? YM_OPT_WAVE_LOG : 0);
 			free(menu_context->next_rom);
 			menu_context->next_rom = NULL;
 			menu = 0;
 			genesis = game_context;
 			genesis->m68k->options->address_log = address_log;
+			map_all_bindings(genesis->ports);
 			start_genesis(genesis, statefile, debuggerfun);
 		}
 		else if (menu && game_context) {
-			puts("Switching back to game context");
 			genesis->arena = set_current_arena(game_context->arena);
 			genesis = game_context;
 			cart = genesis->cart;
 			ram = genesis->work_ram;
 			menu = 0;
-			set_keybindings(genesis->ports);
+			map_all_bindings(genesis->ports);
 			resume_68k(genesis->m68k);
 		} else if (!menu && menu_context) {
-			puts("Switching back to menu context");
 			genesis->arena = set_current_arena(menu_context->arena);
 			genesis = menu_context;
 			cart = genesis->cart;
 			ram = genesis->work_ram;
 			menu = 1;
-			set_keybindings(genesis->ports);
+			map_all_bindings(genesis->ports);
 			resume_68k(genesis->m68k);
 		} else {
 			break;

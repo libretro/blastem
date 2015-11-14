@@ -64,23 +64,23 @@ char *get_external_storage_path()
 	if ((*env)->PushLocalFrame(env, 8) < 0) {
 		return NULL;
 	}
-	
+
 	jclass Environment = (*env)->FindClass(env, "android/os/Environment");
-	jmethodID getExternalStorageDirectory = 
+	jmethodID getExternalStorageDirectory =
 		(*env)->GetStaticMethodID(env, Environment, "getExternalStorageDirectory", "()Ljava/io/File;");
 	jobject file = (*env)->CallStaticObjectMethod(env, Environment, getExternalStorageDirectory);
 	if (!file) {
 		goto cleanup;
 	}
-	
+
 	jmethodID getAbsolutePath = (*env)->GetMethodID(env, (*env)->GetObjectClass(env, file),
 		"getAbsolutePath", "()Ljava/lang/String;");
 	jstring path = (*env)->CallObjectMethod(env, file, getAbsolutePath);
-	
+
 	char const *tmp = (*env)->GetStringUTFChars(env, path, NULL);
 	ret = strdup(tmp);
 	(*env)->ReleaseStringUTFChars(env, path, tmp);
-	
+
 cleanup:
 	(*env)->PopLocalFrame(env, NULL);
 	return ret;
@@ -173,16 +173,17 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 					}
 				}
 			} else {
-				char *pieces[] = {menu->curpath, "/", buf};
+				char *tmp = menu->curpath;
+				char const *pieces[] = {menu->curpath, "/", buf};
 				menu->curpath = alloc_concat_m(3, pieces);
-				free(pieces[0]);
+				free(tmp);
 			}
 			break;
 		}
 		case 2: {
 			char buf[4096];
 			copy_string_from_guest(m68k, dst, buf, sizeof(buf));
-			char *pieces[] = {menu->curpath, "/", buf};
+			char const *pieces[] = {menu->curpath, "/", buf};
 			gen->next_rom = alloc_concat_m(3, pieces);
 			m68k->should_return = 1;
 			break;
