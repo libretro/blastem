@@ -33,6 +33,7 @@ typedef struct {
 
 
 void psg_init(psg_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t samples_frame);
+void psg_free(psg_context *context);
 void psg_adjust_master_clock(psg_context * context, uint32_t master_clock);
 void psg_write(psg_context * context, uint8_t value);
 void psg_run(psg_context * context, uint32_t cycles);

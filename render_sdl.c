@@ -115,7 +115,7 @@ const GLushort element_data[] = {0, 1, 2, 3};
 
 GLuint load_shader(char * fname, GLenum shader_type)
 {
-	char * parts[] = {get_home_dir(), "/.config/blastem/shaders/", fname};
+	char const * parts[] = {get_home_dir(), "/.config/blastem/shaders/", fname};
 	char * shader_path = alloc_concat_m(3, parts);
 	FILE * f = fopen(shader_path, "rb");
 	free(shader_path);
@@ -158,10 +158,15 @@ GLuint load_shader(char * fname, GLenum shader_type)
 
 void render_alloc_surfaces(vdp_context * context)
 {
+	static uint8_t texture_init;
 	context->oddbuf = context->framebuf = malloc(512 * 256 * 4 * 2);
 	memset(context->oddbuf, 0, 512 * 256 * 4 * 2);
 	context->evenbuf = ((char *)context->oddbuf) + 512 * 256 * 4;
 
+	if (texture_init) {
+		return;
+	}
+	texture_init = 1;
 #ifndef DISABLE_OPENGL
 	if (render_gl) {
 		glGenTextures(3, textures);
@@ -209,6 +214,11 @@ void render_alloc_surfaces(vdp_context * context)
 #ifndef DISABLE_OPENGL
 	}
 #endif
+}
+
+void render_free_surfaces(vdp_context *context)
+{
+	free(context->framebuf);
 }
 
 char * caption = NULL;

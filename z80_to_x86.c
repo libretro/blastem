@@ -2596,6 +2596,13 @@ void z80_run(z80_context * context, uint32_t target_cycle)
 	}
 }
 
+void z80_options_free(z80_options *opts)
+{
+	free(opts->gen.native_code_map);
+	free(opts->gen.ram_inst_sizes);
+	free(opts);
+}
+
 void z80_assert_reset(z80_context * context, uint32_t cycle)
 {
 	z80_run(context, cycle);

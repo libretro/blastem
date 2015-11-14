@@ -742,6 +742,11 @@ void set_keybindings(io_port *ports)
 			speeds[i] = 100;
 		}
 	}
+	map_all_bindings(ports);
+}
+
+void map_all_bindings(io_port *ports)
+{
 	for (int bucket = 0; bucket < 256; bucket++)
 	{
 		if (bindings[bucket])

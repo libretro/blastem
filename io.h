@@ -57,6 +57,7 @@ enum {
 };
 
 void set_keybindings(io_port *ports);
+void map_all_bindings(io_port *ports);
 void setup_io_devices(tern_node * config, io_port * ports);
 void io_adjust_cycles(io_port * pad, uint32_t current_cycle, uint32_t deduction);
 void io_data_write(io_port * pad, uint8_t value, uint32_t current_cycle);

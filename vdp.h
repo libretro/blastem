@@ -176,6 +176,7 @@ typedef struct {
 } vdp_context;
 
 void init_vdp_context(vdp_context * context, uint8_t region_pal);
+void vdp_free(vdp_context *context);
 void vdp_run_context(vdp_context * context, uint32_t target_cycles);
 //runs from current cycle count to VBLANK for the current mode, returns ending cycle count
 uint32_t vdp_run_to_vblank(vdp_context * context);
