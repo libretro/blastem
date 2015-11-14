@@ -3,6 +3,11 @@
  This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
 #include "68kinst.h"
 #include "m68k_core.h"
 #include "z80_to_x86.h"
@@ -15,10 +20,7 @@
 #include "util.h"
 #include "romdb.h"
 #include "terminal.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <ctype.h>
+#include "arena.h"
 
 #define BLASTEM_VERSION "0.3.X"
 
@@ -44,7 +46,7 @@
 #endif
 
 uint16_t *cart;
-uint16_t ram[RAM_WORDS];
+uint16_t *ram;
 uint8_t z80_ram[Z80_RAM_BYTES];
 
 int headless = 0;
@@ -784,17 +786,6 @@ void set_speed_percent(genesis_context * context, uint32_t percent)
 	psg_adjust_master_clock(context->psg, context->master_clock);
 }
 
-const memmap_chunk base_map[] = {
-		{0xE00000, 0x1000000, 0xFFFF,   0, MMAP_READ | MMAP_WRITE | MMAP_CODE, ram,
-		           NULL,          NULL,         NULL,            NULL},
-		{0xC00000, 0xE00000,  0x1FFFFF, 0, 0,                                  NULL,
-		           (read_16_fun)vdp_port_read,  (write_16_fun)vdp_port_write,
-		           (read_8_fun)vdp_port_read_b, (write_8_fun)vdp_port_write_b},
-		{0xA00000, 0xA12000,  0x1FFFF,  0, 0,                                  NULL,
-		           (read_16_fun)io_read_w,      (write_16_fun)io_write_w,
-		           (read_8_fun)io_read,         (write_8_fun)io_write}
-	};
-
 char * save_filename;
 genesis_context *genesis;
 genesis_context *menu_context;
@@ -850,6 +841,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, int fps, uint32_t ym_opts)
 	gen->z80->mem_pointers[0] = z80_ram;
 	gen->z80->mem_pointers[1] = gen->z80->mem_pointers[2] = (uint8_t *)cart;
 
+	gen->cart = cart;
 	gen->work_ram = ram;
 	gen->zram = z80_ram;
 	setup_io_devices(config, gen->ports);
@@ -1080,6 +1072,17 @@ int main(int argc, char ** argv)
 
 		loaded = 1;
 	}
+	ram = malloc(RAM_WORDS * sizeof(uint16_t));
+	memmap_chunk base_map[] = {
+		{0xE00000, 0x1000000, 0xFFFF,   0, MMAP_READ | MMAP_WRITE | MMAP_CODE, ram,
+		           NULL,          NULL,         NULL,            NULL},
+		{0xC00000, 0xE00000,  0x1FFFFF, 0, 0,                                  NULL,
+		           (read_16_fun)vdp_port_read,  (write_16_fun)vdp_port_write,
+		           (read_8_fun)vdp_port_read_b, (write_8_fun)vdp_port_write_b},
+		{0xA00000, 0xA12000,  0x1FFFF,  0, 0,                                  NULL,
+		           (read_16_fun)io_read_w,      (write_16_fun)io_write_w,
+		           (read_8_fun)io_read,         (write_8_fun)io_write}
+	};
 	tern_node *rom_db = load_rom_db();
 	rom_info info = configure_rom(rom_db, cart, rom_size, base_map, sizeof(base_map)/sizeof(base_map[0]));
 	byteswap_rom(rom_size);
@@ -1127,33 +1130,67 @@ int main(int argc, char ** argv)
 	}
 
 	start_genesis(genesis, menu ? NULL : statefile, menu ? NULL : debuggerfun);
-	if (menu && menu_context->next_rom) {
-		//TODO: Allow returning to menu
-		if (!(rom_size = load_rom(menu_context->next_rom))) {
-			fatal_error("Failed to open %s for reading\n", menu_context->next_rom);
-		}
-		info = configure_rom(rom_db, cart, rom_size, base_map, sizeof(base_map)/sizeof(base_map[0]));
-		byteswap_rom(rom_size);
-		set_region(&info, force_version);
-		update_title(info.name);
-		fname_size = strlen(romfname);
-		ext = info.save_type == SAVE_I2C ? "eeprom" : "sram";
-		save_filename = malloc(fname_size+strlen(ext) + 2);
-		memcpy(save_filename, romfname, fname_size);
-		for (i = fname_size-1; fname_size >= 0; --i) {
-			if (save_filename[i] == '.') {
-				strcpy(save_filename + i + 1, ext);
-				break;
+	for(;;)
+	{
+		if (menu && menu_context->next_rom) {
+			if (!(rom_size = load_rom(menu_context->next_rom))) {
+				fatal_error("Failed to open %s for reading\n", menu_context->next_rom);
 			}
+			base_map[0].buffer = ram = malloc(RAM_WORDS * sizeof(uint16_t));
+			info = configure_rom(rom_db, cart, rom_size, base_map, sizeof(base_map)/sizeof(base_map[0]));
+			byteswap_rom(rom_size);
+			set_region(&info, force_version);
+			update_title(info.name);
+			fname_size = strlen(romfname);
+			ext = info.save_type == SAVE_I2C ? "eeprom" : "sram";
+			save_filename = malloc(fname_size+strlen(ext) + 2);
+			memcpy(save_filename, romfname, fname_size);
+			for (i = fname_size-1; fname_size >= 0; --i) {
+				if (save_filename[i] == '.') {
+					strcpy(save_filename + i + 1, ext);
+					break;
+				}
+			}
+			if (i < 0) {
+				save_filename[fname_size] = '.';
+				strcpy(save_filename + fname_size + 1, ext);
+			}
+			if (!game_context) {
+				//start a new arena and save old one in suspended genesis context
+				genesis->arena = start_new_arena();
+				//allocate new genesis context
+				game_context = alloc_init_genesis(&info, fps, ym_log ? YM_OPT_WAVE_LOG : 0);
+			} else {
+				//TODO: hard reset of context with new ROM
+			}
+			free(menu_context->next_rom);
+			menu_context->next_rom = NULL;
+			menu = 0;
+			genesis = game_context;
+			genesis->m68k->options->address_log = address_log;
+			start_genesis(genesis, statefile, debuggerfun);
 		}
-		if (i < 0) {
-			save_filename[fname_size] = '.';
-			strcpy(save_filename + fname_size + 1, ext);
+		else if (menu && game_context) {
+			puts("Switching back to game context");
+			genesis->arena = set_current_arena(game_context->arena);
+			genesis = game_context;
+			cart = genesis->cart;
+			ram = genesis->work_ram;
+			menu = 0;
+			set_keybindings(genesis->ports);
+			resume_68k(genesis->m68k);
+		} else if (!menu && menu_context) {
+			puts("Switching back to menu context");
+			genesis->arena = set_current_arena(menu_context->arena);
+			genesis = menu_context;
+			cart = genesis->cart;
+			ram = genesis->work_ram;
+			menu = 1;
+			set_keybindings(genesis->ports);
+			resume_68k(genesis->m68k);
+		} else {
+			break;
 		}
-		game_context = alloc_init_genesis(&info, fps, ym_log ? YM_OPT_WAVE_LOG : 0);
-		genesis->m68k->options->address_log = address_log;
-		genesis = game_context;
-		start_genesis(genesis, statefile, debuggerfun);
 	}
 
 	return 0;

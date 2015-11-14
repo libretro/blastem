@@ -91,7 +91,7 @@ ifndef CPU
 CPU:=$(shell uname -m)
 endif
 
-TRANSOBJS=gen.o backend.o $(MEM)
+TRANSOBJS=gen.o backend.o $(MEM) arena.o
 M68KOBJS=68kinst.o m68k_core.o
 ifeq ($(CPU),x86_64)
 M68KOBJS+= m68k_core_x86.o

@@ -983,6 +983,16 @@ void start_68k_context(m68k_context * context, uint32_t address)
 {
 	code_ptr addr = get_native_address_trans(context, address);
 	m68k_options * options = context->options;
+	context->should_return = 0;
+	options->start_context(addr, context);
+}
+
+void resume_68k(m68k_context *context)
+{
+	code_ptr addr = context->resume_pc;
+	context->resume_pc = NULL;
+	m68k_options * options = context->options;
+	context->should_return = 0;
 	options->start_context(addr, context);
 }
 
