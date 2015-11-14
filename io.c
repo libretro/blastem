@@ -633,6 +633,7 @@ void map_bindings(io_port *ports, keybinding *bindings, int numbindings)
 					 && ports[j].device.pad.gamepad_num == num
 				)
 				{
+					memset(ports[j].input, 0, sizeof(ports[j].input));
 					bindings[i].port = ports + j;
 					break;
 				}
