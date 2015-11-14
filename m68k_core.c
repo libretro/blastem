@@ -1005,6 +1005,13 @@ void m68k_reset(m68k_context * context)
 	start_68k_context(context, address);
 }
 
+void m68k_options_free(m68k_options *opts)
+{
+	free(opts->gen.native_code_map);
+	free(opts->gen.ram_inst_sizes);
+	free(opts);
+}
+
 
 m68k_context * init_68k_context(m68k_options * opts)
 {

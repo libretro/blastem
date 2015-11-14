@@ -104,11 +104,15 @@ ym2612_context * log_context = NULL;
 
 void ym_finalize_log()
 {
+	if (!log_context) {
+		return;
+	}
 	for (int i = 0; i < NUM_CHANNELS; i++) {
 		if (log_context->channels[i].logfile) {
 			wave_finalize(log_context->channels[i].logfile);
 		}
 	}
+	log_context = NULL;
 }
 #define BUFFER_INC_RES 1000000000UL
 
@@ -124,6 +128,7 @@ void ym_adjust_master_clock(ym2612_context * context, uint32_t master_clock)
 
 void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t sample_limit, uint32_t options)
 {
+	static uint8_t registered_finalize;
 	dfopen(debug_file, "ym_debug.txt", "w");
 	memset(context, 0, sizeof(*context));
 	context->audio_buffer = malloc(sizeof(*context->audio_buffer) * sample_limit*2);
@@ -157,7 +162,10 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clo
 	}
 	if (options & YM_OPT_WAVE_LOG) {
 		log_context = context;
-		atexit(ym_finalize_log);
+		if (!registered_finalize) {
+			atexit(ym_finalize_log);
+			registered_finalize = 1;
+		}
 	}
 	if (!did_tbl_init) {
 		//populate sine table
@@ -216,6 +224,18 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clo
 			}
 		}
 	}
+}
+
+void ym_free(ym2612_context *context)
+{
+	if (context == log_context) {
+		ym_finalize_log();
+	}
+	free(context->audio_buffer);
+	//TODO: Figure out how to make this 100% safe
+	//audio thread could still be using this
+	free(context->back_buffer);
+	free(context);
 }
 
 #define YM_VOLUME_MULTIPLIER 2

@@ -74,6 +74,7 @@ void resume_68k(m68k_context *context);
 void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks, uint32_t clock_divider);
 m68k_context * init_68k_context(m68k_options * opts);
 void m68k_reset(m68k_context * context);
+void m68k_options_free(m68k_options *opts);
 void insert_breakpoint(m68k_context * context, uint32_t address, uint8_t * bp_handler);
 void remove_breakpoint(m68k_context * context, uint32_t address);
 m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context);

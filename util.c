@@ -19,9 +19,9 @@
 #define warning_printf(msg, args) __android_log_vprint(ANDROID_LOG_WARN, "BlastEm", msg, args)
 #define fatal_printf(msg, args) __android_log_vprint(ANDROID_LOG_FATAL, "BlastEm", msg, args)
 #else
-#define info_puts(msg) fputs(stdout, msg);
-#define warning_puts(msg) fputs(stderr, msg);
-#define fatal_puts(msg) fputs(stderr, msg);
+#define info_puts(msg) fputs(msg, stdout);
+#define warning_puts(msg) fputs(msg, stderr);
+#define fatal_puts(msg) fputs(msg, stderr);
 
 #define info_printf(msg, args) vprintf(msg, args)
 #define warning_printf(msg, args) vfprintf(stderr, msg, args)
@@ -388,7 +388,7 @@ char *read_bundled_file(char *name, long *sizeret)
 		}
 		return NULL;
 	}
-	char *pieces[] = {exe_dir, "/", name};
+	char const *pieces[] = {exe_dir, "/", name};
 	char *path = alloc_concat_m(3, pieces);
 	FILE *f = fopen(path, "rb");
 	free(path);
