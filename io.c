@@ -935,6 +935,9 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 	case IO_GAMEPAD3:
 	{
 		input = port->input[th ? GAMEPAD_TH1 : GAMEPAD_TH0];
+		if (!th) {
+			input |= 0xC;
+		}
 		break;
 	}
 	case IO_GAMEPAD6:
