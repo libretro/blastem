@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "vgm.h"
 
 #define MCLKS_NTSC 53693175
 #define MCLKS_PAL  53203395
