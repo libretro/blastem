@@ -175,6 +175,10 @@ void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 	context->target_cycle = context->int_cycle < context->sync_cycle ? context->int_cycle : context->sync_cycle;
 	if (context->should_return) {
 		context->target_cycle = context->current_cycle;
+	} else if (context->target_cycle < context->current_cycle) {
+		//Changes to SR can result in an interrupt cycle that's in the past
+		//This can cause issues with the implementation of STOP though
+		context->target_cycle = context->current_cycle;
 	}
 	/*printf("Cyc: %d, Trgt: %d, Int Cyc: %d, Int: %d, Mask: %X, V: %d, H: %d, HICount: %d, HReg: %d, Line: %d\n",
 		context->current_cycle, context->target_cycle, context->int_cycle, context->int_num, (context->status & 0x7),
@@ -241,9 +245,11 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	vdp_context * v_context = gen->vdp;
 	z80_context * z_context = gen->z80;
 	//lame estimation of refresh cycle delay
-	refresh_counter += context->current_cycle - last_sync_cycle;
-	context->current_cycle += REFRESH_DELAY * MCLKS_PER_68K * (refresh_counter / (MCLKS_PER_68K * REFRESH_INTERVAL));
-	refresh_counter = refresh_counter % (MCLKS_PER_68K * REFRESH_INTERVAL);
+	if (!gen->bus_busy) {
+		refresh_counter += context->current_cycle - last_sync_cycle;
+		context->current_cycle += REFRESH_DELAY * MCLKS_PER_68K * (refresh_counter / (MCLKS_PER_68K * REFRESH_INTERVAL));
+		refresh_counter = refresh_counter % (MCLKS_PER_68K * REFRESH_INTERVAL);
+	}
 
 	uint32_t mclks = context->current_cycle;
 	sync_z80(z_context, mclks);
