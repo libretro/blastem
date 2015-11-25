@@ -1592,6 +1592,7 @@ void push_r(code_info *code, uint8_t reg)
 	}
 	*(out++) = OP_PUSH | reg;
 	code->cur = out;
+	code->stack_off += sizeof(void *);
 }
 
 void push_rdisp(code_info *code, uint8_t base, int32_t disp)
@@ -1599,6 +1600,7 @@ void push_rdisp(code_info *code, uint8_t base, int32_t disp)
 	//This instruction has no explicit size, so we pass SZ_B
 	//to avoid any prefixes or bits being set
 	x86_rdisp_size(code, OP_SINGLE_EA, OP_EX_PUSH_EA, base, disp, SZ_B);
+	code->stack_off += sizeof(void *);
 }
 
 void pop_r(code_info *code, uint8_t reg)
@@ -1611,6 +1613,7 @@ void pop_r(code_info *code, uint8_t reg)
 	}
 	*(out++) = OP_POP | reg;
 	code->cur = out;
+	code->stack_off -= sizeof(void *);
 }
 
 void pop_rind(code_info *code, uint8_t reg)
@@ -1624,6 +1627,7 @@ void pop_rind(code_info *code, uint8_t reg)
 	*(out++) = PRE_XOP;
 	*(out++) = MODE_REG_INDIRECT | reg;
 	code->cur = out;
+	code->stack_off -=  sizeof(void *);
 }
 
 void setcc_r(code_info *code, uint8_t cc, uint8_t dst)
@@ -1966,6 +1970,13 @@ void jmp_rind(code_info *code, uint8_t dst)
 
 void call(code_info *code, code_ptr fun)
 {
+	code->stack_off += sizeof(void *);
+	int32_t adjust = 0;
+	if (code->stack_off & 0xF) {
+		adjust = 16 - (code->stack_off & 0xF);
+		code->stack_off += adjust;
+		sub_ir(code, adjust, RSP, SZ_PTR);
+	}
 	check_alloc_code(code, 5);
 	code_ptr out = code->cur;
 	ptrdiff_t disp = fun-(out+5);
@@ -1983,6 +1994,10 @@ void call(code_info *code, code_ptr fun)
 		fatal_error("call: %p - %p = %lX which is out of range for a 32-bit displacement\n", fun, out + 5, (long)disp);
 	}
 	code->cur = out;
+	if (adjust) {
+		add_ir(code, adjust, RSP, SZ_PTR);
+	}
+	code->stack_off -= sizeof(void *) + adjust;
 }
 
 void call_raxfallback(code_info *code, code_ptr fun)
@@ -2008,11 +2023,22 @@ void call_raxfallback(code_info *code, code_ptr fun)
 
 void call_r(code_info *code, uint8_t dst)
 {
+	code->stack_off += sizeof(void *);
+	int32_t adjust = 0;
+	if (code->stack_off & 0xF) {
+		adjust = 16 - (code->stack_off & 0xF);
+		code->stack_off += adjust;
+		sub_ir(code, adjust, RSP, SZ_PTR);
+	}
 	check_alloc_code(code, 2);
 	code_ptr out = code->cur;
 	*(out++) = OP_SINGLE_EA;
 	*(out++) = MODE_REG_DIRECT | dst | (OP_EX_CALL_EA << 3);
 	code->cur = out;
+	if (adjust) {
+		add_ir(code, adjust, RSP, SZ_PTR);
+	}
+	code->stack_off -= sizeof(void *) + adjust;
 }
 
 void retn(code_info *code)
@@ -2084,8 +2110,15 @@ uint32_t prep_args(code_info *code, uint32_t num_args, va_list args)
 	{
 		push_r(code, arg_arr[i]);
 	}
+	uint32_t stack_off_call = code->stack_off + sizeof(void *);
+	uint32_t adjust = 0;
+	if (stack_off_call & 0xF) {
+		adjust = 16 - (stack_off_call & 0xF);
+		sub_ir(code, adjust, RSP, SZ_PTR);
+		code->stack_off += adjust;
+	}
 
-	return stack_args * sizeof(void *);
+	return stack_args * sizeof(void *) + adjust;
 }
 
 void call_args(code_info *code, code_ptr fun, uint32_t num_args, ...)
@@ -2097,9 +2130,10 @@ void call_args(code_info *code, code_ptr fun, uint32_t num_args, ...)
 	call_raxfallback(code, fun);
 	if (adjust) {
 		add_ir(code, adjust, RSP, SZ_PTR);
+		code->stack_off -= adjust;
 	}
 }
-
+/*
 void call_args_abi(code_info *code, code_ptr fun, uint32_t num_args, ...)
 {
 	va_list args;
@@ -2125,7 +2159,7 @@ void call_args_abi(code_info *code, code_ptr fun, uint32_t num_args, ...)
 	*no_adjust_rsp = code->cur - (no_adjust_rsp+1);
 #endif
 }
-
+*/
 void save_callee_save_regs(code_info *code)
 {
 	push_r(code, RBX);
