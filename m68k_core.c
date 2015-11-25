@@ -827,6 +827,10 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 		m68k_disasm(inst, disasm_buf);
 		fatal_error("%X: %s\ninstruction %d not yet implemented\n", inst->address, disasm_buf, inst->op);
 	}
+	if (opts->gen.code.stack_off) {
+		m68k_disasm(inst, disasm_buf);
+		fatal_error("Stack offset is %X after %X: %s\n", opts->gen.code.stack_off, inst->address, disasm_buf);
+	}
 }
 
 void translate_m68k_stream(uint32_t address, m68k_context * context)

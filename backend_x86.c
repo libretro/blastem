@@ -173,6 +173,7 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 							pop_r(code, opts->scratch2);
 						} else {
 							add_ir(code, sizeof(void*), RSP, SZ_D);
+							code->stack_off -= sizeof(void *);
 						}
 					} else {
 						push_r(code, opts->scratch2);
