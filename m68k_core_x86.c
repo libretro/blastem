@@ -1674,6 +1674,7 @@ void translate_m68k_div(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 	set_flag(opts, 0, FLAG_C);
 	push_r(code, RDX);
 	push_r(code, RAX);
+	uint32_t tmp_stack_off = code->stack_off;
 	if (dst_op->mode == MODE_REG_DIRECT) {
 		mov_rr(code, dst_op->base, RAX, SZ_D);
 	} else {
@@ -1717,6 +1718,8 @@ void translate_m68k_div(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 	mov_ir(code, VECTOR_INT_DIV_ZERO, opts->gen.scratch2, SZ_D);
 	mov_ir(code, inst->address+isize, opts->gen.scratch1, SZ_D);
 	jmp(code, opts->trap);
+
+	code->stack_off = tmp_stack_off;
 	*not_zero = code->cur - (not_zero+1);
 	if (inst->op == M68K_DIVS) {
 		cdq(code);
@@ -1761,6 +1764,7 @@ void translate_m68k_div(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 	}
 	code_ptr end_off = code->cur + 1;
 	jmp(code, code->cur + 2);
+	code->stack_off = tmp_stack_off;
 	*norm_off = code->cur - (norm_off + 1);
 	if (inst->op == M68K_DIVS) {
 		*skip_sec_check = code->cur - (skip_sec_check+1);
@@ -2514,9 +2518,14 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	jcc(code, CC_NZ, do_ret);
 	retn(code);
 	*do_ret = code->cur - (do_ret+1);
+	uint32_t tmp_stack_off = code->stack_off;
+	//fetch return address and adjust RSP
 	pop_r(code, opts->gen.scratch1);
+	add_ir(code, 16-sizeof(void *), RSP, SZ_PTR);
+	//save return address for restoring later
 	mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, offsetof(m68k_context, resume_pc), SZ_PTR);
 	retn(code);
+	code->stack_off = tmp_stack_off;
 	*do_int = code->cur - (do_int+1);
 	//implement 1 instruction latency
 	cmp_irdisp(code, 0, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
@@ -2593,9 +2602,12 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	call(code, opts->native_addr_and_sync);
 	//2 prefetch bus operations + 2 idle bus cycles
 	cycles(&opts->gen, 10);
+	tmp_stack_off = code->stack_off;
 	//discard function return address
 	pop_r(code, opts->gen.scratch2);
+	add_ir(code, 16-sizeof(void *), RSP, SZ_PTR);
 	jmp_r(code, opts->gen.scratch1);
+	code->stack_off = tmp_stack_off;
 
 	opts->trap = code->cur;
 	push_r(code, opts->gen.scratch2);

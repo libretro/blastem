@@ -12,4 +12,5 @@ void init_code_info(code_info *code)
 		fatal_error("Failed to allocate memory for generated code\n");
 	}
 	code->last = code->cur + size/sizeof(code_word) - RESERVE_WORDS;
+	code->stack_off = 0;
 }

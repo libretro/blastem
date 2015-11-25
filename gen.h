@@ -15,6 +15,7 @@ typedef code_word * code_ptr;
 typedef struct {
 	code_ptr cur;
 	code_ptr last;
+	uint32_t stack_off;
 } code_info;
 
 void check_alloc_code(code_info *code, uint32_t inst_size);
@@ -26,7 +27,8 @@ void jmp_r(code_info *code, uint8_t dst);
 //call a function and put the arguments in the appropriate place according to the host ABI
 void call_args(code_info *code, code_ptr fun, uint32_t num_args, ...);
 //like the above, but follows other aspects of the ABI like stack alignment
-void call_args_abi(code_info *code, code_ptr fun, uint32_t num_args, ...);
+//void call_args_abi(code_info *code, code_ptr fun, uint32_t num_args, ...);
+#define call_args_abi call_args
 void save_callee_save_regs(code_info *code);
 void restore_callee_save_regs(code_info *code);
 

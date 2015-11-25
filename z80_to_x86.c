@@ -2695,6 +2695,7 @@ void zcreate_stub(z80_context * context)
 {
 	z80_options * opts = context->options;
 	code_info *code = &opts->gen.code;
+	uint32_t start_stack_off = code->stack_off;
 	check_code_prologue(code);
 	context->bp_stub = code->cur;
 
@@ -2727,6 +2728,7 @@ void zcreate_stub(z80_context * context)
 	pop_r(code, opts->gen.scratch1);
 	add_ir(code, check_int_size - patch_size, opts->gen.scratch1, SZ_PTR);
 	jmp_r(code, opts->gen.scratch1);
+	code->stack_off = start_stack_off;
 }
 
 void zinsert_breakpoint(z80_context * context, uint16_t address, uint8_t * bp_handler)
