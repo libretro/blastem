@@ -70,9 +70,15 @@ typedef struct {
 	uint8_t    state;
 } joydpad;
 
+typedef struct {
+	io_port *port;
+	uint8_t mode;
+} mousebinding;
+
 keybinding * bindings[256];
 keybinding * joybindings[MAX_JOYSTICKS];
 joydpad * joydpads[MAX_JOYSTICKS];
+mousebinding *mice[MAX_MICE];
 const uint8_t dpadbits[] = {RENDER_DPAD_UP, RENDER_DPAD_DOWN, RENDER_DPAD_LEFT, RENDER_DPAD_RIGHT};
 
 void bind_key(int keycode, uint8_t bind_type, uint8_t subtype_a, uint8_t subtype_b, uint8_t value)
@@ -337,6 +343,15 @@ void handle_joy_dpad(int joystick, int dpadnum, uint8_t value)
 	}
 }
 
+void handle_mouse_moved(int mouse, uint16_t x, uint16_t y)
+{
+	printf("mouse motion: %d - (%d, %d)\n", mouse, x, y);
+	if (mouse >= MAX_MICE || !mice[mouse]) {
+		return;
+	}
+
+}
+
 int parse_binding_target(char * target, tern_node * padbuttons, int * ui_out, int * padnum_out, int * padbutton_out)
 {
 	int gpadslen = strlen("gamepads.");
@@ -486,7 +501,8 @@ void process_device(char * device_type, io_port * port)
 	}
 
 	const int gamepad_len = strlen("gamepad");
-	if (!memcmp(device_type, "gamepad", gamepad_len))
+	const int mouse_len = strlen("mouse");
+	if (!strncmp(device_type, "gamepad", gamepad_len))
 	{
 		if (
 			(device_type[gamepad_len] != '3' && device_type[gamepad_len] != '6')
@@ -502,6 +518,9 @@ void process_device(char * device_type, io_port * port)
 			port->device_type = IO_GAMEPAD6;
 		}
 		port->device.pad.gamepad_num = device_type[gamepad_len+2] - '1';
+	} else if(!strncmp(device_type, "mouse", mouse_len)) {
+		//TODO: do something with mouse number
+		port->device_type = IO_MOUSE;
 	} else if(!strcmp(device_type, "sega_parallel")) {
 		port->device_type = IO_SEGA_PARALLEL;
 		port->device.stream.data_fd = -1;
@@ -770,6 +789,7 @@ void map_all_bindings(io_port *ports)
 }
 
 #define TH 0x40
+#define TR 0x20
 #define TH_TIMEOUT 56000
 
 void io_adjust_cycles(io_port * port, uint32_t current_cycle, uint32_t deduction)
@@ -911,6 +931,16 @@ void io_data_write(io_port * port, uint8_t value, uint32_t current_cycle)
 		}
 		port->output = value;
 		break;
+	case IO_MOUSE:
+		if ((port->control & (TH|TR)) == (TH|TR)) {
+			if (!(value & TH) && (value & TR) != (port->output & TR)) {
+				port->device.mouse.tr_counter++;
+			}
+		} else {
+			port->device.mouse.tr_counter = 0;
+		}
+		port->output = value;
+		break;
 #ifndef _WIN32
 	case IO_GENERIC:
 		wait_for_connection(port);
@@ -938,6 +968,8 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 		if (!th) {
 			input |= 0xC;
 		}
+		//controller output is logically inverted
+		input = ~input;
 		break;
 	}
 	case IO_GAMEPAD6:
@@ -963,6 +995,71 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 				input = port->input[GAMEPAD_TH0] | 0xC;
 			}
 		}
+		//controller output is logically inverted
+		input = ~input;
+		break;
+	}
+	case IO_MOUSE:
+	{
+		uint8_t tr = control & port->output & TR;
+		if (th) {
+			if (tr) {
+				input = 0x10;
+			} else {
+				input = 0;
+			}
+		} else {
+			int deltax = port->device.mouse.cur_x - port->device.mouse.last_read_x;
+			int deltay = port->device.mouse.cur_y - port->device.mouse.last_read_y;
+			switch (port->device.mouse.tr_counter)
+			{
+			case 0:
+				input = 0xB;
+				break;
+			case 1:
+			case 2:
+				input = 0xF;
+				break;
+			case 3:
+				input = 0;
+				if (deltay > 255 || deltay < -255) {
+					input |= 8;
+				}
+				if (deltax > 255 || deltax < -255) {
+					input |= 4;
+				}
+				if (deltay < 0) {
+					input |= 2;
+				}
+				if (deltax < 0) {
+					input |= 1;
+				}
+				break;
+			case 4:
+				input = port->input[0];
+				break;
+			case 5:
+				input = abs(deltax) >> 4 & 0xF;
+				break;
+			case 6:
+				input = abs(deltax) & 0xF;
+				break;
+			case 7:
+				input = abs(deltay) >> 4 & 0xF;
+				break;
+			case 8:
+				input = abs(deltay) & 0xF;
+				//need to figure out when this actually happens
+				port->device.mouse.last_read_x = port->device.mouse.cur_x;
+				port->device.mouse.last_read_y = port->device.mouse.cur_y;
+				break;
+			default:
+				//need to test what happens here
+				input = 0;
+				break;
+			}
+			input |= tr >> 1;
+		}
 		break;
 	}
 #ifndef _WIN32
@@ -971,7 +1068,7 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 		{
 			service_pipe(port);
 		}
-		input = ~port->input[th ? IO_TH1 : IO_TH0];
+		input = port->input[th ? IO_TH1 : IO_TH0];
 		break;
 	case IO_GENERIC:
 		if (port->input[IO_TH0] & 0x80 && port->input[IO_STATE] == IO_WRITTEN)
@@ -980,14 +1077,14 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 			port->input[IO_STATE] = IO_READ_PENDING;
 		}
 		service_socket(port);
-		input = ~port->input[IO_TH0];
+		input = port->input[IO_TH0];
 		break;
 #endif
 	default:
-		input = 0;
+		input = 0xFF;
 		break;
 	}
-	uint8_t value = ((~input) & (~control)) | (port->output & control);
+	uint8_t value = (input & (~control)) | (port->output & control);
 	/*if (port->input[GAMEPAD_TH0] || port->input[GAMEPAD_TH1]) {
 		printf ("value: %X\n", value);
 	}*/
