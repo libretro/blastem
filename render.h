@@ -21,6 +21,7 @@
 #define RENDER_DPAD_RIGHT SDL_HAT_RIGHT
 
 #define MAX_JOYSTICKS 8
+#define MAX_MICE 8
 
 #include "vdp.h"
 #include "psg.h"

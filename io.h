@@ -33,6 +33,14 @@ typedef struct {
 			int data_fd;
 			int listen_fd;
 		} stream;
+		struct {
+			uint16_t last_read_x;
+			uint16_t last_read_y;
+			uint16_t cur_x;
+			uint16_t cur_y;
+			uint8_t  tr_counter;
+			uint8_t  state;
+		} mouse;
 	} device;
 	uint8_t  output;
 	uint8_t  control;
@@ -67,6 +75,7 @@ void handle_keyup(int keycode);
 void handle_joydown(int joystick, int button);
 void handle_joyup(int joystick, int button);
 void handle_joy_dpad(int joystick, int dpad, uint8_t state);
+void handle_mouse_moved(int mouse, uint16_t x, uint16_t y);
 
 #endif //IO_H_
 
