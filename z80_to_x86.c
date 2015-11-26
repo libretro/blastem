@@ -2389,7 +2389,8 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	add_ir(code, 16-sizeof(void *), RSP, SZ_PTR);
 	pop_r(code, RBX); //return address in translated code
 	add_ir(code, 16-sizeof(void *), RSP, SZ_PTR);
-	sub_ir(code, 5, RAX, SZ_PTR); //adjust return address to point to the call that got us here
+	//FIXME: get the right adjustment value for 32-bit
+	sub_ir(code, 9, RAX, SZ_PTR); //adjust return address to point to the call + stack adjust that got us here
 	mov_rrdisp(code, RBX, options->gen.context_reg, offsetof(z80_context, extra_pc), SZ_PTR);
 	mov_rrind(code, RAX, options->gen.context_reg, SZ_PTR);
 	restore_callee_save_regs(code);
@@ -2413,8 +2414,13 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	call(code, options->gen.save_context);
 	tmp_stack_off = code->stack_off;
 	//pop return address off the stack and save for resume later
-	pop_rind(code, options->gen.context_reg);
+	//pop_rind(code, options->gen.context_reg);
+	pop_r(code, RAX);
+	//FIXME: get appropriate size for 32-bit
+	add_ir(code, 4, RAX, SZ_PTR);
 	add_ir(code, 16-sizeof(void *), RSP, SZ_PTR);
+	mov_rrind(code, RAX, options->gen.context_reg, SZ_PTR);
+	
 	//restore callee saved registers
 	restore_callee_save_regs(code);
 	//return to caller of z80_run
@@ -2556,6 +2562,7 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	cmp_irdisp(code, 0, options->gen.context_reg, offsetof(z80_context, extra_pc), SZ_PTR);
 	code_ptr no_extra = code->cur+1;
 	jcc(code, CC_Z, no_extra);
+	sub_ir(code, 16-sizeof(void *), RSP, SZ_PTR);	
 	push_rdisp(code, options->gen.context_reg, offsetof(z80_context, extra_pc));
 	mov_irdisp(code, 0, options->gen.context_reg, offsetof(z80_context, extra_pc), SZ_PTR);
 	*no_extra = code->cur - (no_extra + 1);
