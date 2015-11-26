@@ -544,6 +544,9 @@ int32_t handle_event(SDL_Event *event)
 	case SDL_JOYHATMOTION:
 		handle_joy_dpad(event->jbutton.which, event->jhat.hat, event->jhat.value);
 		break;
+	case SDL_MOUSEMOTION:
+		handle_mouse_moved(event->motion.which, event->motion.x, event->motion.y);
+		break;
 	case SDL_QUIT:
 		puts("");
 		exit(0);
