@@ -2376,14 +2376,19 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	call(code, options->gen.load_context);
 	retn(code);
 
+	uint32_t tmp_stack_off;
+
 	options->gen.handle_cycle_limit = code->cur;
 	cmp_rdispr(code, options->gen.context_reg, offsetof(z80_context, sync_cycle), options->gen.cycles, SZ_D);
 	code_ptr no_sync = code->cur+1;
 	jcc(code, CC_B, no_sync);
 	mov_irdisp(code, 0, options->gen.context_reg, offsetof(z80_context, pc), SZ_W);
 	call(code, options->save_context_scratch);
+	tmp_stack_off = code->stack_off;
 	pop_r(code, RAX); //return address in read/write func
+	add_ir(code, 16-sizeof(void *), RSP, SZ_PTR);
 	pop_r(code, RBX); //return address in translated code
+	add_ir(code, 16-sizeof(void *), RSP, SZ_PTR);
 	sub_ir(code, 5, RAX, SZ_PTR); //adjust return address to point to the call that got us here
 	mov_rrdisp(code, RBX, options->gen.context_reg, offsetof(z80_context, extra_pc), SZ_PTR);
 	mov_rrind(code, RAX, options->gen.context_reg, SZ_PTR);
@@ -2391,15 +2396,34 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	*no_sync = code->cur - (no_sync + 1);
 	//return to caller of z80_run
 	retn(code);
+	code->stack_off = tmp_stack_off;
 
 	options->gen.handle_code_write = (code_ptr)z80_handle_code_write;
 
 	options->read_8 = gen_mem_fun(&options->gen, chunks, num_chunks, READ_8, &options->read_8_noinc);
 	options->write_8 = gen_mem_fun(&options->gen, chunks, num_chunks, WRITE_8, &options->write_8_noinc);
 
+	code_ptr skip_int = code->cur;
+	cmp_rdispr(code, options->gen.context_reg, offsetof(z80_context, sync_cycle), options->gen.cycles, SZ_D);
+	code_ptr skip_sync = code->cur + 1;
+	jcc(code, CC_B, skip_sync);
+	//save PC
+	mov_rrdisp(code, options->gen.scratch1, options->gen.context_reg, offsetof(z80_context, pc), SZ_D);
+	options->do_sync = code->cur;
+	call(code, options->gen.save_context);
+	tmp_stack_off = code->stack_off;
+	//pop return address off the stack and save for resume later
+	pop_rind(code, options->gen.context_reg);
+	add_ir(code, 16-sizeof(void *), RSP, SZ_PTR);
+	//restore callee saved registers
+	restore_callee_save_regs(code);
+	//return to caller of z80_run
+	*skip_sync = code->cur - (skip_sync+1);
+	retn(code);
+	code->stack_off = tmp_stack_off;
+
 	options->gen.handle_cycle_limit_int = code->cur;
 	cmp_rdispr(code, options->gen.context_reg, offsetof(z80_context, int_cycle), options->gen.cycles, SZ_D);
-	code_ptr skip_int = code->cur+1;
 	jcc(code, CC_B, skip_int);
 	//set limit to the cycle limit
 	mov_rdispr(code, options->gen.context_reg, offsetof(z80_context, sync_cycle), options->gen.limit, SZ_D);
@@ -2428,28 +2452,16 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	cycles(&options->gen, 3);
 	call(code, options->write_8_noinc);
 	//dispose of return address as we'll be jumping somewhere else
-	pop_r(code, options->gen.scratch2);
+	add_ir(code, 16, RSP, SZ_PTR);
 	//TODO: Support interrupt mode 0 and 2
 	mov_ir(code, 0x38, options->gen.scratch1, SZ_W);
 	call(code, options->native_addr);
 	mov_rrind(code, options->gen.scratch1, options->gen.context_reg, SZ_PTR);
+	tmp_stack_off = code->stack_off;
 	restore_callee_save_regs(code);
 	//return to caller of z80_run to sync
 	retn(code);
-	*skip_int = code->cur - (skip_int+1);
-	cmp_rdispr(code, options->gen.context_reg, offsetof(z80_context, sync_cycle), options->gen.cycles, SZ_D);
-	code_ptr skip_sync = code->cur + 1;
-	jcc(code, CC_B, skip_sync);
-	//save PC
-	mov_rrdisp(code, options->gen.scratch1, options->gen.context_reg, offsetof(z80_context, pc), SZ_D);
-	options->do_sync = code->cur;
-	call(code, options->gen.save_context);
-	pop_rind(code, options->gen.context_reg);
-	//restore callee saved registers
-	restore_callee_save_regs(code);
-	//return to caller of z80_run
-	*skip_sync = code->cur - (skip_sync+1);
-	retn(code);
+	code->stack_off = tmp_stack_off;
 
 	//HACK
 	options->gen.address_size = SZ_D;
@@ -2517,8 +2529,11 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	retn(code);
 
 	options->retrans_stub = code->cur;
+	tmp_stack_off = code->stack_off;
 	//pop return address
 	pop_r(code, options->gen.scratch2);
+	add_ir(code, 16-sizeof(void*), RSP, SZ_PTR);
+	code->stack_off = tmp_stack_off;
 	call(code, options->gen.save_context);
 	//adjust pointer before move and call instructions that got us here
 	sub_ir(code, options->gen.scratch1 >= R8 ? 11 : 10, options->gen.scratch2, SZ_PTR);
@@ -2530,6 +2545,7 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	jmp_r(code, options->gen.scratch1);
 
 	options->run = (z80_run_fun)code->cur;
+	tmp_stack_off = code->stack_off;
 	save_callee_save_regs(code);
 #ifdef X86_64
 	mov_rr(code, RDI, options->gen.context_reg, SZ_PTR);
@@ -2544,6 +2560,7 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	mov_irdisp(code, 0, options->gen.context_reg, offsetof(z80_context, extra_pc), SZ_PTR);
 	*no_extra = code->cur - (no_extra + 1);
 	jmp_rind(code, options->gen.context_reg);
+	code->stack_off = tmp_stack_off;
 }
 
 void init_z80_context(z80_context * context, z80_options * options)
