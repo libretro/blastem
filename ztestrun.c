@@ -10,6 +10,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
+#include <stdarg.h>
+
+void fatal_error(char *format, ...)
+{
+	va_list args;
+	va_start(args, format);
+	vfprintf(stderr, format, args);
+	va_end(args);
+	exit(1);
+}
 
 uint8_t z80_ram[0x2000];
 
