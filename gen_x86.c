@@ -1968,15 +1968,8 @@ void jmp_rind(code_info *code, uint8_t dst)
 	code->cur = out;
 }
 
-void call(code_info *code, code_ptr fun)
+void call_noalign(code_info *code, code_ptr fun)
 {
-	code->stack_off += sizeof(void *);
-	int32_t adjust = 0;
-	if (code->stack_off & 0xF) {
-		adjust = 16 - (code->stack_off & 0xF);
-		code->stack_off += adjust;
-		sub_ir(code, adjust, RSP, SZ_PTR);
-	}
 	check_alloc_code(code, 5);
 	code_ptr out = code->cur;
 	ptrdiff_t disp = fun-(out+5);
@@ -1994,12 +1987,24 @@ void call(code_info *code, code_ptr fun)
 		fatal_error("call: %p - %p = %lX which is out of range for a 32-bit displacement\n", fun, out + 5, (long)disp);
 	}
 	code->cur = out;
+}
+
+
+void call(code_info *code, code_ptr fun)
+{
+	code->stack_off += sizeof(void *);
+	int32_t adjust = 0;
+	if (code->stack_off & 0xF) {
+		adjust = 16 - (code->stack_off & 0xF);
+		code->stack_off += adjust;
+		sub_ir(code, adjust, RSP, SZ_PTR);
+	}
+	call_noalign(code, fun);
 	if (adjust) {
 		add_ir(code, adjust, RSP, SZ_PTR);
 	}
 	code->stack_off -= sizeof(void *) + adjust;
 }
-
 void call_raxfallback(code_info *code, code_ptr fun)
 {
 	check_alloc_code(code, 5);
