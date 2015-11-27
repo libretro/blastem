@@ -893,9 +893,7 @@ void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
 	uint8_t orig_size = get_native_inst_size(opts, address);
 	code_ptr orig_start = get_native_address(context->options, address);
 	uint32_t orig = address;
-	code_info orig_code;
-	orig_code.cur = orig_start;
-	orig_code.last = orig_start + orig_size + 5;
+	code_info orig_code = {orig_start, orig_start + orig_size + 5, 0};
 	uint16_t *after, *inst = get_native_pointer(address, (void **)context->mem_pointers, &opts->gen);
 	m68kinst instbuf;
 	after = m68k_decode(inst, &instbuf, orig);
