@@ -2180,9 +2180,7 @@ m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context)
 		m68k_options * options = context->options;
 		code_info *code = &options->gen.code;
 		code_ptr dst = get_native_address(context->options, inst_start);
-		code_info orig;
-		orig.cur = dst;
-		orig.last = dst + 128;
+		code_info orig = {dst, dst + 128, 0};
 		mov_ir(&orig, inst_start, options->gen.scratch2, SZ_D);
 
 		if (!options->retrans_stub) {
@@ -2502,6 +2500,11 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	retn(code);
 
 	opts->gen.handle_cycle_limit_int = code->cur;
+	//calculate stack adjust size
+	add_ir(code, 16-sizeof(void*), RSP, SZ_PTR);
+	uint32_t adjust_size = code->cur - opts->gen.handle_cycle_limit_int;
+	code->cur = opts->gen.handle_cycle_limit_int;
+	
 	cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_cycle), opts->gen.cycles, SZ_D);
 	code_ptr do_int = code->cur + 1;
 	jcc(code, CC_NC, code->cur + 2);
@@ -2522,6 +2525,7 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	//fetch return address and adjust RSP
 	pop_r(code, opts->gen.scratch1);
 	add_ir(code, 16-sizeof(void *), RSP, SZ_PTR);
+	add_ir(code, adjust_size, opts->gen.scratch1, SZ_PTR);
 	//save return address for restoring later
 	mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, offsetof(m68k_context, resume_pc), SZ_PTR);
 	retn(code);
