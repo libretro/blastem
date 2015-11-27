@@ -2379,6 +2379,12 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	uint32_t tmp_stack_off;
 
 	options->gen.handle_cycle_limit = code->cur;
+	//calculate call/stack adjust size
+	sub_ir(code, 16-sizeof(void *), RSP, SZ_PTR);
+	call_noalign(code, options->gen.handle_cycle_limit);
+	uint32_t call_adjust_size = code->cur - options->gen.handle_cycle_limit;
+	code->cur = options->gen.handle_cycle_limit;
+	
 	cmp_rdispr(code, options->gen.context_reg, offsetof(z80_context, sync_cycle), options->gen.cycles, SZ_D);
 	code_ptr no_sync = code->cur+1;
 	jcc(code, CC_B, no_sync);
@@ -2389,8 +2395,7 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	add_ir(code, 16-sizeof(void *), RSP, SZ_PTR);
 	pop_r(code, RBX); //return address in translated code
 	add_ir(code, 16-sizeof(void *), RSP, SZ_PTR);
-	//FIXME: get the right adjustment value for 32-bit
-	sub_ir(code, 9, RAX, SZ_PTR); //adjust return address to point to the call + stack adjust that got us here
+	sub_ir(code, call_adjust_size, RAX, SZ_PTR); //adjust return address to point to the call + stack adjust that got us here
 	mov_rrdisp(code, RBX, options->gen.context_reg, offsetof(z80_context, extra_pc), SZ_PTR);
 	mov_rrind(code, RAX, options->gen.context_reg, SZ_PTR);
 	restore_callee_save_regs(code);
@@ -2405,6 +2410,11 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	options->write_8 = gen_mem_fun(&options->gen, chunks, num_chunks, WRITE_8, &options->write_8_noinc);
 
 	code_ptr skip_int = code->cur;
+	//calculate adjust size
+	add_ir(code, 16-sizeof(void *), RSP, SZ_PTR);
+	uint32_t adjust_size = code->cur - skip_int;
+	code->cur = skip_int;
+	
 	cmp_rdispr(code, options->gen.context_reg, offsetof(z80_context, sync_cycle), options->gen.cycles, SZ_D);
 	code_ptr skip_sync = code->cur + 1;
 	jcc(code, CC_B, skip_sync);
@@ -2416,8 +2426,7 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	//pop return address off the stack and save for resume later
 	//pop_rind(code, options->gen.context_reg);
 	pop_r(code, RAX);
-	//FIXME: get appropriate size for 32-bit
-	add_ir(code, 4, RAX, SZ_PTR);
+	add_ir(code, adjust_size, RAX, SZ_PTR);
 	add_ir(code, 16-sizeof(void *), RSP, SZ_PTR);
 	mov_rrind(code, RAX, options->gen.context_reg, SZ_PTR);
 	
