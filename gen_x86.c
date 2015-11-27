@@ -2111,18 +2111,18 @@ uint32_t prep_args(code_info *code, uint32_t num_args, va_list args)
 #else
 #define stack_args num_args
 #endif
-	for (int i = stack_args -1; i >= 0; i--)
-	{
-		push_r(code, arg_arr[i]);
-	}
-	uint32_t stack_off_call = code->stack_off + sizeof(void *);
+	uint32_t stack_off_call = code->stack_off + sizeof(void *) * (stack_args + 1);
 	uint32_t adjust = 0;
 	if (stack_off_call & 0xF) {
 		adjust = 16 - (stack_off_call & 0xF);
 		sub_ir(code, adjust, RSP, SZ_PTR);
 		code->stack_off += adjust;
 	}
-
+	for (int i = stack_args -1; i >= 0; i--)
+	{
+		push_r(code, arg_arr[i]);
+	}
+	
 	return stack_args * sizeof(void *) + adjust;
 }
 
