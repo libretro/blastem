@@ -210,6 +210,7 @@ void btc_ir(code_info *code, uint8_t val, uint8_t dst, uint8_t size);
 void btc_irdisp(code_info *code, uint8_t val, uint8_t dst_base, int32_t dst_disp, uint8_t size);
 void jcc(code_info *code, uint8_t cc, code_ptr dest);
 void jmp_rind(code_info *code, uint8_t dst);
+void call_noalign(code_info *code, code_ptr fun);
 void call_r(code_info *code, uint8_t dst);
 void retn(code_info *code);
 void cdq(code_info *code);

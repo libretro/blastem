@@ -2095,7 +2095,7 @@ z80_context * z80_handle_code_write(uint32_t address, z80_context * context)
 	uint32_t inst_start = z80_get_instruction_start(context->static_code_map, address);
 	if (inst_start != INVALID_INSTRUCTION_START) {
 		code_ptr dst = z80_get_native_address(context, inst_start);
-		code_info code = {dst, dst+16};
+		code_info code = {dst, dst+32, 0};
 		z80_options * opts = context->options;
 		dprintf("patching code at %p for Z80 instruction at %X due to write to %X\n", code.cur, inst_start, address);
 		mov_ir(&code, inst_start, opts->gen.scratch1, SZ_D);
@@ -2536,13 +2536,24 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 
 	options->retrans_stub = code->cur;
 	tmp_stack_off = code->stack_off;
+	//calculate size of patch
+	mov_ir(code, 0x7FFF, options->gen.scratch1, SZ_D);
+	code->stack_off += sizeof(void *);
+	if (code->stack_off & 0xF) {
+		sub_ir(code, 16 - (code->stack_off & 0xF), RSP, SZ_PTR);
+	}
+	call_noalign(code, options->retrans_stub);
+	uint32_t patch_size = code->cur - options->retrans_stub;
+	code->cur = options->retrans_stub;
+	code->stack_off = tmp_stack_off;
+	
 	//pop return address
 	pop_r(code, options->gen.scratch2);
 	add_ir(code, 16-sizeof(void*), RSP, SZ_PTR);
 	code->stack_off = tmp_stack_off;
 	call(code, options->gen.save_context);
 	//adjust pointer before move and call instructions that got us here
-	sub_ir(code, options->gen.scratch1 >= R8 ? 11 : 10, options->gen.scratch2, SZ_PTR);
+	sub_ir(code, patch_size, options->gen.scratch2, SZ_PTR);
 	push_r(code, options->gen.context_reg);
 	call_args(code, (code_ptr)z80_retranslate_inst, 3, options->gen.scratch1, options->gen.context_reg, options->gen.scratch2);
 	pop_r(code, options->gen.context_reg);
