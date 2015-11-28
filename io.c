@@ -18,6 +18,7 @@
 #include "io.h"
 #include "blastem.h"
 #include "render.h"
+#include "util.h"
 
 const char * device_type_names[] = {
 	"3-button gamepad",
@@ -75,7 +76,7 @@ typedef struct {
 	uint8_t mode;
 } mousebinding;
 
-keybinding * bindings[256];
+keybinding * bindings[0x10000];
 keybinding * joybindings[MAX_JOYSTICKS];
 joydpad * joydpads[MAX_JOYSTICKS];
 mousebinding *mice[MAX_MICE];
@@ -83,12 +84,12 @@ const uint8_t dpadbits[] = {RENDER_DPAD_UP, RENDER_DPAD_DOWN, RENDER_DPAD_LEFT, 
 
 void bind_key(int keycode, uint8_t bind_type, uint8_t subtype_a, uint8_t subtype_b, uint8_t value)
 {
-	int bucket = keycode >> 8 & 0xFF;
+	int bucket = keycode >> 15 & 0xFFFF;
 	if (!bindings[bucket]) {
-		bindings[bucket] = malloc(sizeof(keybinding) * 256);
-		memset(bindings[bucket], 0, sizeof(keybinding) * 256);
+		bindings[bucket] = malloc(sizeof(keybinding) * 0x8000);
+		memset(bindings[bucket], 0, sizeof(keybinding) * 0x8000);
 	}
-	int idx = keycode & 0xFF;
+	int idx = keycode & 0x7FFF;
 	bindings[bucket][idx].bind_type = bind_type;
 	bindings[bucket][idx].subtype_a = subtype_a;
 	bindings[bucket][idx].subtype_b = subtype_b;
@@ -211,11 +212,11 @@ void handle_binding_down(keybinding * binding)
 
 void handle_keydown(int keycode)
 {
-	int bucket = keycode >> 8 & 0xFF;
+	int bucket = keycode >> 15 & 0xFFFF;
 	if (!bindings[bucket]) {
 		return;
 	}
-	int idx = keycode & 0xFF;
+	int idx = keycode & 0x7FFF;
 	keybinding * binding = bindings[bucket] + idx;
 	handle_binding_down(binding);
 }
@@ -307,11 +308,11 @@ void handle_binding_up(keybinding * binding)
 
 void handle_keyup(int keycode)
 {
-	int bucket = keycode >> 8 & 0xFF;
+	int bucket = keycode >> 15 & 0xFFFF;
 	if (!bindings[bucket]) {
 		return;
 	}
-	int idx = keycode & 0xFF;
+	int idx = keycode & 0x7FFF;
 	keybinding * binding = bindings[bucket] + idx;
 	handle_binding_up(binding);
 }
@@ -365,13 +366,13 @@ int parse_binding_target(char * target, tern_node * padbuttons, int * ui_out, in
 				return 1;
 			} else {
 				if (target[gpadslen+1]) {
-					fprintf(stderr, "Gamepad mapping string '%s' refers to an invalid button '%s'\n", target, target + gpadslen + 1);
+					warning("Gamepad mapping string '%s' refers to an invalid button '%s'\n", target, target + gpadslen + 1);
 				} else {
-					fprintf(stderr, "Gamepad mapping string '%s' has no button component\n", target);
+					warning("Gamepad mapping string '%s' has no button component\n", target);
 				}
 			}
 		} else {
-			fprintf(stderr, "Gamepad mapping string '%s' refers to an invalid gamepad number %c\n", target, target[gpadslen]);
+			warning("Gamepad mapping string '%s' refers to an invalid gamepad number %c\n", target, target[gpadslen]);
 		}
 	} else if(!strncmp(target, "ui.", strlen("ui."))) {
 		*padbutton_out = 0;
@@ -393,12 +394,12 @@ int parse_binding_target(char * target, tern_node * padbuttons, int * ui_out, in
 		} else if(!strcmp(target + 3, "exit")) {
 			*ui_out = UI_EXIT;
 		} else {
-			fprintf(stderr, "Unreconized UI binding type %s\n", target);
+			warning("Unreconized UI binding type %s\n", target);
 			return 0;
 		}
 		return 2;
 	} else {
-		fprintf(stderr, "Unrecognized binding type %s\n", target);
+		warning("Unrecognized binding type %s\n", target);
 	}
 	return 0;
 }
@@ -428,7 +429,7 @@ void process_keys(tern_node * cur, tern_node * special, tern_node * padbuttons, 
 		if (!keycode) {
 			keycode = curstr[0];
 			if (curstr[1] != 0) {
-				fprintf(stderr, "%s is not recognized as a key identifier, truncating to %c\n", curstr, curstr[0]);
+				warning("%s is not recognized as a key identifier, truncating to %c\n", curstr, curstr[0]);
 			}
 		}
 		char * target = cur->straight.value.ptrval;
@@ -471,9 +472,9 @@ void process_speeds(tern_node * cur, char * prefix)
 		int speed_index = atoi(curstr);
 		if (speed_index < 1) {
 			if (!strcmp(curstr, "0")) {
-				fputs("Speed index 0 cannot be set to a custom value\n", stderr);
+				warning("Speed index 0 cannot be set to a custom value\n");
 			} else {
-				fprintf(stderr, "%s is not a valid speed index", curstr);
+				warning("%s is not a valid speed index", curstr);
 			}
 		} else {
 			if (speed_index >= num_speeds) {
@@ -510,7 +511,7 @@ void process_device(char * device_type, io_port * port)
 			|| device_type[gamepad_len+2] > '8' || device_type[gamepad_len+3] != 0
 		)
 		{
-			fprintf(stderr, "%s is not a valid gamepad type\n", device_type);
+			warning("%s is not a valid gamepad type\n", device_type);
 		} else if (device_type[gamepad_len] == '3')
 		{
 			port->device_type = IO_GAMEPAD3;
@@ -572,7 +573,7 @@ void setup_io_devices(tern_node * config, io_port * ports)
 			char *pipe_name = tern_find_path(config, "io\0parallel_pipe\0").ptrval;
 			if (!pipe_name)
 			{
-				fprintf(stderr, "IO port %s is configured to use the sega parallel board, but no paralell_pipe is set!\n", io_name(i));
+				warning("IO port %s is configured to use the sega parallel board, but no paralell_pipe is set!\n", io_name(i));
 				ports[i].device_type = IO_NONE;
 			} else {
 				printf("IO port: %s connected to device '%s' with pipe name: %s\n", io_name(i), device_type_names[ports[i].device_type], pipe_name);
@@ -582,13 +583,13 @@ void setup_io_devices(tern_node * config, io_port * ports)
 				} else {
 					if (mkfifo(pipe_name, 0666) && errno != EEXIST)
 					{
-						fprintf(stderr, "Failed to create fifo %s for Sega parallel board emulation: %d %s\n", pipe_name, errno, strerror(errno));
+						warning("Failed to create fifo %s for Sega parallel board emulation: %d %s\n", pipe_name, errno, strerror(errno));
 						ports[i].device_type = IO_NONE;
 					} else {
 						ports[i].device.stream.data_fd = open(pipe_name, O_NONBLOCK | O_RDONLY);
 						if (ports[i].device.stream.data_fd == -1)
 						{
-							fprintf(stderr, "Failed to open fifo %s for Sega parallel board emulation: %d %s\n", pipe_name, errno, strerror(errno));
+							warning("Failed to open fifo %s for Sega parallel board emulation: %d %s\n", pipe_name, errno, strerror(errno));
 							ports[i].device_type = IO_NONE;
 						}
 					}
@@ -598,7 +599,7 @@ void setup_io_devices(tern_node * config, io_port * ports)
 			char *sock_name = tern_find_path(config, "io\0socket\0").ptrval;
 			if (!sock_name)
 			{
-				fprintf(stderr, "IO port %s is configured to use generic IO, but no socket is set!\n", io_name(i));
+				warning("IO port %s is configured to use generic IO, but no socket is set!\n", io_name(i));
 				ports[i].device_type = IO_NONE;
 			} else {
 				printf("IO port: %s connected to device '%s' with socket name: %s\n", io_name(i), device_type_names[ports[i].device_type], sock_name);
@@ -611,12 +612,12 @@ void setup_io_devices(tern_node * config, io_port * ports)
 				memcpy(saddr->sun_path, sock_name, pathlen+1);
 				if (bind(ports[i].device.stream.listen_fd, (struct sockaddr *)saddr, addrlen))
 				{
-					fprintf(stderr, "Failed to bind socket for IO Port %s to path %s: %d %s\n", io_name(i), sock_name, errno, strerror(errno));
+					warning("Failed to bind socket for IO Port %s to path %s: %d %s\n", io_name(i), sock_name, errno, strerror(errno));
 					goto cleanup_sock;
 				}
 				if (listen(ports[i].device.stream.listen_fd, 1))
 				{
-					fprintf(stderr, "Failed to listen on socket for IO Port %s: %d %s\n", io_name(i), errno, strerror(errno));
+					warning("Failed to listen on socket for IO Port %s: %d %s\n", io_name(i), errno, strerror(errno));
 					goto cleanup_sockfile;
 				}
 				sockfile_name = sock_name;
@@ -671,6 +672,10 @@ void set_keybindings(io_port *ports)
 	special = tern_insert_int(special, "esc", RENDERKEY_ESC);
 	special = tern_insert_int(special, "lshift", RENDERKEY_LSHIFT);
 	special = tern_insert_int(special, "rshift", RENDERKEY_RSHIFT);
+	special = tern_insert_int(special, "select", RENDERKEY_SELECT);
+	special = tern_insert_int(special, "play", RENDERKEY_PLAY);
+	special = tern_insert_int(special, "search", RENDERKEY_SEARCH);
+	special = tern_insert_int(special, "back", RENDERKEY_BACK);
 
 	tern_node * padbuttons = tern_insert_int(NULL, ".up", DPAD_UP);
 	padbuttons = tern_insert_int(padbuttons, ".down", DPAD_DOWN);
@@ -758,7 +763,7 @@ void set_keybindings(io_port *ports)
 	for (int i = 0; i < num_speeds; i++)
 	{
 		if (!speeds[i]) {
-			fprintf(stderr, "Speed index %d was not set to a valid percentage!", i);
+			warning("Speed index %d was not set to a valid percentage!", i);
 			speeds[i] = 100;
 		}
 	}
@@ -767,11 +772,11 @@ void set_keybindings(io_port *ports)
 
 void map_all_bindings(io_port *ports)
 {
-	for (int bucket = 0; bucket < 256; bucket++)
+	for (int bucket = 0; bucket < 0x10000; bucket++)
 	{
 		if (bindings[bucket])
 		{
-			map_bindings(ports, bindings[bucket], 256);
+			map_bindings(ports, bindings[bucket], 0x8000);
 		}
 	}
 	for (int stick = 0; stick < MAX_JOYSTICKS; stick++)
@@ -830,7 +835,7 @@ static void service_pipe(io_port * port)
 		port->input[IO_TH0] = (value & 0xF) | 0x10;
 		port->input[IO_TH1] = (value >> 4) | 0x10;
 	} else if(numRead == -1 && errno != EAGAIN && errno != EWOULDBLOCK) {
-		fprintf(stderr, "Error reading pipe for IO port: %d %s\n", errno, strerror(errno));
+		warning("Error reading pipe for IO port: %d %s\n", errno, strerror(errno));
 	}
 }
 
@@ -860,7 +865,7 @@ static void service_socket(io_port *port)
 			port->device.stream.data_fd = -1;
 			wait_for_connection(port);
 		} else if (errno != EAGAIN && errno != EWOULDBLOCK) {
-			fprintf(stderr, "Error reading from socket for IO port: %d %s\n", errno, strerror(errno));
+			warning("Error reading from socket for IO port: %d %s\n", errno, strerror(errno));
 			close(port->device.stream.data_fd);
 			wait_for_connection(port);
 		} else if (port->input[IO_STATE] == IO_READ_PENDING) {
@@ -896,7 +901,7 @@ static void service_socket(io_port *port)
 				port->device.stream.data_fd = -1;
 				wait_for_connection(port);
 			} else if (errno != EAGAIN && errno != EWOULDBLOCK) {
-				fprintf(stderr, "Error writing to socket for IO port: %d %s\n", errno, strerror(errno));
+				warning("Error writing to socket for IO port: %d %s\n", errno, strerror(errno));
 				close(port->device.stream.data_fd);
 				wait_for_connection(port);
 			} else {
