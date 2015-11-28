@@ -672,8 +672,7 @@ class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
         // Some SOURCE_DPAD or SOURCE_GAMEPAD are also SOURCE_KEYBOARD
         // So, we try to process them as DPAD or GAMEPAD events first, if that fails we try them as KEYBOARD
         
-        if ( (event.getSource() & 0x00000401) != 0 || /* API 12: SOURCE_GAMEPAD */
-                   (event.getSource() & InputDevice.SOURCE_DPAD) != 0 ) {
+        if ( (event.getSource() & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD) {
             if (event.getAction() == KeyEvent.ACTION_DOWN) {
                 if (SDLActivity.onNativePadDown(event.getDeviceId(), keyCode) == 0) {
                     return true;
