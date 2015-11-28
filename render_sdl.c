@@ -558,6 +558,11 @@ char * fps_caption = NULL;
 
 uint32_t frame_counter = 0;
 uint32_t start = 0;
+#ifdef __ANDROID__
+#define FPS_INTERVAL 10000
+#else
+#define FPS_INTERVAL 1000
+#endif
 int wait_render_frame(vdp_context * context, int frame_limit)
 {
 	SDL_Event event;
@@ -581,13 +586,18 @@ int wait_render_frame(vdp_context * context, int frame_limit)
 	render_context(context);
 
 	frame_counter++;
-	if ((last_frame - start) > 1000) {
+	if ((last_frame - start) > FPS_INTERVAL) {
 		if (start && (last_frame-start)) {
 			if (!fps_caption) {
-				fps_caption = malloc(strlen(caption) + strlen(" - 1000.1 fps") + 1);
+				fps_caption = malloc(strlen(caption) + strlen(" - 100000000.1 fps") + 1);
 			}
-			sprintf(fps_caption, "%s - %.1f fps", caption, ((float)frame_counter) / (((float)(last_frame-start)) / 1000.0));
+			
+#ifdef __ANDROID__
+			info_message("%s - %.1f fps", caption, ((float)frame_counter) / (((float)(last_frame-start)) / (float)FPS_INTERVAL));
+#else
+			sprintf(fps_caption, "%s - %.1f fps", caption, ((float)frame_counter) / (((float)(last_frame-start)) / (float)FPS_INTERVAL));
 			SDL_SetWindowTitle(main_window, fps_caption);
+#endif
 		}
 		start = last_frame;
 		frame_counter = 0;
