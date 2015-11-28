@@ -36,6 +36,7 @@ void * alloc_code(size_t *size)
 		perror("alloc_code");
 		return NULL;
 	}
+	track_block(ret);
 	next = ret + *size;
 	return ret;
 }
