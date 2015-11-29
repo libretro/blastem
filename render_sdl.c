@@ -547,6 +547,12 @@ int32_t handle_event(SDL_Event *event)
 	case SDL_MOUSEMOTION:
 		handle_mouse_moved(event->motion.which, event->motion.x, event->motion.y);
 		break;
+	case SDL_MOUSEBUTTONDOWN:
+		handle_mousedown(event->button.which, event->button.button);
+		break;
+	case SDL_MOUSEBUTTONUP:
+		handle_mouseup(event->button.which, event->button.button);
+		break;
 	case SDL_QUIT:
 		puts("");
 		exit(0);

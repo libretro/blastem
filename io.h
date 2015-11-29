@@ -38,8 +38,10 @@ typedef struct {
 			uint16_t last_read_y;
 			uint16_t cur_x;
 			uint16_t cur_y;
+			int16_t  delta_x;
+			int16_t  delta_y;
 			uint8_t  tr_counter;
-			uint8_t  state;
+			uint8_t  mouse_num;
 		} mouse;
 	} device;
 	uint8_t  output;
@@ -76,6 +78,8 @@ void handle_joydown(int joystick, int button);
 void handle_joyup(int joystick, int button);
 void handle_joy_dpad(int joystick, int dpad, uint8_t state);
 void handle_mouse_moved(int mouse, uint16_t x, uint16_t y);
+void handle_mousedown(int mouse, int button);
+void handle_mouseup(int mouse, int button);
 
 #endif //IO_H_
 
