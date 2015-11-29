@@ -26,6 +26,7 @@
 
 #define MAX_JOYSTICKS 8
 #define MAX_MICE 8
+#define MAX_MOUSE_BUTTONS 8
 
 #include "vdp.h"
 #include "psg.h"
