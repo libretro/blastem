@@ -2205,6 +2205,7 @@ void insert_breakpoint(m68k_context * context, uint32_t address, code_ptr bp_han
 	code_info native;
 	native.cur = get_native_address_trans(context, address);
 	native.last = native.cur + 128;
+	native.stack_off = 0;
 	code_ptr start_native = native.cur;
 	mov_ir(&native, address, opts->gen.scratch1, SZ_D);
 	if (!bp_stub) {
@@ -2213,10 +2214,12 @@ void insert_breakpoint(m68k_context * context, uint32_t address, code_ptr bp_han
 		bp_stub = code->cur;
 		call(&native, bp_stub);
 
+		uint32_t tmp_stack_off = code->stack_off;
 		//Calculate length of prologue
 		check_cycles_int(&opts->gen, address);
 		int check_int_size = code->cur-bp_stub;
 		code->cur = bp_stub;
+		code->stack_off = tmp_stack_off;
 
 		//Save context and call breakpoint handler
 		call(code, opts->gen.save_context);
@@ -2236,6 +2239,7 @@ void insert_breakpoint(m68k_context * context, uint32_t address, code_ptr bp_han
 		pop_r(code, opts->gen.scratch1);
 		add_ir(code, check_int_size - (native.cur-start_native), opts->gen.scratch1, SZ_PTR);
 		jmp_r(code, opts->gen.scratch1);
+		code->stack_off = tmp_stack_off;
 	} else {
 		call(&native, bp_stub);
 	}
@@ -2504,7 +2508,7 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	add_ir(code, 16-sizeof(void*), RSP, SZ_PTR);
 	uint32_t adjust_size = code->cur - opts->gen.handle_cycle_limit_int;
 	code->cur = opts->gen.handle_cycle_limit_int;
-	
+
 	cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_cycle), opts->gen.cycles, SZ_D);
 	code_ptr do_int = code->cur + 1;
 	jcc(code, CC_NC, code->cur + 2);
