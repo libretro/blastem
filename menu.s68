@@ -175,10 +175,16 @@ sprite_list   rs.l 160
 page_index    rs.l MAX_DISPLAY+1
 page_stack    rs.l 1
 page_pointers rs.l 1024
+mouse_sprite  rs.l 1
+mouse_x       rs.w 1
 num_sprites   rs.b 1
-last_pad      rs.b 1
+last_pad1     rs.b 1
+last_pad2     rs.b 1
 selected      rs.b 1
 more_pages    rs.b 1
+mouse_buf     rs.b 3
+mouse_shown   rs.b 1
+last_mbuttons rs.b 1
 
 
 int_6:
@@ -196,26 +202,50 @@ int_6:
 	move.l d0, (a1)
 	startdma $C000, VDP_VRAM_WRITE
 
-	;read gamepad in port 1
+	;read gamepad/mouse in port 1
 	lea PAD1_DATA, a2
-	move.b #$40, (a2)
-	move.b (a2), d0
-	and.b #$3F, d0
-	move.b d0, (a2)
-	move.b (a2), d1
-	and.b #$30, d1
-	add.b d1, d1
-	add.b d1, d1
-	or.b d1, d0
-	not.b d0   ;button state is inveterted
-	move.b (last_pad).w, d1
+
+	bsr io_read
+
+	cmp.b #3, d2
+	beq .mouse
+
+	move.b last_pad1.w, d1
 	eor.b d0, d1
 	and.b d0, d1
-	move.b d0, (last_pad).w
+	move.b d0, last_pad1.w
 
+	bsr handle_pad_buttons
+
+	bra pad2
+.mouse
+	bsr handle_mouse
+
+pad2:
+	;read gamepad/mouse in port 2
+	lea PAD2_DATA, a2
+
+	bsr io_read
+
+	cmp.b #3, d2
+	beq .mouse
+
+	move.b last_pad2.w, d1
+	eor.b d0, d1
+	and.b d0, d1
+	move.b d0, last_pad2.w
+
+	bsr handle_pad_buttons
+	rte
+.mouse
+	bsr handle_mouse
+	rte
+
+
+;d0 = SACBRLUD
+;d1 = newly pressed buttons
+handle_pad_buttons:
 	moveq #16, d2
-	;d0 = SACBRLUD
-	;d1 = newly pressed buttons
 	btst #1, d1
 	bne down
 	btst #0, d1
@@ -225,9 +255,11 @@ int_6:
 	btst #2, d1
 	bne left
 	btst #7, d1
-	bne start_pressed
-int_done:
-	rte
+	bne select_entry
+	btst #5, d1
+	bne select_entry
+handle_done:
+	rts
 
 down:
 	;check if we are already at the bottom of the page
@@ -238,27 +270,27 @@ down:
 	add.w d0, d0
 	lea page_index.w, a2
 	tst.l (0, a2, d0.w)
-	beq int_done
+	beq handle_done
 	move.b d1, (selected).w
 
 	add.w d2, (sprite_list).w
 	add.w d2, (sprite_list+8).w
-	rte
+	rts
 up:
 	;check if we are already at the top of the page
 	move.b (selected).w, d0
-	beq int_done
+	beq handle_done
 	subq #1, d0
 	move.b d0, (selected).w
 
 	sub.w d2, (sprite_list).w
 	sub.w d2, (sprite_list+8).w
-	rte
+	rts
 
 right:
 	;check that we have another page to go to
 	tst.b more_pages.w
-	beq int_done
+	beq handle_done
 	;switch to the next page
 	move.l page_stack.w, a6
 	move.l (-4, a6), a6
@@ -270,7 +302,7 @@ left:
 	move.l page_stack.w, a5
 	;check if we're already on the first page
 	cmp.l #(page_pointers+8), a5
-	beq int_done
+	beq handle_done
 	;switch to previous page
 	lea (-12, a5), a5
 	move.l (a5)+, a6
@@ -279,7 +311,7 @@ left:
 	addq #6, a7
 	bra render_page
 
-start_pressed:
+select_entry:
 	moveq #0, d0
 	move.b (selected).w, d0
 	add.w d0, d0
@@ -291,7 +323,7 @@ start_pressed:
 	;regular file
 	lea menu_port+8, a3
 	move.l a2, (a3)
-	rte
+	rts
 enter_dir:
 	lea menu_port+4, a3
 	move.l a2, (a3)
@@ -300,9 +332,188 @@ enter_dir:
 	bne .wait_complete
 	addq #6, a7
 	bra menu_start
+
+handle_mouse:
+	move.b last_mbuttons.w, d4
+	eor.b d3, d4
+	and.b d3, d4
+	move.b d3, last_mbuttons.w
+
+	move.b d0, d2
+	or.b d1, d2
+	beq .no_mouse_move
+
+
+	tst.b mouse_shown.w
+	bne .skip_show_check
+
+	moveq #0, d2
+	move.b num_sprites.w, d2
+	move.w d2, d4
+	lsl.w #3, d4
+	lea sprite_list.w, a2
+	move.b d2, (-5, a2, d4.w)
+	lea (0, a2, d4.w), a2
+	move.l a2, mouse_sprite.w
+	move.l #$01000500, (a2)+
+	move.w #$8083, (a2)
+	move.w #$100, mouse_x.w
+	addq #1, d2
+	move.b d2, num_sprites.w
+
+	move.b #1, mouse_shown.w
+
+.skip_show_check
+	move.l mouse_sprite.w, a2
+	add.w d1, (a2)
+	add.w d0, mouse_x.w
+	move.w mouse_x.w, d0
+	asr.w #1, d0
+	move.w d0, (6, a2)
+	move.w (a2), d1
+	cmp.w #272, d1
+	blo .done
+	cmp.w #655, d1
+	bhi .done
+	and.w #$FFF0, d1
+	subq #8, d1
+	move.w d1, (sprite_list).w
+	move.w d1, (sprite_list+8).w
+
+	sub.w #264, d1
+	lsr.w #4, d1
+	move.b d1, selected.w
+.no_mouse_move
+	btst #0, d4
+	bne select_entry
+.done
+	rts
 int_4:
 empty_handler:
 	rte
+
+id_lookup:
+	dc.b $0, $1, $4, $5
+	dc.b $2, $3, $6, $7
+	dc.b $8, $9, $C, $D
+	dc.b $A, $B, $E, $F
+
+io_read:
+	;read TH=1
+	move.b (a2), d0
+	;read TH=0
+	move.b #0, (a2)
+	nop
+	nop
+	move.b (a2), d1
+	;reset TH to 1
+	move.b #$40, (a2)
+
+	moveq #0, d2   ;4
+
+	;calculate Mega Drive peripheral ID
+	move.b d1, d2  ;4
+	lsr.b #1, d2   ;8, 12
+	or.b d1, d2    ;4, 16
+	and.b #5, d2   ;8, 24
+
+	move.b d0, d3  ;4
+	add.b d3, d3   ;4, 8
+	or.b d0, d3    ;4, 12
+	and.b #$A, d3  ;8, 20
+
+	or.b d3, d2    ;4
+	move.b (id_lookup, pc, d2.w), d2 ;14
+
+
+	cmp.b #$3, d2
+	beq .mouse
+
+	cmp.b #$D, d2
+	bne .not_pad
+
+	and.b #$3F, d0
+	and.b #$30, d1
+	add.b d1, d1
+	add.b d1, d1
+	or.b d1, d0
+	not.b d0
+	rts
+.not_pad:
+	moveq #0, d0
+	rts
+
+.mouse:
+
+	move.b #$60, (a2)
+	move.b #$60, (PAD1_CTRL-PAD1_DATA, a2)
+	move.b #$60, (a2)
+
+	moveq #$f, d4
+wait_hi_init:
+	btst #4, (a2)
+	beq wait_hi_init
+	nop
+	nop
+	move.b #$20, (a2)
+	nop
+	nop
+	moveq #$f, d4
+	move.b #0, (a2)
+.wait_lo
+	btst #4, (a2)
+	bne .wait_lo
+	moveq #$f, d4
+	move.b #$20, (a2)
+.wait_hi
+	btst #4, (a2)
+	beq .wait_hi
+
+	lea mouse_buf.w, a3
+	move.l a3, a4
+	moveq #2, d3
+	moveq #0, d0
+loop:
+	moveq #$f, d4
+	move.b #0, (a2)
+.wait_lo
+	btst #4, (a2)
+	bne .wait_lo
+	move.b (a2), d0
+	lsl.b #4, d0
+	moveq #$f, d4
+	move.b #$20, (a2)
+.wait_hi
+	btst #4, (a2)
+	beq .wait_hi
+	move.b (a2), d1
+	and.b #$f, d1
+	or.b d1, d0
+	move.b d0, (a3)+
+
+	dbra d3, loop
+
+	;end request
+	move.b #$60, (a2)
+
+
+	;massage data
+	moveq #0, d1
+	move.b d0, d1
+	move.b (a4)+, d3
+	move.b (a4), d0
+
+	btst #4, d3
+	beq xpos
+	neg.w d0
+xpos
+	btst #5, d3
+	beq ypos
+	neg.w d1
+ypos
+	;set port config back to normal controller mode
+	move.b #$40, (PAD1_CTRL-PAD1_DATA, a2)
+	rts
 
 
 
@@ -322,6 +533,14 @@ initial_regs:
 end_initial_regs
 
 start:
+	lea $FF0000, a0
+	moveq #0, d0
+	move.w #($10000/8 - 1), d1
+.clearloop:
+	move.l d0, (a0)+
+	move.l d0, (a0)+
+	dbra d1, .clearloop
+
 	lea $C00000, a0
 	lea $C00004, a1
 
@@ -344,7 +563,7 @@ start:
 	;load tiles
 	vdpaccess $800, VDP_VRAM_WRITE
 	lea font(pc), a2
-	move.w #((arrowend-font)/4 - 1), d0
+	move.w #((cursorend-font)/4 - 1), d0
 tloop:
 	move.l (a2)+, (a0)
 	dbra d0, tloop
@@ -440,8 +659,9 @@ done_files:
 	moveq #0, d0
 	move.l d0, (a3)
 
-	;setup gamepad in port 1
+	;setup gamepads
 	move.b #$40, PAD1_CTRL
+	move.b #$40, PAD2_CTRL
 
 	move.w #$8174, (a1) ;enable display, vertical interrupts, DMA
 
@@ -509,6 +729,9 @@ fontend
 arrow:
 	incbin arrow.tiles
 arrowend:
+cursor:
+	incbin cursor.tiles
+cursorend:
 
 widths:
 	dc.b 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 1

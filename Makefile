@@ -207,8 +207,9 @@ vos_prog_info : vos_prog_info.o vos_program_module.o
 	vasmz80_mot -Fbin -spaces -o $@ $<
 
 arrow.tiles : arrow.png
+cursor.tiles : cursor.png
 font_interlace_variable.tiles : font_interlace_variable.png
-menu.bin : font_interlace_variable.tiles arrow.tiles
+menu.bin : font_interlace_variable.tiles arrow.tiles cursor.tiles
 
 clean :
 	rm -rf $(ALL) trans ztestrun ztestgen *.o
