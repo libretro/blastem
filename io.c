@@ -1164,7 +1164,8 @@ void io_data_write(io_port * port, uint8_t value, uint32_t current_cycle)
 uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 {
 	uint8_t control = port->control | 0x80;
-	uint8_t th = control & port->output & 0x40;
+	uint8_t output = (control & port->output) | (~control & 0xFF);
+	uint8_t th = output & 0x40;
 	uint8_t input;
 	switch (port->device_type)
 	{
@@ -1207,7 +1208,7 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 	}
 	case IO_MOUSE:
 	{
-		uint8_t tr = control & port->output & TR;
+		uint8_t tr = output & TR;
 		if (th) {
 			if (tr) {
 				input = 0x10;
