@@ -364,6 +364,7 @@ handle_mouse:
 	move.b #1, mouse_shown.w
 
 .skip_show_check
+	neg.w d1
 	move.l mouse_sprite.w, a2
 	add.w d1, (a2)
 	add.w d0, mouse_x.w
@@ -505,11 +506,11 @@ loop:
 
 	btst #4, d3
 	beq xpos
-	neg.w d0
+	or.w #$FF00, d0
 xpos
 	btst #5, d3
 	beq ypos
-	neg.w d1
+	or.w #$FF00, d1
 ypos
 	;set port config back to normal controller mode
 	move.b #$40, (PAD1_CTRL-PAD1_DATA, a2)
