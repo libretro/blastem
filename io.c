@@ -1229,7 +1229,7 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 				//it would be unfortunate if our event handler updated cur_x or cur_y in the middle
 				//of the mouse poll sequence, so we save the delta here
 				port->device.mouse.delta_x = port->device.mouse.cur_x - port->device.mouse.last_read_x;
-				port->device.mouse.delta_y = port->device.mouse.cur_y - port->device.mouse.last_read_y;
+				port->device.mouse.delta_y = port->device.mouse.last_read_y - port->device.mouse.cur_y;
 				if (port->device.mouse.delta_y > 255 || port->device.mouse.delta_y < -255) {
 					input |= 8;
 				}
@@ -1247,16 +1247,16 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 				input = port->input[0];
 				break;
 			case 5:
-				input = abs(port->device.mouse.delta_x) >> 4 & 0xF;
+				input = port->device.mouse.delta_x >> 4 & 0xF;
 				break;
 			case 6:
-				input = abs(port->device.mouse.delta_x) & 0xF;
+				input = port->device.mouse.delta_x & 0xF;
 				break;
 			case 7:
-				input = abs(port->device.mouse.delta_y) >> 4 & 0xF;
+				input = port->device.mouse.delta_y >> 4 & 0xF;
 				break;
 			case 8:
-				input = abs(port->device.mouse.delta_y) & 0xF;
+				input = port->device.mouse.delta_y & 0xF;
 				//need to figure out when this actually happens
 				port->device.mouse.last_read_x = port->device.mouse.cur_x;
 				port->device.mouse.last_read_y = port->device.mouse.cur_y;
