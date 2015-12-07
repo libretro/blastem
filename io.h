@@ -34,12 +34,13 @@ typedef struct {
 			int listen_fd;
 		} stream;
 		struct {
+			uint32_t ready_cycle;
 			uint16_t last_read_x;
 			uint16_t last_read_y;
 			uint16_t cur_x;
 			uint16_t cur_y;
-			int16_t  delta_x;
-			int16_t  delta_y;
+			uint16_t latched_x;
+			uint16_t latched_y;
 			uint8_t  tr_counter;
 			uint8_t  mouse_num;
 		} mouse;
