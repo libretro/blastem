@@ -20,6 +20,8 @@
 #include "render.h"
 #include "util.h"
 
+#define CYCLE_NEVER 0xFFFFFFFF
+
 const char * device_type_names[] = {
 	"3-button gamepad",
 	"6-button gamepad",
@@ -607,6 +609,9 @@ void process_device(char * device_type, io_port * port)
 		port->device.mouse.last_read_y = 0;
 		port->device.mouse.cur_x = 0;
 		port->device.mouse.cur_y = 0;
+		port->device.mouse.latched_x = 0;
+		port->device.mouse.latched_y = 0;
+		port->device.mouse.ready_cycle = CYCLE_NEVER;
 		port->device.mouse.tr_counter = 0;
 	} else if(!strcmp(device_type, "sega_parallel")) {
 		port->device_type = IO_SEGA_PARALLEL;
@@ -998,6 +1003,18 @@ void map_all_bindings(io_port *ports)
 #define TR 0x20
 #define TH_TIMEOUT 56000
 
+void mouse_check_ready(io_port *port, uint32_t current_cycle)
+{
+	if (current_cycle >= port->device.mouse.ready_cycle) {
+		port->device.mouse.tr_counter++;
+		port->device.mouse.ready_cycle = CYCLE_NEVER;
+		if (port->device.mouse.tr_counter == 3) {
+			port->device.mouse.latched_x = port->device.mouse.cur_x;
+			port->device.mouse.latched_y = port->device.mouse.cur_y;
+		}
+	}
+}
+
 void io_adjust_cycles(io_port * port, uint32_t current_cycle, uint32_t deduction)
 {
 	/*uint8_t control = pad->control | 0x80;
@@ -1012,6 +1029,11 @@ void io_adjust_cycles(io_port * port, uint32_t current_cycle, uint32_t deduction
 			port->device.pad.th_counter = 0;
 		} else {
 			port->device.pad.timeout_cycle -= deduction;
+		}
+	} else if (port->device_type == IO_MOUSE) {
+		mouse_check_ready(port, current_cycle);
+		if (port->device.mouse.ready_cycle != CYCLE_NEVER) {
+			port->device.mouse.ready_cycle -= deduction;
 		}
 	}
 }
@@ -1118,46 +1140,53 @@ static void service_socket(io_port *port)
 }
 #endif
 
+const int mouse_delays[] = {112*7, 120*7, 96*7, 132*7, 104*7, 96*7, 112*7, 96*7};
+
 void io_data_write(io_port * port, uint8_t value, uint32_t current_cycle)
 {
+	uint8_t old_output = (port->control & port->output) | (~port->control & 0xFF);
+	uint8_t output = (port->control & value) | (~port->control & 0xFF);
 	switch (port->device_type)
 	{
 	case IO_GAMEPAD6:
-		if (port->control & TH) {
-			//check if TH has changed
-			if ((port->output & TH) ^ (value & TH)) {
-				if (current_cycle >= port->device.pad.timeout_cycle) {
-					port->device.pad.th_counter = 0;
-				}
-				if (!(value & TH)) {
-					port->device.pad.th_counter++;
-				}
-				port->device.pad.timeout_cycle = current_cycle + TH_TIMEOUT;
+		//check if TH has changed
+		if ((old_output & TH) ^ (output & TH)) {
+			if (current_cycle >= port->device.pad.timeout_cycle) {
+				port->device.pad.th_counter = 0;
 			}
+			if (!(output & TH)) {
+				port->device.pad.th_counter++;
+			}
+			port->device.pad.timeout_cycle = current_cycle + TH_TIMEOUT;
 		}
-		port->output = value;
 		break;
 	case IO_MOUSE:
-		if ((port->control & (TH|TR)) == (TH|TR)) {
-			if (!(value & TH) && (value & TR) != (port->output & TR)) {
-				port->device.mouse.tr_counter++;
+		mouse_check_ready(port, current_cycle);
+		if (output & TH) {
+			//request is over or mouse is being reset
+			if (port->device.mouse.tr_counter) {
+				//request is over
+				port->device.mouse.last_read_x = port->device.mouse.latched_x;
+				port->device.mouse.last_read_y = port->device.mouse.latched_y;
 			}
-		} else {
 			port->device.mouse.tr_counter = 0;
+			port->device.mouse.ready_cycle = CYCLE_NEVER;
+		} else {
+			if ((output & TR) != (old_output & TR)) {
+				int delay_index = port->device.mouse.tr_counter >= sizeof(mouse_delays) ? sizeof(mouse_delays)-1 : port->device.mouse.tr_counter;
+				port->device.mouse.ready_cycle = current_cycle + mouse_delays[delay_index];
+			}
 		}
-		port->output = value;
 		break;
 #ifndef _WIN32
 	case IO_GENERIC:
 		wait_for_connection(port);
 		port->input[IO_STATE] = IO_WRITE_PENDING;
-		port->output = value;
 		service_socket(port);
 		break;
 #endif
-	default:
-		port->output = value;
 	}
+	port->output = value;
 
 }
 
@@ -1208,6 +1237,7 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 	}
 	case IO_MOUSE:
 	{
+		mouse_check_ready(port, current_cycle);
 		uint8_t tr = output & TR;
 		if (th) {
 			if (tr) {
@@ -1216,6 +1246,9 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 				input = 0;
 			}
 		} else {
+			
+			int16_t delta_x = port->device.mouse.latched_x - port->device.mouse.last_read_x;
+			int16_t delta_y = port->device.mouse.last_read_y - port->device.mouse.latched_y;
 			switch (port->device.mouse.tr_counter)
 			{
 			case 0:
@@ -1227,20 +1260,16 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 				break;
 			case 3:
 				input = 0;
-				//it would be unfortunate if our event handler updated cur_x or cur_y in the middle
-				//of the mouse poll sequence, so we save the delta here
-				port->device.mouse.delta_x = port->device.mouse.cur_x - port->device.mouse.last_read_x;
-				port->device.mouse.delta_y = port->device.mouse.last_read_y - port->device.mouse.cur_y;
-				if (port->device.mouse.delta_y > 255 || port->device.mouse.delta_y < -255) {
+				if (delta_y > 255 || delta_y < -255) {
 					input |= 8;
 				}
-				if (port->device.mouse.delta_x > 255 || port->device.mouse.delta_x < -255) {
+				if (delta_x > 255 || delta_x < -255) {
 					input |= 4;
 				}
-				if (port->device.mouse.delta_y < 0) {
+				if (delta_y < 0) {
 					input |= 2;
 				}
-				if (port->device.mouse.delta_x < 0) {
+				if (delta_x < 0) {
 					input |= 1;
 				}
 				break;
@@ -1248,26 +1277,20 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 				input = port->input[0];
 				break;
 			case 5:
-				input = port->device.mouse.delta_x >> 4 & 0xF;
+				input = delta_x >> 4 & 0xF;
 				break;
 			case 6:
-				input = port->device.mouse.delta_x & 0xF;
+				input = delta_x & 0xF;
 				break;
 			case 7:
-				input = port->device.mouse.delta_y >> 4 & 0xF;
+				input = delta_y >> 4 & 0xF;
 				break;
 			case 8:
-				input = port->device.mouse.delta_y & 0xF;
-				//need to figure out when this actually happens
-				port->device.mouse.last_read_x = port->device.mouse.cur_x;
-				port->device.mouse.last_read_y = port->device.mouse.cur_y;
-				break;
 			default:
-				//need to test what happens here
-				input = 0;
+				input = delta_y & 0xF;
 				break;
 			}
-			input |= tr >> 1;
+			input |= ((port->device.mouse.tr_counter & 1) == 0) << 4;
 		}
 		break;
 	}
