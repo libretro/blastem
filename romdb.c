@@ -551,6 +551,7 @@ rom_info configure_rom_heuristics(uint8_t *rom, uint32_t rom_size, memmap_chunk 
 	info.name = get_header_name(rom);
 	info.regions = get_header_regions(rom);
 	add_memmap_header(&info, rom, rom_size, base_map, base_chunks);
+	info.port1_override = info.port2_override = info.ext_override = NULL;
 	return info;
 }
 
@@ -840,6 +841,15 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, memmap_
 		}
 	} else {
 		add_memmap_header(&info, rom, rom_size, base_map, base_chunks);
+	}
+
+	tern_node *device_overrides = tern_find_ptr(entry, "device_overrides");
+	if (device_overrides) {
+		info.port1_override = tern_find_ptr(device_overrides, "1");
+		info.port2_override = tern_find_ptr(device_overrides, "2");
+		info.ext_override = tern_find_ptr(device_overrides, "ext");
+	} else {
+		info.port1_override = info.port2_override = info.ext_override = NULL;
 	}
 
 	return info;
