@@ -40,6 +40,9 @@ typedef struct {
 	memmap_chunk  *map;
 	uint8_t       *save_buffer;
 	eeprom_map    *eeprom_map;
+	char          *port1_override;
+	char          *port2_override;
+	char          *ext_override;
 	uint32_t      num_eeprom;
 	uint32_t      map_chunks;
 	uint32_t      save_size;

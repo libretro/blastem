@@ -645,12 +645,12 @@ static void cleanup_sockfile()
 	unlink(sockfile_name);
 }
 
-void setup_io_devices(tern_node * config, io_port * ports)
+void setup_io_devices(tern_node * config, rom_info *rom, io_port * ports)
 {
 	tern_node *io_nodes = tern_get_node(tern_find_path(config, "io\0devices\0"));
-	char * io_1 = tern_find_ptr(io_nodes, "1");
-	char * io_2 = tern_find_ptr(io_nodes, "2");
-	char * io_ext = tern_find_ptr(io_nodes, "ext");
+	char * io_1 = rom->port1_override ? rom->port1_override : tern_find_ptr(io_nodes, "1");
+	char * io_2 = rom->port2_override ? rom->port2_override : tern_find_ptr(io_nodes, "2");
+	char * io_ext = rom->ext_override ? rom->ext_override : tern_find_ptr(io_nodes, "ext");
 
 	process_device(io_1, ports);
 	process_device(io_2, ports+1);
@@ -801,7 +801,7 @@ void process_mouse_button(char *buttonstr, tern_val value, void *data)
 		bindtype += devicenum-1;
 	}
 	mice[state->mouseidx].buttons[buttonnum].bind_type = bindtype;
-	
+
 }
 
 void process_mouse(char *mousenum, tern_val value, void *data)
@@ -810,7 +810,7 @@ void process_mouse(char *mousenum, tern_val value, void *data)
 	tern_node *mousedef = tern_get_node(value);
 	tern_node *padbuttons = buttonmaps[0];
 	tern_node *mousebuttons = buttonmaps[1];
-	
+
 	if (!mousedef) {
 		warning("Binding for mouse %s is a scalar!\n", mousenum);
 		return;
@@ -867,7 +867,7 @@ void set_keybindings(io_port *ports)
 	padbuttons = tern_insert_int(padbuttons, ".z", BUTTON_Z);
 	padbuttons = tern_insert_int(padbuttons, ".start", BUTTON_START);
 	padbuttons = tern_insert_int(padbuttons, ".mode", BUTTON_MODE);
-	
+
 	tern_node *mousebuttons = tern_insert_int(NULL, ".left", MOUSE_LEFT);
 	mousebuttons = tern_insert_int(mousebuttons, ".middle", MOUSE_MIDDLE);
 	mousebuttons = tern_insert_int(mousebuttons, ".right", MOUSE_RIGHT);
@@ -1246,7 +1246,7 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 				input = 0;
 			}
 		} else {
-			
+
 			int16_t delta_x = port->device.mouse.latched_x - port->device.mouse.last_read_x;
 			int16_t delta_y = port->device.mouse.last_read_y - port->device.mouse.latched_y;
 			switch (port->device.mouse.tr_counter)
