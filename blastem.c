@@ -860,7 +860,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, int fps, uint32_t ym_opts)
 	gen->cart = cart;
 	gen->work_ram = ram;
 	gen->zram = z80_ram;
-	setup_io_devices(config, gen->ports);
+	setup_io_devices(config, rom, gen->ports);
 
 	gen->save_type = rom->save_type;
 	gen->save_type = rom->save_type;

@@ -370,4 +370,9 @@ BlstMenu {
 			last 1FFFFF
 		}
 	}
+	device_overrides {
+		1 gamepad3.1
+		2 mouse.1
+		ext none
+	}
 }
