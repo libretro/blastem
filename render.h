@@ -57,6 +57,8 @@ void process_events();
 int render_joystick_num_buttons(int joystick);
 int render_joystick_num_hats(int joystick);
 int render_num_joysticks();
+int render_width();
+int render_height();
 void process_events();
 void render_errorbox(char *title, char *message);
 void render_warnbox(char *title, char *message);
