@@ -412,9 +412,11 @@ void handle_mouse_moved(int mouse, uint16_t x, uint16_t y)
 		return;
 	}
 	//TODO: relative mode
-	//TODO: scale based on window size
-	mice[mouse].motion_port->device.mouse.cur_x = x;
-	mice[mouse].motion_port->device.mouse.cur_y = y;
+	float scale_x = 640.0 / ((float)render_width());
+	float scale_y = 480.0 / ((float)render_height());
+	float scale = scale_x > scale_y ? scale_y : scale_x;
+	mice[mouse].motion_port->device.mouse.cur_x = x * scale_x;
+	mice[mouse].motion_port->device.mouse.cur_y = y * scale_y;
 }
 
 int parse_binding_target(char * target, tern_node * padbuttons, tern_node *mousebuttons, int * ui_out, int * padnum_out, int * padbutton_out)
