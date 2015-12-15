@@ -22,6 +22,8 @@ SDL_Texture  *main_texture;
 SDL_Rect      main_clip;
 SDL_GLContext *main_context;
 
+int main_width, main_height;
+
 uint8_t render_dbg = 0;
 uint8_t debug_pal = 0;
 uint8_t render_gl = 1;
@@ -94,6 +96,16 @@ int num_joysticks;
 int render_num_joysticks()
 {
 	return num_joysticks;
+}
+
+int render_width()
+{
+	return main_width;
+}
+
+int render_height()
+{
+	return main_height;
 }
 
 uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b)
@@ -251,6 +263,8 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 		width = mode.w;
 		height = mode.h;
 	}
+	main_width = width;
+	main_height = height;
 
 	render_gl = 0;
 
