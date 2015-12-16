@@ -43,6 +43,7 @@ typedef struct {
 	char          *port1_override;
 	char          *port2_override;
 	char          *ext_override;
+	char          *mouse_mode;
 	uint32_t      num_eeprom;
 	uint32_t      map_chunks;
 	uint32_t      save_size;
