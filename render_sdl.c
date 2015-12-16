@@ -22,7 +22,7 @@ SDL_Texture  *main_texture;
 SDL_Rect      main_clip;
 SDL_GLContext *main_context;
 
-int main_width, main_height;
+int main_width, main_height, is_fullscreen;
 
 uint8_t render_dbg = 0;
 uint8_t debug_pal = 0;
@@ -106,6 +106,11 @@ int render_width()
 int render_height()
 {
 	return main_height;
+}
+
+int render_fullscreen()
+{
+	return is_fullscreen;
 }
 
 uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b)
@@ -265,6 +270,7 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	}
 	main_width = width;
 	main_height = height;
+	is_fullscreen = fullscreen;
 
 	render_gl = 0;
 
@@ -559,7 +565,7 @@ int32_t handle_event(SDL_Event *event)
 		handle_joy_dpad(event->jbutton.which, event->jhat.hat, event->jhat.value);
 		break;
 	case SDL_MOUSEMOTION:
-		handle_mouse_moved(event->motion.which, event->motion.x, event->motion.y);
+		handle_mouse_moved(event->motion.which, event->motion.x, event->motion.y, event->motion.xrel, event->motion.yrel);
 		break;
 	case SDL_MOUSEBUTTONDOWN:
 		handle_mousedown(event->button.which, event->button.button);
