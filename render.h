@@ -23,6 +23,7 @@
 #define RENDER_DPAD_DOWN  SDL_HAT_DOWN
 #define RENDER_DPAD_LEFT  SDL_HAT_LEFT
 #define RENDER_DPAD_RIGHT SDL_HAT_RIGHT
+#define render_relative_mouse SDL_SetRelativeMouseMode
 
 #define MAX_JOYSTICKS 8
 #define MAX_MICE 8
@@ -59,6 +60,7 @@ int render_joystick_num_hats(int joystick);
 int render_num_joysticks();
 int render_width();
 int render_height();
+int render_fullscreen();
 void process_events();
 void render_errorbox(char *title, char *message);
 void render_warnbox(char *title, char *message);

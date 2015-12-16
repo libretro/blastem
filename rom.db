@@ -375,4 +375,5 @@ BlstMenu {
 		2 mouse.1
 		ext none
 	}
+	mouse_mode absolute
 }

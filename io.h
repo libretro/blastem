@@ -79,7 +79,7 @@ void handle_keyup(int keycode);
 void handle_joydown(int joystick, int button);
 void handle_joyup(int joystick, int button);
 void handle_joy_dpad(int joystick, int dpad, uint8_t state);
-void handle_mouse_moved(int mouse, uint16_t x, uint16_t y);
+void handle_mouse_moved(int mouse, uint16_t x, uint16_t y, int16_t deltax, int16_t deltay);
 void handle_mousedown(int mouse, int button);
 void handle_mouseup(int mouse, int button);
 

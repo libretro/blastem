@@ -68,6 +68,13 @@ typedef enum {
 	UI_EXIT
 } ui_action;
 
+typedef enum {
+	MOUSE_ABSOLUTE, //really only useful for menu ROM
+	MOUSE_RELATIVE, //for full screen
+	MOUSE_CAPTURE   //for windowed mode
+} mouse_modes;
+
+
 typedef struct {
 	io_port *port;
 	uint8_t bind_type;
@@ -85,7 +92,6 @@ typedef struct {
 	io_port    *motion_port;
 	keybinding buttons[MAX_MOUSE_BUTTONS];
 	uint8_t    bind_type;
-	uint8_t    motion_mode;
 } mousebinding;
 
 keybinding * bindings[0x10000];
@@ -93,6 +99,7 @@ keybinding * joybindings[MAX_JOYSTICKS];
 joydpad * joydpads[MAX_JOYSTICKS];
 mousebinding mice[MAX_MICE];
 const uint8_t dpadbits[] = {RENDER_DPAD_UP, RENDER_DPAD_DOWN, RENDER_DPAD_LEFT, RENDER_DPAD_RIGHT};
+mouse_modes mouse_mode;
 
 void bind_key(int keycode, uint8_t bind_type, uint8_t subtype_a, uint8_t subtype_b, uint8_t value)
 {
@@ -406,17 +413,30 @@ void handle_mouseup(int mouse, int button)
 	handle_binding_up(binding);
 }
 
-void handle_mouse_moved(int mouse, uint16_t x, uint16_t y)
+void handle_mouse_moved(int mouse, uint16_t x, uint16_t y, int16_t deltax, int16_t deltay)
 {
 	if (mouse >= MAX_MICE || !mice[mouse].motion_port) {
 		return;
 	}
 	//TODO: relative mode
-	float scale_x = 640.0 / ((float)render_width());
-	float scale_y = 480.0 / ((float)render_height());
-	float scale = scale_x > scale_y ? scale_y : scale_x;
-	mice[mouse].motion_port->device.mouse.cur_x = x * scale_x;
-	mice[mouse].motion_port->device.mouse.cur_y = y * scale_y;
+	switch(mouse_mode)
+	{
+	case MOUSE_ABSOLUTE: {
+		float scale_x = 640.0 / ((float)render_width());
+		float scale_y = 480.0 / ((float)render_height());
+		float scale = scale_x > scale_y ? scale_y : scale_x;
+		mice[mouse].motion_port->device.mouse.cur_x = x * scale_x;
+		mice[mouse].motion_port->device.mouse.cur_y = y * scale_y;
+		break;
+	}
+	case MOUSE_RELATIVE: {
+		mice[mouse].motion_port->device.mouse.cur_x += deltax;
+		mice[mouse].motion_port->device.mouse.cur_y += deltay;
+		break;
+	}
+	case MOUSE_CAPTURE: {
+	}
+	}
 }
 
 int parse_binding_target(char * target, tern_node * padbuttons, tern_node *mousebuttons, int * ui_out, int * padnum_out, int * padbutton_out)
@@ -657,6 +677,17 @@ void setup_io_devices(tern_node * config, rom_info *rom, io_port * ports)
 	process_device(io_1, ports);
 	process_device(io_2, ports+1);
 	process_device(io_ext, ports+2);
+
+	if (rom->mouse_mode && !strcmp(rom->mouse_mode, "absolute")) {
+		mouse_mode = MOUSE_ABSOLUTE;
+	} else {
+		if (render_fullscreen()) {
+			mouse_mode = MOUSE_RELATIVE;
+			render_relative_mouse(1);
+		} else {
+			mouse_mode = MOUSE_CAPTURE;
+		}
+	}
 
 	for (int i = 0; i < 3; i++)
 	{
@@ -1013,6 +1044,17 @@ void mouse_check_ready(io_port *port, uint32_t current_cycle)
 		if (port->device.mouse.tr_counter == 3) {
 			port->device.mouse.latched_x = port->device.mouse.cur_x;
 			port->device.mouse.latched_y = port->device.mouse.cur_y;
+			if (mouse_mode == MOUSE_ABSOLUTE) {
+				//avoid overflow in absolute mode
+				int deltax = port->device.mouse.latched_x - port->device.mouse.last_read_x;
+				if (abs(deltax) > 255) {
+					port->device.mouse.latched_x = port->device.mouse.last_read_x + (deltax > 0 ? 255 : -255);
+				}
+				int deltay = port->device.mouse.latched_y - port->device.mouse.last_read_y;
+				if (abs(deltay) > 255) {
+					port->device.mouse.latched_y = port->device.mouse.last_read_y + (deltay > 0 ? 255 : -255);
+				}
+			}
 		}
 	}
 }
