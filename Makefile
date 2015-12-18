@@ -209,7 +209,8 @@ vos_prog_info : vos_prog_info.o vos_program_module.o
 arrow.tiles : arrow.png
 cursor.tiles : cursor.png
 font_interlace_variable.tiles : font_interlace_variable.png
-menu.bin : font_interlace_variable.tiles arrow.tiles cursor.tiles
+button.tiles : button.png
+menu.bin : font_interlace_variable.tiles arrow.tiles cursor.tiles button.tiles
 
 clean :
 	rm -rf $(ALL) trans ztestrun ztestgen *.o
