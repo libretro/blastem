@@ -733,6 +733,9 @@ arrowend:
 cursor:
 	incbin cursor.tiles
 cursorend:
+button:
+	incbin button.tiles
+buttonend:
 
 widths:
 	dc.b 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 1
