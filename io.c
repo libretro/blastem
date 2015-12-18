@@ -65,6 +65,7 @@ typedef enum {
 	UI_SET_SPEED,
 	UI_NEXT_SPEED,
 	UI_PREV_SPEED,
+	UI_RELEASE_MOUSE,
 	UI_EXIT
 } ui_action;
 
@@ -100,6 +101,7 @@ joydpad * joydpads[MAX_JOYSTICKS];
 mousebinding mice[MAX_MICE];
 const uint8_t dpadbits[] = {RENDER_DPAD_UP, RENDER_DPAD_DOWN, RENDER_DPAD_LEFT, RENDER_DPAD_RIGHT};
 mouse_modes mouse_mode;
+char mouse_captured;
 
 void bind_key(int keycode, uint8_t bind_type, uint8_t subtype_a, uint8_t subtype_b, uint8_t value)
 {
@@ -265,6 +267,11 @@ void handle_joydown(int joystick, int button)
 
 void handle_mousedown(int mouse, int button)
 {
+	if (mouse_mode == MOUSE_CAPTURE && !mouse_captured) {
+		mouse_captured = 1;
+		render_relative_mouse(1);
+		return;
+	}
 	if (mouse >= MAX_MICE || button > MAX_MOUSE_BUTTONS || button <= 0) {
 		return;
 	}
@@ -359,6 +366,12 @@ void handle_binding_up(keybinding * binding)
 				set_speed_percent(genesis, binding->value);
 			}
 			break;
+		case UI_RELEASE_MOUSE:
+			if (mouse_captured) {
+				mouse_captured = 0;
+				render_relative_mouse(0);
+			}
+			break;
 		case UI_EXIT:
 			genesis->m68k->should_return = 1;
 		}
@@ -435,6 +448,10 @@ void handle_mouse_moved(int mouse, uint16_t x, uint16_t y, int16_t deltax, int16
 		break;
 	}
 	case MOUSE_CAPTURE: {
+		if (mouse_captured) {
+			mice[mouse].motion_port->device.mouse.cur_x += deltax;
+			mice[mouse].motion_port->device.mouse.cur_y += deltay;
+		}
 	}
 	}
 }
@@ -496,6 +513,8 @@ int parse_binding_target(char * target, tern_node * padbuttons, tern_node *mouse
 			*ui_out = UI_NEXT_SPEED;
 		} else if(!strcmp(target + 3, "prev_speed")) {
 			*ui_out = UI_PREV_SPEED;
+		} else if(!strcmp(target + 3, "release_mouse")) {
+			*ui_out = UI_RELEASE_MOUSE;
 		} else if(!strcmp(target + 3, "exit")) {
 			*ui_out = UI_EXIT;
 		} else {
@@ -678,12 +697,12 @@ void setup_io_devices(tern_node * config, rom_info *rom, io_port * ports)
 	process_device(io_2, ports+1);
 	process_device(io_ext, ports+2);
 
-	if (rom->mouse_mode && !strcmp(rom->mouse_mode, "absolute")) {
-		mouse_mode = MOUSE_ABSOLUTE;
-	} else {
-		if (render_fullscreen()) {
+	if (render_fullscreen()) {
 			mouse_mode = MOUSE_RELATIVE;
 			render_relative_mouse(1);
+	} else {
+		if (rom->mouse_mode && !strcmp(rom->mouse_mode, "absolute")) {
+			mouse_mode = MOUSE_ABSOLUTE;
 		} else {
 			mouse_mode = MOUSE_CAPTURE;
 		}
