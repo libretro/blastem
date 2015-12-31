@@ -134,6 +134,11 @@ uint16_t read_dma_value(uint32_t address)
 		return cart[address];
 	} else if(address >= 0x700000) {
 		return ram[address & 0x7FFF];
+	} else {
+		uint16_t *ptr = get_native_pointer(address*2, (void **)genesis->m68k->mem_pointers, &genesis->m68k->options->gen);
+		if (ptr) {
+			return *ptr;
+		}
 	}
 	//TODO: Figure out what happens when you try to DMA from weird adresses like IO or banked Z80 area
 	return 0;
