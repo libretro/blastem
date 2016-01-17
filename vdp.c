@@ -605,7 +605,7 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 	if (!vsram_off) {
 		uint16_t left_col, right_col;
 		if (context->regs[REG_WINDOW_H] & WINDOW_RIGHT) {
-			left_col = (context->regs[REG_WINDOW_H] & 0x1F) * 2;
+			left_col = (context->regs[REG_WINDOW_H] & 0x1F) * 2 + 2;
 			right_col = 42;
 		} else {
 			left_col = 0;
