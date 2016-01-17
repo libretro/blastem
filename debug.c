@@ -528,7 +528,6 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 		case 'c':
 			if (input_buf[1] == 0 || input_buf[1] == 'o' && input_buf[2] == 'n')
 			{
-				printf("%X, %X\n", input_buf[1], input_buf[2]);
 				puts("Continuing");
 				return 0;
 			} else if (input_buf[1] == 'o' && input_buf[2] == 'm') {
@@ -606,6 +605,7 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 				new_bp->next = breakpoints;
 				new_bp->address = value;
 				new_bp->index = bp_index++;
+				new_bp->commands = NULL;
 				breakpoints = new_bp;
 				printf("68K Breakpoint %d set at %X\n", new_bp->index, value);
 			}
