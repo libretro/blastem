@@ -516,7 +516,61 @@ ypos
 	move.b #$40, (PAD1_CTRL-PAD1_DATA, a2)
 	rts
 
+topcorner equ (button-font)/64 + 32
+topmiddle equ topcorner+1
+botcorner equ topmiddle+1
+botmiddle equ botcorner+1
+horiz_flip equ $800
+vert_flip equ $1000
 
+; draws a button
+; d0.w - x in cells
+; d1.w - y in cells
+; d2.w - width in cells
+;
+; clobbers a6
+draw_button:
+	;multiply x by 2
+	add.w d0, d0
+	;multiply y by 128
+	lsl.w #7, d1
+	add.w d1, d0
+	add.w #$A000, d0
+	move.w d0, d1
+	and.w #$3FFF, d0
+	rol.w #2, d1
+	and.w #3, d1
+	ori.w #(VDP_VRAM_WRITE >> 16), d0
+	swap d0
+	move.w d1, d0
+	move.l d0, (a1)
+	move.w d2, d1
+	;top left corner
+	move.w #topcorner, (a0)
+	subq #3, d1
+	bmi .notopmiddle
+.toploop:
+	;top middle
+	move.w #topmiddle, (a0)
+	dbra d1, .toploop
+.notopmiddle
+	;top right corner
+	move.w #(topcorner | horiz_flip), (a0)
+	;go to next row in name table
+	add.l #((2*64) << 16), d0
+	move.l d0, (a1)
+	;bottom left corner
+	move.w #botcorner, (a0)
+	subq #3, d2
+	bmi .nomiddlebot
+.botloop:
+	;bottom middle
+	move.w #botmiddle, (a0)
+	dbra d2, .botloop
+.nomiddlebot
+	;bottom right corner
+	move.w #(botcorner | horiz_flip), (a0)
+	rts
 
 initial_regs:
 	vdpreg MODE_2, $4    ;Mode 5, everything turned off
@@ -564,7 +618,7 @@ start:
 	;load tiles
 	vdpaccess $800, VDP_VRAM_WRITE
 	lea font(pc), a2
-	move.w #((cursorend-font)/4 - 1), d0
+	move.w #((buttonend-font)/4 - 1), d0
 tloop:
 	move.l (a2)+, (a0)
 	dbra d0, tloop
@@ -605,6 +659,11 @@ render_page:
 ploop:
 	move.l d0, (a0)
 	dbra d1, ploop
+
+	moveq #0, d0
+	moveq #26, d1
+	moveq #6, d2
+	bsr draw_button
 
 	move.l #$40860002, d3
 	move.l d3, (a1)
