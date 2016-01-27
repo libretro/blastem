@@ -1692,22 +1692,7 @@ uint16_t vdp_control_port_read(vdp_context * context)
 	uint32_t line= context->vcounter;
 	uint32_t slot = context->hslot;
 	uint32_t inactive_start = (context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START);
-	if (
-		(
-			line > inactive_start
-			&& line < 0x1FF
-		)
-		|| (line == inactive_start
-			&& (
-				slot >= (context->regs[REG_MODE_4] & BIT_H40 ? VBLANK_START_H40 : VBLANK_START_H32)
-				|| slot < (context->regs[REG_MODE_4] & BIT_H40 ? LINE_CHANGE_H40 : LINE_CHANGE_H32)
-			)
-		)
-		|| (line == 0x1FF
-			&& slot < (context->regs[REG_MODE_4] & BIT_H40 ? VBLANK_START_H40 : VBLANK_START_H32))
-			&& slot >= (context->regs[REG_MODE_4] & BIT_H40 ? LINE_CHANGE_H40 : LINE_CHANGE_H32)
-		|| !(context->regs[REG_MODE_2] & BIT_DISP_EN)
-	) {
+	if ((line >= inactive_start && line < 0x1FF) || !(context->regs[REG_MODE_2] & BIT_DISP_EN)) {
 		value |= 0x8;
 	}
 	if (context->regs[REG_MODE_4] & BIT_H40) {
