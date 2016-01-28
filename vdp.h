@@ -148,9 +148,9 @@ typedef struct {
 	uint16_t    vscroll_latch[2];
 	uint32_t    frame;
 	uint16_t    vcounter;
-	uint16_t    hslot; //hcounter/2
 	uint16_t    hscroll_a;
 	uint16_t    hscroll_b;
+	uint8_t     hslot; //hcounter/2
 	uint8_t     latched_mode;
 	uint8_t	    sprite_index;
 	uint8_t     sprite_draws;
