@@ -1029,9 +1029,6 @@ void vdp_advance_line(vdp_context *context)
 		CHECK_LIMIT\
 	case (startcyc+7):\
 		render_map_output(context->vcounter, column, context);\
-		if (column == 32 && startcyc == 124) {\
-			vdp_advance_line(context);\
-		}\
 		CHECK_LIMIT
 
 #define SPRITE_RENDER_H40(slot) \
@@ -1236,84 +1233,42 @@ void vdp_h32(vdp_context * context, uint32_t target_cycles)
 	{
 	for (;;)
 	{
-	case 132:
-		external_slot(context);
-		CHECK_LIMIT
-	case 133:
-		external_slot(context);
-		CHECK_LIMIT
-	//sprite render to line buffer starts
-	case 134:
-		context->cur_slot = MAX_DRAWS_H32-1;
-		memset(context->linebuf, 0, LINEBUF_SIZE);
-		if (context->vcounter == 0x1FF) {
-			external_slot(context);
-		} else {
-			render_sprite_cells(context);
-		}
-		CHECK_LIMIT
-	case 135:
-		if (context->vcounter == 0x1FF) {
-			external_slot(context);
-		} else {
-			render_sprite_cells(context);
-		}
-		CHECK_LIMIT
-	case 136:
-		if (context->vcounter == 0x1FF) {
-			external_slot(context);
-		} else {
-			render_sprite_cells(context);
-		}
-		CHECK_LIMIT
-	case 137:
-		if (context->vcounter == 0x1FF) {
-			external_slot(context);
-		} else {
-			render_sprite_cells(context);
-			if (context->vcounter == (context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START)) {
-				context->hslot++;
-				context->cycles += slot_cycles;
-				return;
-			}
-		}
-		CHECK_LIMIT
 	//sprite attribute table scan starts
-	case 138:
+	case 132:
 		context->sprite_index = 0x80;
 		context->slot_counter = MAX_SPRITES_LINE_H32;
 		render_sprite_cells( context);
 		scan_sprite_table(context->vcounter, context);
 		CHECK_LIMIT
+	SPRITE_RENDER_H32(133)
+	SPRITE_RENDER_H32(134)
+	SPRITE_RENDER_H32(135)
+	SPRITE_RENDER_H32(136)
+	SPRITE_RENDER_H32(137)
+	SPRITE_RENDER_H32(138)
 	SPRITE_RENDER_H32(139)
 	SPRITE_RENDER_H32(140)
 	SPRITE_RENDER_H32(141)
-	SPRITE_RENDER_H32(142)
+	case 142:
+		external_slot(context);
+		CHECK_LIMIT
 	SPRITE_RENDER_H32(143)
 	SPRITE_RENDER_H32(144)
 	SPRITE_RENDER_H32(145)
 	SPRITE_RENDER_H32(146)
 	SPRITE_RENDER_H32(147)
-	case 233:
-		external_slot(context);
-		CHECK_LIMIT
+	//HSYNC start
+	SPRITE_RENDER_H32(233)
 	SPRITE_RENDER_H32(234)
 	SPRITE_RENDER_H32(235)
 	SPRITE_RENDER_H32(236)
 	SPRITE_RENDER_H32(237)
 	SPRITE_RENDER_H32(238)
-	//HSYNC start
 	SPRITE_RENDER_H32(239)
-	SPRITE_RENDER_H32(240)
-	SPRITE_RENDER_H32(241)
-	SPRITE_RENDER_H32(242)
-	SPRITE_RENDER_H32(243)
-	SPRITE_RENDER_H32(244)
-	SPRITE_RENDER_H32(245)
-	case 246:
+	case 240:
 		external_slot(context);
 		CHECK_LIMIT
-	case 247:
+	case 241:
 		address = (context->regs[REG_HSCROLL] & 0x3F) << 10;
 		mask = 0;
 		if (context->regs[REG_MODE_3] & 0x2) {
@@ -1327,38 +1282,35 @@ void vdp_h32(vdp_context * context, uint32_t target_cycles)
 		context->hscroll_b = context->vdpmem[address+2] << 8 | context->vdpmem[address+3];
 		//printf("%d: HScroll A: %d, HScroll B: %d\n", context->vcounter, context->hscroll_a, context->hscroll_b);
 		CHECK_LIMIT
-	SPRITE_RENDER_H32(248)
-	SPRITE_RENDER_H32(249)
-	SPRITE_RENDER_H32(250)
-	SPRITE_RENDER_H32(251)
+	SPRITE_RENDER_H32(242)
+	SPRITE_RENDER_H32(243)
+	SPRITE_RENDER_H32(244)
+	SPRITE_RENDER_H32(245)
 	//!HSYNC high
-	case 252:
+	case 246:
 		read_map_scroll_a(0, context->vcounter, context);
 		CHECK_LIMIT
-	SPRITE_RENDER_H32(253)
-	case 254:
+	SPRITE_RENDER_H32(247)
+	case 248:
 		render_map_1(context);
 		scan_sprite_table(context->vcounter, context);//Just a guess
 		CHECK_LIMIT
-	case 255:
+	case 249:
 		render_map_2(context);
 		scan_sprite_table(context->vcounter, context);//Just a guess
-		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, context->hslot); }
-		context->cycles += slot_cycles;
-		context->hslot = 0;
-		CHECK_ONLY
-	case 0:
+		CHECK_LIMIT
+	case 250:
 		read_map_scroll_b(0, context->vcounter, context);
 		CHECK_LIMIT
-	case 1:
+	case 251:
 		render_sprite_cells(context);
 		scan_sprite_table(context->vcounter, context);
 		CHECK_LIMIT
-	case 2:
+	case 252:
 		render_map_3(context);
 		scan_sprite_table(context->vcounter, context);//Just a guess
 		CHECK_LIMIT
-	case 3:
+	case 253:
 		render_map_output(context->vcounter, 0, context);
 		scan_sprite_table(context->vcounter, context);//Just a guess
 		//reverse context slot counter so it counts the number of sprite slots
@@ -1368,22 +1320,49 @@ void vdp_h32(vdp_context * context, uint32_t target_cycles)
 		context->sprite_draws = MAX_DRAWS_H32;
 		context->flags &= (~FLAG_CAN_MASK & ~FLAG_MASKED);
 		CHECK_LIMIT
-	COLUMN_RENDER_BLOCK(2, 4)
-	COLUMN_RENDER_BLOCK(4, 12)
-	COLUMN_RENDER_BLOCK(6, 20)
-	COLUMN_RENDER_BLOCK_REFRESH(8, 28)
-	COLUMN_RENDER_BLOCK(10, 36)
-	COLUMN_RENDER_BLOCK(12, 44)
-	COLUMN_RENDER_BLOCK(14, 52)
-	COLUMN_RENDER_BLOCK_REFRESH(16, 60)
-	COLUMN_RENDER_BLOCK(18, 68)
-	COLUMN_RENDER_BLOCK(20, 76)
-	COLUMN_RENDER_BLOCK(22, 84)
-	COLUMN_RENDER_BLOCK_REFRESH(24, 92)
-	COLUMN_RENDER_BLOCK(26, 100)
-	COLUMN_RENDER_BLOCK(28, 108)
-	COLUMN_RENDER_BLOCK(30, 116)
-	COLUMN_RENDER_BLOCK_REFRESH(32, 124)
+	COLUMN_RENDER_BLOCK(2, 254)
+	COLUMN_RENDER_BLOCK(4, 6)
+	COLUMN_RENDER_BLOCK(6, 14)
+	COLUMN_RENDER_BLOCK_REFRESH(8, 22)
+	COLUMN_RENDER_BLOCK(10, 30)
+	COLUMN_RENDER_BLOCK(12, 38)
+	COLUMN_RENDER_BLOCK(14, 46)
+	COLUMN_RENDER_BLOCK_REFRESH(16, 54)
+	COLUMN_RENDER_BLOCK(18, 62)
+	COLUMN_RENDER_BLOCK(20, 70)
+	COLUMN_RENDER_BLOCK(22, 78)
+	COLUMN_RENDER_BLOCK_REFRESH(24, 86)
+	COLUMN_RENDER_BLOCK(26, 94)
+	COLUMN_RENDER_BLOCK(28, 102)
+	COLUMN_RENDER_BLOCK(30, 110)
+	COLUMN_RENDER_BLOCK_REFRESH(32, 118)
+	case 126:
+		external_slot(context);
+		CHECK_LIMIT
+	case 127:
+		external_slot(context);
+		CHECK_LIMIT
+	//sprite render to line buffer starts
+	case 128:
+		context->cur_slot = MAX_DRAWS_H32-1;
+		memset(context->linebuf, 0, LINEBUF_SIZE);
+		render_sprite_cells(context);
+		CHECK_LIMIT
+	case 129:
+		render_sprite_cells(context);
+		CHECK_LIMIT
+	case 130:
+		render_sprite_cells(context);
+		CHECK_LIMIT
+	case 131:
+		render_sprite_cells(context);
+		vdp_advance_line(context);
+		if (context->vcounter == (context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START)) {
+			context->hslot++;
+			context->cycles += slot_cycles;
+			return;
+		}
+		CHECK_LIMIT
 	}
 	default:
 		context->hslot++;
@@ -1429,14 +1408,6 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 		//line 0x1FF is basically active even though it's not displayed
 		uint8_t active_slot = context->vcounter < inactive_start || context->vcounter == 0x1FF;
 		uint8_t is_h40 = context->regs[REG_MODE_4] & BIT_H40;
-		if (context->vcounter == inactive_start) {
-			if (!is_h40) {
-				//the first inactive line behaves as an active one for the first few slots
-				if (context->hslot > LINE_CHANGE_H32 && context->hslot < 138) {
-					active_slot = 1;
-				}
-			}
-		}
 		if (context->regs[REG_MODE_2] & DISPLAY_ENABLE && active_slot) {
 			if (is_h40) {
 				vdp_h40(context, target_cycles);
@@ -1453,10 +1424,10 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 					context->slot_counter = MAX_SPRITES_LINE;
 				}
 			} else {
-				if (context->hslot == 134) {
+				if (context->hslot == 128) {
 					context->cur_slot = MAX_DRAWS_H32-1;
 					memset(context->linebuf, 0, LINEBUF_SIZE);
-				} else if (context->hslot == 138) {
+				} else if (context->hslot == 132) {
 					context->sprite_index = 0x80;
 					context->slot_counter = MAX_SPRITES_LINE_H32;
 				}
@@ -1491,7 +1462,6 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 			}
 			context->cycles += inccycles;
 			context->hslot++;
-			context->hslot &= 0xFF;
 			if (is_h40) {
 				if (context->hslot == LINE_CHANGE_H40) {
 					vdp_advance_line(context);
