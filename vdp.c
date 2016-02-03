@@ -514,7 +514,7 @@ void external_slot(vdp_context * context)
 	}
 }
 
-void run_dma_src(vdp_context * context, uint32_t slot)
+void run_dma_src(vdp_context * context, int32_t slot)
 {
 	//TODO: Figure out what happens if CD bit 4 is not set in DMA copy mode
 	//TODO: Figure out what happens when CD:0-3 is not set to a write mode in DMA operations
@@ -528,7 +528,7 @@ void run_dma_src(vdp_context * context, uint32_t slot)
 	//68K -> VDP
 	case 0:
 	case 0x40:
-		if (!slot || !is_refresh(context, slot-1)) {
+		if (slot == -1 || !is_refresh(context, slot-1)) {
 			cur = context->fifo + context->fifo_write;
 			cur->cycle = context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20)*FIFO_LATENCY;
 			cur->address = context->address;
@@ -975,7 +975,7 @@ void vdp_advance_line(vdp_context *context)
 }
 
 #define CHECK_ONLY if (context->cycles >= target_cycles) { return; }
-#define CHECK_LIMIT if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, context->hslot); } context->hslot++; context->cycles += slot_cycles; CHECK_ONLY
+#define CHECK_LIMIT if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); } context->hslot++; context->cycles += slot_cycles; CHECK_ONLY
 
 #define COLUMN_RENDER_BLOCK(column, startcyc) \
 	case startcyc:\
@@ -1035,7 +1035,7 @@ void vdp_advance_line(vdp_context *context)
 	case slot:\
 		render_sprite_cells( context);\
 		scan_sprite_table(context->vcounter, context);\
-		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, context->hslot); } \
+		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); } \
 		if (slot == 182) {\
 			context->hslot = 229;\
 			context->cycles += h40_hsync_cycles[0];\
@@ -1053,7 +1053,7 @@ void vdp_advance_line(vdp_context *context)
 	case slot:\
 		render_sprite_cells( context);\
 		scan_sprite_table(context->vcounter, context);\
-		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, context->hslot); } \
+		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); } \
 		if (slot == 147) {\
 			context->hslot = 233;\
 		} else {\
@@ -1125,7 +1125,7 @@ void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		context->hscroll_a = context->vdpmem[address] << 8 | context->vdpmem[address+1];
 		context->hscroll_b = context->vdpmem[address+2] << 8 | context->vdpmem[address+3];
 		//printf("%d: HScroll A: %d, HScroll B: %d\n", context->vcounter, context->hscroll_a, context->hscroll_b);
-		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, context->hslot); }
+		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); }
 		context->hslot++;
 		context->cycles += h40_hsync_cycles[14];
 		CHECK_ONLY
@@ -1141,7 +1141,6 @@ void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	case 249:
 		render_map_1(context);
 		scan_sprite_table(context->vcounter, context);//Just a guess
-		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, context->hslot); }
 		CHECK_LIMIT
 	case 250:
 		render_map_2(context);
