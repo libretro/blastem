@@ -20,9 +20,16 @@ def detect_low(sample, bit):
 	return not sample & mask
 
 def analyze_delays(chanmap, datafile):
-	m68k_clk = chanmap['M68K CLK']
+	if 'M68K_CLK' in chanmap:
+		m68k_clk = chanmap['M68K CLK']
+	elif 'CLK' in chanmap:
+		m68k_clk = chanmap['CLK']
 	m_as = chanmap['!AS']
+	ram_oe = chanmap['RAM !LOE/!RFSH']
+	ram_ce = chanmap['RAM !CE']
 	last = False
+	prev = False
+	prevRefresh = False
 	clks = 0
 	as_start = 0
 	for line in datafile.readlines():
@@ -36,10 +43,47 @@ def analyze_delays(chanmap, datafile):
 				if detect_rise(last, sample, m_as):
 					as_clks  = clks - as_start
 					if as_clks > 2:
-						print '!AS held for', as_clks, 'cycles starting (delay of ' + str(as_clks - 2) + ') at', as_start, 'and ending at', clks
+						if not (prev is False):
+							print '!AS held for', as_clks, 'cycles starting (delay of ' + str(as_clks - 2) + ') at', as_start, 'and ending at', clks, 'delta since last delay:', as_start - prev
+						else:
+							print '!AS held for', as_clks, 'cycles starting (delay of ' + str(as_clks - 2) + ') at', as_start, 'and ending at', clks
+						prev = as_start
 				elif detect_fall(last, sample, m_as):
 					as_start = clks
+				if detect_fall(last, sample, ram_oe) and detect_high( sample, ram_ce):
+					if prevRefresh is False:
+						print 'RAM refresh at ', clks
+					else:
+						print 'RAM refresh at', clks, 'delta since last:', clks-prevRefresh
+					prevRefresh = clks
 			last = sample
+			
+def analyze_refresh(chanmap, datafile):
+	if 'M68K_CLK' in chanmap:
+		m68k_clk = chanmap['M68K CLK']
+	elif 'CLK' in chanmap:
+		m68k_clk = chanmap['CLK']
+	ram_oe = chanmap['RAM !LOE/!RFSH']
+	ram_ce = chanmap['RAM !CE']
+	clks = 0
+	last = False
+	prevRefresh = False
+	for line in datafile.readlines():
+		line = line.strip()
+		if line and not line.startswith(';'):
+			sample,_,num = line.partition('@')
+			sample = int(sample, 16)
+			if not (last is False):
+				if detect_rise(last, sample, m68k_clk):
+					clks = clks + 1
+				if detect_fall(last, sample, ram_oe) and detect_high( sample, ram_ce):
+					if prevRefresh is False:
+						print 'RAM refresh at ', clks
+					else:
+						print 'RAM refresh at', clks, 'delta since last:', clks-prevRefresh
+					prevRefresh = clks
+			last = sample
+				
 
 def main(args):
 	if len(args) < 2:
@@ -49,12 +93,15 @@ def main(args):
 	channelfile = olpfile.open('channel.labels')
 	channels = [line.strip() for line in channelfile.readlines()]
 	channelfile.close()
+	print channels
 	chanmap = {}
 	for i in xrange(0, len(channels)):
 		chanmap[channels[i]] = i
 	datafile = olpfile.open('data.ols')
 	analyze_delays(chanmap, datafile)
-
+	datafile.close()
+	#datafile = olpfile.open('data.ols')
+	#analyze_refresh(chanmap, datafile)
 
 if __name__ == '__main__':
 	main(argv)
