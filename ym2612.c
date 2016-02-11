@@ -298,6 +298,10 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			ym_operator * operator = context->operators + op;
 			ym_channel * channel = context->channels + op/4;
 			uint8_t rate;
+			if (operator->env_phase == PHASE_DECAY && operator->envelope >= operator->sustain_level) {
+				//operator->envelope = operator->sustain_level;
+				operator->env_phase = PHASE_SUSTAIN;
+			}
 			for(;;) {
 				rate = operator->rates[operator->env_phase];
 				if (rate) {
@@ -347,10 +351,6 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 					//clamp to max attenuation value
 					if (operator->envelope > MAX_ENVELOPE) {
 						operator->envelope = MAX_ENVELOPE;
-					}
-					if (operator->env_phase == PHASE_DECAY && operator->envelope >= operator->sustain_level) {
-						//operator->envelope = operator->sustain_level;
-						operator->env_phase = PHASE_SUSTAIN;
 					}
 				}
 			}
