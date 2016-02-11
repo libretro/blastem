@@ -239,7 +239,7 @@ void sync_sound(genesis_context * gen, uint32_t target)
 	//printf("Target: %d, YM bufferpos: %d, PSG bufferpos: %d\n", target, gen->ym->buffer_pos, gen->psg->buffer_pos * 2);
 }
 
-#define REFRESH_INTERVAL 130
+#define REFRESH_INTERVAL 128
 #define REFRESH_DELAY 2
 uint32_t last_frame_num;
 uint32_t last_sync_cycle;
