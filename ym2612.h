@@ -134,6 +134,7 @@ uint8_t ym_read_status(ym2612_context * context);
 uint8_t ym_load_gst(ym2612_context * context, FILE * gstfile);
 uint8_t ym_save_gst(ym2612_context * context, FILE * gstfile);
 void ym_print_channel_info(ym2612_context *context, int channel);
+void ym_print_timer_info(ym2612_context *context);
 
 #endif //YM2612_H_
 

@@ -86,7 +86,7 @@ uint8_t lfo_pm_base[][8] = {
 };
 int16_t lfo_pm_table[128 * 32 * 8];
 
-uint16_t ams_shift[] = {8, 3, 1, 0};
+int16_t ams_shift[] = {8, 1, -1, -2};
 
 #define MAX_ENVELOPE 0xFFC
 #define YM_DIVIDER 2
@@ -439,7 +439,11 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			uint16_t env = operator->envelope + operator->total_level;
 			if (operator->am) {
 				uint16_t base_am = (context->lfo_am_step & 0x80 ? context->lfo_am_step : ~context->lfo_am_step) & 0x7E;
-				env += base_am >> ams_shift[chan->ams];
+				if (ams_shift[chan->ams] >= 0) {
+					env += base_am >> ams_shift[chan->ams];
+				} else {
+					env += base_am << (-ams_shift[chan->ams]);
+				}
 			}
 			if (env > MAX_ENVELOPE) {
 				env = MAX_ENVELOPE;
@@ -856,6 +860,11 @@ void ym_print_channel_info(ym2612_context *context, int channel)
 		   channel+1, chan->algorithm, chan->feedback,
 		   chan->lr == 0xC0 ? "LR" : chan->lr == 0x80 ? "L" : chan->lr == 0x40 ? "R" : "",
 		   chan->ams, chan->pms);
+	if (channel == 2) {
+		printf(
+		   "Mode:      %X: %s\n",
+		   context->ch3_mode, context->ch3_mode ? "special" : "normal");
+	}
 	for (int operator = channel * 4; operator < channel * 4+4; operator++)
 	{
 		int dispnum = operator - channel * 4 + 1;
@@ -881,5 +890,27 @@ void ym_print_channel_info(ym2612_context *context, int channel)
 			   op->sustain_level, op->rates[PHASE_SUSTAIN], op->rates[PHASE_RELEASE],
 			   op->am ? "On" : "Off");
 	}
+}
+
+void ym_print_timer_info(ym2612_context *context)
+{
+	printf("***Timer A***\n"
+	       "Current Value: %d\n"
+		   "Load Value:    %d\n"
+		   "Triggered:     %s\n"
+		   "Enabled:       %s\n\n",
+		   context->timer_a,
+		   context->timer_a_load,
+		   context->status & BIT_STATUS_TIMERA ? "yes" : "no",
+		   context->timer_control & BIT_TIMERA_ENABLE ? "yes" : "no");
+	printf("***Timer B***\n"
+	       "Current Value: %d\n"
+		   "Load Value:    %d\n"
+		   "Triggered:     %s\n"
+		   "Enabled:       %s\n\n",
+		   context->timer_b,
+		   context->timer_b_load,
+		   context->status & BIT_STATUS_TIMERB ? "yes" : "no",
+		   context->timer_control & BIT_TIMERB_ENABLE ? "yes" : "no");
 }
 
