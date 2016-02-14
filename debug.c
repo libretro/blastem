@@ -775,6 +775,10 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 						ym_print_channel_info(gen->ym, i);
 					}
 				}
+				break;
+			case 't':
+				ym_print_timer_info(gen->ym);
+				break;
 			}
 			break;
 		}
