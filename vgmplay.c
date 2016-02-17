@@ -42,6 +42,18 @@ void handle_joy_dpad(int joystick, int dpadnum, uint8_t value)
 {
 }
 
+void handle_mouse_moved(int mouse, uint16_t x, uint16_t y, int16_t deltax, int16_t deltay)
+{
+}
+
+void handle_mousedown(int mouse, int button)
+{
+}
+
+void handle_mouseup(int mouse, int button)
+{
+}
+
 int headless = 0;
 
 #define CYCLE_LIMIT MCLKS_NTSC/60
