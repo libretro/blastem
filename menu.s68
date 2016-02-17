@@ -660,10 +660,10 @@ ploop:
 	move.l d0, (a0)
 	dbra d1, ploop
 
-	moveq #0, d0
-	moveq #26, d1
-	moveq #6, d2
-	bsr draw_button
+	;moveq #0, d0
+	;moveq #26, d1
+	;moveq #6, d2
+	;bsr draw_button
 
 	move.l #$40860002, d3
 	move.l d3, (a1)
