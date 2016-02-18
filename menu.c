@@ -114,6 +114,8 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			dir_entry *entries = get_dir_list(menu->curpath, &num_entries);
 			if (entries) {
 				qsort(entries, num_entries, sizeof(dir_entry), menu_dir_sort);
+			} else {
+				warning("Failed to open directory %s\n", menu->curpath);
 			}
 			uint8_t *dest;
 			for (size_t i = 0; i < num_entries; i++)
