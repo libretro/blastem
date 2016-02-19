@@ -39,6 +39,8 @@
 #define BIT_STATUS_TIMERA 0x1
 #define BIT_STATUS_TIMERB 0x2
 
+uint32_t ym_calc_phase_inc(ym2612_context * context, ym_operator * operator, uint32_t op);
+
 enum {
 	PHASE_ATTACK,
 	PHASE_DECAY,
@@ -369,18 +371,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			ym_operator * operator = context->operators + op;
 			ym_channel * chan = context->channels + channel;
 			uint16_t phase = operator->phase_counter >> 10 & 0x3FF;
-			operator->phase_counter += operator->phase_inc;
-			if (chan->pms) {
-				//not entirely sure this will get the precision correct, but I'd like to avoid recalculating phase
-				//increment every update when LFO phase modulation is enabled
-				int16_t lfo_mod = lfo_pm_table[(chan->fnum & 0x7F0) * 16 + chan->pms + context->lfo_pm_step];
-				if (operator->multiple) {
-					lfo_mod *= operator->multiple;
-				} else {
-					lfo_mod >>= 1;
-				}
-				operator->phase_counter += lfo_mod;
-			}
+			operator->phase_counter += ym_calc_phase_inc(context, operator, context->current_op);
 			int16_t mod = 0;
 			switch (op % 4)
 			{
@@ -595,7 +586,7 @@ uint32_t detune_table[][4] = {
     {0, 8,16,22}
 };  //31 (0x1F)
 
-void ym_update_phase_inc(ym2612_context * context, ym_operator * operator, uint32_t op)
+uint32_t ym_calc_phase_inc(ym2612_context * context, ym_operator * operator, uint32_t op)
 {
 	uint32_t chan_num = op / 4;
 	//printf("ym_update_phase_inc | channel: %d, op: %d\n", chan_num, op);
@@ -606,6 +597,9 @@ void ym_update_phase_inc(ym2612_context * context, ym_operator * operator, uint3
 		//supplemental fnum registers are in a different order than normal slot paramters
 		int index = (op-2*4) ^ 2;
 		inc = context->ch3_supp[index].fnum;
+		if (channel->pms) {
+			inc = inc * 2 + lfo_pm_table[(inc & 0x7F0) * 16 + channel->pms + context->lfo_pm_step];
+		}
 		if (!context->ch3_supp[index].block) {
 			inc >>= 1;
 		} else {
@@ -615,6 +609,9 @@ void ym_update_phase_inc(ym2612_context * context, ym_operator * operator, uint3
 		detune = detune_table[context->ch3_supp[index].keycode][operator->detune & 0x3];
 	} else {
 		inc = channel->fnum;
+		if (channel->pms) {
+			inc = inc * 2 + lfo_pm_table[(inc & 0x7F0) * 16 + channel->pms + context->lfo_pm_step];
+		}
 		if (!channel->block) {
 			inc >>= 1;
 		} else {
@@ -622,6 +619,9 @@ void ym_update_phase_inc(ym2612_context * context, ym_operator * operator, uint3
 		}
 		//detune
 		detune = detune_table[channel->keycode][operator->detune & 0x3];
+	}
+	if (channel->pms) {
+		inc >>= 1;
 	}
 	if (operator->detune & 0x4) {
 		inc -= detune;
@@ -639,7 +639,7 @@ void ym_update_phase_inc(ym2612_context * context, ym_operator * operator, uint3
 		inc >>= 1;
 	}
 	//printf("phase_inc for operator %d: %d, block: %d, fnum: %d, detune: %d, multiple: %d\n", op, inc, channel->block, channel->fnum, detune, operator->multiple);
-	operator->phase_inc = inc;
+	return inc;
 }
 
 void ym_data_write(ym2612_context * context, uint8_t value)
@@ -703,13 +703,7 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 			if (value & BIT_TIMERB_RESET) {
 				context->status &= ~BIT_STATUS_TIMERB;
 			}
-			uint8_t old_mode = context->ch3_mode;
 			context->ch3_mode = value & 0xC0;
-			if (context->ch3_mode != old_mode) {
-				ym_update_phase_inc(context, context->operators + 2*4, 2*4);
-				ym_update_phase_inc(context, context->operators + 2*4+1, 2*4+1);
-				ym_update_phase_inc(context, context->operators + 2*4+2, 2*4+2);
-			}
 			break;
 		}
 		case REG_KEY_ONOFF: {
@@ -760,7 +754,6 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 			case REG_DETUNE_MULT:
 				operator->detune = value >> 4 & 0x7;
 				operator->multiple = value & 0xF;
-				ym_update_phase_inc(context, operator, op);
 				break;
 			case REG_TOTAL_LEVEL:
 				operator->total_level = (value & 0x7F) << 5;
@@ -799,10 +792,6 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 				context->channels[channel].block = context->channels[channel].block_fnum_latch >> 3 & 0x7;
 				context->channels[channel].fnum = (context->channels[channel].block_fnum_latch & 0x7) << 8 | value;
 				context->channels[channel].keycode = context->channels[channel].block << 2 | fnum_to_keycode[context->channels[channel].fnum >> 7];
-				ym_update_phase_inc(context, context->operators + channel*4, channel*4);
-				ym_update_phase_inc(context, context->operators + channel*4+1, channel*4+1);
-				ym_update_phase_inc(context, context->operators + channel*4+2, channel*4+2);
-				ym_update_phase_inc(context, context->operators + channel*4+3, channel*4+3);
 				break;
 			case REG_BLOCK_FNUM_H:{
 				context->channels[channel].block_fnum_latch = value;
@@ -813,9 +802,6 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 					context->ch3_supp[channel].block = context->ch3_supp[channel].block_fnum_latch >> 3 & 0x7;
 					context->ch3_supp[channel].fnum = (context->ch3_supp[channel].block_fnum_latch & 0x7) << 8 | value;
 					context->ch3_supp[channel].keycode = context->ch3_supp[channel].block << 2 | fnum_to_keycode[context->ch3_supp[channel].fnum >> 7];
-					if (context->ch3_mode) {
-						ym_update_phase_inc(context, context->operators + 2*4 + channel, 2*4);
-					}
 				}
 				break;
 			case REG_BLOCK_FN_CH3:
