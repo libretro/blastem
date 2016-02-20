@@ -595,7 +595,10 @@ uint32_t ym_calc_phase_inc(ym2612_context * context, ym_operator * operator, uin
 	uint32_t inc, detune;
 	if (chan_num == 2 && context->ch3_mode && (op < (2*4 + 3))) {
 		//supplemental fnum registers are in a different order than normal slot paramters
-		int index = (op-2*4) ^ 2;
+		int index = op-2*4;
+		if (index < 2) {
+			index ^= 1;
+		}
 		inc = context->ch3_supp[index].fnum;
 		if (channel->pms) {
 			inc = inc * 2 + lfo_pm_table[(inc & 0x7F0) * 16 + channel->pms + context->lfo_pm_step];
