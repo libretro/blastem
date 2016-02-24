@@ -90,13 +90,7 @@ void render_close_audio()
 	SDL_CloseAudio();
 }
 
-SDL_Joystick * joysticks[MAX_JOYSTICKS];
-int num_joysticks;
-
-int render_num_joysticks()
-{
-	return num_joysticks;
-}
+static SDL_Joystick * joysticks[MAX_JOYSTICKS];
 
 int render_width()
 {
@@ -389,17 +383,6 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	sample_rate = actual.freq;
 	printf("Initialized audio at frequency %d with a %d sample buffer\n", actual.freq, actual.samples);
 	SDL_PauseAudio(0);
-	num_joysticks = SDL_NumJoysticks();
-	if (num_joysticks > MAX_JOYSTICKS) {
-		num_joysticks = MAX_JOYSTICKS;
-	}
-	for (int i = 0; i < num_joysticks; i++) {
-		SDL_Joystick * joy = joysticks[i] = SDL_JoystickOpen(i);
-		printf("Joystick %d: %s\n", i, SDL_JoystickName(joy));
-		if (joy) {
-			printf("\tNum Axes: %d\n\tNum Buttons: %d\n\tNum Hats: %d\n", SDL_JoystickNumAxes(joy), SDL_JoystickNumButtons(joy), SDL_JoystickNumHats(joy));
-		}
-	}
 	SDL_JoystickEventState(SDL_ENABLE);
 
 	atexit(render_quit);
@@ -491,22 +474,6 @@ void render_context(vdp_context * context)
 	}
 }
 
-int render_joystick_num_buttons(int joystick)
-{
-	if (joystick >= num_joysticks) {
-		return 0;
-	}
-	return SDL_JoystickNumButtons(joysticks[joystick]);
-}
-
-int render_joystick_num_hats(int joystick)
-{
-	if (joystick >= num_joysticks) {
-		return 0;
-	}
-	return SDL_JoystickNumHats(joysticks[joystick]);
-}
-
 void render_wait_quit(vdp_context * context)
 {
 	SDL_Event event;
@@ -546,6 +513,26 @@ void render_debug_pal(uint8_t pal)
 	}
 }
 
+int find_joystick_index(SDL_JoystickID instanceID)
+{
+	for (int i = 0; i < MAX_JOYSTICKS; i++) {
+		if (joysticks[i] && SDL_JoystickInstanceID(joysticks[i]) == instanceID) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+int lowest_unused_joystick_index()
+{
+	for (int i = 0; i < MAX_JOYSTICKS; i++) {
+		if (!joysticks[i]) {
+			return i;
+		}
+	}
+	return -1;
+}
+
 int32_t handle_event(SDL_Event *event)
 {
 	switch (event->type) {
@@ -556,14 +543,37 @@ int32_t handle_event(SDL_Event *event)
 		handle_keyup(event->key.keysym.sym);
 		break;
 	case SDL_JOYBUTTONDOWN:
-		handle_joydown(event->jbutton.which, event->jbutton.button);
+		handle_joydown(find_joystick_index(event->jbutton.which), event->jbutton.button);
 		break;
 	case SDL_JOYBUTTONUP:
-		handle_joyup(event->jbutton.which, event->jbutton.button);
+		handle_joyup(find_joystick_index(event->jbutton.which), event->jbutton.button);
 		break;
 	case SDL_JOYHATMOTION:
-		handle_joy_dpad(event->jbutton.which, event->jhat.hat, event->jhat.value);
+		handle_joy_dpad(find_joystick_index(event->jbutton.which), event->jhat.hat, event->jhat.value);
 		break;
+	case SDL_JOYDEVICEADDED:
+		if (event->jdevice.which < MAX_JOYSTICKS) {
+			int index = lowest_unused_joystick_index();
+			if (index >= 0) {
+				SDL_Joystick * joy = joysticks[index] = SDL_JoystickOpen(event->jdevice.which);
+				if (joy) {
+					printf("Joystick %d added: %s\n", index, SDL_JoystickName(joy));
+					printf("\tNum Axes: %d\n\tNum Buttons: %d\n\tNum Hats: %d\n", SDL_JoystickNumAxes(joy), SDL_JoystickNumButtons(joy), SDL_JoystickNumHats(joy));
+				}
+			}
+		}
+		break;
+	case SDL_JOYDEVICEREMOVED: {
+		int index = find_joystick_index(event->jdevice.which);
+		if (index >= 0) {
+			SDL_JoystickClose(joysticks[index]);
+			joysticks[index] = NULL;
+			printf("Joystick %d removed\n", index);
+		} else {
+			printf("Failed to find removed joystick with instance ID: %d\n", index);
+		}
+		break;
+	}
 	case SDL_MOUSEMOTION:
 		handle_mouse_moved(event->motion.which, event->motion.x, event->motion.y, event->motion.xrel, event->motion.yrel);
 		break;

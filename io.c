@@ -90,18 +90,26 @@ typedef struct {
 } joydpad;
 
 typedef struct {
+	keybinding *buttons;
+	joydpad    *dpads;
+	uint32_t   num_buttons; //number of entries in the buttons array, not necessarily the number of buttons on the device
+	uint32_t   num_dpads;   //number of entries in the dpads array, not necessarily the number of dpads on the device
+} joystick;
+
+typedef struct {
 	io_port    *motion_port;
 	keybinding buttons[MAX_MOUSE_BUTTONS];
 	uint8_t    bind_type;
 } mousebinding;
 
-keybinding * bindings[0x10000];
-keybinding * joybindings[MAX_JOYSTICKS];
-joydpad * joydpads[MAX_JOYSTICKS];
-mousebinding mice[MAX_MICE];
+#define DEFAULT_JOYBUTTON_ALLOC 12
+
+static keybinding * bindings[0x10000];
+static joystick joysticks[MAX_JOYSTICKS];
+static mousebinding mice[MAX_MICE];
 const uint8_t dpadbits[] = {RENDER_DPAD_UP, RENDER_DPAD_DOWN, RENDER_DPAD_LEFT, RENDER_DPAD_RIGHT};
-mouse_modes mouse_mode;
-char mouse_captured;
+static mouse_modes mouse_mode;
+static char mouse_captured;
 
 void bind_key(int keycode, uint8_t bind_type, uint8_t subtype_a, uint8_t subtype_b, uint8_t value)
 {
@@ -122,18 +130,19 @@ void bind_button(int joystick, int button, uint8_t bind_type, uint8_t subtype_a,
 	if (joystick >= MAX_JOYSTICKS) {
 		return;
 	}
-	if (!joybindings[joystick]) {
-		int num = render_joystick_num_buttons(joystick);
-		if (!num) {
-			return;
-		}
-		joybindings[joystick] = malloc(sizeof(keybinding)*num);
-		memset(joybindings[joystick], 0, sizeof(keybinding)*num);
+	if (!joysticks[joystick].buttons) {
+		joysticks[joystick].num_buttons = button < DEFAULT_JOYBUTTON_ALLOC ? DEFAULT_JOYBUTTON_ALLOC : button + 1;
+		joysticks[joystick].buttons = calloc(joysticks[joystick].num_buttons, sizeof(keybinding));
+	} else if (joysticks[joystick].num_buttons <= button) {
+		uint32_t old_capacity = joysticks[joystick].num_buttons;
+		joysticks[joystick].num_buttons *= 2;
+		joysticks[joystick].buttons = realloc(joysticks[joystick].buttons, sizeof(keybinding) * joysticks[joystick].num_buttons);
+		memset(joysticks[joystick].buttons + old_capacity, 0, joysticks[joystick].num_buttons - old_capacity);
 	}
-	joybindings[joystick][button].bind_type = bind_type;
-	joybindings[joystick][button].subtype_a = subtype_a;
-	joybindings[joystick][button].subtype_b = subtype_b;
-	joybindings[joystick][button].value = value;
+	joysticks[joystick].buttons[button].bind_type = bind_type;
+	joysticks[joystick].buttons[button].subtype_a = subtype_a;
+	joysticks[joystick].buttons[button].subtype_b = subtype_b;
+	joysticks[joystick].buttons[button].value = value;
 }
 
 void bind_dpad(int joystick, int dpad, int direction, uint8_t bind_type, uint8_t subtype_a, uint8_t subtype_b, uint8_t value)
@@ -141,20 +150,22 @@ void bind_dpad(int joystick, int dpad, int direction, uint8_t bind_type, uint8_t
 	if (joystick >= MAX_JOYSTICKS) {
 		return;
 	}
-	if (!joydpads[joystick]) {
-		int num = render_joystick_num_hats(joystick);
-		if (!num) {
-			return;
-		}
-		joydpads[joystick] = malloc(sizeof(joydpad)*num);
-		memset(joydpads[joystick], 0, sizeof(joydpad)*num);
+	if (!joysticks[joystick].dpads) {
+		//multiple D-pads hats are not common, so don't allocate any extra space
+		joysticks[joystick].dpads = calloc(dpad+1, sizeof(joydpad));
+		joysticks[joystick].num_dpads = dpad+1;
+	} else if (joysticks[joystick].num_dpads <= dpad) {
+		uint32_t old_capacity = joysticks[joystick].num_dpads;
+		joysticks[joystick].num_dpads *= 2;
+		joysticks[joystick].dpads = realloc(joysticks[joystick].dpads, sizeof(joydpad) * joysticks[joystick].num_dpads);
+		memset(joysticks[joystick].dpads + old_capacity, 0, joysticks[joystick].num_dpads - old_capacity);
 	}
 	for (int i = 0; i < 4; i ++) {
 		if (dpadbits[i] & direction) {
-			joydpads[joystick][dpad].bindings[i].bind_type = bind_type;
-			joydpads[joystick][dpad].bindings[i].subtype_a = subtype_a;
-			joydpads[joystick][dpad].bindings[i].subtype_b = subtype_b;
-			joydpads[joystick][dpad].bindings[i].value = value;
+			joysticks[joystick].dpads[dpad].bindings[i].bind_type = bind_type;
+			joysticks[joystick].dpads[dpad].bindings[i].subtype_a = subtype_a;
+			joysticks[joystick].dpads[dpad].bindings[i].subtype_b = subtype_b;
+			joysticks[joystick].dpads[dpad].bindings[i].value = value;
 			break;
 		}
 	}
@@ -258,10 +269,10 @@ void handle_keydown(int keycode)
 
 void handle_joydown(int joystick, int button)
 {
-	if (!joybindings[joystick]) {
+	if (joystick >= MAX_JOYSTICKS || button >= joysticks[joystick].num_buttons) {
 		return;
 	}
-	keybinding * binding = joybindings[joystick] + button;
+	keybinding * binding = joysticks[joystick].buttons + button;
 	handle_binding_down(binding);
 }
 
@@ -392,19 +403,19 @@ void handle_keyup(int keycode)
 
 void handle_joyup(int joystick, int button)
 {
-	if (!joybindings[joystick]) {
+	if (joystick >= MAX_JOYSTICKS  || button >= joysticks[joystick].num_buttons) {
 		return;
 	}
-	keybinding * binding = joybindings[joystick] + button;
+	keybinding * binding = joysticks[joystick].buttons + button;
 	handle_binding_up(binding);
 }
 
 void handle_joy_dpad(int joystick, int dpadnum, uint8_t value)
 {
-	if (!joydpads[joystick]) {
+	if (joystick >= MAX_JOYSTICKS  || dpadnum >= joysticks[joystick].num_dpads) {
 		return;
 	}
-	joydpad * dpad = joydpads[joystick] + dpadnum;
+	joydpad * dpad = joysticks[joystick].dpads + dpadnum;
 	uint8_t newdown = (value ^ dpad->state) & value;
 	uint8_t newup = ((~value) ^ (~dpad->state)) & (~value);
 	dpad->state = value;
@@ -931,7 +942,7 @@ void set_keybindings(io_port *ports)
 	char numstr[] = "00";
 	tern_node * pads = tern_get_node(tern_find_path(config, "bindings\0pads\0"));
 	if (pads) {
-		for (int i = 0; i < 100 && i < render_num_joysticks(); i++)
+		for (int i = 0; i < MAX_JOYSTICKS; i++)
 		{
 
 			if (i < 10) {
@@ -945,7 +956,7 @@ void set_keybindings(io_port *ports)
 			if (pad) {
 				tern_node * dpad_node = tern_find_ptr(pad, "dpads");
 				if (dpad_node) {
-					for (int dpad = 0; dpad < 10 && dpad < render_joystick_num_hats(i); dpad++)
+					for (int dpad = 0; dpad < 10; dpad++)
 					{
 						numstr[0] = dpad + '0';
 						numstr[1] = 0;
@@ -968,7 +979,7 @@ void set_keybindings(io_port *ports)
 				}
 				tern_node *button_node = tern_find_ptr(pad, "buttons");
 				if (button_node) {
-					for (int but = 0; but < 100 && but < render_joystick_num_buttons(i); but++)
+					for (int but = 0; but < 30; but++)
 					{
 						if (but < 10) {
 							numstr[0] = but + '0';
@@ -1023,14 +1034,14 @@ void map_all_bindings(io_port *ports)
 	}
 	for (int stick = 0; stick < MAX_JOYSTICKS; stick++)
 	{
-		if (joybindings[stick])
-		{
-			int numbuttons = render_joystick_num_buttons(stick);
-			map_bindings(ports, joybindings[stick], render_joystick_num_buttons(stick));
+		if (joysticks[stick].buttons) {
+			map_bindings(ports, joysticks[stick].buttons, joysticks[stick].num_buttons);
 		}
-		if (joydpads[stick])
+		if (joysticks[stick].dpads)
 		{
-			map_bindings(ports, joydpads[stick]->bindings, 4);
+			for (uint32_t i = 0; i < joysticks[stick].num_dpads; i++) {
+				map_bindings(ports, joysticks[stick].dpads[i].bindings, 4);
+			}
 		}
 	}
 	for (int mouse = 0; mouse < MAX_MICE; mouse++)
