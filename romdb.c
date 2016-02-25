@@ -108,6 +108,9 @@ void set_scl(eeprom_state *state, uint8_t val)
 			if (state->latch & 1) {
 				state->state = I2C_READ;
 				state->counter = 8;
+				if (state->size < 256) {
+					state->address = state->latch >> 1;
+				}
 				state->latch = state->buffer[state->address];
 			} else {
 				if (state->size < 256) {
@@ -365,7 +368,7 @@ uint16_t read_eeprom_i2c_w(uint32_t address, void * context)
 	if (map->sda_read_bit < 16) {
 		ret = get_sda(&gen->eeprom) << map->sda_read_bit;
 	}
-	return ret;
+	return ret;	
 }
 
 uint8_t read_eeprom_i2c_b(uint32_t address, void * context)
