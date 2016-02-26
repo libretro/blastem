@@ -1189,10 +1189,10 @@ int main(int argc, char ** argv)
 			byteswap_rom(rom_size);
 			set_region(&info, force_version);
 			update_title(info.name);
-			fname_size = strlen(romfname);
+			fname_size = strlen(menu_context->next_rom);
 			ext = info.save_type == SAVE_I2C ? "eeprom" : "sram";
 			save_filename = malloc(fname_size+strlen(ext) + 2);
-			memcpy(save_filename, romfname, fname_size);
+			memcpy(save_filename, menu_context->next_rom, fname_size);
 			for (i = fname_size-1; fname_size >= 0; --i) {
 				if (save_filename[i] == '.') {
 					strcpy(save_filename + i + 1, ext);
