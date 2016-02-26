@@ -1173,7 +1173,9 @@ int main(int argc, char ** argv)
 		if (menu && menu_context->next_rom) {
 			if (game_context) {
 				if (game_context->save_type != SAVE_NONE) {
+					genesis = game_context;
 					persist_save();
+					genesis = menu_context;
 				}
 				free(game_context->cart);
 				free(save_filename);
