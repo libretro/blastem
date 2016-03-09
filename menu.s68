@@ -610,13 +610,25 @@ draw_menu:
 	;width
 	move.w d7, d2
 	bsr draw_button
-	addq #4, d6
 	
 	movea.l a5, a6
 	bsr strlen
 	movea.l a5, a6
 	lea (1, a5, d0.w), a5
-	;TODO: draw string
+	;x pos
+	move.w d7, d1
+	lsr.w #1, d1
+	add.w d5, d1
+	lsr.w #1, d0
+	sub.w d0, d1
+	;y pos
+	move.w d6, d2
+	;base attribute
+	;FIXME: Change base attribute to use fixed width font
+	move.w #$206B, d0
+	bsr print_string_fixed
+	
+	addq #3, d6
 	bra .drawloop
 .done
 	rts
@@ -662,7 +674,12 @@ start:
 	;init scroll table
 	vdpaccess $0, VDP_VRAM_WRITE
 	move.w #0, (a0)
-	move.w #4, (a0)
+	move.w #0, (a0)
+	
+	;init vertical scroll RAM
+	vdpaccess $0, VDP_VSRAM_WRITE
+	move.w #-4, (a0)
+	move.w #0, (a0)
 
 	;load tiles
 	vdpaccess $800, VDP_VRAM_WRITE
@@ -717,19 +734,19 @@ ploop:
 	move.l d0, (a0)
 	dbra d1, ploop
 
-	;moveq #0, d0
-	;moveq #26, d1
-	;moveq #6, d2
-	;bsr draw_button
-
 	move.l #$40860002, d3
 	move.l d3, (a1)
 	move.l d3, base_cmd.w
 	
-	moveq #4, d6
+	moveq #8, d6
 	lea main_menu(pc), a5
 	bsr draw_menu
 	bra gamepad_setup
+	
+	;init scroll table
+	vdpaccess $0, VDP_VRAM_WRITE
+	move.w #0, (a0)
+	move.w #4, (a0)
 	
 
 	move.b #0, more_pages.w
@@ -850,8 +867,24 @@ print_string:
 ;a6 - pointer to string
 ;a0 - VDP data port
 ;d0 - base tile attribute
+;d1 - x col
+;d2 - y col
 ;
 print_string_fixed:
+	;multiply x by 2
+	add.w d1, d1
+	;multiply y by 128
+	lsl.w #7, d2
+	add.w d2, d1
+	add.w #$8000, d1
+	move.w d1, d2
+	and.w #$3FFF, d1
+	rol.w #2, d2
+	and.w #3, d2
+	ori.w #(VDP_VRAM_WRITE >> 16), d1
+	swap d1
+	move.w d2, d1
+	move.l d1, (a1)
 .loop
 	moveq #0, d1
 	move.b (a6)+, d1
@@ -898,6 +931,7 @@ widths:
 	
 main_menu:
 	dc.b "Load ROM", 0
+	dc.b "About", 0
 	dc.b "Exit", 0
 	dc.b 0
 	
@@ -906,6 +940,7 @@ pause_menu:
 	dc.b "Load ROM", 0
 	dc.b "Save State", 0
 	dc.b "Load State", 0
+	dc.b "Exit", 0
 	dc.b 0
 
 rom_end:

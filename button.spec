@@ -1,1 +1,1 @@
-button.png,4,0,raw,interlace
+button.png,4,0,raw,interlace,nopal
