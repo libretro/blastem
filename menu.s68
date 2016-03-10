@@ -598,6 +598,17 @@ draw_menu:
 	lsr.w #1, d4
 	moveq #20, d5
 	sub.w d4, d5
+	;calculate left arrow X
+	move.w d5, d4
+	lsl.w #3, d4
+	add.w #(128-24), d4
+	move.w d4, (sprite_list+6).w
+	;calculate right arrow x
+	move.w d7, d3
+	lsl.w #3, d3
+	add.w d3, d4
+	add.w #32, d4
+	move.w d4, (sprite_list+6+8).w
 	;restore menu pointer
 	movea.l a4, a5
 .drawloop
@@ -624,7 +635,6 @@ draw_menu:
 	;y pos
 	move.w d6, d2
 	;base attribute
-	;FIXME: Change base attribute to use fixed width font
 	move.w #$206B, d0
 	bsr print_string_fixed
 	
