@@ -185,6 +185,7 @@ more_pages    rs.b 1
 mouse_buf     rs.b 3
 mouse_shown   rs.b 1
 last_mbuttons rs.b 1
+num_menu      rs.b 1
 
 
 int_6:
@@ -245,37 +246,54 @@ pad2:
 ;d0 = SACBRLUD
 ;d1 = newly pressed buttons
 handle_pad_buttons:
+	tst.b num_menu.w
+	bne handle_buttons_menu
 	moveq #16, d2
-	btst #1, d1
-	bne down
-	btst #0, d1
-	bne up
+
+
 	btst #3, d1
 	bne right
 	btst #2, d1
 	bne left
+buttons_no_leftright
+	btst #1, d1
+	bne down
+	btst #0, d1
+	bne up
 	btst #7, d1
 	bne select_entry
 	btst #5, d1
 	bne select_entry
 handle_done:
 	rts
+handle_buttons_menu
+	moveq #48, d2
+	bra buttons_no_leftright
 
 down:
+	
 	;check if we are already at the bottom of the page
 	moveq #1, d0
 	add.b (selected).w, d0
+	tst.b num_menu.w
+	bne .menu
 	move.w d0, d1
-	add.w d0, d0
-	add.w d0, d0
+	add.w d1, d1
+	add.w d1, d1
 	lea page_index.w, a2
-	tst.l (0, a2, d0.w)
+	tst.l (0, a2, d1.w)
 	beq handle_done
-	move.b d1, (selected).w
+.do_move
+	move.b d0, (selected).w
 
 	add.w d2, (sprite_list).w
 	add.w d2, (sprite_list+8).w
 	rts
+.menu:
+	cmp.b num_menu.w, d0
+	beq handle_done
+	bra .do_move
+	
 up:
 	;check if we are already at the top of the page
 	move.b (selected).w, d0
@@ -576,11 +594,13 @@ draw_button:
 ;d6 - initial Y position of menu
 draw_menu:
 	moveq #0, d7
+	moveq #0, d5
 	;save menu pointer for second pass
 	movea.l a5, a4
 .lenloop	
 	tst.b (a5)
 	beq .lendone
+	addq #1, d5
 	movea.l a5, a6
 	bsr strlen
 	cmp.w d7, d0
@@ -592,6 +612,7 @@ draw_menu:
 .lendone
 	
 	addq #2, d7
+	move.b d5, num_menu.w
 	
 	;calculate X position
 	move.w d7, d4
@@ -609,6 +630,12 @@ draw_menu:
 	add.w d3, d4
 	add.w #32, d4
 	move.w d4, (sprite_list+6+8).w
+	;update left arrow Y
+	move.w d6, d4
+	lsl.w #4, d4
+	add.w #256, d4
+	move.w d4, (sprite_list).w
+	move.w d4, (sprite_list+8).w
 	;restore menu pointer
 	movea.l a4, a5
 .drawloop
