@@ -144,7 +144,11 @@ vdpreg macro
 ;\1 - VDP address
 ;\2 - Access type
 vdpaccess macro
+	ifeq NARG-2
 	move.l #((\2) | (\1) << 16 & $3FFF0000 | (\1) >> 14 & 3), (a1)
+	else
+	move.l #((\2) | (\1) << 16 & $3FFF0000 | (\1) >> 14 & 3), \3
+	endif
 	endm
 
 ;Writes a DMA command to the control port
@@ -169,23 +173,24 @@ menu_port  equ $180000
 MAX_DISPLAY equ 24
 
 	rsset $FFFF8000
-x_pos         rs.w 1
-base_cmd      rs.l 1
-sprite_list   rs.l 160
-page_index    rs.l MAX_DISPLAY+1
-page_stack    rs.l 1
-page_pointers rs.l 1024
-mouse_sprite  rs.l 1
-mouse_x       rs.w 1
-num_sprites   rs.b 1
-last_pad1     rs.b 1
-last_pad2     rs.b 1
-selected      rs.b 1
-more_pages    rs.b 1
-mouse_buf     rs.b 3
-mouse_shown   rs.b 1
-last_mbuttons rs.b 1
-num_menu      rs.b 1
+x_pos          rs.w 1
+base_cmd       rs.l 1
+sprite_list    rs.l 160
+page_index     rs.l MAX_DISPLAY+1
+page_stack     rs.l 1
+page_pointers  rs.l 1024
+mouse_sprite   rs.l 1
+menu_functions rs.l 1
+mouse_x        rs.w 1
+num_sprites    rs.b 1
+last_pad1      rs.b 1
+last_pad2      rs.b 1
+selected       rs.b 1
+more_pages     rs.b 1
+mouse_buf      rs.b 3
+mouse_shown    rs.b 1
+last_mbuttons  rs.b 1
+num_menu       rs.b 1
 
 
 int_6:
@@ -334,6 +339,8 @@ select_entry:
 	move.b (selected).w, d0
 	add.w d0, d0
 	add.w d0, d0
+	tst.b num_menu.w
+	bne .select_menu_button
 	lea page_index.w, a2
 	move.l (0, a2, d0.w), a2
 	tst.b (-1, a2)
@@ -342,6 +349,11 @@ select_entry:
 	lea menu_port+8, a3
 	move.l a2, (a3)
 	rts
+.select_menu_button:
+	movea.l menu_functions.w, a2
+	move.l (0, a2, d0.w), a2
+	addq #6, a7
+	jmp (a2)
 enter_dir:
 	lea menu_port+4, a3
 	move.l a2, (a3)
@@ -595,6 +607,8 @@ draw_button:
 draw_menu:
 	moveq #0, d7
 	moveq #0, d5
+	;select first item
+	move.b d7, selected.w
 	;save menu pointer for second pass
 	movea.l a5, a4
 .lenloop	
@@ -668,6 +682,18 @@ draw_menu:
 	addq #3, d6
 	bra .drawloop
 .done
+	rts
+	
+clear_screen:
+	;clear name tables
+	vdpaccess $8000, VDP_VRAM_WRITE
+	moveq #32, d0
+	swap d0
+	move.b #32, d0
+	move.w #(64*64-1), d1
+ploop:
+	move.l d0, (a0)
+	dbra d1, ploop
 	rts
 
 initial_regs:
@@ -761,25 +787,23 @@ wait_complete:
 	bne wait_complete
 
 render_page:
-	;clear name tables
-	vdpaccess $8000, VDP_VRAM_WRITE
-	moveq #32, d0
-	swap d0
-	move.b #32, d0
-	move.w #(64*64-1), d1
-ploop:
-	move.l d0, (a0)
-	dbra d1, ploop
+
+
+show_main_menu:
+	bsr clear_screen
 
 	move.l #$40860002, d3
 	move.l d3, (a1)
 	move.l d3, base_cmd.w
 	
 	moveq #8, d6
+	move.l #main_menu_func, menu_functions.w
 	lea main_menu(pc), a5
 	bsr draw_menu
 	bra gamepad_setup
 	
+	
+show_file_list:
 	;init scroll table
 	vdpaccess $0, VDP_VRAM_WRITE
 	move.w #0, (a0)
@@ -847,6 +871,45 @@ gamepad_setup:
 wait_forever
 	stop #2500
 	bra wait_forever
+	
+show_about:
+	bsr clear_screen
+	moveq #1, d7
+	lea about_text(pc), a6
+	;base attribute
+	move.w #$006B, d0
+.loop
+	tst.b (a6)
+	beq .done
+	;x pos
+	moveq #1, d1
+	;y pos
+	move.w d7, d2
+	bsr print_string_fixed
+	addq #1, d7
+	bra .loop
+.done
+	moveq #8, d6
+	move.l #about_menu_func, menu_functions.w
+	lea about_menu(pc), a5
+	bsr draw_menu
+.wait
+	stop #2500
+	bra .wait
+	
+exit:
+	;TODO: implement me
+	bra exit
+	
+about_text:
+	dc.b "BlastEm v0.4.0", 0
+	dc.b "Copyright 2011-2016 Michael Pavone", 0
+	dc.b " ", 0
+	dc.b "BlastEm is a high performance, open", 0
+	dc.b "source (GPLv3) Genesis/Megadrive", 0
+	dc.b "emulator.",0
+	dc.b 0
+	
 
 Newline:
 	dc.b $A, 0
@@ -971,6 +1034,20 @@ main_menu:
 	dc.b "About", 0
 	dc.b "Exit", 0
 	dc.b 0
+	
+	align 1
+main_menu_func:
+	dc.l show_file_list
+	dc.l show_about
+	dc.l exit
+	
+about_menu:
+	dc.b "Return", 0
+	dc.b 0
+	
+	align 1
+about_menu_func:
+	dc.l show_main_menu
 	
 pause_menu:
 	dc.b "Resume", 0
