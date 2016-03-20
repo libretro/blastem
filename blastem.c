@@ -1170,6 +1170,9 @@ int main(int argc, char ** argv)
 	start_genesis(genesis, menu ? NULL : statefile, menu == debug_target ? debuggerfun : NULL);
 	for(;;)
 	{
+		if (genesis->should_exit) {
+			break;
+		}
 		if (menu && menu_context->next_rom) {
 			if (game_context) {
 				if (game_context->save_type != SAVE_NONE) {
@@ -1222,8 +1225,7 @@ int main(int argc, char ** argv)
 			genesis->m68k->options->address_log = address_log;
 			map_all_bindings(genesis->ports);
 			start_genesis(genesis, statefile, menu == debug_target ? debuggerfun : NULL);
-		}
-		else if (menu && game_context) {
+		} else if (menu && game_context) {
 			genesis->arena = set_current_arena(game_context->arena);
 			genesis = game_context;
 			cart = genesis->cart;
