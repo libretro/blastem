@@ -913,7 +913,7 @@ show_about:
 	bra .wait
 	
 exit:
-	;TODO: implement me
+	move.w #1, menu_port+12
 	bra exit
 	
 about_text:
