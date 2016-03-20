@@ -739,11 +739,7 @@ start:
 	move.w #0, (a0)
 	move.w #0, (a0)
 	
-	;init vertical scroll RAM
-	vdpaccess $0, VDP_VSRAM_WRITE
-	move.w #-4, (a0)
-	move.w #0, (a0)
-
+	
 	;load tiles
 	vdpaccess $800, VDP_VRAM_WRITE
 	lea font(pc), a2
@@ -772,9 +768,36 @@ dtloop:
 	move.l #$887F01AA, (a2)+
 	move.b #2, num_sprites.w
 	
+show_main_menu:
+	bsr clear_screen
+	;init vertical scroll RAM
+	vdpaccess $0, VDP_VSRAM_WRITE
+	move.w #-4, (a0)
+	move.w #0, (a0)
 	
-
+	moveq #8, d6
+	move.l #main_menu_func, menu_functions.w
+	lea main_menu(pc), a5
+	bsr draw_menu
+	bra gamepad_setup
+	
+	
 menu_start:
+	;init vertical scroll RAM
+	vdpaccess $0, VDP_VSRAM_WRITE
+	move.w #0, (a0)
+	move.w #0, (a0)
+	
+	;reset arrow position
+	move.w #$0108, sprite_list.w
+	move.w #$0108, (sprite_list + 8).w
+	move.w #$0086, (sprite_list + 6).w
+	move.w #$01AA, (sprite_list + 6 + 8).w
+	
+	;reset selection
+	move.b #0, selected.w
+
+	
 	lea page_pointers.w, a5
 	lea dir_buffer, a6
 	move.l a6, (a5)+
@@ -787,27 +810,19 @@ wait_complete:
 	bne wait_complete
 
 render_page:
-
-
-show_main_menu:
 	bsr clear_screen
+	
+	;clear menu state
+	move.b #0, num_menu.w
 
-	move.l #$40860002, d3
-	move.l d3, (a1)
-	move.l d3, base_cmd.w
-	
-	moveq #8, d6
-	move.l #main_menu_func, menu_functions.w
-	lea main_menu(pc), a5
-	bsr draw_menu
-	bra gamepad_setup
-	
-	
-show_file_list:
 	;init scroll table
 	vdpaccess $0, VDP_VRAM_WRITE
 	move.w #0, (a0)
 	move.w #4, (a0)
+	
+	move.l #$40860002, d3
+	move.l d3, (a1)
+	move.l d3, base_cmd.w
 	
 
 	move.b #0, more_pages.w
@@ -1037,7 +1052,7 @@ main_menu:
 	
 	align 1
 main_menu_func:
-	dc.l show_file_list
+	dc.l menu_start
 	dc.l show_about
 	dc.l exit
 	
