@@ -190,6 +190,11 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			gen->next_rom = alloc_concat_m(3, pieces);
 			m68k->should_return = 1;
 			break;
+		case 3: {
+			m68k->should_return = 1;
+			gen->should_exit = 1;
+			break;
+		}
 		}
 		default:
 			fprintf(stderr, "WARNING: write to undefined menu port %X\n", address);

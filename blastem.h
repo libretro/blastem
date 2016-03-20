@@ -43,6 +43,7 @@ typedef struct {
 	uint8_t        save_type;
 	io_port        ports[3];
 	uint8_t        bus_busy;
+	uint8_t        should_exit;
 	eeprom_state   eeprom;
 } genesis_context;
 
