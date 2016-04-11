@@ -8,8 +8,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <ctype.h>
 #include "vos_program_module.h"
 #include "tern.h"
+#include "util.h"
 
 uint8_t visited[(16*1024*1024)/16];
 uint16_t label[(16*1024*1024)/8];
@@ -123,6 +125,22 @@ int label_fun(char *dst, uint32_t address, void * data)
 	}
 }
 
+char * strip_ws(char * text)
+{
+	while (*text && (!isprint(*text) || isblank(*text)))
+	{
+		text++;
+	}
+	char * ret = text;
+	text = ret + strlen(ret) - 1;
+	while (text > ret && (!isprint(*text) || isblank(*text)))
+	{
+		*text = 0;
+		text--;
+	}
+	return ret;
+}
+
 int main(int argc, char ** argv)
 {
 	long filesize;
@@ -133,6 +151,7 @@ int main(int argc, char ** argv)
 	deferred *def = NULL, *tmpd;
 
 	uint8_t labels = 0, addr = 0, only = 0, vos = 0, reset = 0;
+	tern_node * named_labels = NULL;
 
 	for(uint8_t opt = 2; opt < argc; ++opt) {
 		if (argv[opt][0] == '-') {
@@ -167,18 +186,26 @@ int main(int argc, char ** argv)
 				}
 				while (fgets(disbuf, sizeof(disbuf), address_log)) {
 				 	if (disbuf[0]) {
-						uint32_t address = strtol(disbuf, NULL, 16);
+						char *end;
+						uint32_t address = strtol(disbuf, &end, 16);
 						if (address) {
 							def = defer(address, def);
 							reference(address);
+							if (*end == '=') {
+								named_labels = add_label(named_labels, strip_ws(end+1), address);
+							}
 						}
 					}
 				}
 			}
 		} else {
-			uint32_t address = strtol(argv[opt], NULL, 16);
+			char *end;
+			uint32_t address = strtol(argv[opt], &end, 16);
 			def = defer(address, def);
 			reference(address);
+			if (*end == '=') {
+				named_labels = add_label(named_labels, end+1, address);
+			}
 		}
 	}
 
@@ -187,7 +214,6 @@ int main(int argc, char ** argv)
 	filesize = ftell(f);
 	fseek(f, 0, SEEK_SET);
 
-	tern_node * named_labels = NULL;
 	char int_key[MAX_INT_KEY_SIZE];
 	uint32_t address_off, address_end;
 	if (vos)
