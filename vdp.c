@@ -1935,9 +1935,16 @@ uint32_t vdp_next_vint_z80(vdp_context * context)
 
 void vdp_int_ack(vdp_context * context, uint16_t int_num)
 {
-	if (int_num == 6) {
+	//Apparently the VDP interrupt controller is not very smart
+	//Instead of paying attention to what interrupt is being acknowledged it just 
+	//clears the pending flag for whatever interrupt it is currently asserted
+	//which may be different from the interrupt it was asserting when the 68k
+	//started the interrupt process. The window for this is narrow and depends
+	//on the latency between the int enable register write and the interrupt being
+	//asserted, but Fatal Rewind depends on this due to some buggy code
+	if ((context->flags2 & FLAG2_VINT_PENDING) && (context->regs[REG_MODE_2] & BIT_VINT_EN)) {
 		context->flags2 &= ~FLAG2_VINT_PENDING;
-	} else if(int_num ==4) {
+	} else if((context->flags2 & FLAG2_HINT_PENDING) && (context->regs[REG_MODE_1] & BIT_HINT_EN)) {
 		context->flags2 &= ~FLAG2_HINT_PENDING;
 	}
 }
