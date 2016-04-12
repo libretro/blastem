@@ -348,7 +348,9 @@ select_entry:
 	;regular file
 	lea menu_port+8, a3
 	move.l a2, (a3)
-	rts
+	
+	addq #6, a7
+	bra show_pause_menu
 .select_menu_button:
 	movea.l menu_functions.w, a2
 	move.l (0, a2, d0.w), a2
@@ -781,6 +783,17 @@ show_main_menu:
 	bsr draw_menu
 	bra gamepad_setup
 	
+show_pause_menu:
+	bsr clear_screen
+	;init vertical scroll RAM
+	vdpaccess $0, VDP_VSRAM_WRITE
+	move.w #-4, (a0)
+	move.w #0, (a0)
+	moveq #8, d6
+	move.l #pause_menu_func, menu_functions.w
+	lea pause_menu(pc), a5
+	bsr draw_menu
+	bra gamepad_setup
 	
 menu_start:
 	;init vertical scroll RAM
@@ -915,6 +928,18 @@ show_about:
 exit:
 	move.w #1, menu_port+12
 	bra exit
+	
+resume:
+	;TODO: Implement me
+	bra resume
+	
+save_state:
+	;TODO: Implement me
+	bra save_state
+	
+load_state:
+	;TODO: Implement me
+	bra save_state
 	
 about_text:
 	dc.b "BlastEm v0.4.0", 0
@@ -1071,5 +1096,13 @@ pause_menu:
 	dc.b "Load State", 0
 	dc.b "Exit", 0
 	dc.b 0
+	
+	align 1
+pause_menu_func
+	dc.l resume
+	dc.l menu_start
+	dc.l save_state
+	dc.l load_state
+	dc.l exit
 
 rom_end:
