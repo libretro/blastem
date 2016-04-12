@@ -27,8 +27,8 @@
 #define MCLKS_NTSC 53693175
 #define MCLKS_PAL  53203395
 
-#define MCLKS_PER_68K 7
-#define MCLKS_PER_YM  MCLKS_PER_68K
+uint32_t MCLKS_PER_68K;
+#define MCLKS_PER_YM  7
 #define MCLKS_PER_Z80 15
 #define MCLKS_PER_PSG (MCLKS_PER_Z80*16)
 #define DEFAULT_SYNC_INTERVAL MCLKS_LINE
@@ -1086,7 +1086,7 @@ int main(int argc, char ** argv)
 	uint8_t menu = !loaded;
 	if (!loaded) {
 		//load menu
-		romfname = tern_find_path(config, "ui\rom\0").ptrval;
+		romfname = tern_find_path(config, "ui\0rom\0").ptrval;
 		if (!romfname) {
 			romfname = "menu.bin";
 		}
@@ -1108,6 +1108,14 @@ int main(int argc, char ** argv)
 		//TODO: load relative to executable or from assets depending on platform
 
 		loaded = 1;
+	}
+	char *m68k_divider = tern_find_path(config, "clocks\0m68k_divider\0").ptrval;
+	if (!m68k_divider) {
+		m68k_divider = "7";
+	}
+	MCLKS_PER_68K = atoi(m68k_divider);
+	if (!MCLKS_PER_68K) {
+		MCLKS_PER_68K = 7;
 	}
 	ram = malloc(RAM_WORDS * sizeof(uint16_t));
 	memmap_chunk base_map[] = {
