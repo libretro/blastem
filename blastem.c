@@ -290,7 +290,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	//printf("Set sync cycle to: %d @ %d, vcounter: %d, hslot: %d\n", context->sync_cycle, context->current_cycle, v_context->vcounter, v_context->hslot);
 	if (context->int_ack) {
 		//printf("acknowledging %d @ %d:%d, vcounter: %d, hslot: %d\n", context->int_ack, context->current_cycle, v_context->cycles, v_context->vcounter, v_context->hslot);
-		vdp_int_ack(v_context, context->int_ack);
+		vdp_int_ack(v_context);
 		context->int_ack = 0;
 	}
 	if (!address && (break_on_sync || save_state)) {

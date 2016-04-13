@@ -1933,7 +1933,7 @@ uint32_t vdp_next_vint_z80(vdp_context * context)
 	return context->cycles + cycles_to_vint;
 }
 
-void vdp_int_ack(vdp_context * context, uint16_t int_num)
+void vdp_int_ack(vdp_context * context)
 {
 	//Apparently the VDP interrupt controller is not very smart
 	//Instead of paying attention to what interrupt is being acknowledged it just 
