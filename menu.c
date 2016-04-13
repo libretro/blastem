@@ -191,8 +191,17 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			m68k->should_return = 1;
 			break;
 		case 3: {
-			m68k->should_return = 1;
-			gen->should_exit = 1;
+			switch (dst)
+			{
+			case 1:
+				m68k->should_return = 1;
+				gen->should_exit = 1;
+				break;
+			case 2:
+				m68k->should_return = 1;
+				break;
+			}
+			
 			break;
 		}
 		}
@@ -203,6 +212,9 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 	} else {
 		menu->latch = value;
 		menu->state = 1;
+	}
+	if (m68k->should_return) {
+		m68k->target_cycle = m68k->current_cycle;
 	}
 
 	return context;
