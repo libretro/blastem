@@ -926,12 +926,12 @@ show_about:
 	bra .wait
 	
 exit:
-	move.w #1, menu_port+12
+	move.l #1, menu_port+12
 	bra exit
 	
 resume:
-	;TODO: Implement me
-	bra resume
+	move.l #2, menu_port+12
+	bra show_pause_menu
 	
 save_state:
 	;TODO: Implement me
