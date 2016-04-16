@@ -876,15 +876,6 @@ genesis_context *alloc_init_genesis(rom_info *rom, int fps, uint32_t ym_opts)
 		gen->save_storage = rom->save_buffer;
 		gen->eeprom_map = rom->eeprom_map;
 		gen->num_eeprom = rom->num_eeprom;
-		FILE * f = fopen(save_filename, "rb");
-		if (f) {
-			uint32_t read = fread(gen->save_storage, 1, rom->save_size, f);
-			fclose(f);
-			if (read > 0) {
-				printf("Loaded %s from %s\n", rom->save_type == SAVE_I2C ? "EEPROM" : "SRAM", save_filename);
-			}
-		}
-		atexit(persist_save);
 		if (gen->save_type == SAVE_I2C) {
 			eeprom_init(&gen->eeprom, gen->save_storage, gen->save_size);
 		}
@@ -919,6 +910,7 @@ void free_genesis(genesis_context *gen)
 	ym_free(gen->ym);
 	psg_free(gen->psg);
 	free(gen->save_storage);
+	free(gen->save_dir);
 }
 
 void start_genesis(genesis_context *gen, char *statefile, uint8_t *debugger)
@@ -975,7 +967,7 @@ void set_region(rom_info *info, uint8_t region)
 	}
 }
 
-void setup_saves(char *fname, rom_info *info)
+void setup_saves(char *fname, rom_info *info, genesis_context *context)
 {
 	char * barename = basename_no_extension(fname);
 	char const * parts[3] = {get_save_dir(), "/", barename};
@@ -990,8 +982,19 @@ void setup_saves(char *fname, rom_info *info)
 	parts[2] = "quicksave.gst";
 	free(save_state_path);
 	save_state_path = alloc_concat_m(3, parts);
-	info->save_dir = save_dir;
+	context->save_dir = save_dir;
 	free(barename);
+	if (info->save_type != SAVE_NONE) {
+		FILE * f = fopen(save_filename, "rb");
+		if (f) {
+			uint32_t read = fread(context->save_storage, 1, info->save_size, f);
+			fclose(f);
+			if (read > 0) {
+				printf("Loaded %s from %s\n", info->save_type == SAVE_I2C ? "EEPROM" : "SRAM", save_filename);
+			}
+		}
+		atexit(persist_save);
+	}
 }
 
 int main(int argc, char ** argv)
@@ -1170,9 +1173,9 @@ int main(int argc, char ** argv)
 	if (!headless) {
 		render_init(width, height, title, fps, fullscreen);
 	}
-	setup_saves(romfname, &info);
 
 	genesis = alloc_init_genesis(&info, fps, (ym_log && !menu) ? YM_OPT_WAVE_LOG : 0);
+	setup_saves(romfname, &info, genesis);
 	if (menu) {
 		menu_context = genesis;
 	} else {
@@ -1195,7 +1198,6 @@ int main(int argc, char ** argv)
 					genesis = menu_context;
 				}
 				free(game_context->cart);
-				free(info.save_dir);
 				base_map[0].buffer = ram = game_context->work_ram;
 			} else {
 				base_map[0].buffer = ram = malloc(RAM_WORDS * sizeof(uint16_t));
@@ -1208,7 +1210,6 @@ int main(int argc, char ** argv)
 			byteswap_rom(rom_size);
 			set_region(&info, force_version);
 			update_title(info.name);
-			setup_saves(menu_context->next_rom, &info);
 			if (!game_context) {
 				//start a new arena and save old one in suspended genesis context
 				genesis->arena = start_new_arena();
@@ -1219,6 +1220,7 @@ int main(int argc, char ** argv)
 			}
 			//allocate new genesis context
 			game_context = alloc_init_genesis(&info, fps, ym_log ? YM_OPT_WAVE_LOG : 0);
+			setup_saves(menu_context->next_rom, &info, game_context);
 			free(menu_context->next_rom);
 			menu_context->next_rom = NULL;
 			menu = 0;
