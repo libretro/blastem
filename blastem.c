@@ -192,6 +192,7 @@ void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 
 int break_on_sync = 0;
 int save_state = 0;
+char *save_state_path;
 
 //#define DO_DEBUG_PRINT
 #ifdef DO_DEBUG_PRINT
@@ -309,8 +310,8 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			{
 				sync_z80(z_context, z_context->current_cycle + MCLKS_PER_Z80);
 			}
-			save_gst(gen, "savestate.gst", address);
-			puts("Saved state to savestate.gst");
+			save_gst(gen, save_state_path, address);
+			printf("Saved state to %s\n", save_state_path);
 		} else if(save_state) {
 			context->sync_cycle = context->current_cycle + 1;
 		}
@@ -974,6 +975,25 @@ void set_region(rom_info *info, uint8_t region)
 	}
 }
 
+void setup_saves(char *fname, rom_info *info)
+{
+	char * barename = basename_no_extension(fname);
+	char const * parts[3] = {get_save_dir(), "/", barename};
+	char *save_dir = alloc_concat_m(3, parts);
+	if (!ensure_dir_exists(save_dir)) {
+		warning("Failed to create save directory %s\n", save_dir);
+	}
+	parts[0] = save_dir;
+	parts[2] = info->save_type == SAVE_I2C ? "save.eeprom" : "save.sram";
+	free(save_filename);
+	save_filename = alloc_concat_m(3, parts);
+	parts[2] = "quicksave.gst";
+	free(save_state_path);
+	save_state_path = alloc_concat_m(3, parts);
+	info->save_dir = save_dir;
+	free(barename);
+}
+
 int main(int argc, char ** argv)
 {
 	set_exe_str(argv[0]);
@@ -1150,21 +1170,7 @@ int main(int argc, char ** argv)
 	if (!headless) {
 		render_init(width, height, title, fps, fullscreen);
 	}
-	int fname_size = strlen(romfname);
-	char * ext = info.save_type == SAVE_I2C ? "eeprom" : "sram";
-	save_filename = malloc(fname_size+strlen(ext) + 2);
-	memcpy(save_filename, romfname, fname_size);
-	int i;
-	for (i = fname_size-1; fname_size >= 0; --i) {
-		if (save_filename[i] == '.') {
-			strcpy(save_filename + i + 1, ext);
-			break;
-		}
-	}
-	if (i < 0) {
-		save_filename[fname_size] = '.';
-		strcpy(save_filename + fname_size + 1, ext);
-	}
+	setup_saves(romfname, &info);
 
 	genesis = alloc_init_genesis(&info, fps, (ym_log && !menu) ? YM_OPT_WAVE_LOG : 0);
 	if (menu) {
@@ -1189,7 +1195,7 @@ int main(int argc, char ** argv)
 					genesis = menu_context;
 				}
 				free(game_context->cart);
-				free(save_filename);
+				free(info.save_dir);
 				base_map[0].buffer = ram = game_context->work_ram;
 			} else {
 				base_map[0].buffer = ram = malloc(RAM_WORDS * sizeof(uint16_t));
@@ -1202,20 +1208,7 @@ int main(int argc, char ** argv)
 			byteswap_rom(rom_size);
 			set_region(&info, force_version);
 			update_title(info.name);
-			fname_size = strlen(menu_context->next_rom);
-			ext = info.save_type == SAVE_I2C ? "eeprom" : "sram";
-			save_filename = malloc(fname_size+strlen(ext) + 2);
-			memcpy(save_filename, menu_context->next_rom, fname_size);
-			for (i = fname_size-1; fname_size >= 0; --i) {
-				if (save_filename[i] == '.') {
-					strcpy(save_filename + i + 1, ext);
-					break;
-				}
-			}
-			if (i < 0) {
-				save_filename[fname_size] = '.';
-				strcpy(save_filename + fname_size + 1, ext);
-			}
+			setup_saves(menu_context->next_rom, &info);
 			if (!game_context) {
 				//start a new arena and save old one in suspended genesis context
 				genesis->arena = start_new_arena();

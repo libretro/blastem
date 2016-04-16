@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <errno.h>
 
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -91,6 +92,32 @@ char * split_keyval(char * text)
 	}
 	*text = 0;
 	return text+1;
+}
+
+char * basename_no_extension(char *path)
+{
+	char *lastdot = NULL;
+	char *lastslash = NULL;
+	char *cur;
+	for (cur = path; *cur; cur++)
+	{
+		if (*cur == '.') {
+			lastdot = cur;
+		} else if (*cur == '/') {
+			lastslash = cur + 1;
+		}
+	}
+	if (!lastdot) {
+		lastdot = cur;
+	}
+	if (!lastslash) {
+		lastslash = path;
+	}
+	char *barename = malloc(lastdot-lastslash+1);
+	memcpy(barename, lastslash, lastdot-lastslash);
+	barename[lastdot-lastslash] = 0;
+	
+	return barename;
 }
 
 uint32_t nearest_pow2(uint32_t val)
@@ -339,6 +366,32 @@ void free_dir_list(dir_entry *list, size_t numentries)
 	free(list);
 }
 
+int ensure_dir_exists(char *path)
+{
+	struct stat st;
+	if (stat(path, &st)) {
+		if (errno == ENOENT) {
+			char *parent = strdup(path);
+			char *sep = strrchr(parent, '/');
+			if (sep && sep != parent) {
+				*sep = 0;
+				if (!ensure_dir_exists(parent)) {
+					free(parent);
+					return 0;
+				}
+				free(parent);
+			}
+			return mkdir(path, 0777) == 0;
+		} else {
+			char buf[80];
+			strerror_r(errno, buf, sizeof(buf));
+			warning("stat failed with error: %s", buf);
+			return 0;
+		}
+	}
+	return S_ISDIR(st.st_mode);
+}
+
 #endif
 
 #ifdef __ANDROID__
@@ -373,6 +426,11 @@ char *read_bundled_file(char *name, long *sizeret)
 }
 
 char const *get_config_dir()
+{
+	return SDL_AndroidGetInternalStoragePath();
+}
+
+char const *get_save_dir()
 {
 	return SDL_AndroidGetInternalStoragePath();
 }
@@ -428,6 +486,18 @@ char const *get_config_dir()
 		}
 	}
 	return confdir;
+}
+
+char const *get_save_dir()
+{
+	static char* savedir;
+	if (!savedir) {
+		char *homedir = get_home_dir();
+		if (homedir) {
+			savedir = alloc_concat(homedir, "/.local/share/blastem");
+		}
+	}
+	return savedir;
 }
 
 #endif
