@@ -1220,6 +1220,8 @@ int main(int argc, char ** argv)
 			}
 			//allocate new genesis context
 			game_context = alloc_init_genesis(&info, fps, ym_log ? YM_OPT_WAVE_LOG : 0);
+			menu_context->next_context = game_context;
+			game_context->next_context = menu_context;
 			setup_saves(menu_context->next_rom, &info, game_context);
 			free(menu_context->next_rom);
 			menu_context->next_rom = NULL;
