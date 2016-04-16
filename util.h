@@ -2,6 +2,7 @@
 #define UTIL_H_
 
 #include <stdio.h>
+#include <time.h>
 
 typedef struct {
 	char    *name;
@@ -40,6 +41,8 @@ char *read_bundled_file(char *name, long *sizeret);
 dir_entry *get_dir_list(char *path, size_t *numret);
 //Frees a dir list returned by get_dir_list
 void free_dir_list(dir_entry *list, size_t numentries);
+//Gets the modification time of a file
+time_t get_modification_time(char *path);
 //Recusrively creates a directory if it does not exist
 int ensure_dir_exists(char *path);
 //Returns the contents of a symlink in a newly allocated string

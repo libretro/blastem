@@ -935,10 +935,13 @@ resume:
 	
 save_state:
 	;TODO: Implement me
-	bra save_state
+	move.l #0, menu_port+16
+.forever
+	bra .forever
 	
 load_state:
 	;TODO: Implement me
+	move.l #0, menu_port+16
 	bra save_state
 	
 about_text:

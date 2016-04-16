@@ -17,36 +17,39 @@
 #include "romdb.h"
 #include "arena.h"
 
-typedef struct {
-	m68k_context   *m68k;
-	z80_context    *z80;
-	vdp_context    *vdp;
-	ym2612_context *ym;
-	psg_context    *psg;
-	uint16_t       *cart;
-	uint16_t       *work_ram;
-	uint8_t        *zram;
-	void           *extra;
-	arena          *arena;
-	char           *next_rom;
-	char           *save_dir;
-	uint8_t        *save_storage;
-	eeprom_map     *eeprom_map;
-	uint32_t       num_eeprom;
-	uint32_t       save_size;
-	uint32_t       save_ram_mask;
-	uint32_t       master_clock; //Current master clock value
-	uint32_t       normal_clock; //Normal master clock (used to restore master clock after turbo mode)
-	uint32_t       frame_end;
-	uint32_t       max_cycles;
-	uint8_t        bank_regs[8];
-	uint16_t       mapper_start_index;
-	uint8_t        save_type;
-	io_port        ports[3];
-	uint8_t        bus_busy;
-	uint8_t        should_exit;
-	eeprom_state   eeprom;
-} genesis_context;
+typedef struct genesis_context genesis_context;
+
+struct genesis_context {
+	m68k_context    *m68k;
+	z80_context     *z80;
+	vdp_context     *vdp;
+	ym2612_context  *ym;
+	psg_context     *psg;
+	genesis_context *next_context;
+	uint16_t        *cart;
+	uint16_t        *work_ram;
+	uint8_t         *zram;
+	void            *extra;
+	arena           *arena;
+	char            *next_rom;
+	char            *save_dir;
+	uint8_t         *save_storage;
+	eeprom_map      *eeprom_map;
+	uint32_t        num_eeprom;
+	uint32_t        save_size;
+	uint32_t        save_ram_mask;
+	uint32_t        master_clock; //Current master clock value
+	uint32_t        normal_clock; //Normal master clock (used to restore master clock after turbo mode)
+	uint32_t        frame_end;
+	uint32_t        max_cycles;
+	uint8_t         bank_regs[8];
+	uint16_t        mapper_start_index;
+	uint8_t         save_type;
+	io_port         ports[3];
+	uint8_t         bus_busy;
+	uint8_t         should_exit;
+	eeprom_state    eeprom;
+};
 
 extern genesis_context * genesis;
 extern int headless;
