@@ -29,6 +29,7 @@ typedef struct {
 	void           *extra;
 	arena          *arena;
 	char           *next_rom;
+	char           *save_dir;
 	uint8_t        *save_storage;
 	eeprom_map     *eeprom_map;
 	uint32_t       num_eeprom;
