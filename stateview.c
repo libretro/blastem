@@ -16,7 +16,7 @@ io_port gamepad_2;
 uint8_t reset = 1;
 uint8_t busreq = 0;
 
-//uint16_t ram[RAM_WORDS];
+uint16_t *ram;
 uint8_t z80_ram[Z80_RAM_BYTES];
 
 uint16_t read_dma_value(uint32_t address)
@@ -53,6 +53,18 @@ void handle_joyup(int joystick, int button)
 }
 
 void handle_joy_dpad(int joystick, int dpadnum, uint8_t value)
+{
+}
+
+void handle_mousedown(int mouse, int button)
+{
+}
+
+void handle_mouseup(int mouse, int button)
+{
+}
+
+void handle_mouse_moved(int mouse, uint16_t x, uint16_t y, int16_t deltax, int16_t deltay)
 {
 }
 
