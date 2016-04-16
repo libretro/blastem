@@ -52,6 +52,25 @@ void copy_string_from_guest(m68k_context *m68k, uint32_t guest_addr, char *buf, 
 	buf[maxchars-1] = 0;
 }
 
+void copy_to_guest(m68k_context *m68k, uint32_t guest_addr, char *src, size_t tocopy)
+{
+	char *dst = NULL;
+	for (char *cur = src; cur < src+tocopy; cur+=2, guest_addr+=2, dst+=2)
+	{
+		if (!dst || !(guest_addr & 0xFFFF)) {
+			//we may have walked off the end of a memory block, get a fresh native pointer
+			dst = get_native_pointer(guest_addr, (void **)m68k->mem_pointers, &m68k->options->gen);
+			if (!dst) {
+				break;
+			}
+		}
+		src[1] = *cur;
+		*src = cur[1];
+	}
+}
+
+#define SAVE_INFO_BUFFER_SIZE (11*40)
+
 #ifdef __ANDROID__
 #include <SDL.h>
 #include <jni.h>
@@ -190,6 +209,7 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			gen->next_rom = alloc_concat_m(3, pieces);
 			m68k->should_return = 1;
 			break;
+		}
 		case 3: {
 			switch (dst)
 			{
@@ -204,6 +224,55 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			
 			break;
 		}
+		case 4: {
+			char *buffer = malloc(SAVE_INFO_BUFFER_SIZE);
+			char *cur = buffer;
+			if (gen->next_context && gen->next_context->save_dir) {
+				char *end = buffer + SAVE_INFO_BUFFER_SIZE;
+				char slotfile[] = "slot_0.gst";
+				char const * parts[3] = {gen->next_context->save_dir, "/", slotfile};
+				struct tm ltime;
+				char *fname;
+				time_t modtime;
+				for (int i = 0; i < 10 && cur < end; i++)
+				{
+					slotfile[5] = i + '0';
+					fname = alloc_concat_m(3, parts);
+					modtime = get_modification_time(fname);
+					free(fname);
+					if (modtime) {
+						cur += snprintf(cur, end-cur, "Slot %d - ", i);
+						cur += strftime(cur, end-cur, "%c", localtime_r(&modtime, &ltime));
+						
+					} else {
+						cur += snprintf(cur, end-cur, "Slot %d - EMPTY", i);
+					}
+					//advance past the null terminator for this entry
+					cur++;
+				}
+				if (cur < end) {
+					parts[2] = "quicksave.gst";
+					fname = alloc_concat_m(3, parts);
+					modtime = get_modification_time(fname);
+					free(fname);
+					if (modtime) {
+						cur += strftime(cur, end-cur, "Quick   - %c", localtime_r(&modtime, &ltime));
+					} else if ((end-cur) > strlen("Quick   - EMPTY")){
+						cur += strlen(strcpy(cur, "Quick   - EMPTY"));
+					}
+					//advance past the null terminator for this entry
+					cur++;
+					if (cur < end) {
+						//terminate the list
+						*cur = 0;
+					}
+				}
+			} else {
+				*(cur++) = 0;
+				*(cur++) = 0;
+			}
+			copy_to_guest(m68k, dst, buffer, cur-buffer);
+			break;
 		}
 		default:
 			fprintf(stderr, "WARNING: write to undefined menu port %X\n", address);

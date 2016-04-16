@@ -366,6 +366,15 @@ void free_dir_list(dir_entry *list, size_t numentries)
 	free(list);
 }
 
+time_t get_modification_time(char *path)
+{
+	struct stat st;
+	if (stat(path, &st)) {
+		return 0;
+	}
+	return st.st_mtim.tv_sec;
+}
+
 int ensure_dir_exists(char *path)
 {
 	struct stat st;
