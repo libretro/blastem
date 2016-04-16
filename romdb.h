@@ -37,6 +37,7 @@ typedef struct {
 
 typedef struct {
 	char          *name;
+	char          *save_dir;
 	memmap_chunk  *map;
 	uint8_t       *save_buffer;
 	eeprom_map    *eeprom_map;
