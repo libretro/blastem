@@ -64,8 +64,8 @@ void copy_to_guest(m68k_context *m68k, uint32_t guest_addr, char *src, size_t to
 				break;
 			}
 		}
-		src[1] = *cur;
-		*src = cur[1];
+		dst[1] = *cur;
+		*dst = cur[1];
 	}
 }
 
@@ -256,15 +256,15 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 					modtime = get_modification_time(fname);
 					free(fname);
 					if (modtime) {
-						cur += strftime(cur, end-cur, "Quick   - %c", localtime_r(&modtime, &ltime));
-					} else if ((end-cur) > strlen("Quick   - EMPTY")){
-						cur += strlen(strcpy(cur, "Quick   - EMPTY"));
+						cur += strftime(cur, end-cur, "Quick  - %c", localtime_r(&modtime, &ltime));
+					} else if ((end-cur) > strlen("Quick  - EMPTY")){
+						cur += strlen(strcpy(cur, "Quick  - EMPTY"));
 					}
 					//advance past the null terminator for this entry
 					cur++;
 					if (cur < end) {
 						//terminate the list
-						*cur = 0;
+						*(cur++) = 0;
 					}
 				}
 			} else {

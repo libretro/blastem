@@ -933,16 +933,37 @@ resume:
 	move.l #2, menu_port+12
 	bra show_pause_menu
 	
+show_save_slots:
+	lea dir_buffer, a6
+	lea menu_port+16, a3
+	move.l a6, (a3)
+.waitdone:
+	tst.w (a3)
+	bne .waitdone
+	bsr clear_screen
+	moveq #0, d0
+	
+	moveq #2, d7
+.slotloop
+	tst.b (a6)
+	beq .done
+	moveq #2, d1
+	move.w d7, d2
+	bsr print_string_fixed
+	addq #2, d7
+	bra .slotloop
+.done
+	rts
+	
 save_state:
-	;TODO: Implement me
-	move.l #0, menu_port+16
+	bsr show_save_slots
 .forever
 	bra .forever
 	
 load_state:
-	;TODO: Implement me
-	move.l #0, menu_port+16
-	bra save_state
+	bsr show_save_slots
+.forever
+	bra .forever
 	
 about_text:
 	dc.b "BlastEm v0.4.0", 0
