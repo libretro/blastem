@@ -7,6 +7,8 @@
 #include "menu.h"
 #include "backend.h"
 #include "util.h"
+#include "gst.h"
+#include "m68k_internal.h" //needed for get_native_address_trans, should be eliminated once handling of PC is cleaned up
 
 
 uint16_t menu_read_w(uint32_t address, void * context)
@@ -272,6 +274,32 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 				*(cur++) = 0;
 			}
 			copy_to_guest(m68k, dst, buffer, cur-buffer);
+			break;
+		case 5:
+			//save state
+			if (gen->next_context) {
+				gen->next_context->save_state = dst + 1;
+			}
+			m68k->should_return = 1;
+			break;
+		case 6:
+			//load state
+			if (gen->next_context && gen->next_context->save_dir) {
+				char numslotname[] = "slot_0.gst";
+				char *slotname;
+				if (dst == QUICK_SAVE_SLOT) {
+					slotname = "quicksave.gst";
+				} else {
+					numslotname[5] = '0' + dst;
+					slotname = numslotname;
+				}
+				char const *parts[] = {gen->next_context->save_dir, "/", slotname};
+				char *gstpath = alloc_concat_m(3, parts);
+				uint32_t pc = load_gst(gen->next_context, gstpath);
+				free(gstpath);
+				gen->next_context->m68k->resume_pc = get_native_address_trans(gen->next_context->m68k, pc);
+			}
+			m68k->should_return = 1;
 			break;
 		}
 		default:

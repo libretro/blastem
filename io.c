@@ -349,7 +349,7 @@ void handle_binding_up(keybinding * binding)
 			break_on_sync = 1;
 			break;
 		case UI_SAVE_STATE:
-			save_state = 1;
+			genesis->save_state = QUICK_SAVE_SLOT+1;
 			break;
 		case UI_NEXT_SPEED:
 			current_speed++;
