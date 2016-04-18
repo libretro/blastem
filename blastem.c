@@ -191,7 +191,6 @@ void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 }
 
 int break_on_sync = 0;
-int save_state = 0;
 char *save_state_path;
 
 //#define DO_DEBUG_PRINT
@@ -294,7 +293,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 		vdp_int_ack(v_context);
 		context->int_ack = 0;
 	}
-	if (!address && (break_on_sync || save_state)) {
+	if (!address && (break_on_sync || gen->save_state)) {
 		context->sync_cycle = context->current_cycle + 1;
 	}
 	adjust_int_cycle(context, v_context);
@@ -303,16 +302,29 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			break_on_sync = 0;
 			debugger(context, address);
 		}
-		if (save_state && (z_context->pc || (!z_context->reset && !z_context->busreq))) {
-			save_state = 0;
+		if (gen->save_state && (z_context->pc || (!z_context->reset && !z_context->busreq))) {
+			uint8_t slot = gen->save_state - 1;
+			gen->save_state = 0;
 			//advance Z80 core to the start of an instruction
 			while (!z_context->pc)
 			{
 				sync_z80(z_context, z_context->current_cycle + MCLKS_PER_Z80);
 			}
-			save_gst(gen, save_state_path, address);
-			printf("Saved state to %s\n", save_state_path);
-		} else if(save_state) {
+			char *save_path;
+			if (slot == QUICK_SAVE_SLOT) {
+				save_path = save_state_path;
+			} else {
+				char slotname[] = "slot_0.gst";
+				slotname[5] = '0' + slot;
+				char const *parts[] = {gen->save_dir, "/", slotname};
+				save_path = alloc_concat_m(3, parts);
+			}
+			save_gst(gen, save_path, address);
+			printf("Saved state to %s\n", save_path);
+			if (slot != QUICK_SAVE_SLOT) {
+				free(save_path);
+			}
+		} else if(gen->save_state) {
 			context->sync_cycle = context->current_cycle + 1;
 		}
 	}
