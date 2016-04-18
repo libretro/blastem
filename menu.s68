@@ -191,6 +191,7 @@ mouse_buf      rs.b 3
 mouse_shown    rs.b 1
 last_mbuttons  rs.b 1
 num_menu       rs.b 1
+num_slots      rs.b 1
 
 
 int_6:
@@ -253,6 +254,8 @@ pad2:
 handle_pad_buttons:
 	tst.b num_menu.w
 	bne handle_buttons_menu
+	tst.b num_slots.w
+	bne handle_buttons_save
 	moveq #16, d2
 
 
@@ -274,6 +277,9 @@ handle_done:
 handle_buttons_menu
 	moveq #48, d2
 	bra buttons_no_leftright
+handle_buttons_save
+	moveq #32, d2
+	bra buttons_no_leftright
 
 down:
 	
@@ -282,6 +288,8 @@ down:
 	add.b (selected).w, d0
 	tst.b num_menu.w
 	bne .menu
+	tst.b num_slots.w
+	bne .slots
 	move.w d0, d1
 	add.w d1, d1
 	add.w d1, d1
@@ -296,6 +304,10 @@ down:
 	rts
 .menu:
 	cmp.b num_menu.w, d0
+	beq handle_done
+	bra .do_move
+.slots:
+	cmp.b num_slots.w, d0
 	beq handle_done
 	bra .do_move
 	
@@ -922,7 +934,7 @@ show_about:
 	lea about_menu(pc), a5
 	bsr draw_menu
 .wait
-	stop #2500
+	stop #$2500
 	bra .wait
 	
 exit:
@@ -934,6 +946,12 @@ resume:
 	bra show_pause_menu
 	
 show_save_slots:
+	move.w #(256+26), sprite_list.w
+	move.w #(256+26), (sprite_list+8).w
+	move.w #(128+8), (sprite_list+6).w
+	move.w #(128+320-24), (sprite_list+6+8).w
+	move.b #0, selected.w
+	move.b #0, num_menu.w
 	lea dir_buffer, a6
 	lea menu_port+16, a3
 	move.l a6, (a3)
@@ -943,27 +961,32 @@ show_save_slots:
 	bsr clear_screen
 	moveq #0, d0
 	
+	moveq #0, d6
 	moveq #2, d7
 .slotloop
 	tst.b (a6)
 	beq .done
-	moveq #2, d1
+	addq #1, d6
+	moveq #4, d1
 	move.w d7, d2
 	bsr print_string_fixed
 	addq #2, d7
 	bra .slotloop
 .done
+	move.b d6, num_slots.w
 	rts
 	
 save_state:
 	bsr show_save_slots
-.forever
-	bra .forever
+.wait
+	stop #$2500
+	bra .wait
 	
 load_state:
 	bsr show_save_slots
-.forever
-	bra .forever
+.wait
+	stop #$2500
+	bra .wait
 	
 about_text:
 	dc.b "BlastEm v0.4.0", 0
