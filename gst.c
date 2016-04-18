@@ -95,6 +95,7 @@ uint32_t m68k_load_gst(m68k_context * context, FILE * gstfile)
 	}
 	fseek(gstfile, GST_68K_RAM, SEEK_SET);
 	for (int i = 0; i < (32*1024);) {
+		//FIXME: Need to deal with code in RAM that has potentially changed after this
 		if (fread(buffer, 1, sizeof(buffer), gstfile) != sizeof(buffer)) {
 			fputs("Failed to read 68K RAM from savestate\n", stderr);
 			return 0;

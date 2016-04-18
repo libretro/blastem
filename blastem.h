@@ -48,17 +48,18 @@ struct genesis_context {
 	io_port         ports[3];
 	uint8_t         bus_busy;
 	uint8_t         should_exit;
+	uint8_t         save_state;
 	eeprom_state    eeprom;
 };
 
 extern genesis_context * genesis;
 extern int headless;
 extern int break_on_sync;
-extern int save_state;
 extern tern_node * config;
 
 #define RAM_WORDS 32 * 1024
 #define Z80_RAM_BYTES 8 * 1024
+#define QUICK_SAVE_SLOT 10
 
 extern uint16_t *cart;
 extern uint16_t *ram;
