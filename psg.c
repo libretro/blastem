@@ -33,7 +33,7 @@ void psg_free(psg_context *context)
 	free(context);
 }
 
-#define BUFFER_INC_RES 1000000000UL
+#define BUFFER_INC_RES 0x40000000UL
 
 void psg_adjust_master_clock(psg_context * context, uint32_t master_clock)
 {
@@ -116,6 +116,9 @@ void psg_run(psg_context * context, uint32_t cycles)
 			}
 		}
 
+		context->last_sample = context->accum;
+		context->accum = 0;
+		
 		for (int i = 0; i < 3; i++) {
 			if (context->output_state[i]) {
 				context->accum += volume_table[context->volume[i]];
@@ -129,9 +132,13 @@ void psg_run(psg_context * context, uint32_t cycles)
 		context->buffer_fraction += context->buffer_inc;
 		if (context->buffer_fraction >= BUFFER_INC_RES) {
 			context->buffer_fraction -= BUFFER_INC_RES;
+			uint32_t tmp = context->last_sample * (0x10000 - ((context->buffer_fraction << 16) / context->buffer_inc));
+			tmp += context->accum * ((context->buffer_fraction << 16) / context->buffer_inc);
+			printf("Last: %d, Cur: %d, Fraction: %d, Inc: %d, Result: %d, Samples: %d, Float: %f, Fixed: %X\n", 
+				context->last_sample, context->accum, (int)context->buffer_fraction, (int)context->buffer_inc, tmp >> 16, context->sample_count, (float)context->buffer_fraction/(float)context->buffer_inc, (int)((context->buffer_fraction << 16) / context->buffer_inc));
 
-			context->audio_buffer[context->buffer_pos++] = context->accum / context->sample_count;
-			context->accum = context->sample_count = 0;
+			context->audio_buffer[context->buffer_pos++] = tmp >> 16;
+			context->sample_count = 0;
 			if (context->buffer_pos == context->samples_frame) {
 				if (!headless) {
 					render_wait_psg(context);
