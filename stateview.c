@@ -16,12 +16,21 @@ io_port gamepad_2;
 uint8_t reset = 1;
 uint8_t busreq = 0;
 
-uint16_t *ram;
 uint8_t z80_ram[Z80_RAM_BYTES];
 
 uint16_t read_dma_value(uint32_t address)
 {
 	return 0;
+}
+
+m68k_context *m68k_handle_code_write(uint32_t address, m68k_context *context)
+{
+	return NULL;
+}
+
+z80_context *z80_handle_code_write(uint32_t address, z80_context *context)
+{
+	return NULL;
 }
 
 void ym_data_write(ym2612_context * context, uint8_t value)

@@ -66,7 +66,7 @@ void write_be_16(uint8_t * dst, uint16_t val)
 
 uint32_t m68k_load_gst(m68k_context * context, FILE * gstfile)
 {
-	uint8_t buffer[4096];
+	uint8_t buffer[GST_68K_REG_SIZE];
 	fseek(gstfile, GST_68K_REGS, SEEK_SET);
 	if (fread(buffer, 1, GST_68K_REG_SIZE, gstfile) != GST_68K_REG_SIZE) {
 		fputs("Failed to read 68K registers from savestate\n", stderr);
@@ -93,23 +93,13 @@ uint32_t m68k_load_gst(m68k_context * context, FILE * gstfile)
 	} else {
 		context->aregs[8] = read_le_32(buffer + GST_68K_SSP_OFFSET);
 	}
-	fseek(gstfile, GST_68K_RAM, SEEK_SET);
-	for (int i = 0; i < (32*1024);) {
-		//FIXME: Need to deal with code in RAM that has potentially changed after this
-		if (fread(buffer, 1, sizeof(buffer), gstfile) != sizeof(buffer)) {
-			fputs("Failed to read 68K RAM from savestate\n", stderr);
-			return 0;
-		}
-		for(curpos = buffer; curpos < (buffer + sizeof(buffer)); curpos += sizeof(uint16_t)) {
-			ram[i++] = read_be_16(curpos);
-		}
-	}
+	
 	return pc;
 }
 
 uint8_t m68k_save_gst(m68k_context * context, uint32_t pc, FILE * gstfile)
 {
-	uint8_t buffer[4096];
+	uint8_t buffer[GST_68K_REG_SIZE];
 	uint8_t * curpos = buffer;
 	for (int i = 0; i < 8; i++) {
 		write_le_32(curpos, context->dregs[i]);
@@ -139,16 +129,6 @@ uint8_t m68k_save_gst(m68k_context * context, uint32_t pc, FILE * gstfile)
 		return 0;
 	}
 
-	fseek(gstfile, GST_68K_RAM, SEEK_SET);
-	for (int i = 0; i < (32*1024);) {
-		for(curpos = buffer; curpos < (buffer + sizeof(buffer)); curpos += sizeof(uint16_t)) {
-			write_be_16(curpos, ram[i++]);
-		}
-		if (fwrite(buffer, 1, sizeof(buffer), gstfile) != sizeof(buffer)) {
-			fputs("Failed to write 68K RAM to savestate\n", stderr);
-			return 0;
-		}
-	}
 	return 1;
 }
 
@@ -218,10 +198,18 @@ uint8_t z80_load_gst(z80_context * context, FILE * gstfile)
 		context->mem_pointers[1] = NULL;
 	}
 	context->bank_reg = bank >> 15;
+	uint8_t buffer[Z80_RAM_BYTES];
 	fseek(gstfile, GST_Z80_RAM, SEEK_SET);
-	if(fread(context->mem_pointers[0], 1, 8*1024, gstfile) != (8*1024)) {
+	if(fread(buffer, 1, sizeof(buffer), gstfile) != (8*1024)) {
 		fputs("Failed to read Z80 RAM from savestate\n", stderr);
 		return 0;
+	}
+	for (int i = 0; i < Z80_RAM_BYTES; i++)
+	{
+		if (context->mem_pointers[0][i] != buffer[i]) {
+			context->mem_pointers[0][i] = buffer[i];
+			z80_handle_code_write(i, context);
+		}
 	}
 	return 1;
 }
@@ -414,6 +402,7 @@ uint8_t ym_save_gst(ym2612_context * context, FILE * gstfile)
 
 uint32_t load_gst(genesis_context * gen, char * fname)
 {
+	char buffer[4096];
 	FILE * gstfile = fopen(fname, "rb");
 	if (!gstfile) {
 		fprintf(stderr, "Could not open file %s for reading\n", fname);
@@ -432,6 +421,7 @@ uint32_t load_gst(genesis_context * gen, char * fname)
 	if (!pc) {
 		goto error_close;
 	}
+	
 	if (!vdp_load_gst(gen->vdp, gstfile)) {
 		goto error_close;
 	}
@@ -443,6 +433,22 @@ uint32_t load_gst(genesis_context * gen, char * fname)
 	}
 	gen->ports[0].control = 0x40;
 	gen->ports[1].control = 0x40;
+	
+	fseek(gstfile, GST_68K_RAM, SEEK_SET);
+	for (int i = 0; i < (32*1024);) {
+		if (fread(buffer, 1, sizeof(buffer), gstfile) != sizeof(buffer)) {
+			fputs("Failed to read 68K RAM from savestate\n", stderr);
+			return 0;
+		}
+		for(char *curpos = buffer; curpos < (buffer + sizeof(buffer)); curpos += sizeof(uint16_t)) {
+			uint16_t word = read_be_16(curpos);
+			if (word != gen->work_ram[i]) {
+				gen->work_ram[i] = word;
+				m68k_handle_code_write(0xFF0000 | (i << 1), gen->m68k);
+			}
+			i++;
+		}
+	}
 	fclose(gstfile);
 	return pc;
 
@@ -454,6 +460,7 @@ error:
 
 uint8_t save_gst(genesis_context * gen, char *fname, uint32_t m68k_pc)
 {
+	char buffer[4096];
 	FILE * gstfile = fopen(fname, "wb");
 	if (!gstfile) {
 		fprintf(stderr, "Could not open %s for writing\n", fname);
@@ -474,6 +481,16 @@ uint8_t save_gst(genesis_context * gen, char *fname, uint32_t m68k_pc)
 	}
 	if (!ym_save_gst(gen->ym, gstfile)) {
 		goto error_close;
+	}
+	fseek(gstfile, GST_68K_RAM, SEEK_SET);
+	for (int i = 0; i < (32*1024);) {
+		for(char *curpos = buffer; curpos < (buffer + sizeof(buffer)); curpos += sizeof(uint16_t)) {
+			write_be_16(curpos, gen->work_ram[i++]);
+		}
+		if (fwrite(buffer, 1, sizeof(buffer), gstfile) != sizeof(buffer)) {
+			fputs("Failed to write 68K RAM to savestate\n", stderr);
+			return 0;
+		}
 	}
 	return 1;
 
