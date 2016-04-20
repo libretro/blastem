@@ -9,6 +9,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
+#define LOWPASS_CUTOFF 3390
 
 void psg_init(psg_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t samples_frame)
 {
@@ -18,6 +20,10 @@ void psg_init(psg_context * context, uint32_t sample_rate, uint32_t master_clock
 	context->clock_inc = clock_div;
 	context->sample_rate = sample_rate;
 	context->samples_frame = samples_frame;
+	double rc = (1.0 / (double)LOWPASS_CUTOFF) / (2.0 * M_PI);
+	double dt = 1.0 / ((double)master_clock / (double)clock_div);
+	double alpha = dt / (dt + rc);
+	context->lowpass_alpha = (int32_t)(((double)0x10000) * alpha);
 	psg_adjust_master_clock(context, master_clock);
 	for (int i = 0; i < 4; i++) {
 		context->volume[i] = 0xF;
@@ -127,18 +133,16 @@ void psg_run(psg_context * context, uint32_t cycles)
 		if (context->noise_out) {
 			context->accum += volume_table[context->volume[3]];
 		}
-		context->sample_count++;
+		int32_t tmp = context->accum * context->lowpass_alpha + context->last_sample * (0x10000 - context->lowpass_alpha);
+		context->accum = tmp >> 16;
 
 		context->buffer_fraction += context->buffer_inc;
 		if (context->buffer_fraction >= BUFFER_INC_RES) {
 			context->buffer_fraction -= BUFFER_INC_RES;
-			uint32_t tmp = context->last_sample * (0x10000 - ((context->buffer_fraction << 16) / context->buffer_inc));
-			tmp += context->accum * ((context->buffer_fraction << 16) / context->buffer_inc);
-			printf("Last: %d, Cur: %d, Fraction: %d, Inc: %d, Result: %d, Samples: %d, Float: %f, Fixed: %X\n", 
-				context->last_sample, context->accum, (int)context->buffer_fraction, (int)context->buffer_inc, tmp >> 16, context->sample_count, (float)context->buffer_fraction/(float)context->buffer_inc, (int)((context->buffer_fraction << 16) / context->buffer_inc));
-
+			int32_t tmp = context->last_sample * ((context->buffer_fraction << 16) / context->buffer_inc);
+			tmp += context->accum * (0x10000 - ((context->buffer_fraction << 16) / context->buffer_inc));
 			context->audio_buffer[context->buffer_pos++] = tmp >> 16;
-			context->sample_count = 0;
+			
 			if (context->buffer_pos == context->samples_frame) {
 				if (!headless) {
 					render_wait_psg(context);
