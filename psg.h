@@ -18,12 +18,12 @@ typedef struct {
 	uint32_t cycles;
 	uint32_t sample_rate;
 	uint32_t samples_frame;
+	int32_t lowpass_alpha;
 	uint16_t lsfr;
 	uint16_t counter_load[4];
 	uint16_t counters[4];
 	int16_t  accum;
 	int16_t  last_sample;
-	int16_t  sample_count;
 	uint8_t  volume[4];
 	uint8_t  output_state[4];
 	uint8_t  noise_out;
