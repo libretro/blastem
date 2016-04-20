@@ -70,12 +70,15 @@ typedef struct {
 	//TODO: Condense the next two fields into one
 	uint32_t    write_cycle;
 	uint32_t    busy_cycles;
+	uint32_t    lowpass_alpha;
 	ym_operator operators[NUM_OPERATORS];
 	ym_channel  channels[NUM_CHANNELS];
 	uint16_t    timer_a;
 	uint16_t    timer_a_load;
 	uint16_t    env_counter;
 	ym_supp     ch3_supp[3];
+	int16_t     last_left;
+	int16_t     last_right;
 	uint8_t     timer_b;
 	uint8_t     sub_timer_b;
 	uint8_t     timer_b_load;

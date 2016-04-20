@@ -116,17 +116,19 @@ void ym_finalize_log()
 	}
 	log_context = NULL;
 }
-#define BUFFER_INC_RES 1000000000UL
+#define BUFFER_INC_RES 0x40000000UL
 
 void ym_adjust_master_clock(ym2612_context * context, uint32_t master_clock)
 {
 	uint64_t old_inc = context->buffer_inc;
-	context->buffer_inc = ((BUFFER_INC_RES * (uint64_t)context->sample_rate) / (uint64_t)master_clock) * (uint64_t)context->clock_inc;
+	context->buffer_inc = ((BUFFER_INC_RES * (uint64_t)context->sample_rate) / (uint64_t)master_clock) * (uint64_t)context->clock_inc * NUM_OPERATORS;
 }
 
 #ifdef __ANDROID__
 #define log2(x) (log(x)/log(2))
 #endif
+
+#define LOWPASS_CUTOFF 3390
 
 void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t sample_limit, uint32_t options)
 {
@@ -138,6 +140,11 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clo
 	context->sample_rate = sample_rate;
 	context->clock_inc = clock_div * 6;
 	ym_adjust_master_clock(context, master_clock);
+	
+	double rc = (1.0 / (double)LOWPASS_CUTOFF) / (2.0 * M_PI);
+	double dt = 1.0 / ((double)master_clock / (double)(context->clock_inc * NUM_OPERATORS));
+	double alpha = dt / (dt + rc);
+	context->lowpass_alpha = (int32_t)(((double)0x10000) * alpha);
 
 	context->sample_limit = sample_limit*2;
 	context->write_cycle = CYCLE_NEVER;
@@ -478,14 +485,11 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			//puts("operator update done");
 		}
 		context->current_op++;
-		context->buffer_fraction += context->buffer_inc;
 		if (context->current_op == NUM_OPERATORS) {
 			context->current_op = 0;
-		}
-		if (context->buffer_fraction > BUFFER_INC_RES) {
-			context->buffer_fraction -= BUFFER_INC_RES;
-			context->audio_buffer[context->buffer_pos] = 0;
-			context->audio_buffer[context->buffer_pos + 1] = 0;
+			
+			context->buffer_fraction += context->buffer_inc;
+			int16_t left = 0, right = 0;
 			for (int i = 0; i < NUM_CHANNELS; i++) {
 				int16_t value = context->channels[i].output;
 				if (value > 0x1FE0) {
@@ -498,23 +502,42 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 						value |= 0xC000;
 					}
 				}
-				if (context->channels[i].logfile) {
+				if (context->channels[i].logfile && context->buffer_fraction > BUFFER_INC_RES) {
 					fwrite(&value, sizeof(value), 1, context->channels[i].logfile);
 				}
 				if (context->channels[i].lr & 0x80) {
-					context->audio_buffer[context->buffer_pos] += (value * YM_VOLUME_MULTIPLIER) / YM_VOLUME_DIVIDER;
+					left += (value * YM_VOLUME_MULTIPLIER) / YM_VOLUME_DIVIDER;
 				}
 				if (context->channels[i].lr & 0x40) {
-					context->audio_buffer[context->buffer_pos+1] += (value * YM_VOLUME_MULTIPLIER) / YM_VOLUME_DIVIDER;
+					right += (value * YM_VOLUME_MULTIPLIER) / YM_VOLUME_DIVIDER;
 				}
 			}
-			context->buffer_pos += 2;
-			if (context->buffer_pos == context->sample_limit) {
-				if (!headless) {
-					render_wait_ym(context);
+			int32_t tmp = left * context->lowpass_alpha + context->last_left * (0x10000 - context->lowpass_alpha);
+			left = tmp >> 16;
+			tmp = right * context->lowpass_alpha + context->last_right * (0x10000 - context->lowpass_alpha);
+			right = tmp >> 16;
+			if (context->buffer_fraction > BUFFER_INC_RES) {
+				context->buffer_fraction -= BUFFER_INC_RES;
+
+				int64_t tmp = context->last_left * ((context->buffer_fraction << 16) / context->buffer_inc);
+				tmp += left * (0x10000 - ((context->buffer_fraction << 16) / context->buffer_inc));
+				context->audio_buffer[context->buffer_pos] = tmp >> 16;
+				
+				tmp = context->last_right * ((context->buffer_fraction << 16) / context->buffer_inc);
+				tmp += right * (0x10000 - ((context->buffer_fraction << 16) / context->buffer_inc));
+				context->audio_buffer[context->buffer_pos+1] = tmp >> 16;
+				
+				context->buffer_pos += 2;
+				if (context->buffer_pos == context->sample_limit) {
+					if (!headless) {
+						render_wait_ym(context);
+					}
 				}
 			}
+			context->last_left = left;
+			context->last_right = right;
 		}
+		
 	}
 	if (context->current_cycle >= context->write_cycle + (context->busy_cycles * context->clock_inc / 6)) {
 		context->status &= 0x7F;
