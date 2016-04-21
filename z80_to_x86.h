@@ -12,7 +12,7 @@
 #ifdef Z80_LOG_ADDRESS
 #define ZMAX_NATIVE_SIZE 255
 #else
-#define ZMAX_NATIVE_SIZE 128
+#define ZMAX_NATIVE_SIZE 160
 #endif
 
 enum {
