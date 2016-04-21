@@ -2729,7 +2729,7 @@ void z80_adjust_cycles(z80_context * context, uint32_t deduction)
 
 uint32_t zbreakpoint_patch(z80_context * context, uint16_t address, code_ptr dst)
 {
-	code_info code = {dst, dst+16};
+	code_info code = {dst, dst+32};
 	mov_ir(&code, address, context->options->gen.scratch1, SZ_W);
 	call(&code, context->bp_stub);
 	return code.cur-dst;
