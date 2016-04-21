@@ -354,6 +354,30 @@ T-12056 {
 		}
 	}
 }
+T-12046 {
+	name Mega Man - The Wily Wars
+	EEPROM {
+		type i2c
+		size 128
+	}
+	map {
+		0 {
+			device ROM
+			last 1FFFFF
+		}
+		200000 {
+			device EEPROM
+			last 3FFFFF
+			bits_read {
+				0 sda
+			}
+			bits_write {
+				0 sda
+				1 scl
+			}
+		}
+	}
+}
 BlstMenu {
 	map {
 		0 {
