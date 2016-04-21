@@ -1435,6 +1435,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		shl_ir(code, 4, opts->gen.scratch2, SZ_W);
 		and_ir(code, 0xF00F, opts->gen.scratch1, SZ_W);
 		and_ir(code, 0xF0, opts->regs[Z80_A], SZ_B);
+		and_ir(code, 0xF0, opts->gen.scratch2, SZ_W);
 		//opts->gen.scratch1 = 0x2001
 		//opts->gen.scratch2 = 0x0040
 		or_rr(code, opts->gen.scratch2, opts->gen.scratch1, SZ_W);
