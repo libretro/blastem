@@ -250,6 +250,88 @@ char * get_exe_dir()
 	return path;
 }
 
+dir_entry *get_dir_list(char *path, size_t *numret)
+{
+	HANDLE dir;
+	WIN32_FIND_DATA file;
+	char *pattern = alloc_concat(path, "/*.*");
+	dir = FindFirstFile(pattern, &file);
+	free(pattern);
+	if (dir == INVALID_HANDLE_VALUE) {
+		if (numret) {
+			*numret = 0;
+		}
+		return NULL;
+	}
+	
+	size_t storage = 64;
+	dir_entry *ret = malloc(sizeof(dir_entry) * storage);
+	size_t pos = 0;
+	
+	do {
+		if (pos == storage) {
+			storage = storage * 2;
+			ret = realloc(ret, sizeof(dir_entry) * storage);
+		}
+		ret[pos].name = strdup(file.cFileName);
+		ret[pos++].is_dir = (file.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+	} while (FindNextFile(dir, &file));
+	
+	FindClose(dir);
+	if (numret) {
+		*numret = pos;
+	}
+	return ret;
+}
+
+time_t get_modification_time(char *path)
+{
+	HANDLE file = CreateFile(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+	if (file == INVALID_HANDLE_VALUE) {
+		return 0;
+	}
+	FILETIME ft;
+	uint8_t ret = GetFileTime(file, NULL, NULL, &ft);
+	CloseHandle(file);
+	if (ret) {
+		uint64_t wintime = ((uint64_t)ft.dwHighDateTime) << 32 | ft.dwLowDateTime;
+		//convert to seconds
+		wintime /= 10000000;
+		//adjust for difference between Windows and Unix Epoch
+		wintime -= 11644473600LL;
+		return (time_t)wintime;
+	} else {
+		return 0;
+	}
+}
+
+int ensure_dir_exists(char *path)
+{
+	if (CreateDirectory(path, NULL)) {
+		return 1;
+	}
+	if (GetLastError() == ERROR_ALREADY_EXISTS) {
+		return 1;
+	}
+	if (GetLastError() != ERROR_PATH_NOT_FOUND) {
+		warning("CreateDirectory failed with unexpected error code %X\n", GetLastError());
+		return 0;
+	}
+	char *parent = strdup(path);
+	char *sep = strrchr(parent, '/');
+	if (!sep || sep == parent) {
+		//relative path, but for some reason we failed
+		return 0;
+	}
+	*sep = 0;
+	if (!ensure_dir_exists(parent)) {
+		free(parent);
+		return 0;
+	}
+	free(parent);
+	return CreateDirectory(path, NULL);
+}
+
 #else
 
 char * get_home_dir()
@@ -357,15 +439,6 @@ dir_entry *get_dir_list(char *path, size_t *numret)
 	return ret;
 }
 
-void free_dir_list(dir_entry *list, size_t numentries)
-{
-	for (size_t i = 0; i < numentries; i++)
-	{
-		free(list[i].name);
-	}
-	free(list);
-}
-
 time_t get_modification_time(char *path)
 {
 	struct stat st;
@@ -402,6 +475,15 @@ int ensure_dir_exists(char *path)
 }
 
 #endif
+
+void free_dir_list(dir_entry *list, size_t numentries)
+{
+	for (size_t i = 0; i < numentries; i++)
+	{
+		free(list[i].name);
+	}
+	free(list);
+}
 
 #ifdef __ANDROID__
 
