@@ -182,6 +182,9 @@ page_pointers  rs.l 1024
 mouse_sprite   rs.l 1
 menu_functions rs.l 1
 mouse_x        rs.w 1
+selection_top  rs.w 1
+selection_bot  rs.w 1
+selection_mask rs.w 1
 num_sprites    rs.b 1
 last_pad1      rs.b 1
 last_pad2      rs.b 1
@@ -429,10 +432,14 @@ handle_mouse:
 	asr.w #1, d0
 	move.w d0, (6, a2)
 	move.w (a2), d1
-	cmp.w #272, d1
+	cmp.w selection_top.w, d1
 	blo .done
-	cmp.w #655, d1
+	cmp.w selection_bot.w, d1
 	bhi .done
+	tst.b num_menu.w
+	bne .handle_menu
+	tst.b num_slots.w
+	bne .handle_slots
 	and.w #$FFF0, d1
 	subq #8, d1
 	move.w d1, (sprite_list).w
@@ -441,6 +448,41 @@ handle_mouse:
 	sub.w #264, d1
 	lsr.w #4, d1
 	move.b d1, selected.w
+	bra .no_mouse_move
+.handle_menu
+	;TODO: FIXME
+	and.w #$FFF0, d1
+	moveq #0, d0
+	move.w d1, d0
+	sub.w selection_top.w, d0
+	divu.w #48, d0
+	swap d0
+	tst.w d0
+	beq .no_adjust
+	
+	cmp.w #16, d0
+	bne .round_up
+	swap d0
+	sub.w #16, d1
+	bra .set_cursor_pos
+	
+.round_up
+	swap d0
+	addq #1, d0
+	add.w #16, d1
+	bra .set_cursor_pos
+	
+.no_adjust
+	swap d0
+.set_cursor_pos
+	move.w d1, (sprite_list).w
+	move.w d1, (sprite_list+8).w
+
+	move.b d0, selected.w
+	
+	bra .no_mouse_move
+.handle_slots
+	
 .no_mouse_move
 	btst #0, d4
 	bne select_entry
@@ -638,6 +680,8 @@ draw_menu:
 	move.b d7, selected.w
 	;save menu pointer for second pass
 	movea.l a5, a4
+	;adjust arrow mask
+	move.w #$FFE0, selection_mask.w
 .lenloop	
 	tst.b (a5)
 	beq .lendone
@@ -677,6 +721,8 @@ draw_menu:
 	add.w #256, d4
 	move.w d4, (sprite_list).w
 	move.w d4, (sprite_list+8).w
+	;update mouse top limit
+	move.w d4, selection_top.w
 	;restore menu pointer
 	movea.l a4, a5
 .drawloop
@@ -709,6 +755,10 @@ draw_menu:
 	addq #3, d6
 	bra .drawloop
 .done
+	;update mouse bottom limit
+	lsl.w #4, d6
+	add.w #224, d6
+	move.w d6, selection_bot.w
 	rts
 	
 clear_screen:
@@ -852,6 +902,9 @@ render_page:
 	
 	;clear menu state
 	move.b #0, num_menu.w
+	move.w #272, selection_top.w
+	move.w #655, selection_bot.w
+	move.w #$FFF0, selection_mask.w
 
 	;init scroll table
 	vdpaccess $0, VDP_VRAM_WRITE
