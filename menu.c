@@ -109,6 +109,10 @@ cleanup:
 }
 #endif
 
+#ifdef _WIN32
+#define localtime_r(a,b) localtime(a)
+#endif
+
 void * menu_write_w(uint32_t address, void * context, uint16_t value)
 {
 	m68k_context *m68k = context;
