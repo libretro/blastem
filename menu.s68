@@ -482,7 +482,14 @@ handle_mouse:
 	
 	bra .no_mouse_move
 .handle_slots
-	
+	and.w #$FFE0, d1
+	subq #8, d1
+	move.w d1, (sprite_list).w
+	move.w d1, (sprite_list+8).w
+
+	sub.w #264, d1
+	lsr.w #5, d1
+	move.b d1, selected.w
 .no_mouse_move
 	btst #0, d4
 	bne select_entry
@@ -1016,6 +1023,7 @@ show_save_slots:
 	move.w #(256+26), (sprite_list+8).w
 	move.w #(128+8), (sprite_list+6).w
 	move.w #(128+320-24), (sprite_list+6+8).w
+	move.w #(256+32), selection_top.w
 	move.b #0, selected.w
 	move.b #0, num_menu.w
 	lea dir_buffer, a6
@@ -1039,6 +1047,9 @@ show_save_slots:
 	addq #2, d7
 	bra .slotloop
 .done
+	lsl.w #4, d7
+	add.w #248, d7
+	move.w d7, selection_bot.w
 	move.b d6, num_slots.w
 	rts
 	
