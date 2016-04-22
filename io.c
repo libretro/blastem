@@ -108,8 +108,6 @@ static keybinding * bindings[0x10000];
 static joystick joysticks[MAX_JOYSTICKS];
 static mousebinding mice[MAX_MICE];
 const uint8_t dpadbits[] = {RENDER_DPAD_UP, RENDER_DPAD_DOWN, RENDER_DPAD_LEFT, RENDER_DPAD_RIGHT};
-static mouse_modes mouse_mode;
-static char mouse_captured;
 
 void bind_key(int keycode, uint8_t bind_type, uint8_t subtype_a, uint8_t subtype_b, uint8_t value)
 {
@@ -278,8 +276,8 @@ void handle_joydown(int joystick, int button)
 
 void handle_mousedown(int mouse, int button)
 {
-	if (mouse_mode == MOUSE_CAPTURE && !mouse_captured) {
-		mouse_captured = 1;
+	if (genesis->mouse_mode == MOUSE_CAPTURE && !genesis->mouse_captured) {
+		genesis->mouse_captured = 1;
 		render_relative_mouse(1);
 		return;
 	}
@@ -378,8 +376,8 @@ void handle_binding_up(keybinding * binding)
 			}
 			break;
 		case UI_RELEASE_MOUSE:
-			if (mouse_captured) {
-				mouse_captured = 0;
+			if (genesis->mouse_captured) {
+				genesis->mouse_captured = 0;
 				render_relative_mouse(0);
 			}
 			break;
@@ -443,7 +441,7 @@ void handle_mouse_moved(int mouse, uint16_t x, uint16_t y, int16_t deltax, int16
 		return;
 	}
 	//TODO: relative mode
-	switch(mouse_mode)
+	switch(genesis->mouse_mode)
 	{
 	case MOUSE_ABSOLUTE: {
 		float scale_x = 640.0 / ((float)render_width());
@@ -459,7 +457,7 @@ void handle_mouse_moved(int mouse, uint16_t x, uint16_t y, int16_t deltax, int16
 		break;
 	}
 	case MOUSE_CAPTURE: {
-		if (mouse_captured) {
+		if (genesis->mouse_captured) {
 			mice[mouse].motion_port->device.mouse.cur_x += deltax;
 			mice[mouse].motion_port->device.mouse.cur_y += deltay;
 		}
@@ -697,8 +695,9 @@ static void cleanup_sockfile()
 	unlink(sockfile_name);
 }
 
-void setup_io_devices(tern_node * config, rom_info *rom, io_port * ports)
+void setup_io_devices(tern_node * config, rom_info *rom, genesis_context *gen)
 {
+	io_port * ports = gen->ports;
 	tern_node *io_nodes = tern_get_node(tern_find_path(config, "io\0devices\0"));
 	char * io_1 = rom->port1_override ? rom->port1_override : tern_find_ptr(io_nodes, "1");
 	char * io_2 = rom->port2_override ? rom->port2_override : tern_find_ptr(io_nodes, "2");
@@ -709,13 +708,13 @@ void setup_io_devices(tern_node * config, rom_info *rom, io_port * ports)
 	process_device(io_ext, ports+2);
 
 	if (render_fullscreen()) {
-			mouse_mode = MOUSE_RELATIVE;
+			gen->mouse_mode = MOUSE_RELATIVE;
 			render_relative_mouse(1);
 	} else {
 		if (rom->mouse_mode && !strcmp(rom->mouse_mode, "absolute")) {
-			mouse_mode = MOUSE_ABSOLUTE;
+			gen->mouse_mode = MOUSE_ABSOLUTE;
 		} else {
-			mouse_mode = MOUSE_CAPTURE;
+			gen->mouse_mode = MOUSE_CAPTURE;
 		}
 	}
 
@@ -1074,7 +1073,7 @@ void mouse_check_ready(io_port *port, uint32_t current_cycle)
 		if (port->device.mouse.tr_counter == 3) {
 			port->device.mouse.latched_x = port->device.mouse.cur_x;
 			port->device.mouse.latched_y = port->device.mouse.cur_y;
-			if (mouse_mode == MOUSE_ABSOLUTE) {
+			if (genesis->mouse_mode == MOUSE_ABSOLUTE) {
 				//avoid overflow in absolute mode
 				int deltax = port->device.mouse.latched_x - port->device.mouse.last_read_x;
 				if (abs(deltax) > 255) {

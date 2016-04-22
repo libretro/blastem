@@ -49,6 +49,8 @@ struct genesis_context {
 	uint8_t         bus_busy;
 	uint8_t         should_exit;
 	uint8_t         save_state;
+	uint8_t         mouse_mode;
+	uint8_t         mouse_captured;
 	eeprom_state    eeprom;
 };
 
