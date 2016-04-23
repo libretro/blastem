@@ -1588,6 +1588,11 @@ void translate_m68k_bit(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 			and_ir(code, 7, src_op->base, SZ_D);
 			size = SZ_D;
 		}
+		if (dst_op->mode == MODE_IMMED) {
+			dst_op->base = src_op->base == opts->gen.scratch1 ? opts->gen.scratch2 : opts->gen.scratch1;
+			mov_ir(code, dst_op->disp, dst_op->base, SZ_B);
+			dst_op->mode = MODE_REG_DIRECT;
+		}
 		if (dst_op->mode == MODE_REG_DIRECT) {
 			op_rr(code, inst, src_op->base, dst_op->base, size);
 		} else {
