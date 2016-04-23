@@ -72,7 +72,7 @@ int load_smd_rom(long filesize, FILE * f)
 	filesize -= SMD_HEADER_SIZE;
 	fseek(f, SMD_HEADER_SIZE, SEEK_SET);
 
-	uint16_t * dst = cart;
+	uint16_t * dst = cart = malloc(nearest_pow2(filesize));
 	int rom_size = filesize;
 	while (filesize > 0) {
 		fread(block, 1, SMD_BLOCK_SIZE, f);
@@ -81,7 +81,7 @@ int load_smd_rom(long filesize, FILE * f)
 		}
 		filesize -= SMD_BLOCK_SIZE;
 	}
-	return filesize;
+	return rom_size;
 }
 
 void byteswap_rom(int filesize)
