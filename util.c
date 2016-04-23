@@ -286,23 +286,19 @@ dir_entry *get_dir_list(char *path, size_t *numret)
 
 time_t get_modification_time(char *path)
 {
-	HANDLE file = CreateFile(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
-	if (file == INVALID_HANDLE_VALUE) {
+	HANDLE results;
+	WIN32_FIND_DATA file;
+	results = FindFirstFile(path, &file);
+	if (results == INVALID_HANDLE_VALUE) {
 		return 0;
 	}
-	FILETIME ft;
-	uint8_t ret = GetFileTime(file, NULL, NULL, &ft);
-	CloseHandle(file);
-	if (ret) {
-		uint64_t wintime = ((uint64_t)ft.dwHighDateTime) << 32 | ft.dwLowDateTime;
-		//convert to seconds
-		wintime /= 10000000;
-		//adjust for difference between Windows and Unix Epoch
-		wintime -= 11644473600LL;
-		return (time_t)wintime;
-	} else {
-		return 0;
-	}
+	FindClose(results);
+	uint64_t wintime = ((uint64_t)file.ftLastWriteTime.dwHighDateTime) << 32 | file.ftLastWriteTime.dwLowDateTime;
+	//convert to seconds
+	wintime /= 10000000;
+	//adjust for difference between Windows and Unix Epoch
+	wintime -= 11644473600LL;
+	return (time_t)wintime;
 }
 
 int ensure_dir_exists(char *path)
