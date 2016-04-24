@@ -1694,9 +1694,8 @@ void vdp_test_port_write(vdp_context * context, uint16_t value)
 uint16_t vdp_control_port_read(vdp_context * context)
 {
 	context->flags &= ~FLAG_PENDING;
-	//TODO: Open bus emulation
 	//Bits 15-10 are not fixed like Charles MacDonald's doc suggests, but instead open bus values that reflect 68K prefetch
-	uint16_t value = 0;
+	uint16_t value = get_open_bus_value() & 0xFC00;
 	if (context->fifo_read < 0) {
 		value |= 0x200;
 	}
