@@ -692,7 +692,7 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 		update_flags(opts, N|Z|V0|C0);
 	}
 	if (inst->dst.addr_mode != MODE_REG && inst->dst.addr_mode != MODE_AREG) {
-		m68k_write_size(opts, inst->extra.size);
+		m68k_write_size(opts, inst->extra.size, inst->dst.addr_mode == MODE_AREG_PREDEC);
 		if (inst->dst.addr_mode == MODE_AREG_POSTINC) {
 			inc_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (inst->dst.params.regs.pri == 7 ? 2 : 1));
 			addi_areg(opts, inc_amount, inst->dst.params.regs.pri);
