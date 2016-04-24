@@ -796,6 +796,13 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 {
 	check_cycles_int(&opts->gen, inst->address);
 	//log_address(&opts->gen, inst->address, "M68K: %X @ %d\n");
+	if (
+		(inst->src.addr_mode > MODE_AREG && inst->src.addr_mode < MODE_IMMEDIATE) 
+		|| (inst->dst.addr_mode > MODE_AREG && inst->dst.addr_mode < MODE_IMMEDIATE)
+	) {
+		//Not accurate for all cases, but probably good enough for now
+		m68k_set_last_prefetch(opts, inst->address + inst->bytes);
+	}
 	impl_info * info = m68k_impls + inst->op;
 	if (info->itype == RAW_FUNC) {
 		info->impl.raw(opts, inst);

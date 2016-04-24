@@ -2167,6 +2167,11 @@ void translate_out_of_bounds(code_info *code)
 	call_args(code, (code_ptr)exit, 1, RDI);
 }
 
+void m68k_set_last_prefetch(m68k_options *opts, uint32_t address)
+{
+	mov_irdisp(&opts->gen.code, address, opts->gen.context_reg, offsetof(m68k_context, last_prefetch_address), SZ_D);
+}
+
 void nop_fill_or_jmp_next(code_info *code, code_ptr old_end, code_ptr next_inst)
 {
 	if (next_inst == old_end && next_inst - code->cur < 2) {

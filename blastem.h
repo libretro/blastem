@@ -68,6 +68,7 @@ extern uint16_t *ram;
 extern uint8_t z80_ram[Z80_RAM_BYTES];
 
 uint16_t read_dma_value(uint32_t address);
+uint16_t get_open_bus_value();
 m68k_context * sync_components(m68k_context *context, uint32_t address);
 m68k_context * debugger(m68k_context * context, uint32_t address);
 void set_speed_percent(genesis_context * context, uint32_t percent);

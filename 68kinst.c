@@ -1546,8 +1546,10 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 	}
 	if (decoded->op == M68K_INVALID) {
 		decoded->src.params.immed = *start;
+		decoded->bytes = 2;
 		return start + 1;
 	}
+	decoded->bytes = 2 * (istream + 1 - start);
 	return istream+1;
 }
 
