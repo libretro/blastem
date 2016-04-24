@@ -26,19 +26,22 @@ if [ $OS = "Linux" ]; then
 fi
 
 make PORTABLE=1 clean all
+make menu.bin
 if [ $OS = "Windows" ]; then
 	binaries="dis.exe zdis.exe stateview.exe vgmplay.exe blastem.exe SDL2.dll"
 	cmd="wine blastem.exe"
 	txt=".txt"
 else
+	binaries="dis zdis stateview vgmplay blastem termhelper"
 	if [ $OS = "Darwin" ]; then
-		binaries="dis zdis stateview vgmplay blastem termhelper Frameworks"
+		binaries="$binaries Frameworks"
 	else
-		binaries="dis zdis stateview vgmplay blastem termhelper lib"
+		binaries="$binaries lib"
 	fi
 	cmd="./blastem"
 	txt=""
 fi
+binaries="$binaries menu.bin"
 ver=`$cmd -v | awk '/blastem/ { gsub(/\r/, "", $2); print $2 }'`
 if [ $OS = "Windows" ]; then
 	suffix='-win32'

@@ -125,6 +125,10 @@ else
 MAINOBJS+= $(Z80OBJS)
 endif
 
+ifeq ($(OS),Windows)
+MAINOBJS+= res.o
+endif
+
 ALL=dis$(EXE) zdis$(EXE) stateview$(EXE) vgmplay$(EXE) blastem$(EXE)
 ifneq ($(OS),Windows)
 ALL+= termhelper
@@ -205,6 +209,8 @@ vos_prog_info : vos_prog_info.o vos_program_module.o
 
 %.bin : %.sz8
 	vasmz80_mot -Fbin -spaces -o $@ $<
+res.o : blastem.rc
+	wine windres blastem.rc res.o
 
 arrow.tiles : arrow.png
 cursor.tiles : cursor.png
