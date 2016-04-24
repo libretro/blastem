@@ -1,0 +1,25 @@
+1 VERSIONINFO
+FILEVERSION     0,4,0,0
+PRODUCTVERSION  0,4,0,0
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904E4"
+    BEGIN
+      VALUE "CompanyName", "RetroDev"
+      VALUE "FileDescription", "BlastEm - A fast and accurate Genesis/Megadrive emulator"
+      VALUE "FileVersion", "1.0"
+      VALUE "InternalName", "blastem"
+      VALUE "LegalCopyright", "Copyright 2011-2016 Michael Pavone"
+      VALUE "OriginalFilename", "blastem.exe"
+      VALUE "ProductName", "BlastEm"
+      VALUE "ProductVersion", "0.4.0"
+    END
+  END
+
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1252
+  END
+END
+2 ICON "icons/windows.ico"
