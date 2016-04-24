@@ -41,7 +41,7 @@
 #define FLAG_MASKED        0x04
 #define FLAG_WINDOW        0x08
 #define FLAG_PENDING       0x10
-#define FLAG_UNUSED_SLOT   0x20
+#define FLAG_READ_FETCHED  0x20
 #define FLAG_DMA_RUN       0x40
 #define FLAG_DMA_PROG      0x80
 
@@ -161,6 +161,7 @@ typedef struct {
 	uint16_t    col_1;
 	uint16_t    col_2;
 	uint16_t    hv_latch;
+	uint16_t    prefetch;
 	uint8_t     v_offset;
 	uint8_t     dma_cd;
 	uint8_t     hint_counter;
