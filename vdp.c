@@ -229,7 +229,7 @@ void vdp_print_sprite_table(vdp_context * context)
 #define VSRAM_READ 4 //0100
 #define VSRAM_WRITE 5//0101
 //6 would trigger regsiter write 0110
-//7 is a mystery
+//7 is a mystery //0111
 #define CRAM_READ 8  //1000
 //9 is also a mystery //1001
 //A would trigger register write 1010
@@ -238,6 +238,21 @@ void vdp_print_sprite_table(vdp_context * context)
 //D is a mystery 1101
 //E would trigger register write 1110
 //F is a mystery 1111
+
+//Possible theory on how bits work
+//CD0 = Read/Write flag
+//CD2,(CD1|CD3) = RAM type
+//  00 = VRAM
+//  01 = CRAM
+//  10 = VSRAM
+//  11 = VRAM8
+//Would result in
+//  7 = VRAM8 write
+//  9 = CRAM write alias
+//  B = CRAM write alias
+//  D = VRAM8 write alias
+//  F = VRAM8 write alais
+
 #define DMA_START 0x20
 
 const char * cd_name(uint8_t cd)
@@ -468,14 +483,13 @@ void write_cram(vdp_context * context, uint16_t address, uint16_t value)
 	context->colors[addr + CRAM_SIZE*2] = color_map[(value & 0xEEE) | FBUF_HILIGHT];
 }
 
+#define CRAM_BITS 0xEEE
+#define VSRAM_BITS 0x7FF
+#define VSRAM_DIRTY_BITS 0xF800
+
 void external_slot(vdp_context * context)
 {
 	fifo_entry * start = context->fifo + context->fifo_read;
-	/*if (context->flags2 & FLAG2_READ_PENDING) {
-		context->flags2 &= ~FLAG2_READ_PENDING;
-		context->flags |= FLAG_UNUSED_SLOT;
-		return;
-	}*/
 	if (context->fifo_read >= 0 && start->cycle <= context->cycles) {
 		switch (start->cd & 0xF)
 		{
@@ -508,9 +522,72 @@ void external_slot(vdp_context * context)
 		if (context->fifo_read == context->fifo_write) {
 			context->fifo_read = -1;
 		}
-		context->flags &= ~FLAG_UNUSED_SLOT;
-	} else {
-		context->flags |= FLAG_UNUSED_SLOT;
+	} else if ((context->flags & FLAG_DMA_RUN) && (context->regs[REG_DMASRC_H] & 0xC0) == 0xC0) {
+		if (context->flags & FLAG_READ_FETCHED) {
+			context->vdpmem[context->address ^ 1] = context->prefetch;
+			
+			//Update DMA state
+			context->regs[REG_DMASRC_L] += 1;
+			if (!context->regs[REG_DMASRC_L]) {
+				context->regs[REG_DMASRC_M] += 1;
+			}
+			context->address += context->regs[REG_AUTOINC];
+			uint16_t dma_len = ((context->regs[REG_DMALEN_H] << 8) | context->regs[REG_DMALEN_L]) - 1;
+			context->regs[REG_DMALEN_H] = dma_len >> 8;
+			context->regs[REG_DMALEN_L] = dma_len;
+			if (!dma_len) {
+				context->flags &= ~FLAG_DMA_RUN;
+				context->cd &= 0xF;
+			}
+			
+			context->flags &= ~FLAG_READ_FETCHED;
+		} else {
+			context->prefetch = context->vdpmem[(context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L] ^ 1];
+			
+			context->flags |= FLAG_READ_FETCHED;
+		}
+	} else if (!(context->cd & 1) && !(context->flags & FLAG_READ_FETCHED)){
+		switch(context->cd & 0xF)
+		{
+		case VRAM_READ:
+			if (context->flags2 & FLAG2_READ_PENDING) {
+				context->prefetch |= context->vdpmem[context->address | 1];
+				context->flags |= FLAG_READ_FETCHED;
+				context->flags2 &= ~FLAG2_READ_PENDING;
+				//Should this happen after the prefetch or after the read?
+				//context->address += context->regs[REG_AUTOINC];
+			} else {
+				context->prefetch = context->vdpmem[context->address & 0xFFFE] << 8;
+				context->flags2 |= FLAG2_READ_PENDING;
+			}
+			break;
+		case VRAM_READ8:
+			context->prefetch = context->vdpmem[context->address ^ 1];
+			context->prefetch |= context->fifo[context->fifo_write].value & 0xFF00;
+			context->flags |= FLAG_READ_FETCHED;
+			//Should this happen after the prefetch or after the read?
+			//context->address += context->regs[REG_AUTOINC];
+			break;
+		case CRAM_READ:
+			context->prefetch = context->cram[(context->address/2) & (CRAM_SIZE-1)] & CRAM_BITS;
+			context->prefetch |= context->fifo[context->fifo_write].value & ~CRAM_BITS;
+			context->flags |= FLAG_READ_FETCHED;
+			//Should this happen after the prefetch or after the read?
+			//context->address += context->regs[REG_AUTOINC];
+			break;
+		case VSRAM_READ: {
+			uint16_t address = (context->address /2) & 63;
+			if (address >= VSRAM_SIZE) {
+				address = 0;
+			}
+			context->prefetch = context->vsram[address] & VSRAM_BITS;
+			context->prefetch |= context->fifo[context->fifo_write].value & VSRAM_DIRTY_BITS;
+			context->flags |= FLAG_READ_FETCHED;
+			//Should this happen after the prefetch or after the read?
+			//context->address += context->regs[REG_AUTOINC];
+			break;
+		}
+		}
 	}
 }
 
@@ -541,20 +618,7 @@ void run_dma_src(vdp_context * context, int32_t slot)
 			context->fifo_write = (context->fifo_write + 1) & (FIFO_SIZE-1);
 		}
 		break;
-	//Copy
-	case 0xC0:
-		if (context->flags & FLAG_UNUSED_SLOT && context->fifo_read < 0) {
-			//TODO: Fix this to not use the FIFO at all once read-caching is properly implemented
-			context->fifo_read = (context->fifo_write-1) & (FIFO_SIZE-1);
-			cur = context->fifo + context->fifo_read;
-			cur->cycle = context->cycles;
-			cur->address = context->address;
-			cur->partial = 1;
-			cur->value = context->vdpmem[(context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L] ^ 1] | (cur->value & 0xFF00);
-			cur->cd = VRAM_WRITE;
-			context->flags &= ~FLAG_UNUSED_SLOT;
-		}
-		break;
+	//Fill
 	case 0x80:
 		if (context->fifo_read < 0) {
 			context->fifo_read = (context->fifo_write-1) & (FIFO_SIZE-1);
@@ -1527,6 +1591,9 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 		context->address = (context->address & 0x3FFF) | (value << 14);
 		context->cd = (context->cd & 0x3) | ((value >> 2) & 0x3C);
 		context->flags &= ~FLAG_PENDING;
+		//Should these be taken care of here or after the first write?
+		context->flags &= ~FLAG_READ_FETCHED;
+		context->flags2 &= ~FLAG2_READ_PENDING;
 		//printf("New Address: %X, New CD: %X\n", context->address, context->cd);
 		if (context->cd & 0x20 && (context->regs[REG_MODE_2] & BIT_DMA_ENABLE)) {
 			//
@@ -1573,6 +1640,9 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 			context->flags |= FLAG_PENDING;
 			context->address = (context->address &0xC000) | (value & 0x3FFF);
 			context->cd = (context->cd &0x3C) | (value >> 14);
+			//Should these be taken care of here or after the second write?
+			//context->flags &= ~FLAG_READ_FETCHED;
+			//context->flags2 &= ~FLAG2_READ_PENDING;
 		}
 	}
 	return 0;
@@ -1584,7 +1654,12 @@ int vdp_data_port_write(vdp_context * context, uint16_t value)
 	if (context->flags & FLAG_DMA_RUN && (context->regs[REG_DMASRC_H] & 0xC0) != 0x80) {
 		return -1;
 	}
-	context->flags &= ~FLAG_PENDING;
+	if (context->flags & FLAG_PENDING) {
+		context->flags &= ~FLAG_PENDING;
+		//Should these be cleared here?
+		context->flags &= ~FLAG_READ_FETCHED;
+		context->flags2 &= ~FLAG2_READ_PENDING;
+	}
 	/*if (context->fifo_cur == context->fifo_end) {
 		printf("FIFO full, waiting for space before next write at cycle %X\n", context->cycles);
 	}*/
@@ -1619,7 +1694,9 @@ void vdp_test_port_write(vdp_context * context, uint16_t value)
 uint16_t vdp_control_port_read(vdp_context * context)
 {
 	context->flags &= ~FLAG_PENDING;
-	uint16_t value = 0x3400;
+	//TODO: Open bus emulation
+	//Bits 15-10 are not fixed like Charles MacDonald's doc suggests, but instead open bus values that reflect 68K prefetch
+	uint16_t value = 0;
 	if (context->fifo_read < 0) {
 		value |= 0x200;
 	}
@@ -1665,54 +1742,24 @@ uint16_t vdp_control_port_read(vdp_context * context)
 	return value;
 }
 
-#define CRAM_BITS 0xEEE
-#define VSRAM_BITS 0x7FF
-#define VSRAM_DIRTY_BITS 0xF800
-
 uint16_t vdp_data_port_read(vdp_context * context)
 {
-	context->flags &= ~FLAG_PENDING;
+	if (context->flags & FLAG_PENDING) {
+		context->flags &= ~FLAG_PENDING;
+		//Should these be cleared here?
+		context->flags &= ~FLAG_READ_FETCHED;
+		context->flags2 &= ~FLAG2_READ_PENDING;
+	}
 	if (context->cd & 1) {
 		return 0;
 	}
-	//Not sure if the FIFO should be drained before processing a read or not, but it would make sense
-	context->flags &= ~FLAG_UNUSED_SLOT;
-	//context->flags2 |= FLAG2_READ_PENDING;
-	while (!(context->flags & FLAG_UNUSED_SLOT)) {
+	while (!(context->flags & FLAG_READ_FETCHED)) {
 		vdp_run_context(context, context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20));
 	}
-	uint16_t value = 0;
-	switch (context->cd & 0xF)
-	{
-	case VRAM_READ:
-		value = context->vdpmem[context->address & 0xFFFE] << 8;
-		context->flags &= ~FLAG_UNUSED_SLOT;
-		context->flags2 |= FLAG2_READ_PENDING;
-		while (!(context->flags & FLAG_UNUSED_SLOT)) {
-			vdp_run_context(context, context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20));
-		}
-		value |= context->vdpmem[context->address | 1];
-		break;
-	case VRAM_READ8:
-		value = context->vdpmem[context->address ^ 1];
-		value |= context->fifo[context->fifo_write].value & 0xFF00;
-		break;
-	case CRAM_READ:
-		value = context->cram[(context->address/2) & (CRAM_SIZE-1)] & CRAM_BITS;
-		value |= context->fifo[context->fifo_write].value & ~CRAM_BITS;
-		break;
-	case VSRAM_READ: {
-		uint16_t address = (context->address /2) & 63;
-		if (address >= VSRAM_SIZE) {
-			address = 0;
-		}
-		value = context->vsram[address] & VSRAM_BITS;
-		value |= context->fifo[context->fifo_write].value & VSRAM_DIRTY_BITS;
-		break;
-		}
-	}
+	context->flags &= ~FLAG_READ_FETCHED;
+	//Should this happen after the prefetch or after the read?
 	context->address += context->regs[REG_AUTOINC];
-	return value;
+	return context->prefetch;
 }
 
 uint16_t vdp_hv_counter_read(vdp_context * context)
