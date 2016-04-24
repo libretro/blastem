@@ -282,6 +282,7 @@ typedef struct m68kinst {
 		uint8_t size;
 		uint8_t cond;
 	} extra;
+	uint8_t bytes;
 	uint32_t address;
 	m68k_op_info src;
 	m68k_op_info dst;

@@ -144,6 +144,11 @@ uint16_t read_dma_value(uint32_t address)
 	return 0;
 }
 
+uint16_t get_open_bus_value()
+{
+	return read_dma_value(genesis->m68k->last_prefetch_address/2);
+}
+
 void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 {
 	//static int old_int_cycle = CYCLE_NEVER;
@@ -705,8 +710,7 @@ uint8_t io_read(uint32_t location, m68k_context * context)
 		} else {
 			if (location == 0x1100) {
 				value = z80_enabled ? !z80_get_busack(gen->z80, context->current_cycle) : !gen->z80->busack;
-				//TODO: actual pre-fetch emulation
-				value |= 0x4E;
+				value |= (get_open_bus_value() >> 8) & 0xFE;
 				dprintf("Byte read of BUSREQ returned %d @ %d (reset: %d)\n", value, context->current_cycle, gen->z80->reset);
 			} else if (location == 0x1200) {
 				value = !gen->z80->reset;
@@ -726,8 +730,7 @@ uint16_t io_read_w(uint32_t location, m68k_context * context)
 		value = value | (value << 8);
 	} else {
 		value <<= 8;
-		//TODO: actual pre-fetch emulation
-		value |= 0x73;
+		value |= get_open_bus_value() & 0xFF;
 	}
 	return value;
 }
