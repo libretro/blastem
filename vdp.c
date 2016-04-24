@@ -487,8 +487,32 @@ void write_cram(vdp_context * context, uint16_t address, uint16_t value)
 #define VSRAM_BITS 0x7FF
 #define VSRAM_DIRTY_BITS 0xF800
 
+void vdp_advance_dma(vdp_context * context)
+{
+	context->regs[REG_DMASRC_L] += 1;
+	if (!context->regs[REG_DMASRC_L]) {
+		context->regs[REG_DMASRC_M] += 1;
+	}
+	context->address += context->regs[REG_AUTOINC];
+	uint16_t dma_len = ((context->regs[REG_DMALEN_H] << 8) | context->regs[REG_DMALEN_L]) - 1;
+	context->regs[REG_DMALEN_H] = dma_len >> 8;
+	context->regs[REG_DMALEN_L] = dma_len;
+	if (!dma_len) {
+		context->flags &= ~FLAG_DMA_RUN;
+		context->cd &= 0xF;
+	}
+}
+
 void external_slot(vdp_context * context)
 {
+	if ((context->flags & FLAG_DMA_RUN) && (context->regs[REG_DMASRC_H] & 0xC0) == 0x80 && context->fifo_read < 0) {
+		context->fifo_read = (context->fifo_write-1) & (FIFO_SIZE-1);
+		fifo_entry * cur = context->fifo + context->fifo_read;
+		cur->cycle = context->cycles;
+		cur->address = context->address;
+		cur->partial = 2;
+		vdp_advance_dma(context);
+	}
 	fifo_entry * start = context->fifo + context->fifo_read;
 	if (context->fifo_read >= 0 && start->cycle <= context->cycles) {
 		switch (start->cd & 0xF)
@@ -530,18 +554,7 @@ void external_slot(vdp_context * context)
 			context->vdpmem[context->address ^ 1] = context->prefetch;
 			
 			//Update DMA state
-			context->regs[REG_DMASRC_L] += 1;
-			if (!context->regs[REG_DMASRC_L]) {
-				context->regs[REG_DMASRC_M] += 1;
-			}
-			context->address += context->regs[REG_AUTOINC];
-			uint16_t dma_len = ((context->regs[REG_DMALEN_H] << 8) | context->regs[REG_DMALEN_L]) - 1;
-			context->regs[REG_DMALEN_H] = dma_len >> 8;
-			context->regs[REG_DMALEN_L] = dma_len;
-			if (!dma_len) {
-				context->flags &= ~FLAG_DMA_RUN;
-				context->cd &= 0xF;
-			}
+			vdp_advance_dma(context);
 			
 			context->flags &= ~FLAG_READ_FETCHED;
 		} else {
@@ -598,16 +611,13 @@ void run_dma_src(vdp_context * context, int32_t slot)
 {
 	//TODO: Figure out what happens if CD bit 4 is not set in DMA copy mode
 	//TODO: Figure out what happens when CD:0-3 is not set to a write mode in DMA operations
-	//TODO: Figure out what happens if DMA gets disabled part way through a DMA fill or DMA copy
 	if (context->fifo_write == context->fifo_read) {
 		return;
 	}
 	fifo_entry * cur = NULL;
-	switch(context->regs[REG_DMASRC_H] & 0xC0)
+	if (!(context->regs[REG_DMASRC_H] & 0x80))
 	{
-	//68K -> VDP
-	case 0:
-	case 0x40:
+		//68K -> VDP
 		if (slot == -1 || !is_refresh(context, slot-1)) {
 			cur = context->fifo + context->fifo_write;
 			cur->cycle = context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20)*FIFO_LATENCY;
@@ -619,33 +629,7 @@ void run_dma_src(vdp_context * context, int32_t slot)
 				context->fifo_read = context->fifo_write;
 			}
 			context->fifo_write = (context->fifo_write + 1) & (FIFO_SIZE-1);
-		}
-		break;
-	//Fill
-	case 0x80:
-		if (context->fifo_read < 0) {
-			context->fifo_read = (context->fifo_write-1) & (FIFO_SIZE-1);
-			cur = context->fifo + context->fifo_read;
-			cur->cycle = context->cycles;
-			cur->address = context->address;
-			cur->partial = 2;
-		}
-		break;
-	}
-
-	if (cur) {
-		context->regs[REG_DMASRC_L] += 1;
-		if (!context->regs[REG_DMASRC_L]) {
-			context->regs[REG_DMASRC_M] += 1;
-		}
-		context->address += context->regs[REG_AUTOINC];
-		uint16_t dma_len = ((context->regs[REG_DMALEN_H] << 8) | context->regs[REG_DMALEN_L]) - 1;
-		context->regs[REG_DMALEN_H] = dma_len >> 8;
-		context->regs[REG_DMALEN_L] = dma_len;
-		if (!dma_len) {
-			//printf("DMA end at cycle %d, frame: %d, vcounter: %d, hslot: %d\n", context->cycles, context->frame, context->vcounter, context->hslot);
-			context->flags &= ~FLAG_DMA_RUN;
-			context->cd &= 0xF;
+			vdp_advance_dma(context);
 		}
 	}
 }
