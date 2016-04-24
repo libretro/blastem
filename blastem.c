@@ -239,22 +239,29 @@ void sync_sound(genesis_context * gen, uint32_t target)
 	//printf("Target: %d, YM bufferpos: %d, PSG bufferpos: %d\n", target, gen->ym->buffer_pos, gen->psg->buffer_pos * 2);
 }
 
+uint32_t last_frame_num;
+
+//My refresh emulation isn't currently good enough and causes more problems than it solves
+#ifdef REFRESH_EMULATION
 #define REFRESH_INTERVAL 128
 #define REFRESH_DELAY 2
-uint32_t last_frame_num;
 uint32_t last_sync_cycle;
 uint32_t refresh_counter;
+#endif
+
 m68k_context * sync_components(m68k_context * context, uint32_t address)
 {
 	genesis_context * gen = context->system;
 	vdp_context * v_context = gen->vdp;
 	z80_context * z_context = gen->z80;
+#ifdef REFRESH_EMULATION
 	//lame estimation of refresh cycle delay
 	if (!gen->bus_busy) {
 		refresh_counter += context->current_cycle - last_sync_cycle;
 		context->current_cycle += REFRESH_DELAY * MCLKS_PER_68K * (refresh_counter / (MCLKS_PER_68K * REFRESH_INTERVAL));
 		refresh_counter = refresh_counter % (MCLKS_PER_68K * REFRESH_INTERVAL);
 	}
+#endif
 
 	uint32_t mclks = context->current_cycle;
 	sync_z80(z_context, mclks);
@@ -328,7 +335,9 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			context->sync_cycle = context->current_cycle + 1;
 		}
 	}
+#ifdef REFRESH_EMULATION
 	last_sync_cycle = context->current_cycle;
+#endif
 	return context;
 }
 
@@ -388,7 +397,10 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 		}
 		if (v_context->cycles != before_cycle) {
 			//printf("68K paused for %d (%d) cycles at cycle %d (%d) for write\n", v_context->cycles - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
-			last_sync_cycle = context->current_cycle = v_context->cycles;
+			context->current_cycle = v_context->cycles;
+#ifdef REFRESH_EMULATION
+			last_sync_cycle = context->current_cycle;
+#endif
 			//Lock the Z80 out of the bus until the VDP access is complete
 			gen->bus_busy = 1;
 			sync_z80(gen->z80, v_context->cycles);
@@ -461,7 +473,10 @@ uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 	}
 	if (v_context->cycles != before_cycle) {
 		//printf("68K paused for %d (%d) cycles at cycle %d (%d) for read\n", v_context->cycles - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
-		last_sync_cycle = context->current_cycle = v_context->cycles;
+		context->current_cycle = v_context->cycles;
+#ifdef REFRES_EMULATION
+		last_sync_cycle = context->current_cycle;
+#endif
 		//Lock the Z80 out of the bus until the VDP access is complete
 		genesis_context *gen = context->system;
 		gen->bus_busy = 1;
