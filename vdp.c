@@ -520,6 +520,9 @@ void external_slot(vdp_context * context)
 		}
 		context->fifo_read = (context->fifo_read+1) & (FIFO_SIZE-1);
 		if (context->fifo_read == context->fifo_write) {
+			if ((context->cd & 0x20) && (context->regs[REG_DMASRC_H] & 0xC0) == 0x80) {
+				context->flags |= FLAG_DMA_RUN;
+			}
 			context->fifo_read = -1;
 		}
 	} else if ((context->flags & FLAG_DMA_RUN) && (context->regs[REG_DMASRC_H] & 0xC0) == 0xC0) {
@@ -1589,13 +1592,16 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 	}
 	if (context->flags & FLAG_PENDING) {
 		context->address = (context->address & 0x3FFF) | (value << 14);
-		context->cd = (context->cd & 0x3) | ((value >> 2) & 0x3C);
+		//It seems like the DMA enable bit doesn't so much enable DMA so much 
+		//as it enables changing CD5 from control port writes
+		uint8_t preserve = (context->regs[REG_MODE_2] & BIT_DMA_ENABLE) ? 0x3 : 0x23;
+		context->cd = (context->cd & preserve) | ((value >> 2) & ~preserve & 0xFF);
 		context->flags &= ~FLAG_PENDING;
 		//Should these be taken care of here or after the first write?
 		context->flags &= ~FLAG_READ_FETCHED;
 		context->flags2 &= ~FLAG2_READ_PENDING;
 		//printf("New Address: %X, New CD: %X\n", context->address, context->cd);
-		if (context->cd & 0x20 && (context->regs[REG_MODE_2] & BIT_DMA_ENABLE)) {
+		if (context->cd & 0x20) {
 			//
 			if((context->regs[REG_DMASRC_H] & 0xC0) != 0x80) {
 				//DMA copy or 68K -> VDP, transfer starts immediately
@@ -1633,7 +1639,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 					if (!context->double_res) {
 						context->framebuf = context->oddbuf;
 					}
-					}
+				}
 				context->cd &= 0x3C;
 			}
 		} else {
@@ -1673,9 +1679,6 @@ int vdp_data_port_write(vdp_context * context, uint16_t value)
 	cur->cycle = context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20)*FIFO_LATENCY;
 	cur->address = context->address;
 	cur->value = value;
-	if (context->cd & 0x20 && (context->regs[REG_DMASRC_H] & 0xC0) == 0x80 && (context->regs[REG_MODE_2] & BIT_DMA_ENABLE)) {
-		context->flags |= FLAG_DMA_RUN;
-	}
 	cur->cd = context->cd;
 	cur->partial = 0;
 	if (context->fifo_read < 0) {
@@ -1731,7 +1734,7 @@ uint16_t vdp_control_port_read(vdp_context * context)
 			value |= 0x4;
 		}
 	}
-	if (context->flags & FLAG_DMA_RUN) {
+	if (context->cd & 0x20) {
 		value |= 0x2;
 	}
 	if (context->flags2 & FLAG2_REGION_PAL) {
