@@ -547,6 +547,13 @@ code_ptr get_native_address(m68k_options *opts, uint32_t address)
 	if (address & 1) {
 		return opts->odd_address;
 	}
+	//TODO: Refactor part of this loop into some kind of get_ram_chunk function
+	for (int i = 0; i < opts->gen.memmap_chunks; i++) {
+		if (address >= opts->gen.memmap[i].start && address < opts->gen.memmap[i].end) {
+			//calculate the lowest alias for this address
+			address = opts->gen.memmap[i].start + ((address - opts->gen.memmap[i].start) & opts->gen.memmap[i].mask);
+		}
+	}
 	address /= 2;
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
 	if (!native_code_map[chunk].base) {
@@ -564,10 +571,17 @@ code_ptr get_native_from_context(m68k_context * context, uint32_t address)
 	return get_native_address(context->options, address);
 }
 
-uint32_t get_instruction_start(native_map_slot * native_code_map, uint32_t address)
+uint32_t get_instruction_start(m68k_options *opts, native_map_slot * native_code_map, uint32_t address)
 {
-	//FIXME: Use opts->gen.address_mask
-	address &= 0xFFFFFF;
+	address &= opts->gen.address_mask;
+	//TODO: Refactor part of this loop into some kind of get_ram_chunk function
+	for (int i = 0; i < opts->gen.memmap_chunks; i++) {
+		if (address >= opts->gen.memmap[i].start && address < opts->gen.memmap[i].end) {
+			//calculate the lowest alias for this address
+			address = opts->gen.memmap[i].start + ((address - opts->gen.memmap[i].start) & opts->gen.memmap[i].mask);
+		}
+	}
+	
 	address /= 2;
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
 	if (!native_code_map[chunk].base) {
@@ -612,6 +626,8 @@ void map_native_address(m68k_context * context, uint32_t address, code_ptr nativ
 				ram_flags_off = final_off >> (opts->gen.ram_flags_shift + 3);
 				context->ram_code_flags[ram_flags_off] |= 1 << ((final_off >> opts->gen.ram_flags_shift) & 7);
 			}
+			//calculate the lowest alias for this address
+			address = opts->gen.memmap[i].start + ((address - opts->gen.memmap[i].start) & opts->gen.memmap[i].mask);
 			break;
 		} else if ((opts->gen.memmap[i].flags & (MMAP_WRITE | MMAP_CODE)) == (MMAP_WRITE | MMAP_CODE)) {
 			uint32_t size = chunk_size(&opts->gen, opts->gen.memmap + i);

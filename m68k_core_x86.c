@@ -2121,18 +2121,20 @@ void translate_m68k_stop(m68k_options *opts, m68kinst *inst)
 		swap_ssp_usp(opts);
 	}
 	code_ptr loop_top = code->cur;
-	call(code, opts->do_sync);
-	cmp_rr(code, opts->gen.limit, opts->gen.cycles, SZ_D);
-	code_ptr normal_cycle_up = code->cur + 1;
-	jcc(code, CC_A, code->cur + 2);
-	cycles(&opts->gen, BUS);
-	code_ptr after_cycle_up = code->cur + 1;
-	jmp(code, code->cur + 2);
-	*normal_cycle_up = code->cur - (normal_cycle_up + 1);
-	mov_rr(code, opts->gen.limit, opts->gen.cycles, SZ_D);
-	*after_cycle_up = code->cur - (after_cycle_up+1);
-	cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_cycle), opts->gen.cycles, SZ_D);
+		call(code, opts->do_sync);
+		cmp_rr(code, opts->gen.limit, opts->gen.cycles, SZ_D);
+		code_ptr normal_cycle_up = code->cur + 1;
+		jcc(code, CC_A, code->cur + 2);
+			cycles(&opts->gen, BUS);
+			code_ptr after_cycle_up = code->cur + 1;
+			jmp(code, code->cur + 2);
+		*normal_cycle_up = code->cur - (normal_cycle_up + 1);
+			mov_rr(code, opts->gen.limit, opts->gen.cycles, SZ_D);
+		*after_cycle_up = code->cur - (after_cycle_up+1);
+		cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_cycle), opts->gen.cycles, SZ_D);
 	jcc(code, CC_C, loop_top);
+	//set int pending flag so interrupt fires immediately after stop is done
+	mov_irdisp(code, 1, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
 }
 
 void translate_m68k_trapv(m68k_options *opts, m68kinst *inst)
@@ -2185,9 +2187,10 @@ void nop_fill_or_jmp_next(code_info *code, code_ptr old_end, code_ptr next_inst)
 
 m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context)
 {
-	uint32_t inst_start = get_instruction_start(context->native_code_map, address | 0xFF0000);
+	m68k_options * options = context->options;
+	//TODO: Modify gen_mem_fun so that it passes the raw address instead of the masked one, then remove the OR below
+	uint32_t inst_start = get_instruction_start(options, context->native_code_map, address | 0xE00000);
 	if (inst_start) {
-		m68k_options * options = context->options;
 		code_info *code = &options->gen.code;
 		code_ptr dst = get_native_address(context->options, inst_start);
 		code_info orig = {dst, dst + 128, 0};
