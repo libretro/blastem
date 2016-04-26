@@ -1388,21 +1388,6 @@ void translate_m68k_unary(m68k_options *opts, m68kinst *inst, uint32_t flag_mask
 	m68k_save_result(inst, opts);
 }
 
-void translate_m68k_invalid(m68k_options *opts, m68kinst *inst)
-{
-	code_info *code = &opts->gen.code;
-	if (inst->src.params.immed == 0x7100) {
-		retn(code);
-		return;
-	}
-	mov_ir(code, (int64_t)stderr, RDI, SZ_PTR);
-	mov_ir(code, (int64_t)"Invalid instruction at %X\n", RSI, SZ_PTR);
-	mov_ir(code, inst->address, RDX, SZ_D);
-	call_args_abi(code, (code_ptr)fprintf, 3, RDI, RSI, RDX);
-	mov_ir(code, 1, RDI, SZ_D);
-	call_args(code, (code_ptr)exit, 1, RDI);
-}
-
 void translate_m68k_abcd_sbcd(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op)
 {
 	code_info *code = &opts->gen.code;
@@ -1981,13 +1966,6 @@ void translate_m68k_rot(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 		}
 		update_flags(opts, Z|N);
 	}
-}
-
-void translate_m68k_illegal(m68k_options *opts, m68kinst *inst)
-{
-	code_info *code = &opts->gen.code;
-	call(code, opts->gen.save_context);
-	call_args(code, (code_ptr)print_regs_exit, 1, opts->gen.context_reg);
 }
 
 #define BIT_SUPERVISOR 5
