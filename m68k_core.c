@@ -339,6 +339,15 @@ void translate_m68k_trap(m68k_options *opts, m68kinst *inst)
 	jmp(code, opts->trap);
 }
 
+void translate_m68k_illegal(m68k_options *opts, m68kinst *inst)
+{
+	code_info *code = &opts->gen.code;
+	cycles(&opts->gen, BUS);
+	ldi_native(opts, VECTOR_ILLEGAL_INST, opts->gen.scratch2);
+	ldi_native(opts, inst->address, opts->gen.scratch1);
+	jmp(code, opts->trap);
+}
+
 void translate_m68k_move_usp(m68k_options *opts, m68kinst *inst)
 {
 	cycles(&opts->gen, BUS);
@@ -800,7 +809,7 @@ impl_info m68k_impls[] = {
 	RAW_IMPL(M68K_TRAP, translate_m68k_trap),
 	RAW_IMPL(M68K_TRAPV, translate_m68k_trapv),
 	RAW_IMPL(M68K_ILLEGAL, translate_m68k_illegal),
-	RAW_IMPL(M68K_INVALID, translate_m68k_invalid),
+	RAW_IMPL(M68K_INVALID, translate_m68k_illegal),
 
 	//misc
 	RAW_IMPL(M68K_NOP, translate_m68k_nop),

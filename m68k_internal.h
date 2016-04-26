@@ -66,7 +66,6 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst);
 void translate_m68k_movep(m68k_options * opts, m68kinst * inst);
 void translate_m68k_arith(m68k_options *opts, m68kinst * inst, uint32_t flag_mask, host_ea *src_op, host_ea *dst_op);
 void translate_m68k_unary(m68k_options *opts, m68kinst *inst, uint32_t flag_mask, host_ea *dst_op);
-void translate_m68k_invalid(m68k_options *opts, m68kinst *inst);
 void translate_m68k_cmp(m68k_options * opts, m68kinst * inst);
 void translate_m68k_tas(m68k_options * opts, m68kinst * inst);
 void translate_m68k_clr(m68k_options * opts, m68kinst * inst);
@@ -82,7 +81,6 @@ void translate_m68k_exg(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 void translate_m68k_mul(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op);
 void translate_m68k_negx(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op);
 void translate_m68k_rot(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op);
-void translate_m68k_illegal(m68k_options *opts, m68kinst *inst);
 void translate_m68k_andi_ori_ccr_sr(m68k_options *opts, m68kinst *inst);
 void translate_m68k_eori_ccr_sr(m68k_options *opts, m68kinst *inst);
 void translate_m68k_move_ccr_sr(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op);
