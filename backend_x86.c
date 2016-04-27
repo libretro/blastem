@@ -51,18 +51,23 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 	code_info *code = &opts->code;
 	code_ptr start = code->cur;
 	check_cycles(opts);
+	uint8_t is_write = fun_type == WRITE_16 || fun_type == WRITE_8;
+	uint8_t adr_reg = is_write ? opts->scratch2 : opts->scratch1;
+	uint8_t size =  (fun_type == READ_16 || fun_type == WRITE_16) ? SZ_W : SZ_B;
+	if (size != SZ_B && opts->align_error_mask) {
+		test_ir(code, opts->align_error_mask, adr_reg, SZ_D);
+		jcc(code, CC_NZ, is_write ? opts->handle_align_error_write : opts->handle_align_error_read);
+	}
 	cycles(opts, opts->bus_cycles);
 	if (after_inc) {
 		*after_inc = code->cur;
 	}
-	uint8_t is_write = fun_type == WRITE_16 || fun_type == WRITE_8;
-	uint8_t adr_reg = is_write ? opts->scratch2 : opts->scratch1;
+	
 	if (opts->address_size == SZ_D && opts->address_mask != 0xFFFFFFFF) {
 		and_ir(code, opts->address_mask, adr_reg, SZ_D);
 	}
 	code_ptr lb_jcc = NULL, ub_jcc = NULL;
 	uint16_t access_flag = is_write ? MMAP_WRITE : MMAP_READ;
-	uint8_t size =  (fun_type == READ_16 || fun_type == WRITE_16) ? SZ_W : SZ_B;
 	uint32_t ram_flags_off = opts->ram_flags_off;
 	for (uint32_t chunk = 0; chunk < num_chunks; chunk++)
 	{
