@@ -13,7 +13,7 @@ struct m68kinst;
 
 #define NUM_MEM_AREAS 8
 #define NATIVE_MAP_CHUNKS (64*1024)
-#define NATIVE_CHUNK_SIZE ((16 * 1024 * 1024 / NATIVE_MAP_CHUNKS)/2)
+#define NATIVE_CHUNK_SIZE ((16 * 1024 * 1024 / NATIVE_MAP_CHUNKS))
 #define MAX_NATIVE_SIZE 255
 
 #define M68K_OPT_BROKEN_READ_MODIFY 1
@@ -36,7 +36,6 @@ typedef struct {
 	code_ptr        write_32_highfirst;
 	code_ptr        do_sync;
 	code_ptr        trap;
-	code_ptr        odd_address;
 	start_fun       start_context;
 	code_ptr        retrans_stub;
 	code_ptr        native_addr;

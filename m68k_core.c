@@ -553,9 +553,7 @@ code_ptr get_native_address(m68k_options *opts, uint32_t address)
 {
 	native_map_slot * native_code_map = opts->gen.native_code_map;
 	address &= opts->gen.address_mask;
-	if (address & 1) {
-		return opts->odd_address;
-	}
+	
 	//TODO: Refactor part of this loop into some kind of get_ram_chunk function
 	for (int i = 0; i < opts->gen.memmap_chunks; i++) {
 		if (address >= opts->gen.memmap[i].start && address < opts->gen.memmap[i].end) {
@@ -563,7 +561,7 @@ code_ptr get_native_address(m68k_options *opts, uint32_t address)
 			address = opts->gen.memmap[i].start + ((address - opts->gen.memmap[i].start) & opts->gen.memmap[i].mask);
 		}
 	}
-	address /= 2;
+	
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
 	if (!native_code_map[chunk].base) {
 		return NULL;
@@ -591,7 +589,6 @@ uint32_t get_instruction_start(m68k_options *opts, native_map_slot * native_code
 		}
 	}
 	
-	address /= 2;
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
 	if (!native_code_map[chunk].base) {
 		return 0;
@@ -643,7 +640,7 @@ void map_native_address(m68k_context * context, uint32_t address, code_ptr nativ
 			meta_off += size;
 		}
 	}
-	address/= 2;
+	
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
 	if (!native_code_map[chunk].base) {
 		native_code_map[chunk].base = native_addr;
@@ -819,6 +816,10 @@ impl_info m68k_impls[] = {
 
 void translate_m68k(m68k_options * opts, m68kinst * inst)
 {
+	if (inst->address & 1) {
+		translate_m68k_odd(opts, inst);
+		return;
+	}
 	check_cycles_int(&opts->gen, inst->address);
 	//log_address(&opts->gen, inst->address, "M68K: %X @ %d\n");
 	if (
@@ -872,9 +873,6 @@ void translate_m68k_stream(uint32_t address, m68k_context * context)
 			fflush(opts->address_log);
 		}
 		do {
-			if (address & 1) {
-				break;
-			}
 			encoded = get_native_pointer(address, (void **)context->mem_pointers, &opts->gen);
 			if (!encoded) {
 				map_native_address(context, address, code->cur, 2, 1);
@@ -902,7 +900,7 @@ void translate_m68k_stream(uint32_t address, m68k_context * context)
 			translate_m68k(opts, &instbuf);
 			code_ptr after = code->cur;
 			map_native_address(context, instbuf.address, start, m68k_size, after-start);
-		} while(!m68k_is_terminal(&instbuf));
+		} while(!m68k_is_terminal(&instbuf) && !(address & 1));
 		process_deferred(&opts->gen.deferred, context, (native_addr_func)get_native_from_context);
 		if (opts->gen.deferred) {
 			address = opts->gen.deferred->address;

@@ -86,6 +86,8 @@ typedef struct {
 	code_ptr           handle_cycle_limit;
 	code_ptr           handle_cycle_limit_int;
 	code_ptr           handle_code_write;
+	code_ptr           handle_align_error_write;
+	code_ptr           handle_align_error_read;
 	uint32_t           memmap_chunks;
 	uint32_t           address_mask;
 	uint32_t           max_address;
@@ -101,6 +103,7 @@ typedef struct {
 	uint8_t            limit;
 	uint8_t			   scratch1;
 	uint8_t			   scratch2;
+	uint8_t            align_error_mask;
 } cpu_options;
 
 typedef uint8_t * (*native_addr_func)(void * context, uint32_t address);

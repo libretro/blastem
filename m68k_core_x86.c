@@ -2128,6 +2128,54 @@ void translate_m68k_trapv(m68k_options *opts, m68kinst *inst)
 	*no_trap = code->cur - (no_trap + 1);
 }
 
+void translate_m68k_odd(m68k_options *opts, m68kinst *inst)
+{
+	code_info *code = &opts->gen.code;
+	//swap USP and SSP if not already in supervisor mode
+	check_user_mode_swap_ssp_usp(opts);
+	//save PC
+	subi_areg(opts, 4, 7);
+	areg_to_native(opts, 7, opts->gen.scratch2);
+	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, last_prefetch_address), opts->gen.scratch1, SZ_D);
+	call(code, opts->write_32_lowfirst);
+	//save status register
+	subi_areg(opts, 2, 7);
+	call(code, opts->get_sr);
+	areg_to_native(opts, 7, opts->gen.scratch2);
+	call(code, opts->write_16);
+	//save instruction register
+	subi_areg(opts, 2, 7);
+	//TODO: Use actual value
+	mov_ir(code, 0, opts->gen.scratch1, SZ_W);
+	areg_to_native(opts, 7, opts->gen.scratch2);
+	call(code, opts->write_16);
+	//save access address
+	subi_areg(opts, 4, 7);
+	mov_ir(code, inst->address, opts->gen.scratch1, SZ_D);
+	areg_to_native(opts, 7, opts->gen.scratch2);
+	call(code, opts->write_32_lowfirst);
+	//save FC, I/N and R/W word'
+	xor_rr(code, opts->gen.scratch1, opts->gen.scratch1, SZ_W);
+	//FC3 is basically the same as the supervisor bit
+	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, status), opts->gen.scratch1, SZ_B);
+	shr_ir(code, 3, opts->gen.scratch1, SZ_B);
+	and_ir(code, 4, opts->gen.scratch1, SZ_B);
+	//set FC1 to one to indicate instruction fetch, and R/W to indicate read
+	or_ir(code, 0x12, opts->gen.scratch1, SZ_B);
+	//TODO: Figure out what undefined bits get set to, looks like it might be value of IR
+	subi_areg(opts, 2, 7);
+	areg_to_native(opts, 7, opts->gen.scratch2);
+	call(code, opts->write_16);
+	//set supervisor bit
+	or_irdisp(code, 0x20, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
+	//load vector address
+	mov_ir(code, 4 * VECTOR_ADDRESS_ERROR, opts->gen.scratch1, SZ_D);
+	call(code, opts->read_32);
+	call(code, opts->native_addr_and_sync);
+	cycles(&opts->gen, 18);
+	jmp_r(code, opts->gen.scratch1);
+}
+
 void translate_m68k_move_from_sr(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op)
 {
 	code_info *code = &opts->gen.code;
@@ -2285,6 +2333,7 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	opts->gen.cycles = RAX;
 	opts->gen.limit = RBP;
 	opts->gen.scratch1 = RCX;
+	opts->gen.align_error_mask = 1;
 
 
 	opts->gen.native_code_map = malloc(sizeof(native_map_slot) * NATIVE_MAP_CHUNKS);
@@ -2392,7 +2441,14 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	retn(code);
 
 	opts->gen.handle_code_write = (code_ptr)m68k_handle_code_write;
-
+	
+	check_alloc_code(code, 256);
+	opts->gen.handle_align_error_write = code->cur;
+	code->cur += 256;
+	check_alloc_code(code, 256);
+	opts->gen.handle_align_error_read = code->cur;
+	code->cur += 256;
+	
 	opts->read_16 = gen_mem_fun(&opts->gen, memmap, num_chunks, READ_16, NULL);
 	opts->read_8 = gen_mem_fun(&opts->gen, memmap, num_chunks, READ_8, NULL);
 	opts->write_16 = gen_mem_fun(&opts->gen, memmap, num_chunks, WRITE_16, NULL);
@@ -2493,6 +2549,109 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 		}
 	}
 	retn(code);
+	
+	code_info tmp_code = *code;
+	code->cur = opts->gen.handle_align_error_write;
+	code->last = code->cur + 256;
+	//unwind the stack one functinon call
+	add_ir(code, 16, RSP, SZ_PTR);
+	//save address that triggered error so we can write it to the 68K stack at the appropriate place
+	push_r(code, opts->gen.scratch2);
+	//swap USP and SSP if not already in supervisor mode
+	check_user_mode_swap_ssp_usp(opts);
+	//save PC
+	subi_areg(opts, 4, 7);
+	areg_to_native(opts, 7, opts->gen.scratch2);
+	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, last_prefetch_address), opts->gen.scratch1, SZ_D);
+	call(code, opts->write_32_lowfirst);
+	//save status register
+	subi_areg(opts, 2, 7);
+	call(code, opts->get_sr);
+	areg_to_native(opts, 7, opts->gen.scratch2);
+	call(code, opts->write_16);
+	//save instruction register
+	subi_areg(opts, 2, 7);
+	//TODO: Use actual value
+	mov_ir(code, 0, opts->gen.scratch1, SZ_W);
+	areg_to_native(opts, 7, opts->gen.scratch2);
+	call(code, opts->write_16);
+	//save access address
+	subi_areg(opts, 4, 7);
+	pop_r(code, opts->gen.scratch1);
+	areg_to_native(opts, 7, opts->gen.scratch2);
+	call(code, opts->write_32_lowfirst);
+	//save FC, I/N and R/W word'
+	xor_rr(code, opts->gen.scratch1, opts->gen.scratch1, SZ_W);
+	//FC3 is basically the same as the supervisor bit
+	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, status), opts->gen.scratch1, SZ_B);
+	shr_ir(code, 3, opts->gen.scratch1, SZ_B);
+	and_ir(code, 4, opts->gen.scratch1, SZ_B);
+	//set FC0 to one to indicate data access
+	or_ir(code, 1, opts->gen.scratch1, SZ_B);
+	//TODO: Figure out what undefined bits get set to, looks like it might be value of IR
+	subi_areg(opts, 2, 7);
+	areg_to_native(opts, 7, opts->gen.scratch2);
+	call(code, opts->write_16);
+	//set supervisor bit
+	or_irdisp(code, 0x20, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
+	//load vector address
+	mov_ir(code, 4 * VECTOR_ADDRESS_ERROR, opts->gen.scratch1, SZ_D);
+	call(code, opts->read_32);
+	call(code, opts->native_addr_and_sync);
+	cycles(&opts->gen, 18);
+	jmp_r(code, opts->gen.scratch1);
+	
+	code->cur = opts->gen.handle_align_error_read;
+	code->last = code->cur + 256;
+	//unwind the stack one functinon call
+	add_ir(code, 16, RSP, SZ_PTR);
+	//save address that triggered error so we can write it to the 68K stack at the appropriate place
+	push_r(code, opts->gen.scratch1);
+	//swap USP and SSP if not already in supervisor mode
+	check_user_mode_swap_ssp_usp(opts);
+	//save PC
+	subi_areg(opts, 4, 7);
+	areg_to_native(opts, 7, opts->gen.scratch2);
+	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, last_prefetch_address), opts->gen.scratch1, SZ_D);
+	call(code, opts->write_32_lowfirst);
+	//save status register
+	subi_areg(opts, 2, 7);
+	call(code, opts->get_sr);
+	areg_to_native(opts, 7, opts->gen.scratch2);
+	call(code, opts->write_16);
+	//save instruction register
+	subi_areg(opts, 2, 7);
+	//TODO: Use actual value
+	mov_ir(code, 0, opts->gen.scratch1, SZ_W);
+	areg_to_native(opts, 7, opts->gen.scratch2);
+	call(code, opts->write_16);
+	//save access address
+	subi_areg(opts, 4, 7);
+	pop_r(code, opts->gen.scratch1);
+	areg_to_native(opts, 7, opts->gen.scratch2);
+	call(code, opts->write_32_lowfirst);
+	//save FC, I/N and R/W word'
+	xor_rr(code, opts->gen.scratch1, opts->gen.scratch1, SZ_W);
+	//FC3 is basically the same as the supervisor bit
+	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, status), opts->gen.scratch1, SZ_B);
+	shr_ir(code, 3, opts->gen.scratch1, SZ_B);
+	and_ir(code, 4, opts->gen.scratch1, SZ_B);
+	//set FC0 to one to indicate data access, and R/W to indicate read
+	or_ir(code, 0x11, opts->gen.scratch1, SZ_B);
+	//TODO: Figure out what undefined bits get set to, looks like it might be value of IR
+	subi_areg(opts, 2, 7);
+	areg_to_native(opts, 7, opts->gen.scratch2);
+	call(code, opts->write_16);
+	//set supervisor bit
+	or_irdisp(code, 0x20, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
+	//load vector address
+	mov_ir(code, 4 * VECTOR_ADDRESS_ERROR, opts->gen.scratch1, SZ_D);
+	call(code, opts->read_32);
+	call(code, opts->native_addr_and_sync);
+	cycles(&opts->gen, 18);
+	jmp_r(code, opts->gen.scratch1);
+	
+	*code = tmp_code;
 
 	opts->gen.handle_cycle_limit_int = code->cur;
 	//calculate stack adjust size
@@ -2630,11 +2789,4 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	call(code, opts->native_addr_and_sync);
 	cycles(&opts->gen, 18);
 	jmp_r(code, opts->gen.scratch1);
-
-	opts->odd_address = code->cur;
-	mov_ir(code, (int64_t)stderr, RDI, SZ_PTR);
-	mov_ir(code, (int64_t)"Attempt to execute code at odd address\n", RSI, SZ_PTR);
-	call_args_abi(code, (code_ptr)fprintf, 2, RDI, RSI, RDX);
-	xor_rr(code, RDI, RDI, SZ_D);
-	call_args(code, (code_ptr)exit, 1, RDI);
 }
