@@ -1221,7 +1221,8 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			}
 		}
 		break;
-	case RESERVED:
+	case A_LINE:
+		decoded->op = M68K_A_LINE_TRAP;
 		break;
 	case CMP_XOR:
 		size = (*istream >> 6) & 0x3;
@@ -1540,8 +1541,9 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 #endif
 		}
 		break;
-	case COPROC:
-		//TODO: Implement me
+	case F_LINE:
+		//TODO: Decode FPU instructions for members of the 68K family with an FPU
+		decoded->op = M68K_F_LINE_TRAP;
 		break;
 	}
 	if (decoded->op == M68K_INVALID) {
