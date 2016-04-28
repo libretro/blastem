@@ -26,12 +26,12 @@ typedef enum {
 	MOVEQ,
 	OR_DIV_SBCD,
 	SUB_SUBX,
-	RESERVED,
+	A_LINE,
 	CMP_XOR,
 	AND_MUL_ABCD_EXG,
 	ADD_ADDX,
 	SHIFT_ROTATE,
-	COPROC
+	F_LINE
 } m68k_optypes;
 
 typedef enum {
@@ -105,6 +105,8 @@ typedef enum {
 	M68K_TST,
 	M68K_UNLK,
 	M68K_INVALID,
+	M68K_A_LINE_TRAP,
+	M68K_F_LINE_TRAP,
 #ifdef M68010
 	M68K_BKPT,
 	M68K_MOVE_FROM_CCR,
