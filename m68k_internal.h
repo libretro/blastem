@@ -34,6 +34,7 @@ void nop_fill_or_jmp_next(code_info *code, code_ptr old_end, code_ptr next_inst)
 void check_user_mode_swap_ssp_usp(m68k_options *opts);
 void m68k_set_last_prefetch(m68k_options *opts, uint32_t address);
 void translate_m68k_odd(m68k_options *opts, m68kinst *inst);
+void m68k_trap_if_not_supervisor(m68k_options *opts, m68kinst *inst);
 
 //functions implemented in m68k_core.c
 int8_t native_reg(m68k_op_info * op, m68k_options * opts);

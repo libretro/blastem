@@ -350,6 +350,7 @@ void translate_m68k_illegal(m68k_options *opts, m68kinst *inst)
 
 void translate_m68k_move_usp(m68k_options *opts, m68kinst *inst)
 {
+	m68k_trap_if_not_supervisor(opts, inst);
 	cycles(&opts->gen, BUS);
 	int8_t reg;
 	if (inst->src.addr_mode == MODE_UNUSED) {
@@ -532,8 +533,9 @@ void translate_m68k_reset(m68k_options *opts, m68kinst *inst)
 
 void translate_m68k_rte(m68k_options *opts, m68kinst *inst)
 {
+	m68k_trap_if_not_supervisor(opts, inst);
+	
 	code_info *code = &opts->gen.code;
-	//TODO: Trap if not in system mode
 	//Read saved SR
 	areg_to_native(opts, 7, opts->gen.scratch1);
 	call(code, opts->read_16);
