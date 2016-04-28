@@ -79,6 +79,7 @@ void insert_breakpoint(m68k_context * context, uint32_t address, uint8_t * bp_ha
 void remove_breakpoint(m68k_context * context, uint32_t address);
 m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context);
 uint32_t get_instruction_start(m68k_options *opts, native_map_slot * native_code_map, uint32_t address);
+uint16_t m68k_get_ir(m68k_context *context);
 
 #endif //M68K_CORE_H_
 

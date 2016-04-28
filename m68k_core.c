@@ -702,6 +702,17 @@ void m68k_handle_deferred(m68k_context * context)
 	}
 }
 
+uint16_t m68k_get_ir(m68k_context *context)
+{
+	uint32_t inst_addr = get_instruction_start(context->options, context->native_code_map, context->last_prefetch_address-2);
+	uint16_t *native_addr = get_native_pointer(inst_addr, (void **)context->mem_pointers, &context->options->gen);
+	if (native_addr) {
+		return *native_addr;
+	}
+	fprintf(stderr, "M68K: Failed to calculate value of IR. Last prefetch address: %X\n", context->last_prefetch_address);
+	return 0xFFFF;
+}
+
 typedef enum {
 	RAW_FUNC = 1,
 	BINARY_ARITH,
@@ -826,6 +837,7 @@ void translate_m68k(m68k_options * opts, m68kinst * inst)
 	if (
 		(inst->src.addr_mode > MODE_AREG && inst->src.addr_mode < MODE_IMMEDIATE) 
 		|| (inst->dst.addr_mode > MODE_AREG && inst->dst.addr_mode < MODE_IMMEDIATE)
+		|| (inst->op == M68K_BCC && (inst->src.params.immed & 1))
 	) {
 		//Not accurate for all cases, but probably good enough for now
 		m68k_set_last_prefetch(opts, inst->address + inst->bytes);

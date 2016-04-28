@@ -2145,8 +2145,15 @@ void translate_m68k_odd(m68k_options *opts, m68kinst *inst)
 	call(code, opts->write_16);
 	//save instruction register
 	subi_areg(opts, 2, 7);
-	//TODO: Use actual value
-	mov_ir(code, 0, opts->gen.scratch1, SZ_W);
+	//calculate IR
+	push_r(code, opts->gen.context_reg);
+	call(code, opts->gen.save_context);
+	call_args_abi(code, (code_ptr)m68k_get_ir, 1, opts->gen.context_reg);
+	mov_rr(code, RAX, opts->gen.scratch1, SZ_W);
+	pop_r(code, opts->gen.context_reg);
+	push_r(code, RAX); //save it for use in the "info" word
+	call(code, opts->gen.load_context);
+	//write it to the stack
 	areg_to_native(opts, 7, opts->gen.scratch2);
 	call(code, opts->write_16);
 	//save access address
@@ -2162,7 +2169,10 @@ void translate_m68k_odd(m68k_options *opts, m68kinst *inst)
 	and_ir(code, 4, opts->gen.scratch1, SZ_B);
 	//set FC1 to one to indicate instruction fetch, and R/W to indicate read
 	or_ir(code, 0x12, opts->gen.scratch1, SZ_B);
-	//TODO: Figure out what undefined bits get set to, looks like it might be value of IR
+	//set undefined bits to IR value
+	pop_r(code, opts->gen.scratch2);
+	and_ir(code, 0xFFE0, opts->gen.scratch2, SZ_W);
+	or_rr(code, opts->gen.scratch2, opts->gen.scratch1, SZ_W);
 	subi_areg(opts, 2, 7);
 	areg_to_native(opts, 7, opts->gen.scratch2);
 	call(code, opts->write_16);
@@ -2571,8 +2581,17 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	call(code, opts->write_16);
 	//save instruction register
 	subi_areg(opts, 2, 7);
-	//TODO: Use actual value
-	mov_ir(code, 0, opts->gen.scratch1, SZ_W);
+	//calculate IR
+	push_r(code, opts->gen.context_reg);
+	call(code, opts->gen.save_context);
+	call_args_abi(code, (code_ptr)m68k_get_ir, 1, opts->gen.context_reg);
+	mov_rr(code, RAX, opts->gen.scratch1, SZ_W);
+	pop_r(code, opts->gen.context_reg);
+	pop_r(code, opts->gen.scratch2); //access address
+	push_r(code, RAX); //save it for use in the "info" word
+	push_r(code, opts->gen.scratch2); //access address
+	call(code, opts->gen.load_context);
+	//write it to the stack
 	areg_to_native(opts, 7, opts->gen.scratch2);
 	call(code, opts->write_16);
 	//save access address
@@ -2588,7 +2607,10 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	and_ir(code, 4, opts->gen.scratch1, SZ_B);
 	//set FC0 to one to indicate data access
 	or_ir(code, 1, opts->gen.scratch1, SZ_B);
-	//TODO: Figure out what undefined bits get set to, looks like it might be value of IR
+	//set undefined bits to IR value
+	pop_r(code, opts->gen.scratch2);
+	and_ir(code, 0xFFE0, opts->gen.scratch2, SZ_W);
+	or_rr(code, opts->gen.scratch2, opts->gen.scratch1, SZ_W);
 	subi_areg(opts, 2, 7);
 	areg_to_native(opts, 7, opts->gen.scratch2);
 	call(code, opts->write_16);
@@ -2621,8 +2643,17 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	call(code, opts->write_16);
 	//save instruction register
 	subi_areg(opts, 2, 7);
-	//TODO: Use actual value
-	mov_ir(code, 0, opts->gen.scratch1, SZ_W);
+	//calculate IR
+	push_r(code, opts->gen.context_reg);
+	call(code, opts->gen.save_context);
+	call_args_abi(code, (code_ptr)m68k_get_ir, 1, opts->gen.context_reg);
+	mov_rr(code, RAX, opts->gen.scratch1, SZ_W);
+	pop_r(code, opts->gen.context_reg);
+	pop_r(code, opts->gen.scratch2); //access address
+	push_r(code, RAX); //save it for use in the "info" word
+	push_r(code, opts->gen.scratch2); //access address
+	call(code, opts->gen.load_context);
+	//write it to the stack
 	areg_to_native(opts, 7, opts->gen.scratch2);
 	call(code, opts->write_16);
 	//save access address
@@ -2638,7 +2669,10 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	and_ir(code, 4, opts->gen.scratch1, SZ_B);
 	//set FC0 to one to indicate data access, and R/W to indicate read
 	or_ir(code, 0x11, opts->gen.scratch1, SZ_B);
-	//TODO: Figure out what undefined bits get set to, looks like it might be value of IR
+	//set undefined bits to IR value
+	pop_r(code, opts->gen.scratch2);
+	and_ir(code, 0xFFE0, opts->gen.scratch2, SZ_W);
+	or_rr(code, opts->gen.scratch2, opts->gen.scratch1, SZ_W);
 	subi_areg(opts, 2, 7);
 	areg_to_native(opts, 7, opts->gen.scratch2);
 	call(code, opts->write_16);
