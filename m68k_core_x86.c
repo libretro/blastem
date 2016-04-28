@@ -1970,11 +1970,28 @@ void translate_m68k_rot(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 
 #define BIT_SUPERVISOR 5
 
+void m68k_trap_if_not_supervisor(m68k_options *opts, m68kinst *inst)
+{
+	code_info *code = &opts->gen.code;
+	//check supervisor bit in SR and trap if not in supervisor mode
+	bt_irdisp(code, BIT_SUPERVISOR, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
+	code_ptr in_sup_mode = code->cur + 1;
+	jcc(code, CC_C, code->cur + 2);
+	
+	ldi_native(opts, VECTOR_PRIV_VIOLATION, opts->gen.scratch2);
+	ldi_native(opts, inst->address, opts->gen.scratch1);
+	jmp(code, opts->trap);
+	
+	*in_sup_mode = code->cur - (in_sup_mode + 1);
+}
+
 void translate_m68k_andi_ori_ccr_sr(m68k_options *opts, m68kinst *inst)
 {
 	code_info *code = &opts->gen.code;
+	if (inst->op == M68K_ANDI_SR || inst->op == M68K_ORI_SR) {
+		m68k_trap_if_not_supervisor(opts, inst);
+	}
 	cycles(&opts->gen, 20);
-	//TODO: If ANDI to SR, trap if not in supervisor mode
 	uint32_t flag_mask = 0;
 	uint32_t base_flag = inst->op == M68K_ANDI_SR || inst->op == M68K_ANDI_CCR ? X0 : X1;
 	for (int i = 0; i < 5; i++)
@@ -2009,8 +2026,10 @@ void translate_m68k_andi_ori_ccr_sr(m68k_options *opts, m68kinst *inst)
 void translate_m68k_eori_ccr_sr(m68k_options *opts, m68kinst *inst)
 {
 	code_info *code = &opts->gen.code;
+	if (inst->op == M68K_EORI_SR) {
+		m68k_trap_if_not_supervisor(opts, inst);
+	}
 	cycles(&opts->gen, 20);
-	//TODO: If ANDI to SR, trap if not in supervisor mode
 	if (inst->src.params.immed & 0x1) {
 		xor_flag(opts, 1, FLAG_C);
 	}
@@ -2049,7 +2068,9 @@ void set_all_flags(m68k_options *opts, uint8_t flags)
 void translate_m68k_move_ccr_sr(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op)
 {
 	code_info *code = &opts->gen.code;
-	//TODO: Privilege check for MOVE to SR
+	if (inst->op == M68K_MOVE_SR) {
+		m68k_trap_if_not_supervisor(opts, inst);
+	}
 	if (src_op->mode == MODE_IMMED) {
 		set_all_flags(opts, src_op->disp);
 		if (inst->op == M68K_MOVE_SR) {
@@ -2085,7 +2106,7 @@ void translate_m68k_move_ccr_sr(m68k_options *opts, m68kinst *inst, host_ea *src
 
 void translate_m68k_stop(m68k_options *opts, m68kinst *inst)
 {
-	//TODO: Trap if not in system mode
+	m68k_trap_if_not_supervisor(opts, inst);
 	//manual says 4 cycles, but it has to be at least 8 since it's a 2-word instruction
 	//possibly even 12 since that's how long MOVE to SR takes
 	//On further thought prefetch + the fact that this stops the CPU may make
@@ -2189,7 +2210,6 @@ void translate_m68k_odd(m68k_options *opts, m68kinst *inst)
 void translate_m68k_move_from_sr(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op)
 {
 	code_info *code = &opts->gen.code;
-	//TODO: Trap if not in system mode
 	call(code, opts->get_sr);
 	if (dst_op->mode == MODE_REG_DIRECT) {
 		mov_rr(code, opts->gen.scratch1, dst_op->base, SZ_W);
