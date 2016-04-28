@@ -586,6 +586,7 @@ uint32_t get_instruction_start(m68k_options *opts, native_map_slot * native_code
 		if (address >= opts->gen.memmap[i].start && address < opts->gen.memmap[i].end) {
 			//calculate the lowest alias for this address
 			address = opts->gen.memmap[i].start + ((address - opts->gen.memmap[i].start) & opts->gen.memmap[i].mask);
+			break;
 		}
 	}
 	
@@ -602,7 +603,7 @@ uint32_t get_instruction_start(m68k_options *opts, native_map_slot * native_code
 		chunk = address / NATIVE_CHUNK_SIZE;
 		offset = address % NATIVE_CHUNK_SIZE;
 	}
-	return address*2;
+	return address;
 }
 
 void map_native_address(m68k_context * context, uint32_t address, code_ptr native_addr, uint8_t size, uint8_t native_size)
@@ -649,8 +650,8 @@ void map_native_address(m68k_context * context, uint32_t address, code_ptr nativ
 	}
 	uint32_t offset = address % NATIVE_CHUNK_SIZE;
 	native_code_map[chunk].offsets[offset] = native_addr-native_code_map[chunk].base;
-	for(address++,size-=2; size; address++,size-=2) {
-		address &= opts->gen.address_mask >> 1;
+	for(address++,size-=1; size; address++,size-=1) {
+		address &= opts->gen.address_mask;
 		chunk = address / NATIVE_CHUNK_SIZE;
 		offset = address % NATIVE_CHUNK_SIZE;
 		if (!native_code_map[chunk].base) {
