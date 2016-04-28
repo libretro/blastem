@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "render.h"
+#include "util.h"
 
 #define NTSC_INACTIVE_START 224
 #define PAL_INACTIVE_START 240
@@ -1737,10 +1738,18 @@ uint16_t vdp_data_port_read(vdp_context * context)
 		context->flags2 &= ~FLAG2_READ_PENDING;
 	}
 	if (context->cd & 1) {
-		return 0;
+		warning("Read from VDP data port while writes are configured, CPU is now frozen. VDP Address: %X, CD: %X\n", context->address, context->cd);
 	}
+	uint32_t old_frame = context->frame;
 	while (!(context->flags & FLAG_READ_FETCHED)) {
 		vdp_run_context(context, context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20));
+		if (context->frame != old_frame) {
+			if (!headless) {
+				//TODO: make pushing frames to renderer automatic so this doesn't need to be here
+				wait_render_frame(context, 0);
+			}
+			old_frame = context->frame;
+		}
 	}
 	context->flags &= ~FLAG_READ_FETCHED;
 	//Should this happen after the prefetch or after the read?
