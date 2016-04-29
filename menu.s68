@@ -173,29 +173,30 @@ menu_port  equ $180000
 MAX_DISPLAY equ 24
 
 	rsset $FFFF8000
-x_pos          rs.w 1
-base_cmd       rs.l 1
-sprite_list    rs.l 160
-page_index     rs.l MAX_DISPLAY+1
-page_stack     rs.l 1
-page_pointers  rs.l 1024
-mouse_sprite   rs.l 1
-menu_functions rs.l 1
-mouse_x        rs.w 1
-selection_top  rs.w 1
-selection_bot  rs.w 1
-selection_mask rs.w 1
-num_sprites    rs.b 1
-last_pad1      rs.b 1
-last_pad2      rs.b 1
-selected       rs.b 1
-more_pages     rs.b 1
-mouse_buf      rs.b 3
-mouse_shown    rs.b 1
-last_mbuttons  rs.b 1
-num_menu       rs.b 1
-num_slots      rs.b 1
-port_off       rs.b 1
+x_pos           rs.w 1
+base_cmd        rs.l 1
+sprite_list     rs.l 160
+page_index      rs.l MAX_DISPLAY+1
+page_stack      rs.l 1
+page_pointers   rs.l 1024
+mouse_sprite    rs.l 1
+menu_functions  rs.l 1
+cursor_show_fun rs.l 1
+mouse_x         rs.w 1
+selection_top   rs.w 1
+selection_bot   rs.w 1
+selection_mask  rs.w 1
+num_sprites     rs.b 1
+last_pad1       rs.b 1
+last_pad2       rs.b 1
+selected        rs.b 1
+more_pages      rs.b 1
+mouse_buf       rs.b 3
+mouse_shown     rs.b 1
+last_mbuttons   rs.b 1
+num_menu        rs.b 1
+num_slots       rs.b 1
+port_off        rs.b 1
 
 
 int_6:
@@ -922,7 +923,6 @@ render_page:
 	move.l d3, (a1)
 	move.l d3, base_cmd.w
 	
-
 	move.b #0, more_pages.w
 	lea page_index.w, a3
 	moveq #MAX_DISPLAY-1, d7
@@ -972,6 +972,56 @@ done_files:
 	;null terminate page_index
 	moveq #0, d0
 	move.l d0, (a3)
+	
+	tst.b mouse_shown
+	beq .no_mouse
+	
+	tst.b more_pages.w
+	beq .no_next_page
+	
+	;draw Next button
+	moveq #30, d0
+	moveq #26, d1
+	moveq #6, d2
+	bsr draw_button
+	
+	;base attribute
+	move.w #$206B, d0
+	;x pos
+	moveq #32, d1
+	;y pos
+	moveq #26, d2
+	lea next_str(pc), a6
+	bsr print_string_fixed
+	
+.no_next_page
+
+	cmp.l #(page_pointers+8), a5
+	beq .no_prev_page
+	
+	;draw Prev button
+	moveq #4, d0
+	moveq #26, d1
+	moveq #6, d2
+	bsr draw_button
+	
+	;base attribute
+	move.w #$206B, d0
+	;x pos
+	moveq #6, d1
+	;y pos
+	moveq #26, d2
+	lea prev_str(pc), a6
+	bsr print_string_fixed
+	
+.no_prev_page
+
+	move.l #0, cursor_show_fun.w
+	
+	bra .done_page_buttons
+.no_mouse
+	;TODO - setup cusrsor_show_fun
+.done_page_buttons
 
 gamepad_setup:
 	;setup gamepads
@@ -1066,6 +1116,11 @@ load_state:
 .wait
 	stop #$2500
 	bra .wait
+	
+next_str:
+	dc.b "Next", 0
+prev_str:
+	dc.b "Prev", 0
 	
 about_text:
 	dc.b "BlastEm v0.4.0", 0
