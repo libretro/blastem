@@ -21,6 +21,7 @@
 #define MAX_SPRITES_LINE_H32 16
 #define MAX_SPRITES_FRAME 80
 #define MAX_SPRITES_FRAME_H32 64
+#define SAT_CACHE_SIZE (MAX_SPRITES_FRAME * 4)
 
 #define FBUF_SHADOW 0x0001
 #define FBUF_HILIGHT 0x0010
@@ -158,6 +159,7 @@ typedef struct {
 	int8_t      cur_slot;
 	sprite_draw sprite_draw_list[MAX_DRAWS];
 	sprite_info sprite_info_list[MAX_SPRITES_LINE];
+	uint8_t     sat_cache[SAT_CACHE_SIZE];
 	uint16_t    col_1;
 	uint16_t    col_2;
 	uint16_t    hv_latch;
