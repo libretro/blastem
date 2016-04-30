@@ -366,7 +366,12 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 				while(v_context->flags & FLAG_DMA_RUN) {
 					vdp_run_dma_done(v_context, gen->frame_end);
 					if (v_context->cycles >= gen->frame_end) {
-						context->current_cycle = v_context->cycles;
+						uint32_t cycle_diff = v_context->cycles - context->current_cycle;
+						uint32_t m68k_cycle_diff = (cycle_diff / MCLKS_PER_68K) * MCLKS_PER_68K;
+						if (m68k_cycle_diff < cycle_diff) {
+							m68k_cycle_diff += MCLKS_PER_68K;
+						}
+						context->current_cycle += m68k_cycle_diff;
 						gen->bus_busy = 1;
 						sync_components(context, 0);
 						gen->bus_busy = 0;
@@ -381,12 +386,24 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 					while(v_context->flags & FLAG_DMA_RUN) {
 						vdp_run_dma_done(v_context, gen->frame_end);
 						if (v_context->cycles >= gen->frame_end) {
-							context->current_cycle = v_context->cycles;
+							uint32_t cycle_diff = v_context->cycles - context->current_cycle;
+							uint32_t m68k_cycle_diff = (cycle_diff / MCLKS_PER_68K) * MCLKS_PER_68K;
+							if (m68k_cycle_diff < cycle_diff) {
+								m68k_cycle_diff += MCLKS_PER_68K;
+							}
+							context->current_cycle += m68k_cycle_diff;
 							gen->bus_busy = 1;
 							sync_components(context, 0);
 							gen->bus_busy = 0;
 						}
+						if (!(v_context->flags & FLAG_DMA_RUN)) {
+							//two more slots of delay are needed to kill sufficient sprite capacity in Overdrive
+							//TODO: Measure exact value with logic analyzer
+							vdp_run_context(v_context, v_context->cycles + 1);
+							vdp_run_context(v_context, v_context->cycles + 1);
+						}
 					}
+					
 					if (blocked < 0) {
 						blocked = vdp_control_port_write(v_context, value);
 					} else {
@@ -403,7 +420,12 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 		}
 		if (v_context->cycles != before_cycle) {
 			//printf("68K paused for %d (%d) cycles at cycle %d (%d) for write\n", v_context->cycles - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
-			context->current_cycle = v_context->cycles;
+			uint32_t cycle_diff = v_context->cycles - context->current_cycle;
+			uint32_t m68k_cycle_diff = (cycle_diff / MCLKS_PER_68K) * MCLKS_PER_68K;
+			if (m68k_cycle_diff < cycle_diff) {
+				m68k_cycle_diff += MCLKS_PER_68K;
+			}
+			context->current_cycle += m68k_cycle_diff;
 #ifdef REFRESH_EMULATION
 			last_sync_cycle = context->current_cycle;
 #endif
