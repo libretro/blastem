@@ -478,7 +478,9 @@ void read_sprite_x(uint32_t line, vdp_context * context)
 					context->sprite_draw_list[context->sprite_draws].h_flip = (tileinfo & MAP_BIT_H_FLIP) ? 1 : 0;
 				}
 			}
-			if (!context->sprite_draws/*i < width*/) {
+			//Used to be i < width
+			//TODO: Confirm this is the right condition on hardware
+			if (!context->sprite_draws) {
 				context->flags |= FLAG_DOT_OFLOW;
 			}
 			context->cur_slot--;
