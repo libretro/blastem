@@ -166,6 +166,7 @@ void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 		if ((context->status & 0x7) < 4) {
 			uint32_t next_hint = vdp_next_hint(v_context);
 			if (next_hint != CYCLE_NEVER) {
+				next_hint = next_hint < context->current_cycle ? context->current_cycle : next_hint;
 				if (next_hint < context->int_cycle) {
 					context->int_cycle = next_hint;
 					context->int_num = 4;
