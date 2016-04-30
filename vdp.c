@@ -210,11 +210,12 @@ void vdp_print_sprite_table(vdp_context * context)
 	uint8_t count = 0;
 	do {
 		uint16_t address = current_index * 8 + sat_address;
-		uint8_t height = ((context->vdpmem[address+2] & 0x3) + 1) * 8;
-		uint8_t width = (((context->vdpmem[address+2]  >> 2) & 0x3) + 1) * 8;
-		int16_t y = ((context->vdpmem[address] & 0x3) << 8 | context->vdpmem[address+1]) & 0x1FF;
+		uint16_t cache_address = current_index * 4;
+		uint8_t height = ((context->sat_cache[cache_address+2] & 0x3) + 1) * 8;
+		uint8_t width = (((context->sat_cache[cache_address+2]  >> 2) & 0x3) + 1) * 8;
+		int16_t y = ((context->sat_cache[cache_address] & 0x3) << 8 | context->sat_cache[cache_address+1]) & 0x1FF;
 		int16_t x = ((context->vdpmem[address+ 6] & 0x3) << 8 | context->vdpmem[address + 7]) & 0x1FF;
-		uint16_t link = context->vdpmem[address+3] & 0x7F;
+		uint16_t link = context->sat_cache[cache_address+3] & 0x7F;
 		uint8_t pal = context->vdpmem[address + 4] >> 5 & 0x3;
 		uint8_t pri = context->vdpmem[address + 4] >> 7;
 		uint16_t pattern = ((context->vdpmem[address + 4] << 8 | context->vdpmem[address + 5]) & 0x7FF) << 5;
@@ -374,33 +375,40 @@ void scan_sprite_table(uint32_t line, vdp_context * context)
 			context->sprite_index = 0;
 			return;
 		}
-		//TODO: Read from SAT cache rather than from VRAM
-		uint16_t sat_address = (context->regs[REG_SAT] & 0x7F) << 9;
-		uint16_t address = context->sprite_index * 8 + sat_address;
+		uint16_t address = context->sprite_index * 4;
 		line += ymin;
-		uint16_t y = ((context->vdpmem[address] & 0x3) << 8 | context->vdpmem[address+1]) & ymask;
-		uint8_t height = ((context->vdpmem[address+2] & 0x3) + 1) * height_mult;
+		uint16_t y = ((context->sat_cache[address] & 0x3) << 8 | context->sat_cache[address+1]) & ymask;
+		uint8_t height = ((context->sat_cache[address+2] & 0x3) + 1) * height_mult;
 		//printf("Sprite %d | y: %d, height: %d\n", context->sprite_index, y, height);
 		if (y <= line && line < (y + height)) {
 			//printf("Sprite %d at y: %d with height %d is on line %d\n", context->sprite_index, y, height, line);
-			context->sprite_info_list[--(context->slot_counter)].size = context->vdpmem[address+2];
+			context->sprite_info_list[--(context->slot_counter)].size = context->sat_cache[address+2];
 			context->sprite_info_list[context->slot_counter].index = context->sprite_index;
 			context->sprite_info_list[context->slot_counter].y = y-ymin;
 		}
-		context->sprite_index = context->vdpmem[address+3] & 0x7F;
+		context->sprite_index = context->sat_cache[address+3] & 0x7F;
 		if (context->sprite_index && context->slot_counter)
 		{
-			address = context->sprite_index * 8 + sat_address;
-			y = ((context->vdpmem[address] & 0x3) << 8 | context->vdpmem[address+1]) & ymask;
-			height = ((context->vdpmem[address+2] & 0x3) + 1) * height_mult;
+			if (context->regs[REG_MODE_4] & BIT_H40) {
+				if (context->sprite_index >= MAX_SPRITES_FRAME) {
+					context->sprite_index = 0;
+					return;
+				}
+			} else if(context->sprite_index >= MAX_SPRITES_FRAME_H32) {
+				context->sprite_index = 0;
+				return;
+			}
+			address = context->sprite_index * 4;
+			y = ((context->sat_cache[address] & 0x3) << 8 | context->sat_cache[address+1]) & ymask;
+			height = ((context->sat_cache[address+2] & 0x3) + 1) * height_mult;
 			//printf("Sprite %d | y: %d, height: %d\n", context->sprite_index, y, height);
 			if (y <= line && line < (y + height)) {
 				//printf("Sprite %d at y: %d with height %d is on line %d\n", context->sprite_index, y, height, line);
-				context->sprite_info_list[--(context->slot_counter)].size = context->vdpmem[address+2];
+				context->sprite_info_list[--(context->slot_counter)].size = context->sat_cache[address+2];
 				context->sprite_info_list[context->slot_counter].index = context->sprite_index;
 				context->sprite_info_list[context->slot_counter].y = y-ymin;
 			}
-			context->sprite_index = context->vdpmem[address+3] & 0x7F;
+			context->sprite_index = context->sat_cache[address+3] & 0x7F;
 		}
 	}
 }
@@ -509,6 +517,17 @@ void vdp_advance_dma(vdp_context * context)
 	}
 }
 
+void write_vram_byte(vdp_context *context, uint16_t address, uint8_t value)
+{
+	if (!(address & 4)) {
+		uint16_t sat_address = (context->regs[REG_SAT] & 0x7F) << 9;
+		if(address >= sat_address && address <= sat_address + SAT_CACHE_SIZE*2) {
+			context->sat_cache[(address & 3) | (address >> 1 & 0x1FC)] = value;
+		}
+	}
+	context->vdpmem[address] = value;
+}
+
 void external_slot(vdp_context * context)
 {
 	if ((context->flags & FLAG_DMA_RUN) && (context->regs[REG_DMASRC_H] & 0xC0) == 0x80 && context->fifo_read < 0) {
@@ -526,10 +545,10 @@ void external_slot(vdp_context * context)
 		case VRAM_WRITE:
 			if (start->partial) {
 				//printf("VRAM Write: %X to %X at %d (line %d, slot %d)\n", start->value, start->address ^ 1, context->cycles, context->cycles/MCLKS_LINE, (context->cycles%MCLKS_LINE)/16);
-				context->vdpmem[start->address ^ 1] = start->partial == 2 ? start->value >> 8 : start->value;
+				write_vram_byte(context, start->address ^ 1, start->partial == 2 ? start->value >> 8 : start->value);
 			} else {
 				//printf("VRAM Write High: %X to %X at %d (line %d, slot %d)\n", start->value >> 8, start->address, context->cycles, context->cycles/MCLKS_LINE, (context->cycles%MCLKS_LINE)/16);
-				context->vdpmem[start->address] = start->value >> 8;
+				write_vram_byte(context, start->address, start->value >> 8);
 				start->partial = 1;
 				//skip auto-increment and removal of entry from fifo
 				return;
@@ -557,7 +576,7 @@ void external_slot(vdp_context * context)
 		}
 	} else if ((context->flags & FLAG_DMA_RUN) && (context->regs[REG_DMASRC_H] & 0xC0) == 0xC0) {
 		if (context->flags & FLAG_READ_FETCHED) {
-			context->vdpmem[context->address ^ 1] = context->prefetch;
+			write_vram_byte(context, context->address ^ 1, context->prefetch);
 			
 			//Update DMA state
 			vdp_advance_dma(context);
