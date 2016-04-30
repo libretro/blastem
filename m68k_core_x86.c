@@ -2016,7 +2016,7 @@ void translate_m68k_andi_ori_ccr_sr(m68k_options *opts, m68kinst *inst)
 		    || (inst->op == M68K_ORI_SR && inst->src.params.immed & 0x700)) {
 			if (inst->op == M68K_ANDI_SR) {
 				//set int pending flag in case we trigger an interrupt as a result of the mask change
-				mov_irdisp(code, 1, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
+				mov_irdisp(code, INT_PENDING_SR_CHANGE, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
 			}
 			call(code, opts->do_sync);
 		}
@@ -2049,7 +2049,7 @@ void translate_m68k_eori_ccr_sr(m68k_options *opts, m68kinst *inst)
 		xor_irdisp(code, inst->src.params.immed >> 8, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
 		if (inst->src.params.immed & 0x700) {
 			//set int pending flag in case we trigger an interrupt as a result of the mask change
-			mov_irdisp(code, 1, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
+			mov_irdisp(code, INT_PENDING_SR_CHANGE, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
 			call(code, opts->do_sync);
 		}
 	}
@@ -2081,7 +2081,7 @@ void translate_m68k_move_ccr_sr(m68k_options *opts, m68kinst *inst, host_ea *src
 			}
 			if (((src_op->disp >> 8) & 7) < 7) {
 				//set int pending flag in case we trigger an interrupt as a result of the mask change
-				mov_irdisp(code, 1, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
+				mov_irdisp(code, INT_PENDING_SR_CHANGE, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
 			}
 			call(code, opts->do_sync);
 		}
@@ -2133,7 +2133,7 @@ void translate_m68k_stop(m68k_options *opts, m68kinst *inst)
 		cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_cycle), opts->gen.cycles, SZ_D);
 	jcc(code, CC_C, loop_top);
 	//set int pending flag so interrupt fires immediately after stop is done
-	mov_irdisp(code, 1, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
+	mov_irdisp(code, INT_PENDING_SR_CHANGE, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
 }
 
 void translate_m68k_trapv(m68k_options *opts, m68kinst *inst)
@@ -2560,7 +2560,7 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	shr_ir(code, 8, opts->gen.scratch1, SZ_W);
 	mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
 	//set int pending flag in case we trigger an interrupt as a result of the mask change
-	mov_irdisp(code, 1, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
+	mov_irdisp(code, INT_PENDING_SR_CHANGE, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
 	retn(code);
 
 	opts->set_ccr = code->cur;
@@ -2743,11 +2743,20 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	cmp_irdisp(code, 0, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
 	do_int = code->cur + 1;
 	jcc(code, CC_NZ, do_int);
-	mov_irdisp(code, 1, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
+	//store current interrupt number so it doesn't change before we start processing the vector
+	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_num), opts->gen.scratch1, SZ_B);
+	mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
 	retn(code);
 	*do_int = code->cur - (do_int + 1);
-	//save interrupt number so it can't change during interrupt processing
-	push_rdisp(code, opts->gen.context_reg, offsetof(m68k_context, int_num));
+	//Check if int_pending has an actual interrupt priority in it
+	cmp_irdisp(code, INT_PENDING_SR_CHANGE, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
+	code_ptr already_int_num = code->cur + 1;
+	jcc(code, CC_NZ, already_int_num);
+	
+	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_num), opts->gen.scratch2, SZ_B);
+	mov_rrdisp(code, opts->gen.scratch2, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
+	
+	*already_int_num = code->cur - (already_int_num + 1);
 	//save PC as stored in scratch1 for later
 	push_r(code, opts->gen.scratch1);
 	//set target cycle to sync cycle
@@ -2803,13 +2812,17 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	add_ir(code, 2, opts->gen.scratch2, SZ_D);
 	call(code, opts->write_32_lowfirst);
 
-	//restore saved interrupt number
-	pop_r(code, opts->gen.scratch1);
+	//grab saved interrupt number
+	xor_rr(code, opts->gen.scratch1, opts->gen.scratch1, SZ_D);
+	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_pending), opts->gen.scratch1, SZ_B);
 	//ack the interrupt (happens earlier on hardware, but shouldn't be an observable difference)
 	mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, offsetof(m68k_context, int_ack), SZ_W);
 	//calculate the vector address
 	shl_ir(code, 2, opts->gen.scratch1, SZ_D);
 	add_ir(code, 0x60, opts->gen.scratch1, SZ_D);
+	//clear out pending flag
+	mov_irdisp(code, 0, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
+	//read vector
 	call(code, opts->read_32);
 	call(code, opts->native_addr_and_sync);
 	//2 prefetch bus operations + 2 idle bus cycles
