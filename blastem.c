@@ -175,7 +175,7 @@ void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 			}
 		}
 	}
-	if (context->int_cycle > context->current_cycle) {
+	if (context->int_cycle > context->current_cycle && context->int_pending == INT_PENDING_SR_CHANGE) {
 		context->int_pending = 0;
 	}
 	/*if (context->int_cycle != old_int_cycle) {
