@@ -23,8 +23,8 @@
 
 #define MCLKS_SLOT_H40  16
 #define MCLKS_SLOT_H32  20
-#define VINT_SLOT_H40  4 //21 slots before HSYNC, 16 during, 10 after
-#define VINT_SLOT_H32  4  //old value was 23, but recent tests suggest the actual value is close to the H40 one
+#define VINT_SLOT_H40  255 //21 slots before HSYNC, 16 during, 10 after
+#define VINT_SLOT_H32  255  //old value was 23, but recent tests suggest the actual value is close to the H40 one
 #define HSYNC_SLOT_H40  228
 #define HSYNC_END_H40  (HSYNC_SLOT_H40+17)
 #define HSYNC_END_H32   (33 * MCLKS_SLOT_H32)
@@ -74,6 +74,7 @@ void init_vdp_context(vdp_context * context, uint8_t region_pal)
 	context->sprite_draws = MAX_DRAWS;
 	context->fifo_write = 0;
 	context->fifo_read = -1;
+	context->regs[REG_HINT] = context->hint_counter = 0xFF;
 
 	if (!color_map_init_done) {
 		uint8_t b,g,r;
@@ -332,9 +333,13 @@ void vdp_print_reg_explain(vdp_context * context)
 	       "CD:      %X - %s\n"
 	       "Pending: %s\n"
 		   "VCounter: %d\n"
-		   "HCounter: %d\n",
+		   "HCounter: %d\n"
+		   "VINT Pending: %s\n"
+		   "HINT Pending: %s\n"
+		   "Status: %X\n",
 	       context->address, context->cd, cd_name(context->cd), (context->flags & FLAG_PENDING) ? "true" : "false",
-		   context->vcounter, context->hslot*2);
+		   context->vcounter, context->hslot*2, (context->flags2 & FLAG2_VINT_PENDING) ? "true" : "false",
+		   (context->flags2 & FLAG2_HINT_PENDING) ? "true" : "false", vdp_control_port_read(context));
 
 	//TODO: Window Group, DMA Group
 }
@@ -1949,28 +1954,37 @@ uint32_t vdp_next_vint_z80(vdp_context * context)
 	uint32_t inactive_start = context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START;
 	if (context->vcounter == inactive_start) {
 		if (context->regs[REG_MODE_4] & BIT_H40) {
-			if (context->hslot >= LINE_CHANGE_H40) {
-				return context->cycles + vdp_cycles_hslot_wrap_h40(context) + VINT_SLOT_H40 * MCLKS_SLOT_H40;
-			} else if (context->hslot <= VINT_SLOT_H40) {
-				return context->cycles + (VINT_SLOT_H40 - context->hslot) * MCLKS_SLOT_H40;
+			if (context->hslot >= LINE_CHANGE_H40 && context->hslot <= VINT_SLOT_H40) {
+				uint32_t cycles = context->cycles;
+				if (context->hslot < 182) {
+					cycles += (182 - context->hslot) * MCLKS_SLOT_H40;
+				}
+				
+				if (context->hslot < 229) {
+					cycles += h40_hsync_cycles[0];
+				}
+				for (int slot = context->hslot <= 229 ? 229 : context->hslot; slot < HSYNC_END_H40; slot++ )
+				{
+					cycles += h40_hsync_cycles[slot - HSYNC_SLOT_H40];
+				}
+				cycles += (VINT_SLOT_H40 - (context->hslot > HSYNC_SLOT_H40 ? context->hslot : HSYNC_SLOT_H40)) * MCLKS_SLOT_H40;
+				return cycles;
 			}
 		} else {
-			if (context->hslot >= LINE_CHANGE_H32) {
-				if (context->hslot < 148) {
-					return context->cycles + (VINT_SLOT_H32 + 148 - context->hslot + 256 - 233) * MCLKS_SLOT_H32;
+			if (context->hslot >= LINE_CHANGE_H32 && context->hslot <= VINT_SLOT_H32) {
+				if (context->hslot < 233) {
+					return context->cycles + (148 - context->hslot + VINT_SLOT_H40 - 233) * MCLKS_SLOT_H32;
 				} else {
-					return context->cycles + (VINT_SLOT_H32 + 256 - context->hslot) * MCLKS_SLOT_H32;
+					return context->cycles + (VINT_SLOT_H32 - context->hslot) * MCLKS_SLOT_H32;
 				}
-			} else if (context->hslot <= VINT_SLOT_H32) {
-				return context->cycles + (VINT_SLOT_H32 - context->hslot) * MCLKS_SLOT_H32;
 			}
 		}
 	}
 	int32_t cycles_to_vint = vdp_cycles_to_line(context, inactive_start);
 	if (context->regs[REG_MODE_4] & BIT_H40) {
-		cycles_to_vint += MCLKS_LINE - (LINE_CHANGE_H40 - VINT_SLOT_H40) * MCLKS_SLOT_H40;
+		cycles_to_vint += MCLKS_LINE - (LINE_CHANGE_H40 + (256 - VINT_SLOT_H40)) * MCLKS_SLOT_H40;
 	} else {
-		cycles_to_vint += (VINT_SLOT_H32 + 148 - LINE_CHANGE_H32 + 256 - 233) * MCLKS_SLOT_H32;
+		cycles_to_vint += (VINT_SLOT_H32 - 233 + 148 - LINE_CHANGE_H32) * MCLKS_SLOT_H32;
 	}
 	return context->cycles + cycles_to_vint;
 }
