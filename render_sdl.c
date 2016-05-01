@@ -27,6 +27,7 @@ int main_width, main_height, is_fullscreen;
 uint8_t render_dbg = 0;
 uint8_t debug_pal = 0;
 uint8_t render_gl = 1;
+uint8_t scanlines = 0;
 
 uint32_t last_frame = 0;
 
@@ -334,6 +335,8 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 		}
 #endif
 	}
+	def.ptrval = "false";
+	scanlines = !strcmp(tern_find_path_default(config, "video\0scanlines\0", def).ptrval, "true");
 
 	caption = title;
 	min_delay = 0;
@@ -413,7 +416,7 @@ void render_context(vdp_context * context)
 		glUniform1i(un_textures[0], 0);
 
 		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, (context->regs[REG_MODE_4] & BIT_INTERLACE) ? textures[1] : textures[2]);
+		glBindTexture(GL_TEXTURE_2D, textures[(context->regs[REG_MODE_4] & BIT_INTERLACE) ? 1 : scanlines ? 2 : 0]);
 		glUniform1i(un_textures[1], 1);
 
 		glUniform1f(un_width, width);
