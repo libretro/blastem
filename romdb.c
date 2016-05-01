@@ -6,7 +6,9 @@
 #include "blastem.h"
 #include "menu.h"
 
-#define TITLE_START 0x150
+#define DOM_TITLE_START 0x120
+#define DOM_TITLE_END 0x150
+#define TITLE_START DOM_TITLE_END
 #define TITLE_END (TITLE_START+48)
 #define GAME_ID_OFF 0x183
 #define GAME_ID_LEN 8
@@ -397,28 +399,45 @@ tern_node *load_rom_db()
 
 char *get_header_name(uint8_t *rom)
 {
+	//TODO: Should probably prefer the title field that corresponds to the user's region preference
 	uint8_t *last = rom + TITLE_END - 1;
 	uint8_t *src = rom + TITLE_START;
-
-	while (last > src && (*last <=  0x20 || *last >= 0x80))
+	
+	for (;;)
 	{
-		last--;
-	}
-	if (last == src) {
-		//TODO: Use other name field
-		return strdup("UNKNOWN");
-	} else {
-		last++;
-		char *ret = malloc(last - (rom + TITLE_START) + 1);
-		uint8_t *dst;
-		for (dst = ret; src < last; src++)
+		while (last > src && (*last <=  0x20 || *last >= 0x80))
 		{
-			if (*src >= 0x20 && *src < 0x80) {
-				*(dst++) = *src;
-			}
+			last--;
 		}
-		*dst = 0;
-		return ret;
+		if (last == src) {
+			if (src == rom + TITLE_START) {
+				src = rom + DOM_TITLE_START;
+				last = rom + DOM_TITLE_END - 1;
+			} else {
+				return strdup("UNKNOWN");
+			}
+		} else {
+			last++;
+			char *ret = malloc(last - (rom + TITLE_START) + 1);
+			uint8_t *dst;
+			uint8_t last_was_space = 1;
+			for (dst = ret; src < last; src++)
+			{
+				if (*src >= 0x20 && *src < 0x80) {
+					if (*src == ' ') {
+						if (last_was_space) {
+							continue;
+						}
+						last_was_space = 1;
+					} else {
+						last_was_space = 0;
+					}
+					*(dst++) = *src;
+				}
+			}
+			*dst = 0;
+			return ret;
+		}
 	}
 }
 
