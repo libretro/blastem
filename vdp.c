@@ -518,13 +518,15 @@ void vdp_advance_dma(vdp_context * context)
 		context->cd &= 0xF;
 	}
 }
-
+#include <assert.h>
 void write_vram_byte(vdp_context *context, uint16_t address, uint8_t value)
 {
 	if (!(address & 4)) {
 		uint16_t sat_address = (context->regs[REG_SAT] & 0x7F) << 9;
-		if(address >= sat_address && address <= sat_address + SAT_CACHE_SIZE*2) {
-			context->sat_cache[(address & 3) | (address >> 1 & 0x1FC)] = value;
+		if(address >= sat_address && address < (sat_address + SAT_CACHE_SIZE*2)) {
+			uint16_t cache_address = address - sat_address;
+			cache_address = (cache_address & 3) | (cache_address >> 1 & 0x1FC);
+			context->sat_cache[cache_address] = value;
 		}
 	}
 	context->vdpmem[address] = value;
