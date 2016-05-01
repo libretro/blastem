@@ -602,13 +602,10 @@ void process_speeds(tern_node * cur, char * prefix)
 	if (cur->el) {
 		process_speeds(cur->straight.next, curstr);
 	} else {
-		int speed_index = atoi(curstr);
-		if (speed_index < 1) {
-			if (!strcmp(curstr, "0")) {
-				warning("Speed index 0 cannot be set to a custom value\n");
-			} else {
-				warning("%s is not a valid speed index", curstr);
-			}
+		char *end;
+		long speed_index = strtol(curstr, &end, 10);
+		if (speed_index < 0 || end == curstr || *end) {
+			warning("%s is not a valid speed index", curstr);
 		} else {
 			if (speed_index >= num_speeds) {
 				speeds = realloc(speeds, sizeof(uint32_t) * (speed_index+1));
@@ -617,6 +614,10 @@ void process_speeds(tern_node * cur, char * prefix)
 				}
 			}
 			speeds[speed_index] = atoi(cur->straight.value.ptrval);
+			if (speeds[speed_index] < 1) {
+				warning("%s is not a valid speed percentage, setting speed %d to 100", cur->straight.value.ptrval, speed_index);
+				speeds[speed_index] = 100;
+			}
 		}
 	}
 	process_speeds(cur->left, prefix);
@@ -1058,6 +1059,10 @@ void map_all_bindings(io_port *ports)
 			}
 		}
 		map_bindings(ports, mice[mouse].buttons, MAX_MOUSE_BUTTONS);
+	}
+	//not really related to the intention of this function, but the best place to do this currently
+	if (speeds[0] != 100) {
+		set_speed_percent(genesis, speeds[0]);
 	}
 }
 
