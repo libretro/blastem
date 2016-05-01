@@ -32,6 +32,7 @@ uint32_t MCLKS_PER_68K;
 #define MCLKS_PER_Z80 15
 #define MCLKS_PER_PSG (MCLKS_PER_Z80*16)
 #define DEFAULT_SYNC_INTERVAL MCLKS_LINE
+#define DEFAULT_LOWPASS_CUTOFF 3390
 
 //TODO: Figure out the exact value for this
 #define LINES_NTSC 262
@@ -898,11 +899,14 @@ genesis_context *alloc_init_genesis(rom_info *rom, int fps, uint32_t ym_opts)
 	char * config_cycles = tern_find_path(config, "clocks\0max_cycles\0").ptrval;
 	gen->max_cycles = config_cycles ? atoi(config_cycles) : DEFAULT_SYNC_INTERVAL;
 
+	char * lowpass_cutoff_str = tern_find_path(config, "audio\0lowpass_cutoff\0").ptrval;
+	uint32_t lowpass_cutoff = lowpass_cutoff_str ? atoi(lowpass_cutoff_str) : DEFAULT_LOWPASS_CUTOFF;
+	
 	gen->ym = malloc(sizeof(ym2612_context));
-	ym_init(gen->ym, render_sample_rate(), gen->master_clock, MCLKS_PER_YM, render_audio_buffer(), ym_opts);
+	ym_init(gen->ym, render_sample_rate(), gen->master_clock, MCLKS_PER_YM, render_audio_buffer(), ym_opts, lowpass_cutoff);
 
 	gen->psg = malloc(sizeof(psg_context));
-	psg_init(gen->psg, render_sample_rate(), gen->master_clock, MCLKS_PER_PSG, render_audio_buffer());
+	psg_init(gen->psg, render_sample_rate(), gen->master_clock, MCLKS_PER_PSG, render_audio_buffer(), lowpass_cutoff);
 
 	gen->z80 = calloc(1, sizeof(z80_context));
 #ifndef NO_Z80

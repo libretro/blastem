@@ -95,12 +95,15 @@ int main(int argc, char ** argv)
 	if (argc >= 3 && !strcmp(argv[2], "-y")) {
 		opts |= YM_OPT_WAVE_LOG;
 	}
+	
+	char * lowpass_cutoff_str = tern_find_path(config, "audio\0lowpass_cutoff\0").ptrval;
+	uint32_t lowpass_cutoff = lowpass_cutoff_str ? atoi(lowpass_cutoff_str) : 3390;
 
 	ym2612_context y_context;
-	ym_init(&y_context, render_sample_rate(), MCLKS_NTSC, MCLKS_PER_YM, render_audio_buffer(), opts);
+	ym_init(&y_context, render_sample_rate(), MCLKS_NTSC, MCLKS_PER_YM, render_audio_buffer(), opts, lowpass_cutoff);
 
 	psg_context p_context;
-	psg_init(&p_context, render_sample_rate(), MCLKS_NTSC, MCLKS_PER_PSG, render_audio_buffer());
+	psg_init(&p_context, render_sample_rate(), MCLKS_NTSC, MCLKS_PER_PSG, render_audio_buffer(), lowpass_cutoff);
 
 	FILE * f = fopen(argv[1], "rb");
 	vgm_header header;
