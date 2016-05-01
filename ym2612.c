@@ -128,9 +128,7 @@ void ym_adjust_master_clock(ym2612_context * context, uint32_t master_clock)
 #define log2(x) (log(x)/log(2))
 #endif
 
-#define LOWPASS_CUTOFF 3390
-
-void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t sample_limit, uint32_t options)
+void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t sample_limit, uint32_t options, uint32_t lowpass_cutoff)
 {
 	static uint8_t registered_finalize;
 	dfopen(debug_file, "ym_debug.txt", "w");
@@ -141,7 +139,7 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clo
 	context->clock_inc = clock_div * 6;
 	ym_adjust_master_clock(context, master_clock);
 	
-	double rc = (1.0 / (double)LOWPASS_CUTOFF) / (2.0 * M_PI);
+	double rc = (1.0 / (double)lowpass_cutoff) / (2.0 * M_PI);
 	double dt = 1.0 / ((double)master_clock / (double)(context->clock_inc * NUM_OPERATORS));
 	double alpha = dt / (dt + rc);
 	context->lowpass_alpha = (int32_t)(((double)0x10000) * alpha);

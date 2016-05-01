@@ -10,9 +10,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
-#define LOWPASS_CUTOFF 3390
-
-void psg_init(psg_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t samples_frame)
+void psg_init(psg_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t samples_frame, uint32_t lowpass_cutoff)
 {
 	memset(context, 0, sizeof(*context));
 	context->audio_buffer = malloc(sizeof(*context->audio_buffer) * samples_frame);
@@ -20,7 +18,7 @@ void psg_init(psg_context * context, uint32_t sample_rate, uint32_t master_clock
 	context->clock_inc = clock_div;
 	context->sample_rate = sample_rate;
 	context->samples_frame = samples_frame;
-	double rc = (1.0 / (double)LOWPASS_CUTOFF) / (2.0 * M_PI);
+	double rc = (1.0 / (double)lowpass_cutoff) / (2.0 * M_PI);
 	double dt = 1.0 / ((double)master_clock / (double)clock_div);
 	double alpha = dt / (dt + rc);
 	context->lowpass_alpha = (int32_t)(((double)0x10000) * alpha);
