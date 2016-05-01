@@ -268,6 +268,8 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	is_fullscreen = fullscreen;
 
 	render_gl = 0;
+	tern_val def = {.ptrval = "off"};
+	char *vsync = tern_find_path_default(config, "video\0vsync\0", def).ptrval;
 
 #ifndef DISABLE_OPENGL
 	flags |= SDL_WINDOW_OPENGL;
@@ -288,11 +290,27 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 
 	if (res == GLEW_OK && GLEW_VERSION_2_0) {
 		render_gl = 1;
+		if (!strcmp("tear", vsync)) {
+			if (SDL_GL_SetSwapInterval(-1) < 0) {
+				warning("late tear is not available (%s), using normal vsync\n", SDL_GetError());
+				vsync = "on";
+			} else {
+				vsync = NULL;
+			}
+		}
+		if (vsync) {
+			if (SDL_GL_SetSwapInterval(!strcmp("on", vsync)) < 0) {
+				warning("Failed to set vsync to %s: %s\n", vsync, SDL_GetError());
+			}
+		}
 	} else {
-		SDL_DestroyWindow(main_window);
-		warning("OpenGL 2.0 is unavailable, falling back to SDL2 renderer\n", stderr);
+		warning("OpenGL 2.0 is unavailable, falling back to SDL2 renderer\n");
 #endif
-		SDL_CreateWindowAndRenderer(width, height, flags, &main_window, &main_renderer);
+		flags = SDL_RENDERER_ACCELERATED;
+		if (!strcmp("on", vsync) || !strcmp("tear", vsync)) {
+			flags |= SDL_RENDERER_PRESENTVSYNC;
+		}
+		main_renderer = SDL_CreateRenderer(main_window, -1, flags);
 
 		if (!main_window || !main_renderer) {
 			fatal_error("unable to create SDL window: %s\n", SDL_GetError());
@@ -308,7 +326,7 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	printf("Window created with size: %d x %d\n", width, height);
 	float src_aspect = 4.0/3.0;
 	float aspect     = (float)width / height;
-	tern_val def = {.ptrval = "normal"};
+	def.ptrval = "normal";
 	int stretch = fabs(aspect - src_aspect) > 0.01 && !strcmp(tern_find_path_default(config, "video\0aspect\0", def).ptrval, "stretch");
 
 	if (!stretch) {
@@ -335,8 +353,8 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 		}
 #endif
 	}
-	def.ptrval = "false";
-	scanlines = !strcmp(tern_find_path_default(config, "video\0scanlines\0", def).ptrval, "true");
+	def.ptrval = "off";
+	scanlines = !strcmp(tern_find_path_default(config, "video\0scanlines\0", def).ptrval, "on");
 
 	caption = title;
 	min_delay = 0;
