@@ -182,6 +182,7 @@ page_pointers   rs.l 1024
 mouse_sprite    rs.l 1
 menu_functions  rs.l 1
 cursor_show_fun rs.l 1
+special_click   rs.l 1
 mouse_x         rs.w 1
 selection_top   rs.w 1
 selection_bot   rs.w 1
@@ -423,6 +424,12 @@ handle_mouse:
 	move.b d2, num_sprites.w
 
 	move.b #1, mouse_shown.w
+	
+	move.l cursor_show_fun.w, d2
+	beq .skip_show_check
+	move.l d2, a2
+	jsr (a2)
+	
 
 .skip_show_check
 	neg.w d1
@@ -436,7 +443,7 @@ handle_mouse:
 	cmp.w selection_top.w, d1
 	blo .done
 	cmp.w selection_bot.w, d1
-	bhi .done
+	bhi .special_click
 	tst.b num_menu.w
 	bne .handle_menu
 	tst.b num_slots.w
@@ -449,7 +456,7 @@ handle_mouse:
 	sub.w #264, d1
 	lsr.w #4, d1
 	move.b d1, selected.w
-	bra .no_mouse_move
+	bra .normal_click
 .handle_menu
 	;TODO: FIXME
 	and.w #$FFF0, d1
@@ -481,7 +488,7 @@ handle_mouse:
 
 	move.b d0, selected.w
 	
-	bra .no_mouse_move
+	bra .normal_click
 .handle_slots
 	and.w #$FFE0, d1
 	subq #8, d1
@@ -491,11 +498,22 @@ handle_mouse:
 	sub.w #264, d1
 	lsr.w #5, d1
 	move.b d1, selected.w
-.no_mouse_move
+.normal_click
 	btst #0, d4
 	bne select_entry
 .done
 	rts
+.no_mouse_move
+	tst.b mouse_shown
+	bne .skip_show_check
+	rts
+.special_click:
+	btst #0, d4
+	beq .done
+	move.l special_click.w, d2
+	beq .done
+	move.l d2, a2
+	jmp (a2)
 int_4:
 empty_handler:
 	rte
@@ -686,6 +704,9 @@ draw_menu:
 	moveq #0, d5
 	;clear out save slot state
 	move.b d5, num_slots.w
+	;clear out event handlers
+	move.l d5, cursor_show_fun.w
+	move.l d5, special_click.w
 	;select first item
 	move.b d7, selected.w
 	;save menu pointer for second pass
@@ -881,10 +902,11 @@ show_pause_menu:
 	bra gamepad_setup
 	
 menu_start:
+	moveq #0, d0
 	;init vertical scroll RAM
 	vdpaccess $0, VDP_VSRAM_WRITE
-	move.w #0, (a0)
-	move.w #0, (a0)
+	move.w d0, (a0)
+	move.w d0, (a0)
 	
 	;reset arrow position
 	move.w #$0108, sprite_list.w
@@ -893,7 +915,10 @@ menu_start:
 	move.w #$01AA, (sprite_list + 6 + 8).w
 	
 	;reset selection
-	move.b #0, selected.w
+	move.b d0, selected.w
+	
+	;reset special click handler
+	move.l d0, special_click.w
 
 	
 	lea page_pointers.w, a5
@@ -1002,7 +1027,7 @@ done_files:
 	beq .no_prev_page
 	
 	;draw Prev button
-	moveq #4, d0
+	moveq #3, d0
 	moveq #26, d1
 	moveq #6, d2
 	bsr draw_button
@@ -1010,7 +1035,7 @@ done_files:
 	;base attribute
 	move.w #$206B, d0
 	;x pos
-	moveq #6, d1
+	moveq #5, d1
 	;y pos
 	moveq #26, d2
 	lea prev_str(pc), a6
@@ -1022,8 +1047,9 @@ done_files:
 	
 	bra .done_page_buttons
 .no_mouse
-	;TODO - setup cusrsor_show_fun
+	move.l #show_prev_next_buttons, cursor_show_fun.w
 .done_page_buttons
+	move.l #handle_prev_next_click, special_click.w
 
 gamepad_setup:
 	;setup gamepads
@@ -1036,6 +1062,94 @@ gamepad_setup:
 wait_forever
 	stop #2500
 	bra wait_forever
+	
+handle_prev_next_click:
+	;make sure we're actually low enough
+	cmp.w #663, d1
+	bls .no_prev_page
+
+
+	tst.b more_pages.w
+	beq .no_next_page
+	
+	cmp.w #373, d0
+	blo .no_next_page
+	
+	cmp.w #419, d0
+	bhi .no_next_page
+	
+	;switch to the next page
+	move.l page_stack.w, a6
+	move.l (-4, a6), a6
+
+	add.w #10, a7
+	bra render_page
+	
+.no_next_page
+	cmp.l #(page_pointers+8), a5
+	beq .no_prev_page
+	
+	cmp.w #157, d0
+	blo .no_prev_page
+	
+	cmp.w #203, d0
+	bhi .no_prev_page
+	
+	;switch to previous page
+	lea (-12, a5), a5
+	move.l (a5)+, a6
+	move.l a5, page_stack.w
+
+	add.w #10, a7
+	bra render_page
+	
+.no_prev_page
+	rts
+	
+show_prev_next_buttons:
+	movem.l d0-d2/a6, -(a7)
+	tst.b more_pages.w
+	beq .no_next_page
+	
+	;draw Next button
+	moveq #30, d0
+	moveq #26, d1
+	moveq #6, d2
+	bsr draw_button
+	
+	;base attribute
+	move.w #$206B, d0
+	;x pos
+	moveq #32, d1
+	;y pos
+	moveq #26, d2
+	lea next_str(pc), a6
+	bsr print_string_fixed
+	
+.no_next_page
+
+	cmp.l #(page_pointers+8), a5
+	beq .no_prev_page
+	
+	;draw Prev button
+	moveq #3, d0
+	moveq #26, d1
+	moveq #6, d2
+	bsr draw_button
+	
+	;base attribute
+	move.w #$206B, d0
+	;x pos
+	moveq #5, d1
+	;y pos
+	moveq #26, d2
+	lea prev_str(pc), a6
+	bsr print_string_fixed
+	
+.no_prev_page
+	move.l #0, cursor_show_fun.w
+	movem.l (a7)+, d0-d2/a6
+	rts
 	
 show_about:
 	bsr clear_screen
