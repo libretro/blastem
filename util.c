@@ -94,6 +94,26 @@ char * split_keyval(char * text)
 	return text+1;
 }
 
+char is_path_sep(char c)
+{
+#ifdef _WIN32
+	if (c == '\\') {
+		return 1;
+	}
+#endif
+	return c == '/';
+}
+
+char is_absolute_path(char *path)
+{
+#ifdef _WIN32
+	if (path[1] == ':' && is_path_sep(path[2]) && isalpha(path[0])) {
+		return 1;
+	}
+#endif
+	return is_path_sep(path[0]);
+}
+
 char * basename_no_extension(char *path)
 {
 	char *lastdot = NULL;
@@ -103,7 +123,7 @@ char * basename_no_extension(char *path)
 	{
 		if (*cur == '.') {
 			lastdot = cur;
-		} else if (*cur == '/') {
+		} else if (is_path_sep(*cur)) {
 			lastslash = cur + 1;
 		}
 	}
@@ -314,7 +334,13 @@ int ensure_dir_exists(char *path)
 		return 0;
 	}
 	char *parent = strdup(path);
-	char *sep = strrchr(parent, '/');
+	//Windows technically supports both native and Unix-style path separators
+	//so search for both
+	char *sep = strrchr(parent, '\\');
+	char *osep = strrchr(parent, '/');
+	if (osep && (!sep || osep < sep)) {
+		sep = osep;
+	}
 	if (!sep || sep == parent) {
 		//relative path, but for some reason we failed
 		return 0;
@@ -372,7 +398,7 @@ char * get_exe_dir()
 		int linksize = strlen(linktext);
 		for(cur = linktext + linksize - 1; cur != linktext; cur--)
 		{
-			if (*cur == '/') {
+			if (is_path_sep(*cur)) {
 				*cur = 0;
 				break;
 			}
@@ -387,7 +413,7 @@ fallback:
 			int pathsize = strlen(exe_str);
 			for(cur = exe_str + pathsize - 1; cur != exe_str; cur--)
 			{
-				if (*cur == '/') {
+				if (is_path_sep(*cur)) {
 					exe_dir = malloc(cur-exe_str+1);
 					memcpy(exe_dir, exe_str, cur-exe_str);
 					exe_dir[cur-exe_str] = 0;
@@ -533,7 +559,7 @@ char *read_bundled_file(char *name, long *sizeret)
 		}
 		return NULL;
 	}
-	char const *pieces[] = {exe_dir, "/", name};
+	char const *pieces[] = {exe_dir, PATH_SEP, name};
 	char *path = alloc_concat_m(3, pieces);
 	FILE *f = fopen(path, "rb");
 	free(path);
