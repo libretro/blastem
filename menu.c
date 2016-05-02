@@ -195,14 +195,14 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 				size_t len = strlen(menu->curpath);
 				while (len > 1) {
 					--len;
-					if (menu->curpath[len] == '/') {
+					if (is_path_sep(menu->curpath[len])) {
 						menu->curpath[len] = 0;
 						break;
 					}
 				}
 			} else {
 				char *tmp = menu->curpath;
-				char const *pieces[] = {menu->curpath, "/", buf};
+				char const *pieces[] = {menu->curpath, PATH_SEP, buf};
 				menu->curpath = alloc_concat_m(3, pieces);
 				free(tmp);
 			}
@@ -211,7 +211,7 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 		case 2: {
 			char buf[4096];
 			copy_string_from_guest(m68k, dst, buf, sizeof(buf));
-			char const *pieces[] = {menu->curpath, "/", buf};
+			char const *pieces[] = {menu->curpath, PATH_SEP, buf};
 			gen->next_rom = alloc_concat_m(3, pieces);
 			m68k->should_return = 1;
 			break;
@@ -236,7 +236,7 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			if (gen->next_context && gen->next_context->save_dir) {
 				char *end = buffer + SAVE_INFO_BUFFER_SIZE;
 				char slotfile[] = "slot_0.gst";
-				char const * parts[3] = {gen->next_context->save_dir, "/", slotfile};
+				char const * parts[3] = {gen->next_context->save_dir, PATH_SEP, slotfile};
 				struct tm ltime;
 				char *fname;
 				time_t modtime;
@@ -297,7 +297,7 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 					numslotname[5] = '0' + dst;
 					slotname = numslotname;
 				}
-				char const *parts[] = {gen->next_context->save_dir, "/", slotname};
+				char const *parts[] = {gen->next_context->save_dir, PATH_SEP, slotname};
 				char *gstpath = alloc_concat_m(3, parts);
 				uint32_t pc = load_gst(gen->next_context, gstpath);
 				free(gstpath);

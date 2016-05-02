@@ -9,6 +9,12 @@ typedef struct {
 	uint8_t is_dir;
 } dir_entry;
 
+#ifdef _WIN32
+#define PATH_SEP "\\"
+#else
+#define PATH_SEP "/"
+#endif
+
 //Utility functions
 
 //Allocates a new string containing the concatenation of first and second
@@ -21,6 +27,10 @@ long file_size(FILE * f);
 char * strip_ws(char * text);
 //Inserts a null after the first word, returns a pointer to the second word
 char * split_keyval(char * text);
+//Determines whether a character is a valid path separator for the current platform
+char is_path_sep(char c);
+//Determines whether a path is considered an absolute path on the current platform
+char is_absolute_path(char *path);
 //Returns the basename of a path with th extension (if any) stripped
 char * basename_no_extension(char *path);
 //Gets the smallest power of two that is >= a certain value, won't work for values > 0x80000000

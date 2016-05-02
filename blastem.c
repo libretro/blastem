@@ -330,7 +330,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			} else {
 				char slotname[] = "slot_0.gst";
 				slotname[5] = '0' + slot;
-				char const *parts[] = {gen->save_dir, "/", slotname};
+				char const *parts[] = {gen->save_dir, PATH_SEP, slotname};
 				save_path = alloc_concat_m(3, parts);
 			}
 			save_gst(gen, save_path, address);
@@ -1027,7 +1027,7 @@ void set_region(rom_info *info, uint8_t region)
 void setup_saves(char *fname, rom_info *info, genesis_context *context)
 {
 	char * barename = basename_no_extension(fname);
-	char const * parts[3] = {get_save_dir(), "/", barename};
+	char const * parts[3] = {get_save_dir(), PATH_SEP, barename};
 	char *save_dir = alloc_concat_m(3, parts);
 	if (!ensure_dir_exists(save_dir)) {
 		warning("Failed to create save directory %s\n", save_dir);
@@ -1170,7 +1170,7 @@ int main(int argc, char ** argv)
 		if (!romfname) {
 			romfname = "menu.bin";
 		}
-		if (romfname[0] == '/') {
+		if (is_absolute_path(romfname)) {
 			if (!(rom_size = load_rom(romfname))) {
 				fatal_error("Failed to open UI ROM %s for reading", romfname);
 			}
