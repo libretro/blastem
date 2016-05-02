@@ -1,4 +1,4 @@
-BlastEm 0.3.1
+BlastEm 0.4.0
 -------------
 
 Installation
@@ -12,10 +12,15 @@ environment variable.
 Usage
 -----
 
-BlastEm does not have much of a GUI at the moment and expects a filename to be
-passed to it at startup. You can do this by either running it from the command
-line or associating it with a file type. To get a list of supported command
-line options on Linux or OSX type:
+This version of BlastEm has an experimental GUI that is implemented as a Genesis
+ROM running inside the emulator. This UI can be operated with either a mouse or
+the first emulated gamepad. By default, both the keyboard and the first game
+controller are mapped to said gamepad. For more information on bindings see the
+Bindings section.
+
+
+Some operations are currently only supported through the command line. To get a
+list of supported command line options on Linux or OSX type:
 
 	./blastem -h
 	
@@ -45,25 +50,82 @@ yet supported.
 
 The pads subsection is used to map gamepads and joysticks. Analog axes are not
 currently supported. An example configuration is provided in default.cfg to map
-SDL joystick 0 to the second controller.
+SDL joystick 0 to the first controller and SDL joystick 1 to the second
+controller. The button assignments there work well for a 360 controller (at 
+least on Linux, it's possible the physical button to button number is different
+on other operating systems).
+
+The mice subsection is used to map mice to emulated Mega/Sega mice. The default
+configuration maps both the first and second host mice to the first emulated
+mouse. This should not need modification for most users.
+
+One special mapping deserves a mention. By default, the 'r' key is mapped to
+ui.release_mouse. When operating in windowed mode the mouse has a capture
+behavior. Mouse events are ignored until you click in the window. The mouse
+will then be "captured" and the cursor will be both made invisible and locked
+to the window. The ui.release_mouse binding releases the mouse so it can be
+used normally.
+
+IO
+--
+
+This section controls which peripherals are attached to the emulated console.
+IO assignments can be overridden by the ROM database when appropriate. For
+instance, games with mouse support can automatically use the mouse and games
+that only support 3-button pads can automatically force an appropriate pad.
+Unforunately, the ROM database is not yet exhaustive so manual configuration
+may be needed here in some cases.
 
 Video
 -----
 
-The video section currently has three settings: "width", "vertex_shader" and
-"fragment_shader". "width" sets the width of the window in pixels. Height is
-calculated from this value. Both width and height can be overridden from the
-command line. "vertex_shader" and "fragment_shader" control which GLSL shader
-files are used for rendering the display when in Open GL rendering mode.
-Shaders can be used to implement graphical filters and other effects.
+The video section contains settings that affect the visual output of BlastEm.
+
+"width" is used to control the window size when not in fullscreen mode. The
+height of the window is calculated from this value. Both width and height can
+be overridden from the command line.
+
+"vertex_shader" and "fragment_shader" define the GLSL shader program that
+produces the final image for each frame. Shaders can be used to add various
+visual effects or enhancements. Currently BlastEm only ships with the default
+shader. If you write your own shaders, place them in 
+$HOME/.config/blastem/shaders and then specify the basename of the new shader
+files in the "vertex_shader" and "fragment_shader" config options. Note that
+shaders are not available in the SDL fallback renderer.
+
+"scanlines" controls whether there is any emulation of the gaps between display
+lines that are present when driving a CRT television with a 240p signal. This
+emulation is very basic at the moment so this option is off by default.
+
+"vsync" controls whether the drawing of frames is synchronized to the monitor
+refresh rate. Valid values for this setting are "off", "on" and "tear". The
+latter will attempt to use the "late tear" option if it's available and normal
+vsync otherwise. Currently it's recommended to leave this at the default of
+"off" as BlastEm synchronizes to audio and does not yet have the necessary code
+to fully handle conflicts between the audio rate and monitor refresh rate.
+Additionally, the "turbo" feature does not function properly with vsync
+enabled. These issues will be addressed in a future release. If you wish to use
+vsync, please see the VSync section at the bottom of the README.
 
 Audio
 -----
 
-The audio section has two config values: rate and buffer. rate selects the
-sample rate and buffer sets the size of the output buffer in samples. 512 is
-generally a good value, but if you're experiencing audio dropouts you might
-want to increase it to 1024.
+The audio section contains settings that affect the audio output of BlastEm
+
+"rate" selects the preferred sample rate for audio output. Your operating
+system may not accept this value in which case a different rate will be chosen.
+This should generally be either the native sample rate of your sound card or an
+integral divisor of it. Most modern sound cards have a native output rate that
+is a multiple of 48000 Hz so the default setting should work well for most users.
+
+"buffer size" controls how large of a buffer uses for audio data. Smaller values
+will reduce latency, but too small of a value can lead to dropouts. 512 works
+well for me, but a higher or lower value may be more appropriate for your system.
+
+"lowpass_cutoff" controls the cutoff, or knee, frequency of the RC-style
+low-pass filter. The default value of 3390 Hz is supposedly what is present in
+at least some Genesis/Megadrive models. Other models reportedly use an even
+lower value.
 
 Debugger
 --------
@@ -73,6 +135,10 @@ interface. The interface is very rough at the moment. Available commands in the
 68K debugger are:
 	b ADDRESS            - Set a breakpoint at ADDRESS
 	d BREAKPOINT         - Delete a 68K breakpoint
+	di[/(x|X|d|c)] VALUE - Print a register or memory location when a
+						   breakpoint is hit
+	co BREAKPOINT        - Run a list of debugger commands when BREAKPOINT is
+	                       hit
 	a ADDRESS            - Advance to address
 	n                    - Advance to next instruction
 	o                    - Advance to next instruction ignoring branches to
@@ -135,6 +201,11 @@ code.
 	zdis      - Z80 disassembler
 	vgmplay   - Very basic VGM player
 	stateview - GST save state viewer
+	
+VSync
+-----
+
+This section includes information
 
 License
 -------
