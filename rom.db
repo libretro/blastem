@@ -378,30 +378,46 @@ T-12046 {
 		}
 	}
 }
-G-4060 {
-	name Wonder Boy in Monster World
-	EEPROM {
-		type i2c
-		size 128
-	}
-	map {
-		0 {
-			device ROM
-			last 1FFFFF
-		}
-		200000 {
-			device EEPROM
-			last 3FFFFF
-			bits_read {
-				0 sda
-			}
-			bits_write {
-				0 sda
-				1 scl
-			}
-		}
+T-48036 {
+	name Ms. Pac-Man
+	#Ms. Pac-Man doesn't like 6-button controllers
+	device_overrides {
+		1 gamepad3.1
+		2 gamepad3.2
 	}
 }
+#Automatically hook up the mouse in the appropriate port for the games I've tested
+T-76076 {
+	name Nobunaga's Ambition
+	device_overrides {
+		2 mouse.1
+	}
+}
+T-97056 {
+	name Fun 'N' Games
+	device_overrides {
+		2 mouse.1
+	}
+}
+MK-1552 {
+	name Richard Scarry's Busytown
+	device_overrides {
+		1 mouse.1
+	}
+}
+MK-1713 {
+	name Wacky Worlds
+	device_overrides {
+		2 mouse.1
+	}
+}
+T-130016 {
+	name Shanghai II: Dragon's Eye
+	device_overrides {
+		1 mouse.1
+	}
+}
+#This entry is used by the GUI ROM
 BlstMenu {
 	map {
 		0 {
