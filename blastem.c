@@ -868,14 +868,17 @@ genesis_context *menu_context;
 genesis_context *game_context;
 void persist_save()
 {
-	FILE * f = fopen(save_filename, "wb");
-	if (!f) {
-		fprintf(stderr, "Failed to open %s file %s for writing\n", genesis->save_type == SAVE_I2C ? "EEPROM" : "SRAM", save_filename);
+	if (!game_context) {
 		return;
 	}
-	fwrite(genesis->save_storage, 1, genesis->save_size, f);
+	FILE * f = fopen(save_filename, "wb");
+	if (!f) {
+		fprintf(stderr, "Failed to open %s file %s for writing\n", game_context->save_type == SAVE_I2C ? "EEPROM" : "SRAM", save_filename);
+		return;
+	}
+	fwrite(game_context->save_storage, 1, game_context->save_size, f);
 	fclose(f);
-	printf("Saved %s to %s\n", genesis->save_type == SAVE_I2C ? "EEPROM" : "SRAM", save_filename);
+	printf("Saved %s to %s\n", game_context->save_type == SAVE_I2C ? "EEPROM" : "SRAM", save_filename);
 }
 
 #ifndef NO_Z80
