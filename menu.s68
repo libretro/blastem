@@ -684,6 +684,8 @@ draw_button:
 draw_menu:
 	moveq #0, d7
 	moveq #0, d5
+	;clear out save slot state
+	move.b d5, num_slots.w
 	;select first item
 	move.b d7, selected.w
 	;save menu pointer for second pass
