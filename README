@@ -26,6 +26,19 @@ list of supported command line options on Linux or OSX type:
 From within your BlastEm directory. On Windows type:
 	
 	blastem.exe -h
+	
+Lock-On Support
+---------------
+
+This version of BlastEm has some preliminary support for Sonic & Knuckles lock
+on technology. This is only available from the command line at the moment. To
+use it specify the Sonic & Knuckles ROM as the primary ROM and specify the ROM
+to be locked on using the -o option. As an example:
+
+	./blastem ~/romz/sonic_and_knuckles.bin -o ~/romz/sonic3.bin
+	
+Please note that Sonic 2 lock-on does not work at this time. Additionally the
+save RAM added by Sonic 3 won't work either.
 
 Configuration
 -------------
@@ -105,6 +118,11 @@ to fully handle conflicts between the audio rate and monitor refresh rate.
 Additionally, the "turbo" feature does not function properly with vsync
 enabled. These issues will be addressed in a future release. If you wish to use
 vsync, please see the VSync section at the bottom of the README.
+
+"fullscreen" controls whether BlastEm starts in fullscreen or windowed mode.
+This can be overridden on the command line with the -f flag. If fullscreen
+is set to "off", -f will turn it on. Conversely, if fullscreen is set to "on"
+in the config, -f will turn it off.
 
 Audio
 -----
