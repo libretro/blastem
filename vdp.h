@@ -204,6 +204,7 @@ void vdp_print_reg_explain(vdp_context * context);
 void latch_mode(vdp_context * context);
 uint32_t vdp_cycles_to_frame_end(vdp_context * context);
 uint32_t vdp_frame_end_line(vdp_context *context);
+void write_vram_byte(vdp_context *context, uint16_t address, uint8_t value);
 
 extern int32_t color_map[1 << 12];
 
