@@ -378,6 +378,19 @@ T-12046 {
 		}
 	}
 }
+MK-1563 {
+	name Sonic & Knuckles
+	map {
+		0 {
+			device ROM
+			last 1FFFFF
+		}
+		200000 {
+			device LOCK-ON
+			last 3FFFFF
+		}
+	}
+}
 T-48036 {
 	name Ms. Pac-Man
 	#Ms. Pac-Man doesn't like 6-button controllers
