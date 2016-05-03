@@ -301,6 +301,9 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 				char *gstpath = alloc_concat_m(3, parts);
 				uint32_t pc = load_gst(gen->next_context, gstpath);
 				free(gstpath);
+				if (!pc) {
+					break;
+				}
 				gen->next_context->m68k->resume_pc = get_native_address_trans(gen->next_context->m68k, pc);
 			}
 			m68k->should_return = 1;
