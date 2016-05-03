@@ -18,7 +18,6 @@ the first emulated gamepad. By default, both the keyboard and the first game
 controller are mapped to said gamepad. For more information on bindings see the
 Bindings section.
 
-
 Some operations are currently only supported through the command line. To get a
 list of supported command line options on Linux or OSX type:
 
@@ -110,7 +109,7 @@ vsync, please see the VSync section at the bottom of the README.
 Audio
 -----
 
-The audio section contains settings that affect the audio output of BlastEm
+The audio section contains settings that affect the audio output of BlastEm.
 
 "rate" selects the preferred sample rate for audio output. Your operating
 system may not accept this value in which case a different rate will be chosen.
@@ -127,6 +126,44 @@ low-pass filter. The default value of 3390 Hz is supposedly what is present in
 at least some Genesis/Megadrive models. Other models reportedly use an even
 lower value.
 
+Clocks
+------
+
+The clocks section contains settings that affect how fast things run.
+
+"m68k_divider" describes the relationsip between the master clock (which is
+53693175 Hz for NTSC mode and 53203395 Hz for PAL mode). The default value of 7
+matches the real hardware. Set this to a lower number to overclock the 68000
+and set it to a higher number to underclock it.
+
+"max_cycles" controls how often the system is forced to synchronize all
+hardware. BlastEm generally uses a sync on demand approach to synchronizing
+components in the system. This can provide perfect synchronization for most
+components, but since the Z80 can steal cycles from the 68000 at unpredictable
+times 68000/Z80 synchronization is imperfect. The default value of 3420
+corresponds to the number of master clock cycles per line. Larger numbers may
+produce a modest performance improvement whereas smaller numbers will improve
+68000/Z80 synchronization.
+
+"speeds" controls the speed of the overall emulated console at different
+presets. Preset 0 is the default speed and should normally be set to 100. The
+other presets enable the slow/turbo mode functionality.
+
+UI
+--
+
+The UI section contains settings that affect the graphical user interface.
+
+"rom" determines the path of the Genesis/Megadrive ROM that implements the UI.
+Relative paths will be loaded relative to the BlastEm executable.
+
+Other Settings
+--------------
+
+"default_region" determines the console region that will be used when region
+detection fails and when there are multiple valid regions. The default of 'U'
+specifies a 60Hz "foreign" console. 
+
 Debugger
 --------
 
@@ -135,10 +172,8 @@ interface. The interface is very rough at the moment. Available commands in the
 68K debugger are:
 	b ADDRESS            - Set a breakpoint at ADDRESS
 	d BREAKPOINT         - Delete a 68K breakpoint
-	di[/(x|X|d|c)] VALUE - Print a register or memory location when a
-						   breakpoint is hit
-	co BREAKPOINT        - Run a list of debugger commands when BREAKPOINT is
-	                       hit
+	co BREAKPOINT        - Run a list of debugger commands each time
+                           BREAKPOINT is hit
 	a ADDRESS            - Advance to address
 	n                    - Advance to next instruction
 	o                    - Advance to next instruction ignoring branches to
@@ -147,6 +182,8 @@ interface. The interface is very rough at the moment. Available commands in the
 	c                    - Continue
 	bt                   - Print a backtrace
 	p[/(x|X|d|c)] VALUE  - Print a register or memory location
+	di[/(x|X|d|c)] VALUE - Print a register or memory location each time
+						   a breakpoint is hit
 	vs                   - Print VDP sprite list
 	vr                   - Print VDP register info
 	zb ADDRESS           - Set a Z80 breakpoint
@@ -159,12 +196,14 @@ Available commands in the Z80 debugger are:
 	n                    - Advance to next instruction
 	c                    - Continue
 	p[/(x|X|d|c)] VALUE  - Print a register or memory location
-	di[/(x|X|d|c)] VALUE - Print VALUE before every debugger prompt
+	di[/(x|X|d|c)] VALUE - Print a register or memory location each time
+						   a breakpoint is hit
 	q                    - Quit BlastEm
 
 The -d flag can be used to cause BlastEm to start in the debugger.
 Alternatively, you can use the ui.enter_debugger action (mapped to the 'u' key
-by default) to enter the debugger while a game is running.
+by default) to enter the debugger while a game is running. To debug the menu
+ROM, use the -dm flag.
 
 GDB Remote Debugging
 --------------------
@@ -205,7 +244,27 @@ code.
 VSync
 -----
 
-This section includes information
+This section includes information about using VSync with BlastEm. As mentioned
+above, the code is currently designed to only sync to audio and has some issues
+with VSync as a result. That said, if your computer is fast enough and you
+don't care about turbo mode, it can generally made to work.
+
+The native refresh rate of an NTSC Genesis is approximately 59.92 Hz which is
+probably not the native refresh rate of your monitor. Fortunately, it is
+most likely lower than your refresh rate. As long as this is true, VSync will
+generally work as long as your computer is fast enough to cope with the time
+lost waiting for VSync and the audio buffer is large enough to not run out of
+samples during that delay. Latency will suffer a bit and you'll get a doubled
+frame, but things will be fine.
+
+If you enable VSync and you're getting audio dropouts, first try doubling the
+audio buffer setting. If you still experience dropouts, it's possible your
+computer is not fast enough or that your monitor's actual refresh rate is in
+fact lower than that of the emualted console. Not much can be done about the
+former (apart from disabling VSync), but the latter can be dealt with by
+lowering the default speed slightly in the "clocks" section.
+
+A future release will support VSync in a less hacky fashion.
 
 License
 -------
