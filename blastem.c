@@ -130,16 +130,10 @@ int load_rom(char * filename)
 
 uint16_t read_dma_value(uint32_t address)
 {
-	//addresses here are word addresses (i.e. bit 0 corresponds to A1), so no need to do div by 2
-	if (address < 0x200000) {
-		return cart[address];
-	} else if(address >= 0x700000) {
-		return ram[address & 0x7FFF];
-	} else {
-		uint16_t *ptr = get_native_pointer(address*2, (void **)genesis->m68k->mem_pointers, &genesis->m68k->options->gen);
-		if (ptr) {
-			return *ptr;
-		}
+	//addresses here are word addresses (i.e. bit 0 corresponds to A1), so no need to do multiply by 2
+	uint16_t *ptr = get_native_pointer(address*2, (void **)genesis->m68k->mem_pointers, &genesis->m68k->options->gen);
+	if (ptr) {
+		return *ptr;
 	}
 	//TODO: Figure out what happens when you try to DMA from weird adresses like IO or banked Z80 area
 	return 0;
@@ -971,6 +965,7 @@ void free_genesis(genesis_context *gen)
 	psg_free(gen->psg);
 	free(gen->save_storage);
 	free(gen->save_dir);
+	free(gen->lock_on);
 }
 
 void start_genesis(genesis_context *gen, char *statefile, uint8_t *debugger)
@@ -1070,7 +1065,8 @@ int main(int argc, char ** argv)
 	char * romfname = NULL;
 	FILE *address_log = NULL;
 	char * statefile = NULL;
-	int rom_size;
+	int rom_size, lock_on_size;
+	uint16_t *lock_on = NULL;
 	uint8_t * debuggerfun = NULL;
 	uint8_t fullscreen = FULLSCREEN_DEFAULT, use_gl = 1;
 	uint8_t debug_target = 0;
@@ -1135,6 +1131,22 @@ int main(int argc, char ** argv)
 			case 'y':
 				ym_log = 1;
 				break;
+			case 'o': {
+				i++;
+				if (i >= argc) {
+					fatal_error("-o must be followed by a lock on cartridge filename\n");
+				}
+				uint16_t *tmp = cart;
+				lock_on_size = load_rom(argv[i]);
+				if (lock_on_size) {
+					byteswap_rom(lock_on_size);
+					lock_on = cart;
+				} else {
+					fatal_error("Failed to load lock on cartridge %s\n", argv[i]);
+				}
+				cart = tmp;
+				break;
+			}
 			case 'h':
 				info_message(
 					"Usage: blastem [OPTIONS] ROMFILE [WIDTH] [HEIGHT]\n"
@@ -1212,7 +1224,7 @@ int main(int argc, char ** argv)
 		           (read_8_fun)io_read,         (write_8_fun)io_write}
 	};
 	tern_node *rom_db = load_rom_db();
-	rom_info info = configure_rom(rom_db, cart, rom_size, base_map, sizeof(base_map)/sizeof(base_map[0]));
+	rom_info info = configure_rom(rom_db, cart, rom_size, lock_on, lock_on_size, base_map, sizeof(base_map)/sizeof(base_map[0]));
 	byteswap_rom(rom_size);
 	set_region(&info, force_version);
 	update_title(info.name);
@@ -1235,6 +1247,7 @@ int main(int argc, char ** argv)
 	}
 
 	genesis = alloc_init_genesis(&info, fps, (ym_log && !menu) ? YM_OPT_WAVE_LOG : 0);
+	genesis->lock_on = lock_on;
 	setup_saves(romfname, &info, genesis);
 	if (menu) {
 		menu_context = genesis;
@@ -1266,7 +1279,7 @@ int main(int argc, char ** argv)
 			if (!(rom_size = load_rom(menu_context->next_rom))) {
 				fatal_error("Failed to open %s for reading\n", menu_context->next_rom);
 			}
-			info = configure_rom(rom_db, cart, rom_size, base_map, sizeof(base_map)/sizeof(base_map[0]));
+			info = configure_rom(rom_db, cart, rom_size, NULL, 0, base_map, sizeof(base_map)/sizeof(base_map[0]));
 			byteswap_rom(rom_size);
 			set_region(&info, force_version);
 			update_title(info.name);

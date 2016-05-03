@@ -580,8 +580,10 @@ rom_info configure_rom_heuristics(uint8_t *rom, uint32_t rom_size, memmap_chunk 
 typedef struct {
 	rom_info     *info;
 	uint8_t      *rom;
+	uint8_t      *lock_on;
 	tern_node    *root;
 	uint32_t     rom_size;
+	uint32_t     lock_on_size;
 	int          index;
 	int          num_els;
 	uint16_t     ptr_index;
@@ -714,6 +716,14 @@ void map_iter_fun(char *key, tern_val val, void *data)
 		map->buffer = state->rom + offset;
 		map->flags = MMAP_READ;
 		map->mask = calc_mask(state->rom_size - offset, start, end);
+	} else if (!strcmp(dtype, "LOCK-ON")) {
+		if (!state->lock_on) {
+			//skip this entry if there is no lock on cartridge attached
+			return;
+		}
+		map->buffer = state->lock_on + offset;
+		map->flags = MMAP_READ;
+		map->mask = calc_mask(state->lock_on_size - offset, start, end);
 	} else if (!strcmp(dtype, "EEPROM")) {
 		process_eeprom_def(key, state);
 		add_eeprom_map(node, start, end, state);
@@ -797,12 +807,12 @@ void map_iter_fun(char *key, tern_val val, void *data)
 		map->write_16 = menu_write_w;
 		map->read_16 = menu_read_w;
 	} else {
-		fatal_error("Invalid device type for ROM DB map entry %d with address %s\n", state->index, key);
+		fatal_error("Invalid device type %s for ROM DB map entry %d with address %s\n", dtype, state->index, key);
 	}
 	state->index++;
 }
 
-rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, memmap_chunk const *base_map, uint32_t base_chunks)
+rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, void *lock_on, uint32_t lock_on_size, memmap_chunk const *base_map, uint32_t base_chunks)
 {
 	uint8_t product_id[GAME_ID_LEN+1];
 	uint8_t *rom = vrom;
@@ -855,7 +865,17 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, memmap_
 			info.eeprom_map = NULL;
 			info.num_eeprom = 0;
 			memset(info.map, 0, sizeof(memmap_chunk) * info.map_chunks);
-			map_iter_state state = {&info, rom, entry, rom_size, 0, info.map_chunks - base_chunks, 0};
+			map_iter_state state = {
+				.info = &info, 
+				.rom = rom, 
+				.lock_on = lock_on,
+				.root = entry, 
+				.rom_size = rom_size, 
+				.lock_on_size = lock_on_size,
+				.index = 0, 
+				.num_els = info.map_chunks - base_chunks,
+				.ptr_index = 0
+			};
 			tern_foreach(map, map_iter_fun, &state);
 			memcpy(info.map + state.index, base_map, sizeof(memmap_chunk) * base_chunks);
 		} else {

@@ -27,6 +27,7 @@ struct genesis_context {
 	psg_context     *psg;
 	genesis_context *next_context;
 	uint16_t        *cart;
+	uint16_t        *lock_on;
 	uint16_t        *work_ram;
 	uint8_t         *zram;
 	void            *extra;
