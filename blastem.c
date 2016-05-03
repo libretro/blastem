@@ -1153,9 +1153,10 @@ int main(int argc, char ** argv)
 					"Options:\n"
 					"	-h          Print this help text\n"
 					"	-r (J|U|E)  Force region to Japan, US or Europe respectively\n"
-					"	-f          Start in fullscreen mode\n"
+					"	-f          Toggles fullscreen mode\n"
 					"	-g          Disable OpenGL rendering\n"
 					"	-s FILE     Load a GST format savestate from FILE\n"
+					"	-o FILE     Load FILE as a lock-on cartridge\n"
 					"	-d          Enter debugger on startup\n"
 					"	-n          Disable Z80\n"
 					"	-v          Display version number and exit\n"
@@ -1241,6 +1242,10 @@ int main(int argc, char ** argv)
 	uint32_t fps = 60;
 	if (version_reg & 0x40) {
 		fps = 50;
+	}
+	char *config_fullscreen = tern_find_path(config, "video\0fullscreen\0").ptrval;
+	if (config_fullscreen && !strcmp("on", config_fullscreen)) {
+		fullscreen = !fullscreen;
 	}
 	if (!headless) {
 		render_init(width, height, title, fps, fullscreen);
