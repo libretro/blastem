@@ -518,7 +518,7 @@ void vdp_advance_dma(vdp_context * context)
 		context->cd &= 0xF;
 	}
 }
-#include <assert.h>
+
 void write_vram_byte(vdp_context *context, uint16_t address, uint8_t value)
 {
 	if (!(address & 4)) {
