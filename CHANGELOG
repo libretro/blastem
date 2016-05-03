@@ -1,3 +1,63 @@
+0.4.0
+-----
+*New Features*
+
+
+ - Genesis ROM based Graphical User Interface - command line is no longer required for basic functionality
+ - Added support for the Mega/Sega Mouse
+ - Configurable low pass filter
+ - 68000 overclock and underclock
+ - Scanlines can now be controlled via the config file and defaults to off (previously was always on)
+ - VSync can now be specified via the config file and defaults to off (previously just used the OS/driver default)
+ - Fullscreen mode can now be specified via the config file in addition to the command line flag
+ - New 68K debugger command 'co' allows a list of commands to be run each time a breakpoint is hit
+ - 68K debugger now supports the 'di' command like the Z80 debugger
+ - New debugger command 'yt' displays YM-2612 timer info
+ - Added support for controller hotplug (game controllers don't need to be plugged in before starting BlastEm)
+ - IO devices can now be automatically configured by ROM DB entries
+
+*Bugfixes*
+
+ - Fixed calculation of window start column - removes graphical glitches in Afterburner 2, Fireshark, Dungeons and Dragons: Warriors of the Eternal Sun and probably others
+ - Fixed the implementation of LDD and LDDR
+ - Fixed ABCD/SBCD - eliminates the score counter problem in Bubsy
+ - Fixed btst when used with immediate destination - Fixes a crash in NHL 95
+ - Fixed YM-2612 attack phase and sustain level
+ - Fixed mapping of YM-2612 key on/off bits to operators
+ - Fixed YM-2612 LFO AMS shift values
+ - Fixed YM-2612 LFO phase modulation
+ - Fixed mapping of registers to operators in Channel 3 special mode (for real this time)
+ - Fixed a small bug in YM-2612 timer reloads
+ - Fixed peripheral ID for 3-button pad
+ - Accesses by the 68K to the low 4MB of the address space, but outside of the defined ROM will no longer cause a crash
+ - Config files and shaders saved with Windows-style line endings will no longer fail to load
+ - Fixed a crash bug on Windows by properly detecting invalid destination modes for immediate variant opcodes
+
+*Accuracy/Completeness Improvements*
+
+ - All 68000 instructions are now implemented
+ - Implemented 68000 privilege, address error and illegal instruction exceptions
+ - Z80 half carry flag is now implemented for the trivial cases
+ - Fixed timing of the Z80 IM and certain LD variants
+ - Implemented interrupt latency - Fixes Sesame Street: Counting Cafe
+ - Interrupts are know acknowleged based on what the VDP thinks its asserting rather than what the 68K actually is acking - Fixes Fatal Rewind
+ - Improved timing of 68000 interrupt processing
+ - Improved timing of Z80 busack response - Fixes a crash in Barkley: Shut Up and Jam
+ - Adjusted the amount of time the 68000 is blocked during DMA - gets rid of remaining part of "YOUR EMULATOR SUX" text in overdrive
+ - Corrected order individual words of a longword are written when the predecrement addressing mode is used as the destination of a move instruction
+ - Adjusted relationship between Horizontal counter and render events to better match tests/measurements
+ - Adjusted vertical interrupt timing to better match measurements
+ - Improved timing of 68K/Z80 interactions based on tests
+
+*Other Changes*
+
+ - Z80 disassembler now supports a start offset parameter: -s
+ - Windows build now uses link time optimization like the others
+ - Optimized the VDP code
+ - Improved audio resampling
+ - Added Mega Man - The Wily Wars to ROM database
+ - Added Wonder Boy in Monster World to ROM database
+
 0.3.1
 -----
 *New Features*
