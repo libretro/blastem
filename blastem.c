@@ -1,5 +1,5 @@
 /*
- Copyright 2013 Michael Pavone
+ Copyright 2013-2016 Michael Pavone
  This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
@@ -22,7 +22,7 @@
 #include "terminal.h"
 #include "arena.h"
 
-#define BLASTEM_VERSION "0.3.X"
+#define BLASTEM_VERSION "0.4.0"
 
 #define MCLKS_NTSC 53693175
 #define MCLKS_PAL  53203395
