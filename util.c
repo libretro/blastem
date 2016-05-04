@@ -467,7 +467,11 @@ time_t get_modification_time(char *path)
 	if (stat(path, &st)) {
 		return 0;
 	}
+#ifdef __APPLE__
+    return st.st_mtimespec.tv_sec;
+#else
 	return st.st_mtim.tv_sec;
+#endif
 }
 
 int ensure_dir_exists(char *path)
