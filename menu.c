@@ -193,17 +193,26 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			copy_string_from_guest(m68k, dst, buf, sizeof(buf));
 			if (!strcmp(buf, "..")) {
 				size_t len = strlen(menu->curpath);
-				while (len > 1) {
+				while (len > 0) {
 					--len;
 					if (is_path_sep(menu->curpath[len])) {
-						menu->curpath[len] = 0;
+						if (!len) {
+							//special handling for /
+							menu->curpath[len+1] = 0;
+						} else {
+							menu->curpath[len] = 0;
+						}
 						break;
 					}
 				}
 			} else {
 				char *tmp = menu->curpath;
-				char const *pieces[] = {menu->curpath, PATH_SEP, buf};
-				menu->curpath = alloc_concat_m(3, pieces);
+				if (is_path_sep(menu->curpath[strlen(menu->curpath) - 1])) {
+					menu->curpath = alloc_concat(menu->curpath, buf);
+				} else {
+					char const *pieces[] = {menu->curpath, PATH_SEP, buf};
+					menu->curpath = alloc_concat_m(3, pieces);
+				}
 				free(tmp);
 			}
 			break;
