@@ -216,6 +216,7 @@ arrow.tiles : arrow.png
 cursor.tiles : cursor.png
 font_interlace_variable.tiles : font_interlace_variable.png
 button.tiles : button.png
+font.tiles : font.png
 
 menu.bin : font_interlace_variable.tiles arrow.tiles cursor.tiles button.tiles font.tiles
 
