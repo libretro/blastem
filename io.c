@@ -26,6 +26,7 @@ const char * device_type_names[] = {
 	"3-button gamepad",
 	"6-button gamepad",
 	"Mega Mouse",
+	"Saturn Keyboard",
 	"Menacer",
 	"Justifier",
 	"Sega multi-tap",
@@ -107,6 +108,7 @@ typedef struct {
 static keybinding * bindings[0x10000];
 static joystick joysticks[MAX_JOYSTICKS];
 static mousebinding mice[MAX_MICE];
+static io_port *keyboard_port;
 const uint8_t dpadbits[] = {RENDER_DPAD_UP, RENDER_DPAD_DOWN, RENDER_DPAD_LEFT, RENDER_DPAD_RIGHT};
 
 void bind_key(int keycode, uint8_t bind_type, uint8_t subtype_a, uint8_t subtype_b, uint8_t value)
@@ -254,7 +256,20 @@ void handle_binding_down(keybinding * binding)
 	}
 }
 
-void handle_keydown(int keycode)
+void store_key_event(uint16_t code)
+{
+	if (keyboard_port) {
+		keyboard_port->device.keyboard.write_pos = (keyboard_port->device.keyboard.write_pos + 1) & 7;
+		if (keyboard_port->device.keyboard.write_pos == keyboard_port->device.keyboard.read_pos) {
+			//we've wrapped around to the read position, drop this event
+			keyboard_port->device.keyboard.write_pos = (keyboard_port->device.keyboard.write_pos - 1) & 7;
+			return;
+		}
+		keyboard_port->device.keyboard.events[keyboard_port->device.keyboard.write_pos] = code;
+	}
+}
+
+void handle_keydown(int keycode, char scancode)
 {
 	int bucket = keycode >> 15 & 0xFFFF;
 	if (!bindings[bucket]) {
@@ -263,6 +278,7 @@ void handle_keydown(int keycode)
 	int idx = keycode & 0x7FFF;
 	keybinding * binding = bindings[bucket] + idx;
 	handle_binding_down(binding);
+	store_key_event(scancode);
 }
 
 void handle_joydown(int joystick, int button)
@@ -388,7 +404,7 @@ void handle_binding_up(keybinding * binding)
 	}
 }
 
-void handle_keyup(int keycode)
+void handle_keyup(int keycode, char scancode)
 {
 	int bucket = keycode >> 15 & 0xFFFF;
 	if (!bindings[bucket]) {
@@ -397,6 +413,7 @@ void handle_keyup(int keycode)
 	int idx = keycode & 0x7FFF;
 	keybinding * binding = bindings[bucket] + idx;
 	handle_binding_up(binding);
+	store_key_event(0x100 | scancode);
 }
 
 void handle_joyup(int joystick, int button)
@@ -1059,6 +1076,14 @@ void map_all_bindings(io_port *ports)
 			}
 		}
 		map_bindings(ports, mice[mouse].buttons, MAX_MOUSE_BUTTONS);
+	}
+	keyboard_port = NULL;
+	for (int i = 0; i < 3; i++)
+	{
+		if (ports[i].device_type == IO_SATURN_KEYBOARD) {
+			keyboard_port = ports + i;
+			break;
+		}
 	}
 	//not really related to the intention of this function, but the best place to do this currently
 	if (speeds[0] != 100) {
