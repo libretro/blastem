@@ -554,14 +554,55 @@ int lowest_unused_joystick_index()
 	return -1;
 }
 
+uint8_t scancode_map[SDL_NUM_SCANCODES] = {
+	[SDL_SCANCODE_A] = 0x1C,
+	[SDL_SCANCODE_B] = 0x32,
+	[SDL_SCANCODE_C] = 0x21,
+	[SDL_SCANCODE_D] = 0x23,
+	[SDL_SCANCODE_E] = 0x24,
+	[SDL_SCANCODE_F] = 0x28,
+	[SDL_SCANCODE_G] = 0x34,
+	[SDL_SCANCODE_H] = 0x33,
+	[SDL_SCANCODE_I] = 0x43,
+	[SDL_SCANCODE_J] = 0x3B,
+	[SDL_SCANCODE_K] = 0x42,
+	[SDL_SCANCODE_L] = 0x4B,
+	[SDL_SCANCODE_M] = 0x3A,
+	[SDL_SCANCODE_N] = 0x31,
+	[SDL_SCANCODE_O] = 0x44,
+	[SDL_SCANCODE_P] = 0x4D,
+	[SDL_SCANCODE_Q] = 0x15,
+	[SDL_SCANCODE_R] = 0x2D,
+	[SDL_SCANCODE_S] = 0x1B,
+	[SDL_SCANCODE_T] = 0x2C,
+	[SDL_SCANCODE_U] = 0x3C,
+	[SDL_SCANCODE_V] = 0x2A,
+	[SDL_SCANCODE_W] = 0x1D,
+	[SDL_SCANCODE_X] = 0x22,
+	[SDL_SCANCODE_Y] = 0x35,
+	[SDL_SCANCODE_Z] = 0x1A,
+	[SDL_SCANCODE_1] = 0x16,
+	[SDL_SCANCODE_2] = 0x1E,
+	[SDL_SCANCODE_3] = 0x26,
+	[SDL_SCANCODE_4] = 0x25,
+	[SDL_SCANCODE_5] = 0x2E,
+	[SDL_SCANCODE_6] = 0x36,
+	[SDL_SCANCODE_7] = 0x3D,
+	[SDL_SCANCODE_8] = 0x3E,
+	[SDL_SCANCODE_9] = 0x46,
+	[SDL_SCANCODE_0] = 0x45,
+	[SDL_SCANCODE_RETURN] = 0x5A,
+	[SDL_SCANCODE_SPACE] = 0x29
+};
+
 int32_t handle_event(SDL_Event *event)
 {
 	switch (event->type) {
 	case SDL_KEYDOWN:
-		handle_keydown(event->key.keysym.sym);
+		handle_keydown(event->key.keysym.sym, scancode_map[event->key.keysym.scancode]);
 		break;
 	case SDL_KEYUP:
-		handle_keyup(event->key.keysym.sym);
+		handle_keyup(event->key.keysym.sym, scancode_map[event->key.keysym.scancode]);
 		break;
 	case SDL_JOYBUTTONDOWN:
 		handle_joydown(find_joystick_index(event->jbutton.which), event->jbutton.button);

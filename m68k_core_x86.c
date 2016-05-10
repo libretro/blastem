@@ -949,6 +949,7 @@ void translate_m68k_movep(m68k_options * opts, m68kinst * inst)
 				add_ir(code, 2, opts->gen.scratch1, SZ_D);
 				push_r(code, opts->gen.scratch1);
 				call(code, opts->read_8);
+				movzx_rr(code, opts->gen.scratch1, opts->gen.scratch1, SZ_B, SZ_W);
 				shl_ir(code, 16, opts->gen.scratch1, SZ_D);
 				or_rr(code, opts->gen.scratch1, reg, SZ_D);
 			} else {
