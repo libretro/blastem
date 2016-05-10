@@ -13,6 +13,7 @@ enum {
 	IO_GAMEPAD3,
 	IO_GAMEPAD6,
 	IO_MOUSE,
+	IO_SATURN_KEYBOARD,
 	IO_MENACER,
 	IO_JUSTIFIER,
 	IO_SEGA_MULTI,
@@ -45,6 +46,11 @@ typedef struct {
 			uint8_t  tr_counter;
 			uint8_t  mouse_num;
 		} mouse;
+		struct {
+			uint16_t events[8];
+			uint8_t  read_pos;
+			uint8_t  write_pos;
+		} keyboard;
 	} device;
 	uint8_t  output;
 	uint8_t  control;
@@ -76,8 +82,8 @@ void setup_io_devices(tern_node * config, rom_info *rom, genesis_context * gen);
 void io_adjust_cycles(io_port * pad, uint32_t current_cycle, uint32_t deduction);
 void io_data_write(io_port * pad, uint8_t value, uint32_t current_cycle);
 uint8_t io_data_read(io_port * pad, uint32_t current_cycle);
-void handle_keydown(int keycode);
-void handle_keyup(int keycode);
+void handle_keydown(int keycode, char scancode);
+void handle_keyup(int keycode, char scancode);
 void handle_joydown(int joystick, int button);
 void handle_joyup(int joystick, int button);
 void handle_joy_dpad(int joystick, int dpad, uint8_t state);
