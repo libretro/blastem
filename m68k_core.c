@@ -334,11 +334,12 @@ void translate_m68k_rtr(m68k_options *opts, m68kinst * inst)
 void translate_m68k_trap(m68k_options *opts, m68kinst *inst)
 {
 	code_info *code = &opts->gen.code;
-	uint32_t vector;
+	uint32_t vector, pc = inst->address;
 	switch (inst->op)
 	{
 	case M68K_TRAP:
 		vector = inst->src.params.immed + VECTOR_TRAP_0;
+		pc += 2;
 		break;
 	case M68K_A_LINE_TRAP:
 		vector = VECTOR_LINE_1010;
@@ -348,7 +349,7 @@ void translate_m68k_trap(m68k_options *opts, m68kinst *inst)
 		break;
 	}
 	ldi_native(opts, vector, opts->gen.scratch2);
-	ldi_native(opts, inst->address+2, opts->gen.scratch1);
+	ldi_native(opts, pc, opts->gen.scratch1);
 	jmp(code, opts->trap);
 }
 
