@@ -258,18 +258,18 @@ void handle_binding_down(keybinding * binding)
 
 void store_key_event(uint16_t code)
 {
-	if (keyboard_port) {
-		keyboard_port->device.keyboard.write_pos = (keyboard_port->device.keyboard.write_pos + 1) & 7;
-		if (keyboard_port->device.keyboard.write_pos == keyboard_port->device.keyboard.read_pos) {
-			//we've wrapped around to the read position, drop this event
-			keyboard_port->device.keyboard.write_pos = (keyboard_port->device.keyboard.write_pos - 1) & 7;
-			return;
-		}
+	if (keyboard_port && keyboard_port->device.keyboard.write_pos != keyboard_port->device.keyboard.read_pos) {
+		//there's room in the buffer, record this event
 		keyboard_port->device.keyboard.events[keyboard_port->device.keyboard.write_pos] = code;
+		if (keyboard_port->device.keyboard.read_pos == 0xFF) {
+			//ring buffer was empty, update read_pos to indicate there is now data
+			keyboard_port->device.keyboard.read_pos = keyboard_port->device.keyboard.write_pos;
+		}
+		keyboard_port->device.keyboard.write_pos = (keyboard_port->device.keyboard.write_pos + 1) & 7;
 	}
 }
 
-void handle_keydown(int keycode, char scancode)
+void handle_keydown(int keycode, uint8_t scancode)
 {
 	int bucket = keycode >> 15 & 0xFFFF;
 	if (!bindings[bucket]) {
@@ -404,7 +404,7 @@ void handle_binding_up(keybinding * binding)
 	}
 }
 
-void handle_keyup(int keycode, char scancode)
+void handle_keyup(int keycode, uint8_t scancode)
 {
 	int bucket = keycode >> 15 & 0xFFFF;
 	if (!bindings[bucket]) {
@@ -681,6 +681,10 @@ void process_device(char * device_type, io_port * port)
 		port->device.mouse.latched_y = 0;
 		port->device.mouse.ready_cycle = CYCLE_NEVER;
 		port->device.mouse.tr_counter = 0;
+	} else if(!strcmp(device_type, "saturn keyboard")) {
+		port->device_type = IO_SATURN_KEYBOARD;
+		port->device.keyboard.read_pos = 0xFF;
+		port->device.keyboard.write_pos = 0;
 	} else if(!strcmp(device_type, "sega_parallel")) {
 		port->device_type = IO_SEGA_PARALLEL;
 		port->device.stream.data_fd = -1;
@@ -1281,6 +1285,24 @@ void io_data_write(io_port * port, uint8_t value, uint32_t current_cycle)
 			}
 		}
 		break;
+	case IO_SATURN_KEYBOARD:
+		if (output & TH) {
+			//request is over
+			if (port->device.keyboard.tr_counter >= 10 && port->device.keyboard.read_pos != 0xFF) {
+				//remove scan code from buffer
+				port->device.keyboard.read_pos++;
+				port->device.keyboard.read_pos &= 7;
+				if (port->device.keyboard.read_pos == port->device.keyboard.write_pos) {
+					port->device.keyboard.read_pos = 0xFF;
+				}
+			}
+			port->device.keyboard.tr_counter = 0;
+		} else {
+			if ((output & TR) != (old_output & TR)) {
+				port->device.keyboard.tr_counter++;
+			}
+		}
+		break;
 #ifndef _WIN32
 	case IO_GENERIC:
 		wait_for_connection(port);
@@ -1394,6 +1416,78 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 				break;
 			}
 			input |= ((port->device.mouse.tr_counter & 1) == 0) << 4;
+		}
+		break;
+	}
+	case IO_SATURN_KEYBOARD:
+	{
+		if (th) {
+			input = 0x11;
+		} else {
+			uint8_t tr = output & TR;
+			uint16_t code = port->device.keyboard.read_pos == 0xFF ? 0 
+				: port->device.keyboard.events[port->device.keyboard.read_pos];
+			switch (port->device.keyboard.tr_counter)
+			{
+			case 0:
+				input = 1;
+				break;
+			case 1:
+				//Saturn peripheral ID
+				input = 3;
+				break;
+			case 2:
+				//data size
+				input = 4;
+				break;
+			case 3:
+				//d-pad
+				//TODO: set these based on keyboard state
+				input = 0xF;
+				break;
+			case 4:
+				//Start ABC
+				//TODO: set these based on keyboard state
+				input = 0xF;
+				break;
+			case 5:
+				//R XYZ
+				//TODO: set these based on keyboard state
+				input = 0xF;
+				break;
+			case 6:
+				//L and KBID
+				//TODO: set L based on keyboard state
+				input = 0x8;
+				break;
+			case 7:
+				//Capslock, Numlock, Scrolllock
+				//TODO: set these based on keyboard state
+				input = 0;
+				break;
+			case 8:
+				input = 6;
+				if (code & 0x100) {
+					//break
+					input |= 1;
+				} else if (code) {
+					input |= 8;
+				}
+				break;
+			case 9:
+				input = code >> 4 & 0xF;
+				break;
+			case 10:
+				input = code & 0xF;
+				break;
+			case 11:
+				input = 0;
+				break;
+			default:
+				input = 1;
+				break;
+			}
+			input |= ((port->device.keyboard.tr_counter & 1) == 0) << 4;
 		}
 		break;
 	}

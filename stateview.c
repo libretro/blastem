@@ -50,11 +50,11 @@ void ym_address_write_part2(ym2612_context * context, uint8_t address)
 {
 }
 
-void handle_keydown(int keycode)
+void handle_keydown(int keycode, uint8_t scancode)
 {
 }
 
-void handle_keyup(int keycode)
+void handle_keyup(int keycode, uint8_t scancode)
 {
 }
 
