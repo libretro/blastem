@@ -185,18 +185,20 @@ void render_sprite_cells(vdp_context * context)
 		//printf("Draw Slot %d of %d, Rendering sprite cell from %X to x: %d\n", context->cur_slot, context->sprite_draws, d->address, x);
 		context->cur_slot--;
 		for (uint16_t address = d->address; address != ((d->address+4) & 0xFFFF); address++) {
-			if (x >= 0 && x < 320 && !(context->linebuf[x] & 0xF)) {
-				if (context->linebuf[x] && (context->vdpmem[address] >> 4)) {
+			if (x >= 0 && x < 320) {
+				if (!(context->linebuf[x] & 0xF)) {
+					context->linebuf[x] = (context->vdpmem[address] >> 4) | d->pal_priority;
+				} else if (context->vdpmem[address] >> 4) {
 					context->flags2 |= FLAG2_SPRITE_COLLIDE;
 				}
-				context->linebuf[x] = (context->vdpmem[address] >> 4) | d->pal_priority;
 			}
 			x += dir;
-			if (x >= 0 && x < 320 && !(context->linebuf[x] & 0xF)) {
-				if (context->linebuf[x] && (context->vdpmem[address] & 0xF)) {
+			if (x >= 0 && x < 320) {
+				if (!(context->linebuf[x] & 0xF)) {
+					context->linebuf[x] = (context->vdpmem[address] & 0xF)  | d->pal_priority;
+				} else if (context->vdpmem[address] & 0xF) {
 					context->flags2 |= FLAG2_SPRITE_COLLIDE;
 				}
-				context->linebuf[x] = (context->vdpmem[address] & 0xF)  | d->pal_priority;
 			}
 			x += dir;
 		}
