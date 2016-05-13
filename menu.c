@@ -142,6 +142,10 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 				qsort(entries, num_entries, sizeof(dir_entry), menu_dir_sort);
 			} else {
 				warning("Failed to open directory %s: %s\n", menu->curpath, strerror(errno));
+				entries = malloc(sizeof(dir_entry));
+				entries->name = strdup("..");
+				entries->is_dir = 1;
+				num_entries = 1;
 			}
 			uint8_t *dest;
 			for (size_t i = 0; i < num_entries; i++)
@@ -184,8 +188,8 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			dest = get_native_pointer(dst, (void **)m68k->mem_pointers, &m68k->options->gen);
 			if (dest) {
 				*dest = dest[1] = 0;
-				free_dir_list(entries, num_entries);
 			}
+			free_dir_list(entries, num_entries);
 			break;
 		}
 		case 1: {
