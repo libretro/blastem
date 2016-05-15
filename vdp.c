@@ -826,20 +826,18 @@ void read_map_scroll_b(uint16_t column, uint32_t line, vdp_context * context)
 void render_map(uint16_t col, uint8_t * tmp_buf, uint8_t offset, vdp_context * context)
 {
 	uint16_t address;
-	uint8_t shift, add;
+	uint16_t vflip_base;
 	if (context->double_res) {
 		address = ((col & 0x3FF) << 6);
-		shift = 1;
-		add = context->framebuf != context->oddbuf ? 1 : 0;
+		vflip_base = 60;
 	} else {
 		address = ((col & 0x7FF) << 5);
-		shift = 0;
-		add = 0;
+		vflip_base = 28;
 	}
 	if (col & MAP_BIT_V_FLIP) {
-		address +=  28 - 4 * context->v_offset/*((context->v_offset << shift) + add)*/;
+		address +=  vflip_base - 4 * context->v_offset;
 	} else {
-		address += 4 * context->v_offset/*((context->v_offset << shift) + add)*/;
+		address += 4 * context->v_offset;
 	}
 	uint16_t pal_priority = (col >> 9) & 0x70;
 	int32_t dir;
