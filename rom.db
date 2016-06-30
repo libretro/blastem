@@ -430,6 +430,23 @@ T-130016 {
 		1 mouse.1
 	}
 }
+T-50286 {
+	name Buck Rogers: Countdown to Doomsday
+	SRAM {
+		size 8192
+		bus odd
+	}
+	map {
+		0 {
+			device ROM
+			last 1FFFFF
+		}
+		200000 {
+			device SRAM
+			last 3FFFFF
+		}
+	}
+}
 #This entry is used by the GUI ROM
 BlstMenu {
 	map {
