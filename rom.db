@@ -391,6 +391,30 @@ MK-1563 {
 		}
 	}
 }
+G-4060 {
+	name Wonder Boy in Monster World
+	EEPROM {
+		type i2c
+		size 128
+	}
+	map {
+		0 {
+			device ROM
+			last 1FFFFF
+		}
+		200000 {
+			device EEPROM
+			last 3FFFFF
+			bits_read {
+				0 sda
+			}
+			bits_write {
+				0 sda
+				1 scl
+			}
+		}
+	}
+}
 T-48036 {
 	name Ms. Pac-Man
 	#Ms. Pac-Man doesn't like 6-button controllers
