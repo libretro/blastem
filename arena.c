@@ -17,6 +17,8 @@ struct arena {
 	size_t free_storage;
 };
 
+#define DEFAULT_STORAGE_SIZE 8
+
 static arena *current_arena;
 
 arena *get_current_arena()
@@ -45,7 +47,11 @@ void track_block(void *block)
 {
 	arena *cur = get_current_arena();
 	if (cur->used_count == cur->used_storage) {
-		cur->used_storage *= 2;
+		if (cur->used_storage) {
+			cur->used_storage *= 2;
+		} else {
+			cur->used_storage = DEFAULT_STORAGE_SIZE;
+		}
 		cur->used_blocks = realloc(cur->used_blocks, cur->used_storage * sizeof(void *));
 	}
 	cur->used_blocks[cur->used_count++] = block;

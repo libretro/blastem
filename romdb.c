@@ -418,7 +418,7 @@ char *get_header_name(uint8_t *rom)
 			}
 		} else {
 			last++;
-			char *ret = malloc(last - (rom + TITLE_START) + 1);
+			char *ret = malloc(last - src + 1);
 			uint8_t *dst;
 			uint8_t last_was_space = 1;
 			for (dst = ret; src < last; src++)
