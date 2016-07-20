@@ -338,7 +338,7 @@ int ensure_dir_exists(char *path)
 	//so search for both
 	char *sep = strrchr(parent, '\\');
 	char *osep = strrchr(parent, '/');
-	if (osep && (!sep || osep < sep)) {
+	if (osep && (!sep || osep > sep)) {
 		sep = osep;
 	}
 	if (!sep || sep == parent) {
