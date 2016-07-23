@@ -1933,10 +1933,206 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		call(code, opts->write_io);
 		z80_save_reg(inst, opts);
 		break;
-	/*case Z80_OUTI:
-	case Z80_OTIR:
+	case Z80_OUTI:
+		cycles(&opts->gen, 9);//T States: 4, 5
+		//read from (HL)
+		zreg_to_native(opts, Z80_HL, opts->gen.scratch1);
+		call(code, opts->read_8);//T states 3
+		//undocumented N flag behavior
+		//flag set on bit 7 of value written
+		bt_ir(code, 7, opts->gen.scratch1, SZ_B);
+		setcc_rdisp(code, CC_NC, opts->gen.context_reg, zf_off(ZF_N)); 
+		//write to IO (C)
+		zreg_to_native(opts, Z80_C, opts->gen.scratch2);
+		call(code, opts->write_io);//T states 4
+		//increment HL
+		if (opts->regs[Z80_HL] >= 0) {
+			add_ir(code, 1, opts->regs[Z80_HL], SZ_W);
+			add_rr(code, opts->regs[Z80_L], opts->gen.scratch1, SZ_B);
+		} else {
+			add_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_HL), SZ_B);
+			add_rdispr(code, opts->gen.context_reg, zr_off(Z80_L), opts->gen.scratch1, SZ_B);
+		}
+		//undocumented C and H flag behavior
+		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
+		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_H));
+		//decrement B
+		if (opts->regs[Z80_B] >= 0) {
+			sub_ir(code, 1, opts->regs[Z80_B], SZ_B);
+		} else {
+			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_B), SZ_B);
+		}
+		//undocumented Z and S flag behavior, set based on decrement of B
+		setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
+		setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
+		//crazy undocumented P/V flag behavior
+		and_ir(code, 7, opts->gen.scratch1, SZ_B);
+		if (opts->regs[Z80_B] >= 0) {
+			//deal with silly x86-64 restrictions on *H registers
+			ror_ir(code, 8, opts->regs[Z80_BC], SZ_W);
+			xor_rr(code, opts->regs[Z80_C], opts->gen.scratch1, SZ_B);
+			ror_ir(code, 8, opts->regs[Z80_BC], SZ_W);
+		} else {
+			xor_rdispr(code, opts->gen.context_reg, zr_off(Z80_B), opts->gen.scratch1, SZ_B);
+		}
+		setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
+		break;
+	case Z80_OTIR: {
+		code_ptr start = code->cur;
+		cycles(&opts->gen, 9);//T States: 4, 5
+		//read from (HL)
+		zreg_to_native(opts, Z80_HL, opts->gen.scratch1);
+		call(code, opts->read_8);//T states 3
+		//undocumented N flag behavior
+		//flag set on bit 7 of value written
+		bt_ir(code, 7, opts->gen.scratch1, SZ_B);
+		setcc_rdisp(code, CC_NC, opts->gen.context_reg, zf_off(ZF_N)); 
+		//write to IO (C)
+		zreg_to_native(opts, Z80_C, opts->gen.scratch2);
+		call(code, opts->write_io);//T states 4
+		//increment HL
+		if (opts->regs[Z80_HL] >= 0) {
+			add_ir(code, 1, opts->regs[Z80_HL], SZ_W);
+			add_rr(code, opts->regs[Z80_L], opts->gen.scratch1, SZ_B);
+		} else {
+			add_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_HL), SZ_B);
+			add_rdispr(code, opts->gen.context_reg, zr_off(Z80_L), opts->gen.scratch1, SZ_B);
+		}
+		//undocumented C and H flag behavior
+		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
+		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_H));
+		//decrement B
+		if (opts->regs[Z80_B] >= 0) {
+			sub_ir(code, 1, opts->regs[Z80_B], SZ_B);
+		} else {
+			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_B), SZ_B);
+		}
+		//undocumented Z and S flag behavior, set based on decrement of B
+		setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
+		setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
+		//crazy undocumented P/V flag behavior
+		and_ir(code, 7, opts->gen.scratch1, SZ_B);
+		if (opts->regs[Z80_B] >= 0) {
+			//deal with silly x86-64 restrictions on *H registers
+			ror_ir(code, 8, opts->regs[Z80_BC], SZ_W);
+			xor_rr(code, opts->regs[Z80_C], opts->gen.scratch1, SZ_B);
+			ror_ir(code, 8, opts->regs[Z80_BC], SZ_W);
+		} else {
+			xor_rdispr(code, opts->gen.context_reg, zr_off(Z80_B), opts->gen.scratch1, SZ_B);
+		}
+		setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
+		if (opts->regs[Z80_B] >= 0) {
+			cmp_ir(code, 0, opts->regs[Z80_B], SZ_B);
+		} else {
+			cmp_irdisp(code, 0, opts->gen.context_reg, zr_off(Z80_B), SZ_B);
+		}
+		code_ptr done = code->cur+1;
+		jcc(code, CC_Z, code->cur+2);
+		cycles(&opts->gen, 5);
+		jmp(code, start);
+		*done = code->cur - (done + 1);
+		break;
+	}
 	case Z80_OUTD:
-	case Z80_OTDR:*/
+		cycles(&opts->gen, 9);//T States: 4, 5
+		//read from (HL)
+		zreg_to_native(opts, Z80_HL, opts->gen.scratch1);
+		call(code, opts->read_8);//T states 3
+		//undocumented N flag behavior
+		//flag set on bit 7 of value written
+		bt_ir(code, 7, opts->gen.scratch1, SZ_B);
+		setcc_rdisp(code, CC_NC, opts->gen.context_reg, zf_off(ZF_N)); 
+		//write to IO (C)
+		zreg_to_native(opts, Z80_C, opts->gen.scratch2);
+		call(code, opts->write_io);//T states 4
+		//decrement HL
+		if (opts->regs[Z80_HL] >= 0) {
+			sub_ir(code, 1, opts->regs[Z80_HL], SZ_W);
+			add_rr(code, opts->regs[Z80_L], opts->gen.scratch1, SZ_B);
+		} else {
+			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_HL), SZ_B);
+			add_rdispr(code, opts->gen.context_reg, zr_off(Z80_L), opts->gen.scratch1, SZ_B);
+		}
+		//undocumented C and H flag behavior
+		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
+		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_H));
+		//decrement B
+		if (opts->regs[Z80_B] >= 0) {
+			sub_ir(code, 1, opts->regs[Z80_B], SZ_B);
+		} else {
+			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_B), SZ_B);
+		}
+		//undocumented Z and S flag behavior, set based on decrement of B
+		setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
+		setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
+		//crazy undocumented P/V flag behavior
+		and_ir(code, 7, opts->gen.scratch1, SZ_B);
+		if (opts->regs[Z80_B] >= 0) {
+			//deal with silly x86-64 restrictions on *H registers
+			ror_ir(code, 8, opts->regs[Z80_BC], SZ_W);
+			xor_rr(code, opts->regs[Z80_C], opts->gen.scratch1, SZ_B);
+			ror_ir(code, 8, opts->regs[Z80_BC], SZ_W);
+		} else {
+			xor_rdispr(code, opts->gen.context_reg, zr_off(Z80_B), opts->gen.scratch1, SZ_B);
+		}
+		setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
+		break;
+	case Z80_OTDR: {
+		code_ptr start = code->cur;
+		cycles(&opts->gen, 9);//T States: 4, 5
+		//read from (HL)
+		zreg_to_native(opts, Z80_HL, opts->gen.scratch1);
+		call(code, opts->read_8);//T states 3
+		//undocumented N flag behavior
+		//flag set on bit 7 of value written
+		bt_ir(code, 7, opts->gen.scratch1, SZ_B);
+		setcc_rdisp(code, CC_NC, opts->gen.context_reg, zf_off(ZF_N)); 
+		//write to IO (C)
+		zreg_to_native(opts, Z80_C, opts->gen.scratch2);
+		call(code, opts->write_io);//T states 4
+		//increment HL
+		if (opts->regs[Z80_HL] >= 0) {
+			sub_ir(code, 1, opts->regs[Z80_HL], SZ_W);
+			add_rr(code, opts->regs[Z80_L], opts->gen.scratch1, SZ_B);
+		} else {
+			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_HL), SZ_B);
+			add_rdispr(code, opts->gen.context_reg, zr_off(Z80_L), opts->gen.scratch1, SZ_B);
+		}
+		//undocumented C and H flag behavior
+		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
+		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_H));
+		//decrement B
+		if (opts->regs[Z80_B] >= 0) {
+			sub_ir(code, 1, opts->regs[Z80_B], SZ_B);
+		} else {
+			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_B), SZ_B);
+		}
+		//undocumented Z and S flag behavior, set based on decrement of B
+		setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
+		setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
+		//crazy undocumented P/V flag behavior
+		and_ir(code, 7, opts->gen.scratch1, SZ_B);
+		if (opts->regs[Z80_B] >= 0) {
+			//deal with silly x86-64 restrictions on *H registers
+			ror_ir(code, 8, opts->regs[Z80_BC], SZ_W);
+			xor_rr(code, opts->regs[Z80_C], opts->gen.scratch1, SZ_B);
+			ror_ir(code, 8, opts->regs[Z80_BC], SZ_W);
+		} else {
+			xor_rdispr(code, opts->gen.context_reg, zr_off(Z80_B), opts->gen.scratch1, SZ_B);
+		}
+		setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
+		if (opts->regs[Z80_B] >= 0) {
+			cmp_ir(code, 0, opts->regs[Z80_B], SZ_B);
+		} else {
+			cmp_irdisp(code, 0, opts->gen.context_reg, zr_off(Z80_B), SZ_B);
+		}
+		code_ptr done = code->cur+1;
+		jcc(code, CC_Z, code->cur+2);
+		cycles(&opts->gen, 5);
+		jmp(code, start);
+		*done = code->cur - (done + 1);
+		break;
+	}
 	default: {
 		char disbuf[80];
 		z80_disasm(inst, disbuf, address);
