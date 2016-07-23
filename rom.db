@@ -302,6 +302,23 @@ T-50516 {
 		}
 	}
 }
+T-172196 {
+	name Madden NFL 98
+	SRAM {
+		size 16318
+		bus odd
+	}
+	map {
+		0 {
+			device ROM
+			last 1FFFFF
+		}
+		200000 {
+			device SRAM
+			last 3FFFFF
+		}
+	}
+}
 T-50606 {
 	name Bill Walsh College Football
 	EEPROM {
