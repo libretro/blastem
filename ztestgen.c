@@ -465,7 +465,7 @@ void z80_gen_test(z80inst * inst, uint8_t *instbuf, uint8_t instlen)
 uint8_t should_skip(z80inst * inst)
 {
 	return inst->op >= Z80_DJNZ || (inst->op >= Z80_LDI && inst->op <= Z80_CPDR) || inst->op == Z80_HALT
-		|| inst->op == Z80_DAA || inst->op == Z80_RLD || inst->op == Z80_RRD || inst->op == Z80_NOP
+		|| inst->op == Z80_RLD || inst->op == Z80_RRD || inst->op == Z80_NOP
 		|| inst->op == Z80_DI || inst->op == Z80_EI;
 }
 
