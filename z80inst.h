@@ -76,7 +76,8 @@ enum {
 	Z80_OUTI,
 	Z80_OTIR,
 	Z80_OUTD,
-	Z80_OTDR
+	Z80_OTDR,
+	Z80_USE_MAIN
 };
 
 enum {
@@ -133,6 +134,7 @@ typedef struct {
 	uint8_t  addr_mode;
 	uint8_t  ea_reg;
 	uint16_t immed;
+	uint16_t  opcode_bytes;
 } z80inst;
 
 uint8_t * z80_decode(uint8_t * istream, z80inst * decoded);
