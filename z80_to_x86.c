@@ -2747,7 +2747,11 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	memset(options->regs, -1, sizeof(options->regs));
 	options->regs[Z80_A] = RAX;
 	options->regs[Z80_R] = AH;
-	options->regs[Z80_SP] = RBX;
+	options->regs[Z80_H] = BH;
+	options->regs[Z80_L] = RBX;
+	options->regs[Z80_HL] = RBX;
+	
+	options->regs[Z80_SP] = RDI;
 
 	options->gen.scratch1 = RCX;
 	options->gen.scratch2 = RDX;
