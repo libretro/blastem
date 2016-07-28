@@ -98,11 +98,11 @@ typedef struct {
 	uint8_t            ram_flags_shift;
 	uint8_t            address_size;
 	uint8_t            byte_swap;
-	uint8_t            context_reg;
-	uint8_t            cycles;
-	uint8_t            limit;
-	uint8_t			   scratch1;
-	uint8_t			   scratch2;
+	int8_t             context_reg;
+	int8_t             cycles;
+	int8_t             limit;
+	int8_t             scratch1;
+	int8_t             scratch2;
 	uint8_t            align_error_mask;
 } cpu_options;
 

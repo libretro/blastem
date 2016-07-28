@@ -335,7 +335,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			zbreakpoint_patch(context, address, start);
 		}
 		num_cycles = 4 * inst->opcode_bytes;
-		//TODO: increment R register once for every opcode byte
+		add_ir(code, inst->opcode_bytes > 1 ? 2 : 1, opts->regs[Z80_R], SZ_B);
 #ifdef Z80_LOG_ADDRESS
 		log_address(&opts->gen, address, "Z80: %X @ %d\n");
 #endif
@@ -374,7 +374,16 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			translate_z80_ea(inst, &src_op, opts, READ, DONT_MODIFY);
 			translate_z80_reg(inst, &dst_op, opts);
 		}
-		if (src_op.mode == MODE_REG_DIRECT) {
+		if (inst->reg == Z80_R) {
+			mov_rr(code, opts->regs[Z80_A], opts->gen.scratch1, SZ_B);
+			mov_rr(code, opts->regs[Z80_A], opts->regs[Z80_R], SZ_B);
+			and_ir(code, 0x80, opts->gen.scratch1, SZ_B);
+			mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zr_off(Z80_R), SZ_B);
+		} else if (inst->ea_reg == Z80_R && inst->addr_mode == Z80_REG) {
+			mov_rr(code, opts->regs[Z80_R], opts->regs[Z80_A], SZ_B);
+			and_ir(code, 0x7F, opts->regs[Z80_A], SZ_B);
+			or_rdispr(code, opts->gen.context_reg, zr_off(Z80_R), opts->regs[Z80_A], SZ_B);
+		} else if (src_op.mode == MODE_REG_DIRECT) {
 			if(dst_op.mode == MODE_REG_DISPLACE8) {
 				mov_rrdisp(code, src_op.base, dst_op.base, dst_op.disp, size);
 			} else {
@@ -1285,12 +1294,19 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		cycles(&opts->gen, num_cycles);
 		mov_irdisp(code, 0, opts->gen.context_reg, offsetof(z80_context, iff1), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, offsetof(z80_context, iff2), SZ_B);
-		mov_rdispr(code, opts->gen.context_reg, offsetof(z80_context, sync_cycle), opts->gen.limit, SZ_D);
+		add_rdispr(code, opts->gen.context_reg, offsetof(z80_context, target_cycle), opts->gen.cycles, SZ_D);
+		mov_rdispr(code, opts->gen.context_reg, offsetof(z80_context, sync_cycle), opts->gen.scratch1, SZ_D);
 		mov_irdisp(code, 0xFFFFFFFF, opts->gen.context_reg, offsetof(z80_context, int_cycle), SZ_D);
+		mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, offsetof(z80_context, target_cycle), SZ_D);
+		sub_rr(code, opts->gen.scratch1, opts->gen.cycles, SZ_D);
 		break;
 	case Z80_EI:
 		cycles(&opts->gen, num_cycles);
+		neg_r(code, opts->gen.cycles, SZ_D);
+		add_rdispr(code, opts->gen.context_reg, offsetof(z80_context, target_cycle), opts->gen.cycles, SZ_D);
 		mov_rrdisp(code, opts->gen.cycles, opts->gen.context_reg, offsetof(z80_context, int_enable_cycle), SZ_D);
+		neg_r(code, opts->gen.cycles, SZ_D);
+		add_rdispr(code, opts->gen.context_reg, offsetof(z80_context, target_cycle), opts->gen.cycles, SZ_D);
 		mov_irdisp(code, 1, opts->gen.context_reg, offsetof(z80_context, iff1), SZ_B);
 		mov_irdisp(code, 1, opts->gen.context_reg, offsetof(z80_context, iff2), SZ_B);
 		//interrupt enable has a one-instruction latency, minimum instruction duration is 4 cycles
@@ -2715,7 +2731,7 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	options->regs[Z80_IYH] = -1;
 	options->regs[Z80_IYL] = R8;
 	options->regs[Z80_I] = -1;
-	options->regs[Z80_R] = -1;
+	options->regs[Z80_R] = RDI;
 	options->regs[Z80_A] = R10;
 	options->regs[Z80_BC] = RBX;
 	options->regs[Z80_DE] = RCX;
@@ -2730,6 +2746,7 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 #else
 	memset(options->regs, -1, sizeof(options->regs));
 	options->regs[Z80_A] = RAX;
+	options->regs[Z80_R] = AH;
 	options->regs[Z80_SP] = RBX;
 
 	options->gen.scratch1 = RCX;
@@ -2738,7 +2755,7 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 
 	options->gen.context_reg = RSI;
 	options->gen.cycles = RBP;
-	options->gen.limit = RDI;
+	options->gen.limit = -1;
 
 	options->gen.native_code_map = malloc(sizeof(native_map_slot));
 	memset(options->gen.native_code_map, 0, sizeof(native_map_slot));
@@ -2765,9 +2782,15 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 		} else {
 			reg = i;
 			size = SZ_B;
-}
-		if (options->regs[reg] >= 0) {
-			mov_rrdisp(code, options->regs[reg], options->gen.context_reg, offsetof(z80_context, regs) + i, size);
+		}
+		if (reg == Z80_R) {
+			and_ir(code, 0x7F, options->regs[Z80_R], SZ_B);
+			or_rrdisp(code, options->regs[Z80_R], options->gen.context_reg, zr_off(Z80_R), SZ_B);
+		} else if (options->regs[reg] >= 0) {
+			mov_rrdisp(code, options->regs[reg], options->gen.context_reg, zr_off(reg), size);
+			if (reg == Z80_R) {
+				and_irdisp(code, 0x80, options->gen.context_reg, zr_off(reg), SZ_B);
+			}	
 		}
 		if (size == SZ_W) {
 			i++;
@@ -2776,7 +2799,8 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	if (options->regs[Z80_SP] >= 0) {
 		mov_rrdisp(code, options->regs[Z80_SP], options->gen.context_reg, offsetof(z80_context, sp), SZ_W);
 	}
-	mov_rrdisp(code, options->gen.limit, options->gen.context_reg, offsetof(z80_context, target_cycle), SZ_D);
+	neg_r(code, options->gen.cycles, SZ_D);
+	add_rdispr(code, options->gen.context_reg, offsetof(z80_context, target_cycle), options->gen.cycles, SZ_D);
 	mov_rrdisp(code, options->gen.cycles, options->gen.context_reg, offsetof(z80_context, current_cycle), SZ_D);
 	retn(code);
 
@@ -2805,8 +2829,8 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	if (options->regs[Z80_SP] >= 0) {
 		mov_rdispr(code, options->gen.context_reg, offsetof(z80_context, sp), options->regs[Z80_SP], SZ_W);
 	}
-	mov_rdispr(code, options->gen.context_reg, offsetof(z80_context, target_cycle), options->gen.limit, SZ_D);
-	mov_rdispr(code, options->gen.context_reg, offsetof(z80_context, current_cycle), options->gen.cycles, SZ_D);
+	mov_rdispr(code, options->gen.context_reg, offsetof(z80_context, target_cycle), options->gen.cycles, SZ_D);
+	sub_rdispr(code, options->gen.context_reg, offsetof(z80_context, current_cycle), options->gen.cycles, SZ_D);
 	retn(code);
 
 	options->native_addr = code->cur;
@@ -2828,9 +2852,13 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	uint32_t call_adjust_size = code->cur - options->gen.handle_cycle_limit;
 	code->cur = options->gen.handle_cycle_limit;
 	
+	neg_r(code, options->gen.cycles, SZ_D);
+	add_rdispr(code, options->gen.context_reg, offsetof(z80_context, target_cycle), options->gen.cycles, SZ_D);
 	cmp_rdispr(code, options->gen.context_reg, offsetof(z80_context, sync_cycle), options->gen.cycles, SZ_D);
 	code_ptr no_sync = code->cur+1;
 	jcc(code, CC_B, no_sync);
+	neg_r(code, options->gen.cycles, SZ_D);
+	add_rdispr(code, options->gen.context_reg, offsetof(z80_context, target_cycle), options->gen.cycles, SZ_D);
 	mov_irdisp(code, 0, options->gen.context_reg, offsetof(z80_context, pc), SZ_W);
 	call(code, options->save_context_scratch);
 	tmp_stack_off = code->stack_off;
@@ -2842,8 +2870,12 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	mov_rrdisp(code, RBX, options->gen.context_reg, offsetof(z80_context, extra_pc), SZ_PTR);
 	mov_rrind(code, RAX, options->gen.context_reg, SZ_PTR);
 	restore_callee_save_regs(code);
-	*no_sync = code->cur - (no_sync + 1);
 	//return to caller of z80_run
+	retn(code);
+	
+	*no_sync = code->cur - (no_sync + 1);
+	neg_r(code, options->gen.cycles, SZ_D);
+	add_rdispr(code, options->gen.context_reg, offsetof(z80_context, target_cycle), options->gen.cycles, SZ_D);
 	retn(code);
 	code->stack_off = tmp_stack_off;
 
@@ -2861,6 +2893,8 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	cmp_rdispr(code, options->gen.context_reg, offsetof(z80_context, sync_cycle), options->gen.cycles, SZ_D);
 	code_ptr skip_sync = code->cur + 1;
 	jcc(code, CC_B, skip_sync);
+	neg_r(code, options->gen.cycles, SZ_D);
+	add_rdispr(code, options->gen.context_reg, offsetof(z80_context, target_cycle), options->gen.cycles, SZ_D);
 	//save PC
 	mov_rrdisp(code, options->gen.scratch1, options->gen.context_reg, offsetof(z80_context, pc), SZ_D);
 	options->do_sync = code->cur;
@@ -2876,15 +2910,23 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	//restore callee saved registers
 	restore_callee_save_regs(code);
 	//return to caller of z80_run
+	retn(code);
 	*skip_sync = code->cur - (skip_sync+1);
+	neg_r(code, options->gen.cycles, SZ_D);
+	add_rdispr(code, options->gen.context_reg, offsetof(z80_context, target_cycle), options->gen.cycles, SZ_D);
 	retn(code);
 	code->stack_off = tmp_stack_off;
 
 	options->gen.handle_cycle_limit_int = code->cur;
+	neg_r(code, options->gen.cycles, SZ_D);
+	add_rdispr(code, options->gen.context_reg, offsetof(z80_context, target_cycle), options->gen.cycles, SZ_D);
 	cmp_rdispr(code, options->gen.context_reg, offsetof(z80_context, int_cycle), options->gen.cycles, SZ_D);
 	jcc(code, CC_B, skip_int);
 	//set limit to the cycle limit
-	mov_rdispr(code, options->gen.context_reg, offsetof(z80_context, sync_cycle), options->gen.limit, SZ_D);
+	mov_rdispr(code, options->gen.context_reg, offsetof(z80_context, sync_cycle), options->gen.scratch2, SZ_D);
+	mov_rrdisp(code, options->gen.scratch2, options->gen.context_reg, offsetof(z80_context, target_cycle), SZ_D);
+	neg_r(code, options->gen.cycles, SZ_D);
+	add_rr(code, options->gen.scratch2, options->gen.cycles, SZ_D);
 	//disable interrupts
 	mov_irdisp(code, 0, options->gen.context_reg, offsetof(z80_context, iff1), SZ_B);
 	mov_irdisp(code, 0, options->gen.context_reg, offsetof(z80_context, iff2), SZ_B);
@@ -3203,9 +3245,9 @@ void zcreate_stub(z80_context * context)
 	call(code, opts->gen.load_context);
 	pop_r(code, opts->gen.scratch1);
 		//do prologue stuff
-	cmp_rr(code, opts->gen.cycles, opts->gen.limit, SZ_D);
+	or_rr(code, opts->gen.cycles, opts->gen.cycles, SZ_D);
 	uint8_t * jmp_off = code->cur+1;
-	jcc(code, CC_NC, code->cur + 7);
+	jcc(code, CC_NS, code->cur + 7);
 	pop_r(code, opts->gen.scratch1);
 	add_ir(code, check_int_size - patch_size, opts->gen.scratch1, SZ_PTR);
 	push_r(code, opts->gen.scratch1);
