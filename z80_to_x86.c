@@ -425,17 +425,20 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		if (inst->reg == Z80_AF) {
 			zreg_to_native(opts, Z80_A, opts->gen.scratch1);
 			shl_ir(code, 8, opts->gen.scratch1, SZ_W);
-			mov_rdispr(code, opts->gen.context_reg, zf_off(ZF_S), opts->gen.scratch1, SZ_B);
-			shl_ir(code, 1, opts->gen.scratch1, SZ_B);
-			or_rdispr(code, opts->gen.context_reg, zf_off(ZF_Z), opts->gen.scratch1, SZ_B);
-			shl_ir(code, 2, opts->gen.scratch1, SZ_B);
-			or_rdispr(code, opts->gen.context_reg, zf_off(ZF_H), opts->gen.scratch1, SZ_B);
-			shl_ir(code, 2, opts->gen.scratch1, SZ_B);
-			or_rdispr(code, opts->gen.context_reg, zf_off(ZF_PV), opts->gen.scratch1, SZ_B);
-			shl_ir(code, 1, opts->gen.scratch1, SZ_B);
-			or_rdispr(code, opts->gen.context_reg, zf_off(ZF_N), opts->gen.scratch1, SZ_B);
-			shl_ir(code, 1, opts->gen.scratch1, SZ_B);
+			mov_rdispr(code, opts->gen.context_reg, zf_off(ZF_XY), opts->gen.scratch1, SZ_B);
+			and_ir(code, 0x28, opts->gen.scratch1, SZ_B);
 			or_rdispr(code, opts->gen.context_reg, zf_off(ZF_C), opts->gen.scratch1, SZ_B);
+			ror_ir(code, 1, opts->gen.scratch1, SZ_B);
+			or_rdispr(code, opts->gen.context_reg, zf_off(ZF_N), opts->gen.scratch1, SZ_B);
+			ror_ir(code, 1, opts->gen.scratch1, SZ_B);
+			or_rdispr(code, opts->gen.context_reg, zf_off(ZF_PV), opts->gen.scratch1, SZ_B);
+			ror_ir(code, 2, opts->gen.scratch1, SZ_B);
+			or_rdispr(code, opts->gen.context_reg, zf_off(ZF_H), opts->gen.scratch1, SZ_B);
+			ror_ir(code, 2, opts->gen.scratch1, SZ_B);
+			or_rdispr(code, opts->gen.context_reg, zf_off(ZF_Z), opts->gen.scratch1, SZ_B);
+			ror_ir(code, 1, opts->gen.scratch1, SZ_B);
+			or_rdispr(code, opts->gen.context_reg, zf_off(ZF_S), opts->gen.scratch1, SZ_B);
+			ror_ir(code, 1, opts->gen.scratch1, SZ_B);
 		} else {
 			zreg_to_native(opts, inst->reg, opts->gen.scratch1);
 		}
@@ -463,6 +466,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_Z));
 			bt_ir(code, 7, opts->gen.scratch1, SZ_W);
 			setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_S));
+			mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 			shr_ir(code, 8, opts->gen.scratch1, SZ_W);
 			native_to_zreg(opts, opts->gen.scratch1, Z80_A);
 		} else {
@@ -829,6 +833,9 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			} else {
 				add_rdispr(code, src_op.base, src_op.disp, dst_op.base, z80_size(inst));
 			}
+			if (z80_size(inst) == SZ_B) {
+				mov_rrdisp(code, dst_op.base, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+			}
 		} else {
 			if (src_op.mode == MODE_REG_DIRECT) {
 				add_rrdisp(code, src_op.base, dst_op.base, dst_op.disp, z80_size(inst));
@@ -838,6 +845,8 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 				mov_rdispr(code, src_op.base, src_op.disp, opts->gen.scratch1, z80_size(inst));
 				add_rrdisp(code, opts->gen.scratch1, dst_op.base, dst_op.disp, z80_size(inst));
 			}
+			mov_rdispr(code, dst_op.base, dst_op.disp + z80_size(inst) == SZ_B ? 0 : 8, opts->gen.scratch1, SZ_B);
+			mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		}
 		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
@@ -853,6 +862,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		}
 		bt_ir(code, z80_size(inst) == SZ_B ? 4 : 12, opts->gen.scratch2, z80_size(inst));
 		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_H));
+		if (z80_size(inst) == SZ_W & dst_op.mode == MODE_REG_DIRECT) {
+			mov_rr(code, dst_op.base, opts->gen.scratch2, SZ_W);
+			shr_ir(code, 8, opts->gen.scratch2, SZ_W);
+			mov_rrdisp(code, opts->gen.scratch2, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+		}
 		z80_save_reg(inst, opts);
 		z80_save_ea(code, inst, opts);
 		break;
@@ -888,6 +902,9 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			} else {
 				adc_rdispr(code, src_op.base, src_op.disp, dst_op.base, z80_size(inst));
 			}
+			if (z80_size(inst) == SZ_B) {
+				mov_rrdisp(code, dst_op.base, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+			}
 		} else {
 			if (src_op.mode == MODE_REG_DIRECT) {
 				adc_rrdisp(code, src_op.base, dst_op.base, dst_op.disp, z80_size(inst));
@@ -897,6 +914,8 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 				mov_rdispr(code, src_op.base, src_op.disp, opts->gen.scratch1, z80_size(inst));
 				adc_rrdisp(code, opts->gen.scratch1, dst_op.base, dst_op.disp, z80_size(inst));
 			}
+			mov_rdispr(code, dst_op.base, dst_op.disp + z80_size(inst) == SZ_B ? 0 : 8, opts->gen.scratch1, SZ_B);
+			mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		}
 		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
@@ -910,6 +929,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		}
 		bt_ir(code, z80_size(inst) == SZ_B ? 4 : 12, opts->gen.scratch2, z80_size(inst));
 		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_H));
+		if (z80_size(inst) == SZ_W & dst_op.mode == MODE_REG_DIRECT) {
+			mov_rr(code, dst_op.base, opts->gen.scratch2, SZ_W);
+			shr_ir(code, 8, opts->gen.scratch2, SZ_W);
+			mov_rrdisp(code, opts->gen.scratch2, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+		}
 		z80_save_reg(inst, opts);
 		z80_save_ea(code, inst, opts);
 		break;
@@ -942,6 +966,9 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			} else {
 				sub_rdispr(code, src_op.base, src_op.disp, dst_op.base, z80_size(inst));
 			}
+			if (z80_size(inst) == SZ_B) {
+				mov_rrdisp(code, dst_op.base, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+			}
 		} else {
 			if (src_op.mode == MODE_REG_DIRECT) {
 				sub_rrdisp(code, src_op.base, dst_op.base, dst_op.disp, z80_size(inst));
@@ -951,6 +978,8 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 				mov_rdispr(code, src_op.base, src_op.disp, opts->gen.scratch1, z80_size(inst));
 				sub_rrdisp(code, opts->gen.scratch1, dst_op.base, dst_op.disp, z80_size(inst));
 			}
+			mov_rdispr(code, dst_op.base, dst_op.disp + z80_size(inst) == SZ_B ? 0 : 8, opts->gen.scratch1, SZ_B);
+			mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		}
 		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
 		mov_irdisp(code, 1, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
@@ -964,6 +993,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		}
 		bt_ir(code, z80_size(inst) == SZ_B ? 4 : 12, opts->gen.scratch2, z80_size(inst));
 		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_H));
+		if (z80_size(inst) == SZ_W & dst_op.mode == MODE_REG_DIRECT) {
+			mov_rr(code, dst_op.base, opts->gen.scratch2, SZ_W);
+			shr_ir(code, 8, opts->gen.scratch2, SZ_W);
+			mov_rrdisp(code, opts->gen.scratch2, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+		}
 		z80_save_reg(inst, opts);
 		z80_save_ea(code, inst, opts);
 		break;
@@ -999,6 +1033,9 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			} else {
 				sbb_rdispr(code, src_op.base, src_op.disp, dst_op.base, z80_size(inst));
 			}
+			if (z80_size(inst) == SZ_B) {
+				mov_rrdisp(code, dst_op.base, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+			}
 		} else {
 			if (src_op.mode == MODE_REG_DIRECT) {
 				sbb_rrdisp(code, src_op.base, dst_op.base, dst_op.disp, z80_size(inst));
@@ -1008,6 +1045,8 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 				mov_rdispr(code, src_op.base, src_op.disp, opts->gen.scratch1, z80_size(inst));
 				sbb_rrdisp(code, opts->gen.scratch1, dst_op.base, dst_op.disp, z80_size(inst));
 			}
+			mov_rdispr(code, dst_op.base, dst_op.disp + z80_size(inst) == SZ_B ? 0 : 8, opts->gen.scratch1, SZ_B);
+			mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		}
 		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
 		mov_irdisp(code, 1, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
@@ -1021,6 +1060,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		}
 		bt_ir(code, z80_size(inst) == SZ_B ? 4 : 12, opts->gen.scratch2, z80_size(inst));
 		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_H));
+		if (z80_size(inst) == SZ_W & dst_op.mode == MODE_REG_DIRECT) {
+			mov_rr(code, dst_op.base, opts->gen.scratch2, SZ_W);
+			shr_ir(code, 8, opts->gen.scratch2, SZ_W);
+			mov_rrdisp(code, opts->gen.scratch2, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+		}
 		z80_save_reg(inst, opts);
 		z80_save_ea(code, inst, opts);
 		break;
@@ -1042,6 +1086,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		} else {
 			and_rdispr(code, src_op.base, src_op.disp, dst_op.base, z80_size(inst));
 		}
+		mov_rrdisp(code, dst_op.base, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_C), SZ_B);
 		mov_irdisp(code, 1, opts->gen.context_reg, zf_off(ZF_H), SZ_B);
@@ -1069,6 +1114,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		} else {
 			or_rdispr(code, src_op.base, src_op.disp, dst_op.base, z80_size(inst));
 		}
+		mov_rrdisp(code, dst_op.base, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_C), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_H), SZ_B);
@@ -1096,6 +1142,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		} else {
 			xor_rdispr(code, src_op.base, src_op.disp, dst_op.base, z80_size(inst));
 		}
+		mov_rrdisp(code, dst_op.base, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_C), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_H), SZ_B);
@@ -1117,10 +1164,14 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		mov_rr(code, dst_op.base, opts->gen.scratch2, z80_size(inst));
 		if (src_op.mode == MODE_REG_DIRECT) {
 			sub_rr(code, src_op.base, opts->gen.scratch2, z80_size(inst));
+			mov_rrdisp(code, src_op.base, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		} else if (src_op.mode == MODE_IMMED) {
 			sub_ir(code, src_op.disp, opts->gen.scratch2, z80_size(inst));
+			mov_irdisp(code, src_op.disp, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		} else {
 			sub_rdispr(code, src_op.base, src_op.disp, opts->gen.scratch2, z80_size(inst));
+			mov_rdispr(code, src_op.base, src_op.disp, opts->gen.scratch1, SZ_B);
+			mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		}
 		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
 		mov_irdisp(code, 1, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
@@ -1181,6 +1232,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
 			int bit = 4;
 			if (dst_op.mode == MODE_REG_DIRECT) {
+				mov_rrdisp(code, dst_op.base, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 				if (dst_op.base >= AH && dst_op.base <= BH) {
 					bit = 12;
 					xor_rr(code, dst_op.base - AH, opts->gen.scratch2, SZ_W);
@@ -1188,7 +1240,9 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 					xor_rr(code, dst_op.base, opts->gen.scratch2, SZ_B);
 				}
 			} else {
+				mov_rdispr(code, dst_op.base, dst_op.disp, opts->gen.scratch1, SZ_B);
 				xor_rdispr(code, dst_op.base, dst_op.disp, opts->gen.scratch2, SZ_B);
+				mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 			}
 			bt_ir(code, bit, opts->gen.scratch2, SZ_W);
 			setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_H));
@@ -1257,6 +1311,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		cycles(&opts->gen, num_cycles);
 		mov_rr(code, opts->regs[Z80_A], opts->gen.scratch2, SZ_B);
 		neg_r(code, opts->regs[Z80_A], SZ_B);
+		mov_rrdisp(code, dst_op.base, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
 		setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
 		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
@@ -1736,6 +1791,26 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
 		} else {
 			mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_S), SZ_B);
+		}
+		
+		if ((inst->addr_mode & 0x1F) == Z80_REG) {
+			if (src_op.mode == MODE_REG_DIRECT) {
+				if (size == SZ_W) {
+					mov_rr(code, src_op.base, opts->gen.scratch1, SZ_W);
+					shr_ir(code, 8, opts->gen.scratch1, SZ_W);
+					mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+				} else {
+					mov_rrdisp(code, src_op.base, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+				}
+			} else {
+				mov_rdispr(code, src_op.base, src_op.disp, opts->gen.scratch1, SZ_B);
+				mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+			}
+		} else if((inst->addr_mode & 0x1F) != Z80_REG_INDIRECT) {
+			zreg_to_native(opts, (inst->addr_mode & 0x1F) == Z80_IX_DISPLACE ? Z80_IX : Z80_IY, opts->gen.scratch2);
+			add_ir(code, inst->ea_reg & 0x80 ? inst->ea_reg - 256 : inst->ea_reg, opts->gen.scratch2, SZ_W);
+			shr_ir(code, 8, opts->gen.scratch2, SZ_W);
+			mov_rrdisp(code, opts->gen.scratch2, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		}
 		break;
 	}
