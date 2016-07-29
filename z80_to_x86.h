@@ -22,6 +22,7 @@ enum {
 	ZF_H,
 	ZF_Z,
 	ZF_S,
+	ZF_XY,
 	ZF_NUM
 };
 
