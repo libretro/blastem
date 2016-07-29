@@ -701,6 +701,14 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			sub_irdisp(code, 1, opts->gen.context_reg,  zr_off(Z80_BC), SZ_W);
 		}
 		setcc_rdisp(code, CC_NZ, opts->gen.context_reg, zf_off(ZF_PV));
+		mov_rr(code, opts->regs[Z80_A], opts->gen.scratch2, SZ_B);
+		sub_rr(code, opts->gen.scratch1, opts->gen.scratch2, SZ_B);
+		sub_rdispr(code, opts->gen.context_reg, zf_off(ZF_H), opts->gen.scratch2, SZ_B);
+		mov_rrdisp(code, opts->gen.scratch2, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+		shl_ir(code, 4, opts->gen.scratch2, SZ_B);
+		and_irdisp(code, 0x8, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+		and_ir(code, 0x20, opts->gen.scratch2, SZ_B);
+		or_rrdisp(code, opts->gen.scratch2, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		break;
 	case Z80_CPIR: {
 		cycles(&opts->gen, num_cycles);//T-States 4,4
@@ -721,6 +729,14 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		} else {
 			add_irdisp(code, 1, opts->gen.context_reg,  zr_off(Z80_HL), SZ_W);
 		}
+		mov_rr(code, opts->regs[Z80_A], opts->gen.scratch2, SZ_B);
+		sub_rr(code, opts->gen.scratch1, opts->gen.scratch2, SZ_B);
+		sub_rdispr(code, opts->gen.context_reg, zf_off(ZF_H), opts->gen.scratch2, SZ_B);
+		mov_rrdisp(code, opts->gen.scratch2, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+		shl_ir(code, 4, opts->gen.scratch2, SZ_B);
+		and_irdisp(code, 0x8, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+		and_ir(code, 0x20, opts->gen.scratch2, SZ_B);
+		or_rrdisp(code, opts->gen.scratch2, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		if (opts->regs[Z80_BC] >= 0) {
 			sub_ir(code, 1, opts->regs[Z80_BC], SZ_W);
 		} else {
@@ -764,6 +780,14 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			sub_irdisp(code, 1, opts->gen.context_reg,  zr_off(Z80_BC), SZ_W);
 		}
 		setcc_rdisp(code, CC_NZ, opts->gen.context_reg, zf_off(ZF_PV));
+		mov_rr(code, opts->regs[Z80_A], opts->gen.scratch2, SZ_B);
+		sub_rr(code, opts->gen.scratch1, opts->gen.scratch2, SZ_B);
+		sub_rdispr(code, opts->gen.context_reg, zf_off(ZF_H), opts->gen.scratch2, SZ_B);
+		mov_rrdisp(code, opts->gen.scratch2, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+		shl_ir(code, 4, opts->gen.scratch2, SZ_B);
+		and_irdisp(code, 0x8, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+		and_ir(code, 0x20, opts->gen.scratch2, SZ_B);
+		or_rrdisp(code, opts->gen.scratch2, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		break;
 	case Z80_CPDR: {
 		cycles(&opts->gen, num_cycles);//T-States 4,4
@@ -784,6 +808,14 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		} else {
 			sub_irdisp(code, 1, opts->gen.context_reg,  zr_off(Z80_HL), SZ_W);
 		}
+		mov_rr(code, opts->regs[Z80_A], opts->gen.scratch2, SZ_B);
+		sub_rr(code, opts->gen.scratch1, opts->gen.scratch2, SZ_B);
+		sub_rdispr(code, opts->gen.context_reg, zf_off(ZF_H), opts->gen.scratch2, SZ_B);
+		mov_rrdisp(code, opts->gen.scratch2, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+		shl_ir(code, 4, opts->gen.scratch2, SZ_B);
+		and_irdisp(code, 0x8, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+		and_ir(code, 0x20, opts->gen.scratch2, SZ_B);
+		or_rrdisp(code, opts->gen.scratch2, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		if (opts->regs[Z80_BC] >= 0) {
 			sub_ir(code, 1, opts->regs[Z80_BC], SZ_W);
 		} else {
