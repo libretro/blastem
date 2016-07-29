@@ -1299,6 +1299,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		xor_rr(code, opts->regs[Z80_A], opts->gen.scratch1, SZ_B);
 		bt_ir(code, 4, opts->gen.scratch1, SZ_B);
 		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_H));
+		mov_rrdisp(code, opts->regs[Z80_A], opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		break;
 	}
 	case Z80_CPL:
@@ -1306,6 +1307,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		not_r(code, opts->regs[Z80_A], SZ_B);
 		mov_irdisp(code, 1, opts->gen.context_reg, zf_off(ZF_H), SZ_B);
 		mov_irdisp(code, 1, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
+		mov_rrdisp(code, opts->regs[Z80_A], opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		break;
 	case Z80_NEG:
 		cycles(&opts->gen, num_cycles);
@@ -1327,12 +1329,14 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		xor_irdisp(code, 1, opts->gen.context_reg, zf_off(ZF_C), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zf_off(ZF_H), SZ_B);
+		mov_rrdisp(code, opts->regs[Z80_A], opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		break;
 	case Z80_SCF:
 		cycles(&opts->gen, num_cycles);
 		mov_irdisp(code, 1, opts->gen.context_reg, zf_off(ZF_C), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_H), SZ_B);
+		mov_rrdisp(code, opts->regs[Z80_A], opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		break;
 	case Z80_NOP:
 		cycles(&opts->gen, num_cycles);
