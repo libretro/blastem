@@ -108,8 +108,11 @@ int main(int argc, char ** argv)
 		(context.regs[Z80_IXH] << 8) | context.regs[Z80_IXL],
 		(context.regs[Z80_IYH] << 8) | context.regs[Z80_IYL],
 		context.sp, context.im, context.iff1, context.iff2);
-	printf("Flags: SZHVNC\n"
-	       "       %d%d%d%d%d%d\n", context.flags[ZF_S], context.flags[ZF_Z], context.flags[ZF_H], context.flags[ZF_PV], context.flags[ZF_N], context.flags[ZF_C]);
+	printf("Flags: SZYHXVNC\n"
+	       "       %d%d%d%d%d%d%d%d\n", 
+			context.flags[ZF_S], context.flags[ZF_Z], context.flags[ZF_XY] >> 5 & 1, context.flags[ZF_H], 
+			context.flags[ZF_XY] >> 3 & 1, context.flags[ZF_PV], context.flags[ZF_N], context.flags[ZF_C]
+	);
 	puts("--Alternate Regs--");
 	printf("A: %X\nB: %X\nC: %X\nD: %X\nE: %X\nHL: %X\n",
 		context.alt_regs[Z80_A], context.alt_regs[Z80_B], context.alt_regs[Z80_C],
