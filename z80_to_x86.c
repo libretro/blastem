@@ -1797,6 +1797,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
 		setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
 		setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
+		mov_rrdisp(code, opts->regs[Z80_A], opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 
 		zreg_to_native(opts, Z80_HL, opts->gen.scratch2);
 		ror_ir(code, 8, opts->gen.scratch1, SZ_W);
@@ -1828,6 +1829,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
 		setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
 		setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
+		mov_rrdisp(code, opts->regs[Z80_A], opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 
 		zreg_to_native(opts, Z80_HL, opts->gen.scratch2);
 		ror_ir(code, 8, opts->gen.scratch1, SZ_W);
