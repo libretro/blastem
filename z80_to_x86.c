@@ -1673,8 +1673,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_H), SZ_B);
 		if (dst_op.mode == MODE_REG_DIRECT) {
+			mov_rrdisp(code, dst_op.base, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 			cmp_ir(code, 0, dst_op.base, SZ_B);
 		} else {
+			mov_rdispr(code, dst_op.base, dst_op.disp, opts->gen.scratch1, SZ_B);
+			mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 			cmp_irdisp(code, 0, dst_op.base, dst_op.disp, SZ_B);
 		}
 		setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
@@ -1716,8 +1719,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_H), SZ_B);
 		if (dst_op.mode == MODE_REG_DIRECT) {
+			mov_rrdisp(code, dst_op.base, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 			cmp_ir(code, 0, dst_op.base, SZ_B);
 		} else {
+			mov_rdispr(code, dst_op.base, dst_op.disp, opts->gen.scratch1, SZ_B);
+			mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 			cmp_irdisp(code, 0, dst_op.base, dst_op.disp, SZ_B);
 		}
 		setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
@@ -1759,8 +1765,11 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_N), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, zf_off(ZF_H), SZ_B);
 		if (dst_op.mode == MODE_REG_DIRECT) {
+			mov_rrdisp(code, dst_op.base, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 			cmp_ir(code, 0, dst_op.base, SZ_B);
 		} else {
+			mov_rdispr(code, dst_op.base, dst_op.disp, opts->gen.scratch1, SZ_B);
+			mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 			cmp_irdisp(code, 0, dst_op.base, dst_op.disp, SZ_B);
 		}
 		setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
