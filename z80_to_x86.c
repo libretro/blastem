@@ -1377,7 +1377,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		cycles(&opts->gen, num_cycles);
 		mov_rr(code, opts->regs[Z80_A], opts->gen.scratch2, SZ_B);
 		neg_r(code, opts->regs[Z80_A], SZ_B);
-		mov_rrdisp(code, dst_op.base, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+		mov_rrdisp(code, opts->regs[Z80_A], opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
 		setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
 		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
