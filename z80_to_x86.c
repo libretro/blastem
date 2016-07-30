@@ -909,7 +909,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 				mov_rdispr(code, src_op.base, src_op.disp, opts->gen.scratch1, z80_size(inst));
 				add_rrdisp(code, opts->gen.scratch1, dst_op.base, dst_op.disp, z80_size(inst));
 			}
-			mov_rdispr(code, dst_op.base, dst_op.disp + z80_size(inst) == SZ_B ? 0 : 8, opts->gen.scratch1, SZ_B);
+			mov_rdispr(code, dst_op.base, dst_op.disp + (z80_size(inst) == SZ_B ? 0 : 1), opts->gen.scratch1, SZ_B);
 			mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
 		}
 		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
