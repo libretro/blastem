@@ -111,7 +111,48 @@ cleanup:
 
 #ifdef _WIN32
 #define localtime_r(a,b) localtime(a)
+#undef N
+#undef X
+#include <windows.h>
 #endif
+
+uint32_t copy_dir_entry_to_guest(uint32_t dst, m68k_context *m68k, char *name, uint8_t is_dir)
+{
+	uint8_t *dest = get_native_pointer(dst, (void **)m68k->mem_pointers, &m68k->options->gen);
+	if (!dest) {
+		return 0;
+	}
+	*(dest++) = is_dir;
+	*(dest++) = 1;
+	dst += 2;
+	uint8_t term = 0;
+	for (char *cpos = name; *cpos; cpos++)
+	{
+		dest[1] = *cpos;
+		dest[0] = cpos[1];
+		if (cpos[1]) {
+			cpos++;
+		} else {
+			term = 1;
+		}
+		dst += 2;
+		if (!(dst & 0xFFFF)) {
+			//we may have walked off the end of a memory block, get a fresh native pointer
+			dest = get_native_pointer(dst, (void **)m68k->mem_pointers, &m68k->options->gen);
+			if (!dest) {
+				break;
+			}
+		} else {
+			dest += 2;
+		}
+	}
+	if (!term) {
+		*(dest++) = 0;
+		*dest = 0;
+		dst += 2;
+	}
+	return dst;
+}
 
 void * menu_write_w(uint32_t address, void * context, uint16_t value)
 {
@@ -136,6 +177,24 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 		switch (address >> 2)
 		{
 		case 0: {
+#ifdef _WIN32
+			//handle virtual "drives" directory
+			if (menu->curpath[0] == PATH_SEP[0]) {
+				char drivestrings[4096];
+				if (sizeof(drivestrings) >= GetLogicalDriveStrings(sizeof(drivestrings), drivestrings)) {
+					for (char *cur = drivestrings; *cur; cur += strlen(cur) + 1)
+					{
+						dst = copy_dir_entry_to_guest(dst, m68k, cur, 1);
+					}
+				}
+				//terminate list
+				uint8_t *dest = get_native_pointer(dst, (void **)m68k->mem_pointers, &m68k->options->gen);
+				if (dest) {
+					*dest = dest[1] = 0;
+				}
+				break;
+			}
+#endif
 			size_t num_entries;
 			dir_entry *entries = get_dir_list(menu->curpath, &num_entries);
 			if (entries) {
@@ -147,45 +206,18 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 				entries->is_dir = 1;
 				num_entries = 1;
 			}
-			uint8_t *dest;
-			for (size_t i = 0; i < num_entries; i++)
+#ifdef _WIN32
+			if (menu->curpath[1] == ':' && !menu->curpath[2]) {
+				//Add fake .. entry to allow navigation to virtual "drives" directory
+				dst = copy_dir_entry_to_guest(dst, m68k, "..", 1);
+			}
+#endif
+			for (size_t i = 0; dst && i < num_entries; i++)
 			{
-				dest = get_native_pointer(dst, (void **)m68k->mem_pointers, &m68k->options->gen);
-				if (!dest) {
-					break;
-				}
-				*(dest++) = entries[i].is_dir;
-				*(dest++) = 1;
-				dst += 2;
-				uint8_t term = 0;
-				for (char *cpos = entries[i].name; *cpos; cpos++)
-				{
-					dest[1] = *cpos;
-					dest[0] = cpos[1];
-					if (cpos[1]) {
-						cpos++;
-					} else {
-						term = 1;
-					}
-					dst += 2;
-					if (!(dst & 0xFFFF)) {
-						//we may have walked off the end of a memory block, get a fresh native pointer
-						dest = get_native_pointer(dst, (void **)m68k->mem_pointers, &m68k->options->gen);
-						if (!dest) {
-							break;
-						}
-					} else {
-						dest += 2;
-					}
-				}
-				if (!term) {
-					*(dest++) = 0;
-					*dest = 0;
-					dst += 2;
-				}
+				dst = copy_dir_entry_to_guest(dst,  m68k, entries[i].name, entries[i].is_dir);
 			}
 			//terminate list
-			dest = get_native_pointer(dst, (void **)m68k->mem_pointers, &m68k->options->gen);
+			uint8_t *dest = get_native_pointer(dst, (void **)m68k->mem_pointers, &m68k->options->gen);
 			if (dest) {
 				*dest = dest[1] = 0;
 			}
@@ -196,6 +228,13 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			char buf[4096];
 			copy_string_from_guest(m68k, dst, buf, sizeof(buf));
 			if (!strcmp(buf, "..")) {
+#ifdef _WIN32
+				if (menu->curpath[1] == ':' && !menu->curpath[2]) {
+					menu->curpath[0] = PATH_SEP[0];
+					menu->curpath[1] = 0;
+					break;
+				}
+#endif
 				size_t len = strlen(menu->curpath);
 				while (len > 0) {
 					--len;
@@ -211,6 +250,11 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 				}
 			} else {
 				char *tmp = menu->curpath;
+#ifdef _WIN32
+				if (menu->curpath[0] == PATH_SEP[0] && !menu->curpath[1]) {
+					menu->curpath = strdup(buf);
+				} else
+#endif
 				if (is_path_sep(menu->curpath[strlen(menu->curpath) - 1])) {
 					menu->curpath = alloc_concat(menu->curpath, buf);
 				} else {
