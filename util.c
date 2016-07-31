@@ -593,13 +593,35 @@ char *read_bundled_file(char *name, long *sizeret)
 	return ret;
 }
 
+
+#ifdef _WIN32
+char const *get_save_base_dir()
+{
+	static char path[MAX_PATH];
+	if (S_OK == SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA | CSIDL_FLAG_CREATE, NULL, 0, path))
+	{
+		return path;
+	}
+	return NULL;
+}
+#define CONFIG_PREFIX ""
+#define SAVE_PREFIX ""
+
+#else
+
+#define get_save_base_dir get_home_dir
+#define CONFIG_PREFIX "/.config"
+#define SAVE_PREFIX "/.local/share"
+
+#endif
+
 char const *get_config_dir()
 {
 	static char* confdir;
 	if (!confdir) {
-		char *homedir = get_home_dir();
-		if (homedir) {
-			confdir = alloc_concat(homedir, "/.config/blastem");
+		char const *base = get_save_base_dir();
+		if (base) {
+			confdir = alloc_concat(base, CONFIG_PREFIX PATH_SEP "blastem");
 		}
 	}
 	return confdir;
@@ -609,9 +631,9 @@ char const *get_save_dir()
 {
 	static char* savedir;
 	if (!savedir) {
-		char *homedir = get_home_dir();
-		if (homedir) {
-			savedir = alloc_concat(homedir, "/.local/share/blastem");
+		char const *base = get_save_base_dir();
+		if (base) {
+			savedir = alloc_concat(base, SAVE_PREFIX PATH_SEP "blastem");
 		}
 	}
 	return savedir;
