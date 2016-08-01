@@ -38,6 +38,10 @@ const memmap_chunk z80_map[] = {
 	{ 0x4000, 0x10000, 0xFFFF, 0, 0,                                  NULL,    NULL, NULL, z80_unmapped_read, z80_unmapped_write}
 };
 
+const memmap_chunk port_map[] = {
+	{ 0x0000, 0x100, 0xFF, 0, 0,                                  NULL,    NULL, NULL, z80_unmapped_read, z80_unmapped_write}
+};
+
 void z80_next_int_pulse(z80_context * context)
 {
 	context->int_pulse_start = context->int_pulse_end = CYCLE_NEVER;
@@ -85,7 +89,7 @@ int main(int argc, char ** argv)
 		exit(1);
 	}
 	fclose(f);
-	init_z80_opts(&opts, z80_map, 2, NULL, 0, 1);
+	init_z80_opts(&opts, z80_map, 2, port_map, 1, 1);
 	init_z80_context(&context, &opts);
 	//Z80 RAM
 	context.mem_pointers[0] = z80_ram;
