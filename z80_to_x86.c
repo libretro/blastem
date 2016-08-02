@@ -2461,9 +2461,131 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		*done = code->cur - (done + 1);
 		break;
 	}
-	/*
 	case Z80_IND:
-	case Z80_INDR:*/
+		cycles(&opts->gen, num_cycles + 1);//T States: 4, 5
+		//read from IO (C)
+		zreg_to_native(opts, Z80_BC, opts->gen.scratch1);
+		call(code, opts->read_io);//T states 3
+		
+		//undocumented N flag behavior
+		//flag set on bit 7 of value written
+		bt_ir(code, 7, opts->gen.scratch1, SZ_B);
+		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_N));
+		//save value to be written for flag calculation, as the write func does not
+		//guarantee that it's preserved across the call
+		mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, offsetof(z80_context, scratch1), SZ_B);
+		
+		//write to (HL)
+		zreg_to_native(opts, Z80_HL, opts->gen.scratch2);
+		call(code, opts->write_8);//T states 4
+		cycles(&opts->gen, 1);
+		
+		//decrement HL
+		if (opts->regs[Z80_HL] >= 0) {
+			sub_ir(code, 1, opts->regs[Z80_HL], SZ_W);
+		} else {
+			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_HL), SZ_B);
+		}
+		mov_rdispr(code, opts->gen.context_reg, offsetof(z80_context, scratch1), opts->gen.scratch1, SZ_B);
+		if (opts->regs[Z80_C] >= 0) {
+			add_rr(code, opts->regs[Z80_C], opts->gen.scratch1, SZ_B);
+		} else {
+			add_rdispr(code, opts->gen.context_reg, zr_off(Z80_C), opts->gen.scratch1, SZ_B);
+		}
+		add_ir(code, 1, opts->gen.scratch1, SZ_B);
+		//undocumented C and H flag behavior
+		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
+		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_H));
+		//decrement B
+		if (opts->regs[Z80_B] >= 0) {
+			sub_ir(code, 1, opts->regs[Z80_B], SZ_B);
+			mov_rrdisp(code, opts->regs[Z80_B], opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+		} else {
+			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_B), SZ_B);
+		}
+		//undocumented Z and S flag behavior, set based on decrement of B
+		setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
+		setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
+		//crazy undocumented P/V flag behavior
+		and_ir(code, 7, opts->gen.scratch1, SZ_B);
+		if (opts->regs[Z80_B] >= 0) {
+			//deal with silly x86-64 restrictions on *H registers
+			ror_ir(code, 8, opts->regs[Z80_BC], SZ_W);
+			xor_rr(code, opts->regs[Z80_C], opts->gen.scratch1, SZ_B);
+			ror_ir(code, 8, opts->regs[Z80_BC], SZ_W);
+		} else {
+			xor_rdispr(code, opts->gen.context_reg, zr_off(Z80_B), opts->gen.scratch1, SZ_B);
+		}
+		setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
+		break;
+	case Z80_INDR: {
+		cycles(&opts->gen, num_cycles + 1);//T States: 4, 5
+		//read from IO (C)
+		zreg_to_native(opts, Z80_BC, opts->gen.scratch1);
+		call(code, opts->read_io);//T states 3
+		
+		//undocumented N flag behavior
+		//flag set on bit 7 of value written
+		bt_ir(code, 7, opts->gen.scratch1, SZ_B);
+		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_N));
+		//save value to be written for flag calculation, as the write func does not
+		//guarantee that it's preserved across the call
+		mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, offsetof(z80_context, scratch1), SZ_B);
+		
+		//write to (HL)
+		zreg_to_native(opts, Z80_HL, opts->gen.scratch2);
+		call(code, opts->write_8);//T states 4
+		cycles(&opts->gen, 1);
+		
+		//decrement HL
+		if (opts->regs[Z80_HL] >= 0) {
+			sub_ir(code, 1, opts->regs[Z80_HL], SZ_W);
+		} else {
+			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_HL), SZ_B);
+		}
+		mov_rdispr(code, opts->gen.context_reg, offsetof(z80_context, scratch1), opts->gen.scratch1, SZ_B);
+		if (opts->regs[Z80_C] >= 0) {
+			add_rr(code, opts->regs[Z80_C], opts->gen.scratch1, SZ_B);
+		} else {
+			add_rdispr(code, opts->gen.context_reg, zr_off(Z80_C), opts->gen.scratch1, SZ_B);
+		}
+		add_ir(code, 1, opts->gen.scratch1, SZ_B);
+		//undocumented C and H flag behavior
+		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_C));
+		setcc_rdisp(code, CC_C, opts->gen.context_reg, zf_off(ZF_H));
+		//decrement B
+		if (opts->regs[Z80_B] >= 0) {
+			sub_ir(code, 1, opts->regs[Z80_B], SZ_B);
+			mov_rrdisp(code, opts->regs[Z80_B], opts->gen.context_reg, zf_off(ZF_XY), SZ_B);
+		} else {
+			sub_irdisp(code, 1, opts->gen.context_reg, zr_off(Z80_B), SZ_B);
+		}
+		//undocumented Z and S flag behavior, set based on decrement of B
+		setcc_rdisp(code, CC_Z, opts->gen.context_reg, zf_off(ZF_Z));
+		setcc_rdisp(code, CC_S, opts->gen.context_reg, zf_off(ZF_S));
+		//crazy undocumented P/V flag behavior
+		and_ir(code, 7, opts->gen.scratch1, SZ_B);
+		if (opts->regs[Z80_B] >= 0) {
+			//deal with silly x86-64 restrictions on *H registers
+			ror_ir(code, 8, opts->regs[Z80_BC], SZ_W);
+			xor_rr(code, opts->regs[Z80_C], opts->gen.scratch1, SZ_B);
+			ror_ir(code, 8, opts->regs[Z80_BC], SZ_W);
+		} else {
+			xor_rdispr(code, opts->gen.context_reg, zr_off(Z80_B), opts->gen.scratch1, SZ_B);
+		}
+		setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
+		if (opts->regs[Z80_B] >= 0) {
+			cmp_ir(code, 0, opts->regs[Z80_B], SZ_B);
+		} else {
+			cmp_irdisp(code, 0, opts->gen.context_reg, zr_off(Z80_B), SZ_B);
+		}
+		code_ptr done = code->cur+1;
+		jcc(code, CC_Z, code->cur+2);
+		cycles(&opts->gen, 5);
+		jmp(code, start);
+		*done = code->cur - (done + 1);
+		break;
+	}
 	case Z80_OUT:
 		if (inst->reg == Z80_A) {
 			num_cycles += 3;
