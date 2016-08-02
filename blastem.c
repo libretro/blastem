@@ -22,7 +22,7 @@
 #include "terminal.h"
 #include "arena.h"
 
-#define BLASTEM_VERSION "0.4.0"
+#define BLASTEM_VERSION "0.4.1"
 
 #define MCLKS_NTSC 53693175
 #define MCLKS_PAL  53203395
