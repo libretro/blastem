@@ -1,3 +1,37 @@
+0.4.1
+-----
+*New Features*
+
+ - Basic support for the Saturn Keyboard adapter peripheral
+ - You can now navigate up to a drive selection on Windows
+ - Added support for binding more "special" keys
+ 
+*Bugfixes*
+
+ - It's now possible to navigate to the root directory on Unix-like systems
+ - Fixed a bug in movep.l
+ - Fixed a crash bug in the memory management code
+ - Fixed a bug in the header parsing code, that caused a crash when the "International Name" field was empty
+ - Fixed some minor graphical corruption in Sonic 2 split-screen caused by a bug in vflip combined with interlace mode
+ - Corrected the PC value pushed onto the stack for line A emulator and line F emulator traps
+ - Fixed a bug in ensure_dir_exists that would cause it to fail to create directories in some cases when mixed path separators were used
+ 
+*Accuracy/Completeness Improvements*
+
+ - All Z80 instructions are now implemented
+ - Z80 Half-carry flag is now fully implemented
+ - Implemented undocumented Z80 flag bits
+ - R register is now incremented appropriately
+ - Redundant opcode prefixes are now handled properly
+
+*Other Changes*
+
+ - Added Buck Rogers to the ROM DB
+ - Added Wonder Boy in Monster World to the ROM DB (for real this time)
+ - Slightly better handling of directory read errors
+ - Added "Special Thanks" to About menu
+ - Use local app data folder for saves and config files on Windows rather than Unix-style locations
+
 0.4.0
 -----
 *New Features*
