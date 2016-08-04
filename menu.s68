@@ -1245,6 +1245,22 @@ about_text:
 	dc.b "BlastEm is a high performance, open", 0
 	dc.b "source (GPLv3) Genesis/Megadrive", 0
 	dc.b "emulator.",0
+	dc.b " ", 0
+	dc.b " ", 0
+	dc.b " ", 0
+	dc.b " ", 0
+	dc.b "       --- Special Thanks ---", 0
+	dc.b " ", 0
+	dc.b "Nemesis: Documentatino and test ROMs", 0
+	dc.b "Charles MacDonald: Documentation", 0
+	dc.b "Eke-Eke: Documentation", 0
+	dc.b "Bart Trzynadlowski: Documentation", 0
+	dc.b "KanedaFR: Hosting the best Sega forum", 0
+	dc.b "Mickael Vaseux: Testing", 0
+	dc.b "Sik: Testing", 0
+	dc.b "Tim Lawrence : Testing", 0
+	dc.b "ComradeOj: Testing", 0
+	dc.b "Vladikcomper: Testing", 0
 	dc.b 0
 	
 
