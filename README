@@ -1,13 +1,20 @@
-BlastEm 0.4.0
+BlastEm 0.4.1
 -------------
 
 Installation
 ------------
 
 Extract this archive to a directory of your choosing. If you wish to change the
-configuration settings, copy default.cfg to $HOME/.config/blastem/blastem.cfg and
-modify the copy. You may also whish to add the blastem directory to your PATH
-environment variable.
+configuration settings, copy default.cfg to $HOME/.config/blastem/blastem.cfg 
+and modify the copy. If you are on Windows, the config file should be placed in
+%localappdata%\blastem. You may also whish to add the blastem directory to your
+PATH environment variable.
+
+NOTE: Prior to version 0.4.1, BlastEm was still using Unixy locations for config
+and save files. If you're upgrading from a previous version on Windows, you will
+need to move them manually. For config files, the relevant paths are in the
+previous paragraph. For save files, move all the directories found in 
+%userprofile%\.local\share\blastem to %localappdata%\blastem
 
 Usage
 -----
@@ -21,12 +28,12 @@ Bindings section.
 Some operations are currently only supported through the command line. To get a
 list of supported command line options on Linux or OSX type:
 
-	./blastem -h
-	
+    ./blastem -h
+    
 From within your BlastEm directory. On Windows type:
-	
-	blastem.exe -h
-	
+    
+    blastem.exe -h
+    
 Lock-On Support
 ---------------
 
@@ -35,18 +42,19 @@ on technology. This is only available from the command line at the moment. To
 use it specify the Sonic & Knuckles ROM as the primary ROM and specify the ROM
 to be locked on using the -o option. As an example:
 
-	./blastem ~/romz/sonic_and_knuckles.bin -o ~/romz/sonic3.bin
-	
+    ./blastem ~/romz/sonic_and_knuckles.bin -o ~/romz/sonic3.bin
+    
 Please note that Sonic 2 lock-on does not work at this time. Additionally the
 save RAM added by Sonic 3 won't work either.
 
 Configuration
 -------------
 
-Configuration is read from the file at $HOME/.config/blastem/blastem.cfg if it
-exists, othwerise it is read from default.cfg from the same directory as the
-BlastEm executable. Sections are denoted by a section name followed by an open
-curly bracket, the section's contents and a closing curly bracket. Individual
+Configuration is read from the file at $HOME/.config/blastem/blastem.cfg on
+Unix-like systems and %localappdata%\blastem\blastem.cfg if it exists.
+Othwerise it is read from default.cfg from the same directory as the BlastEm
+executable. Sections are denoted by a section name followed by an open curly 
+bracket, the section's contents and a closing curly bracket. Individual
 configuration values are set by entering the value's name followed by a space
 or tab and followed by the desired value.
 
@@ -55,10 +63,46 @@ Bindings
 
 The keys subsection of bindings maps keyboard keys to gamepad buttons or UI
 actions. The key name goes on the left and the action is on the right.
-Most keys are named for the character they produce when pressed. Additionally,
-the arrow, enter and escape keys have the symbolic names up, down, left, right,
-enter and esc respectively. Other keys that do not produce characters are not
-yet supported.
+Most keys are named for the character they produce when pressed. For keys that
+don't correspond to a normal character, check the list below:
+
+  Name       | Description
+  -----------------
+  up           Up arrow
+  down         Down arrow
+  left         Left arrow
+  right        Right arrow
+  space
+  tab
+  backspace    Backspace on PC keyboards, Delete on Mac keyboards
+  esc
+  delete
+  lshift       Left shift
+  rshift       Right shift
+  lctrl        Left control
+  rctrl        Right control
+  lalt         Left alt on PC keyboards, Option on Mac keyboards
+  ralt         Right alt on PC keyboards, Option on Mac keyboards
+  home
+  end
+  pageup
+  pagedown
+  f1
+  f2
+  f3
+  f4
+  f5
+  f6
+  f7
+  f8
+  f9
+  f10
+  f11
+  f12
+  select
+  play
+  search
+  back
 
 The pads subsection is used to map gamepads and joysticks. Analog axes are not
 currently supported. An example configuration is provided in default.cfg to map
@@ -188,35 +232,35 @@ Debugger
 BlastEm has an integrated command-line debugger loosely based on GDB's
 interface. The interface is very rough at the moment. Available commands in the
 68K debugger are:
-	b ADDRESS            - Set a breakpoint at ADDRESS
-	d BREAKPOINT         - Delete a 68K breakpoint
-	co BREAKPOINT        - Run a list of debugger commands each time
+    b ADDRESS            - Set a breakpoint at ADDRESS
+    d BREAKPOINT         - Delete a 68K breakpoint
+    co BREAKPOINT        - Run a list of debugger commands each time
                            BREAKPOINT is hit
-	a ADDRESS            - Advance to address
-	n                    - Advance to next instruction
-	o                    - Advance to next instruction ignoring branches to
-	                       lower addresses (good for breaking out of loops)
-	s                    - Advance to next instruction (follows bsr/jsr)
-	c                    - Continue
-	bt                   - Print a backtrace
-	p[/(x|X|d|c)] VALUE  - Print a register or memory location
-	di[/(x|X|d|c)] VALUE - Print a register or memory location each time
-						   a breakpoint is hit
-	vs                   - Print VDP sprite list
-	vr                   - Print VDP register info
-	zb ADDRESS           - Set a Z80 breakpoint
-	zp[/(x|X|d|c)] VALUE - Display a Z80 value
-	q                    - Quit BlastEm
+    a ADDRESS            - Advance to address
+    n                    - Advance to next instruction
+    o                    - Advance to next instruction ignoring branches to
+                           lower addresses (good for breaking out of loops)
+    s                    - Advance to next instruction (follows bsr/jsr)
+    c                    - Continue
+    bt                   - Print a backtrace
+    p[/(x|X|d|c)] VALUE  - Print a register or memory location
+    di[/(x|X|d|c)] VALUE - Print a register or memory location each time
+                           a breakpoint is hit
+    vs                   - Print VDP sprite list
+    vr                   - Print VDP register info
+    zb ADDRESS           - Set a Z80 breakpoint
+    zp[/(x|X|d|c)] VALUE - Display a Z80 value
+    q                    - Quit BlastEm
 Available commands in the Z80 debugger are:
-	b  ADDRESS           - Set a breakpoint at ADDRESS
-	de BREAKPOINT        - Delete a Z80 breakpoint
-	a  ADDRESS           - Advance to address
-	n                    - Advance to next instruction
-	c                    - Continue
-	p[/(x|X|d|c)] VALUE  - Print a register or memory location
-	di[/(x|X|d|c)] VALUE - Print a register or memory location each time
-						   a breakpoint is hit
-	q                    - Quit BlastEm
+    b  ADDRESS           - Set a breakpoint at ADDRESS
+    de BREAKPOINT        - Delete a Z80 breakpoint
+    a  ADDRESS           - Advance to address
+    n                    - Advance to next instruction
+    c                    - Continue
+    p[/(x|X|d|c)] VALUE  - Print a register or memory location
+    di[/(x|X|d|c)] VALUE - Print a register or memory location each time
+                           a breakpoint is hit
+    q                    - Quit BlastEm
 
 The -d flag can be used to cause BlastEm to start in the debugger.
 Alternatively, you can use the ui.enter_debugger action (mapped to the 'u' key
@@ -231,7 +275,7 @@ debugging stub. To use this, you'll want to configure your Makefile to produce
 both an ELF executable and a raw binary. Invoke an m68k-elf targeted gdb with
 the ELF file. Once inside the gdb session, type:
 
-	target remote | BLASTEM_PATH/blastem ROM_FILE.bin -D
+    target remote | BLASTEM_PATH/blastem ROM_FILE.bin -D
 
 where BLASTEM_PATH is the relative or absolute path to your BlastEm
 installation and ROM_FILE.bin is the name of the raw binary for your program.
@@ -239,12 +283,12 @@ BlastEm will halt at the beginning of your program's entry point and return
 control to GDB. This will allow you to set breakpoints before your code runs.
 
 On Windows, the procedure is slightly different. First run 
-	blastem.exe ROM_FILE.bin -D
+    blastem.exe ROM_FILE.bin -D
 This will cause BlastEm to wait for a socket connection on port 1234. It will
 appear to be frozen until gdb connects to it. Now open the ELF file in gdb
 and type:
 
-	target remote :1234
+    target remote :1234
 
 Trace points and watch points are not currently supported.
 
@@ -253,12 +297,12 @@ Included Tools
 
 BlastEm ships with a few small utilities that leverage portions of the emulator
 code.
-	
-	dis       - 68K disassembler
-	zdis      - Z80 disassembler
-	vgmplay   - Very basic VGM player
-	stateview - GST save state viewer
-	
+    
+    dis       - 68K disassembler
+    zdis      - Z80 disassembler
+    vgmplay   - Very basic VGM player
+    stateview - GST save state viewer
+    
 VSync
 -----
 
@@ -283,6 +327,37 @@ former (apart from disabling VSync), but the latter can be dealt with by
 lowering the default speed slightly in the "clocks" section.
 
 A future release will support VSync in a less hacky fashion.
+
+Special Thanks
+--------------
+
+My work has been made much easier by the contributions of those in the Genesis
+community past and present. I'd like to thank the people below for their help.
+
+Nemesis            - His work reverse engineering and documenting the VDP and
+                     YM-2612 has saved me an immeasurable amount of time. I've
+                     found both his sprite overflow test ROM and VDP FIFO
+                     Testing ROM to be quite helpful.
+
+Charles MacDonald  - While it hasn't been updated in a while, I still find his
+                     VDP document to be my favorite reference. His Genesis
+                     hardware document has also come in handy.
+
+Eke-Eke            - Eke-Eke wrote a great document on the use of I2C EEPROM in
+                     Genesis games and also left some useful very helpful 
+                     comments about problematic games in Genesis Plus GX
+
+Bart Trzynadlowski - His documents on the Genecyst save-state format and the
+                     mapper used in Super Street Fighter 2 were definitely
+                     appreciated.
+                     
+KanedaFR           - Kaneda's SpritesMind forum is a great resource for the
+                     Sega development community.
+
+I'd also like to thank the following people who have performed compatibility
+testing or submitted helpful bug reports
+
+Mickael Vaseux, Sik, Tim Lawrence, ComradeOj, Vladikcomper
 
 License
 -------
