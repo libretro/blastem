@@ -1256,7 +1256,7 @@ about_text:
 	dc.b "Eke-Eke: Documentation", 0
 	dc.b "Bart Trzynadlowski: Documentation", 0
 	dc.b "KanedaFR: Hosting the best Sega forum", 0
-	dc.b "Mickael Vaseux: Testing", 0
+	dc.b "micky: Testing", 0
 	dc.b "Sik: Testing", 0
 	dc.b "Tim Lawrence : Testing", 0
 	dc.b "ComradeOj: Testing", 0
