@@ -234,6 +234,7 @@ void render_free_surfaces(vdp_context *context)
 }
 
 char * caption = NULL;
+char * fps_caption = NULL;
 
 static void render_quit()
 {
@@ -412,6 +413,8 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 void render_update_caption(char *title)
 {
 	caption = title;
+	free(fps_caption);
+	fps_caption = NULL;
 }
 
 void render_context(vdp_context * context)
@@ -714,8 +717,6 @@ int32_t handle_event(SDL_Event *event)
 	}
 	return 0;
 }
-
-char * fps_caption = NULL;
 
 uint32_t frame_counter = 0;
 uint32_t start = 0;
