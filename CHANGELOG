@@ -15,6 +15,7 @@
  - Fixed some minor graphical corruption in Sonic 2 split-screen caused by a bug in vflip combined with interlace mode
  - Corrected the PC value pushed onto the stack for line A emulator and line F emulator traps
  - Fixed a bug in ensure_dir_exists that would cause it to fail to create directories in some cases when mixed path separators were used
+ - Fixed a bug that would result in a buffer overflow when starting a game with a long title from the menu
  
 *Accuracy/Completeness Improvements*
 
@@ -23,11 +24,13 @@
  - Implemented undocumented Z80 flag bits
  - R register is now incremented appropriately
  - Redundant opcode prefixes are now handled properly
+ - Z80 core now passes ZEXALL!
 
 *Other Changes*
 
  - Added Buck Rogers to the ROM DB
  - Added Wonder Boy in Monster World to the ROM DB (for real this time)
+ - Added Evander 'Real Deal' Holyfield's Boxing to the ROM DB
  - Slightly better handling of directory read errors
  - Added "Special Thanks" to About menu
  - Use local app data folder for saves and config files on Windows rather than Unix-style locations
@@ -152,7 +155,7 @@
 
 - Added Turbo and Slow modes that overclock and underclock the system respectively
 - Added FPS counter
-- New OpenGL render backend that allows filters to be writte in GLSL
+- New OpenGL render backend that allows filters to be written in GLSL
 - Support 'UI' bindings on gamepad buttons and dpads
 - GDB remote debugging support
 - New debugger 68K debugger commands o, s and zp (see README for details)
