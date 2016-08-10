@@ -279,10 +279,12 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 5);
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+#endif
 	main_window = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, flags);
 	if (!main_window) {
 		fatal_error("Unable to create SDL window: %s\n", SDL_GetError());
 	}
+#ifndef DISABLE_OPENGL
 	main_context = SDL_GL_CreateContext(main_window);
 	GLenum res = glewInit();
 	if (res != GLEW_OK) {
@@ -313,8 +315,8 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 		}
 		main_renderer = SDL_CreateRenderer(main_window, -1, flags);
 
-		if (!main_window || !main_renderer) {
-			fatal_error("unable to create SDL window: %s\n", SDL_GetError());
+		if (!main_renderer) {
+			fatal_error("unable to create SDL renderer: %s\n", SDL_GetError());
 		}
 		main_clip.x = main_clip.y = 0;
 		main_clip.w = width;
