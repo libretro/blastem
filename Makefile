@@ -32,7 +32,11 @@ LIBS=sdl2 glew gl
 endif #Darwin
 
 HAS_PROC:=$(shell if [ -d /proc ]; then /bin/echo -e -DHAS_PROC; fi)
-CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -Wno-unused-value -Wno-logical-op-parentheses $(HAS_PROC)
+CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -Wno-unused-value $(HAS_PROC)
+ifeq ($(OS),Darwin)
+#This should really be based on whether or not the C compiler is clang rather than based on the OS
+CFLAGS+= -Wno-logical-op-parentheses
+endif
 ifdef PORTABLE
 CFLAGS+= -DGLEW_STATIC -Iglew/include
 LDFLAGS:=-lm glew/lib/libGLEW.a
@@ -61,8 +65,13 @@ ifdef DEBUG
 CFLAGS:=-ggdb $(CFLAGS)
 LDFLAGS:=-ggdb $(LDFLAGS)
 else
+ifdef NOLTO
+CFLAGS:=-O2 $(CFLAGS)
+LDFLAGS:=-O2 $(LDFLAGS)
+else
 CFLAGS:=-O2 -flto $(CFLAGS)
 LDFLAGS:=-O2 -flto $(LDFLAGS)
+endif #NOLTO
 endif #DEBUG
 
 ifdef Z80_LOG_ADDRESS
@@ -91,6 +100,15 @@ ifndef CPU
 CPU:=$(shell uname -m)
 endif
 
+#OpenBSD uses different names for these architectures
+ifeq ($(CPU),amd64)
+CPU:=x86_64
+else
+ifeq ($(CPU),i386)
+CPU:=i686
+endif
+endif
+
 TRANSOBJS=gen.o backend.o $(MEM) arena.o
 M68KOBJS=68kinst.o m68k_core.o
 ifeq ($(CPU),x86_64)
@@ -116,6 +134,8 @@ else
 ifeq ($(CPU),i686)
 CFLAGS+=-DX86_32 -m32
 LDFLAGS+=-m32
+else
+$(error $(CPU) is not a supported architecture)
 endif
 endif
 
