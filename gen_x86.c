@@ -2019,11 +2019,11 @@ void call_raxfallback(code_info *code, code_ptr fun)
 		*(out++) = disp;
 		disp >>= 8;
 		*(out++) = disp;
+		code->cur = out;
 	} else {
 		mov_ir(code, (int64_t)fun, RAX, SZ_PTR);
 		call_r(code, RAX);
 	}
-	code->cur = out;
 }
 
 void call_r(code_info *code, uint8_t dst)
