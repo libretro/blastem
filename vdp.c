@@ -1726,7 +1726,6 @@ uint16_t vdp_control_port_read(vdp_context * context)
 	}
 	if (context->flags2 & FLAG2_SPRITE_COLLIDE) {
 		value |= 0x20;
-		//TODO: Test when this is actually cleared
 		context->flags2 &= ~FLAG2_SPRITE_COLLIDE;
 	}
 	if ((context->regs[REG_MODE_4] & BIT_INTERLACE) && context->framebuf == context->oddbuf) {
