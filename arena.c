@@ -83,5 +83,7 @@ void *try_alloc_arena()
 	if (!current_arena || !current_arena->free_count) {
 		return NULL;
 	}
-	return current_arena->free_blocks[--current_arena->free_count];
+	void *ret = current_arena->free_blocks[--current_arena->free_count];
+	track_block(ret);
+	return ret;
 }
