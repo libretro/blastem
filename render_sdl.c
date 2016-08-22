@@ -16,9 +16,12 @@
 #include <GL/glew.h>
 #endif
 
+#define MAX_EVENT_POLL_PER_FRAME 2
+
 SDL_Window *main_window;
 SDL_Renderer *main_renderer;
-SDL_Texture  *main_texture;
+SDL_Texture  **sdl_textures;
+uint8_t num_textures;
 SDL_Rect      main_clip;
 SDL_GLContext *main_context;
 
@@ -168,19 +171,20 @@ GLuint load_shader(char * fname, GLenum shader_type)
 }
 #endif
 
-void render_alloc_surfaces(vdp_context * context)
+uint32_t texture_buf[512 * 256];
+void render_alloc_surfaces()
 {
 	static uint8_t texture_init;
-	context->oddbuf = context->framebuf = malloc(512 * 256 * 4 * 2);
-	memset(context->oddbuf, 0, 512 * 256 * 4 * 2);
-	context->evenbuf = ((char *)context->oddbuf) + 512 * 256 * 4;
 
 	if (texture_init) {
 		return;
 	}
+	sdl_textures= malloc(sizeof(SDL_Texture *) * 2);
+	num_textures = 2;
 	texture_init = 1;
 #ifndef DISABLE_OPENGL
 	if (render_gl) {
+		sdl_textures[0] = sdl_textures[1] = NULL;
 		glGenTextures(3, textures);
 		for (int i = 0; i < 3; i++)
 		{
@@ -190,7 +194,7 @@ void render_alloc_surfaces(vdp_context * context)
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 			if (i < 2) {
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 512, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, i ? context->evenbuf : context->oddbuf);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 512, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, texture_buf);
 			} else {
 				uint32_t blank = 255 << 24;
 				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_BGRA, GL_UNSIGNED_BYTE, &blank);
@@ -221,16 +225,12 @@ void render_alloc_surfaces(vdp_context * context)
 		at_pos = glGetAttribLocation(program, "pos");
 	} else {
 #endif
-	/* height=480 to fit interlaced output */
-		main_texture = SDL_CreateTexture(main_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, 320, 480);
+		
+		//height=480 to fit interlaced output
+		sdl_textures[0] = sdl_textures[1] = SDL_CreateTexture(main_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, 320, 480);
 #ifndef DISABLE_OPENGL
 	}
 #endif
-}
-
-void render_free_surfaces(vdp_context *context)
-{
-	free(context->framebuf);
 }
 
 char * caption = NULL;
@@ -239,9 +239,12 @@ char * fps_caption = NULL;
 static void render_quit()
 {
 	render_close_audio();
-#ifdef DISABLE_OPENGL
-	SDL_DestroyTexture(main_texture);
-#endif
+	for (int i = 0; i < num_textures; i++)
+	{
+		if (sdl_textures[i]) {
+			SDL_DestroyTexture(sdl_textures[i]);
+		}
+	}
 }
 
 void render_init(int width, int height, char * title, uint32_t fps, uint8_t fullscreen)
@@ -356,6 +359,7 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 		}
 #endif
 	}
+	render_alloc_surfaces();
 	def.ptrval = "off";
 	scanlines = !strcmp(tern_find_path_default(config, "video\0scanlines\0", def).ptrval, "on");
 
@@ -419,16 +423,57 @@ void render_update_caption(char *title)
 	fps_caption = NULL;
 }
 
-void render_context(vdp_context * context)
+uint32_t *locked_pixels;
+uint32_t locked_pitch;
+uint32_t *render_get_framebuffer(uint8_t which, int *pitch)
 {
-	int width  = context->regs[REG_MODE_4] & BIT_H40 ? 320.0f : 256.0f;
-	int height = 240;
-
-	last_frame = SDL_GetTicks();
 #ifndef DISABLE_OPENGL
-	if (render_gl) {
-		glBindTexture(GL_TEXTURE_2D, textures[context->framebuf == context->oddbuf ? 0 : 1]);
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 320, 240, GL_BGRA, GL_UNSIGNED_BYTE, context->framebuf);;
+	if (render_gl && which <= FRAMEBUFFER_EVEN) {
+		*pitch = 320 * sizeof(uint32_t); //TODO: change this to LINEBUF_SIZE once border rendering is added
+		return texture_buf;
+	} else {
+#endif
+		if (which >= num_textures) {
+			warning("Request for invalid framebuffer number %d\n", which);
+			return NULL;
+		}
+		void *pixels;
+		if (SDL_LockTexture(sdl_textures[which], NULL, &pixels, pitch) < 0) {
+			warning("Failed to lock texture: %s\n", SDL_GetError());
+			return NULL;
+		}
+		static uint8_t last;
+		if (which <= FRAMEBUFFER_EVEN) {
+			locked_pixels = pixels;
+			if (which == FRAMEBUFFER_EVEN) {
+				pixels += *pitch;
+			}
+			locked_pitch = *pitch;
+			if (which != last) {
+				*pitch *= 2;
+			}
+			last = which;
+		}
+		return pixels;
+#ifndef DISABLE_OPENGL
+	}
+#endif
+}
+
+uint8_t events_processed;
+#ifdef __ANDROID__
+#define FPS_INTERVAL 10000
+#else
+#define FPS_INTERVAL 1000
+#endif
+
+void render_framebuffer_updated(uint8_t which, int width)
+{
+	static uint8_t last;
+#ifndef DISABLE_OPENGL
+	if (render_gl && which <= FRAMEBUFFER_EVEN) {
+		glBindTexture(GL_TEXTURE_2D, textures[which]);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 320, 240, GL_BGRA, GL_UNSIGNED_BYTE, texture_buf);
 
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
@@ -439,7 +484,7 @@ void render_context(vdp_context * context)
 		glUniform1i(un_textures[0], 0);
 
 		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, textures[(context->regs[REG_MODE_4] & BIT_INTERLACE) ? 1 : scanlines ? 2 : 0]);
+		glBindTexture(GL_TEXTURE_2D, textures[last != which ? 1 : scanlines ? 2 : 0]);
 		glUniform1i(un_textures[1], 1);
 
 		glUniform1f(un_width, width);
@@ -456,48 +501,60 @@ void render_context(vdp_context * context)
 		SDL_GL_SwapWindow(main_window);
 	} else {
 #endif
-		SDL_Rect area;
-
-		area.x = area.y = 0;
-		area.w = width;
-		area.h = height;
-
-		if (context->regs[REG_MODE_4] & BIT_INTERLACE) {
-			unsigned skip;
-			uint32_t *src = (uint32_t*)context->framebuf;
-			uint8_t  *dst;
-			int i;
-
-			area.h *= 2;
-
-			SDL_LockTexture(main_texture, &area, (void**)&dst, &skip);
-
-			if (context->framebuf == context->evenbuf)
-				dst += skip;
-
-			skip *= 2;
-
-			for (i = 0; i < 240; ++i) {
-				memcpy(dst, src, width*sizeof(uint32_t));
-				src += 320;
-				dst += skip;
+		uint32_t height = 240;
+		if (which <= FRAMEBUFFER_EVEN && last != which) {
+			uint8_t *cur_dst = (uint8_t *)locked_pixels;
+			uint8_t *cur_saved = (uint8_t *)texture_buf;
+			uint32_t dst_off = which == FRAMEBUFFER_EVEN ? 0 : locked_pitch;
+			uint32_t src_off = which == FRAMEBUFFER_EVEN ? locked_pitch : 0;
+			for (int i = 0; i < 240; ++i)
+			{
+				//copy saved line from other field
+				memcpy(cur_dst + dst_off, cur_saved, locked_pitch);
+				//save line from this field to buffer for next frame
+				memcpy(cur_saved, cur_dst + src_off, locked_pitch);
+				cur_dst += locked_pitch * 2;
+				cur_saved += locked_pitch;
 			}
-
-			SDL_UnlockTexture(main_texture);
+			height = 480;
 		}
-		else /* possibly faster path for non-interlaced output */
-			SDL_UpdateTexture(main_texture, &area, context->framebuf, 320*sizeof(uint32_t));
-
-		SDL_RenderClear(main_renderer);
-		SDL_RenderCopy(main_renderer, main_texture, &area, &main_clip);
+		SDL_UnlockTexture(sdl_textures[which]);
+		SDL_Rect src_clip = {
+			.x = 0,
+			.y = 0,
+			.w = width,
+			.h = height
+		};
+		SDL_RenderCopy(main_renderer, sdl_textures[which], &src_clip, &main_clip);
 		SDL_RenderPresent(main_renderer);
 #ifndef DISABLE_OPENGL
 	}
 #endif
-
-	if (context->regs[REG_MODE_4] & BIT_INTERLACE) {
-		context->framebuf = context->framebuf == context->oddbuf ? context->evenbuf : context->oddbuf;
+	if (which <= FRAMEBUFFER_EVEN) {
+		last = which;
+		static uint32_t frame_counter, start;
+		frame_counter++;
+		last_frame= SDL_GetTicks();
+		if ((last_frame - start) > FPS_INTERVAL) {
+			if (start && (last_frame-start)) {
+	#ifdef __ANDROID__
+				info_message("%s - %.1f fps", caption, ((float)frame_counter) / (((float)(last_frame-start)) / 1000.0));
+	#else
+				if (!fps_caption) {
+					fps_caption = malloc(strlen(caption) + strlen(" - 100000000.1 fps") + 1);
+				}
+				sprintf(fps_caption, "%s - %.1f fps", caption, ((float)frame_counter) / (((float)(last_frame-start)) / 1000.0));
+				SDL_SetWindowTitle(main_window, fps_caption);
+	#endif
+			}
+			start = last_frame;
+			frame_counter = 0;
+		}
 	}
+	if (!events_processed) {
+		process_events();
+	}
+	events_processed = 0;
 }
 
 void render_wait_quit(vdp_context * context)
@@ -505,20 +562,6 @@ void render_wait_quit(vdp_context * context)
 	SDL_Event event;
 	while(SDL_WaitEvent(&event)) {
 		switch (event.type) {
-		case SDL_KEYDOWN:
-			if (event.key.keysym.sym == SDLK_LEFTBRACKET) {
-				render_dbg++;
-				if (render_dbg == 4) {
-					render_dbg = 0;
-				}
-				render_context(context);
-			} else if(event.key.keysym.sym ==  SDLK_RIGHTBRACKET) {
-				debug_pal++;
-				if (debug_pal == 4) {
-					debug_pal = 0;
-				}
-			}
-			break;
 		case SDL_QUIT:
 			return;
 		}
@@ -720,60 +763,16 @@ int32_t handle_event(SDL_Event *event)
 	return 0;
 }
 
-uint32_t frame_counter = 0;
-uint32_t start = 0;
-#ifdef __ANDROID__
-#define FPS_INTERVAL 10000
-#else
-#define FPS_INTERVAL 1000
-#endif
-int wait_render_frame(vdp_context * context, int frame_limit)
-{
-	SDL_Event event;
-	int ret = 0;
-	while(SDL_PollEvent(&event)) {
-		ret = handle_event(&event);
-	}
-	if (frame_limit) {
-		//TODO: Adjust frame delay so we actually get 60 FPS rather than 62.5 FPS
-		uint32_t current = SDL_GetTicks();
-		uint32_t desired = last_frame + frame_delay;
-		if (current < desired) {
-			uint32_t delay = last_frame + frame_delay - current;
-			if (delay > min_delay) {
-				SDL_Delay((delay/min_delay)*min_delay);
-			}
-			while ((desired) >= SDL_GetTicks()) {
-			}
-		}
-	}
-	render_context(context);
-
-	frame_counter++;
-	if ((last_frame - start) > FPS_INTERVAL) {
-		if (start && (last_frame-start)) {
-#ifdef __ANDROID__
-			info_message("%s - %.1f fps", caption, ((float)frame_counter) / (((float)(last_frame-start)) / 1000.0));
-#else
-			if (!fps_caption) {
-				fps_caption = malloc(strlen(caption) + strlen(" - 100000000.1 fps") + 1);
-			}
-			sprintf(fps_caption, "%s - %.1f fps", caption, ((float)frame_counter) / (((float)(last_frame-start)) / 1000.0));
-			SDL_SetWindowTitle(main_window, fps_caption);
-#endif
-		}
-		start = last_frame;
-		frame_counter = 0;
-	}
-	return ret;
-}
-
 void process_events()
 {
+	if (events_processed > MAX_EVENT_POLL_PER_FRAME) {
+		return;
+	}
 	SDL_Event event;
 	while(SDL_PollEvent(&event)) {
 		handle_event(&event);
 	}
+	events_processed++;
 }
 
 void render_wait_psg(psg_context * context)

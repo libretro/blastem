@@ -59,14 +59,11 @@ void init_vdp_context(vdp_context * context, uint8_t region_pal)
 	/*
 	*/
 	if (headless) {
-		context->oddbuf = context->framebuf = malloc(FRAMEBUF_ENTRIES * (32 / 8));
-		memset(context->framebuf, 0, FRAMEBUF_ENTRIES * (32 / 8));
-		context->evenbuf = malloc(FRAMEBUF_ENTRIES * (32 / 8));
-		memset(context->evenbuf, 0, FRAMEBUF_ENTRIES * (32 / 8));
+		context->output = malloc(LINEBUF_SIZE);
+		context->output_pitch = 0;
 	} else {
-		render_alloc_surfaces(context);
+		context->output = render_get_framebuffer(FRAMEBUFFER_ODD, &context->output_pitch);
 	}
-	context->framebuf = context->oddbuf;
 	context->linebuf = malloc(LINEBUF_SIZE + SCROLL_BUFFER_SIZE*2);
 	memset(context->linebuf, 0, LINEBUF_SIZE + SCROLL_BUFFER_SIZE*2);
 	context->tmp_buf_a = context->linebuf + LINEBUF_SIZE;
@@ -146,12 +143,6 @@ void vdp_free(vdp_context *context)
 {
 	free(context->vdpmem);
 	free(context->linebuf);
-	if (headless) {
-		free(context->oddbuf);
-		free(context->evenbuf);
-	} else {
-		render_free_surfaces(context);
-	}
 	free(context);
 }
 
@@ -356,7 +347,7 @@ void scan_sprite_table(uint32_t line, vdp_context * context)
 		uint8_t height_mult;
 		if (context->double_res) {
 			line *= 2;
-			if (context->framebuf != context->oddbuf) {
+			if (context->flags2 & FLAG2_EVEN_FIELD) {
 				line++;
 			}
 			ymask = 0x3FF;
@@ -427,7 +418,7 @@ void read_sprite_x(uint32_t line, vdp_context * context)
 			uint8_t height = ((context->sprite_info_list[context->cur_slot].size & 0x3) + 1) * 8;
 			if (context->double_res) {
 				line *= 2;
-				if (context->framebuf != context->oddbuf) {
+				if (context->flags2 & FLAG2_EVEN_FIELD) {
 					line++;
 				}
 				height *= 2;
@@ -673,7 +664,7 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 	uint16_t window_line_shift, v_offset_mask, vscroll_shift;
 	if (context->double_res) {
 		line *= 2;
-		if (context->framebuf != context->oddbuf) {
+		if (context->flags2 & FLAG2_EVEN_FIELD) {
 			line++;
 		}
 		window_line_shift = 4;
@@ -886,8 +877,7 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 	if (col)
 	{
 		col-=2;
-		dst = context->framebuf;
-		dst += line * 320 + col * 8;
+		dst = context->output + col * 8;
 		if (context->debug < 2) {
 			sprite_buf = context->linebuf + col * 8;
 			uint8_t a_src, src;
@@ -1042,8 +1032,26 @@ void vdp_advance_line(vdp_context *context)
 	} else if (!(context->latched_mode & BIT_PAL) &&  context->vcounter == 0xEB) {
 		context->vcounter = 0x1E5;
 	}
+	uint32_t inactive_start = (context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START);
+	if (!headless) {
+		if (!context->vcounter && !context->output) {
+			context->output = render_get_framebuffer(context->flags2 & FLAG2_EVEN_FIELD ? FRAMEBUFFER_EVEN : FRAMEBUFFER_ODD, &context->output_pitch);
+			context->h40_lines = 0;
+		} else if (context->vcounter == inactive_start) { //TODO: Change this once border emulation is added
+			context->output = NULL;
+			render_framebuffer_updated(context->flags2 & FLAG2_EVEN_FIELD ? FRAMEBUFFER_EVEN: FRAMEBUFFER_ODD, context->h40_lines > inactive_start / 2 ? 320 : 256);
+			if (context->double_res) {
+				context->flags2 ^= FLAG2_EVEN_FIELD;
+			}
+		} else if (context->output) {
+			context->output = (uint32_t *)(((char *)context->output) + context->output_pitch);
+			if (context->regs[REG_MODE_4] & BIT_H40) {
+				context->h40_lines++;
+			}
+		}
+	}
 
-	if (context->vcounter > (context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START)) {
+	if (context->vcounter > inactive_start) {
 		context->hint_counter = context->regs[REG_HINT];
 	} else if (context->hint_counter) {
 		context->hint_counter--;
@@ -1459,19 +1467,16 @@ void check_render_bg(vdp_context * context, int32_t line, uint32_t slot)
 	int starti = -1;
 	if (context->regs[REG_MODE_4] & BIT_H40) {
 		if (slot >= 12 && slot < 172) {
-			uint32_t x = (slot-12)*2;
-			starti = line * 320 + x;
+			starti = (slot-12)*2;
 		}
 	} else {
 		if (slot >= 11 && slot < 139) {
-			uint32_t x = (slot-11)*2;
-			starti = line * 320 + x;
+			starti = (slot-11)*2;
 		}
 	}
 	if (starti >= 0) {
 		uint32_t color = context->colors[context->regs[REG_BG_COLOR]];
-		uint32_t * start = context->framebuf;
-		start += starti;
+		uint32_t * start = context->output + starti;
 		for (int i = 0; i < 2; i++) {
 			*(start++) = color;
 		}
@@ -1650,7 +1655,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 				if (reg == REG_MODE_4) {
 					context->double_res = (value & (BIT_INTERLACE | BIT_DOUBLE_RES)) == (BIT_INTERLACE | BIT_DOUBLE_RES);
 					if (!context->double_res) {
-						context->framebuf = context->oddbuf;
+						context->flags &= FLAG2_EVEN_FIELD;
 					}
 				}
 				context->cd &= 0x3C;
@@ -1728,7 +1733,7 @@ uint16_t vdp_control_port_read(vdp_context * context)
 		value |= 0x20;
 		context->flags2 &= ~FLAG2_SPRITE_COLLIDE;
 	}
-	if ((context->regs[REG_MODE_4] & BIT_INTERLACE) && context->framebuf == context->oddbuf) {
+	if ((context->regs[REG_MODE_4] & BIT_INTERLACE) && !(context->flags2 & FLAG2_EVEN_FIELD)) {
 		value |= 0x10;
 	}
 	uint32_t line= context->vcounter;
@@ -1767,16 +1772,8 @@ uint16_t vdp_data_port_read(vdp_context * context)
 	if (context->cd & 1) {
 		warning("Read from VDP data port while writes are configured, CPU is now frozen. VDP Address: %X, CD: %X\n", context->address, context->cd);
 	}
-	uint32_t old_frame = context->frame;
 	while (!(context->flags & FLAG_READ_FETCHED)) {
 		vdp_run_context(context, context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20));
-		if (context->frame != old_frame) {
-			if (!headless) {
-				//TODO: make pushing frames to renderer automatic so this doesn't need to be here
-				wait_render_frame(context, 0);
-			}
-			old_frame = context->frame;
-		}
 	}
 	context->flags &= ~FLAG_READ_FETCHED;
 	//Should this happen after the prefetch or after the read?
