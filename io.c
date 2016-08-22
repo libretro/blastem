@@ -21,6 +21,7 @@
 #include "util.h"
 
 #define CYCLE_NEVER 0xFFFFFFFF
+#define MIN_POLL_INTERVAL 6840
 
 const char * device_type_names[] = {
 	"3-button gamepad",
@@ -1146,6 +1147,7 @@ void mouse_check_ready(io_port *port, uint32_t current_cycle)
 	}
 }
 
+uint32_t last_poll_cycle;
 void io_adjust_cycles(io_port * port, uint32_t current_cycle, uint32_t deduction)
 {
 	/*uint8_t control = pad->control | 0x80;
@@ -1166,6 +1168,11 @@ void io_adjust_cycles(io_port * port, uint32_t current_cycle, uint32_t deduction
 		if (port->device.mouse.ready_cycle != CYCLE_NEVER) {
 			port->device.mouse.ready_cycle -= deduction;
 		}
+	}
+	if (last_poll_cycle >= deduction) {
+		last_poll_cycle -= deduction;
+	} else {
+		last_poll_cycle = 0;
 	}
 }
 
@@ -1345,6 +1352,10 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 	uint8_t output = (control & port->output) | (~control & 0xFF);
 	uint8_t th = output & 0x40;
 	uint8_t input;
+	if (current_cycle - last_poll_cycle > MIN_POLL_INTERVAL) {
+		process_events();
+		last_poll_cycle = current_cycle;
+	}
 	switch (port->device_type)
 	{
 	case IO_GAMEPAD3:

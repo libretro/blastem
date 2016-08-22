@@ -50,19 +50,16 @@
 #define MAX_MICE 8
 #define MAX_MOUSE_BUTTONS 8
 
+#define FRAMEBUFFER_ODD 0
+#define FRAMEBUFFER_EVEN 1
+
 #include "vdp.h"
 #include "psg.h"
 #include "ym2612.h"
 
-typedef struct {
-	void *oddbuf;
-	void *evenbuf;
-	int  stride;
-} surface_info;
-
 uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b);
-void render_alloc_surfaces(vdp_context * context);
-void render_free_surfaces(vdp_context *context);
+uint32_t *render_get_framebuffer(uint8_t which, int *pitch);
+void render_framebuffer_updated(uint8_t which, int width);
 void render_init(int width, int height, char * title, uint32_t fps, uint8_t fullscreen);
 void render_update_caption(char *title);
 void render_context(vdp_context * context);

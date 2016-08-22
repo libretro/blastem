@@ -224,9 +224,6 @@ uint8_t vdp_load_gst(vdp_context * context, FILE * state_file)
 		return 0;
 	}
 	context->double_res = (context->regs[REG_MODE_4] & (BIT_INTERLACE | BIT_DOUBLE_RES)) == (BIT_INTERLACE | BIT_DOUBLE_RES);
-	if (!context->double_res) {
-		context->framebuf = context->oddbuf;
-	}
 	latch_mode(context);
 	if (fread(tmp_buf, 1, CRAM_SIZE*2, state_file) != CRAM_SIZE*2) {
 		fputs("Failed to read CRAM from savestate\n", stderr);

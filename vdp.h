@@ -13,8 +13,8 @@
 #define CRAM_SIZE 64
 #define VSRAM_SIZE 40
 #define VRAM_SIZE (64*1024)
-#define LINEBUF_SIZE 320
-#define FRAMEBUF_ENTRIES (320+27)*(240+27) //PAL active display + full border
+#define LINEBUF_SIZE (320+27) //H40 + full border
+#define BORDER_BOTTOM 13 //TODO: Replace with actual value
 #define MAX_DRAWS 40
 #define MAX_DRAWS_H32 32
 #define MAX_SPRITES_LINE 20
@@ -51,6 +51,7 @@
 #define FLAG2_READ_PENDING   0x04
 #define FLAG2_SPRITE_COLLIDE 0x08
 #define FLAG2_REGION_PAL     0x10
+#define FLAG2_EVEN_FIELD     0x20
 
 #define DISPLAY_ENABLE 0x40
 
@@ -138,15 +139,14 @@ typedef struct {
 	uint8_t     *vdpmem;
 	//stores 2-bit palette + 4-bit palette index + priority for current sprite line
 	uint8_t     *linebuf;
-	//stores 12-bit color + shadow/highlight bits
-	void        *framebuf;
-	void        *oddbuf;
-	void        *evenbuf;
+	//pointer to current line in framebuffer
+	uint32_t    *output;
 	uint16_t    cram[CRAM_SIZE];
 	uint32_t    colors[CRAM_SIZE*3];
 	uint32_t    debugcolors[1 << (3 + 1 + 1 + 1)];//3 bits for source, 1 bit for priority, 1 bit for shadow, 1 bit for hilight
 	uint16_t    vsram[VSRAM_SIZE];
 	uint16_t    vscroll_latch[2];
+	uint32_t    output_pitch;
 	uint32_t    frame;
 	uint16_t    vcounter;
 	uint16_t    hscroll_a;
@@ -155,6 +155,7 @@ typedef struct {
 	uint8_t     latched_mode;
 	uint8_t	    sprite_index;
 	uint8_t     sprite_draws;
+	uint8_t     h40_lines;
 	int8_t      slot_counter;
 	int8_t      cur_slot;
 	sprite_draw sprite_draw_list[MAX_DRAWS];
