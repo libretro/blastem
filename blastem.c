@@ -272,9 +272,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 		//printf("reached frame end %d | MCLK Cycles: %d, Target: %d, VDP cycles: %d, vcounter: %d, hslot: %d\n", last_frame_num, mclks, gen->frame_end, v_context->cycles, v_context->vcounter, v_context->hslot);
 		last_frame_num = v_context->frame;
 
-		if (!headless) {
-			break_on_sync |= wait_render_frame(v_context, frame_limit);
-		} else if(exit_after){
+		if(exit_after){
 			--exit_after;
 			if (!exit_after) {
 				exit(0);
