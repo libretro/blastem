@@ -55,6 +55,7 @@ typedef enum {
 #define MMAP_ONLY_EVEN 0x20
 #define MMAP_FUNC_NULL 0x40
 #define MMAP_BYTESWAP  0x80
+#define MMAP_AUX_BUFF  0x100
 
 typedef uint16_t (*read_16_fun)(uint32_t address, void * context);
 typedef uint8_t (*read_8_fun)(uint32_t address, void * context);
@@ -65,6 +66,7 @@ typedef struct {
 	uint32_t     start;
 	uint32_t     end;
 	uint32_t     mask;
+	uint32_t     aux_mask;
 	uint16_t     ptr_index;
 	uint16_t     flags;
 	void *       buffer;
