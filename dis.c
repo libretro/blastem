@@ -153,6 +153,7 @@ int main(int argc, char ** argv)
 	uint8_t labels = 0, addr = 0, only = 0, vos = 0, reset = 0;
 	tern_node * named_labels = NULL;
 
+	uint32_t address_off = 0, address_end;
 	for(uint8_t opt = 2; opt < argc; ++opt) {
 		if (argv[opt][0] == '-') {
 			FILE * address_log;
@@ -172,6 +173,14 @@ int main(int argc, char ** argv)
 				break;
 			case 'r':
 				reset = 1;
+				break;
+			case 's':
+				opt++;
+				if (opt >= argc) {
+					fputs("-s must be followed by an offset\n", stderr);
+					exit(1);
+				}
+				address_off = strtol(argv[opt], NULL, 0);
 				break;
 			case 'f':
 				opt++;
@@ -208,14 +217,12 @@ int main(int argc, char ** argv)
 			}
 		}
 	}
-
 	FILE * f = fopen(argv[1], "rb");
 	fseek(f, 0, SEEK_END);
 	filesize = ftell(f);
 	fseek(f, 0, SEEK_SET);
 
 	char int_key[MAX_INT_KEY_SIZE];
-	uint32_t address_off, address_end;
 	if (vos)
 	{
 		vos_program_module header;
@@ -250,8 +257,7 @@ int main(int argc, char ** argv)
 			named_labels = add_label(named_labels, "reset", filebuf[2] << 16 | filebuf[3]);
 		}
 	} else {
-		address_off = 0;
-		address_end = filesize;
+		address_end = address_off + filesize;
 		filebuf = malloc(filesize);
 		if (fread(filebuf, 2, filesize/2, f) != filesize/2)
 		{
