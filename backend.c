@@ -65,6 +65,9 @@ void * get_native_pointer(uint32_t address, void ** mem_pointers, cpu_options * 
 				? mem_pointers[memmap[chunk].ptr_index]
 				: memmap[chunk].buffer;
 			if (!base) {
+				if (memmap[chunk].flags & MMAP_AUX_BUFF) {
+					return memmap[chunk].buffer + (address & memmap[chunk].aux_mask);
+				}
 				return NULL;
 			}
 			return base + (address & memmap[chunk].mask);
