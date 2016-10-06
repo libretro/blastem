@@ -2138,6 +2138,19 @@ void call_args(code_info *code, code_ptr fun, uint32_t num_args, ...)
 		code->stack_off -= adjust;
 	}
 }
+
+void call_args_r(code_info *code, uint8_t fun_reg, uint32_t num_args, ...)
+{
+	va_list args;
+	va_start(args, num_args);
+	uint32_t adjust = prep_args(code, num_args, args);
+	va_end(args);
+	call_r(code, fun_reg);
+	if (adjust) {
+		add_ir(code, adjust, RSP, SZ_PTR);
+		code->stack_off -= adjust;
+	}
+}
 /*
 void call_args_abi(code_info *code, code_ptr fun, uint32_t num_args, ...)
 {
