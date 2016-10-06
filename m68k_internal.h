@@ -9,7 +9,7 @@
 #include "68kinst.h"
 
 //functions implemented in host CPU specfic file
-void translate_out_of_bounds(code_info *code);
+void translate_out_of_bounds(m68k_options *opts, uint32_t address);
 void areg_to_native(m68k_options *opts, uint8_t reg, uint8_t native_reg);
 void dreg_to_native(m68k_options *opts, uint8_t reg, uint8_t native_reg);
 void areg_to_native_sx(m68k_options *opts, uint8_t reg, uint8_t native_reg);
@@ -42,7 +42,6 @@ size_t dreg_offset(uint8_t reg);
 size_t areg_offset(uint8_t reg);
 size_t reg_offset(m68k_op_info *op);
 void translate_m68k_op(m68kinst * inst, host_ea * ea, m68k_options * opts, uint8_t dst);
-void print_regs_exit(m68k_context * context);
 void m68k_read_size(m68k_options *opts, uint8_t size);
 void m68k_write_size(m68k_options *opts, uint8_t size, uint8_t lowfirst);
 void m68k_save_result(m68kinst * inst, m68k_options * opts);
@@ -88,6 +87,7 @@ void translate_m68k_eori_ccr_sr(m68k_options *opts, m68kinst *inst);
 void translate_m68k_move_ccr_sr(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op);
 void translate_m68k_stop(m68k_options *opts, m68kinst *inst);
 void translate_m68k_move_from_sr(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op);
+void translate_m68k_reset(m68k_options *opts, m68kinst *inst);
 
 //flag update bits
 #define X0  0x0001

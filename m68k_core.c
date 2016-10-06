@@ -43,7 +43,7 @@ size_t reg_offset(m68k_op_info *op)
 	return op->addr_mode == MODE_REG ? dreg_offset(op->params.regs.pri) : areg_offset(op->params.regs.pri);
 }
 
-void print_regs_exit(m68k_context * context)
+void m68k_print_regs(m68k_context * context)
 {
 	printf("XNZVC\n%d%d%d%d%d\n", context->flags[0], context->flags[1], context->flags[2], context->flags[3], context->flags[4]);
 	for (int i = 0; i < 8; i++) {
@@ -52,7 +52,6 @@ void print_regs_exit(m68k_context * context)
 	for (int i = 0; i < 8; i++) {
 		printf("a%d: %X\n", i, context->aregs[i]);
 	}
-	exit(0);
 }
 
 void m68k_read_size(m68k_options *opts, uint8_t size)
@@ -538,13 +537,6 @@ void swap_ssp_usp(m68k_options * opts)
 	native_to_areg(opts, opts->gen.scratch2, 8);
 }
 
-void translate_m68k_reset(m68k_options *opts, m68kinst *inst)
-{
-	code_info *code = &opts->gen.code;
-	call(code, opts->gen.save_context);
-	call_args(code, (code_ptr)print_regs_exit, 1, opts->gen.context_reg);
-}
-
 void translate_m68k_rte(m68k_options *opts, m68kinst *inst)
 {
 	m68k_trap_if_not_supervisor(opts, inst);
@@ -907,7 +899,7 @@ void translate_m68k_stream(uint32_t address, m68k_context * context)
 			encoded = get_native_pointer(address, (void **)context->mem_pointers, &opts->gen);
 			if (!encoded) {
 				map_native_address(context, address, code->cur, 2, 1);
-				translate_out_of_bounds(code);
+				translate_out_of_bounds(opts, address);
 				break;
 			}
 			code_ptr existing = get_native_address(opts, address);
@@ -1068,7 +1060,7 @@ void m68k_options_free(m68k_options *opts)
 }
 
 
-m68k_context * init_68k_context(m68k_options * opts)
+m68k_context * init_68k_context(m68k_options * opts, m68k_reset_handler reset_handler)
 {
 	size_t ctx_size = sizeof(m68k_context) + ram_size(&opts->gen) / (1 << opts->gen.ram_flags_shift) / 8;
 	m68k_context * context = malloc(ctx_size);
@@ -1077,5 +1069,6 @@ m68k_context * init_68k_context(m68k_options * opts)
 	context->options = opts;
 	context->int_cycle = CYCLE_NEVER;
 	context->status = 0x27;
+	context->reset_handler = (code_ptr)reset_handler;
 	return context;
 }

@@ -27,6 +27,14 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	return context;
 }
 
+m68k_context *reset_handler(m68k_context *context)
+{
+	m68k_print_regs(context);
+	exit(0);
+	//unreachable
+	return context;
+}
+
 int main(int argc, char ** argv)
 {
 	long filesize;
@@ -60,7 +68,7 @@ int main(int argc, char ** argv)
 	memmap[1].buffer = malloc(64 * 1024);
 	memset(memmap[1].buffer, 0, 64 * 1024);
 	init_m68k_opts(&opts, memmap, 2, 1);
-	m68k_context * context = init_68k_context(&opts);
+	m68k_context * context = init_68k_context(&opts, reset_handler);
 	context->mem_pointers[0] = memmap[0].buffer;
 	context->mem_pointers[1] = memmap[1].buffer;
 	context->target_cycle = context->sync_cycle = 0x80000000;

@@ -1156,6 +1156,21 @@ void translate_shift(m68k_options * opts, m68kinst * inst, host_ea *src_op, host
 	}
 }
 
+void translate_m68k_reset(m68k_options *opts, m68kinst *inst)
+{
+	code_info *code = &opts->gen.code;
+	cycles(&opts->gen, BUS);
+	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, reset_handler), opts->gen.scratch1, SZ_PTR);
+	cmp_ir(code, 0, opts->gen.scratch1, SZ_PTR);
+	code_ptr no_reset_handler = code->cur + 1;
+	jcc(code, CC_Z, code->cur+2);
+	call(code, opts->gen.save_context);
+	call_args_r(code, opts->gen.scratch1, 1, opts->gen.context_reg);
+	mov_rr(code, RAX, opts->gen.context_reg, SZ_PTR);
+	call(code, opts->gen.load_context);
+	*no_reset_handler = code->cur - (no_reset_handler + 1);
+}
+
 void op_ir(code_info *code, m68kinst *inst, int32_t val, uint8_t dst, uint8_t size)
 {
 	switch (inst->op)
@@ -2220,10 +2235,16 @@ void translate_m68k_move_from_sr(m68k_options *opts, m68kinst *inst, host_ea *sr
 	m68k_save_result(inst, opts);
 }
 
-void translate_out_of_bounds(code_info *code)
+void m68k_out_of_bounds_execution(uint32_t address)
 {
-	xor_rr(code, RDI, RDI, SZ_D);
-	call_args(code, (code_ptr)exit, 1, RDI);
+	fatal_error("M68K attempted to execute code at unmapped or I/O address %X\n", address);
+}
+
+void translate_out_of_bounds(m68k_options *opts, uint32_t address)
+{
+	code_info *code = &opts->gen.code;
+	mov_ir(code, address, opts->gen.scratch1, SZ_D);
+	call_args(code, (code_ptr)m68k_out_of_bounds_execution, 1, opts->gen.scratch1);
 }
 
 void m68k_set_last_prefetch(m68k_options *opts, uint32_t address)
