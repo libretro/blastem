@@ -61,6 +61,7 @@ typedef struct {
 	uint32_t        last_prefetch_address;
 	uint16_t        *mem_pointers[NUM_MEM_AREAS];
 	code_ptr        resume_pc;
+	code_ptr        reset_handler;
 	native_map_slot *native_code_map;
 	m68k_options    *options;
 	void            *system;
@@ -69,12 +70,14 @@ typedef struct {
 	uint8_t         ram_code_flags[];
 } m68k_context;
 
+typedef m68k_context *(*m68k_reset_handler)(m68k_context *context);
+
 void translate_m68k(m68k_options * opts, struct m68kinst * inst);
 void translate_m68k_stream(uint32_t address, m68k_context * context);
 void start_68k_context(m68k_context * context, uint32_t address);
 void resume_68k(m68k_context *context);
 void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks, uint32_t clock_divider);
-m68k_context * init_68k_context(m68k_options * opts);
+m68k_context * init_68k_context(m68k_options * opts, m68k_reset_handler reset_handler);
 void m68k_reset(m68k_context * context);
 void m68k_options_free(m68k_options *opts);
 void insert_breakpoint(m68k_context * context, uint32_t address, uint8_t * bp_handler);
@@ -82,6 +85,7 @@ void remove_breakpoint(m68k_context * context, uint32_t address);
 m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context);
 uint32_t get_instruction_start(m68k_options *opts, native_map_slot * native_code_map, uint32_t address);
 uint16_t m68k_get_ir(m68k_context *context);
+void m68k_print_regs(m68k_context * context);
 
 #endif //M68K_CORE_H_
 

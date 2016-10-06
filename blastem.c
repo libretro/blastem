@@ -875,11 +875,11 @@ void persist_save()
 
 #ifndef NO_Z80
 const memmap_chunk z80_map[] = {
-	{ 0x0000, 0x4000,  0x1FFF, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE, z80_ram, NULL, NULL, NULL,              NULL },
-	{ 0x8000, 0x10000, 0x7FFF, 0, 0,                                  NULL,    NULL, NULL, z80_read_bank,     z80_write_bank},
-	{ 0x4000, 0x6000,  0x0003, 0, 0,                                  NULL,    NULL, NULL, z80_read_ym,       z80_write_ym},
-	{ 0x6000, 0x6100,  0xFFFF, 0, 0,                                  NULL,    NULL, NULL, NULL,              z80_write_bank_reg},
-	{ 0x7F00, 0x8000,  0x00FF, 0, 0,                                  NULL,    NULL, NULL, z80_vdp_port_read, z80_vdp_port_write}
+	{ 0x0000, 0x4000,  0x1FFF, 0, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE, z80_ram, NULL, NULL, NULL,              NULL },
+	{ 0x8000, 0x10000, 0x7FFF, 0, 0, 0,                                  NULL,    NULL, NULL, z80_read_bank,     z80_write_bank},
+	{ 0x4000, 0x6000,  0x0003, 0, 0, 0,                                  NULL,    NULL, NULL, z80_read_ym,       z80_write_ym},
+	{ 0x6000, 0x6100,  0xFFFF, 0, 0, 0,                                  NULL,    NULL, NULL, NULL,              z80_write_bank_reg},
+	{ 0x7F00, 0x8000,  0x00FF, 0, 0, 0,                                  NULL,    NULL, NULL, z80_vdp_port_read, z80_vdp_port_write}
 };
 #endif
 
@@ -939,7 +939,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, int fps, uint32_t ym_opts)
 	init_m68k_opts(opts, rom->map, rom->map_chunks, MCLKS_PER_68K);
 	//TODO: make this configurable
 	opts->gen.flags |= M68K_OPT_BROKEN_READ_MODIFY;
-	gen->m68k = init_68k_context(opts);
+	gen->m68k = init_68k_context(opts, NULL);
 	gen->m68k->system = gen;
 
 	for (int i = 0; i < rom->map_chunks; i++)
@@ -1213,12 +1213,12 @@ int main(int argc, char ** argv)
 	}
 	ram = malloc(RAM_WORDS * sizeof(uint16_t));
 	memmap_chunk base_map[] = {
-		{0xE00000, 0x1000000, 0xFFFF,   0, MMAP_READ | MMAP_WRITE | MMAP_CODE, ram,
+		{0xE00000, 0x1000000, 0xFFFF,   0, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE, ram,
 		           NULL,          NULL,         NULL,            NULL},
-		{0xC00000, 0xE00000,  0x1FFFFF, 0, 0,                                  NULL,
+		{0xC00000, 0xE00000,  0x1FFFFF, 0, 0, 0,                                  NULL,
 		           (read_16_fun)vdp_port_read,  (write_16_fun)vdp_port_write,
 		           (read_8_fun)vdp_port_read_b, (write_8_fun)vdp_port_write_b},
-		{0xA00000, 0xA12000,  0x1FFFF,  0, 0,                                  NULL,
+		{0xA00000, 0xA12000,  0x1FFFF,  0, 0, 0,                                  NULL,
 		           (read_16_fun)io_read_w,      (write_16_fun)io_write_w,
 		           (read_8_fun)io_read,         (write_8_fun)io_write}
 	};
