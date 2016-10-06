@@ -141,10 +141,15 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 				if (opts->address_size != SZ_D) {
 					movzx_rr(code, adr_reg, adr_reg, opts->address_size, SZ_D);
 				}
+				if (is_write && (memmap[chunk].flags & MMAP_CODE)) {
+					push_r(code, adr_reg);
+				}
 				add_rdispr(code, opts->context_reg, opts->mem_ptr_off + sizeof(void*) * memmap[chunk].ptr_index, adr_reg, SZ_PTR);
 				if (is_write) {
 					mov_rrind(code, opts->scratch1, opts->scratch2, size);
-
+					if (memmap[chunk].flags & MMAP_CODE) {
+						pop_r(code, adr_reg);
+					}
 				} else {
 					mov_rindr(code, opts->scratch1, opts->scratch1, size);
 				}
