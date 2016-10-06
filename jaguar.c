@@ -5,6 +5,7 @@
 #include "m68k_core.h"
 #include "jaguar.h"
 #include "util.h"
+#include "debug.h"
 
 //BIOS Area Memory map
 // 10 00 00 - 10 04 00 : Video mode/ Memory control registers
@@ -36,7 +37,33 @@ void rom0_write_16(uint32_t address, jaguar_context *system, uint16_t value)
 		if (address < 0x101000) {
 			if (address < 0x100400) {
 				//Video mode / Memory control registers
-				fprintf(stderr, "Unhanelde write to video mode/memory control registers - %X:%X", address, value);
+				switch(address & 0x3FE)
+				{
+				case 0:
+					if (((value ^ system->memcon1) & 1) || !system->memcon_written) {
+						uint16_t **mem_pointers = system->m68k->mem_pointers;
+						int rom = value & 1 ? 4 : 1;
+						int ram0 = value & 1 ? 0 : 6;
+						int ram1 = value & 1 ? 2 : 4;
+						mem_pointers[ram0] = mem_pointers[ram0 + 1] = system->dram;
+						//these are probably open bus, but mirror DRAM for now
+						mem_pointers[ram1] = mem_pointers[ram1 + 1] = system->dram;
+						
+						mem_pointers[rom] = system->cart;
+						mem_pointers[rom + 1] = system->cart + ((0x200000 & (system->cart_size-1)) >> 1);
+						mem_pointers[rom + 2] = system->cart + ((0x400000 & (system->cart_size-1)) >> 1);
+						system->memcon_written = 1;
+						//TODO: invalidate code cache
+					}
+					system->memcon1 = value;
+					break;
+				case 2:
+					system->memcon2 = value;
+					break;
+				default:
+					fprintf(stderr, "Unhandled write to video mode/memory control registers - %X:%X\n", address, value);
+					break;
+				}
 			} else if (address < 0x100800) {
 				//CLUT
 				address = address >> 1 & 255;
@@ -78,14 +105,14 @@ void rom0_write_16(uint32_t address, jaguar_context *system, uint16_t value)
 			system->gpu_local[offset] |= value32;
 		} else if (address < 0x114000) {
 			//timer clock registers
-			fprintf(stderr, "Unhanelde write to timer/clock registers - %X:%X", address, value);
+			fprintf(stderr, "Unhandled write to timer/clock registers - %X:%X\n", address, value);
 		} else {
 			//joystick interface
-			fprintf(stderr, "Unhanelde write to joystick interface - %X:%X", address, value);
+			fprintf(stderr, "Unhandled write to joystick interface - %X:%X\n", address, value);
 		}
 	} else if (address < 0x11B000) {
 		//DSP/DAC/I2S Registers
-		fprintf(stderr, "Unhanelde write to DSP/DAC/I2S registers - %X:%X", address, value);
+		fprintf(stderr, "Unhandled write to DSP/DAC/I2S registers - %X:%X\n", address, value);
 	} else if (address < 0x11D000) {
 		//DSP local RAM
 		uint32_t offset = address >> 2 & (DSP_RAM_BYTES / sizeof(uint32_t) - 1);
@@ -114,7 +141,7 @@ uint16_t rom0_read_16(uint32_t address, jaguar_context *system)
 		if (address < 0x101000) {
 			if (address < 0x100400) {
 				//Video mode / Memory control registers
-				fprintf(stderr, "Unhandled read from video mode/memory control registers - %X", address);
+				fprintf(stderr, "Unhandled read from video mode/memory control registers - %X\n", address);
 			} else if (address < 0x100800) {
 				//CLUT
 				address = address >> 1 & 255;
@@ -153,14 +180,14 @@ uint16_t rom0_read_16(uint32_t address, jaguar_context *system)
 			}
 		} else if (address < 0x114000) {
 			//timer clock registers
-			fprintf(stderr, "Unhandled read from timer/clock registers - %X", address);
+			fprintf(stderr, "Unhandled read from timer/clock registers - %X\n", address);
 		} else {
 			//joystick interface
-			fprintf(stderr, "Unhandled read from joystick interface - %X", address);
+			fprintf(stderr, "Unhandled read from joystick interface - %X\n", address);
 		}
 	} else if (address < 0x11B000) {
 		//DSP/DAC/I2S Registers
-		fprintf(stderr, "Unhandled read from DSP/DAC/I2S registers - %X", address);
+		fprintf(stderr, "Unhandled read from DSP/DAC/I2S registers - %X\n", address);
 	} else if (address < 0x11D000) {
 		//DSP local RAM
 		uint32_t offset = address >> 2 & (DSP_RAM_BYTES / sizeof(uint32_t) - 1);
@@ -214,6 +241,12 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	return context;
 }
 
+m68k_context *handle_m68k_reset(m68k_context *context)
+{
+	puts("M68K executed RESET");
+	return context;
+}
+
 jaguar_context *init_jaguar(uint16_t *bios, uint32_t bios_size, uint16_t *cart, uint32_t cart_size)
 {
 	jaguar_context *system = calloc(1, sizeof(jaguar_context));
@@ -222,7 +255,7 @@ jaguar_context *init_jaguar(uint16_t *bios, uint32_t bios_size, uint16_t *cart, 
 	system->cart = cart;
 	system->cart_size = cart_size;
 
-	memmap_chunk jag_m68k_map[8];
+	memmap_chunk *jag_m68k_map = calloc(8, sizeof(memmap_chunk));
 	for (uint32_t start = 0, index=0; index < 8; index++, start += 0x200000)
 	{
 		jag_m68k_map[index].start = start;
@@ -230,7 +263,7 @@ jaguar_context *init_jaguar(uint16_t *bios, uint32_t bios_size, uint16_t *cart, 
 		jag_m68k_map[index].mask = index ? 0x1FFFFF : 0xFFFFFF;
 		jag_m68k_map[index].aux_mask = bios_size - 1;
 		jag_m68k_map[index].ptr_index = index;
-		jag_m68k_map[index].flags = MMAP_READ | MMAP_WRITE | MMAP_PTR_IDX | MMAP_FUNC_NULL | MMAP_AUX_BUFF;
+		jag_m68k_map[index].flags = MMAP_READ | MMAP_WRITE | MMAP_PTR_IDX | MMAP_FUNC_NULL | MMAP_AUX_BUFF | MMAP_CODE;
 		jag_m68k_map[index].buffer = bios;
 		jag_m68k_map[index].read_16 = rom0_read_m68k;
 		jag_m68k_map[index].read_8 = rom0_read_m68k_b;
@@ -239,7 +272,7 @@ jaguar_context *init_jaguar(uint16_t *bios, uint32_t bios_size, uint16_t *cart, 
 	}
 	m68k_options *opts = malloc(sizeof(m68k_options));
 	init_m68k_opts(opts, jag_m68k_map, 8, 2);
-	system->m68k = init_68k_context(opts);
+	system->m68k = init_68k_context(opts, handle_m68k_reset);
 	system->m68k->system = system;
 	return system;
 }
@@ -259,6 +292,12 @@ uint16_t *load_rom(char * filename, uint32_t *size)
 	uint16_t *cart = malloc(*size);
 	if (filesize != fread(cart, 1, filesize, f)) {
 		fatal_error("Error reading from %s\n", filename);
+	}
+	filesize = (filesize + 1) & ~1L;
+	for (long i = 0; i < filesize; i+=2)
+	{
+		long index = i >> 1;
+		cart[index] = cart[index] >> 8 | cart[index] << 8;
 	}
 	while (filesize < *size)
 	{
