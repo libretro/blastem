@@ -12,7 +12,8 @@ typedef struct {
 	uint16_t     *cart;
 	uint32_t     bios_size;
 	uint32_t     cart_size;
-	uint32_t     memcon;
+	uint32_t     memcon1;
+	uint32_t     memcon2;
 	uint16_t     write_latch;
 	uint8_t      write_pending;
 	
@@ -25,6 +26,7 @@ typedef struct {
 	uint16_t     *write_line_buffer;
 	uint16_t     *read_line_buffer;
 	
+	uint8_t      memcon_written;
 } jaguar_context;
 
 
