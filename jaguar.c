@@ -6,6 +6,7 @@
 #include "jaguar.h"
 #include "util.h"
 #include "debug.h"
+#include "config.h"
 
 //BIOS Area Memory map
 // 10 00 00 - 10 04 00 : Video mode/ Memory control registers
@@ -22,6 +23,39 @@
 // 11 D0 00 - 11 E0 00 : Wave table ROM
 
 int headless = 1;
+tern_node * config;
+
+void handle_keydown(int keycode, uint8_t scancode)
+{
+}
+
+void handle_keyup(int keycode, uint8_t scancode)
+{
+}
+
+void handle_joydown(int joystick, int button)
+{
+}
+
+void handle_joyup(int joystick, int button)
+{
+}
+
+void handle_joy_dpad(int joystick, int dpadnum, uint8_t value)
+{
+}
+
+void handle_mousedown(int mouse, int button)
+{
+}
+
+void handle_mouseup(int mouse, int button)
+{
+}
+
+void handle_mouse_moved(int mouse, uint16_t x, uint16_t y, int16_t deltax, int16_t deltay)
+{
+}
 
 
 void rom0_write_16(uint32_t address, jaguar_context *system, uint16_t value)
@@ -53,6 +87,7 @@ void rom0_write_16(uint32_t address, jaguar_context *system, uint16_t value)
 						mem_pointers[rom + 1] = system->cart + ((0x200000 & (system->cart_size-1)) >> 1);
 						mem_pointers[rom + 2] = system->cart + ((0x400000 & (system->cart_size-1)) >> 1);
 						system->memcon_written = 1;
+						printf("MEMCON1 write - ROMHI: %d", value & 1);
 						//TODO: invalidate code cache
 					}
 					system->memcon1 = value;
@@ -315,6 +350,8 @@ int main(int argc, char **argv)
 		fputs("Usage: blastjag BIOS ROM\n", stderr);
 		return 1;
 	}
+	set_exe_str(argv[0]);
+	config = load_config(argv[0]);
 	uint32_t bios_size;
 	uint16_t *bios = load_rom(argv[1], &bios_size);
 	if (!bios_size) {
