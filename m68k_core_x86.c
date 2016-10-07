@@ -2267,7 +2267,7 @@ m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context)
 {
 	m68k_options * options = context->options;
 	//TODO: Modify gen_mem_fun so that it passes the raw address instead of the masked one, then remove the OR below
-	uint32_t inst_start = get_instruction_start(options, context->native_code_map, address | 0xE00000);
+	uint32_t inst_start = get_instruction_start(options, context->native_code_map, address);
 	if (inst_start) {
 		code_info *code = &options->gen.code;
 		code_ptr dst = get_native_address(context->options, inst_start);
