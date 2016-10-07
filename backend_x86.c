@@ -81,17 +81,23 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 	code_ptr lb_jcc = NULL, ub_jcc = NULL;
 	uint16_t access_flag = is_write ? MMAP_WRITE : MMAP_READ;
 	uint32_t ram_flags_off = opts->ram_flags_off;
+	uint32_t min_address = 0;
+	uint32_t max_address = opts->max_address;
 	for (uint32_t chunk = 0; chunk < num_chunks; chunk++)
 	{
-		if (memmap[chunk].start > 0) {
+		if (memmap[chunk].start > min_address) {
 			cmp_ir(code, memmap[chunk].start, adr_reg, opts->address_size);
 			lb_jcc = code->cur + 1;
 			jcc(code, CC_C, code->cur + 2);
+		} else {
+			min_address = memmap[chunk].end;
 		}
-		if (memmap[chunk].end < opts->max_address) {
+		if (memmap[chunk].end < max_address) {
 			cmp_ir(code, memmap[chunk].end, adr_reg, opts->address_size);
 			ub_jcc = code->cur + 1;
 			jcc(code, CC_NC, code->cur + 2);
+		} else {
+			max_address = memmap[chunk].start;
 		}
 
 		if (memmap[chunk].mask != opts->address_mask) {
@@ -230,7 +236,7 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 				call(code, opts->save_context);
 				call_args(code, opts->handle_code_write, 2, opts->scratch2, opts->context_reg);
 				mov_rr(code, RAX, opts->context_reg, SZ_PTR);
-				call(code, opts->load_context);
+				jmp(code, opts->load_context);
 				*not_code = code->cur - (not_code+1);
 			}
 			retn(code);
