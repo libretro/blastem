@@ -102,25 +102,25 @@ void rom0_write_16(uint32_t address, jaguar_context *system, uint16_t value)
 			} else if (address < 0x100800) {
 				//CLUT
 				address = address >> 1 & 255;
-				system->clut[address] = value;
+				system->video->clut[address] = value;
 			} else {
 				//Line buffer A
 				address = address >> 1 & 0x3FF;
 				if (address < LINEBUFFER_WORDS) {
-					system->line_buffer_a[address] = value;
+					system->video->line_buffer_a[address] = value;
 				}
 			}
 		} else if (address < 0x101800) {
 			//Line buffer B
 			address = address >> 1 & 0x3FF;
 			if (address < LINEBUFFER_WORDS) {
-				system->line_buffer_b[address] = value;
+				system->video->line_buffer_b[address] = value;
 			}
 		} else if (address < 0x102100) {
 			//Write Line Buffer
 			address = address >> 1 & 0x3FF;
 			if (address < LINEBUFFER_WORDS) {
-				system->write_line_buffer[address] = value;
+				system->video->write_line_buffer[address] = value;
 			}
 		} else {
 			//GPU/Blitter registers
@@ -180,25 +180,25 @@ uint16_t rom0_read_16(uint32_t address, jaguar_context *system)
 			} else if (address < 0x100800) {
 				//CLUT
 				address = address >> 1 & 255;
-				return system->clut[address];
+				return system->video->clut[address];
 			} else {
 				//Line buffer A
 				address = address >> 1 & 0x3FF;
 				if (address < LINEBUFFER_WORDS) {
-					return system->line_buffer_a[address];
+					return system->video->line_buffer_a[address];
 				}
 			}
 		} else if (address < 0x101800) {
 			//Line buffer B
 			address = address >> 1 & 0x3FF;
 			if (address < LINEBUFFER_WORDS) {
-				return system->line_buffer_b[address];
+				return system->video->line_buffer_b[address];
 			}
 		} else if (address < 0x102100) {
 			//Write Line Buffer
 			address = address >> 1 & 0x3FF;
 			if (address < LINEBUFFER_WORDS) {
-				return system->write_line_buffer[address];
+				return system->video->write_line_buffer[address];
 			}
 		} else {
 			//GPU/Blitter registers
@@ -270,8 +270,11 @@ uint8_t rom0_read_m68k_b(uint32_t address, void *context)
 
 m68k_context * sync_components(m68k_context * context, uint32_t address)
 {
+	jaguar_context *system = context->system;
+	jag_video_run(system->video, context->current_cycle);
 	if (context->current_cycle > 0x10000000) {
 		context->current_cycle -= 0x10000000;
+		system->video->cycles -= 0x10000000;
 	}
 	return context;
 }
@@ -309,6 +312,7 @@ jaguar_context *init_jaguar(uint16_t *bios, uint32_t bios_size, uint16_t *cart, 
 	init_m68k_opts(opts, jag_m68k_map, 8, 2);
 	system->m68k = init_68k_context(opts, handle_m68k_reset);
 	system->m68k->system = system;
+	system->video = jag_video_init();
 	return system;
 }
 
