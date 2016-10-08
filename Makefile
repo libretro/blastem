@@ -160,7 +160,7 @@ blastem$(EXE) : $(MAINOBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
 	$(FIXUP) ./$@
 	
-blastjag$(EXE) : jaguar.o render_sdl.o $(M68KOBJS) $(TRANSOBJS) $(CONFIGOBJS)
+blastjag$(EXE) : jaguar.o jag_video.o render_sdl.o $(M68KOBJS) $(TRANSOBJS) $(CONFIGOBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 dis$(EXE) : dis.o 68kinst.o tern.o vos_program_module.o
