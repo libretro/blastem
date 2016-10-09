@@ -87,7 +87,7 @@ void rom0_write_16(uint32_t address, jaguar_context *system, uint16_t value)
 						mem_pointers[rom + 1] = system->cart + ((0x200000 & (system->cart_size-1)) >> 1);
 						mem_pointers[rom + 2] = system->cart + ((0x400000 & (system->cart_size-1)) >> 1);
 						system->memcon_written = 1;
-						printf("MEMCON1 write - ROMHI: %d", value & 1);
+						printf("MEMCON1 write - ROMHI: %d\n", value & 1);
 						//TODO: invalidate code cache
 					}
 					system->memcon1 = value;
@@ -96,7 +96,7 @@ void rom0_write_16(uint32_t address, jaguar_context *system, uint16_t value)
 					system->memcon2 = value;
 					break;
 				default:
-					fprintf(stderr, "Unhandled write to video mode/memory control registers - %X:%X\n", address, value);
+					jag_video_reg_write(system->video, address, value);
 					break;
 				}
 			} else if (address < 0x100800) {
