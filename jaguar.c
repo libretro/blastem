@@ -7,6 +7,7 @@
 #include "util.h"
 #include "debug.h"
 #include "config.h"
+#include "render.h"
 
 //BIOS Area Memory map
 // 10 00 00 - 10 04 00 : Video mode/ Memory control registers
@@ -238,36 +239,6 @@ uint16_t rom0_read_16(uint32_t address, jaguar_context *system)
 	return 0xFFFF;
 }
 
-
-void *rom0_write_m68k(uint32_t address, void *context, uint16_t value)
-{
-	rom0_write_16(address, ((m68k_context *)context)->system, value);
-	return context;
-}
-
-uint16_t rom0_read_m68k(uint32_t address, void *context)
-{
-	return rom0_read_16(address, ((m68k_context *)context)->system);
-}
-
-void *rom0_write_m68k_b(uint32_t address, void *context, uint8_t value)
-{
-	//seems unlikely these areas support byte access
-	uint16_t value16 = value;
-	value16 |= value16 << 8;
-	rom0_write_16(address, ((m68k_context *)context)->system, value16);
-	return context;
-}
-
-uint8_t rom0_read_m68k_b(uint32_t address, void *context)
-{
-	uint16_t value = rom0_read_16(address, ((m68k_context *)context)->system);
-	if (address & 1) {
-		return value;
-	}
-	return value >> 8;
-}
-
 m68k_context * sync_components(m68k_context * context, uint32_t address)
 {
 	jaguar_context *system = context->system;
@@ -277,6 +248,40 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 		system->video->cycles -= 0x10000000;
 	}
 	return context;
+}
+
+
+void *rom0_write_m68k(uint32_t address, void *context, uint16_t value)
+{
+	sync_components(context, 0);
+	rom0_write_16(address, ((m68k_context *)context)->system, value);
+	return context;
+}
+
+uint16_t rom0_read_m68k(uint32_t address, void *context)
+{
+	sync_components(context, 0);
+	return rom0_read_16(address, ((m68k_context *)context)->system);
+}
+
+void *rom0_write_m68k_b(uint32_t address, void *context, uint8_t value)
+{
+	sync_components(context, 0);
+	//seems unlikely these areas support byte access
+	uint16_t value16 = value;
+	value16 |= value16 << 8;
+	rom0_write_16(address, ((m68k_context *)context)->system, value16);
+	return context;
+}
+
+uint8_t rom0_read_m68k_b(uint32_t address, void *context)
+{
+	sync_components(context, 0);
+	uint16_t value = rom0_read_16(address, ((m68k_context *)context)->system);
+	if (address & 1) {
+		return value;
+	}
+	return value >> 8;
 }
 
 m68k_context *handle_m68k_reset(m68k_context *context)
@@ -367,6 +372,7 @@ int main(int argc, char **argv)
 		fatal_error("Failed to read cart from %s\n", argv[2]);
 	}
 	jaguar_context *system = init_jaguar(bios, bios_size, cart, cart_size);
+	render_init(640, 480, "BlastJag", 60, 0);
 	m68k_reset(system->m68k);
 	return 0;
 }

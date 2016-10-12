@@ -50,13 +50,14 @@ enum {
 #define LINEBUFFER_WORDS 720
 
 typedef struct {
-	uint16_t regs[JAG_VIDEO_REGS];
+	uint32_t     *output;
+	uint32_t     output_pitch;
+	uint16_t     regs[JAG_VIDEO_REGS];
 	
 	uint16_t     clut[256];
 	uint16_t     line_buffer_a[LINEBUFFER_WORDS];
 	uint16_t     line_buffer_b[LINEBUFFER_WORDS];
 	uint16_t     *write_line_buffer;
-	uint16_t     *read_line_buffer;
 	
 	uint32_t     cycles;
 	uint8_t      pclock_div;
