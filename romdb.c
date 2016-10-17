@@ -543,7 +543,7 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 			info->map[1].read_8 = (read_8_fun)read_sram_b;
 			info->map[1].write_16 = (write_16_fun)write_sram_area_w;//these will be called all writes to the area
 			info->map[1].write_8 = (write_8_fun)write_sram_area_b;
-			info->map[1].buffer = cart + 0x200000;
+			info->map[1].buffer = cart + 0x200000 / sizeof(uint16_t);
 
 			memmap_chunk *last = info->map + info->map_chunks - 1;
 			memset(last, 0, sizeof(memmap_chunk));
