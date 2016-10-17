@@ -6,7 +6,7 @@
 #define DSP_RAM_BYTES 8192
 
 #include "jag_video.h"
-
+typedef struct m68k_context m68k_context;
 typedef struct {
 	m68k_context *m68k;
 	jag_video    *video;
@@ -16,6 +16,7 @@ typedef struct {
 	uint32_t     cart_size;
 	uint32_t     memcon1;
 	uint32_t     memcon2;
+	uint32_t     rom_cycles;
 	uint16_t     write_latch;
 	uint8_t      write_pending;
 	
@@ -25,6 +26,9 @@ typedef struct {
 	
 	uint8_t      memcon_written;
 } jaguar_context;
+
+uint64_t jag_read_phrase(jaguar_context *system, uint32_t address, uint32_t *cycles);
+uint32_t jag_write_phrase(jaguar_context *system, uint32_t address, uint64_t value);
 
 
 #endif //JAGUAR_H_

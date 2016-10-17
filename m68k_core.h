@@ -47,7 +47,7 @@ typedef struct {
 	code_ptr		set_ccr;
 } m68k_options;
 
-typedef struct {
+typedef struct m68k_context {
 	uint8_t         flags[5];
 	uint8_t         status;
 	uint16_t        int_ack;
