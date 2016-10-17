@@ -89,6 +89,21 @@ void rom0_write_16(uint32_t address, jaguar_context *system, uint16_t value)
 						mem_pointers[rom + 2] = system->cart + ((0x400000 & (system->cart_size-1)) >> 1);
 						system->memcon_written = 1;
 						printf("MEMCON1 write - ROMHI: %d\n", value & 1);
+						switch (system->memcon1 >> 3 & 3)
+						{
+						case 0:
+							system->rom_cycles = 10;
+							break;
+						case 1:
+							system->rom_cycles = 8;
+							break;
+						case 2:
+							system->rom_cycles = 6;
+							break;
+						case 3:
+							system->rom_cycles = 5;
+							break;
+						}
 						//TODO: invalidate code cache
 					}
 					system->memcon1 = value;
@@ -239,6 +254,112 @@ uint16_t rom0_read_16(uint32_t address, jaguar_context *system)
 	return 0xFFFF;
 }
 
+uint64_t rom0_read_64(uint32_t address, jaguar_context *system)
+{
+	address &= 0x1FFFFF;
+	uint64_t high = rom0_read_16(address, system);
+	uint64_t highmid = rom0_read_16(address+2, system);
+	uint64_t lowmid = rom0_read_16(address+4, system);
+	uint64_t low = rom0_read_16(address+6, system);
+	return high << 48 | highmid << 32 | lowmid << 16 | low;
+}
+
+void rom0_write_64(uint32_t address, jaguar_context *system, uint64_t val)
+{
+	address &= 0x1FFFFF;
+	rom0_write_16(address, system, val >> 48);
+	rom0_write_16(address+2, system, val >> 32);
+	rom0_write_16(address+4, system, val >> 16);
+	rom0_write_16(address+6, system, val);
+}
+
+uint64_t jag_read_phrase(jaguar_context *system, uint32_t address, uint32_t *cycles)
+{
+	if (!system->memcon_written) {
+		//unsure of timing, but presumably at least 2 32-bit reads 
+		//which presumably take a minimum of 1 cycle
+		//reality probably depends on the exact area read
+		//docs seem to imply some areas only 16-bits wide whereas others are 32-bit
+		*cycles += 2;
+		return rom0_read_64(address, system);
+	}
+	uint16_t *src;
+	if (system->memcon1 & 1) {
+		if (address < 0x800000) {
+			src = system->dram + (address >> 1 & (DRAM_WORDS - 1));
+			//DRAM is 64-bits wide, but sounds like an access is still at least two cycles
+			*cycles += 2;
+		} else if (address < 0xE00000) {
+			//cart is slow and only 32-bits wide
+			*cycles += 2 * (system->rom_cycles);
+			src = system->cart + (address >> 1 & (system->cart_size - 1));
+		} else {
+			*cycles += 2;
+			return rom0_read_64(address, system);
+		}
+	} else if (address > 0x800000) {
+		src = system->dram + (address >> 1 & (DRAM_WORDS - 1));
+		//DRAM is 64-bits wide, but sounds like an access is still at least two cycles
+		*cycles += 2;
+	} else if (address > 0x200000) {
+		//cart is slow and only 32-bits wide
+		*cycles += 2 * (system->rom_cycles);
+		src = system->cart + (address >> 1 & (system->cart_size - 1));
+	} else {
+		*cycles += 2;
+		return rom0_read_64(address, system);
+	}
+	uint64_t high = src[0];
+	uint64_t highmid = src[1];
+	uint64_t lowmid = src[2];
+	uint64_t low = src[3];
+	return high << 48 | highmid << 32 | lowmid << 16 | low;
+}
+
+uint32_t jag_write_phrase(jaguar_context *system, uint32_t address, uint64_t val)
+{
+	if (!system->memcon_written) {
+		//unsure of timing, but presumably at least 2 32-bit reads 
+		//which presumably take a minimum of 1 cycle
+		//reality probably depends on the exact area read
+		//docs seem to imply some areas only 16-bits wide whereas others are 32-bit
+		rom0_write_64(address, system, val);
+		return 2;
+	}
+	uint16_t *dst;
+	uint32_t cycles;
+	if (system->memcon1 & 1) {
+		if (address < 0x800000) {
+			dst = system->dram + (address >> 1 & (DRAM_WORDS - 1));
+			//DRAM is 64-bits wide, but sounds like an access is still at least two cycles
+			cycles = 2;
+		} else if (address < 0xE00000) {
+			dst = system->cart + (address >> 1 & (system->cart_size - 1));
+			//cart is slow and only 32-bits wide
+			cycles = 2 * (system->rom_cycles);
+		} else {
+			rom0_write_64(address, system, val);
+			return 2;
+		}
+	} else if (address > 0x800000) {
+		dst = system->dram + (address >> 1 & (DRAM_WORDS - 1));
+		//DRAM is 64-bits wide, but sounds like an access is still at least two cycles
+		cycles = 2;
+	} else if (address > 0x200000) {
+		dst = system->cart + (address >> 1 & (system->cart_size - 1));
+		//cart is slow and only 32-bits wide
+		cycles = 2 * (system->rom_cycles);
+	} else {
+		rom0_write_64(address, system, val);
+		return 2;
+	}
+	dst[0] = val >> 48;
+	dst[1] = val >> 32;
+	dst[2] = val >> 16;
+	dst[3] = val;
+	return cycles;
+}
+
 m68k_context * sync_components(m68k_context * context, uint32_t address)
 {
 	jaguar_context *system = context->system;
@@ -318,6 +439,7 @@ jaguar_context *init_jaguar(uint16_t *bios, uint32_t bios_size, uint16_t *cart, 
 	system->m68k = init_68k_context(opts, handle_m68k_reset);
 	system->m68k->system = system;
 	system->video = jag_video_init();
+	system->video->system = system;
 	return system;
 }
 

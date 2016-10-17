@@ -50,19 +50,55 @@ enum {
 #define LINEBUFFER_WORDS 720
 
 typedef struct {
-	uint32_t     *output;
-	uint32_t     output_pitch;
-	uint16_t     regs[JAG_VIDEO_REGS];
+	uint64_t im_data;
+	uint64_t prefetch;
+	uint32_t cycles;
+	uint32_t obj_start;
+	uint32_t link;
+	uint32_t data_address;
+	uint32_t cur_address;
+	uint32_t increment;
+	uint32_t line_pitch;
+	uint32_t lb_offset;
+	int16_t  xpos;
+	uint16_t ypos;
+	uint16_t height;
+	int16_t  hscale;
+	int16_t  vscale;
+	int16_t  hremainder;
+	int16_t  remainder;
+	uint8_t  bpp;
+	uint8_t  line_phrases;
+	uint8_t  state;
+	uint8_t  type;
+	uint8_t  im_bits;
+	uint8_t  pal_offset;
+	uint8_t  has_prefetch;
+	uint8_t  hflip;
+	uint8_t  addpixels;
+	uint8_t  transparent;
+	uint8_t  leftclip;
+} object_processor;
+
+typedef struct {
+	void             *system;
+	uint32_t         *output;
+	uint32_t         output_pitch;
+	uint16_t         regs[JAG_VIDEO_REGS];
 	
-	uint16_t     clut[256];
-	uint16_t     line_buffer_a[LINEBUFFER_WORDS];
-	uint16_t     line_buffer_b[LINEBUFFER_WORDS];
-	uint16_t     *write_line_buffer;
+	uint16_t         clut[256];
+	uint16_t         line_buffer_a[LINEBUFFER_WORDS];
+	uint16_t         line_buffer_b[LINEBUFFER_WORDS];
+	uint16_t         *write_line_buffer;
 	
-	uint32_t     cycles;
-	uint8_t      pclock_div;
-	uint8_t      pclock_counter;
-	uint8_t      mode;
+	uint32_t         cycles;
+	uint32_t         op_cycles;
+	uint8_t          pclock_div;
+	uint8_t          pclock_counter;
+	uint8_t          mode;
+	
+	object_processor op;
+	
 } jag_video;
 
 
