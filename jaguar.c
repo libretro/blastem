@@ -142,6 +142,11 @@ void rom0_write_16(uint32_t address, jaguar_context *system, uint16_t value)
 			//GPU/Blitter registers
 			if (address < 0x102200) {
 				fprintf(stderr, "Unhandled write to GPU registers %X: %X\n", address, value);
+				if (address == 0x102116 && (value & 1)) {
+					FILE *f = fopen("gpu.bin", "wb");
+					fwrite(system->gpu_local, 1, sizeof(system->gpu_local), f);
+					fclose(f);
+				}
 			} else {
 				fprintf(stderr, "Unhandled write to Blitter registers %X: %X\n", address, value);
 			}
