@@ -140,7 +140,11 @@ void rom0_write_16(uint32_t address, jaguar_context *system, uint16_t value)
 			}
 		} else {
 			//GPU/Blitter registers
-			fprintf(stderr, "Unhandled write to GPU/Blitter registers %X: %X\n", address, value);
+			if (address < 0x102200) {
+				fprintf(stderr, "Unhandled write to GPU registers %X: %X\n", address, value);
+			} else {
+				fprintf(stderr, "Unhandled write to Blitter registers %X: %X\n", address, value);
+			}
 		}
 	} else if (address < 0x11A100) {
 		if (address < 0x110000) {
@@ -218,7 +222,11 @@ uint16_t rom0_read_16(uint32_t address, jaguar_context *system)
 			}
 		} else {
 			//GPU/Blitter registers
-			fprintf(stderr, "Unhandled read from GPU/Blitter registers %X\n", address);
+			if (address < 0x102200) {
+				fprintf(stderr, "Unhandled read from GPU registers %X\n", address);
+			} else {
+				fprintf(stderr, "Unhandled read from Blitter registers %X\n", address);
+			}
 		}
 	} else if (address < 0x11A100) {
 		if (address < 0x110000) {
