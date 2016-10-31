@@ -95,7 +95,7 @@ void init_dsp_mnemonic_table()
 
 uint16_t jag_opcode(uint16_t inst, uint8_t is_gpu)
 {
-	uint16_t opcode = inst >> 11;
+	uint16_t opcode = inst >> 10;
 	if (is_gpu && opcode == GPU_PACK && (inst & 0x20)) {
 		return GPU_UNPACK;
 	}
@@ -188,13 +188,13 @@ uint32_t jag_jr_dest(uint16_t inst, uint32_t address)
 	if (rel & 0x10) {
 		rel |= 0xFFFFFFE0;
 	}
-	return address + 2 + rel;
+	return address + 2 + rel*2;
 }
 
 int jag_cpu_disasm(uint16_t **stream, uint32_t address, char *dst, uint8_t is_gpu, uint8_t labels)
 {
 	uint16_t inst = **stream;
-	*stream++;
+	(*stream)++;
 	uint16_t opcode = jag_opcode(inst, is_gpu);
 	char **mnemonics;
 	if (is_gpu) {
@@ -207,25 +207,25 @@ int jag_cpu_disasm(uint16_t **stream, uint32_t address, char *dst, uint8_t is_gp
 	{
 	case JAG_MOVEI: {
 		uint32_t immed = **stream;
-		*stream++;
+		(*stream)++;
 		immed |= **stream << 16;
-		*stream++;
-		return sprintf("%s $%X, r%d", mnemonics[opcode], immed, jag_reg2(inst));
+		(*stream)++;
+		return sprintf(dst, "%s $%X, r%d", mnemonics[opcode], immed, jag_reg2(inst));
 	}
 	case JAG_JR:
-		return sprintf(
+		return sprintf(dst,
 			labels ? "%s %s, ADR_%X" : "%s %s, $W%X",
 			mnemonics[opcode], jag_cc(inst), jag_jr_dest(inst, address)
 		);
 	case JAG_JUMP:
-		return sprintf("%s %s, (r%d)", mnemonics[opcode], jag_cc(inst), jag_reg1(inst));
+		return sprintf(dst, "%s %s, (r%d)", mnemonics[opcode], jag_cc(inst), jag_reg1(inst));
 	default:
 		if (is_quick_1_32_opcode(opcode, is_gpu)) {
-			return sprintf("%s %d, r%d", mnemonics[opcode], jag_quick(inst), jag_reg2(inst));
+			return sprintf(dst, "%s %d, r%d", mnemonics[opcode], jag_quick(inst), jag_reg2(inst));
 		} else if (is_quick_0_31_opcode(opcode)) {
-			return sprintf("%s %d, r%d", mnemonics[opcode], jag_reg1(inst), jag_reg2(inst));
+			return sprintf(dst, "%s %d, r%d", mnemonics[opcode], jag_reg1(inst), jag_reg2(inst));
 		} else {
-			return sprintf("%s r%d, r%d", mnemonics[opcode], jag_reg1(inst), jag_reg2(inst));
+			return sprintf(dst, "%s r%d, r%d", mnemonics[opcode], jag_reg1(inst), jag_reg2(inst));
 		}
 	}
 }
