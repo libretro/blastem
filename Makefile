@@ -165,6 +165,9 @@ blastjag$(EXE) : jaguar.o jag_video.o render_sdl.o $(M68KOBJS) $(TRANSOBJS) $(CO
 
 dis$(EXE) : dis.o 68kinst.o tern.o vos_program_module.o
 	$(CC) -o $@ $^
+	
+jagdis : jagdis.o jagcpu.o tern.o
+	$(CC) -o $@ $^
 
 zdis$(EXE) : zdis.o z80inst.o
 	$(CC) -o $@ $^
