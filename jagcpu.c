@@ -219,6 +219,42 @@ int jag_cpu_disasm(uint16_t **stream, uint32_t address, char *dst, uint8_t is_gp
 		);
 	case JAG_JUMP:
 		return sprintf(dst, "%s %s, (r%d)", mnemonics[opcode], jag_cc(inst), jag_reg1(inst));
+	case JAG_LOAD_R14_REL:
+	case JAG_LOAD_R15_REL:
+		return sprintf(dst, "%s (r%d+%d), r%d",  
+			mnemonics[opcode],
+			opcode == JAG_LOAD_R14_REL ? 14 : 15,
+			jag_quick(inst),
+			jag_reg2(inst)
+		);
+		break;
+	case JAG_STORE_R14_REL:
+	case JAG_STORE_R15_REL:
+		return sprintf(dst, "%s r%d, (r%d+%d)",  
+			mnemonics[opcode],
+			jag_reg2(inst),
+			opcode == JAG_STORE_R14_REL ? 14 : 15,
+			jag_quick(inst)
+		);
+		break;
+	case JAG_LOAD_R14_INDEXED:
+	case JAG_LOAD_R15_INDEXED:
+		return sprintf(dst, "%s (r%d+r%d), r%d",  
+			mnemonics[opcode],
+			opcode == JAG_LOAD_R14_INDEXED ? 14 : 15,
+			jag_reg1(inst),
+			jag_reg2(inst)
+		);
+		break;
+	case JAG_STORE_R14_INDEXED:
+	case JAG_STORE_R15_INDEXED:
+		return sprintf(dst, "%s r%d, (r%d+r%d)",  
+			mnemonics[opcode],
+			jag_reg2(inst),
+			opcode == JAG_STORE_R14_INDEXED ? 14 : 15,
+			jag_reg1(inst)
+		);
+		break;
 	default:
 		if (is_quick_1_32_opcode(opcode, is_gpu)) {
 			return sprintf(dst, "%s %d, r%d", mnemonics[opcode], jag_quick(inst), jag_reg2(inst));
