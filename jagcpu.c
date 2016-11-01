@@ -143,6 +143,22 @@ uint8_t is_quick_0_31_opcode(uint16_t opcode)
 		|| opcode == JAG_BCLR;
 }
 
+uint8_t is_load(uint16_t opcode, uint8_t is_gpu)
+{
+	return opcode == JAG_LOAD
+		|| opcode == JAG_LOADB
+		|| opcode == JAG_LOADW
+		|| (is_gpu && opcode == GPU_LOADP);
+}
+
+uint8_t is_store(uint16_t opcode, uint8_t is_gpu)
+{
+	return opcode == JAG_STORE
+		|| opcode == JAG_STOREB
+		|| opcode == JAG_STOREW
+		|| (is_gpu && opcode == GPU_STOREP);
+}
+
 char * jag_cc_names[] = {
 	"t",
 	"ne",
@@ -260,6 +276,10 @@ int jag_cpu_disasm(uint16_t **stream, uint32_t address, char *dst, uint8_t is_gp
 			return sprintf(dst, "%s %d, r%d", mnemonics[opcode], jag_quick(inst), jag_reg2(inst));
 		} else if (is_quick_0_31_opcode(opcode)) {
 			return sprintf(dst, "%s %d, r%d", mnemonics[opcode], jag_reg1(inst), jag_reg2(inst));
+		} else if (is_load(opcode, is_gpu)) {
+			return sprintf(dst, "%s (r%d), r%d", mnemonics[opcode], jag_reg1(inst), jag_reg2(inst));
+		} else if (is_store(opcode, is_gpu)) {
+			return sprintf(dst, "%s r%d, (r%d)", mnemonics[opcode], jag_reg2(inst), jag_reg1(inst));
 		} else {
 			return sprintf(dst, "%s r%d, r%d", mnemonics[opcode], jag_reg1(inst), jag_reg2(inst));
 		}
