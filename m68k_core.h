@@ -18,7 +18,8 @@ struct m68kinst;
 
 #define M68K_OPT_BROKEN_READ_MODIFY 1
 
-#define INT_PENDING_SR_CHANGE 8
+#define INT_PENDING_SR_CHANGE 254
+#define INT_PENDING_NONE 255
 
 typedef void (*start_fun)(uint8_t * addr, void * context);
 

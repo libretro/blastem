@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include "m68k_core.h"
+#include "68kinst.h"
 #include "jaguar.h"
 #include "util.h"
 #include "debug.h"
@@ -58,6 +59,38 @@ void handle_mouse_moved(int mouse, uint16_t x, uint16_t y, int16_t deltax, int16
 {
 }
 
+void jag_update_m68k_int(jaguar_context *system)
+{
+	m68k_context *m68k = system->m68k;
+	if (m68k->sync_cycle - m68k->current_cycle > system->max_cycles) {
+		m68k->sync_cycle = m68k->current_cycle + system->max_cycles;
+	}
+	//TODO: Support other interrupt sources
+	if (!system->cpu_int_control || (m68k->status & 0x7)) {
+		m68k->int_cycle = CYCLE_NEVER;
+	} else if(system->cpu_int_control & system->video->cpu_int_pending) {
+		m68k->int_cycle = m68k->current_cycle;
+		//supposedly all interrupts on the jaguar are "level 0" autovector interrupts
+		//which I assume means they're abusing the "spurious interrupt" vector
+		m68k->int_num = VECTOR_USER0 - VECTOR_SPURIOUS_INTERRUPT;
+	} else {
+		m68k->int_cycle = jag_next_vid_interrupt(system->video);
+		m68k->int_num = VECTOR_USER0 - VECTOR_SPURIOUS_INTERRUPT;
+	}
+	
+	if (m68k->int_cycle > m68k->current_cycle && m68k->int_pending == INT_PENDING_SR_CHANGE) {
+		m68k->int_pending = INT_PENDING_NONE;
+	}
+	
+	m68k->target_cycle = m68k->int_cycle < m68k->sync_cycle ? m68k->int_cycle : m68k->sync_cycle;
+	if (m68k->should_return) {
+		m68k->target_cycle = m68k->current_cycle;
+	} else if (m68k->target_cycle < m68k->current_cycle) {
+		//Changes to SR can result in an interrupt cycle that's in the past
+		//This can cause issues with the implementation of STOP though
+		m68k->target_cycle = m68k->current_cycle;
+	}
+}
 
 void rom0_write_16(uint32_t address, jaguar_context *system, uint16_t value)
 {
@@ -111,8 +144,19 @@ void rom0_write_16(uint32_t address, jaguar_context *system, uint16_t value)
 				case 2:
 					system->memcon2 = value;
 					break;
+				case 0xE0:
+					printf("INT1 write: %X\n", value);
+					system->cpu_int_control = value & 0x1F;
+					system->video->cpu_int_pending &= ~(value >> 8);
+					//TODO: apply mask to int pending fields on other components once they are implemented
+					break;
+				case 0xE2:
+					//no real handling of bus conflicts presently, so this doesn't really need to do anything yet
+					printf("INT2 write: %X\n", value);
+					break;
 				default:
 					jag_video_reg_write(system->video, address, value);
+					jag_update_m68k_int(system);
 					break;
 				}
 			} else if (address < 0x100800) {
@@ -144,7 +188,15 @@ void rom0_write_16(uint32_t address, jaguar_context *system, uint16_t value)
 				fprintf(stderr, "Unhandled write to GPU registers %X: %X\n", address, value);
 				if (address == 0x102116 && (value & 1)) {
 					FILE *f = fopen("gpu.bin", "wb");
-					fwrite(system->gpu_local, 1, sizeof(system->gpu_local), f);
+					uint8_t buf[4];
+					for (int i = 0; i < GPU_RAM_BYTES/sizeof(uint32_t); i++)
+					{
+						buf[0] = system->gpu_local[i] >> 24;
+						buf[1] = system->gpu_local[i] >> 16;
+						buf[2] = system->gpu_local[i] >> 8;
+						buf[3] = system->gpu_local[i];
+						fwrite(buf, 1, sizeof(buf), f);
+					}
 					fclose(f);
 				}
 			} else {
@@ -154,7 +206,7 @@ void rom0_write_16(uint32_t address, jaguar_context *system, uint16_t value)
 	} else if (address < 0x11A100) {
 		if (address < 0x110000) {
 			//GPU Local RAM
-			uint32_t offset = address >> 2 & (GPU_RAM_BYTES / sizeof(uint32_t) - 1);
+				uint32_t offset = address >> 2 & (GPU_RAM_BYTES / sizeof(uint32_t) - 1);
 			uint32_t value32 = value;
 			if (address & 2) {
 				system->gpu_local[offset] &= 0xFFFF0000;
@@ -201,7 +253,16 @@ uint16_t rom0_read_16(uint32_t address, jaguar_context *system)
 		if (address < 0x101000) {
 			if (address < 0x100400) {
 				//Video mode / Memory control registers
-				fprintf(stderr, "Unhandled read from video mode/memory control registers - %X\n", address);
+				switch (address & 0x3FE)
+				{
+				case 0xE0:
+					puts("INT1 read");
+					//TODO: Bitwise or with cpu_int_pending fields from other components once implemented
+					return system->video->cpu_int_pending;
+					break;
+				default:
+					fprintf(stderr, "Unhandled read from video mode/memory control registers - %X\n", address);
+				}
 			} else if (address < 0x100800) {
 				//CLUT
 				address = address >> 1 & 255;
@@ -377,10 +438,17 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 {
 	jaguar_context *system = context->system;
 	jag_video_run(system->video, context->current_cycle);
+	jag_update_m68k_int(system);
 	if (context->current_cycle > 0x10000000) {
 		context->current_cycle -= 0x10000000;
 		system->video->cycles -= 0x10000000;
 	}
+	if (context->int_ack) {
+		context->int_ack = 0;
+		//hack until 68K core more properly supports non-autovector interrupts
+		context->status |= 1;
+	}
+	jag_update_m68k_int(system);
 	return context;
 }
 
@@ -431,6 +499,8 @@ jaguar_context *init_jaguar(uint16_t *bios, uint32_t bios_size, uint16_t *cart, 
 	system->bios_size = bios_size;
 	system->cart = cart;
 	system->cart_size = cart_size;
+	//TODO: Figure out a better default for this and make it configurable
+	system->max_cycles = 3000;
 
 	memmap_chunk *jag_m68k_map = calloc(8, sizeof(memmap_chunk));
 	for (uint32_t start = 0, index=0; index < 8; index++, start += 0x200000)
@@ -450,6 +520,7 @@ jaguar_context *init_jaguar(uint16_t *bios, uint32_t bios_size, uint16_t *cart, 
 	m68k_options *opts = malloc(sizeof(m68k_options));
 	init_m68k_opts(opts, jag_m68k_map, 8, 2);
 	system->m68k = init_68k_context(opts, handle_m68k_reset);
+	system->m68k->sync_cycle = system->max_cycles;
 	system->m68k->system = system;
 	system->video = jag_video_init();
 	system->video->system = system;

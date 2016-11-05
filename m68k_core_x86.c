@@ -2762,7 +2762,7 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	code->stack_off = tmp_stack_off;
 	*do_int = code->cur - (do_int+1);
 	//implement 1 instruction latency
-	cmp_irdisp(code, 0, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
+	cmp_irdisp(code, INT_PENDING_NONE, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
 	do_int = code->cur + 1;
 	jcc(code, CC_NZ, do_int);
 	//store current interrupt number so it doesn't change before we start processing the vector
@@ -2824,6 +2824,8 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	//update status register
 	and_irdisp(code, 0xF8, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
 	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_num), opts->gen.scratch1, SZ_B);
+	//need to separate int priority and interrupt vector, but for now mask out large interrupt numbers
+	and_ir(code, 0x7, opts->gen.scratch1, SZ_B);
 	or_ir(code, 0x20, opts->gen.scratch1, SZ_B);
 	or_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
 
@@ -2843,7 +2845,7 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	shl_ir(code, 2, opts->gen.scratch1, SZ_D);
 	add_ir(code, 0x60, opts->gen.scratch1, SZ_D);
 	//clear out pending flag
-	mov_irdisp(code, 0, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
+	mov_irdisp(code, INT_PENDING_NONE, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
 	//read vector
 	call(code, opts->read_32);
 	call(code, opts->native_addr_and_sync);
