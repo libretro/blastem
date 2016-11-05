@@ -187,6 +187,27 @@ enum {
 	OBJ_STOP
 };
 
+uint32_t jag_cycles_to_halfline(jag_video *context, uint32_t target)
+{
+	uint32_t cycles = context->regs[VID_HPERIOD] - (context->regs[VID_HCOUNT & 0x3FF]);
+	uint32_t num_lines;
+	if (context->regs[VID_VCOUNT] < target) {
+		num_lines = target - 1 - context->regs[VID_VCOUNT];
+	} else {
+		num_lines = target + context->regs[VID_VPERIOD] - context->regs[VID_VCOUNT];
+	}
+	cycles += num_lines * context->regs[VID_HPERIOD];
+	return cycles;
+}
+
+uint32_t jag_next_vid_interrupt(jag_video *context)
+{
+	if (context->regs[VID_VINT] > context->regs[VID_VPERIOD]) {
+		return 0xFFFFFFF;
+	}
+	return context->cycles + jag_cycles_to_halfline(context, context->regs[VID_VINT]);
+}
+
 void op_run(jag_video *context)
 {
 	while (context->op.cycles < context->cycles)
@@ -547,6 +568,9 @@ void jag_video_run(jag_video *context, uint32_t target_cycle)
 					context->regs[VID_VCOUNT] = 0;
 				} else {
 					context->regs[VID_VCOUNT]++;
+					if (context->regs[VID_VCOUNT] == context->regs[VID_VINT]) {
+						context->cpu_int_pending |= BIT_CPU_VID_INT_ENABLED;
+					}
 				}
 			} else {
 				context->regs[VID_HCOUNT]++;
