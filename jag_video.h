@@ -96,6 +96,7 @@ typedef struct {
 	uint8_t          pclock_div;
 	uint8_t          pclock_counter;
 	uint8_t          mode;
+	uint8_t          cpu_int_pending;
 	
 	object_processor op;
 	
@@ -105,5 +106,6 @@ typedef struct {
 jag_video *jag_video_init(void);
 void jag_video_run(jag_video *context, uint32_t target_cycle);
 void jag_video_reg_write(jag_video *context, uint32_t address, uint16_t value);
+uint32_t jag_next_vid_interrupt(jag_video *context);
 
 #endif //JAG_VIDEO_H_

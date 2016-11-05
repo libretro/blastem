@@ -329,7 +329,8 @@ typedef enum {
 	VECTOR_TRAP_12,
 	VECTOR_TRAP_13,
 	VECTOR_TRAP_14,
-	VECTOR_TRAP_15
+	VECTOR_TRAP_15,
+	VECTOR_USER0 = 64
 } m68k_vector;
 
 typedef int (*format_label_fun)(char * dst, uint32_t address, void * data);
