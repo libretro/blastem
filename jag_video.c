@@ -62,15 +62,15 @@ static uint32_t cry_to_rgb(uint16_t cry)
 {
 	uint32_t y = cry & 0xFF;
 	if (y) {
-		uint8_t c = cry >> 12;
-		uint8_t r = cry >> 8 & 0xF;
+		uint8_t c = cry >> 8 & 0xF;
+		uint8_t r = cry >> 12;
 		
 		uint32_t red = cry_red[c < 7 ? 0 : c - 7][r];
 		uint32_t green = cry_green[c][r < 8 ? r : 15 - r];
 		uint32_t blue = cry_red[c < 7 ? 0 : c - 7][15-r];
-		red = red * 255 / y;
-		blue = blue * 255 / y;
-		green = green * 255 / y;
+		red = red * y / 255;
+		blue = blue * y / 255;
+		green = green * y / 255;
 		return render_map_color(red, green, blue);
 	} else {
 		return render_map_color(0, 0, 0);
