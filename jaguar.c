@@ -145,9 +145,10 @@ void rom0_write_16(uint32_t address, jaguar_context *system, uint16_t value)
 					system->memcon2 = value;
 					break;
 				case 0xE0:
-					printf("INT1 write: %X\n", value);
 					system->cpu_int_control = value & 0x1F;
 					system->video->cpu_int_pending &= ~(value >> 8);
+					printf("INT1 write: %X @ %d - int_pending: %X, int_control: %X\n", value, system->m68k->current_cycle, system->video->cpu_int_pending, system->cpu_int_control);
+					jag_update_m68k_int(system);
 					//TODO: apply mask to int pending fields on other components once they are implemented
 					break;
 				case 0xE2:
