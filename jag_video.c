@@ -433,33 +433,41 @@ void op_run(jag_video *context)
 			}
 			while (proc_cycles)
 			{
-				if (context->op.type == OBJ_SCALED && context->op.hscale) {
-					while (context->op.hremainder <= 0 && context->op.im_bits) {
-						context->op.im_bits -= context->op.bpp;
-						context->op.hremainder += context->op.hscale;
-					}
-				}
 				if (context->op.im_bits) {
 					uint32_t val = context->op.im_data >> (context->op.im_bits - context->op.bpp);
 					val &= (1 << context->op.bpp) - 1;
-					context->op.im_bits -= context->op.bpp;
-					if (context->op.bpp < 16) {
-						val = context->clut[val + context->op.pal_offset];
+					if (val || !context->op.transparent)
+					{
+						if (context->op.bpp < 16) {
+							val = context->clut[val + context->op.pal_offset];
+						}
+						if (context->op.bpp == 32) {
+							context->write_line_buffer[context->op.lb_offset++] = val >> 16;
+						}
+						context->write_line_buffer[context->op.lb_offset++] = val;
+					} else {
+						context->op.lb_offset += context->op.bpp == 32 ? 2 : 1;
 					}
-					if (context->op.bpp == 32) {
-						context->write_line_buffer[context->op.lb_offset++] = val >> 16;
-					}
-					context->write_line_buffer[context->op.lb_offset++] = val;
 					if (context->op.type == OBJ_SCALED) {
 						context->op.hremainder -= 0x20;
+						while (context->op.hremainder <= 0 && context->op.im_bits) {
+							context->op.im_bits -= context->op.bpp;
+							context->op.hremainder += context->op.hscale;
+						}
+					} else {
+						context->op.im_bits -= context->op.bpp;
 					}
 				}
 				if (context->op.im_bits && context->op.bpp < 32 && context->op.type == OBJ_BITMAP && context->op.lb_offset < LINEBUFFER_WORDS) {
 					uint32_t val = context->op.im_data >> (context->op.im_bits - context->op.bpp);
 					val &= (1 << context->op.bpp) - 1;
+					if (val || !context->op.transparent)
+					{
+						val = context->clut[val + context->op.pal_offset];
+						context->write_line_buffer[context->op.lb_offset] = val;
+					}
+					context->op.lb_offset++;
 					context->op.im_bits -= context->op.bpp;
-					val = context->clut[val + context->op.pal_offset];
-					context->write_line_buffer[context->op.lb_offset++] = val;
 				}
 				context->op_cycles++;
 				proc_cycles--;
