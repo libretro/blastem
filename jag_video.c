@@ -189,7 +189,7 @@ enum {
 
 uint32_t jag_cycles_to_halfline(jag_video *context, uint32_t target)
 {
-	uint32_t cycles = context->regs[VID_HPERIOD] - (context->regs[VID_HCOUNT & 0x3FF]);
+	uint32_t cycles = context->regs[VID_HPERIOD] - (context->regs[VID_HCOUNT] & 0x3FF);
 	uint32_t num_lines;
 	if (context->regs[VID_VCOUNT] < target) {
 		num_lines = target - 1 - context->regs[VID_VCOUNT];
