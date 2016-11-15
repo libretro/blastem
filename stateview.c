@@ -10,13 +10,6 @@
 #include "util.h"
 #include "blastem.h"
 
-//not used, but referenced by the renderer since it handles input
-io_port gamepad_1;
-io_port gamepad_2;
-uint8_t reset = 1;
-uint8_t busreq = 0;
-
-uint8_t z80_ram[Z80_RAM_BYTES];
 
 uint16_t read_dma_value(uint32_t address)
 {
@@ -122,7 +115,6 @@ int main(int argc, char ** argv)
 	vdp_run_to_vblank(&context);
 	vdp_print_sprite_table(&context);
 	printf("Display %s\n", (context.regs[REG_MODE_2] & DISPLAY_ENABLE) ? "enabled" : "disabled");
-    render_context(&context);
     render_wait_quit(&context);
     return 0;
 }
