@@ -39,7 +39,7 @@
 #define BIT_STATUS_TIMERA 0x1
 #define BIT_STATUS_TIMERB 0x2
 
-uint32_t ym_calc_phase_inc(ym2612_context * context, ym_operator * operator, uint32_t op);
+static uint32_t ym_calc_phase_inc(ym2612_context * context, ym_operator * operator, uint32_t op);
 
 enum {
 	PHASE_ATTACK,
@@ -53,14 +53,14 @@ uint8_t did_tbl_init = 0;
 //memory is cheap so using a half sine table will probably save some cycles
 //a full sine table would be nice, but negative numbers don't get along with log2
 #define SINE_TABLE_SIZE 512
-uint16_t sine_table[SINE_TABLE_SIZE];
+static uint16_t sine_table[SINE_TABLE_SIZE];
 //Similar deal here with the power table for log -> linear conversion
 //According to Nemesis, real hardware only uses a 256 entry table for the fractional part
 //and uses the whole part as a shift amount.
 #define POW_TABLE_SIZE (1 << 13)
-uint16_t pow_table[POW_TABLE_SIZE];
+static uint16_t pow_table[POW_TABLE_SIZE];
 
-uint16_t rate_table_base[] = {
+static uint16_t rate_table_base[] = {
 	//main portion
 	0,1,0,1,0,1,0,1,
 	0,1,0,1,1,1,0,1,
@@ -73,10 +73,10 @@ uint16_t rate_table_base[] = {
 	1,2,2,2,1,2,2,2,
 };
 
-uint16_t rate_table[64*8];
+static uint16_t rate_table[64*8];
 
-uint8_t lfo_timer_values[] = {108, 77, 71, 67, 62, 44, 8, 5};
-uint8_t lfo_pm_base[][8] = {
+static uint8_t lfo_timer_values[] = {108, 77, 71, 67, 62, 44, 8, 5};
+static uint8_t lfo_pm_base[][8] = {
 	{0,   0,   0,   0,   0,   0,   0,   0},
 	{0,   0,   0,   0,   4,   4,   4,   4},
 	{0,   0,   0,   4,   4,   4,   8,   8},
@@ -86,7 +86,7 @@ uint8_t lfo_pm_base[][8] = {
 	{0,   0,0x10,0x18,0x20,0x20,0x28,0x30},
 	{0,   0,0x20,0x30,0x40,0x40,0x50,0x60}
 };
-int16_t lfo_pm_table[128 * 32 * 8];
+static int16_t lfo_pm_table[128 * 32 * 8];
 
 int16_t ams_shift[] = {8, 1, -1, -2};
 
@@ -94,17 +94,17 @@ int16_t ams_shift[] = {8, 1, -1, -2};
 #define YM_DIVIDER 2
 #define CYCLE_NEVER 0xFFFFFFFF
 
-uint16_t round_fixed_point(double value, int dec_bits)
+static uint16_t round_fixed_point(double value, int dec_bits)
 {
 	return value * (1 << dec_bits) + 0.5;
 }
 
-FILE * debug_file = NULL;
-uint32_t first_key_on=0;
+static FILE * debug_file = NULL;
+static uint32_t first_key_on=0;
 
-ym2612_context * log_context = NULL;
+static ym2612_context * log_context = NULL;
 
-void ym_finalize_log()
+static void ym_finalize_log()
 {
 	if (!log_context) {
 		return;
@@ -564,7 +564,7 @@ void ym_address_write_part2(ym2612_context * context, uint8_t address)
 	context->status |= 0x80;
 }
 
-uint8_t fnum_to_keycode[] = {
+static uint8_t fnum_to_keycode[] = {
 	//F11 = 0
 	0,0,0,0,0,0,0,1,
 	//F11 = 1
@@ -572,7 +572,7 @@ uint8_t fnum_to_keycode[] = {
 };
 
 //table courtesy of Nemesis
-uint32_t detune_table[][4] = {
+static uint32_t detune_table[][4] = {
 	{0, 0, 1, 2},   //0  (0x00)
     {0, 0, 1, 2},   //1  (0x01)
     {0, 0, 1, 2},   //2  (0x02)
@@ -607,7 +607,7 @@ uint32_t detune_table[][4] = {
     {0, 8,16,22}
 };  //31 (0x1F)
 
-uint32_t ym_calc_phase_inc(ym2612_context * context, ym_operator * operator, uint32_t op)
+static uint32_t ym_calc_phase_inc(ym2612_context * context, ym_operator * operator, uint32_t op)
 {
 	uint32_t chan_num = op / 4;
 	//printf("ym_update_phase_inc | channel: %d, op: %d\n", chan_num, op);
