@@ -18,38 +18,36 @@
 
 #define MAX_EVENT_POLL_PER_FRAME 2
 
-SDL_Window *main_window;
-SDL_Renderer *main_renderer;
-SDL_Texture  **sdl_textures;
-uint8_t num_textures;
-SDL_Rect      main_clip;
-SDL_GLContext *main_context;
+static SDL_Window *main_window;
+static SDL_Renderer *main_renderer;
+static SDL_Texture  **sdl_textures;
+static uint8_t num_textures;
+static SDL_Rect      main_clip;
+static SDL_GLContext *main_context;
 
-int main_width, main_height, is_fullscreen;
+static int main_width, main_height, is_fullscreen;
 
-uint8_t render_dbg = 0;
-uint8_t debug_pal = 0;
-uint8_t render_gl = 1;
-uint8_t scanlines = 0;
+static uint8_t render_gl = 1;
+static uint8_t scanlines = 0;
 
-uint32_t last_frame = 0;
+static uint32_t last_frame = 0;
 
-uint32_t min_delay;
-uint32_t frame_delay = 1000/60;
+static uint32_t min_delay;
+static uint32_t frame_delay = 1000/60;
 
-int16_t * current_psg = NULL;
-int16_t * current_ym = NULL;
+static int16_t * current_psg = NULL;
+static int16_t * current_ym = NULL;
 
-uint32_t buffer_samples, sample_rate;
-uint32_t missing_count;
+static uint32_t buffer_samples, sample_rate;
+static uint32_t missing_count;
 
-SDL_mutex * audio_mutex;
-SDL_cond * audio_ready;
-SDL_cond * psg_cond;
-SDL_cond * ym_cond;
-uint8_t quitting = 0;
+static SDL_mutex * audio_mutex;
+static SDL_cond * audio_ready;
+static SDL_cond * psg_cond;
+static SDL_cond * ym_cond;
+static uint8_t quitting = 0;
 
-void audio_callback(void * userdata, uint8_t *byte_stream, int len)
+static void audio_callback(void * userdata, uint8_t *byte_stream, int len)
 {
 	//puts("audio_callback");
 	int16_t * stream = (int16_t *)byte_stream;
@@ -85,7 +83,7 @@ void audio_callback(void * userdata, uint8_t *byte_stream, int len)
 	}
 }
 
-void render_close_audio()
+static void render_close_audio()
 {
 	SDL_LockMutex(audio_mutex);
 		quitting = 1;
@@ -117,18 +115,18 @@ uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b)
 }
 
 #ifndef DISABLE_OPENGL
-GLuint textures[3], buffers[2], vshader, fshader, program, un_textures[2], un_width, at_pos;
+static GLuint textures[3], buffers[2], vshader, fshader, program, un_textures[2], un_width, at_pos;
 
-GLfloat vertex_data[] = {
+static GLfloat vertex_data[] = {
 	-1.0f, -1.0f,
 	 1.0f, -1.0f,
 	-1.0f,  1.0f,
 	 1.0f,  1.0f
 };
 
-const GLushort element_data[] = {0, 1, 2, 3};
+static const GLushort element_data[] = {0, 1, 2, 3};
 
-GLuint load_shader(char * fname, GLenum shader_type)
+static GLuint load_shader(char * fname, GLenum shader_type)
 {
 	char const * parts[] = {get_home_dir(), "/.config/blastem/shaders/", fname};
 	char * shader_path = alloc_concat_m(3, parts);
@@ -171,8 +169,8 @@ GLuint load_shader(char * fname, GLenum shader_type)
 }
 #endif
 
-uint32_t texture_buf[512 * 256];
-void render_alloc_surfaces()
+static uint32_t texture_buf[512 * 256];
+static void render_alloc_surfaces()
 {
 	static uint8_t texture_init;
 
@@ -233,8 +231,8 @@ void render_alloc_surfaces()
 #endif
 }
 
-char * caption = NULL;
-char * fps_caption = NULL;
+static char * caption = NULL;
+static char * fps_caption = NULL;
 
 static void render_quit()
 {
@@ -568,21 +566,7 @@ void render_wait_quit(vdp_context * context)
 	}
 }
 
-void render_debug_mode(uint8_t mode)
-{
-	if (mode < 4) {
-		render_dbg = mode;
-	}
-}
-
-void render_debug_pal(uint8_t pal)
-{
-	if (pal < 4) {
-		debug_pal = pal;
-	}
-}
-
-int find_joystick_index(SDL_JoystickID instanceID)
+static int find_joystick_index(SDL_JoystickID instanceID)
 {
 	for (int i = 0; i < MAX_JOYSTICKS; i++) {
 		if (joysticks[i] && SDL_JoystickInstanceID(joysticks[i]) == instanceID) {
@@ -592,7 +576,7 @@ int find_joystick_index(SDL_JoystickID instanceID)
 	return -1;
 }
 
-int lowest_unused_joystick_index()
+static int lowest_unused_joystick_index()
 {
 	for (int i = 0; i < MAX_JOYSTICKS; i++) {
 		if (!joysticks[i]) {
@@ -602,7 +586,7 @@ int lowest_unused_joystick_index()
 	return -1;
 }
 
-uint8_t scancode_map[SDL_NUM_SCANCODES] = {
+static uint8_t scancode_map[SDL_NUM_SCANCODES] = {
 	[SDL_SCANCODE_A] = 0x1C,
 	[SDL_SCANCODE_B] = 0x32,
 	[SDL_SCANCODE_C] = 0x21,
@@ -706,7 +690,7 @@ uint8_t scancode_map[SDL_NUM_SCANCODES] = {
 	[SDL_SCANCODE_KP_PERIOD] = 0x71,
 };
 
-int32_t handle_event(SDL_Event *event)
+static int32_t handle_event(SDL_Event *event)
 {
 	switch (event->type) {
 	case SDL_KEYDOWN:
@@ -803,11 +787,6 @@ void render_wait_ym(ym2612_context * context)
 		context->back_buffer = current_ym;
 	SDL_UnlockMutex(audio_mutex);
 	context->buffer_pos = 0;
-}
-
-void render_fps(uint32_t fps)
-{
-	frame_delay = 1000/fps;
 }
 
 uint32_t render_audio_buffer()

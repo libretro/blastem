@@ -73,7 +73,6 @@ typedef struct m68k_context {
 
 typedef m68k_context *(*m68k_reset_handler)(m68k_context *context);
 
-void translate_m68k(m68k_options * opts, struct m68kinst * inst);
 void translate_m68k_stream(uint32_t address, m68k_context * context);
 void start_68k_context(m68k_context * context, uint32_t address);
 void resume_68k(m68k_context *context);
