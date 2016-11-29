@@ -39,9 +39,9 @@
 #define FIFO_LATENCY    3
 
 int32_t color_map[1 << 12];
-uint8_t levels[] = {0, 27, 49, 71, 87, 103, 119, 130, 146, 157, 174, 190, 206, 228, 255};
+static uint8_t levels[] = {0, 27, 49, 71, 87, 103, 119, 130, 146, 157, 174, 190, 206, 228, 255};
 
-uint8_t debug_base[][3] = {
+static uint8_t debug_base[][3] = {
 	{127, 127, 127}, //BG
 	{0, 0, 127},     //A
 	{127, 0, 0},     //Window
@@ -49,7 +49,7 @@ uint8_t debug_base[][3] = {
 	{127, 0, 127}    //Sprites
 };
 
-uint8_t color_map_init_done;
+static uint8_t color_map_init_done;
 
 void init_vdp_context(vdp_context * context, uint8_t region_pal)
 {
@@ -146,7 +146,7 @@ void vdp_free(vdp_context *context)
 	free(context);
 }
 
-int is_refresh(vdp_context * context, uint32_t slot)
+static int is_refresh(vdp_context * context, uint32_t slot)
 {
 	if (context->regs[REG_MODE_4] & BIT_H40) {
 		return slot == 250 || slot == 26 || slot == 59 || slot == 90 || slot == 122 || slot == 154;
@@ -159,7 +159,7 @@ int is_refresh(vdp_context * context, uint32_t slot)
 	}
 }
 
-void render_sprite_cells(vdp_context * context)
+static void render_sprite_cells(vdp_context * context)
 {
 	if (context->cur_slot >= context->sprite_draws) {
 		sprite_draw * d = context->sprite_draw_list + context->cur_slot;
@@ -251,7 +251,7 @@ void vdp_print_sprite_table(vdp_context * context)
 
 #define DMA_START 0x20
 
-const char * cd_name(uint8_t cd)
+static const char * cd_name(uint8_t cd)
 {
 	switch (cd & 0xF)
 	{
@@ -338,7 +338,7 @@ void vdp_print_reg_explain(vdp_context * context)
 	//TODO: Window Group, DMA Group
 }
 
-void scan_sprite_table(uint32_t line, vdp_context * context)
+static void scan_sprite_table(uint32_t line, vdp_context * context)
 {
 	if (context->sprite_index && context->slot_counter) {
 		line += 1;
@@ -406,7 +406,7 @@ void scan_sprite_table(uint32_t line, vdp_context * context)
 	}
 }
 
-void read_sprite_x(uint32_t line, vdp_context * context)
+static void read_sprite_x(uint32_t line, vdp_context * context)
 {
 	if (context->cur_slot >= context->slot_counter) {
 		if (context->sprite_draws) {
@@ -483,7 +483,7 @@ void read_sprite_x(uint32_t line, vdp_context * context)
 	}
 }
 
-void write_cram(vdp_context * context, uint16_t address, uint16_t value)
+static void write_cram(vdp_context * context, uint16_t address, uint16_t value)
 {
 	uint16_t addr = (address/2) & (CRAM_SIZE-1);
 	context->cram[addr] = value;
@@ -496,7 +496,7 @@ void write_cram(vdp_context * context, uint16_t address, uint16_t value)
 #define VSRAM_BITS 0x7FF
 #define VSRAM_DIRTY_BITS 0xF800
 
-void vdp_advance_dma(vdp_context * context)
+static void vdp_advance_dma(vdp_context * context)
 {
 	context->regs[REG_DMASRC_L] += 1;
 	if (!context->regs[REG_DMASRC_L]) {
@@ -525,7 +525,7 @@ void write_vram_byte(vdp_context *context, uint16_t address, uint8_t value)
 	context->vdpmem[address] = value;
 }
 
-void external_slot(vdp_context * context)
+static void external_slot(vdp_context * context)
 {
 	if ((context->flags & FLAG_DMA_RUN) && (context->regs[REG_DMASRC_H] & 0xC0) == 0x80 && context->fifo_read < 0) {
 		context->fifo_read = (context->fifo_write-1) & (FIFO_SIZE-1);
@@ -629,7 +629,7 @@ void external_slot(vdp_context * context)
 	}
 }
 
-void run_dma_src(vdp_context * context, int32_t slot)
+static void run_dma_src(vdp_context * context, int32_t slot)
 {
 	//TODO: Figure out what happens if CD bit 4 is not set in DMA copy mode
 	//TODO: Figure out what happens when CD:0-3 is not set to a write mode in DMA operations
@@ -659,7 +659,7 @@ void run_dma_src(vdp_context * context, int32_t slot)
 #define WINDOW_RIGHT 0x80
 #define WINDOW_DOWN  0x80
 
-void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_t address, uint16_t hscroll_val, vdp_context * context)
+static void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_t address, uint16_t hscroll_val, vdp_context * context)
 {
 	uint16_t window_line_shift, v_offset_mask, vscroll_shift;
 	if (context->double_res) {
@@ -804,17 +804,17 @@ void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, uint16_
 	}
 }
 
-void read_map_scroll_a(uint16_t column, uint32_t line, vdp_context * context)
+static void read_map_scroll_a(uint16_t column, uint32_t line, vdp_context * context)
 {
 	read_map_scroll(column, 0, line, (context->regs[REG_SCROLL_A] & 0x38) << 10, context->hscroll_a, context);
 }
 
-void read_map_scroll_b(uint16_t column, uint32_t line, vdp_context * context)
+static void read_map_scroll_b(uint16_t column, uint32_t line, vdp_context * context)
 {
 	read_map_scroll(column, 1, line, (context->regs[REG_SCROLL_B] & 0x7) << 13, context->hscroll_b, context);
 }
 
-void render_map(uint16_t col, uint8_t * tmp_buf, uint8_t offset, vdp_context * context)
+static void render_map(uint16_t col, uint8_t * tmp_buf, uint8_t offset, vdp_context * context)
 {
 	uint16_t address;
 	uint16_t vflip_base;
@@ -850,22 +850,22 @@ void render_map(uint16_t col, uint8_t * tmp_buf, uint8_t offset, vdp_context * c
 	}
 }
 
-void render_map_1(vdp_context * context)
+static void render_map_1(vdp_context * context)
 {
 	render_map(context->col_1, context->tmp_buf_a, context->buf_a_off, context);
 }
 
-void render_map_2(vdp_context * context)
+static void render_map_2(vdp_context * context)
 {
 	render_map(context->col_2, context->tmp_buf_a, context->buf_a_off+8, context);
 }
 
-void render_map_3(vdp_context * context)
+static void render_map_3(vdp_context * context)
 {
 	render_map(context->col_1, context->tmp_buf_b, context->buf_b_off, context);
 }
 
-void render_map_output(uint32_t line, int32_t col, vdp_context * context)
+static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 {
 	if (line >= 240) {
 		return;
@@ -1015,9 +1015,9 @@ void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 	context->buf_b_off = (context->buf_b_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
 }
 
-uint32_t const h40_hsync_cycles[] = {19, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20, 20, 19};
+static uint32_t const h40_hsync_cycles[] = {19, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20, 20, 19};
 
-void vdp_advance_line(vdp_context *context)
+static void vdp_advance_line(vdp_context *context)
 {
 	context->vcounter++;
 	context->vcounter &= 0x1FF;
@@ -1151,7 +1151,7 @@ void vdp_advance_line(vdp_context *context)
 		CHECK_ONLY
 
 
-void vdp_h40(vdp_context * context, uint32_t target_cycles)
+static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 {
 	uint16_t address;
 	uint32_t mask;
@@ -1311,7 +1311,7 @@ void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	}
 }
 
-void vdp_h32(vdp_context * context, uint32_t target_cycles)
+static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 {
 	uint16_t address;
 	uint32_t mask;
@@ -1462,7 +1462,7 @@ void latch_mode(vdp_context * context)
 	context->latched_mode = context->regs[REG_MODE_2] & BIT_PAL;
 }
 
-void check_render_bg(vdp_context * context, int32_t line, uint32_t slot)
+static void check_render_bg(vdp_context * context, int32_t line, uint32_t slot)
 {
 	int starti = -1;
 	if (context->regs[REG_MODE_4] & BIT_H40) {
@@ -1830,7 +1830,7 @@ void vdp_adjust_cycles(vdp_context * context, uint32_t deduction)
 	}
 }
 
-uint32_t vdp_cycles_hslot_wrap_h40(vdp_context * context)
+static uint32_t vdp_cycles_hslot_wrap_h40(vdp_context * context)
 {
 	if (context->hslot < 183) {
 		return MCLKS_LINE - context->hslot * MCLKS_SLOT_H40;
@@ -1848,7 +1848,7 @@ uint32_t vdp_cycles_hslot_wrap_h40(vdp_context * context)
 	}
 }
 
-uint32_t vdp_cycles_next_line(vdp_context * context)
+static uint32_t vdp_cycles_next_line(vdp_context * context)
 {
 	if (context->regs[REG_MODE_4] & BIT_H40) {
 		if (context->hslot < LINE_CHANGE_H40) {
@@ -1867,7 +1867,7 @@ uint32_t vdp_cycles_next_line(vdp_context * context)
 	}
 }
 
-uint32_t vdp_cycles_to_line(vdp_context * context, uint32_t target)
+static uint32_t vdp_cycles_to_line(vdp_context * context, uint32_t target)
 {
 	uint32_t jump_start, jump_dst;
 	if (context->flags2 & FLAG2_REGION_PAL) {
@@ -1909,7 +1909,7 @@ uint32_t vdp_cycles_to_line(vdp_context * context, uint32_t target)
 	return MCLKS_LINE * (lines - 1) + vdp_cycles_next_line(context);
 }
 
-uint32_t vdp_frame_end_line(vdp_context * context)
+static uint32_t vdp_frame_end_line(vdp_context * context)
 {
 	uint32_t frame_end;
 	if (context->flags2 & FLAG2_REGION_PAL) {

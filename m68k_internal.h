@@ -45,14 +45,10 @@ void translate_m68k_op(m68kinst * inst, host_ea * ea, m68k_options * opts, uint8
 void m68k_read_size(m68k_options *opts, uint8_t size);
 void m68k_write_size(m68k_options *opts, uint8_t size, uint8_t lowfirst);
 void m68k_save_result(m68kinst * inst, m68k_options * opts);
-void push_const(m68k_options *opts, int32_t value);
 void jump_m68k_abs(m68k_options * opts, uint32_t address);
 void swap_ssp_usp(m68k_options * opts);
 code_ptr get_native_address(m68k_options *opts, uint32_t address);
-void map_native_address(m68k_context * context, uint32_t address, code_ptr native_addr, uint8_t size, uint8_t native_size);
-uint8_t get_native_inst_size(m68k_options * opts, uint32_t address);
 uint8_t m68k_is_terminal(m68kinst * inst);
-void m68k_handle_deferred(m68k_context * context);
 code_ptr get_native_address_trans(m68k_context * context, uint32_t address);
 void * m68k_retranslate_inst(uint32_t address, m68k_context * context);
 
@@ -60,8 +56,6 @@ void * m68k_retranslate_inst(uint32_t address, m68k_context * context);
 void translate_m68k_bcc(m68k_options * opts, m68kinst * inst);
 void translate_m68k_scc(m68k_options * opts, m68kinst * inst);
 void translate_m68k_dbcc(m68k_options * opts, m68kinst * inst);
-void translate_m68k_rtr(m68k_options *opts, m68kinst * inst);
-void translate_m68k_trap(m68k_options *opts, m68kinst *inst);
 void translate_m68k_trapv(m68k_options *opts, m68kinst *inst);
 void translate_m68k_move(m68k_options * opts, m68kinst * inst);
 void translate_m68k_movep(m68k_options * opts, m68kinst * inst);

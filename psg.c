@@ -91,7 +91,7 @@ void psg_write(psg_context * context, uint8_t value)
 #define PSG_VOL_DIV 14
 
 //table shamelessly swiped from PSG doc from smspower.org
-int16_t volume_table[16] = {
+static int16_t volume_table[16] = {
 	32767/PSG_VOL_DIV, 26028/PSG_VOL_DIV, 20675/PSG_VOL_DIV, 16422/PSG_VOL_DIV, 13045/PSG_VOL_DIV, 10362/PSG_VOL_DIV,
 	8231/PSG_VOL_DIV, 6568/PSG_VOL_DIV, 5193/PSG_VOL_DIV, 4125/PSG_VOL_DIV, 3277/PSG_VOL_DIV, 2603/PSG_VOL_DIV,
 	2067/PSG_VOL_DIV, 1642/PSG_VOL_DIV, 1304/PSG_VOL_DIV, 0

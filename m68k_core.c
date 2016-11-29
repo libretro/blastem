@@ -100,7 +100,7 @@ void m68k_save_result(m68kinst * inst, m68k_options * opts)
 	}
 }
 
-void translate_m68k_lea_pea(m68k_options * opts, m68kinst * inst)
+static void translate_m68k_lea_pea(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
 	int8_t dst_reg = inst->op == M68K_PEA ? opts->gen.scratch1 : native_reg(&(inst->dst), opts);
@@ -175,7 +175,7 @@ void translate_m68k_lea_pea(m68k_options * opts, m68kinst * inst)
 	}
 }
 
-void push_const(m68k_options *opts, int32_t value)
+static void push_const(m68k_options *opts, int32_t value)
 {
 	ldi_native(opts, value, opts->gen.scratch1);
 	subi_areg(opts, 4, 7);
@@ -197,7 +197,7 @@ void jump_m68k_abs(m68k_options * opts, uint32_t address)
 	//since instruction retranslation patches the original native instruction location
 }
 
-void translate_m68k_bsr(m68k_options * opts, m68kinst * inst)
+static void translate_m68k_bsr(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
 	int32_t disp = inst->src.params.immed;
@@ -208,7 +208,7 @@ void translate_m68k_bsr(m68k_options * opts, m68kinst * inst)
 	jump_m68k_abs(opts, inst->address + 2 + disp);
 }
 
-void translate_m68k_jmp_jsr(m68k_options * opts, m68kinst * inst)
+static void translate_m68k_jmp_jsr(m68k_options * opts, m68kinst * inst)
 {
 	uint8_t is_jsr = inst->op == M68K_JSR;
 	code_info *code = &opts->gen.code;
@@ -278,7 +278,7 @@ void translate_m68k_jmp_jsr(m68k_options * opts, m68kinst * inst)
 	}
 }
 
-void translate_m68k_unlk(m68k_options * opts, m68kinst * inst)
+static void translate_m68k_unlk(m68k_options * opts, m68kinst * inst)
 {
 	cycles(&opts->gen, BUS);
 	areg_to_native(opts, inst->dst.params.regs.pri, opts->aregs[7]);
@@ -288,7 +288,7 @@ void translate_m68k_unlk(m68k_options * opts, m68kinst * inst)
 	addi_areg(opts, 4, 7);
 }
 
-void translate_m68k_link(m68k_options * opts, m68kinst * inst)
+static void translate_m68k_link(m68k_options * opts, m68kinst * inst)
 {
 	//compensate for displacement word
 	cycles(&opts->gen, BUS);
@@ -302,7 +302,7 @@ void translate_m68k_link(m68k_options * opts, m68kinst * inst)
 	cycles(&opts->gen, BUS);
 }
 
-void translate_m68k_rts(m68k_options * opts, m68kinst * inst)
+static void translate_m68k_rts(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
 	//TODO: Add cycles
@@ -313,7 +313,7 @@ void translate_m68k_rts(m68k_options * opts, m68kinst * inst)
 	jmp_r(code, opts->gen.scratch1);
 }
 
-void translate_m68k_rtr(m68k_options *opts, m68kinst * inst)
+static void translate_m68k_rtr(m68k_options *opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
 	//Read saved CCR
@@ -330,7 +330,7 @@ void translate_m68k_rtr(m68k_options *opts, m68kinst * inst)
 	jmp_r(code, opts->gen.scratch1);
 }
 
-void translate_m68k_trap(m68k_options *opts, m68kinst *inst)
+static void translate_m68k_trap(m68k_options *opts, m68kinst *inst)
 {
 	code_info *code = &opts->gen.code;
 	uint32_t vector, pc = inst->address;
@@ -352,7 +352,7 @@ void translate_m68k_trap(m68k_options *opts, m68kinst *inst)
 	jmp(code, opts->trap);
 }
 
-void translate_m68k_illegal(m68k_options *opts, m68kinst *inst)
+static void translate_m68k_illegal(m68k_options *opts, m68kinst *inst)
 {
 	code_info *code = &opts->gen.code;
 	cycles(&opts->gen, BUS);
@@ -361,7 +361,7 @@ void translate_m68k_illegal(m68k_options *opts, m68kinst *inst)
 	jmp(code, opts->trap);
 }
 
-void translate_m68k_move_usp(m68k_options *opts, m68kinst *inst)
+static void translate_m68k_move_usp(m68k_options *opts, m68kinst *inst)
 {
 	m68k_trap_if_not_supervisor(opts, inst);
 	cycles(&opts->gen, BUS);
@@ -385,7 +385,7 @@ void translate_m68k_move_usp(m68k_options *opts, m68kinst *inst)
 	}
 }
 
-void translate_m68k_movem(m68k_options * opts, m68kinst * inst)
+static void translate_m68k_movem(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
 	int8_t bit,reg,sec_reg;
@@ -525,7 +525,7 @@ void translate_m68k_movem(m68k_options * opts, m68kinst * inst)
 	cycles(&opts->gen, 4);
 }
 
-void translate_m68k_nop(m68k_options *opts, m68kinst *inst)
+static void translate_m68k_nop(m68k_options *opts, m68kinst *inst)
 {
 	cycles(&opts->gen, BUS);
 }
@@ -537,7 +537,7 @@ void swap_ssp_usp(m68k_options * opts)
 	native_to_areg(opts, opts->gen.scratch2, 8);
 }
 
-void translate_m68k_rte(m68k_options *opts, m68kinst *inst)
+static void translate_m68k_rte(m68k_options *opts, m68kinst *inst)
 {
 	m68k_trap_if_not_supervisor(opts, inst);
 	
@@ -614,7 +614,7 @@ uint32_t get_instruction_start(m68k_options *opts, native_map_slot * native_code
 	return address;
 }
 
-void map_native_address(m68k_context * context, uint32_t address, code_ptr native_addr, uint8_t size, uint8_t native_size)
+static void map_native_address(m68k_context * context, uint32_t address, code_ptr native_addr, uint8_t size, uint8_t native_size)
 {
 	native_map_slot * native_code_map = context->native_code_map;
 	m68k_options * opts = context->options;
@@ -674,7 +674,7 @@ void map_native_address(m68k_context * context, uint32_t address, code_ptr nativ
 	}
 }
 
-uint8_t get_native_inst_size(m68k_options * opts, uint32_t address)
+static uint8_t get_native_inst_size(m68k_options * opts, uint32_t address)
 {
 	address &= opts->gen.address_mask;
 	uint32_t meta_off = 0;
@@ -701,7 +701,7 @@ uint8_t m68k_is_terminal(m68kinst * inst)
 		|| (inst->op == M68K_BCC && inst->extra.cond == COND_TRUE);
 }
 
-void m68k_handle_deferred(m68k_context * context)
+static void m68k_handle_deferred(m68k_context * context)
 {
 	m68k_options * opts = context->options;
 	process_deferred(&opts->gen.deferred, context, (native_addr_func)get_native_from_context);
@@ -745,7 +745,7 @@ typedef struct {
 #define UNARY_IMPL(inst, mask)  [inst] = { .impl = { .flag_mask = mask }, .itype = UNARY_ARITH }
 #define BINARY_IMPL(inst, mask) [inst] = { .impl = { .flag_mask = mask}, .itype = BINARY_ARITH }
 
-impl_info m68k_impls[] = {
+static impl_info m68k_impls[] = {
 	//math
 	BINARY_IMPL(M68K_ADD, X|N|Z|V|C),
 	BINARY_IMPL(M68K_SUB, X|N|Z|V|C),
@@ -836,7 +836,7 @@ impl_info m68k_impls[] = {
 	RAW_IMPL(M68K_TAS, translate_m68k_tas),
 };
 
-void translate_m68k(m68k_options * opts, m68kinst * inst)
+static void translate_m68k(m68k_options * opts, m68kinst * inst)
 {
 	if (inst->address & 1) {
 		translate_m68k_odd(opts, inst);
