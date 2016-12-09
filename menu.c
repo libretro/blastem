@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
-#include "blastem.h"
+#include "genesis.h"
 #include "menu.h"
 #include "backend.h"
 #include "util.h"

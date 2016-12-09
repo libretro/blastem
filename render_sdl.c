@@ -9,6 +9,7 @@
 #include <math.h>
 #include "render.h"
 #include "blastem.h"
+#include "genesis.h"
 #include "io.h"
 #include "util.h"
 
@@ -31,9 +32,6 @@ static uint8_t render_gl = 1;
 static uint8_t scanlines = 0;
 
 static uint32_t last_frame = 0;
-
-static uint32_t min_delay;
-static uint32_t frame_delay = 1000/60;
 
 static int16_t * current_psg = NULL;
 static int16_t * current_ym = NULL;
@@ -245,7 +243,7 @@ static void render_quit()
 	}
 }
 
-void render_init(int width, int height, char * title, uint32_t fps, uint8_t fullscreen)
+void render_init(int width, int height, char * title, uint8_t fullscreen)
 {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK) < 0) {
 		fatal_error("Unable to init SDL: %s\n", SDL_GetError());
@@ -362,21 +360,6 @@ void render_init(int width, int height, char * title, uint32_t fps, uint8_t full
 	scanlines = !strcmp(tern_find_path_default(config, "video\0scanlines\0", def).ptrval, "on");
 
 	caption = title;
-	min_delay = 0;
-	for (int i = 0; i < 100; i++) {
-		uint32_t start = SDL_GetTicks();
-		SDL_Delay(1);
-		uint32_t delay = SDL_GetTicks()-start;
-		if (delay > min_delay) {
-			min_delay = delay;
-		}
-	}
-	if (!min_delay) {
-		min_delay = 1;
-	}
-	printf("minimum delay: %d\n", min_delay);
-
-	frame_delay = 1000/fps;
 
 	audio_mutex = SDL_CreateMutex();
 	psg_cond = SDL_CreateCond();

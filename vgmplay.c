@@ -89,7 +89,7 @@ int main(int argc, char ** argv)
 
 	uint32_t fps = 60;
 	config = load_config(argv[0]);
-	render_init(320, 240, "vgm play", 60, 0);
+	render_init(320, 240, "vgm play", 0);
 
 	uint32_t opts = 0;
 	if (argc >= 3 && !strcmp(argv[2], "-y")) {

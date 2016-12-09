@@ -17,6 +17,7 @@
 
 #include "io.h"
 #include "blastem.h"
+#include "genesis.h"
 #include "render.h"
 #include "util.h"
 

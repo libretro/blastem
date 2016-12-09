@@ -3,7 +3,7 @@
 #include "config.h"
 #include "romdb.h"
 #include "util.h"
-#include "blastem.h"
+#include "genesis.h"
 #include "menu.h"
 
 #define DOM_TITLE_START 0x120
@@ -287,15 +287,15 @@ m68k_context * write_bank_reg_w(uint32_t address, m68k_context * context, uint16
 			}
 		} else {
 			//Used for games that only use the mapper for SRAM
-			context->mem_pointers[gen->mapper_start_index] = cart + 0x200000/2;
+			context->mem_pointers[gen->mapper_start_index] = gen->cart + 0x200000/2;
 			//For games that need more than 4MB
 			for (int i = 1; i < 8; i++)
 			{
-				context->mem_pointers[gen->mapper_start_index + i] = cart + 0x40000*gen->bank_regs[i];
+				context->mem_pointers[gen->mapper_start_index + i] = gen->cart + 0x40000*gen->bank_regs[i];
 			}
 		}
 	} else {
-		context->mem_pointers[gen->mapper_start_index + address] = cart + 0x40000*value;
+		context->mem_pointers[gen->mapper_start_index + address] = gen->cart + 0x40000*value;
 	}
 	return context;
 }
@@ -543,7 +543,7 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 			info->map[1].read_8 = (read_8_fun)read_sram_b;
 			info->map[1].write_16 = (write_16_fun)write_sram_area_w;//these will be called all writes to the area
 			info->map[1].write_8 = (write_8_fun)write_sram_area_b;
-			info->map[1].buffer = cart + 0x200000 / sizeof(uint16_t);
+			info->map[1].buffer = rom + 0x200000 / sizeof(uint16_t);
 
 			memmap_chunk *last = info->map + info->map_chunks - 1;
 			memset(last, 0, sizeof(memmap_chunk));

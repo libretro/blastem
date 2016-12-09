@@ -5,6 +5,7 @@
 */
 #include "vdp.h"
 #include "blastem.h"
+#include "genesis.h"
 #include <stdlib.h>
 #include <string.h>
 #include "render.h"
