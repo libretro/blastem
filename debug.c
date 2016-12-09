@@ -1,5 +1,5 @@
 #include "debug.h"
-#include "blastem.h"
+#include "genesis.h"
 #include "68kinst.h"
 #include <stdlib.h>
 #include <string.h>
@@ -140,6 +140,7 @@ void zdebugger_print(z80_context * context, char format_char, char * param)
 	uint32_t value;
 	char format[8];
 	strcpy(format, "%s: %d\n");
+	genesis_context *system = context->system;
 	switch (format_char)
 	{
 	case 'x':
@@ -305,14 +306,14 @@ void zdebugger_print(z80_context * context, char format_char, char * param)
 		if (param[1] == 'x') {
 			uint16_t p_addr = strtol(param+2, NULL, 16);
 			if (p_addr < 0x4000) {
-				value = z80_ram[p_addr & 0x1FFF];
+				value = system->zram[p_addr & 0x1FFF];
 			} else if(p_addr >= 0x8000) {
 				uint32_t v_addr = context->bank_reg << 15;
 				v_addr += p_addr & 0x7FFF;
 				if (v_addr < 0x400000) {
-					value = cart[v_addr/2];
+					value = system->cart[v_addr/2];
 				} else if(v_addr > 0xE00000) {
-					value = ram[(v_addr & 0xFFFF)/2];
+					value = system->work_ram[(v_addr & 0xFFFF)/2];
 				}
 				if (v_addr & 1) {
 					value &= 0xFF;
@@ -333,6 +334,7 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 	static uint16_t branch_t;
 	static uint16_t branch_f;
 	z80inst inst;
+	genesis_context *system = context->system;
 	init_terminal();
 	//Check if this is a user set breakpoint, or just a temporary one
 	bp_def ** this_bp = find_breakpoint(&zbreakpoints, address);
@@ -343,7 +345,7 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 	}
 	uint8_t * pc;
 	if (address < 0x4000) {
-		pc = z80_ram + (address & 0x1FFF);
+		pc = system->zram + (address & 0x1FFF);
 	} else if (address >= 0x8000) {
 		if (context->bank_reg < (0x400000 >> 15)) {
 			fatal_error("Entered Z80 debugger in banked memory address %X, which is not yet supported\n", address);
@@ -469,7 +471,7 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 					after += inst.immed;
 				} else if(inst.op == Z80_RET) {
 					if (context->sp < 0x4000) {
-						after = z80_ram[context->sp & 0x1FFF] | z80_ram[(context->sp+1) & 0x1FFF] << 8;
+						after = system->zram[context->sp & 0x1FFF] | system->zram[(context->sp+1) & 0x1FFF] << 8;
 					}
 				}
 				zinsert_breakpoint(context, after, (uint8_t *)zdebugger);
@@ -495,7 +497,7 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 				}
 				FILE * f = fopen(param, "wb");
 				if (f) {
-					if(fwrite(z80_ram, 1, sizeof(z80_ram), f) != sizeof(z80_ram)) {
+					if(fwrite(system->zram, 1, Z80_RAM_BYTES, f) != Z80_RAM_BYTES) {
 						fputs("Error writing file\n", stderr);
 					}
 					fclose(f);
@@ -521,6 +523,7 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 {
 	char * param;
 	char format_char;
+	genesis_context *system = context->system;
 	uint32_t value;
 	bp_def *new_bp, **this_bp;
 	switch(input_buf[0])
@@ -571,16 +574,16 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 					stack &= 0xFFFF;
 					uint8_t non_adr_count = 0;
 					do {
-						uint32_t bt_address = ram[stack/2] << 16 | ram[stack/2+1];
+						uint32_t bt_address = system->work_ram[stack/2] << 16 | system->work_ram[stack/2+1];
 						bt_address = get_instruction_start(context->options, context->native_code_map, bt_address - 2);
 						if (bt_address) {
 							stack += 4;
 							non_adr_count = 0;
 							uint16_t *bt_pc = NULL;
 							if (bt_address < 0x400000) {
-								bt_pc = cart + bt_address/2;
+								bt_pc = system->cart + bt_address/2;
 							} else if(bt_address > 0xE00000) {
-								bt_pc = ram + (bt_address & 0xFFFF)/2;
+								bt_pc = system->work_ram + (bt_address & 0xFFFF)/2;
 							}
 							m68k_decode(bt_pc, &inst, bt_address);
 							m68k_disasm(&inst, input_buf);
@@ -851,12 +854,8 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 		branch_t = branch_f = 0;
 	}
 
-	uint16_t * pc;
-	if (address < 0x400000) {
-		pc = cart + address/2;
-	} else if(address > 0xE00000) {
-		pc = ram + (address & 0xFFFF)/2;
-	} else {
+	uint16_t * pc = get_native_pointer(address, (void **)context->mem_pointers, &context->options->gen);
+	if (!pc) {
 		fatal_error("Entered 68K debugger at address %X\n", address);
 	}
 	uint16_t * after_pc = m68k_decode(pc, &inst, address);

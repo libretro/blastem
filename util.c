@@ -57,6 +57,15 @@ char * alloc_concat_m(int num_parts, char const ** parts)
 	return ret;
 }
 
+void byteswap_rom(int filesize, uint16_t *cart)
+{
+	for(uint16_t *cur = cart; cur - cart < filesize/2; ++cur)
+	{
+		*cur = (*cur >> 8) | (*cur << 8);
+	}
+}
+
+
 long file_size(FILE * f)
 {
 	fseek(f, 0, SEEK_END);

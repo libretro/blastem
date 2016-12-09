@@ -3,8 +3,10 @@
  This file is part of BlastEm.
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
+#include "genesis.h"
 #include "gst.h"
 #include <string.h>
+#include <stdio.h>
 
 #define GST_68K_REGS 0x80
 #define GST_68K_REG_SIZE (0xDA-GST_68K_REGS)
