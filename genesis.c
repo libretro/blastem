@@ -23,11 +23,7 @@ uint32_t MCLKS_PER_68K;
 #define LINES_NTSC 262
 #define LINES_PAL 312
 
-#define MAX_SOUND_CYCLES 100000
-
-uint16_t *cart;
-uint16_t *ram;
-uint8_t z80_ram[Z80_RAM_BYTES];
+#define MAX_SOUND_CYCLES 100000	
 
 uint16_t read_dma_value(uint32_t address)
 {
@@ -461,7 +457,7 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 		if (!z80_enabled || z80_get_busack(gen->z80, context->current_cycle)) {
 			location &= 0x7FFF;
 			if (location < 0x4000) {
-				z80_ram[location & 0x1FFF] = value;
+				gen->zram[location & 0x1FFF] = value;
 #ifndef NO_Z80
 				z80_handle_code_write(location & 0x1FFF, gen->z80);
 #endif
@@ -582,7 +578,7 @@ uint8_t io_read(uint32_t location, m68k_context * context)
 		if (!z80_enabled || z80_get_busack(gen->z80, context->current_cycle)) {
 			location &= 0x7FFF;
 			if (location < 0x4000) {
-				value = z80_ram[location & 0x1FFF];
+				value = gen->zram[location & 0x1FFF];
 			} else if (location < 0x6000) {
 				sync_sound(gen, context->current_cycle);
 				value = ym_read_status(gen->ym);
@@ -718,7 +714,7 @@ void *z80_write_bank(uint32_t location, void * vcontext, uint8_t value)
 	uint32_t address = context->bank_reg << 15 | location;
 	if (address >= 0xE00000) {
 		address &= 0xFFFF;
-		((uint8_t *)ram)[address ^ 1] = value;
+		((uint8_t *)gen->work_ram)[address ^ 1] = value;
 	} else if (address >= 0xC00000) {
 		z80_vdp_port_write(location & 0xFF, context, value);
 	} else {
@@ -817,12 +813,12 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 
 	gen->z80->system = gen;
 	gen->z80->mem_pointers[0] = gen->zram;
-	gen->z80->mem_pointers[1] = gen->z80->mem_pointers[2] = (uint8_t *)cart;
+	gen->z80->mem_pointers[1] = gen->z80->mem_pointers[2] = (uint8_t *)main_rom;
 
 	gen->cart = main_rom;
 	gen->lock_on = lock_on;
 	gen->work_ram = calloc(2, RAM_WORDS);
-	gen->zram = z80_ram;
+	gen->zram = calloc(1, Z80_RAM_BYTES);
 	setup_io_devices(config, rom, gen);
 
 	gen->save_type = rom->save_type;
@@ -894,7 +890,7 @@ void start_genesis(genesis_context *gen, char *statefile, uint8_t *debugger)
 		start_68k_context(gen->m68k, pc);
 	} else {
 		if (debugger) {
-			uint32_t address = cart[2] << 16 | cart[3];
+			uint32_t address = gen->cart[2] << 16 | gen->cart[3];
 			insert_breakpoint(gen->m68k, address, debugger);
 		}
 		m68k_reset(gen->m68k);
@@ -918,10 +914,10 @@ genesis_context *alloc_config_genesis(void *rom, uint32_t rom_size, void *lock_o
 		rom_db = load_rom_db();
 	}
 	*info_out = configure_rom(rom_db, rom, rom_size, lock_on, lock_on_size, base_map, sizeof(base_map)/sizeof(base_map[0]));
-#ifndef BIG_ENDIAN
-	byteswap_rom(rom, rom_size);
+#ifndef BLASTEM_BIG_ENDIAN
+	byteswap_rom(rom_size, rom);
 	if (lock_on) {
-		byteswap_rom(lock_on, lock_on_size);
+		byteswap_rom(lock_on_size, lock_on);
 	}
 #endif
 	char *m68k_divider = tern_find_path(config, "clocks\0m68k_divider\0").ptrval;
