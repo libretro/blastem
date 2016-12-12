@@ -1656,7 +1656,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 				if (reg == REG_MODE_4) {
 					context->double_res = (value & (BIT_INTERLACE | BIT_DOUBLE_RES)) == (BIT_INTERLACE | BIT_DOUBLE_RES);
 					if (!context->double_res) {
-						context->flags &= FLAG2_EVEN_FIELD;
+						context->flags2 &= ~FLAG2_EVEN_FIELD;
 					}
 				}
 				context->cd &= 0x3C;
