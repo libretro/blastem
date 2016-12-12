@@ -803,6 +803,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	psg_init(gen->psg, render_sample_rate(), gen->master_clock, MCLKS_PER_PSG, render_audio_buffer(), lowpass_cutoff);
 
 	gen->z80 = calloc(1, sizeof(z80_context));
+	gen->zram = calloc(1, Z80_RAM_BYTES);
 	z80_map[0].buffer = gen->zram = calloc(1, Z80_RAM_BYTES);
 #ifndef NO_Z80
 	z80_options *z_opts = malloc(sizeof(z80_options));
@@ -818,7 +819,6 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	gen->cart = main_rom;
 	gen->lock_on = lock_on;
 	gen->work_ram = calloc(2, RAM_WORDS);
-	gen->zram = calloc(1, Z80_RAM_BYTES);
 	setup_io_devices(config, rom, gen);
 
 	gen->save_type = rom->save_type;
