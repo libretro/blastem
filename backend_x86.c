@@ -231,7 +231,7 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 				code_ptr not_code = code->cur + 1;
 				jcc(code, CC_NC, code->cur + 2);
 				if (memmap[chunk].mask != opts->address_mask) {
-					or_ir(code, memmap[chunk].start, opts->scratch1, opts->address_size);
+					or_ir(code, memmap[chunk].start, opts->scratch2, opts->address_size);
 				}
 				call(code, opts->save_context);
 				call_args(code, opts->handle_code_write, 2, opts->scratch2, opts->context_reg);
