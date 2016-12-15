@@ -363,7 +363,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			break;
 		case Z80_IX_DISPLACE:
 		case Z80_IY_DISPLACE:
-			num_cycles = 8; //3 for displacement, 5 for address addition
+			num_cycles += 8; //3 for displacement, 5 for address addition
 			break;
 		}
 		cycles(&opts->gen, num_cycles);
@@ -1417,11 +1417,16 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		cycles(&opts->gen, num_cycles);
 		mov_irdisp(code, 0, opts->gen.context_reg, offsetof(z80_context, iff1), SZ_B);
 		mov_irdisp(code, 0, opts->gen.context_reg, offsetof(z80_context, iff2), SZ_B);
+		//turn cycles remaining into current cycle
+		neg_r(code, opts->gen.cycles, SZ_D);
 		add_rdispr(code, opts->gen.context_reg, offsetof(z80_context, target_cycle), opts->gen.cycles, SZ_D);
+		//set interrupt cycle to never and fetch the new target cycle from sync_cycle
 		mov_rdispr(code, opts->gen.context_reg, offsetof(z80_context, sync_cycle), opts->gen.scratch1, SZ_D);
 		mov_irdisp(code, 0xFFFFFFFF, opts->gen.context_reg, offsetof(z80_context, int_cycle), SZ_D);
 		mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, offsetof(z80_context, target_cycle), SZ_D);
-		sub_rr(code, opts->gen.scratch1, opts->gen.cycles, SZ_D);
+		//turn current cycle back into cycles remaining
+		neg_r(code, opts->gen.cycles, SZ_D);
+		add_rr(code, opts->gen.scratch1, opts->gen.cycles, SZ_D);
 		break;
 	case Z80_EI:
 		cycles(&opts->gen, num_cycles);
