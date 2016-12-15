@@ -97,14 +97,13 @@ void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 #define dputs
 #endif
 
-#define Z80_VINT_DURATION 128
-
 void z80_next_int_pulse(z80_context * z_context)
 {
-		genesis_context * gen = z_context->system;
+	genesis_context * gen = z_context->system;
 	z_context->int_pulse_start = vdp_next_vint_z80(gen->vdp);
-	z_context->int_pulse_end = z_context->int_pulse_start + Z80_VINT_DURATION * MCLKS_PER_Z80;
-			}
+	//Notes in the Genesis Plus GX code suggest this is asserted for one line
+	z_context->int_pulse_end = z_context->int_pulse_start + MCLKS_LINE;
+}
 
 void sync_z80(z80_context * z_context, uint32_t mclks)
 {
