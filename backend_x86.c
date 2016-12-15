@@ -13,13 +13,16 @@ void cycles(cpu_options *opts, uint32_t num)
 void check_cycles_int(cpu_options *opts, uint32_t address)
 {
 	code_info *code = &opts->code;
+	uint8_t cc;
 	if (opts->limit < 0) {
-		or_rr(code, opts->cycles, opts->cycles, SZ_D);
+		cmp_ir(code, 1, opts->cycles, SZ_D);
+		cc = CC_NS;
 	} else {
 		cmp_rr(code, opts->cycles, opts->limit, SZ_D);
+		cc = CC_A;
 	}
 	code_ptr jmp_off = code->cur+1;
-	jcc(code, CC_NS, jmp_off+1);
+	jcc(code, cc, jmp_off+1);
 	mov_ir(code, address, opts->scratch1, SZ_D);
 	call(code, opts->handle_cycle_limit_int);
 	*jmp_off = code->cur - (jmp_off+1);
@@ -28,14 +31,17 @@ void check_cycles_int(cpu_options *opts, uint32_t address)
 void check_cycles(cpu_options * opts)
 {
 	code_info *code = &opts->code;
+	uint8_t cc;
 	if (opts->limit < 0) {
-		or_rr(code, opts->cycles, opts->cycles, SZ_D);
+		cmp_ir(code, 1, opts->cycles, SZ_D);
+		cc = CC_NS;
 	} else {
 		cmp_rr(code, opts->cycles, opts->limit, SZ_D);
+		cc = CC_A;
 	}
 	check_alloc_code(code, MAX_INST_LEN*2);
 	code_ptr jmp_off = code->cur+1;
-	jcc(code, CC_NS, jmp_off+1);
+	jcc(code, cc, jmp_off+1);
 	call(code, opts->handle_cycle_limit);
 	*jmp_off = code->cur - (jmp_off+1);
 }
