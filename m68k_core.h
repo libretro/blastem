@@ -72,6 +72,7 @@ typedef struct m68k_context {
 } m68k_context;
 
 typedef m68k_context *(*m68k_reset_handler)(m68k_context *context);
+typedef m68k_context *(*m68k_debug_handler)(m68k_context *context, uint32_t pc);
 
 void translate_m68k_stream(uint32_t address, m68k_context * context);
 void start_68k_context(m68k_context * context, uint32_t address);
@@ -80,7 +81,7 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 m68k_context * init_68k_context(m68k_options * opts, m68k_reset_handler reset_handler);
 void m68k_reset(m68k_context * context);
 void m68k_options_free(m68k_options *opts);
-void insert_breakpoint(m68k_context * context, uint32_t address, uint8_t * bp_handler);
+void insert_breakpoint(m68k_context * context, uint32_t address, m68k_debug_handler bp_handler);
 void remove_breakpoint(m68k_context * context, uint32_t address);
 m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context);
 uint32_t get_instruction_start(m68k_options *opts, native_map_slot * native_code_map, uint32_t address);

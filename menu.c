@@ -269,7 +269,7 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			char buf[4096];
 			copy_string_from_guest(m68k, dst, buf, sizeof(buf));
 			char const *pieces[] = {menu->curpath, PATH_SEP, buf};
-			gen->next_rom = alloc_concat_m(3, pieces);
+			gen->header.next_rom = alloc_concat_m(3, pieces);
 			m68k->should_return = 1;
 			break;
 		}
@@ -278,7 +278,7 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			{
 			case 1:
 				m68k->should_return = 1;
-				gen->should_exit = 1;
+				gen->header.should_exit = 1;
 				break;
 			case 2:
 				m68k->should_return = 1;
@@ -290,10 +290,10 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 		case 4: {
 			char *buffer = malloc(SAVE_INFO_BUFFER_SIZE);
 			char *cur = buffer;
-			if (gen->next_context && gen->next_context->save_dir) {
+			if (gen->header.next_context && gen->header.next_context->save_dir) {
 				char *end = buffer + SAVE_INFO_BUFFER_SIZE;
 				char slotfile[] = "slot_0.gst";
-				char const * parts[3] = {gen->next_context->save_dir, PATH_SEP, slotfile};
+				char const * parts[3] = {gen->header.next_context->save_dir, PATH_SEP, slotfile};
 				struct tm ltime;
 				char *fname;
 				time_t modtime;
@@ -338,14 +338,14 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			break;
 		case 5:
 			//save state
-			if (gen->next_context) {
-				gen->next_context->save_state = dst + 1;
+			if (gen->header.next_context) {
+				gen->header.next_context->save_state = dst + 1;
 			}
 			m68k->should_return = 1;
 			break;
 		case 6:
 			//load state
-			if (gen->next_context && gen->next_context->save_dir) {
+			if (gen->header.next_context && gen->header.next_context->save_dir) {
 				char numslotname[] = "slot_0.gst";
 				char *slotname;
 				if (dst == QUICK_SAVE_SLOT) {
@@ -354,14 +354,15 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 					numslotname[5] = '0' + dst;
 					slotname = numslotname;
 				}
-				char const *parts[] = {gen->next_context->save_dir, PATH_SEP, slotname};
+				char const *parts[] = {gen->header.next_context->save_dir, PATH_SEP, slotname};
 				char *gstpath = alloc_concat_m(3, parts);
-				uint32_t pc = load_gst(gen->next_context, gstpath);
+				genesis_context *next = (genesis_context *)gen->header.next_context;
+				uint32_t pc = load_gst(next, gstpath);
 				free(gstpath);
 				if (!pc) {
 					break;
 				}
-				gen->next_context->m68k->resume_pc = get_native_address_trans(gen->next_context->m68k, pc);
+				next->m68k->resume_pc = get_native_address_trans(next->m68k, pc);
 			}
 			m68k->should_return = 1;
 			break;

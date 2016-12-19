@@ -9,6 +9,8 @@
 #include "render.h"
 #include "gst.h"
 #include "util.h"
+#include "debug.h"
+#include "gdb_remote.h"
 #define MCLKS_NTSC 53693175
 #define MCLKS_PAL  53203395
 
@@ -27,6 +29,7 @@ uint32_t MCLKS_PER_68K;
 
 uint16_t read_dma_value(uint32_t address)
 {
+	genesis_context *genesis = (genesis_context *)current_system;
 	//addresses here are word addresses (i.e. bit 0 corresponds to A1), so no need to do multiply by 2
 	uint16_t *ptr = get_native_pointer(address*2, (void **)genesis->m68k->mem_pointers, &genesis->m68k->options->gen);
 	if (ptr) {
@@ -38,6 +41,7 @@ uint16_t read_dma_value(uint32_t address)
 
 uint16_t get_open_bus_value()
 {
+	genesis_context *genesis = (genesis_context *)current_system;
 	return read_dma_value(genesis->m68k->last_prefetch_address/2);
 }
 
@@ -173,9 +177,9 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 		}
 
 		vdp_adjust_cycles(v_context, mclks);
-		io_adjust_cycles(gen->ports, context->current_cycle, mclks);
-		io_adjust_cycles(gen->ports+1, context->current_cycle, mclks);
-		io_adjust_cycles(gen->ports+2, context->current_cycle, mclks);
+		io_adjust_cycles(gen->io.ports, context->current_cycle, mclks);
+		io_adjust_cycles(gen->io.ports+1, context->current_cycle, mclks);
+		io_adjust_cycles(gen->io.ports+2, context->current_cycle, mclks);
 		context->current_cycle -= mclks;
 		z80_adjust_cycles(z_context, mclks);
 		gen->ym->current_cycle -= mclks;
@@ -192,18 +196,18 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 		vdp_int_ack(v_context);
 		context->int_ack = 0;
 	}
-	if (!address && (break_on_sync || gen->save_state)) {
+	if (!address && (gen->header.enter_debugger || gen->header.save_state)) {
 		context->sync_cycle = context->current_cycle + 1;
 	}
 	adjust_int_cycle(context, v_context);
 	if (address) {
-		if (break_on_sync) {
-			break_on_sync = 0;
+		if (gen->header.enter_debugger) {
+			gen->header.enter_debugger = 0;
 			debugger(context, address);
 		}
-		if (gen->save_state && (z_context->pc || (!z_context->reset && !z_context->busreq))) {
-			uint8_t slot = gen->save_state - 1;
-			gen->save_state = 0;
+		if (gen->header.save_state && (z_context->pc || (!z_context->reset && !z_context->busreq))) {
+			uint8_t slot = gen->header.save_state - 1;
+			gen->header.save_state = 0;
 			//advance Z80 core to the start of an instruction
 			while (!z_context->pc)
 			{
@@ -215,7 +219,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			} else {
 				char slotname[] = "slot_0.gst";
 				slotname[5] = '0' + slot;
-				char const *parts[] = {gen->save_dir, PATH_SEP, slotname};
+				char const *parts[] = {gen->header.save_dir, PATH_SEP, slotname};
 				save_path = alloc_concat_m(3, parts);
 			}
 			save_gst(gen, save_path, address);
@@ -223,7 +227,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			if (slot != QUICK_SAVE_SLOT) {
 				free(save_path);
 			}
-		} else if(gen->save_state) {
+		} else if(gen->header.save_state) {
 			context->sync_cycle = context->current_cycle + 1;
 		}
 	}
@@ -486,22 +490,22 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 			switch(location/2)
 			{
 			case 0x1:
-				io_data_write(gen->ports, value, context->current_cycle);
+				io_data_write(gen->io.ports, value, context->current_cycle);
 				break;
 			case 0x2:
-				io_data_write(gen->ports+1, value, context->current_cycle);
+				io_data_write(gen->io.ports+1, value, context->current_cycle);
 				break;
 			case 0x3:
-				io_data_write(gen->ports+2, value, context->current_cycle);
+				io_data_write(gen->io.ports+2, value, context->current_cycle);
 				break;
 			case 0x4:
-				gen->ports[0].control = value;
+				gen->io.ports[0].control = value;
 				break;
 			case 0x5:
-				gen->ports[1].control = value;
+				gen->io.ports[1].control = value;
 				break;
 			case 0x6:
-				gen->ports[2].control = value;
+				gen->io.ports[2].control = value;
 				break;
 			}
 		} else {
@@ -597,22 +601,22 @@ uint8_t io_read(uint32_t location, m68k_context * context)
 				value = gen->version_reg;
 				break;
 			case 0x1:
-				value = io_data_read(gen->ports, context->current_cycle);
+				value = io_data_read(gen->io.ports, context->current_cycle);
 				break;
 			case 0x2:
-				value = io_data_read(gen->ports+1, context->current_cycle);
+				value = io_data_read(gen->io.ports+1, context->current_cycle);
 				break;
 			case 0x3:
-				value = io_data_read(gen->ports+2, context->current_cycle);
+				value = io_data_read(gen->io.ports+2, context->current_cycle);
 				break;
 			case 0x4:
-				value = gen->ports[0].control;
+				value = gen->io.ports[0].control;
 				break;
 			case 0x5:
-				value = gen->ports[1].control;
+				value = gen->io.ports[1].control;
 				break;
 			case 0x6:
-				value = gen->ports[2].control;
+				value = gen->io.ports[2].control;
 				break;
 			default:
 				value = 0xFF;
@@ -737,8 +741,9 @@ void *z80_write_bank_reg(uint32_t location, void * vcontext, uint8_t value)
 	return context;
 }
 
-void set_speed_percent(genesis_context * context, uint32_t percent)
+static void set_speed_percent(system_header * system, uint32_t percent)
 {
+	genesis_context *context = (genesis_context *)system;
 	uint32_t old_clock = context->master_clock;
 	context->master_clock = ((uint64_t)context->normal_clock * (uint64_t)percent) / 100;
 	while (context->ym->current_cycle != context->psg->cycles) {
@@ -774,6 +779,109 @@ void set_region(genesis_context *gen, rom_info *info, uint8_t region)
 	gen->master_clock = gen->normal_clock;
 }
 
+static void start_genesis(system_header *system, char *statefile)
+{
+	genesis_context *gen = (genesis_context *)system;
+	set_keybindings(&gen->io);
+	if (statefile) {
+		uint32_t pc = load_gst(gen, statefile);
+		if (!pc) {
+			fatal_error("Failed to load save state %s\n", statefile);
+		}
+		printf("Loaded %s\n", statefile);
+		if (gen->header.enter_debugger) {
+			gen->header.enter_debugger = 0;
+			insert_breakpoint(gen->m68k, pc, gen->header.debugger_type == DEBUGGER_NATIVE ? debugger : gdb_debug_enter);
+		}
+		adjust_int_cycle(gen->m68k, gen->vdp);
+		start_68k_context(gen->m68k, pc);
+	} else {
+		if (gen->header.enter_debugger) {
+			gen->header.enter_debugger = 0;
+			uint32_t address = gen->cart[2] << 16 | gen->cart[3];
+			insert_breakpoint(gen->m68k, address, gen->header.debugger_type == DEBUGGER_NATIVE ? debugger : gdb_debug_enter);
+		}
+		m68k_reset(gen->m68k);
+	}
+}
+
+static void resume_genesis(system_header *system)
+{
+	genesis_context *gen = (genesis_context *)system;
+	map_all_bindings(&gen->io);
+	resume_68k(gen->m68k);
+}
+
+static void inc_debug_mode(system_header *system)
+{
+	genesis_context *gen = (genesis_context *)system;
+	gen->vdp->debug++;
+	if (gen->vdp->debug == 7) {
+		gen->vdp->debug = 0;
+	}
+}
+
+static void inc_debug_pal(system_header *system)
+{
+	genesis_context *gen = (genesis_context *)system;
+	gen->vdp->debug_pal++;
+	if (gen->vdp->debug_pal == 4) {
+		gen->vdp->debug_pal = 0;
+	}
+}
+
+static void request_exit(system_header *system)
+{
+	genesis_context *gen = (genesis_context *)system;
+	gen->m68k->should_return = 1;
+}
+
+static void persist_save(system_header *system)
+{
+	genesis_context *gen = (genesis_context *)system;
+	if (gen->save_type == SAVE_NONE) {
+		return;
+	}
+	FILE * f = fopen(save_filename, "wb");
+	if (!f) {
+		fprintf(stderr, "Failed to open %s file %s for writing\n", gen->save_type == SAVE_I2C ? "EEPROM" : "SRAM", save_filename);
+		return;
+	}
+	fwrite(gen->save_storage, 1, gen->save_size, f);
+	fclose(f);
+	printf("Saved %s to %s\n", gen->save_type == SAVE_I2C ? "EEPROM" : "SRAM", save_filename);
+}
+
+static void load_save(system_header *system)
+{
+	genesis_context *gen = (genesis_context *)system;
+	FILE * f = fopen(save_filename, "rb");
+	if (f) {
+		uint32_t read = fread(gen->save_storage, 1, gen->save_size, f);
+		fclose(f);
+		if (read > 0) {
+			printf("Loaded %s from %s\n", gen->save_type == SAVE_I2C ? "EEPROM" : "SRAM", save_filename);
+		}
+	}
+}
+
+static void free_genesis(system_header *system)
+{
+	genesis_context *gen = (genesis_context *)system;
+	vdp_free(gen->vdp);
+	m68k_options_free(gen->m68k->options);
+	free(gen->m68k);
+	free(gen->work_ram);
+	z80_options_free(gen->z80->options);
+	free(gen->z80);
+	free(gen->zram);
+	ym_free(gen->ym);
+	psg_free(gen->psg);
+	free(gen->save_storage);
+	free(gen->header.save_dir);
+	free(gen->lock_on);
+}
+
 genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on, uint32_t ym_opts, uint8_t force_region)
 {
 	static memmap_chunk z80_map[] = {
@@ -784,6 +892,15 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 		{ 0x7F00, 0x8000,  0x00FF, 0, 0, 0,                                  NULL, NULL, NULL, z80_vdp_port_read, z80_vdp_port_write}
 	};
 	genesis_context *gen = calloc(1, sizeof(genesis_context));
+	gen->header.set_speed_percent = set_speed_percent;
+	gen->header.start_context = start_genesis;
+	gen->header.resume_context = resume_genesis;
+	gen->header.load_save = load_save;
+	gen->header.persist_save = persist_save;
+	gen->header.free_context = free_genesis;
+	gen->header.request_exit = request_exit;
+	gen->header.inc_debug_mode = inc_debug_mode;
+	gen->header.inc_debug_pal = inc_debug_pal;
 	set_region(gen, rom, force_region);
 
 	gen->vdp = malloc(sizeof(vdp_context));
@@ -853,47 +970,6 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	gen->m68k->system = gen;
 
 	return gen;
-}
-
-
-
-void free_genesis(genesis_context *gen)
-{
-	vdp_free(gen->vdp);
-	m68k_options_free(gen->m68k->options);
-	free(gen->m68k);
-	free(gen->work_ram);
-	z80_options_free(gen->z80->options);
-	free(gen->z80);
-	free(gen->zram);
-	ym_free(gen->ym);
-	psg_free(gen->psg);
-	free(gen->save_storage);
-	free(gen->save_dir);
-	free(gen->lock_on);
-}
-
-void start_genesis(genesis_context *gen, char *statefile, uint8_t *debugger)
-{
-
-	if (statefile) {
-		uint32_t pc = load_gst(gen, statefile);
-		if (!pc) {
-			fatal_error("Failed to load save state %s\n", statefile);
-		}
-		printf("Loaded %s\n", statefile);
-		if (debugger) {
-			insert_breakpoint(gen->m68k, pc, debugger);
-		}
-		adjust_int_cycle(gen->m68k, gen->vdp);
-		start_68k_context(gen->m68k, pc);
-	} else {
-		if (debugger) {
-			uint32_t address = gen->cart[2] << 16 | gen->cart[3];
-			insert_breakpoint(gen->m68k, address, debugger);
-		}
-		m68k_reset(gen->m68k);
-	}
 }
 
 genesis_context *alloc_config_genesis(void *rom, uint32_t rom_size, void *lock_on, uint32_t lock_on_size, uint32_t ym_opts, uint8_t force_region, rom_info *info_out)

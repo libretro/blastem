@@ -2289,7 +2289,7 @@ m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context)
 	return context;
 }
 
-void insert_breakpoint(m68k_context * context, uint32_t address, code_ptr bp_handler)
+void insert_breakpoint(m68k_context * context, uint32_t address, m68k_debug_handler bp_handler)
 {
 	static code_ptr bp_stub = NULL;
 	m68k_options * opts = context->options;
@@ -2315,7 +2315,7 @@ void insert_breakpoint(m68k_context * context, uint32_t address, code_ptr bp_han
 		//Save context and call breakpoint handler
 		call(code, opts->gen.save_context);
 		push_r(code, opts->gen.scratch1);
-		call_args_abi(code, bp_handler, 2, opts->gen.context_reg, opts->gen.scratch1);
+		call_args_abi(code, (code_ptr)bp_handler, 2, opts->gen.context_reg, opts->gen.scratch1);
 		mov_rr(code, RAX, opts->gen.context_reg, SZ_PTR);
 		//Restore context
 		call(code, opts->gen.load_context);
