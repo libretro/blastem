@@ -59,6 +59,12 @@ typedef struct {
 	uint8_t  device_type;
 } io_port;
 
+typedef struct {
+	io_port	ports[3];
+	uint8_t mouse_mode;
+	uint8_t mouse_captured;
+} sega_io;
+
 #define GAMEPAD_TH0 0
 #define GAMEPAD_TH1 1
 #define GAMEPAD_EXTRA 2
@@ -77,8 +83,8 @@ enum {
 
 typedef struct genesis_context genesis_context;
 
-void set_keybindings(io_port *ports);
-void map_all_bindings(io_port *ports);
+void set_keybindings(sega_io *io);
+void map_all_bindings(sega_io *io);
 void setup_io_devices(tern_node * config, rom_info *rom, genesis_context * gen);
 void io_adjust_cycles(io_port * pad, uint32_t current_cycle, uint32_t deduction);
 void io_data_write(io_port * pad, uint8_t value, uint32_t current_cycle);

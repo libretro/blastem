@@ -8,6 +8,7 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "system.h"
 #include "68kinst.h"
 #include "m68k_core.h"
 #include "z80_to_x86.h"
@@ -66,7 +67,7 @@ int load_smd_rom(long filesize, FILE * f, uint16_t **buffer)
 	return rom_size;
 }
 
-int load_rom(char * filename, uint16_t **dst)
+int load_rom(char * filename, uint16_t **dst, system_type *stype)
 {
 	uint8_t header[10];
 	FILE * f = fopen(filename, "rb");
@@ -90,6 +91,9 @@ int load_rom(char * filename, uint16_t **dst)
 			if (header[2]) {
 				fatal_error("%s is a split SMD ROM which is not currently supported", filename);
 			}
+			if (stype) {
+				*stype = SYSTEM_GENESIS;
+			}
 			return load_smd_rom(filesize, f, dst);
 		}
 	}
@@ -98,6 +102,9 @@ int load_rom(char * filename, uint16_t **dst)
 		fatal_error("Error reading from %s\n", filename);
 	}
 	fclose(f);
+	if (stype) {
+		*stype = detect_system_type((uint8_t *)*dst, filesize);
+	}
 	return filesize;
 }
 
@@ -111,25 +118,16 @@ char *save_state_path;
 
 
 char * save_filename;
-genesis_context *genesis;
-genesis_context *menu_context;
-genesis_context *game_context;
+system_header *current_system;
+system_header *menu_context;
+system_header *game_context;
 void persist_save()
 {
 	if (!game_context) {
 		return;
 	}
-	FILE * f = fopen(save_filename, "wb");
-	if (!f) {
-		fprintf(stderr, "Failed to open %s file %s for writing\n", game_context->save_type == SAVE_I2C ? "EEPROM" : "SRAM", save_filename);
-		return;
-	}
-	fwrite(game_context->save_storage, 1, game_context->save_size, f);
-	fclose(f);
-	printf("Saved %s to %s\n", game_context->save_type == SAVE_I2C ? "EEPROM" : "SRAM", save_filename);
+	game_context->persist_save(game_context);
 }
-
-
 
 char *title;
 void update_title(char *rom_name)
@@ -142,8 +140,9 @@ void update_title(char *rom_name)
 	render_update_caption(title);
 }
 
-void setup_saves(char *fname, rom_info *info, genesis_context *context)
+void setup_saves(char *fname, rom_info *info, system_header *context)
 {
+	static uint8_t persist_save_registered;
 	char * barename = basename_no_extension(fname);
 	char const * parts[3] = {get_save_dir(), PATH_SEP, barename};
 	char *save_dir = alloc_concat_m(3, parts);
@@ -154,21 +153,18 @@ void setup_saves(char *fname, rom_info *info, genesis_context *context)
 	parts[2] = info->save_type == SAVE_I2C ? "save.eeprom" : "save.sram";
 	free(save_filename);
 	save_filename = alloc_concat_m(3, parts);
+	//TODO: make quick save filename dependent on system type
 	parts[2] = "quicksave.gst";
 	free(save_state_path);
 	save_state_path = alloc_concat_m(3, parts);
 	context->save_dir = save_dir;
 	free(barename);
 	if (info->save_type != SAVE_NONE) {
-		FILE * f = fopen(save_filename, "rb");
-		if (f) {
-			uint32_t read = fread(context->save_storage, 1, info->save_size, f);
-			fclose(f);
-			if (read > 0) {
-				printf("Loaded %s from %s\n", info->save_type == SAVE_I2C ? "EEPROM" : "SRAM", save_filename);
-			}
+		context->load_save(context);
+		if (!persist_save_registered) {
+			atexit(persist_save);
+			persist_save_registered = 1;
 		}
-		atexit(persist_save);
 	}
 }
 
@@ -181,13 +177,15 @@ int main(int argc, char ** argv)
 	int debug = 0;
 	int ym_log = 0;
 	int loaded = 0;
+	system_type stype;
 	uint8_t force_region = 0;
 	char * romfname = NULL;
 	FILE *address_log = NULL;
 	char * statefile = NULL;
 	int rom_size, lock_on_size;
 	uint16_t *cart = NULL, *lock_on = NULL;
-	uint8_t * debuggerfun = NULL;
+	debugger_type dtype = DEBUGGER_NATIVE;
+	uint8_t start_in_debugger = 0;
 	uint8_t fullscreen = FULLSCREEN_DEFAULT, use_gl = 1;
 	uint8_t debug_target = 0;
 	for (int i = 1; i < argc; i++) {
@@ -202,7 +200,7 @@ int main(int argc, char ** argv)
 				exit_after = atoi(argv[i]);
 				break;
 			case 'd':
-				debuggerfun = (uint8_t *)debugger;
+				start_in_debugger = 1;
 				//allow debugging the menu
 				if (argv[i][2] == 'm') {
 					debug_target = 1;
@@ -210,7 +208,7 @@ int main(int argc, char ** argv)
 				break;
 			case 'D':
 				gdb_remote_init();
-				debuggerfun = (uint8_t *)gdb_debug_enter;
+				dtype = DEBUGGER_GDB;
 				break;
 			case 'f':
 				fullscreen = !fullscreen;
@@ -256,7 +254,7 @@ int main(int argc, char ** argv)
 				if (i >= argc) {
 					fatal_error("-o must be followed by a lock on cartridge filename\n");
 				}
-				lock_on_size = load_rom(argv[i], &lock_on);
+				lock_on_size = load_rom(argv[i], &lock_on, NULL);
 				if (!lock_on_size) {
 					fatal_error("Failed to load lock on cartridge %s\n", argv[i]);
 				}
@@ -283,7 +281,7 @@ int main(int argc, char ** argv)
 				fatal_error("Unrecognized switch %s\n", argv[i]);
 			}
 		} else if (!loaded) {
-			if (!(rom_size = load_rom(argv[i], &cart))) {
+			if (!(rom_size = load_rom(argv[i], &cart, &stype))) {
 				fatal_error("Failed to open %s for reading\n", argv[i]);
 			}
 			romfname = argv[i];
@@ -302,7 +300,7 @@ int main(int argc, char ** argv)
 			romfname = "menu.bin";
 		}
 		if (is_absolute_path(romfname)) {
-			if (!(rom_size = load_rom(romfname, &cart))) {
+			if (!(rom_size = load_rom(romfname, &cart, &stype))) {
 				fatal_error("Failed to open UI ROM %s for reading", romfname);
 			}
 		} else {
@@ -311,6 +309,7 @@ int main(int argc, char ** argv)
 			if (!cart) {
 				fatal_error("Failed to open UI ROM %s for reading", romfname);
 			}
+			stype = detect_system_type((uint8_t *)cart, fsize);
 			rom_size = nearest_pow2(fsize);
 			if (rom_size > fsize) {
 				cart = realloc(cart, rom_size);
@@ -341,43 +340,41 @@ int main(int argc, char ** argv)
 
 	rom_info info;
 	uint32_t ym_opts = (ym_log && !menu) ? YM_OPT_WAVE_LOG : 0;
-	genesis = alloc_config_genesis(cart, rom_size, lock_on, lock_on_size, ym_opts, force_region, &info);
-	setup_saves(romfname, &info, genesis);
+	current_system = alloc_config_system(stype, cart, rom_size, lock_on, lock_on_size, ym_opts, force_region, &info);
+	setup_saves(romfname, &info, current_system);
 	update_title(info.name);
 	if (menu) {
-		menu_context = genesis;
+		menu_context = current_system;
 	} else {
-		genesis->m68k->options->address_log = address_log;
-		game_context = genesis;
+		//TODO: make this an option flag
+		//genesis->m68k->options->address_log = address_log;
+		game_context = current_system;
 	}
 
-	set_keybindings(genesis->ports);
-	start_genesis(genesis, menu ? NULL : statefile, menu == debug_target ? debuggerfun : NULL);
+	current_system->debugger_type = dtype;
+	current_system->enter_debugger = start_in_debugger && menu == debug_target;
+	current_system->start_context(current_system,  menu ? NULL : statefile);
 	for(;;)
 	{
-		if (genesis->should_exit) {
+		if (current_system->should_exit) {
 			break;
 		}
 		if (menu && menu_context->next_rom) {
 			if (game_context) {
-				if (game_context->save_type != SAVE_NONE) {
-					genesis = game_context;
-					persist_save();
-					genesis = menu_context;
-				}
+				game_context->persist_save(game_context);
 				//swap to game context arena and mark all allocated pages in it free
-				genesis->arena = set_current_arena(game_context->arena);
+				current_system->arena = set_current_arena(game_context->arena);
 				mark_all_free();
-				free_genesis(game_context);
+				game_context->free_context(game_context);
 			} else {
 				//start a new arena and save old one in suspended genesis context
-				genesis->arena = start_new_arena();
+				current_system->arena = start_new_arena();
 			}
-			if (!(rom_size = load_rom(menu_context->next_rom, &cart))) {
+			if (!(rom_size = load_rom(menu_context->next_rom, &cart, &stype))) {
 				fatal_error("Failed to open %s for reading\n", menu_context->next_rom);
 			}
 			//allocate new genesis context
-			game_context = alloc_config_genesis(cart, rom_size, lock_on, lock_on_size, ym_opts,force_region, &info);
+			game_context = alloc_config_system(stype, cart, rom_size, lock_on, lock_on_size, ym_opts,force_region, &info);
 			menu_context->next_context = game_context;
 			game_context->next_context = menu_context;
 			setup_saves(menu_context->next_rom, &info, game_context);
@@ -385,22 +382,22 @@ int main(int argc, char ** argv)
 			free(menu_context->next_rom);
 			menu_context->next_rom = NULL;
 			menu = 0;
-			genesis = game_context;
-			genesis->m68k->options->address_log = address_log;
-			map_all_bindings(genesis->ports);
-			start_genesis(genesis, statefile, menu == debug_target ? debuggerfun : NULL);
+			current_system = game_context;
+			//TODO: make this an option flag
+			//genesis->m68k->options->address_log = address_log;
+			current_system->debugger_type = dtype;
+			current_system->enter_debugger = start_in_debugger && menu == debug_target;
+			current_system->start_context(current_system, statefile);
 		} else if (menu && game_context) {
-			genesis->arena = set_current_arena(game_context->arena);
-			genesis = game_context;
+			current_system->arena = set_current_arena(game_context->arena);
+			current_system = game_context;
 			menu = 0;
-			map_all_bindings(genesis->ports);
-			resume_68k(genesis->m68k);
+			current_system->resume_context(current_system);
 		} else if (!menu && menu_context) {
-			genesis->arena = set_current_arena(menu_context->arena);
-			genesis = menu_context;
+			current_system->arena = set_current_arena(menu_context->arena);
+			current_system = menu_context;
 			menu = 1;
-			map_all_bindings(genesis->ports);
-			resume_68k(genesis->m68k);
+			current_system->resume_context(current_system);
 		} else {
 			break;
 		}

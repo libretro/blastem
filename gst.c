@@ -434,8 +434,8 @@ uint32_t load_gst(genesis_context * gen, char * fname)
 	if (!z80_load_gst(gen->z80, gstfile)) {
 		goto error_close;
 	}
-	gen->ports[0].control = 0x40;
-	gen->ports[1].control = 0x40;
+	gen->io.ports[0].control = 0x40;
+	gen->io.ports[1].control = 0x40;
 	
 	fseek(gstfile, GST_68K_RAM, SEEK_SET);
 	for (int i = 0; i < (32*1024);) {
