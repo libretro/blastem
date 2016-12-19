@@ -579,7 +579,7 @@ int main(int argc, char **argv)
 		fatal_error("Failed to read cart from %s\n", argv[2]);
 	}
 	jaguar_context *system = init_jaguar(bios, bios_size, cart, cart_size);
-	render_init(640, 480, "BlastJag", 60, 0);
+	render_init(640, 480, "BlastJag", 0);
 	m68k_reset(system->m68k);
 	return 0;
 }
