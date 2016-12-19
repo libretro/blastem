@@ -214,6 +214,7 @@ uint8_t z80_load_gst(z80_context * context, FILE * gstfile)
 		}
 	}
 	context->native_pc = NULL;
+	context->extra_pc = NULL;
 	return 1;
 }
 
