@@ -159,6 +159,24 @@ uint8_t is_store(uint16_t opcode, uint8_t is_gpu)
 		|| (is_gpu && opcode == GPU_STOREP);
 }
 
+uint8_t is_single_source(uint16_t opcode, uint8_t is_gpu)
+{
+	return opcode == JAG_NEG
+		|| opcode == JAG_NOT
+		|| opcode == JAG_ABS
+		|| opcode == GPU_SAT16 //no is_gpu check needed as DSP_SAT16S is also single source
+		|| (is_gpu && (
+			opcode == GPU_SAT8
+			|| opcode == GPU_SAT24
+			|| opcode == GPU_PACK
+			|| opcode == GPU_UNPACK
+		))
+		|| (!is_gpu && (
+			opcode == DSP_SAT32S
+			|| opcode == DSP_MIRROR
+		));
+}
+
 char * jag_cc_names[] = {
 	"t",
 	"ne",
@@ -196,6 +214,11 @@ char * jag_cc(uint16_t inst)
 		return jag_cc_names[3];
 	}
 	return jag_cc_names[ccnum];
+}
+
+uint8_t jag_is_alwyas_falsse(uint16_t cond)
+{
+	return (cond & 3) == 3 || (cond && 0xC) == 0xC;
 }
 
 uint32_t jag_jr_dest(uint16_t inst, uint32_t address)
