@@ -43,6 +43,8 @@ struct system_header {
 	system_type       type;
 };
 
+#define OPT_ADDRESS_LOG (1U << 31U)
+
 system_type detect_system_type(uint8_t *rom, long filesize);
 system_header *alloc_config_system(system_type stype, void *rom, uint32_t rom_size, void *lock_on, uint32_t lock_on_size, uint32_t opts, uint8_t force_region, rom_info *info_out);
 
