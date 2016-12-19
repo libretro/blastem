@@ -175,12 +175,11 @@ int main(int argc, char ** argv)
 	int width = -1;
 	int height = -1;
 	int debug = 0;
-	int ym_log = 0;
+	uint32_t opts = 0;
 	int loaded = 0;
 	system_type stype;
 	uint8_t force_region = 0;
 	char * romfname = NULL;
-	FILE *address_log = NULL;
 	char * statefile = NULL;
 	int rom_size, lock_on_size;
 	uint16_t *cart = NULL, *lock_on = NULL;
@@ -217,7 +216,7 @@ int main(int argc, char ** argv)
 				use_gl = 0;
 				break;
 			case 'l':
-				address_log = fopen("address.log", "w");
+				opts |= OPT_ADDRESS_LOG;
 				break;
 			case 'v':
 				info_message("blastem %s\n", BLASTEM_VERSION);
@@ -247,7 +246,7 @@ int main(int argc, char ** argv)
 				force_no_terminal();
 				break;
 			case 'y':
-				ym_log = 1;
+				opts |= YM_OPT_WAVE_LOG;
 				break;
 			case 'o': {
 				i++;
@@ -339,15 +338,12 @@ int main(int argc, char ** argv)
 	}
 
 	rom_info info;
-	uint32_t ym_opts = (ym_log && !menu) ? YM_OPT_WAVE_LOG : 0;
-	current_system = alloc_config_system(stype, cart, rom_size, lock_on, lock_on_size, ym_opts, force_region, &info);
+	current_system = alloc_config_system(stype, cart, rom_size, lock_on, lock_on_size, menu ? 0 : opts, force_region, &info);
 	setup_saves(romfname, &info, current_system);
 	update_title(info.name);
 	if (menu) {
 		menu_context = current_system;
 	} else {
-		//TODO: make this an option flag
-		//genesis->m68k->options->address_log = address_log;
 		game_context = current_system;
 	}
 
@@ -374,7 +370,7 @@ int main(int argc, char ** argv)
 				fatal_error("Failed to open %s for reading\n", menu_context->next_rom);
 			}
 			//allocate new genesis context
-			game_context = alloc_config_system(stype, cart, rom_size, lock_on, lock_on_size, ym_opts,force_region, &info);
+			game_context = alloc_config_system(stype, cart, rom_size, lock_on, lock_on_size, opts,force_region, &info);
 			menu_context->next_context = game_context;
 			game_context->next_context = menu_context;
 			setup_saves(menu_context->next_rom, &info, game_context);
@@ -383,8 +379,6 @@ int main(int argc, char ** argv)
 			menu_context->next_rom = NULL;
 			menu = 0;
 			current_system = game_context;
-			//TODO: make this an option flag
-			//genesis->m68k->options->address_log = address_log;
 			current_system->debugger_type = dtype;
 			current_system->enter_debugger = start_in_debugger && menu == debug_target;
 			current_system->start_context(current_system, statefile);
