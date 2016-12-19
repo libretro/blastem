@@ -882,7 +882,7 @@ static void free_genesis(system_header *system)
 	free(gen->lock_on);
 }
 
-genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on, uint32_t ym_opts, uint8_t force_region)
+genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on, uint32_t system_opts, uint8_t force_region)
 {
 	static memmap_chunk z80_map[] = {
 		{ 0x0000, 0x4000,  0x1FFF, 0, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE, NULL, NULL, NULL, NULL,              NULL },
@@ -913,7 +913,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	uint32_t lowpass_cutoff = lowpass_cutoff_str ? atoi(lowpass_cutoff_str) : DEFAULT_LOWPASS_CUTOFF;
 	
 	gen->ym = malloc(sizeof(ym2612_context));
-	ym_init(gen->ym, render_sample_rate(), gen->master_clock, MCLKS_PER_YM, render_audio_buffer(), ym_opts, lowpass_cutoff);
+	ym_init(gen->ym, render_sample_rate(), gen->master_clock, MCLKS_PER_YM, render_audio_buffer(), system_opts, lowpass_cutoff);
 
 	gen->psg = malloc(sizeof(psg_context));
 	psg_init(gen->psg, render_sample_rate(), gen->master_clock, MCLKS_PER_PSG, render_audio_buffer(), lowpass_cutoff);
@@ -968,6 +968,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	opts->gen.flags |= M68K_OPT_BROKEN_READ_MODIFY;
 	gen->m68k = init_68k_context(opts, NULL);
 	gen->m68k->system = gen;
+	opts->address_log = (system_opts & OPT_ADDRESS_LOG) ? fopen("address.log", "w") : NULL;
 
 	return gen;
 }
