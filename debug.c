@@ -603,7 +603,7 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 					break;
 				}
 				value = strtol(param, NULL, 16);
-				insert_breakpoint(context, value, (uint8_t *)debugger);
+				insert_breakpoint(context, value, debugger);
 				new_bp = malloc(sizeof(bp_def));
 				new_bp->next = breakpoints;
 				new_bp->address = value;
@@ -620,7 +620,7 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 				break;
 			}
 			value = strtol(param, NULL, 16);
-			insert_breakpoint(context, value, (uint8_t *)debugger);
+			insert_breakpoint(context, value, debugger);
 			return 0;
 		case 'd':
 			if (input_buf[1] == 'i') {
@@ -682,7 +682,7 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 				if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
 					branch_f = after;
 					branch_t = m68k_branch_target(&inst, context->dregs, context->aregs);
-					insert_breakpoint(context, branch_t, (uint8_t *)debugger);
+					insert_breakpoint(context, branch_t, debugger);
 				} else if(inst.op == M68K_DBCC) {
 					if ( inst.extra.cond == COND_FALSE) {
 						if (context->dregs[inst.dst.params.regs.pri] & 0xFFFF) {
@@ -691,13 +691,13 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 					} else {
 						branch_t = after;
 						branch_f = m68k_branch_target(&inst, context->dregs, context->aregs);
-						insert_breakpoint(context, branch_f, (uint8_t *)debugger);
+						insert_breakpoint(context, branch_f, debugger);
 					}
 				} else {
 					after = m68k_branch_target(&inst, context->dregs, context->aregs);
 				}
 			}
-			insert_breakpoint(context, after, (uint8_t *)debugger);
+			insert_breakpoint(context, after, debugger);
 			return 0;
 		case 'o':
 			if (inst.op == M68K_RTS) {
@@ -711,7 +711,7 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 							branch_t = 0;
 					} else {
 						branch_f = after;
-						insert_breakpoint(context, branch_t, (uint8_t *)debugger);
+						insert_breakpoint(context, branch_t, debugger);
 					}
 				} else if(inst.op == M68K_DBCC) {
 					uint32_t target = m68k_branch_target(&inst, context->dregs, context->aregs)  & 0xFFFFFF;
@@ -721,14 +721,14 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 						} else {
 							branch_f = target;
 							branch_t = after;
-							insert_breakpoint(context, branch_f, (uint8_t *)debugger);
+							insert_breakpoint(context, branch_f, debugger);
 						}
 					}
 				} else {
 					after = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
 				}
 			}
-			insert_breakpoint(context, after, (uint8_t *)debugger);
+			insert_breakpoint(context, after, debugger);
 			return 0;
 		case 's':
 			if (inst.op == M68K_RTS) {
@@ -739,16 +739,16 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 				if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
 					branch_f = after;
 					branch_t = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
-					insert_breakpoint(context, branch_t, (uint8_t *)debugger);
+					insert_breakpoint(context, branch_t, debugger);
 				} else if(inst.op == M68K_DBCC && inst.extra.cond != COND_FALSE) {
 					branch_t = after;
 					branch_f = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
-					insert_breakpoint(context, branch_f, (uint8_t *)debugger);
+					insert_breakpoint(context, branch_f, debugger);
 				} else {
 					after = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
 				}
 			}
-			insert_breakpoint(context, after, (uint8_t *)debugger);
+			insert_breakpoint(context, after, debugger);
 			return 0;
 		case 'v': {
 			genesis_context * gen = context->system;

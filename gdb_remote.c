@@ -216,16 +216,16 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 			if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
 				branch_f = after;
 				branch_t = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
-				insert_breakpoint(context, branch_t, (uint8_t *)gdb_debug_enter);
+				insert_breakpoint(context, branch_t, gdb_debug_enter);
 			} else if(inst.op == M68K_DBCC && inst.extra.cond != COND_FALSE) {
 				branch_t = after;
 				branch_f = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
-				insert_breakpoint(context, branch_f, (uint8_t *)gdb_debug_enter);
+				insert_breakpoint(context, branch_f, gdb_debug_enter);
 			} else {
 				after = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
 			}
 		}
-		insert_breakpoint(context, after, (uint8_t *)gdb_debug_enter);
+		insert_breakpoint(context, after, gdb_debug_enter);
 
 		cont = 1;
 		expect_break_response = 1;
@@ -243,7 +243,7 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 		uint8_t type = command[1];
 		if (type < '2') {
 			uint32_t address = strtoul(command+3, NULL, 16);
-			insert_breakpoint(context, address, (uint8_t *)gdb_debug_enter);
+			insert_breakpoint(context, address, gdb_debug_enter);
 			bp_def *new_bp = malloc(sizeof(bp_def));
 			new_bp->next = breakpoints;
 			new_bp->address = address;
@@ -433,16 +433,16 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 					if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
 						branch_f = after;
 						branch_t = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
-						insert_breakpoint(context, branch_t, (uint8_t *)gdb_debug_enter);
+						insert_breakpoint(context, branch_t, gdb_debug_enter);
 					} else if(inst.op == M68K_DBCC && inst.extra.cond != COND_FALSE) {
 						branch_t = after;
 						branch_f = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
-						insert_breakpoint(context, branch_f, (uint8_t *)gdb_debug_enter);
+						insert_breakpoint(context, branch_f, gdb_debug_enter);
 					} else {
 						after = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
 					}
 				}
-				insert_breakpoint(context, after, (uint8_t *)gdb_debug_enter);
+				insert_breakpoint(context, after, gdb_debug_enter);
 
 				cont = 1;
 				expect_break_response = 1;

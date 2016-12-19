@@ -107,7 +107,8 @@ typedef struct {
 
 #define DEFAULT_JOYBUTTON_ALLOC 12
 
-static keybinding * bindings[0x10000];
+static sega_io *current_io;
+static keybinding *bindings[0x10000];
 static joystick joysticks[MAX_JOYSTICKS];
 static mousebinding mice[MAX_MICE];
 static io_port *keyboard_port;
@@ -294,8 +295,8 @@ void handle_joydown(int joystick, int button)
 
 void handle_mousedown(int mouse, int button)
 {
-	if (genesis->mouse_mode == MOUSE_CAPTURE && !genesis->mouse_captured) {
-		genesis->mouse_captured = 1;
+	if (current_io->mouse_mode == MOUSE_CAPTURE && !current_io->mouse_captured) {
+		current_io->mouse_captured = 1;
 		render_relative_mouse(1);
 		return;
 	}
@@ -348,24 +349,16 @@ void handle_binding_up(keybinding * binding)
 		switch (binding->subtype_a)
 		{
 		case UI_DEBUG_MODE_INC:
-			ui_debug_mode++;
-			if (ui_debug_mode == 7) {
-				ui_debug_mode = 0;
-			}
-			genesis->vdp->debug = ui_debug_mode;
+			current_system->inc_debug_mode(current_system);
 			break;
 		case UI_DEBUG_PAL_INC:
-			ui_debug_pal++;
-			if (ui_debug_pal == 4) {
-				ui_debug_pal = 0;
-			}
-			genesis->vdp->debug_pal = ui_debug_pal;
+			current_system->inc_debug_pal(current_system);
 			break;
 		case UI_ENTER_DEBUGGER:
-			break_on_sync = 1;
+			current_system->enter_debugger = 1;
 			break;
 		case UI_SAVE_STATE:
-			genesis->save_state = QUICK_SAVE_SLOT+1;
+			current_system->save_state = QUICK_SAVE_SLOT+1;
 			break;
 		case UI_NEXT_SPEED:
 			current_speed++;
@@ -373,7 +366,7 @@ void handle_binding_up(keybinding * binding)
 				current_speed = 0;
 			}
 			printf("Setting speed to %d: %d\n", current_speed, speeds[current_speed]);
-			set_speed_percent(genesis, speeds[current_speed]);
+			current_system->set_speed_percent(current_system, speeds[current_speed]);
 			break;
 		case UI_PREV_SPEED:
 			current_speed--;
@@ -381,26 +374,27 @@ void handle_binding_up(keybinding * binding)
 				current_speed = num_speeds - 1;
 			}
 			printf("Setting speed to %d: %d\n", current_speed, speeds[current_speed]);
-			set_speed_percent(genesis, speeds[current_speed]);
+			current_system->set_speed_percent(current_system, speeds[current_speed]);
 			break;
 		case UI_SET_SPEED:
 			if (binding->value < num_speeds) {
 				current_speed = binding->value;
 				printf("Setting speed to %d: %d\n", current_speed, speeds[current_speed]);
-				set_speed_percent(genesis, speeds[current_speed]);
+				current_system->set_speed_percent(current_system, speeds[current_speed]);
 			} else {
 				printf("Setting speed to %d\n", speeds[current_speed]);
-				set_speed_percent(genesis, binding->value);
+				current_system->set_speed_percent(current_system, speeds[current_speed]);
 			}
 			break;
 		case UI_RELEASE_MOUSE:
-			if (genesis->mouse_captured) {
-				genesis->mouse_captured = 0;
+			if (current_io->mouse_captured) {
+				current_io->mouse_captured = 0;
 				render_relative_mouse(0);
 			}
 			break;
 		case UI_EXIT:
-			genesis->m68k->should_return = 1;
+			current_system->request_exit(current_system);
+			break;
 		}
 		break;
 	}
@@ -460,7 +454,7 @@ void handle_mouse_moved(int mouse, uint16_t x, uint16_t y, int16_t deltax, int16
 		return;
 	}
 	//TODO: relative mode
-	switch(genesis->mouse_mode)
+	switch(current_io->mouse_mode)
 	{
 	case MOUSE_ABSOLUTE: {
 		float scale_x = 640.0 / ((float)render_width());
@@ -476,7 +470,7 @@ void handle_mouse_moved(int mouse, uint16_t x, uint16_t y, int16_t deltax, int16
 		break;
 	}
 	case MOUSE_CAPTURE: {
-		if (genesis->mouse_captured) {
+		if (current_io->mouse_captured) {
 			mice[mouse].motion_port->device.mouse.cur_x += deltax;
 			mice[mouse].motion_port->device.mouse.cur_y += deltay;
 		}
@@ -721,7 +715,8 @@ static void cleanup_sockfile()
 
 void setup_io_devices(tern_node * config, rom_info *rom, genesis_context *gen)
 {
-	io_port * ports = gen->ports;
+	current_io = &gen->io;
+	io_port * ports = current_io->ports;
 	tern_node *io_nodes = tern_get_node(tern_find_path(config, "io\0devices\0"));
 	char * io_1 = rom->port1_override ? rom->port1_override : tern_find_ptr(io_nodes, "1");
 	char * io_2 = rom->port2_override ? rom->port2_override : tern_find_ptr(io_nodes, "2");
@@ -732,13 +727,13 @@ void setup_io_devices(tern_node * config, rom_info *rom, genesis_context *gen)
 	process_device(io_ext, ports+2);
 
 	if (render_fullscreen()) {
-			gen->mouse_mode = MOUSE_RELATIVE;
+			current_io->mouse_mode = MOUSE_RELATIVE;
 			render_relative_mouse(1);
 	} else {
 		if (rom->mouse_mode && !strcmp(rom->mouse_mode, "absolute")) {
-			gen->mouse_mode = MOUSE_ABSOLUTE;
+			current_io->mouse_mode = MOUSE_ABSOLUTE;
 		} else {
-			gen->mouse_mode = MOUSE_CAPTURE;
+			current_io->mouse_mode = MOUSE_CAPTURE;
 		}
 	}
 
@@ -926,8 +921,15 @@ void process_mouse(char *mousenum, tern_val value, void *data)
 	}
 }
 
-void set_keybindings(io_port *ports)
+void set_keybindings(sega_io *io)
 {
+	static uint8_t already_done;
+	if (already_done) {
+		map_all_bindings(io);
+		return;
+	}
+	already_done = 1;
+	io_port *ports = io->ports;
 	tern_node * special = tern_insert_int(NULL, "up", RENDERKEY_UP);
 	special = tern_insert_int(special, "down", RENDERKEY_DOWN);
 	special = tern_insert_int(special, "left", RENDERKEY_LEFT);
@@ -1067,11 +1069,14 @@ void set_keybindings(io_port *ports)
 			speeds[i] = 100;
 		}
 	}
-	map_all_bindings(ports);
+	map_all_bindings(io);
 }
 
-void map_all_bindings(io_port *ports)
+void map_all_bindings(sega_io *io)
 {
+	current_io = io;
+	io_port *ports = io->ports;
+	
 	for (int bucket = 0; bucket < 0x10000; bucket++)
 	{
 		if (bindings[bucket])
@@ -1117,7 +1122,7 @@ void map_all_bindings(io_port *ports)
 	}
 	//not really related to the intention of this function, but the best place to do this currently
 	if (speeds[0] != 100) {
-		set_speed_percent(genesis, speeds[0]);
+		current_system->set_speed_percent(current_system, speeds[0]);
 	}
 }
 
@@ -1133,7 +1138,7 @@ void mouse_check_ready(io_port *port, uint32_t current_cycle)
 		if (port->device.mouse.tr_counter == 3) {
 			port->device.mouse.latched_x = port->device.mouse.cur_x;
 			port->device.mouse.latched_y = port->device.mouse.cur_y;
-			if (genesis->mouse_mode == MOUSE_ABSOLUTE) {
+			if (current_io->mouse_mode == MOUSE_ABSOLUTE) {
 				//avoid overflow in absolute mode
 				int deltax = port->device.mouse.latched_x - port->device.mouse.last_read_x;
 				if (abs(deltax) > 255) {

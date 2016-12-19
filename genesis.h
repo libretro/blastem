@@ -7,6 +7,7 @@
 #define GENESIS_H_
 
 #include <stdint.h>
+#include "system.h"
 #include "m68k_core.h"
 #include "z80_to_x86.h"
 #include "ym2612.h"
@@ -19,20 +20,17 @@
 typedef struct genesis_context genesis_context;
 
 struct genesis_context {
+	system_header   header;
 	m68k_context    *m68k;
 	z80_context     *z80;
 	vdp_context     *vdp;
 	ym2612_context  *ym;
 	psg_context     *psg;
-	genesis_context *next_context;
 	uint16_t        *cart;
 	uint16_t        *lock_on;
 	uint16_t        *work_ram;
 	uint8_t         *zram;
 	void            *extra;
-	arena           *arena;
-	char            *next_rom;
-	char            *save_dir;
 	uint8_t         *save_storage;
 	eeprom_map      *eeprom_map;
 	uint32_t        num_eeprom;
@@ -45,18 +43,11 @@ struct genesis_context {
 	uint8_t         bank_regs[8];
 	uint16_t        mapper_start_index;
 	uint8_t         save_type;
-	io_port         ports[3];
+	sega_io         io;
 	uint8_t         version_reg;
 	uint8_t         bus_busy;
-	uint8_t         should_exit;
-	uint8_t         save_state;
-	uint8_t         mouse_mode;
-	uint8_t         mouse_captured;
 	eeprom_state    eeprom;
 };
-
-extern genesis_context * genesis;
-extern int break_on_sync;
 
 #define RAM_WORDS 32 * 1024
 #define Z80_RAM_BYTES 8 * 1024
@@ -64,11 +55,7 @@ extern int break_on_sync;
 uint16_t read_dma_value(uint32_t address);
 uint16_t get_open_bus_value();
 m68k_context * sync_components(m68k_context *context, uint32_t address);
-m68k_context * debugger(m68k_context * context, uint32_t address);
-void set_speed_percent(genesis_context * context, uint32_t percent);
 genesis_context *alloc_config_genesis(void *rom, uint32_t rom_size, void *lock_on, uint32_t lock_on_size, uint32_t ym_opts, uint8_t force_region, rom_info *info_out);
-void start_genesis(genesis_context *gen, char *statefile, uint8_t *debugger);
-void free_genesis(genesis_context *gen);
 
 #endif //GENESIS_H_
 
