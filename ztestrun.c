@@ -89,7 +89,7 @@ int main(int argc, char ** argv)
 		exit(1);
 	}
 	fclose(f);
-	init_z80_opts(&opts, z80_map, 2, port_map, 1, 1);
+	init_z80_opts(&opts, z80_map, 2, port_map, 1, 1, 0xFF);
 	init_z80_context(&context, &opts);
 	//Z80 RAM
 	context.mem_pointers[0] = z80_ram;

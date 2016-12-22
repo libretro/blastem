@@ -3120,7 +3120,7 @@ void translate_z80_stream(z80_context * context, uint32_t address)
 	} while (opts->gen.deferred);
 }
 
-void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t num_chunks, memmap_chunk const * io_chunks, uint32_t num_io_chunks, uint32_t clock_divider)
+void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t num_chunks, memmap_chunk const * io_chunks, uint32_t num_io_chunks, uint32_t clock_divider, uint32_t io_address_mask)
 {
 	memset(options, 0, sizeof(*options));
 
@@ -3386,7 +3386,7 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 
 	//HACK
 	options->gen.address_size = SZ_D;
-	options->gen.address_mask = 0xFF;
+	options->gen.address_mask = io_address_mask;
 	options->read_io = gen_mem_fun(&options->gen, io_chunks, num_io_chunks, READ_8, NULL);
 	options->write_io = gen_mem_fun(&options->gen, io_chunks, num_io_chunks, WRITE_8, NULL);
 	options->gen.address_size = SZ_W;
