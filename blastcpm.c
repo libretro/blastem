@@ -101,7 +101,7 @@ int main(int argc, char **argv)
 	
 	z80_options opts;
 	z80_context context;
-	init_z80_opts(&opts, z80_map, 1, io_map, 3, 1);
+	init_z80_opts(&opts, z80_map, 1, io_map, 3, 1, 0xFF);
 	init_z80_context(&context, &opts);
 	for(;;)
 	{

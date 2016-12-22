@@ -83,6 +83,8 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 	
 	if (opts->address_size == SZ_D && opts->address_mask != 0xFFFFFFFF) {
 		and_ir(code, opts->address_mask, adr_reg, SZ_D);
+	} else if (opts->address_size == SZ_W && opts->address_mask != 0xFFFF) {
+		and_ir(code, opts->address_mask, adr_reg, SZ_W);
 	}
 	code_ptr lb_jcc = NULL, ub_jcc = NULL;
 	uint16_t access_flag = is_write ? MMAP_WRITE : MMAP_READ;

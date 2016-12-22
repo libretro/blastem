@@ -88,7 +88,7 @@ typedef struct {
 } z80_context;
 
 void translate_z80_stream(z80_context * context, uint32_t address);
-void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t num_chunks, memmap_chunk const * io_chunks, uint32_t num_io_chunks, uint32_t clock_divider);
+void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t num_chunks, memmap_chunk const * io_chunks, uint32_t num_io_chunks, uint32_t clock_divider, uint32_t io_address_mask);
 void z80_options_free(z80_options *opts);
 void init_z80_context(z80_context * context, z80_options * options);
 code_ptr z80_get_native_address(z80_context * context, uint32_t address);
