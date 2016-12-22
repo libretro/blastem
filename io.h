@@ -85,7 +85,7 @@ typedef struct genesis_context genesis_context;
 
 void set_keybindings(sega_io *io);
 void map_all_bindings(sega_io *io);
-void setup_io_devices(tern_node * config, rom_info *rom, genesis_context * gen);
+void setup_io_devices(tern_node * config, rom_info *rom, sega_io *io);
 void io_adjust_cycles(io_port * pad, uint32_t current_cycle, uint32_t deduction);
 void io_data_write(io_port * pad, uint8_t value, uint32_t current_cycle);
 uint8_t io_data_read(io_port * pad, uint32_t current_cycle);

@@ -45,7 +45,7 @@ uint16_t get_open_bus_value()
 	return read_dma_value(genesis->m68k->last_prefetch_address/2);
 }
 
-void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
+static void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 {
 	//static int old_int_cycle = CYCLE_NEVER;
 	genesis_context *gen = context->system;
@@ -109,7 +109,7 @@ void z80_next_int_pulse(z80_context * z_context)
 	z_context->int_pulse_end = z_context->int_pulse_start + MCLKS_LINE;
 }
 
-void sync_z80(z80_context * z_context, uint32_t mclks)
+static void sync_z80(z80_context * z_context, uint32_t mclks)
 {
 #ifndef NO_Z80
 	if (z80_enabled) {
@@ -121,7 +121,7 @@ void sync_z80(z80_context * z_context, uint32_t mclks)
 	}
 }
 
-void sync_sound(genesis_context * gen, uint32_t target)
+static void sync_sound(genesis_context * gen, uint32_t target)
 {
 	//printf("YM | Cycle: %d, bpos: %d, PSG | Cycle: %d, bpos: %d\n", gen->ym->current_cycle, gen->ym->buffer_pos, gen->psg->cycles, gen->psg->buffer_pos * 2);
 	while (target > gen->psg->cycles && target - gen->psg->cycles > MAX_SOUND_CYCLES) {
@@ -137,7 +137,8 @@ void sync_sound(genesis_context * gen, uint32_t target)
 	//printf("Target: %d, YM bufferpos: %d, PSG bufferpos: %d\n", target, gen->ym->buffer_pos, gen->psg->buffer_pos * 2);
 }
 
-uint32_t last_frame_num;
+//TODO: move this inside the system context
+static uint32_t last_frame_num;
 
 //My refresh emulation isn't currently good enough and causes more problems than it solves
 #ifdef REFRESH_EMULATION
@@ -237,7 +238,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	return context;
 }
 
-m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_t value)
+static m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_t value)
 {
 	if (vdp_port & 0x2700E0) {
 		fatal_error("machine freeze due to write to address %X\n", 0xC00000 | vdp_port);
@@ -332,12 +333,12 @@ m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, uint16_
 	return context;
 }
 
-m68k_context * vdp_port_write_b(uint32_t vdp_port, m68k_context * context, uint8_t value)
+static m68k_context * vdp_port_write_b(uint32_t vdp_port, m68k_context * context, uint8_t value)
 {
 	return vdp_port_write(vdp_port, context, vdp_port < 0x10 ? value | value << 8 : ((vdp_port & 1) ? value : 0));
 }
 
-void * z80_vdp_port_write(uint32_t vdp_port, void * vcontext, uint8_t value)
+static void * z80_vdp_port_write(uint32_t vdp_port, void * vcontext, uint8_t value)
 {
 	z80_context * context = vcontext;
 	genesis_context * gen = context->system;
@@ -364,7 +365,7 @@ void * z80_vdp_port_write(uint32_t vdp_port, void * vcontext, uint8_t value)
 	return context;
 }
 
-uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
+static uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 {
 	if (vdp_port & 0x2700E0) {
 		fatal_error("machine freeze due to read from address %X\n", 0xC00000 | vdp_port);
@@ -404,7 +405,7 @@ uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 	return value;
 }
 
-uint8_t vdp_port_read_b(uint32_t vdp_port, m68k_context * context)
+static uint8_t vdp_port_read_b(uint32_t vdp_port, m68k_context * context)
 {
 	uint16_t value = vdp_port_read(vdp_port, context);
 	if (vdp_port & 1) {
@@ -414,7 +415,7 @@ uint8_t vdp_port_read_b(uint32_t vdp_port, m68k_context * context)
 	}
 }
 
-uint8_t z80_vdp_port_read(uint32_t vdp_port, void * vcontext)
+static uint8_t z80_vdp_port_read(uint32_t vdp_port, void * vcontext)
 {
 	z80_context * context = vcontext;
 	if (vdp_port & 0xE0) {
@@ -449,9 +450,10 @@ uint8_t z80_vdp_port_read(uint32_t vdp_port, void * vcontext)
 	return vdp_port & 1 ? ret : ret >> 8;
 }
 
-uint32_t zram_counter = 0;
+//TODO: Move this inside the system context
+static uint32_t zram_counter = 0;
 
-m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value)
+static m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value)
 {
 	genesis_context * gen = context->system;
 	if (location < 0x10000) {
@@ -555,7 +557,7 @@ m68k_context * io_write(uint32_t location, m68k_context * context, uint8_t value
 	return context;
 }
 
-m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t value)
+static m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t value)
 {
 	if (location < 0x10000 || (location & 0x1FFF) >= 0x100) {
 		return io_write(location, context, value >> 8);
@@ -571,7 +573,7 @@ m68k_context * io_write_w(uint32_t location, m68k_context * context, uint16_t va
 #define EUR (HZ50|FOREIGN)
 #define NO_DISK 0x20
 
-uint8_t io_read(uint32_t location, m68k_context * context)
+static uint8_t io_read(uint32_t location, m68k_context * context)
 {
 	uint8_t value;
 	genesis_context *gen = context->system;
@@ -637,7 +639,7 @@ uint8_t io_read(uint32_t location, m68k_context * context)
 	return value;
 }
 
-uint16_t io_read_w(uint32_t location, m68k_context * context)
+static uint16_t io_read_w(uint32_t location, m68k_context * context)
 {
 	uint16_t value = io_read(location, context);
 	if (location < 0x10000 || (location & 0x1FFF) < 0x100) {
@@ -649,7 +651,7 @@ uint16_t io_read_w(uint32_t location, m68k_context * context)
 	return value;
 }
 
-void * z80_write_ym(uint32_t location, void * vcontext, uint8_t value)
+static void * z80_write_ym(uint32_t location, void * vcontext, uint8_t value)
 {
 	z80_context * context = vcontext;
 	genesis_context * gen = context->system;
@@ -664,7 +666,7 @@ void * z80_write_ym(uint32_t location, void * vcontext, uint8_t value)
 	return context;
 }
 
-uint8_t z80_read_ym(uint32_t location, void * vcontext)
+static uint8_t z80_read_ym(uint32_t location, void * vcontext)
 {
 	z80_context * context = vcontext;
 	genesis_context * gen = context->system;
@@ -672,7 +674,7 @@ uint8_t z80_read_ym(uint32_t location, void * vcontext)
 	return ym_read_status(gen->ym);
 }
 
-uint8_t z80_read_bank(uint32_t location, void * vcontext)
+static uint8_t z80_read_bank(uint32_t location, void * vcontext)
 {
 	z80_context * context = vcontext;
 	genesis_context *gen = context->system;
@@ -699,7 +701,7 @@ uint8_t z80_read_bank(uint32_t location, void * vcontext)
 	return 0;
 }
 
-void *z80_write_bank(uint32_t location, void * vcontext, uint8_t value)
+static void *z80_write_bank(uint32_t location, void * vcontext, uint8_t value)
 {
 	z80_context * context = vcontext;
 	genesis_context *gen = context->system;
@@ -726,7 +728,7 @@ void *z80_write_bank(uint32_t location, void * vcontext, uint8_t value)
 	return context;
 }
 
-void *z80_write_bank_reg(uint32_t location, void * vcontext, uint8_t value)
+static void *z80_write_bank_reg(uint32_t location, void * vcontext, uint8_t value)
 {
 	z80_context * context = vcontext;
 
@@ -748,7 +750,7 @@ static void set_speed_percent(system_header * system, uint32_t percent)
 	context->master_clock = ((uint64_t)context->normal_clock * (uint64_t)percent) / 100;
 	while (context->ym->current_cycle != context->psg->cycles) {
 		sync_sound(context, context->psg->cycles + MCLKS_PER_PSG);
-}
+	}
 	ym_adjust_master_clock(context->ym, context->master_clock);
 	psg_adjust_master_clock(context->psg, context->master_clock);
 }
@@ -870,6 +872,7 @@ static void free_genesis(system_header *system)
 	genesis_context *gen = (genesis_context *)system;
 	vdp_free(gen->vdp);
 	m68k_options_free(gen->m68k->options);
+	free(gen->cart);
 	free(gen->m68k);
 	free(gen->work_ram);
 	z80_options_free(gen->z80->options);
@@ -880,6 +883,7 @@ static void free_genesis(system_header *system)
 	free(gen->save_storage);
 	free(gen->header.save_dir);
 	free(gen->lock_on);
+	free(gen);
 }
 
 genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on, uint32_t system_opts, uint8_t force_region)
@@ -923,7 +927,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	z80_map[0].buffer = gen->zram = calloc(1, Z80_RAM_BYTES);
 #ifndef NO_Z80
 	z80_options *z_opts = malloc(sizeof(z80_options));
-	init_z80_opts(z_opts, z80_map, 5, NULL, 0, MCLKS_PER_Z80);
+	init_z80_opts(z_opts, z80_map, 5, NULL, 0, MCLKS_PER_Z80, 0xFFFF);
 	init_z80_context(gen->z80, z_opts);
 	z80_assert_reset(gen->z80, 0);
 #endif
@@ -935,7 +939,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	gen->cart = main_rom;
 	gen->lock_on = lock_on;
 	gen->work_ram = calloc(2, RAM_WORDS);
-	setup_io_devices(config, rom, gen);
+	setup_io_devices(config, rom, &gen->io);
 
 	gen->save_type = rom->save_type;
 	gen->save_type = rom->save_type;

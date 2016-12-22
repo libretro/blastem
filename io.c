@@ -713,9 +713,9 @@ static void cleanup_sockfile()
 	unlink(sockfile_name);
 }
 
-void setup_io_devices(tern_node * config, rom_info *rom, genesis_context *gen)
+void setup_io_devices(tern_node * config, rom_info *rom, sega_io *io)
 {
-	current_io = &gen->io;
+	current_io = io;
 	io_port * ports = current_io->ports;
 	tern_node *io_nodes = tern_get_node(tern_find_path(config, "io\0devices\0"));
 	char * io_1 = rom->port1_override ? rom->port1_override : tern_find_ptr(io_nodes, "1");
