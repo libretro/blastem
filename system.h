@@ -19,6 +19,7 @@ typedef enum {
 } debugger_type;
 
 typedef void (*system_fun)(system_header *);
+typedef uint16_t (*system_fun_r16)(system_header *);
 typedef void (*start_system_fun)(system_header *, char *);
 typedef void (*speed_system_fun)(system_header *, uint32_t);
 
@@ -30,6 +31,7 @@ struct system_header {
 	system_fun        persist_save;
 	system_fun        request_exit;
 	system_fun        free_context;
+	system_fun_r16    get_open_bus_value;
 	speed_system_fun  set_speed_percent;
 	system_fun        inc_debug_mode;
 	system_fun        inc_debug_pal;

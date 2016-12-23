@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include "system.h"
 
 #define VDP_REGS 24
 #define CRAM_SIZE 64
@@ -52,6 +53,7 @@
 #define FLAG2_SPRITE_COLLIDE 0x08
 #define FLAG2_REGION_PAL     0x10
 #define FLAG2_EVEN_FIELD     0x20
+#define FLAG2_BYTE_PENDING   0x40
 
 #define DISPLAY_ENABLE 0x40
 
@@ -141,6 +143,7 @@ typedef struct {
 	uint8_t     *linebuf;
 	//pointer to current line in framebuffer
 	uint32_t    *output;
+	system_header  *system;
 	uint16_t    cram[CRAM_SIZE];
 	uint32_t    colors[CRAM_SIZE*3];
 	uint32_t    debugcolors[1 << (3 + 1 + 1 + 1)];//3 bits for source, 1 bit for priority, 1 bit for shadow, 1 bit for hilight
@@ -175,6 +178,7 @@ typedef struct {
 	uint8_t     buf_b_off;
 	uint8_t     debug;
 	uint8_t     debug_pal;
+	uint8_t     pending_byte;
 	uint8_t     *tmp_buf_a;
 	uint8_t     *tmp_buf_b;
 } vdp_context;
@@ -189,7 +193,9 @@ void vdp_run_dma_done(vdp_context * context, uint32_t target_cycles);
 uint8_t vdp_load_gst(vdp_context * context, FILE * state_file);
 uint8_t vdp_save_gst(vdp_context * context, FILE * outfile);
 int vdp_control_port_write(vdp_context * context, uint16_t value);
+void vdp_control_port_write_pbc(vdp_context * context, uint8_t value);
 int vdp_data_port_write(vdp_context * context, uint16_t value);
+void vdp_data_port_write_pbc(vdp_context * context, uint8_t value);
 void vdp_test_port_write(vdp_context * context, uint16_t value);
 uint16_t vdp_control_port_read(vdp_context * context);
 uint16_t vdp_data_port_read(vdp_context * context);

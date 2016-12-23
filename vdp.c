@@ -554,13 +554,33 @@ static void external_slot(vdp_context * context)
 			break;
 		case CRAM_WRITE: {
 			//printf("CRAM Write | %X to %X\n", start->value, (start->address/2) & (CRAM_SIZE-1));
-			write_cram(context, start->address, start->partial == 2 ? context->fifo[context->fifo_write].value : start->value);
+			if (start->partial == 1) {
+				uint16_t val;
+				if (start->address & 1) {
+					val = (context->cram[start->address >> 1 & (CRAM_SIZE-1)] & 0xFF) | start->value << 8;
+				} else {
+					val = (context->cram[start->address >> 1 & (CRAM_SIZE-1)] & 0xFF00) | start->value;
+				}
+				write_cram(context, start->address, val);
+			} else {
+				write_cram(context, start->address, start->partial == 2 ? context->fifo[context->fifo_write].value : start->value);
+			}
 			break;
 		}
 		case VSRAM_WRITE:
 			if (((start->address/2) & 63) < VSRAM_SIZE) {
 				//printf("VSRAM Write: %X to %X @ vcounter: %d, hslot: %d, cycle: %d\n", start->value, context->address, context->vcounter, context->hslot, context->cycles);
-				context->vsram[(start->address/2) & 63] = start->partial == 2 ? context->fifo[context->fifo_write].value : start->value;
+				if (start->partial == 1) {
+					if (start->address & 1) {
+						context->vsram[(start->address/2) & 63] &= 0xFF;
+						context->vsram[(start->address/2) & 63] |= start->value << 8;
+					} else {
+						context->vsram[(start->address/2) & 63] &= 0xFF00;
+						context->vsram[(start->address/2) & 63] |= start->value;
+					}
+				} else {
+					context->vsram[(start->address/2) & 63] = start->partial == 2 ? context->fifo[context->fifo_write].value : start->value;
+				}
 			}
 
 			break;
@@ -1673,6 +1693,19 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 	return 0;
 }
 
+void vdp_control_port_write_pbc(vdp_context *context, uint8_t value)
+{
+	if (context->flags2 & FLAG2_BYTE_PENDING) {
+		uint16_t full_val = value << 8 | context->pending_byte;
+		context->flags2 &= ~FLAG2_BYTE_PENDING;
+		//TODO: Deal with fact that Vbus->VDP DMA doesn't do anything in PBC mode
+		vdp_control_port_write(context, full_val);
+	} else {
+		context->pending_byte = value;
+		context->flags2 |= FLAG2_BYTE_PENDING;
+	}
+}
+
 int vdp_data_port_write(vdp_context * context, uint16_t value)
 {
 	//printf("data port write: %X at %d\n", value, context->cycles);
@@ -1708,6 +1741,36 @@ int vdp_data_port_write(vdp_context * context, uint16_t value)
 	return 0;
 }
 
+void vdp_data_port_write_pbc(vdp_context * context, uint8_t value)
+{
+	if (context->flags & FLAG_PENDING) {
+		context->flags &= ~FLAG_PENDING;
+		//Should these be cleared here?
+		context->flags &= ~FLAG_READ_FETCHED;
+		context->flags2 &= ~FLAG2_READ_PENDING;
+	}
+	/*if (context->fifo_cur == context->fifo_end) {
+		printf("FIFO full, waiting for space before next write at cycle %X\n", context->cycles);
+	}*/
+	if (context->cd & 0x20 && (context->regs[REG_DMASRC_H] & 0xC0) == 0x80) {
+		context->flags &= ~FLAG_DMA_RUN;
+	}
+	while (context->fifo_write == context->fifo_read) {
+		vdp_run_context(context, context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20));
+	}
+	fifo_entry * cur = context->fifo + context->fifo_write;
+	cur->cycle = context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20)*FIFO_LATENCY;
+	cur->address = context->address;
+	cur->value = value;
+	cur->cd = context->cd;
+	cur->partial = 1;
+	if (context->fifo_read < 0) {
+		context->fifo_read = context->fifo_write;
+	}
+	context->fifo_write = (context->fifo_write + 1) & (FIFO_SIZE-1);
+	context->address += context->regs[REG_AUTOINC];
+}
+
 void vdp_test_port_write(vdp_context * context, uint16_t value)
 {
 	//TODO: implement test register
@@ -1717,7 +1780,7 @@ uint16_t vdp_control_port_read(vdp_context * context)
 {
 	context->flags &= ~FLAG_PENDING;
 	//Bits 15-10 are not fixed like Charles MacDonald's doc suggests, but instead open bus values that reflect 68K prefetch
-	uint16_t value = get_open_bus_value() & 0xFC00;
+	uint16_t value = context->system->get_open_bus_value(context->system) & 0xFC00;
 	if (context->fifo_read < 0) {
 		value |= 0x200;
 	}
