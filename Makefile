@@ -142,7 +142,7 @@ endif
 ifdef NOZ80
 CFLAGS+=-DNO_Z80
 else
-MAINOBJS+= $(Z80OBJS)
+MAINOBJS+= sms.o $(Z80OBJS)
 endif
 
 ifeq ($(OS),Windows)

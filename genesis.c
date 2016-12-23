@@ -39,9 +39,9 @@ uint16_t read_dma_value(uint32_t address)
 	return 0;
 }
 
-uint16_t get_open_bus_value()
+static uint16_t get_open_bus_value(system_header *system)
 {
-	genesis_context *genesis = (genesis_context *)current_system;
+	genesis_context *genesis = (genesis_context *)system;
 	return read_dma_value(genesis->m68k->last_prefetch_address/2);
 }
 
@@ -101,7 +101,7 @@ static void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 #define dputs
 #endif
 
-void z80_next_int_pulse(z80_context * z_context)
+static void z80_next_int_pulse(z80_context * z_context)
 {
 	genesis_context * gen = z_context->system;
 	z_context->int_pulse_start = vdp_next_vint_z80(gen->vdp);
@@ -626,7 +626,7 @@ static uint8_t io_read(uint32_t location, m68k_context * context)
 		} else {
 			if (location == 0x1100) {
 				value = z80_enabled ? !z80_get_busack(gen->z80, context->current_cycle) : !gen->z80->busack;
-				value |= (get_open_bus_value() >> 8) & 0xFE;
+				value |= (get_open_bus_value(&gen->header) >> 8) & 0xFE;
 				dprintf("Byte read of BUSREQ returned %d @ %d (reset: %d)\n", value, context->current_cycle, gen->z80->reset);
 			} else if (location == 0x1200) {
 				value = !gen->z80->reset;
@@ -641,12 +641,13 @@ static uint8_t io_read(uint32_t location, m68k_context * context)
 
 static uint16_t io_read_w(uint32_t location, m68k_context * context)
 {
+	genesis_context *gen = context->system;
 	uint16_t value = io_read(location, context);
 	if (location < 0x10000 || (location & 0x1FFF) < 0x100) {
 		value = value | (value << 8);
 	} else {
 		value <<= 8;
-		value |= get_open_bus_value() & 0xFF;
+		value |= get_open_bus_value(&gen->header) & 0xFF;
 	}
 	return value;
 }
@@ -902,6 +903,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	gen->header.load_save = load_save;
 	gen->header.persist_save = persist_save;
 	gen->header.free_context = free_genesis;
+	gen->header.get_open_bus_value = get_open_bus_value;
 	gen->header.request_exit = request_exit;
 	gen->header.inc_debug_mode = inc_debug_mode;
 	gen->header.inc_debug_pal = inc_debug_pal;
@@ -909,6 +911,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 
 	gen->vdp = malloc(sizeof(vdp_context));
 	init_vdp_context(gen->vdp, gen->version_reg & 0x40);
+	gen->vdp->system = &gen->header;
 	gen->frame_end = vdp_cycles_to_frame_end(gen->vdp);
 	char * config_cycles = tern_find_path(config, "clocks\0max_cycles\0").ptrval;
 	gen->max_cycles = config_cycles ? atoi(config_cycles) : DEFAULT_SYNC_INTERVAL;
@@ -929,6 +932,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	z80_options *z_opts = malloc(sizeof(z80_options));
 	init_z80_opts(z_opts, z80_map, 5, NULL, 0, MCLKS_PER_Z80, 0xFFFF);
 	init_z80_context(gen->z80, z_opts);
+	gen->z80->next_int_pulse = z80_next_int_pulse;
 	z80_assert_reset(gen->z80, 0);
 #endif
 

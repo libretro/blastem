@@ -26,7 +26,8 @@ enum {
 	ZF_NUM
 };
 
-typedef void (*z80_run_fun)(void * context);
+typedef struct z80_context z80_context;
+typedef void (*z80_ctx_fun)(z80_context * context);
 
 typedef struct {
 	cpu_options     gen;
@@ -47,10 +48,10 @@ typedef struct {
 
 	uint32_t        flags;
 	int8_t          regs[Z80_UNUSED];
-	z80_run_fun     run;
+	z80_ctx_fun     run;
 } z80_options;
 
-typedef struct {
+struct z80_context {
 	void *            native_pc;
 	uint16_t          sp;
 	uint8_t           flags[ZF_NUM];
@@ -82,10 +83,11 @@ typedef struct {
 	uint8_t *         bp_handler;
 	uint8_t *         bp_stub;
 	uint8_t *         interp_code[256];
+	z80_ctx_fun       next_int_pulse;
 	uint8_t           reset;
 	uint8_t           busreq;
 	uint8_t           busack;
-} z80_context;
+};
 
 void translate_z80_stream(z80_context * context, uint32_t address);
 void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t num_chunks, memmap_chunk const * io_chunks, uint32_t num_io_chunks, uint32_t clock_divider, uint32_t io_address_mask);
@@ -104,8 +106,6 @@ void z80_assert_busreq(z80_context * context, uint32_t cycle);
 void z80_clear_busreq(z80_context * context, uint32_t cycle);
 uint8_t z80_get_busack(z80_context * context, uint32_t cycle);
 void z80_adjust_cycles(z80_context * context, uint32_t deduction);
-//to be provided by system code
-void z80_next_int_pulse(z80_context * z_context);
 
 #endif //Z80_TO_X86_H_
 

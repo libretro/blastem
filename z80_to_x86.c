@@ -3476,7 +3476,7 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	call(code, options->gen.load_context);
 	jmp_r(code, options->gen.scratch1);
 
-	options->run = (z80_run_fun)code->cur;
+	options->run = code->cur;
 	tmp_stack_off = code->stack_off;
 	save_callee_save_regs(code);
 #ifdef X86_64
@@ -3525,8 +3525,8 @@ void z80_run(z80_context * context, uint32_t target_cycle)
 			}
 			while (context->current_cycle < context->sync_cycle)
 			{
-				if (context->int_pulse_end < context->current_cycle || context->int_pulse_end == CYCLE_NEVER) {
-					z80_next_int_pulse(context);
+				if (context->next_int_pulse && (context->int_pulse_end < context->current_cycle || context->int_pulse_end == CYCLE_NEVER)) {
+					context->next_int_pulse(context);
 				}
 				if (context->iff1) {
 					context->int_cycle = context->int_pulse_start < context->int_enable_cycle ? context->int_enable_cycle : context->int_pulse_start;
@@ -3623,7 +3623,9 @@ void z80_adjust_cycles(z80_context * context, uint32_t deduction)
 		if (context->int_pulse_end < deduction) {
 			context->int_pulse_start = context->int_pulse_end = CYCLE_NEVER;
 		} else {
-			context->int_pulse_end -= deduction;
+			if (context->int_pulse_end != CYCLE_NEVER) {
+				context->int_pulse_end -= deduction;
+			}
 			if (context->int_pulse_start < deduction) {
 				context->int_pulse_start = 0;
 			} else {
