@@ -53,7 +53,6 @@ struct genesis_context {
 #define Z80_RAM_BYTES 8 * 1024
 
 uint16_t read_dma_value(uint32_t address);
-uint16_t get_open_bus_value();
 m68k_context * sync_components(m68k_context *context, uint32_t address);
 genesis_context *alloc_config_genesis(void *rom, uint32_t rom_size, void *lock_on, uint32_t lock_on_size, uint32_t system_opts, uint8_t force_region, rom_info *info_out);
 

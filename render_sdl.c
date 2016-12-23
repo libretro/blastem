@@ -44,6 +44,7 @@ static SDL_cond * audio_ready;
 static SDL_cond * psg_cond;
 static SDL_cond * ym_cond;
 static uint8_t quitting = 0;
+static uint8_t ym_enabled = 1;
 
 static void audio_callback(void * userdata, uint8_t *byte_stream, int len)
 {
@@ -61,24 +62,43 @@ static void audio_callback(void * userdata, uint8_t *byte_stream, int len)
 				current_psg = NULL;
 				SDL_CondSignal(psg_cond);
 			}
-			if (!ym_buf) {
+			if (ym_enabled && !ym_buf) {
 				ym_buf = current_ym;
 				current_ym = NULL;
 				SDL_CondSignal(ym_cond);
 			}
-			if (!quitting && (!psg_buf || !ym_buf)) {
+			if (!quitting && (!psg_buf || (ym_enabled && !ym_buf))) {
 				SDL_CondWait(audio_ready, audio_mutex);
 			}
-		} while(!quitting && (!psg_buf || !ym_buf));
+		} while(!quitting && (!psg_buf || (ym_enabled && !ym_buf)));
 
 		local_quit = quitting;
 	SDL_UnlockMutex(audio_mutex);
 	if (!local_quit) {
-		for (int i = 0; i < samples; i++) {
-			*(stream++) = psg_buf[i] + *(ym_buf++);
-			*(stream++) = psg_buf[i] + *(ym_buf++);
+		if (ym_enabled) {
+			for (int i = 0; i < samples; i++)
+			{
+				*(stream++) = psg_buf[i] + *(ym_buf++);
+				*(stream++) = psg_buf[i] + *(ym_buf++);
+			}
+		} else {
+			for (int i = 0; i < samples; i++)
+			{
+				*(stream++) = psg_buf[i];
+				*(stream++) = psg_buf[i];
+			}
 		}
 	}
+}
+
+void render_disable_ym()
+{
+	ym_enabled = 0;
+}
+
+void render_enable_ym()
+{
+	ym_enabled = 1;
 }
 
 static void render_close_audio()

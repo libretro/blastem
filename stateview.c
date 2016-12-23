@@ -27,11 +27,6 @@ z80_context *z80_handle_code_write(uint32_t address, z80_context *context)
 	return NULL;
 }
 
-uint16_t get_open_bus_value()
-{
-	return 0;
-}
-
 void ym_data_write(ym2612_context * context, uint8_t value)
 {
 }

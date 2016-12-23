@@ -65,6 +65,8 @@ void render_update_caption(char *title);
 void render_wait_quit(vdp_context * context);
 void render_wait_psg(psg_context * context);
 void render_wait_ym(ym2612_context * context);
+void render_disable_ym();
+void render_enable_ym();
 uint32_t render_audio_buffer();
 uint32_t render_sample_rate();
 void process_events();
