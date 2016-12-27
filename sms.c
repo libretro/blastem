@@ -56,9 +56,10 @@ static uint8_t vdp_read(uint32_t location, void *vcontext)
 	sms_context *sms = z80->system;
 	vdp_run_context(sms->vdp, z80->current_cycle);
 	if (location & 1) {
+		uint8_t ret = vdp_control_port_read(sms->vdp);
 		sms->vdp->flags2 &= ~(FLAG2_VINT_PENDING|FLAG2_HINT_PENDING);
 		update_interrupts(sms);
-		return vdp_control_port_read(sms->vdp);
+		return ret;
 	} else {
 		return vdp_data_port_read(sms->vdp);
 	}
