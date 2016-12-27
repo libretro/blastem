@@ -18,6 +18,7 @@
 #define BORDER_BOTTOM 13 //TODO: Replace with actual value
 #define MAX_DRAWS 40
 #define MAX_DRAWS_H32 32
+#define MAX_DRAWS_H32_MODE4 16
 #define MAX_SPRITES_LINE 20
 #define MAX_SPRITES_LINE_H32 16
 #define MAX_SPRITES_FRAME 80
@@ -26,6 +27,7 @@
 
 #define FBUF_SHADOW 0x0001
 #define FBUF_HILIGHT 0x0010
+#define FBUF_MODE4 0x0100
 #define DBG_SHADOW 0x10
 #define DBG_HILIGHT 0x20
 #define DBG_PRIORITY 0x8
@@ -64,12 +66,16 @@ enum {
 	REG_WINDOW,
 	REG_SCROLL_B,
 	REG_SAT,
-	REG_BG_COLOR=7,
-	REG_HINT=0xA,
+	REG_STILE_BASE,
+	REG_BG_COLOR,
+	REG_X_SCROLL,
+	REG_Y_SCROLL,
+	REG_HINT,
 	REG_MODE_3,
 	REG_MODE_4,
 	REG_HSCROLL,
-	REG_AUTOINC=0xF,
+	REG_BGTILE_BASE,
+	REG_AUTOINC,
 	REG_SCROLL,
 	REG_WINDOW_H,
 	REG_WINDOW_V,
@@ -81,8 +87,13 @@ enum {
 } vdp_regs;
 
 //Mode reg 1
+#define BIT_VSCRL_LOCK 0x80
+#define BIT_HSCRL_LOCK 0x40
+#define BIT_COL0_MASK  0x20
 #define BIT_HINT_EN    0x10
+#define BIT_SPRITE_8PX 0x08
 #define BIT_PAL_SEL    0x04
+#define BIT_MODE_4     BIT_PAL_SEL
 #define BIT_HVC_LATCH  0x02
 #define BIT_DISP_DIS   0x01
 
@@ -92,6 +103,7 @@ enum {
 #define BIT_DMA_ENABLE 0x10
 #define BIT_PAL        0x08
 #define BIT_MODE_5     0x04
+#define BIT_SPRITE_SZ  0x02
 
 //Mode reg 3
 #define BIT_EINT_EN    0x10
@@ -145,7 +157,7 @@ typedef struct {
 	uint32_t    *output;
 	system_header  *system;
 	uint16_t    cram[CRAM_SIZE];
-	uint32_t    colors[CRAM_SIZE*3];
+	uint32_t    colors[CRAM_SIZE*4];
 	uint32_t    debugcolors[1 << (3 + 1 + 1 + 1)];//3 bits for source, 1 bit for priority, 1 bit for shadow, 1 bit for hilight
 	uint16_t    vsram[VSRAM_SIZE];
 	uint16_t    vscroll_latch[2];
@@ -168,6 +180,7 @@ typedef struct {
 	uint16_t    col_2;
 	uint16_t    hv_latch;
 	uint16_t    prefetch;
+	uint8_t     fetch_tmp[2];
 	uint8_t     v_offset;
 	uint8_t     dma_cd;
 	uint8_t     hint_counter;
@@ -210,8 +223,7 @@ void vdp_print_sprite_table(vdp_context * context);
 void vdp_print_reg_explain(vdp_context * context);
 void latch_mode(vdp_context * context);
 uint32_t vdp_cycles_to_frame_end(vdp_context * context);
+void write_cram(vdp_context * context, uint16_t address, uint16_t value);
 void write_vram_byte(vdp_context *context, uint16_t address, uint8_t value);
-
-extern int32_t color_map[1 << 12];
 
 #endif //VDP_H_
