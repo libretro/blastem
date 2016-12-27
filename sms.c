@@ -169,6 +169,24 @@ static void request_exit(system_header *system)
 	sms->should_return = 1;
 }
 
+static void inc_debug_mode(system_header *system)
+{
+	sms_context *sms = (sms_context *)system;
+	sms->vdp->debug++;
+	if (sms->vdp->debug == 7) {
+		sms->vdp->debug = 0;
+	}
+}
+
+static void inc_debug_pal(system_header *system)
+{
+	sms_context *sms = (sms_context *)system;
+	sms->vdp->debug_pal++;
+	if (sms->vdp->debug_pal == 4) {
+		sms->vdp->debug_pal = 0;
+	}
+}
+
 sms_context *alloc_configure_sms(void *rom, uint32_t rom_size, void *extra_rom, uint32_t extra_rom_size, uint32_t opts, uint8_t force_region, rom_info *info_out)
 {
 	memset(info_out, 0, sizeof(*info_out));
@@ -214,8 +232,8 @@ sms_context *alloc_configure_sms(void *rom, uint32_t rom_size, void *extra_rom, 
 	sms->header.free_context = free_sms;
 	sms->header.get_open_bus_value = get_open_bus_value;
 	sms->header.request_exit = request_exit;
-	sms->header.inc_debug_mode = NULL;
-	sms->header.inc_debug_pal = NULL;
+	sms->header.inc_debug_mode = inc_debug_mode;
+	sms->header.inc_debug_pal = inc_debug_pal;
 	
 	return sms;
 }

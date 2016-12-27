@@ -234,10 +234,7 @@ uint8_t vdp_load_gst(vdp_context * context, FILE * state_file)
 	}
 	for (int i = 0; i < CRAM_SIZE; i++) {
 		uint16_t value;
-		context->cram[i] = value = (tmp_buf[i*2+1] << 8) | tmp_buf[i*2];
-		context->colors[i] = color_map[value & 0xEEE];
-		context->colors[i + CRAM_SIZE] = color_map[(value & 0xEEE) | FBUF_SHADOW];
-		context->colors[i + CRAM_SIZE*2] = color_map[(value & 0xEEE) | FBUF_HILIGHT];
+		write_cram(context, i, (tmp_buf[i*2+1] << 8) | tmp_buf[i*2]);
 	}
 	if (fread(tmp_buf, 2, VSRAM_SIZE, state_file) != VSRAM_SIZE) {
 		fputs("Failed to read VSRAM from savestate\n", stderr);

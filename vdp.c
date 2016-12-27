@@ -13,6 +13,7 @@
 
 #define NTSC_INACTIVE_START 224
 #define PAL_INACTIVE_START 240
+#define MODE4_INACTIVE_START 192
 #define BUF_BIT_PRIORITY 0x40
 #define MAP_BIT_PRIORITY 0x8000
 #define MAP_BIT_H_FLIP 0x800
@@ -39,7 +40,9 @@
 #define VBLANK_START_H32 (LINE_CHANGE_H32+2)
 #define FIFO_LATENCY    3
 
-int32_t color_map[1 << 12];
+static int32_t color_map[1 << 12];
+static uint16_t mode4_address_map[0x4000];
+static uint32_t planar_to_chunky[256];
 static uint8_t levels[] = {0, 27, 49, 71, 87, 103, 119, 130, 146, 157, 174, 190, 206, 228, 255};
 
 static uint8_t debug_base[][3] = {
@@ -85,12 +88,33 @@ void init_vdp_context(vdp_context * context, uint8_t region_pal)
 				b = levels[((color >> 9) & 0x7) + 7];
 				g = levels[((color >> 5) & 0x7) + 7];
 				r = levels[((color >> 1) & 0x7) + 7];
+			} else if(color & FBUF_MODE4) {
+				b = levels[color >> 3 & 0xC];
+				g = levels[(color >> 2 & 0x8) | (color >> 1 & 0x4)];
+				r = levels[color << 1 & 0xC];
 			} else {
 				b = levels[(color >> 8) & 0xE];
 				g = levels[(color >> 4) & 0xE];
 				r = levels[color & 0xE];
 			}
 			color_map[color] = render_map_color(r, g, b);
+		}
+		for (uint16_t mode4_addr = 0; mode4_addr < 0x4000; mode4_addr++)
+		{
+			uint16_t mode5_addr = mode4_addr & 0x3DFD;
+			mode5_addr |= mode4_addr << 8 & 0x200;
+			mode5_addr |= mode4_addr >> 8 & 2;
+			mode4_address_map[mode4_addr] = mode5_addr;
+		}
+		for (uint32_t planar = 0; planar < 256; planar++)
+		{
+			uint32_t chunky = 0;
+			for (int bit = 7; bit >= 0; bit--)
+			{
+				chunky = chunky << 4;
+				chunky |= planar >> bit & 1;
+			}
+			planar_to_chunky[planar] = chunky;
 		}
 		color_map_init_done = 1;
 	}
@@ -194,6 +218,38 @@ static void render_sprite_cells(vdp_context * context)
 			}
 			x += dir;
 		}
+	}
+}
+
+static void fetch_sprite_cells_mode4(vdp_context * context)
+{
+	if (context->cur_slot >= context->sprite_draws) {
+		sprite_draw * d = context->sprite_draw_list + context->cur_slot;
+		uint32_t address = mode4_address_map[d->address & 0x3FFF];
+		context->fetch_tmp[0] = context->vdpmem[address];
+		context->fetch_tmp[1] = context->vdpmem[address + 1];
+	}
+}
+
+static void render_sprite_cells_mode4(vdp_context * context)
+{
+	if (context->cur_slot >= context->sprite_draws) {
+		sprite_draw * d = context->sprite_draw_list + context->cur_slot;
+		uint32_t pixels = planar_to_chunky[context->fetch_tmp[0]] << 1;
+		pixels |= planar_to_chunky[context->fetch_tmp[1]];
+		uint32_t address = mode4_address_map[(d->address + 2) & 0x3FFF];
+		pixels |= planar_to_chunky[context->vdpmem[address]] << 3;
+		pixels |= planar_to_chunky[context->vdpmem[address + 1]] << 2;
+		int x = d->x_pos & 0xFF;
+		for (int i = 28; i >= 0; i -= 4, x++)
+		{
+			if (context->linebuf[x]) {
+				context->flags2 |= FLAG2_SPRITE_COLLIDE;
+			} else {
+				context->linebuf[x] = pixels >> i & 0xF;
+			}
+		}
+		context->cur_slot--;
 	}
 }
 
@@ -407,6 +463,34 @@ static void scan_sprite_table(uint32_t line, vdp_context * context)
 	}
 }
 
+static void scan_sprite_table_mode4(uint32_t line, vdp_context * context)
+{
+	if (context->sprite_index < MAX_SPRITES_FRAME_H32 && context->slot_counter) {
+		line += 1;
+		line &= 0xFF;
+		
+		uint32_t y = context->sat_cache[context->sprite_index];
+		uint32_t size = (context->regs[REG_MODE_2] & BIT_SPRITE_SZ) ? 16 : 8;
+		if (y <= line && line < (y + size)) {
+			context->sprite_info_list[--(context->slot_counter)].size = size;
+			context->sprite_info_list[context->slot_counter].index = context->sprite_index;
+			context->sprite_info_list[context->slot_counter].y = y;
+		}
+		context->sprite_index++;
+		
+		if (context->sprite_index < MAX_SPRITES_FRAME_H32 && context->slot_counter) {
+			y = context->sat_cache[context->sprite_index];
+			if (y <= line && line < (y + size)) {
+				context->sprite_info_list[--(context->slot_counter)].size = size;
+				context->sprite_info_list[context->slot_counter].index = context->sprite_index;
+				context->sprite_info_list[context->slot_counter].y = y;
+			}
+			context->sprite_index++;
+		}
+		
+	}
+}
+
 static void read_sprite_x(uint32_t line, vdp_context * context)
 {
 	if (context->cur_slot >= context->slot_counter) {
@@ -484,18 +568,46 @@ static void read_sprite_x(uint32_t line, vdp_context * context)
 	}
 }
 
-static void write_cram(vdp_context * context, uint16_t address, uint16_t value)
+static void read_sprite_x_mode4(uint32_t line, vdp_context * context)
 {
-	uint16_t addr = (address/2) & (CRAM_SIZE-1);
-	context->cram[addr] = value;
-	context->colors[addr] = color_map[value & 0xEEE];
-	context->colors[addr + CRAM_SIZE] = color_map[(value & 0xEEE) | FBUF_SHADOW];
-	context->colors[addr + CRAM_SIZE*2] = color_map[(value & 0xEEE) | FBUF_HILIGHT];
+	if (context->cur_slot >= context->slot_counter) {
+		if (context->sprite_draws) {
+			line += 1;
+			line &= 0xFF;
+			
+			uint32_t address = (context->regs[REG_SAT] << 7 & 0x3F00) + 0x80 + context->sprite_info_list[context->cur_slot].index * 2;
+			address = mode4_address_map[address];
+			--context->sprite_draws;
+			uint32_t tile_address = context->vdpmem[address + 1] * 32 + (context->regs[REG_STILE_BASE] << 11 & 0x2000);
+			tile_address += (line - context->sprite_info_list[context->cur_slot].y)* 4;
+			context->sprite_draw_list[context->sprite_draws].x_pos = context->vdpmem[address];
+			context->sprite_draw_list[context->sprite_draws].address = tile_address;
+			context->cur_slot--;
+		} else {
+			context->flags |= FLAG_DOT_OFLOW;
+		}
+	}
 }
 
 #define CRAM_BITS 0xEEE
 #define VSRAM_BITS 0x7FF
 #define VSRAM_DIRTY_BITS 0xF800
+
+void write_cram(vdp_context * context, uint16_t address, uint16_t value)
+{
+	uint16_t addr;
+	if (context->regs[REG_MODE_2] & BIT_MODE_5) {
+		addr = (address/2) & (CRAM_SIZE-1);
+	} else {
+		addr = address & 0x1F;
+		value = (value << 1 & 0xE) | (value << 2 & 0xE0) | (value & 0xE00);
+	}
+	context->cram[addr] = value;
+	context->colors[addr] = color_map[value & CRAM_BITS];
+	context->colors[addr + CRAM_SIZE] = color_map[(value & CRAM_BITS) | FBUF_SHADOW];
+	context->colors[addr + CRAM_SIZE*2] = color_map[(value & CRAM_BITS) | FBUF_HILIGHT];
+	context->colors[addr + CRAM_SIZE*3] = color_map[(value & CRAM_BITS) | FBUF_MODE4];
+}
 
 static void vdp_advance_dma(vdp_context * context)
 {
@@ -515,13 +627,23 @@ static void vdp_advance_dma(vdp_context * context)
 
 void write_vram_byte(vdp_context *context, uint16_t address, uint8_t value)
 {
-	if (!(address & 4)) {
-		uint16_t sat_address = (context->regs[REG_SAT] & 0x7F) << 9;
-		if(address >= sat_address && address < (sat_address + SAT_CACHE_SIZE*2)) {
-			uint16_t cache_address = address - sat_address;
-			cache_address = (cache_address & 3) | (cache_address >> 1 & 0x1FC);
-			context->sat_cache[cache_address] = value;
+	if (context->regs[REG_MODE_2] & BIT_MODE_5) {
+		if (!(address & 4)) {
+			uint16_t sat_address = (context->regs[REG_SAT] & 0x7F) << 9;
+			if(address >= sat_address && address < (sat_address + SAT_CACHE_SIZE*2)) {
+				uint16_t cache_address = address - sat_address;
+				cache_address = (cache_address & 3) | (cache_address >> 1 & 0x1FC);
+				context->sat_cache[cache_address] = value;
+			}
 		}
+	} else {
+		if (!(address & 0xC0)) {
+			uint16_t sat_address = context->regs[REG_SAT] << 7 & 0x3F00;
+			if (address >= sat_address && address < (sat_address + 0x40)) {
+				context->sat_cache[address-sat_address] = value;
+			}
+		}
+		address = mode4_address_map[address & 0x3FFF];
 	}
 	context->vdpmem[address] = value;
 }
@@ -556,10 +678,11 @@ static void external_slot(vdp_context * context)
 			//printf("CRAM Write | %X to %X\n", start->value, (start->address/2) & (CRAM_SIZE-1));
 			if (start->partial == 1) {
 				uint16_t val;
-				if (start->address & 1) {
+				if ((start->address & 1) && (context->regs[REG_MODE_2] & BIT_MODE_5)) {
 					val = (context->cram[start->address >> 1 & (CRAM_SIZE-1)] & 0xFF) | start->value << 8;
 				} else {
-					val = (context->cram[start->address >> 1 & (CRAM_SIZE-1)] & 0xFF00) | start->value;
+					uint16_t address = (context->regs[REG_MODE_2] & BIT_MODE_5) ? start->address >> 1 & (CRAM_SIZE-1) : start->address & 0x1F;
+					val = (context->cram[address] & 0xFF00) | start->value;
 				}
 				write_cram(context, start->address, val);
 			} else {
@@ -835,6 +958,25 @@ static void read_map_scroll_b(uint16_t column, uint32_t line, vdp_context * cont
 	read_map_scroll(column, 1, line, (context->regs[REG_SCROLL_B] & 0x7) << 13, context->hscroll_b, context);
 }
 
+static void read_map_mode4(uint16_t column, uint32_t line, vdp_context * context)
+{
+	uint32_t address = (context->regs[REG_SCROLL_A] & 0xE) << 10;
+	//add row
+	uint32_t vscroll = line;
+	if (column < 24 || !(context->regs[REG_MODE_1] & BIT_VSCRL_LOCK)) {
+		vscroll += context->regs[REG_Y_SCROLL];
+	}
+	if (vscroll > 223) {
+		vscroll -= 224;
+	}
+	address += (vscroll >> 3) * 2 * 32;
+	//add column
+	address += (((column << 3) + context->hscroll_a) >> 3) * 2;
+	//adjust for weird VRAM mapping in Mode 4
+	address = mode4_address_map[address];
+	context->col_1 = (context->vdpmem[address] << 8) | context->vdpmem[address+1];
+}
+
 static void render_map(uint16_t col, uint8_t * tmp_buf, uint8_t offset, vdp_context * context)
 {
 	uint16_t address;
@@ -884,6 +1026,26 @@ static void render_map_2(vdp_context * context)
 static void render_map_3(vdp_context * context)
 {
 	render_map(context->col_1, context->tmp_buf_b, context->buf_b_off, context);
+}
+
+static void fetch_map_mode4(uint16_t col, uint32_t line, vdp_context *context)
+{
+	//calculate pixel row to fetch
+	uint32_t vscroll = line;
+	if (col < 24 || !(context->regs[REG_MODE_1] & BIT_VSCRL_LOCK)) {
+		vscroll += context->regs[REG_Y_SCROLL];
+	}
+	if (vscroll > 223) {
+		vscroll -= 224;
+	}
+	vscroll &= 7;
+	if (context->col_1 & 0x400) {
+		vscroll = 7 - vscroll;
+	}
+	
+	uint32_t address = mode4_address_map[((context->col_1 & 0x1FF) * 32) + vscroll * 4];
+	context->fetch_tmp[0] = context->vdpmem[address];
+	context->fetch_tmp[1] = context->vdpmem[address+1];
 }
 
 static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
@@ -1036,6 +1198,125 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 	context->buf_b_off = (context->buf_b_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
 }
 
+static void render_map_mode4(uint32_t line, int32_t col, vdp_context * context)
+{
+	uint32_t vscroll = line;
+	if (col < 24 || !(context->regs[REG_MODE_1] & BIT_VSCRL_LOCK)) {
+		vscroll += context->regs[REG_Y_SCROLL];
+	}
+	if (vscroll > 223) {
+		vscroll -= 224;
+	}
+	vscroll &= 7;
+	if (context->col_1 & 0x400) {
+		//vflip
+		vscroll = 7 - vscroll;
+	}
+	
+	uint32_t pixels = planar_to_chunky[context->fetch_tmp[0]] << 1;
+	pixels |=  planar_to_chunky[context->fetch_tmp[1]];
+	
+	uint32_t address = mode4_address_map[((context->col_1 & 0x1FF) * 32) + vscroll * 4 + 2];
+	pixels |= planar_to_chunky[context->vdpmem[address]] << 3;
+	pixels |= planar_to_chunky[context->vdpmem[address+1]] << 2;
+	
+	int i, i_inc, i_limit;
+	if (context->col_1 & 0x200) {
+		//hflip
+		i = 0;
+		i_inc = 4;
+		i_limit = 32;
+	} else {
+		i = 28;
+		i_inc = -4;
+		i_limit = -4;
+	}
+	uint8_t pal_priority = (context->col_1 >> 7 & 0x10) | (context->col_1 >> 6 & 0x40);
+	for (uint8_t *dst = context->tmp_buf_a + context->buf_a_off; i != i_limit; i += i_inc, dst++)
+	{
+		*dst = (pixels >> i & 0xF) | pal_priority;
+	}
+	context->buf_a_off = (context->buf_a_off + 8) & 15;
+	
+	uint8_t bgcolor = 0x10 | (context->regs[REG_BG_COLOR] & 0xF) + CRAM_SIZE*3;
+	uint32_t *dst = context->output + col * 8;
+	if (context->debug < 2) {
+		if (col || !(context->regs[REG_MODE_1] & BIT_COL0_MASK)) {
+			uint8_t *sprite_src = context->linebuf + col * 8;
+			if (context->regs[REG_MODE_1] & BIT_SPRITE_8PX) {
+				sprite_src += 8;
+			}
+			uint8_t *bg_src = context->tmp_buf_a + (((col & 1) * 8 + (context->hscroll_a & 0x7)) & 0x15);
+			for (int i = 0; i < 8; i++, bg_src++, sprite_src++)
+			{
+				if ((*bg_src & 0x4F) > 0x40) {
+					//background plane has priority and is opaque
+					if (context->debug) {
+						*(dst++) = context->debugcolors[DBG_SRC_A];
+					} else {
+						*(dst++) = context->colors[(*bg_src & 0x1F) + CRAM_SIZE*3];
+					}
+					
+				} else if (*sprite_src) {
+					//sprite layer is opaque
+					if (context->debug) {
+						*(dst++) = context->debugcolors[DBG_SRC_S];
+					} else {
+						*(dst++) = context->colors[*sprite_src | 0x10 + CRAM_SIZE*3];
+					}
+				} else if (*bg_src & 0xF) {
+					//background plane is opaque
+					if (context->debug) {
+						*(dst++) = context->debugcolors[DBG_SRC_A];
+					} else {
+						*(dst++) = context->colors[(*bg_src & 0x1F) + CRAM_SIZE*3];
+					}
+				} else {
+					if (context->debug) {
+						*(dst++) = context->debugcolors[DBG_SRC_BG];
+					} else {
+						*(dst++) = context->colors[bgcolor];
+					}
+				}
+			}
+		} else {
+			for (int i = 0; i < 8; i++)
+			{
+				*(dst++) = context->colors[bgcolor];
+			}
+		}
+	} else if (context->debug == 2) {
+		for (int i = 0; i < 8; i++)
+		{
+			*(dst++) = context->colors[CRAM_SIZE*3 + col];
+		}
+	} else {
+		uint32_t cell = (line / 8) * 32 + col;
+		uint32_t address = cell * 32 + (line % 8) * 4;
+		uint32_t m4_address = mode4_address_map[address & 0x3FFF];
+		uint32_t pixel = planar_to_chunky[context->vdpmem[m4_address]] << 1;
+		pixel |= planar_to_chunky[context->vdpmem[m4_address + 1]];
+		m4_address = mode4_address_map[(address + 2) & 0x3FFF];
+		pixel |= planar_to_chunky[context->vdpmem[m4_address]] << 3;
+		pixel |= planar_to_chunky[context->vdpmem[m4_address + 1]] << 2;
+		if (context->debug_pal < 2) {
+			for (int i = 28; i >= 0; i -= 4)
+			{
+				*(dst++) = context->colors[CRAM_SIZE*3 | (context->debug_pal << 4) | (pixel >> i & 0xF)];
+			}
+		} else {
+			for (int i = 28; i >= 0; i -= 4)
+			{
+				uint8_t value = (pixel >> i & 0xF) * 17;
+				if (context->debug_pal == 3) {
+					value = 255 - value;
+				}
+				*(dst++) = render_map_color(value, value, value);
+			}
+		}
+	}
+}
+
 static uint32_t const h40_hsync_cycles[] = {19, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20, 20, 19};
 
 static void vdp_advance_line(vdp_context *context)
@@ -1139,6 +1420,40 @@ static void vdp_advance_line(vdp_context *context)
 	case (startcyc+7):\
 		render_map_output(context->vcounter, column, context);\
 		CHECK_LIMIT
+		
+#define COLUMN_RENDER_BLOCK_MODE4(column, startcyc) \
+	case startcyc:\
+		read_map_mode4(column, context->vcounter, context);\
+		CHECK_LIMIT\
+	case ((startcyc+1)&0xFF):\
+		if (column & 1) {\
+			read_sprite_x_mode4(context->vcounter, context);\
+		} else {\
+			external_slot(context);\
+		}\
+		CHECK_LIMIT\
+	case ((startcyc+2)&0xFF):\
+		fetch_map_mode4(column, context->vcounter, context);\
+		CHECK_LIMIT\
+	case ((startcyc+3)&0xFF):\
+		render_map_mode4(context->vcounter, column, context);\
+		CHECK_LIMIT
+		
+#define COLUMN_RENDER_BLOCK_REFRESH_MODE4(column, startcyc) \
+	case startcyc:\
+		read_map_mode4(column, context->vcounter, context);\
+		CHECK_LIMIT\
+	case (startcyc+1):\
+		/* refresh, no don't run dma src */\
+		context->hslot++;\
+		context->cycles += slot_cycles;\
+		CHECK_ONLY\
+	case (startcyc+2):\
+		fetch_map_mode4(column, context->vcounter, context);\
+		CHECK_LIMIT\
+	case (startcyc+3):\
+		render_map_mode4(context->vcounter, column, context);\
+		CHECK_LIMIT
 
 #define SPRITE_RENDER_H40(slot) \
 	case slot:\
@@ -1170,7 +1485,30 @@ static void vdp_advance_line(vdp_context *context)
 		}\
 		context->cycles += slot_cycles;\
 		CHECK_ONLY
-
+		
+#define SPRITE_RENDER_H32_MODE4(slot) \
+	case slot:\
+		fetch_sprite_cells_mode4(context);\
+		scan_sprite_table(context->vcounter, context);\
+		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); } \
+		if (slot == 147) {\
+			context->hslot = 233;\
+		} else {\
+			context->hslot++;\
+		}\
+		context->cycles += slot_cycles;\
+		CHECK_ONLY\
+	case (slot == 147 ? 233 : slot+1):\
+		render_sprite_cells_mode4(context);\
+		scan_sprite_table(context->vcounter, context);\
+		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); } \
+		if (slot == 147) {\
+			context->hslot = 233;\
+		} else {\
+			context->hslot++;\
+		}\
+		context->cycles += slot_cycles;\
+		CHECK_ONLY
 
 static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 {
@@ -1478,6 +1816,158 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 	}
 }
 
+static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
+{
+	uint16_t address;
+	uint32_t mask;
+	uint32_t const slot_cycles = MCLKS_SLOT_H32;
+	switch(context->hslot)
+	{
+	for (;;)
+	{
+	//sprite attribute table scan starts
+	case 132:
+		context->sprite_index = 0x80;
+		//in theory, Mode 4 should only allow 8 sprites per line, but if we assume that thee
+		//Genesis VDP uses the SAT cache for sprite scans in Mode 4 like it does in Mode 5,
+		//there should be enough bandwidth for 16 like in Mode 5 (though only 128 pixels rather than 256)
+		context->slot_counter = MAX_SPRITES_LINE_H32;
+		fetch_sprite_cells_mode4(context);
+		scan_sprite_table_mode4(context->vcounter, context);
+		CHECK_LIMIT
+	case 133:
+		render_sprite_cells_mode4(context);
+		scan_sprite_table_mode4(context->vcounter, context);
+		CHECK_LIMIT
+	SPRITE_RENDER_H32_MODE4(134)
+	SPRITE_RENDER_H32_MODE4(136)
+	SPRITE_RENDER_H32_MODE4(138)
+	SPRITE_RENDER_H32_MODE4(140)
+	case 142:
+		external_slot(context);
+		CHECK_LIMIT
+	SPRITE_RENDER_H32_MODE4(143)
+	SPRITE_RENDER_H32_MODE4(145)
+	SPRITE_RENDER_H32_MODE4(147)
+	//HSYNC start @233
+	SPRITE_RENDER_H32_MODE4(234)
+	SPRITE_RENDER_H32_MODE4(236)
+	SPRITE_RENDER_H32_MODE4(238)
+	case 240:
+		external_slot(context);
+		CHECK_LIMIT
+	case 241:
+		if (context->regs[REG_MODE_1] & BIT_HSCRL_LOCK && context->vcounter < 16) {
+			context->hscroll_a = 0;
+		} else {
+			context->hscroll_a = context->regs[REG_X_SCROLL];
+		}
+		CHECK_LIMIT
+	SPRITE_RENDER_H32_MODE4(242)
+	SPRITE_RENDER_H32_MODE4(244)
+	//!HSYNC high
+	case 246:
+		external_slot(context);
+		CHECK_LIMIT
+	case 247:
+		fetch_sprite_cells_mode4(context);
+		scan_sprite_table_mode4(context->vcounter, context);
+		CHECK_LIMIT
+	case 248:
+		external_slot(context);
+		scan_sprite_table_mode4(context->vcounter, context);//Just a guess
+		CHECK_LIMIT
+	case 249:
+		external_slot(context);
+		scan_sprite_table_mode4(context->vcounter, context);//Just a guess
+		CHECK_LIMIT
+	case 250:
+		external_slot(context);
+		CHECK_LIMIT
+	case 251:
+		render_sprite_cells_mode4(context);
+		scan_sprite_table_mode4(context->vcounter, context);
+		CHECK_LIMIT
+	case 252:
+		external_slot(context);
+		scan_sprite_table_mode4(context->vcounter, context);//Just a guess
+		CHECK_LIMIT
+	case 253:
+		external_slot(context);
+		scan_sprite_table_mode4(context->vcounter, context);//Just a guess
+		//reverse context slot counter so it counts the number of sprite slots
+		//filled rather than the number of available slots
+		//context->slot_counter = MAX_SPRITES_LINE - context->slot_counter;
+		context->cur_slot = MAX_SPRITES_LINE_H32-1;
+		context->sprite_draws = MAX_DRAWS_H32_MODE4;
+		context->flags &= (~FLAG_CAN_MASK & ~FLAG_MASKED);
+		CHECK_LIMIT
+	COLUMN_RENDER_BLOCK_MODE4(0, 254)
+	COLUMN_RENDER_BLOCK_MODE4(1, 2)
+	COLUMN_RENDER_BLOCK_MODE4(2, 6)
+	COLUMN_RENDER_BLOCK_MODE4(3, 10)
+	COLUMN_RENDER_BLOCK_MODE4(4, 14)
+	COLUMN_RENDER_BLOCK_MODE4(5, 18)
+	COLUMN_RENDER_BLOCK_REFRESH_MODE4(6, 22)
+	COLUMN_RENDER_BLOCK_MODE4(7, 26)
+	COLUMN_RENDER_BLOCK_MODE4(8, 30)
+	COLUMN_RENDER_BLOCK_MODE4(9, 34)
+	COLUMN_RENDER_BLOCK_MODE4(10, 38)
+	COLUMN_RENDER_BLOCK_MODE4(11, 42)
+	COLUMN_RENDER_BLOCK_MODE4(12, 46)
+	COLUMN_RENDER_BLOCK_MODE4(13, 50)
+	COLUMN_RENDER_BLOCK_REFRESH_MODE4(14, 54)
+	COLUMN_RENDER_BLOCK_MODE4(15, 58)
+	COLUMN_RENDER_BLOCK_MODE4(16, 62)
+	COLUMN_RENDER_BLOCK_MODE4(17, 66)
+	COLUMN_RENDER_BLOCK_MODE4(18, 70)
+	COLUMN_RENDER_BLOCK_MODE4(19, 74)
+	COLUMN_RENDER_BLOCK_MODE4(20, 78)
+	COLUMN_RENDER_BLOCK_MODE4(21, 82)
+	COLUMN_RENDER_BLOCK_REFRESH_MODE4(22, 86)
+	COLUMN_RENDER_BLOCK_MODE4(23, 90)
+	COLUMN_RENDER_BLOCK_MODE4(24, 94)
+	COLUMN_RENDER_BLOCK_MODE4(25, 98)
+	COLUMN_RENDER_BLOCK_MODE4(26, 102)
+	COLUMN_RENDER_BLOCK_MODE4(27, 106)
+	COLUMN_RENDER_BLOCK_MODE4(28, 110)
+	COLUMN_RENDER_BLOCK_MODE4(29, 114)
+	COLUMN_RENDER_BLOCK_REFRESH_MODE4(30, 118)
+	COLUMN_RENDER_BLOCK_MODE4(31, 122)
+	case 126:
+		external_slot(context);
+		CHECK_LIMIT
+	case 127:
+		external_slot(context);
+		CHECK_LIMIT
+	//sprite render to line buffer starts
+	case 128:
+		context->cur_slot = MAX_DRAWS_H32_MODE4-1;
+		memset(context->linebuf, 0, LINEBUF_SIZE);
+		fetch_sprite_cells_mode4(context);
+		CHECK_LIMIT
+	case 129:
+		render_sprite_cells_mode4(context);
+		CHECK_LIMIT
+	case 130:
+		fetch_sprite_cells_mode4(context);
+		CHECK_LIMIT
+	case 131:
+		render_sprite_cells_mode4(context);
+		vdp_advance_line(context);
+		if (context->vcounter == MODE4_INACTIVE_START) {
+			context->hslot++;
+			context->cycles += slot_cycles;
+			return;
+		}
+		CHECK_LIMIT
+	}
+	default:
+		context->hslot++;
+		context->cycles += MCLKS_SLOT_H32;
+	}
+}
+
 void latch_mode(vdp_context * context)
 {
 	context->latched_mode = context->regs[REG_MODE_2] & BIT_PAL;
@@ -1509,15 +1999,31 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 {
 	while(context->cycles < target_cycles)
 	{
-		uint32_t inactive_start = context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START;
-		//line 0x1FF is basically active even though it's not displayed
-		uint8_t active_slot = context->vcounter < inactive_start || context->vcounter == 0x1FF;
 		uint8_t is_h40 = context->regs[REG_MODE_4] & BIT_H40;
-		if (context->regs[REG_MODE_2] & DISPLAY_ENABLE && active_slot) {
-			if (is_h40) {
-				vdp_h40(context, target_cycles);
+		uint8_t active_slot, mode_5;
+		uint32_t inactive_start;
+		if (context->regs[REG_MODE_2] & BIT_MODE_5) {
+			//Mode 5 selected
+			mode_5 = 1;
+			inactive_start = context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START;
+			//line 0x1FF is basically active even though it's not displayed
+			active_slot = (context->vcounter < inactive_start || context->vcounter == 0x1FF) && (context->regs[REG_MODE_2] & DISPLAY_ENABLE);
+		} else {
+			mode_5 = 0;
+			inactive_start = MODE4_INACTIVE_START;
+			//display is effectively disabled if neither mode 5 nor mode 4 are selected
+			active_slot = context->vcounter < inactive_start && (context->regs[REG_MODE_2] & DISPLAY_ENABLE) && (context->regs[REG_MODE_1] & BIT_MODE_4);
+		}
+		
+		if (active_slot) {
+			if (mode_5) {
+				if (is_h40) {
+					vdp_h40(context, target_cycles);
+				} else {
+					vdp_h32(context, target_cycles);
+				}
 			} else {
-				vdp_h32(context, target_cycles);
+				vdp_h32_mode4(context, target_cycles);
 			}
 		} else {
 			if (is_h40) {
@@ -1658,10 +2164,11 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 			}
 		}
 	} else {
+		uint8_t mode_5 = context->regs[REG_MODE_2] & BIT_MODE_5;
 		if ((value & 0xC000) == 0x8000) {
 			//Register write
 			uint8_t reg = (value >> 8) & 0x1F;
-			if (reg < (context->regs[REG_MODE_2] & BIT_MODE_5 ? VDP_REGS : 0xA)) {
+			if (reg < (mode_5 ? VDP_REGS : 0xA)) {
 				//printf("register %d set to %X\n", reg, value & 0xFF);
 				if (reg == REG_MODE_1 && (value & BIT_HVC_LATCH) && !(context->regs[reg] & BIT_HVC_LATCH)) {
 					context->hv_latch = vdp_hv_counter_read(context);
@@ -1681,13 +2188,18 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 				}
 				context->cd &= 0x3C;
 			}
-		} else {
+		} else if (mode_5) {
 			context->flags |= FLAG_PENDING;
 			context->address = (context->address &0xC000) | (value & 0x3FFF);
 			context->cd = (context->cd &0x3C) | (value >> 14);
 			//Should these be taken care of here or after the second write?
 			//context->flags &= ~FLAG_READ_FETCHED;
 			//context->flags2 &= ~FLAG2_READ_PENDING;
+		} else {
+			context->address = value & 0x3FFF;
+			context->cd = value >> 14;
+			context->flags &= ~FLAG_READ_FETCHED;
+			context->flags2 &= ~FLAG2_READ_PENDING;
 		}
 	}
 	return 0;
@@ -1738,6 +2250,9 @@ int vdp_data_port_write(vdp_context * context, uint16_t value)
 	}
 	context->fifo_write = (context->fifo_write + 1) & (FIFO_SIZE-1);
 	context->address += context->regs[REG_AUTOINC];
+	if (!(context->regs[REG_MODE_2] & BIT_MODE_5)) {
+		context->address++;
+	}
 	return 0;
 }
 
@@ -1769,6 +2284,9 @@ void vdp_data_port_write_pbc(vdp_context * context, uint8_t value)
 	}
 	context->fifo_write = (context->fifo_write + 1) & (FIFO_SIZE-1);
 	context->address += context->regs[REG_AUTOINC];
+	if (!(context->regs[REG_MODE_2] & BIT_MODE_5)) {
+		context->address++;
+	}
 }
 
 void vdp_test_port_write(vdp_context * context, uint16_t value)
