@@ -471,21 +471,32 @@ static void scan_sprite_table_mode4(uint32_t line, vdp_context * context)
 		
 		uint32_t y = context->sat_cache[context->sprite_index];
 		uint32_t size = (context->regs[REG_MODE_2] & BIT_SPRITE_SZ) ? 16 : 8;
-		if (y <= line && line < (y + size)) {
-			context->sprite_info_list[--(context->slot_counter)].size = size;
-			context->sprite_info_list[context->slot_counter].index = context->sprite_index;
-			context->sprite_info_list[context->slot_counter].y = y;
-		}
-		context->sprite_index++;
 		
-		if (context->sprite_index < MAX_SPRITES_FRAME_H32 && context->slot_counter) {
-			y = context->sat_cache[context->sprite_index];
+		if (y >= 0xd0) {
+			context->sprite_index = MAX_SPRITES_FRAME_H32;
+			return;
+		} else {
 			if (y <= line && line < (y + size)) {
 				context->sprite_info_list[--(context->slot_counter)].size = size;
 				context->sprite_info_list[context->slot_counter].index = context->sprite_index;
 				context->sprite_info_list[context->slot_counter].y = y;
 			}
 			context->sprite_index++;
+		}
+		
+		if (context->sprite_index < MAX_SPRITES_FRAME_H32 && context->slot_counter) {
+			y = context->sat_cache[context->sprite_index];
+			if (y >= 0xd0) {
+				context->sprite_index = MAX_SPRITES_FRAME_H32;
+				return;
+			} else {
+				if (y <= line && line < (y + size)) {
+					context->sprite_info_list[--(context->slot_counter)].size = size;
+					context->sprite_info_list[context->slot_counter].index = context->sprite_index;
+					context->sprite_info_list[context->slot_counter].y = y;
+				}
+				context->sprite_index++;
+			}
 		}
 		
 	}
@@ -1256,7 +1267,6 @@ static void render_map_mode4(uint32_t line, int32_t col, vdp_context * context)
 					} else {
 						*(dst++) = context->colors[(*bg_src & 0x1F) + CRAM_SIZE*3];
 					}
-					
 				} else if (*sprite_src) {
 					//sprite layer is opaque
 					if (context->debug) {
