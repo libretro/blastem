@@ -1246,9 +1246,9 @@ static void render_map_mode4(uint32_t line, int32_t col, vdp_context * context)
 			if (context->regs[REG_MODE_1] & BIT_SPRITE_8PX) {
 				sprite_src += 8;
 			}
-			uint8_t *bg_src = context->tmp_buf_a + (((col & 1) * 8 + (context->hscroll_a & 0x7)) & 0x15);
-			for (int i = 0; i < 8; i++, bg_src++, sprite_src++)
+			for (int i = 0; i < 8; i++, sprite_src++)
 			{
+				uint8_t *bg_src = context->tmp_buf_a + ((8 + i + col * 8 - (context->hscroll_a & 0x7)) & 15);
 				if ((*bg_src & 0x4F) > 0x40) {
 					//background plane has priority and is opaque
 					if (context->debug) {
@@ -1895,6 +1895,8 @@ static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
 	case 253:
 		external_slot(context);
 		scan_sprite_table_mode4(context->vcounter, context);//Just a guess
+		context->buf_a_off = 8;
+		memset(context->tmp_buf_a, 0, 8);
 		//reverse context slot counter so it counts the number of sprite slots
 		//filled rather than the number of available slots
 		//context->slot_counter = MAX_SPRITES_LINE - context->slot_counter;
