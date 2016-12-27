@@ -10,8 +10,6 @@
 uint8_t busreq;
 uint8_t reset;
 
-int32_t color_map[1 << 12];
-
 void latch_mode(vdp_context * context)
 {
 }
