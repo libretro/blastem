@@ -2180,7 +2180,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 		if ((value & 0xC000) == 0x8000) {
 			//Register write
 			uint8_t reg = (value >> 8) & 0x1F;
-			if (reg < (mode_5 ? VDP_REGS : 0xA)) {
+			if (reg < (mode_5 ? VDP_REGS : 0xB)) {
 				//printf("register %d set to %X\n", reg, value & 0xFF);
 				if (reg == REG_MODE_1 && (value & BIT_HVC_LATCH) && !(context->regs[reg] & BIT_HVC_LATCH)) {
 					context->hv_latch = vdp_hv_counter_read(context);
@@ -2535,7 +2535,9 @@ uint32_t vdp_next_hint(vdp_context * context)
 	if (context->flags2 & FLAG2_HINT_PENDING) {
 		return context->pending_hint_start;
 	}
-	uint32_t inactive_start = context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START;
+	uint32_t inactive_start = (context->regs[REG_MODE_2] & BIT_MODE_5)
+		? (context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START)
+		: MODE4_INACTIVE_START;
 	uint32_t hint_line;
 	if (context->vcounter + context->hint_counter >= inactive_start) {
 		if (context->regs[REG_HINT] > inactive_start) {
