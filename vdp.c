@@ -89,7 +89,7 @@ void init_vdp_context(vdp_context * context, uint8_t region_pal)
 				g = levels[((color >> 5) & 0x7) + 7];
 				r = levels[((color >> 1) & 0x7) + 7];
 			} else if(color & FBUF_MODE4) {
-				b = levels[(color >> 3 & 0xC) | (color >> 5 & 0x2)];
+				b = levels[(color >> 4 & 0xC) | (color >> 6 & 0x2)];
 				g = levels[(color >> 2 & 0x8) | (color >> 1 & 0x4) | (color >> 4 & 0x2)];
 				r = levels[(color << 1 & 0xC) | (color >> 1 & 0x2)];
 			} else {
