@@ -2377,7 +2377,7 @@ uint16_t vdp_data_port_read(vdp_context * context)
 
 uint16_t vdp_hv_counter_read(vdp_context * context)
 {
-	if (context->regs[REG_MODE_1] & BIT_HVC_LATCH) {
+	if ((context->regs[REG_MODE_2] & BIT_MODE_5) && (context->regs[REG_MODE_1] & BIT_HVC_LATCH)) {
 		return context->hv_latch;
 	}
 	uint32_t line= context->vcounter & 0xFF;
