@@ -343,17 +343,9 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 	} else {
 		zremove_breakpoint(context, address);
 	}
-	uint8_t * pc;
-	if (address < 0x4000) {
-		pc = system->zram + (address & 0x1FFF);
-	} else if (address >= 0x8000) {
-		if (context->bank_reg < (0x400000 >> 15)) {
-			fatal_error("Entered Z80 debugger in banked memory address %X, which is not yet supported\n", address);
-		} else {
-			fatal_error("Entered Z80 debugger in banked memory address %X, but the bank is not pointed to a cartridge address\n", address);
-		}
-	} else {
-		fatal_error("Entered Z80 debugger at address %X\n", address);
+	uint8_t * pc = get_native_pointer(address, (void **)context->mem_pointers, &context->options->gen);
+	if (!pc) {
+		fatal_error("Failed to get native pointer on entering Z80 debugger at address %X\n", address);
 	}
 	for (disp_def * cur = zdisplays; cur; cur = cur->next) {
 		zdebugger_print(context, cur->format_char, cur->param);
@@ -470,8 +462,13 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 				} else if(inst.op == Z80_JR) {
 					after += inst.immed;
 				} else if(inst.op == Z80_RET) {
-					if (context->sp < 0x4000) {
-						after = system->zram[context->sp & 0x1FFF] | system->zram[(context->sp+1) & 0x1FFF] << 8;
+					uint8_t *sp = get_native_pointer(context->sp, (void **)context->mem_pointers, &context->options->gen);
+					if (sp) {
+						after = *sp;
+						sp = get_native_pointer((context->sp + 1) & 0xFFFF, (void **)context->mem_pointers, &context->options->gen);
+						if (sp) {
+							after |= *sp << 8;
+						}
 					}
 				}
 				zinsert_breakpoint(context, after, (uint8_t *)zdebugger);
@@ -495,14 +492,33 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 					fputs("s command requires a file name\n", stderr);
 					break;
 				}
-				FILE * f = fopen(param, "wb");
-				if (f) {
-					if(fwrite(system->zram, 1, Z80_RAM_BYTES, f) != Z80_RAM_BYTES) {
-						fputs("Error writing file\n", stderr);
+				memmap_chunk const *ram_chunk = NULL;
+				for (int i = 0; i < context->options->gen.memmap_chunks; i++)
+				{
+					memmap_chunk const *cur = context->options->gen.memmap + i;
+					if (cur->flags & MMAP_WRITE) {
+						ram_chunk = cur;
+						break;
 					}
-					fclose(f);
+				}
+				if (ram_chunk) {
+					uint32_t size = ram_chunk->end - ram_chunk->start;
+					if (size > ram_chunk->mask) {
+						size = ram_chunk->mask+1;
+					}
+					uint8_t *buf = get_native_pointer(ram_chunk->start, (void **)context->mem_pointers, &context->options->gen);
+					FILE * f = fopen(param, "wb");
+					if (f) {
+						if(fwrite(buf, 1, size, f) != size) {
+							fputs("Error writing file\n", stderr);
+						}
+						fclose(f);
+						printf("Wrote %d bytes to %s\n", size, param);
+					} else {
+						fprintf(stderr, "Could not open %s for writing\n", param);
+					}
 				} else {
-					fprintf(stderr, "Could not open %s for writing\n", param);
+					fputs("Failed to find a RAM memory chunk\n", stderr);
 				}
 				break;
 			}
