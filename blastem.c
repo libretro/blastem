@@ -339,6 +339,9 @@ int main(int argc, char ** argv)
 
 	rom_info info;
 	current_system = alloc_config_system(stype, cart, rom_size, lock_on, lock_on_size, menu ? 0 : opts, force_region, &info);
+	if (!current_system) {
+		fatal_error("Failed to detect system type for %s\n", romfname);
+	}
 	setup_saves(romfname, &info, current_system);
 	update_title(info.name);
 	if (menu) {
@@ -371,6 +374,9 @@ int main(int argc, char ** argv)
 			}
 			//allocate new genesis context
 			game_context = alloc_config_system(stype, cart, rom_size, lock_on, lock_on_size, opts,force_region, &info);
+			if (!game_context) {
+				fatal_error("Failed to detect system type for %s\n", menu_context->next_rom);
+			}
 			menu_context->next_context = game_context;
 			game_context->next_context = menu_context;
 			setup_saves(menu_context->next_rom, &info, game_context);
