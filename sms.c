@@ -5,6 +5,7 @@
 #include "blastem.h"
 #include "render.h"
 #include "util.h"
+#include "debug.h"
 
 static void *memory_io_write(uint32_t location, void *vcontext, uint8_t value)
 {
@@ -119,6 +120,10 @@ static void run_sms(system_header *system)
 	uint32_t target_cycle = sms->z80->current_cycle + 3420*262;
 	while (!sms->should_return)
 	{
+		if (system->enter_debugger && sms->z80->pc) {
+			system->enter_debugger = 0;
+			zdebugger(sms->z80, sms->z80->pc);
+		}
 		z80_run(sms->z80, target_cycle);
 		target_cycle = sms->z80->current_cycle;
 		vdp_run_context(sms->vdp, target_cycle);
@@ -142,6 +147,11 @@ static void start_sms(system_header *system, char *statefile)
 {
 	sms_context *sms = (sms_context *)system;
 	set_keybindings(&sms->io);
+	
+	if (system->enter_debugger) {
+		system->enter_debugger = 0;
+		zinsert_breakpoint(sms->z80, 0, (uint8_t *)zdebugger);
+	}
 	
 	z80_assert_reset(sms->z80, 0);
 	z80_clear_reset(sms->z80, 128*15);
