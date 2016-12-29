@@ -34,12 +34,12 @@ void * z80_unmapped_write(uint32_t location, void * context, uint8_t value)
 }
 
 const memmap_chunk z80_map[] = {
-	{ 0x0000, 0x4000,  0x1FFF, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE, z80_ram, NULL, NULL, NULL,              NULL },
-	{ 0x4000, 0x10000, 0xFFFF, 0, 0,                                  NULL,    NULL, NULL, z80_unmapped_read, z80_unmapped_write}
+	{ 0x0000, 0x4000,  0x1FFF, 0, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE, z80_ram, NULL, NULL, NULL,              NULL },
+	{ 0x4000, 0x10000, 0xFFFF, 0, 0, 0,                                  NULL,    NULL, NULL, z80_unmapped_read, z80_unmapped_write}
 };
 
 const memmap_chunk port_map[] = {
-	{ 0x0000, 0x100, 0xFF, 0, 0,                                  NULL,    NULL, NULL, z80_unmapped_read, z80_unmapped_write}
+	{ 0x0000, 0x100, 0xFF, 0, 0, 0,                                  NULL,    NULL, NULL, z80_unmapped_read, z80_unmapped_write}
 };
 
 void z80_next_int_pulse(z80_context * context)
@@ -52,7 +52,7 @@ int main(int argc, char ** argv)
 	long filesize;
 	uint8_t *filebuf;
 	z80_options opts;
-	z80_context context;
+	z80_context *context;
 	char *fname = NULL;
 	uint8_t retranslate = 0;
 	for (int i = 1; i < argc; i++)
@@ -90,37 +90,37 @@ int main(int argc, char ** argv)
 	}
 	fclose(f);
 	init_z80_opts(&opts, z80_map, 2, port_map, 1, 1, 0xFF);
-	init_z80_context(&context, &opts);
+	context = init_z80_context(&opts);
 	//Z80 RAM
-	context.mem_pointers[0] = z80_ram;
+	context->mem_pointers[0] = z80_ram;
 	if (retranslate) {
 		//run core long enough to translate code
-		z80_run(&context, 1);
+		z80_run(context, 1);
 		for (int i = 0; i < filesize; i++)
 		{
-			z80_handle_code_write(i, &context);
+			z80_handle_code_write(i, context);
 		}
-		z80_assert_reset(&context, context.current_cycle);
-		z80_clear_reset(&context, context.current_cycle + 3);
-		z80_adjust_cycles(&context, context.current_cycle);
+		z80_assert_reset(context, context->current_cycle);
+		z80_clear_reset(context, context->current_cycle + 3);
+		z80_adjust_cycles(context, context->current_cycle);
 	}
-	z80_run(&context, 1000);
+	z80_run(context, 1000);
 	printf("A: %X\nB: %X\nC: %X\nD: %X\nE: %X\nHL: %X\nIX: %X\nIY: %X\nSP: %X\n\nIM: %d, IFF1: %d, IFF2: %d\n",
-		context.regs[Z80_A], context.regs[Z80_B], context.regs[Z80_C],
-		context.regs[Z80_D], context.regs[Z80_E],
-		(context.regs[Z80_H] << 8) | context.regs[Z80_L],
-		(context.regs[Z80_IXH] << 8) | context.regs[Z80_IXL],
-		(context.regs[Z80_IYH] << 8) | context.regs[Z80_IYL],
-		context.sp, context.im, context.iff1, context.iff2);
+		context->regs[Z80_A], context->regs[Z80_B], context->regs[Z80_C],
+		context->regs[Z80_D], context->regs[Z80_E],
+		(context->regs[Z80_H] << 8) | context->regs[Z80_L],
+		(context->regs[Z80_IXH] << 8) | context->regs[Z80_IXL],
+		(context->regs[Z80_IYH] << 8) | context->regs[Z80_IYL],
+		context->sp, context->im, context->iff1, context->iff2);
 	printf("Flags: SZYHXVNC\n"
 	       "       %d%d%d%d%d%d%d%d\n", 
-			context.flags[ZF_S], context.flags[ZF_Z], context.flags[ZF_XY] >> 5 & 1, context.flags[ZF_H], 
-			context.flags[ZF_XY] >> 3 & 1, context.flags[ZF_PV], context.flags[ZF_N], context.flags[ZF_C]
+			context->flags[ZF_S], context->flags[ZF_Z], context->flags[ZF_XY] >> 5 & 1, context->flags[ZF_H], 
+			context->flags[ZF_XY] >> 3 & 1, context->flags[ZF_PV], context->flags[ZF_N], context->flags[ZF_C]
 	);
 	puts("--Alternate Regs--");
 	printf("A: %X\nB: %X\nC: %X\nD: %X\nE: %X\nHL: %X\n",
-		context.alt_regs[Z80_A], context.alt_regs[Z80_B], context.alt_regs[Z80_C],
-		context.alt_regs[Z80_D], context.alt_regs[Z80_E],
-		(context.alt_regs[Z80_H] << 8) | context.alt_regs[Z80_L]);
+		context->alt_regs[Z80_A], context->alt_regs[Z80_B], context->alt_regs[Z80_C],
+		context->alt_regs[Z80_D], context->alt_regs[Z80_E],
+		(context->alt_regs[Z80_H] << 8) | context->alt_regs[Z80_L]);
 	return 0;
 }

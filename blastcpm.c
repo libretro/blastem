@@ -62,13 +62,13 @@ void *exit_write(uint32_t address, void *context, uint8_t value)
 }
 
 const memmap_chunk z80_map[] = {
-	{ 0x0000, 0x10000,  0xFFFF, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE, ram, NULL, NULL, NULL, NULL},
+	{ 0x0000, 0x10000,  0xFFFF, 0, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE, ram, NULL, NULL, NULL, NULL},
 };
 
 const memmap_chunk io_map[] = {
-	{ 0x0, 0x1, 0xFFFF, 0, 0, NULL, NULL, NULL, console_read, console_write},
-	{ 0x1, 0x2, 0xFFFF, 0, 0, NULL, NULL, NULL, console_status_read, console_flush_write},
-	{ 0x2, 0x3, 0xFFFF, 0, 0, NULL, NULL, NULL, NULL, exit_write},
+	{ 0x0, 0x1, 0xFFFF, 0, 0, 0, NULL, NULL, NULL, console_read, console_write},
+	{ 0x1, 0x2, 0xFFFF, 0, 0, 0, NULL, NULL, NULL, console_status_read, console_flush_write},
+	{ 0x2, 0x3, 0xFFFF, 0, 0, 0, NULL, NULL, NULL, NULL, exit_write},
 };
 
 int main(int argc, char **argv)
@@ -100,13 +100,13 @@ int main(int argc, char **argv)
 	ram[7] = OS_START >> 8;
 	
 	z80_options opts;
-	z80_context context;
+	z80_context *context;
 	init_z80_opts(&opts, z80_map, 1, io_map, 3, 1, 0xFF);
-	init_z80_context(&context, &opts);
+	context = init_z80_context(&opts);
 	for(;;)
 	{
-		z80_run(&context, 1000000);
-		context.current_cycle = 0;
+		z80_run(context, 1000000);
+		context->current_cycle = 0;
 	}
 	return 0;
 }

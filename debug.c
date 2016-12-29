@@ -591,7 +591,7 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 					uint8_t non_adr_count = 0;
 					do {
 						uint32_t bt_address = system->work_ram[stack/2] << 16 | system->work_ram[stack/2+1];
-						bt_address = get_instruction_start(context->options, context->native_code_map, bt_address - 2);
+						bt_address = get_instruction_start(context->options, bt_address - 2);
 						if (bt_address) {
 							stack += 4;
 							non_adr_count = 0;

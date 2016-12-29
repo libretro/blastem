@@ -51,6 +51,23 @@ void process_deferred(deferred_addr ** head_ptr, void * context, native_addr_fun
 	}
 }
 
+memmap_chunk const *find_map_chunk(uint32_t address, cpu_options *opts, uint16_t flags, uint32_t *size_sum)
+{
+	if (size_sum) {
+		*size_sum = 0;
+	}
+	address &= opts->address_mask;
+	for (memmap_chunk const *cur = opts->memmap, *end = opts->memmap + opts->memmap_chunks; cur != end; cur++)
+	{
+		if (address >= cur->start && address < cur->end) {
+			return cur;
+		} else if (size_sum && (cur->flags & flags) == flags) {
+			*size_sum += chunk_size(opts, cur);
+		}
+	}
+	return NULL;
+}
+
 void * get_native_pointer(uint32_t address, void ** mem_pointers, cpu_options * opts)
 {
 	memmap_chunk const * memmap = opts->memmap;

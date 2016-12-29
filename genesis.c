@@ -925,15 +925,16 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	gen->psg = malloc(sizeof(psg_context));
 	psg_init(gen->psg, render_sample_rate(), gen->master_clock, MCLKS_PER_PSG, render_audio_buffer(), lowpass_cutoff);
 
-	gen->z80 = calloc(1, sizeof(z80_context));
 	gen->zram = calloc(1, Z80_RAM_BYTES);
 	z80_map[0].buffer = gen->zram = calloc(1, Z80_RAM_BYTES);
 #ifndef NO_Z80
 	z80_options *z_opts = malloc(sizeof(z80_options));
 	init_z80_opts(z_opts, z80_map, 5, NULL, 0, MCLKS_PER_Z80, 0xFFFF);
-	init_z80_context(gen->z80, z_opts);
+	gen->z80 = init_z80_context(z_opts);
 	gen->z80->next_int_pulse = z80_next_int_pulse;
 	z80_assert_reset(gen->z80, 0);
+#else
+	gen->z80 = calloc(1, sizeof(z80_context));
 #endif
 
 	gen->z80->system = gen;

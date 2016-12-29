@@ -70,11 +70,8 @@ struct z80_context {
 	void *            extra_pc;
 	uint32_t          sync_cycle;
 	uint32_t          int_cycle;
-	native_map_slot * static_code_map;
-	native_map_slot * banked_code_map;
 	z80_options *     options;
 	void *            system;
-	uint8_t           ram_code_flags[(8 * 1024)/128/8];
 	uint32_t          int_enable_cycle;
 	uint16_t          pc;
 	uint32_t          int_pulse_start;
@@ -87,12 +84,13 @@ struct z80_context {
 	uint8_t           reset;
 	uint8_t           busreq;
 	uint8_t           busack;
+	uint8_t           ram_code_flags[];
 };
 
 void translate_z80_stream(z80_context * context, uint32_t address);
 void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t num_chunks, memmap_chunk const * io_chunks, uint32_t num_io_chunks, uint32_t clock_divider, uint32_t io_address_mask);
 void z80_options_free(z80_options *opts);
-void init_z80_context(z80_context * context, z80_options * options);
+z80_context * init_z80_context(z80_options * options);
 code_ptr z80_get_native_address(z80_context * context, uint32_t address);
 code_ptr z80_get_native_address_trans(z80_context * context, uint32_t address);
 z80_context * z80_handle_code_write(uint32_t address, z80_context * context);
