@@ -212,8 +212,7 @@ sms_context *alloc_configure_sms(void *rom, uint32_t rom_size, void *extra_rom, 
 	memcpy(info_out->map, memory_map, sizeof(memory_map));
 	z80_options *zopts = malloc(sizeof(z80_options));
 	init_z80_opts(zopts, info_out->map, 2, io_map, 4, 15, 0xFF);
-	sms->z80 = malloc(sizeof(z80_context));
-	init_z80_context(sms->z80, zopts);
+	sms->z80 = init_z80_context(zopts);
 	sms->z80->system = sms;
 	
 	char * lowpass_cutoff_str = tern_find_path(config, "audio\0lowpass_cutoff\0").ptrval;

@@ -15,6 +15,8 @@
 
 #define MODE_UNUSED (MODE_IMMED-1)
 #define MAX_MCYCLE_LENGTH 6
+#define NATIVE_CHUNK_SIZE 1024
+#define NATIVE_MAP_CHUNKS (0x10000 / NATIVE_CHUNK_SIZE)
 
 //#define DO_DEBUG_PRINT
 
@@ -2881,94 +2883,120 @@ code_info z80_make_interp_stub(z80_context * context, uint16_t address)
 
 uint8_t * z80_get_native_address(z80_context * context, uint32_t address)
 {
-	native_map_slot *map;
-	if (address < 0x4000) {
-		address &= 0x1FFF;
-		map = context->static_code_map;
-	} else {
-		address -= 0x4000;
-		map = context->banked_code_map;
+	z80_options *opts = context->options;
+	native_map_slot * native_code_map = opts->gen.native_code_map;
+	
+	memmap_chunk const *mem_chunk = find_map_chunk(address, &opts->gen, 0, NULL);
+	if (mem_chunk) {
+		//calculate the lowest alias for this address
+		address = mem_chunk->start + ((address - mem_chunk->start) & mem_chunk->mask);
 	}
-	if (!map->base || !map->offsets || map->offsets[address] == INVALID_OFFSET || map->offsets[address] == EXTENSION_WORD) {
-		//dprintf("z80_get_native_address: %X NULL\n", address);
+	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
+	if (!native_code_map[chunk].base) {
 		return NULL;
 	}
-	//dprintf("z80_get_native_address: %X %p\n", address, map->base + map->offsets[address]);
-	return map->base + map->offsets[address];
+	uint32_t offset = address % NATIVE_CHUNK_SIZE;
+	if (native_code_map[chunk].offsets[offset] == INVALID_OFFSET || native_code_map[chunk].offsets[offset] == EXTENSION_WORD) {
+		return NULL;
+	}
+	return native_code_map[chunk].base + native_code_map[chunk].offsets[offset];
 }
 
 uint8_t z80_get_native_inst_size(z80_options * opts, uint32_t address)
 {
-	//TODO: Fix for addresses >= 0x4000
-	if (address >= 0x4000) {
-		return 0;
+	uint32_t meta_off;
+	memmap_chunk const *chunk = find_map_chunk(address, &opts->gen, MMAP_WRITE | MMAP_CODE, &meta_off);
+	if (chunk) {
+		meta_off += (address - chunk->start) & chunk->mask;
 	}
-	return opts->gen.ram_inst_sizes[0][address & 0x1FFF];
+	uint32_t slot = meta_off/1024;
+	return opts->gen.ram_inst_sizes[slot][meta_off%1024];
 }
 
 void z80_map_native_address(z80_context * context, uint32_t address, uint8_t * native_address, uint8_t size, uint8_t native_size)
 {
 	uint32_t orig_address = address;
-	native_map_slot *map;
+	
 	z80_options * opts = context->options;
-	if (address < 0x4000) {
-		address &= 0x1FFF;
-		map = context->static_code_map;
-		opts->gen.ram_inst_sizes[0][address] = native_size;
-		context->ram_code_flags[(address & 0x1C00) >> 10] |= 1 << ((address & 0x380) >> 7);
-		context->ram_code_flags[((address + size) & 0x1C00) >> 10] |= 1 << (((address + size) & 0x380) >> 7);
-	} else {
-		//HERE
-		address -= 0x4000;
-		map = context->banked_code_map;
-		if (!map->offsets) {
-			map->offsets = malloc(sizeof(int32_t) * 0xC000);
-			memset(map->offsets, 0xFF, sizeof(int32_t) * 0xC000);
+	uint32_t meta_off;
+	memmap_chunk const *mem_chunk = find_map_chunk(address, &opts->gen, MMAP_WRITE | MMAP_CODE, &meta_off);
+	if (mem_chunk) {
+		if ((mem_chunk->flags & (MMAP_WRITE | MMAP_CODE)) == (MMAP_WRITE | MMAP_CODE)) {
+			uint32_t masked = (address & mem_chunk->mask);
+			uint32_t final_off = masked + meta_off;
+			uint32_t ram_flags_off = final_off >> (opts->gen.ram_flags_shift + 3);
+			context->ram_code_flags[ram_flags_off] |= 1 << ((final_off >> opts->gen.ram_flags_shift) & 7);
+
+			uint32_t slot = final_off / 1024;
+			if (!opts->gen.ram_inst_sizes[slot]) {
+				opts->gen.ram_inst_sizes[slot] = malloc(sizeof(uint8_t) * 1024);
+			}
+			opts->gen.ram_inst_sizes[slot][final_off % 1024] = native_size;
+
+			//TODO: Deal with case in which end of instruction is in a different memory chunk
+			masked = (address + size - 1) & mem_chunk->mask;
+			final_off = masked + meta_off;
+			ram_flags_off = final_off >> (opts->gen.ram_flags_shift + 3);
+			context->ram_code_flags[ram_flags_off] |= 1 << ((final_off >> opts->gen.ram_flags_shift) & 7);
 		}
+		//calculate the lowest alias for this address
+		address = mem_chunk->start + ((address - mem_chunk->start) & mem_chunk->mask);
 	}
+	
+	native_map_slot *map = opts->gen.native_code_map + address / NATIVE_CHUNK_SIZE;
 	if (!map->base) {
 		map->base = native_address;
+		map->offsets = malloc(sizeof(int32_t) * NATIVE_CHUNK_SIZE);
+		memset(map->offsets, 0xFF, sizeof(int32_t) * NATIVE_CHUNK_SIZE);
 	}
-	map->offsets[address] = native_address - map->base;
-	for(--size, orig_address++; size; --size, orig_address++) {
-		address = orig_address;
-		if (address < 0x4000) {
-			address &= 0x1FFF;
-			map = context->static_code_map;
-		} else {
-			address -= 0x4000;
-			map = context->banked_code_map;
+	map->offsets[address % NATIVE_CHUNK_SIZE] = native_address - map->base;
+	for(--size, address++; size; --size, orig_address++) {
+		address &= opts->gen.address_mask;
+		map = opts->gen.native_code_map + address / NATIVE_CHUNK_SIZE;
+		if (!map->base) {
+			map->base = native_address;
+			map->offsets = malloc(sizeof(int32_t) * NATIVE_CHUNK_SIZE);
+			memset(map->offsets, 0xFF, sizeof(int32_t) * NATIVE_CHUNK_SIZE);
 		}
-		if (!map->offsets) {
-			map->offsets = malloc(sizeof(int32_t) * 0xC000);
-			memset(map->offsets, 0xFF, sizeof(int32_t) * 0xC000);
+	
+		if (map->offsets[address % NATIVE_CHUNK_SIZE] == INVALID_OFFSET) {
+			map->offsets[address % NATIVE_CHUNK_SIZE] = EXTENSION_WORD;
 		}
-		map->offsets[address] = EXTENSION_WORD;
 	}
 }
 
 #define INVALID_INSTRUCTION_START 0xFEEDFEED
 
-uint32_t z80_get_instruction_start(native_map_slot * static_code_map, uint32_t address)
-{
-	//TODO: Fixme for address >= 0x4000
-	if (!static_code_map->base || address >= 0x4000) {
+uint32_t z80_get_instruction_start(z80_context *context, uint32_t address)
+{	
+	z80_options *opts = context->options;
+	native_map_slot * native_code_map = opts->gen.native_code_map;
+	memmap_chunk const *mem_chunk = find_map_chunk(address, &opts->gen, 0, NULL);
+	if (mem_chunk) {
+		//calculate the lowest alias for this address
+		address = mem_chunk->start + ((address - mem_chunk->start) & mem_chunk->mask);
+	}
+	
+	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
+	if (!native_code_map[chunk].base) {
 		return INVALID_INSTRUCTION_START;
 	}
-	address &= 0x1FFF;
-	if (static_code_map->offsets[address] == INVALID_OFFSET) {
+	uint32_t offset = address % NATIVE_CHUNK_SIZE;
+	if (native_code_map[chunk].offsets[offset] == INVALID_OFFSET) {
 		return INVALID_INSTRUCTION_START;
 	}
-	while (static_code_map->offsets[address] == EXTENSION_WORD) {
+	while (native_code_map[chunk].offsets[offset] == EXTENSION_WORD)
+	{
 		--address;
-		address &= 0x1FFF;
+		chunk = address / NATIVE_CHUNK_SIZE;
+		offset = address % NATIVE_CHUNK_SIZE;
 	}
 	return address;
 }
 
 z80_context * z80_handle_code_write(uint32_t address, z80_context * context)
 {
-	uint32_t inst_start = z80_get_instruction_start(context->static_code_map, address);
+	uint32_t inst_start = z80_get_instruction_start(context, address);
 	if (inst_start != INVALID_INSTRUCTION_START) {
 		code_ptr dst = z80_get_native_address(context, inst_start);
 		code_info code = {dst, dst+32, 0};
@@ -3178,12 +3206,12 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	options->gen.cycles = RBP;
 	options->gen.limit = -1;
 
-	options->gen.native_code_map = malloc(sizeof(native_map_slot));
-	memset(options->gen.native_code_map, 0, sizeof(native_map_slot));
+	options->gen.native_code_map = malloc(sizeof(native_map_slot) * NATIVE_MAP_CHUNKS);
+	memset(options->gen.native_code_map, 0, sizeof(native_map_slot) * NATIVE_MAP_CHUNKS);
 	options->gen.deferred = NULL;
-	options->gen.ram_inst_sizes = malloc(sizeof(uint8_t) * 0x2000 + sizeof(uint8_t *));
-	options->gen.ram_inst_sizes[0] = (uint8_t *)(options->gen.ram_inst_sizes + 1);
-	memset(options->gen.ram_inst_sizes[0], 0, sizeof(uint8_t) * 0x2000);
+	uint32_t inst_size_size = sizeof(uint8_t *) * ram_size(&options->gen) / 1024;
+	options->gen.ram_inst_sizes = malloc(inst_size_size);
+	memset(options->gen.ram_inst_sizes, 0, inst_size_size);
 
 	code_info *code = &options->gen.code;
 	init_code_info(code);
@@ -3476,7 +3504,7 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	call(code, options->gen.load_context);
 	jmp_r(code, options->gen.scratch1);
 
-	options->run = code->cur;
+	options->run = (z80_ctx_fun)code->cur;
 	tmp_stack_off = code->stack_off;
 	save_callee_save_regs(code);
 #ifdef X86_64
@@ -3496,19 +3524,16 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	code->stack_off = tmp_stack_off;
 }
 
-void init_z80_context(z80_context * context, z80_options * options)
+z80_context *init_z80_context(z80_options * options)
 {
-	memset(context, 0, sizeof(*context));
-	context->static_code_map = malloc(sizeof(*context->static_code_map));
-	context->static_code_map->base = NULL;
-	context->static_code_map->offsets = malloc(sizeof(int32_t) * 0x2000);
-	memset(context->static_code_map->offsets, 0xFF, sizeof(int32_t) * 0x2000);
-	context->banked_code_map = malloc(sizeof(native_map_slot));
-	memset(context->banked_code_map, 0, sizeof(native_map_slot));
+	size_t ctx_size = sizeof(z80_context) + ram_size(&options->gen) / (1 << options->gen.ram_flags_shift) / 8;
+	z80_context *context = calloc(1, ctx_size);
 	context->options = options;
 	context->int_cycle = CYCLE_NEVER;
 	context->int_pulse_start = CYCLE_NEVER;
 	context->int_pulse_end = CYCLE_NEVER;
+	
+	return context;
 }
 
 void z80_run(z80_context * context, uint32_t target_cycle)
