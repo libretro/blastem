@@ -63,7 +63,6 @@ typedef struct m68k_context {
 	uint16_t        *mem_pointers[NUM_MEM_AREAS];
 	code_ptr        resume_pc;
 	code_ptr        reset_handler;
-	native_map_slot *native_code_map;
 	m68k_options    *options;
 	void            *system;
 	uint8_t         int_pending;
@@ -84,7 +83,7 @@ void m68k_options_free(m68k_options *opts);
 void insert_breakpoint(m68k_context * context, uint32_t address, m68k_debug_handler bp_handler);
 void remove_breakpoint(m68k_context * context, uint32_t address);
 m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context);
-uint32_t get_instruction_start(m68k_options *opts, native_map_slot * native_code_map, uint32_t address);
+uint32_t get_instruction_start(m68k_options *opts, uint32_t address);
 uint16_t m68k_get_ir(m68k_context *context);
 void m68k_print_regs(m68k_context * context);
 
