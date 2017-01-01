@@ -1260,32 +1260,19 @@ static void render_map_mode4(uint32_t line, int32_t col, vdp_context * context)
 			for (int i = 0; i < 8; i++, sprite_src++)
 			{
 				uint8_t *bg_src = context->tmp_buf_a + ((8 + i + col * 8 - (context->hscroll_a & 0x7)) & 15);
-				if ((*bg_src & 0x4F) > 0x40) {
-					//background plane has priority and is opaque
-					if (context->debug) {
-						*(dst++) = context->debugcolors[DBG_SRC_A];
-					} else {
-						*(dst++) = context->colors[(*bg_src & 0x1F) + CRAM_SIZE*3];
-					}
-				} else if (*sprite_src) {
-					//sprite layer is opaque
-					if (context->debug) {
-						*(dst++) = context->debugcolors[DBG_SRC_S];
-					} else {
-						*(dst++) = context->colors[*sprite_src | 0x10 + CRAM_SIZE*3];
-					}
-				} else if (*bg_src & 0xF) {
-					//background plane is opaque
+				if ((*bg_src & 0x4F) > 0x40 || !*sprite_src) {
+					//background plane has priority and is opaque or sprite layer is transparent
 					if (context->debug) {
 						*(dst++) = context->debugcolors[DBG_SRC_A];
 					} else {
 						*(dst++) = context->colors[(*bg_src & 0x1F) + CRAM_SIZE*3];
 					}
 				} else {
+					//sprite layer is opaque and not covered by high priority BG pixels
 					if (context->debug) {
-						*(dst++) = context->debugcolors[DBG_SRC_BG];
+						*(dst++) = context->debugcolors[DBG_SRC_S];
 					} else {
-						*(dst++) = context->colors[bgcolor];
+						*(dst++) = context->colors[*sprite_src | 0x10 + CRAM_SIZE*3];
 					}
 				}
 			}
