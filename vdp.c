@@ -589,9 +589,12 @@ static void read_sprite_x_mode4(uint32_t line, vdp_context * context)
 			uint32_t address = (context->regs[REG_SAT] << 7 & 0x3F00) + 0x80 + context->sprite_info_list[context->cur_slot].index * 2;
 			address = mode4_address_map[address];
 			--context->sprite_draws;
-			uint32_t tile_address = context->vdpmem[address + 1] * 32 + (context->regs[REG_STILE_BASE] << 11 & 0x2000);
+			uint32_t tile_address = context->vdpmem[address] * 32 + (context->regs[REG_STILE_BASE] << 11 & 0x2000);
+			if (context->regs[REG_MODE_2] & BIT_SPRITE_SZ) {
+				tile_address &= ~32;
+			}
 			tile_address += (line - context->sprite_info_list[context->cur_slot].y)* 4;
-			context->sprite_draw_list[context->sprite_draws].x_pos = context->vdpmem[address];
+			context->sprite_draw_list[context->sprite_draws].x_pos = context->vdpmem[address + 1];
 			context->sprite_draw_list[context->sprite_draws].address = tile_address;
 			context->cur_slot--;
 		} else {
