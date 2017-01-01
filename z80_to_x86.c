@@ -3662,7 +3662,15 @@ void z80_adjust_cycles(z80_context * context, uint32_t deduction)
 
 uint32_t zbreakpoint_patch(z80_context * context, uint16_t address, code_ptr dst)
 {
-	code_info code = {dst, dst+32};
+	code_info code = {
+		dst, 
+		dst+32,
+#ifdef X86_64
+		8
+#else
+		0
+#endif
+	};
 	mov_ir(&code, address, context->options->gen.scratch1, SZ_W);
 	call(&code, context->bp_stub);
 	return code.cur-dst;
@@ -3670,13 +3678,14 @@ uint32_t zbreakpoint_patch(z80_context * context, uint16_t address, code_ptr dst
 
 void zcreate_stub(z80_context * context)
 {
+	//FIXME: Stack offset stuff is still a bit broken
 	z80_options * opts = context->options;
 	code_info *code = &opts->gen.code;
 	uint32_t start_stack_off = code->stack_off;
 	check_code_prologue(code);
 	context->bp_stub = code->cur;
 
-		//Calculate length of prologue
+	//Calculate length of prologue
 	check_cycles_int(&opts->gen, 0);
 	int check_int_size = code->cur-context->bp_stub;
 	code->cur = context->bp_stub;
@@ -3684,7 +3693,10 @@ void zcreate_stub(z80_context * context)
 	//Calculate length of patch
 	int patch_size = zbreakpoint_patch(context, 0, code->cur);
 
-		//Save context and call breakpoint handler
+#ifdef X86_64
+	code->stack_off = 8;
+#endif
+	//Save context and call breakpoint handler
 	call(code, opts->gen.save_context);
 	push_r(code, opts->gen.scratch1);
 	call_args_abi(code, context->bp_handler, 2, opts->gen.context_reg, opts->gen.scratch1);
@@ -3693,7 +3705,7 @@ void zcreate_stub(z80_context * context)
 	call(code, opts->gen.load_context);
 	pop_r(code, opts->gen.scratch1);
 		//do prologue stuff
-	or_rr(code, opts->gen.cycles, opts->gen.cycles, SZ_D);
+	cmp_ir(code, 1, opts->gen.cycles, SZ_D);
 	uint8_t * jmp_off = code->cur+1;
 	jcc(code, CC_NS, code->cur + 7);
 	pop_r(code, opts->gen.scratch1);
@@ -3732,7 +3744,7 @@ void zremove_breakpoint(z80_context * context, uint16_t address)
 		z80_options * opts = context->options;
 		code_info tmp_code = opts->gen.code;
 		opts->gen.code.cur = native;
-		opts->gen.code.last = native + 16;
+		opts->gen.code.last = native + 128;
 		check_cycles_int(&opts->gen, address);
 		opts->gen.code = tmp_code;
 	}
