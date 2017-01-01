@@ -1335,6 +1335,9 @@ static void vdp_advance_line(vdp_context *context)
 		context->vcounter = 0x1E5;
 	}
 	uint32_t inactive_start = (context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START);
+	if (!(context->regs[REG_MODE_2] & BIT_MODE_5)) {
+		inactive_start = MODE4_INACTIVE_START;
+	}
 	if (!headless) {
 		if (!context->vcounter && !context->output) {
 			context->output = render_get_framebuffer(context->flags2 & FLAG2_EVEN_FIELD ? FRAMEBUFFER_EVEN : FRAMEBUFFER_ODD, &context->output_pitch);
@@ -1502,7 +1505,7 @@ static void vdp_advance_line(vdp_context *context)
 		render_sprite_cells_mode4(context);\
 		scan_sprite_table(context->vcounter, context);\
 		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); } \
-		if (slot == 147) {\
+		if ((slot+1) == 147) {\
 			context->hslot = 233;\
 		} else {\
 			context->hslot++;\
@@ -2323,6 +2326,9 @@ uint16_t vdp_control_port_read(vdp_context * context)
 	uint32_t line= context->vcounter;
 	uint32_t slot = context->hslot;
 	uint32_t inactive_start = (context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START);
+	if (!(context->regs[REG_MODE_2] & BIT_MODE_5)) {
+		inactive_start = MODE4_INACTIVE_START;
+	}
 	if ((line >= inactive_start && line < 0x1FF) || !(context->regs[REG_MODE_2] & BIT_DISP_EN)) {
 		value |= 0x8;
 	}
@@ -2557,6 +2563,9 @@ uint32_t vdp_next_vint(vdp_context * context)
 uint32_t vdp_next_vint_z80(vdp_context * context)
 {
 	uint32_t inactive_start = context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START;
+	if (!(context->regs[REG_MODE_2] & BIT_MODE_5)) {
+		inactive_start = MODE4_INACTIVE_START;
+	}
 	if (context->vcounter == inactive_start) {
 		if (context->regs[REG_MODE_4] & BIT_H40) {
 			if (context->hslot >= LINE_CHANGE_H40 && context->hslot <= VINT_SLOT_H40) {
