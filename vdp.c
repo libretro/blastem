@@ -223,8 +223,8 @@ static void render_sprite_cells(vdp_context * context)
 
 static void fetch_sprite_cells_mode4(vdp_context * context)
 {
-	if (context->cur_slot >= context->sprite_draws) {
-		sprite_draw * d = context->sprite_draw_list + context->cur_slot;
+	if (context->sprite_index >= context->sprite_draws) {
+		sprite_draw * d = context->sprite_draw_list + context->sprite_index;
 		uint32_t address = mode4_address_map[d->address & 0x3FFF];
 		context->fetch_tmp[0] = context->vdpmem[address];
 		context->fetch_tmp[1] = context->vdpmem[address + 1];
@@ -233,8 +233,8 @@ static void fetch_sprite_cells_mode4(vdp_context * context)
 
 static void render_sprite_cells_mode4(vdp_context * context)
 {
-	if (context->cur_slot >= context->sprite_draws) {
-		sprite_draw * d = context->sprite_draw_list + context->cur_slot;
+	if (context->sprite_index >= context->sprite_draws) {
+		sprite_draw * d = context->sprite_draw_list + context->sprite_index;
 		uint32_t pixels = planar_to_chunky[context->fetch_tmp[0]] << 1;
 		pixels |= planar_to_chunky[context->fetch_tmp[1]];
 		uint32_t address = mode4_address_map[(d->address + 2) & 0x3FFF];
@@ -249,7 +249,7 @@ static void render_sprite_cells_mode4(vdp_context * context)
 				context->linebuf[x] = pixels >> i & 0xF;
 			}
 		}
-		context->cur_slot--;
+		context->sprite_index--;
 	}
 }
 
@@ -463,13 +463,14 @@ static void scan_sprite_table(uint32_t line, vdp_context * context)
 	}
 }
 
-static void scan_sprite_table_mode4(uint32_t line, vdp_context * context)
+static void scan_sprite_table_mode4(vdp_context * context)
 {
-	if (context->sprite_index < MAX_SPRITES_FRAME_H32 && context->slot_counter) {
-		line += 1;
+	if (context->sprite_index < MAX_SPRITES_FRAME_H32) {
+		uint32_t line = context->vcounter + 1;
 		line &= 0xFF;
 		
-		uint32_t y = context->sat_cache[context->sprite_index];
+		uint32_t sat_address = mode4_address_map[(context->regs[REG_SAT] << 7 & 0x3F00) + context->sprite_index];
+		uint32_t y = context->vdpmem[sat_address];
 		uint32_t size = (context->regs[REG_MODE_2] & BIT_SPRITE_SZ) ? 16 : 8;
 		
 		if (y >= 0xd0) {
@@ -477,6 +478,11 @@ static void scan_sprite_table_mode4(uint32_t line, vdp_context * context)
 			return;
 		} else {
 			if (y <= line && line < (y + size)) {
+				if (!context->slot_counter) {
+					context->sprite_index = MAX_SPRITES_FRAME_H32;
+					context->flags |= FLAG_DOT_OFLOW;
+					return;
+				}
 				context->sprite_info_list[--(context->slot_counter)].size = size;
 				context->sprite_info_list[context->slot_counter].index = context->sprite_index;
 				context->sprite_info_list[context->slot_counter].y = y;
@@ -484,13 +490,18 @@ static void scan_sprite_table_mode4(uint32_t line, vdp_context * context)
 			context->sprite_index++;
 		}
 		
-		if (context->sprite_index < MAX_SPRITES_FRAME_H32 && context->slot_counter) {
-			y = context->sat_cache[context->sprite_index];
+		if (context->sprite_index < MAX_SPRITES_FRAME_H32) {
+			y = context->vdpmem[sat_address+1];
 			if (y >= 0xd0) {
 				context->sprite_index = MAX_SPRITES_FRAME_H32;
 				return;
 			} else {
 				if (y <= line && line < (y + size)) {
+					if (!context->slot_counter) {
+						context->sprite_index = MAX_SPRITES_FRAME_H32;
+						context->flags |= FLAG_DOT_OFLOW;
+						return;
+					}
 					context->sprite_info_list[--(context->slot_counter)].size = size;
 					context->sprite_info_list[context->slot_counter].index = context->sprite_index;
 					context->sprite_info_list[context->slot_counter].y = y;
@@ -579,27 +590,20 @@ static void read_sprite_x(uint32_t line, vdp_context * context)
 	}
 }
 
-static void read_sprite_x_mode4(uint32_t line, vdp_context * context)
+static void read_sprite_x_mode4(vdp_context * context)
 {
 	if (context->cur_slot >= context->slot_counter) {
-		if (context->sprite_draws) {
-			line += 1;
-			line &= 0xFF;
-			
-			uint32_t address = (context->regs[REG_SAT] << 7 & 0x3F00) + 0x80 + context->sprite_info_list[context->cur_slot].index * 2;
-			address = mode4_address_map[address];
-			--context->sprite_draws;
-			uint32_t tile_address = context->vdpmem[address] * 32 + (context->regs[REG_STILE_BASE] << 11 & 0x2000);
-			if (context->regs[REG_MODE_2] & BIT_SPRITE_SZ) {
-				tile_address &= ~32;
-			}
-			tile_address += (line - context->sprite_info_list[context->cur_slot].y)* 4;
-			context->sprite_draw_list[context->sprite_draws].x_pos = context->vdpmem[address + 1];
-			context->sprite_draw_list[context->sprite_draws].address = tile_address;
-			context->cur_slot--;
-		} else {
-			context->flags |= FLAG_DOT_OFLOW;
+		uint32_t address = (context->regs[REG_SAT] << 7 & 0x3F00) + 0x80 + context->sprite_info_list[context->cur_slot].index * 2;
+		address = mode4_address_map[address];
+		--context->sprite_draws;
+		uint32_t tile_address = context->vdpmem[address] * 32 + (context->regs[REG_STILE_BASE] << 11 & 0x2000);
+		if (context->regs[REG_MODE_2] & BIT_SPRITE_SZ) {
+			tile_address &= ~32;
 		}
+		tile_address += (context->vcounter - context->sprite_info_list[context->cur_slot].y)* 4;
+		context->sprite_draw_list[context->sprite_draws].x_pos = context->vdpmem[address + 1];
+		context->sprite_draw_list[context->sprite_draws].address = tile_address;
+		context->cur_slot--;
 	}
 }
 
@@ -651,12 +655,6 @@ void write_vram_byte(vdp_context *context, uint16_t address, uint8_t value)
 			}
 		}
 	} else {
-		if (!(address & 0xC0)) {
-			uint16_t sat_address = context->regs[REG_SAT] << 7 & 0x3F00;
-			if (address >= sat_address && address < (sat_address + 0x40)) {
-				context->sat_cache[address-sat_address] = value;
-			}
-		}
 		address = mode4_address_map[address & 0x3FFF];
 	}
 	context->vdpmem[address] = value;
@@ -1429,8 +1427,8 @@ static void vdp_advance_line(vdp_context *context)
 		read_map_mode4(column, context->vcounter, context);\
 		CHECK_LIMIT\
 	case ((startcyc+1)&0xFF):\
-		if (column & 1) {\
-			read_sprite_x_mode4(context->vcounter, context);\
+		if (column & 3) {\
+			scan_sprite_table_mode4(context);\
 		} else {\
 			external_slot(context);\
 		}\
@@ -1439,22 +1437,6 @@ static void vdp_advance_line(vdp_context *context)
 		fetch_map_mode4(column, context->vcounter, context);\
 		CHECK_LIMIT\
 	case ((startcyc+3)&0xFF):\
-		render_map_mode4(context->vcounter, column, context);\
-		CHECK_LIMIT
-		
-#define COLUMN_RENDER_BLOCK_REFRESH_MODE4(column, startcyc) \
-	case startcyc:\
-		read_map_mode4(column, context->vcounter, context);\
-		CHECK_LIMIT\
-	case (startcyc+1):\
-		/* refresh, no don't run dma src */\
-		context->hslot++;\
-		context->cycles += slot_cycles;\
-		CHECK_ONLY\
-	case (startcyc+2):\
-		fetch_map_mode4(column, context->vcounter, context);\
-		CHECK_LIMIT\
-	case (startcyc+3):\
 		render_map_mode4(context->vcounter, column, context);\
 		CHECK_LIMIT
 
@@ -1491,27 +1473,23 @@ static void vdp_advance_line(vdp_context *context)
 		
 #define SPRITE_RENDER_H32_MODE4(slot) \
 	case slot:\
+		read_sprite_x_mode4(context);\
+		CHECK_LIMIT\
+	case (slot+1):\
+		read_sprite_x_mode4(context);\
+		CHECK_LIMIT\
+	case (slot+2):\
 		fetch_sprite_cells_mode4(context);\
-		scan_sprite_table(context->vcounter, context);\
-		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); } \
-		if (slot == 147) {\
-			context->hslot = 233;\
-		} else {\
-			context->hslot++;\
-		}\
-		context->cycles += slot_cycles;\
-		CHECK_ONLY\
-	case (slot == 147 ? 233 : slot+1):\
+		CHECK_LIMIT\
+	case (slot+3):\
 		render_sprite_cells_mode4(context);\
-		scan_sprite_table(context->vcounter, context);\
-		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); } \
-		if ((slot+1) == 147) {\
-			context->hslot = 233;\
-		} else {\
-			context->hslot++;\
-		}\
-		context->cycles += slot_cycles;\
-		CHECK_ONLY
+		CHECK_LIMIT\
+	case (slot+4):\
+		fetch_sprite_cells_mode4(context);\
+		CHECK_LIMIT\
+	case (slot+5):\
+		render_sprite_cells_mode4(context);\
+		CHECK_LIMIT
 
 static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 {
@@ -1828,137 +1806,113 @@ static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
 	{
 	for (;;)
 	{
-	//sprite attribute table scan starts
 	case 132:
-		context->sprite_index = 0x80;
-		//in theory, Mode 4 should only allow 8 sprites per line, but if we assume that thee
-		//Genesis VDP uses the SAT cache for sprite scans in Mode 4 like it does in Mode 5,
-		//there should be enough bandwidth for 16 like in Mode 5 (though only 128 pixels rather than 256)
-		context->slot_counter = MAX_SPRITES_LINE_H32;
-		fetch_sprite_cells_mode4(context);
-		scan_sprite_table_mode4(context->vcounter, context);
+		external_slot(context);
 		CHECK_LIMIT
 	case 133:
-		render_sprite_cells_mode4(context);
-		scan_sprite_table_mode4(context->vcounter, context);
+		external_slot(context);
+		//set things up for sprite rendering in the next slot
+		memset(context->linebuf, 0, LINEBUF_SIZE);
+		context->cur_slot = context->sprite_index = MAX_DRAWS_H32_MODE4-1;
+		context->sprite_draws = MAX_DRAWS_H32_MODE4;
 		CHECK_LIMIT
+	//sprite rendering starts
 	SPRITE_RENDER_H32_MODE4(134)
-	SPRITE_RENDER_H32_MODE4(136)
-	SPRITE_RENDER_H32_MODE4(138)
 	SPRITE_RENDER_H32_MODE4(140)
-	case 142:
+	case 146:
 		external_slot(context);
 		CHECK_LIMIT
-	SPRITE_RENDER_H32_MODE4(143)
-	SPRITE_RENDER_H32_MODE4(145)
-	SPRITE_RENDER_H32_MODE4(147)
-	//HSYNC start @233
-	SPRITE_RENDER_H32_MODE4(234)
+	case 147:
+		external_slot(context);
+		CHECK_LIMIT
+	//!HSYNC low
+	case 233:
+		external_slot(context);
+		CHECK_LIMIT
+	case 234:
+		external_slot(context);
+		CHECK_LIMIT
+	case 235:
+		external_slot(context);
+		CHECK_LIMIT
 	SPRITE_RENDER_H32_MODE4(236)
-	SPRITE_RENDER_H32_MODE4(238)
-	case 240:
+	SPRITE_RENDER_H32_MODE4(242)
+	case 248:
 		external_slot(context);
 		CHECK_LIMIT
-	case 241:
+	case 249:
+		external_slot(context);
 		if (context->regs[REG_MODE_1] & BIT_HSCRL_LOCK && context->vcounter < 16) {
 			context->hscroll_a = 0;
 		} else {
 			context->hscroll_a = context->regs[REG_X_SCROLL];
 		}
 		CHECK_LIMIT
-	SPRITE_RENDER_H32_MODE4(242)
-	SPRITE_RENDER_H32_MODE4(244)
-	//!HSYNC high
-	case 246:
-		external_slot(context);
-		CHECK_LIMIT
-	case 247:
-		fetch_sprite_cells_mode4(context);
-		scan_sprite_table_mode4(context->vcounter, context);
-		CHECK_LIMIT
-	case 248:
-		external_slot(context);
-		scan_sprite_table_mode4(context->vcounter, context);//Just a guess
-		CHECK_LIMIT
-	case 249:
-		external_slot(context);
-		scan_sprite_table_mode4(context->vcounter, context);//Just a guess
-		CHECK_LIMIT
 	case 250:
-		external_slot(context);
+		context->sprite_index = 0;
+		context->slot_counter = MAX_DRAWS_H32_MODE4;
+		scan_sprite_table_mode4(context);
 		CHECK_LIMIT
 	case 251:
-		render_sprite_cells_mode4(context);
-		scan_sprite_table_mode4(context->vcounter, context);
+		scan_sprite_table_mode4(context);
 		CHECK_LIMIT
 	case 252:
-		external_slot(context);
-		scan_sprite_table_mode4(context->vcounter, context);//Just a guess
+		scan_sprite_table_mode4(context);
 		CHECK_LIMIT
 	case 253:
-		external_slot(context);
-		scan_sprite_table_mode4(context->vcounter, context);//Just a guess
+		scan_sprite_table_mode4(context);
+		CHECK_LIMIT
+	case 254:
+		scan_sprite_table_mode4(context);
+		CHECK_LIMIT
+	case 255:
+		scan_sprite_table_mode4(context);
+		CHECK_LIMIT
+	case 0:
+		scan_sprite_table_mode4(context);
+		CHECK_LIMIT
+	case 1:
+		scan_sprite_table_mode4(context);
 		context->buf_a_off = 8;
 		memset(context->tmp_buf_a, 0, 8);
-		//reverse context slot counter so it counts the number of sprite slots
-		//filled rather than the number of available slots
-		//context->slot_counter = MAX_SPRITES_LINE - context->slot_counter;
-		context->cur_slot = MAX_SPRITES_LINE_H32-1;
-		context->sprite_draws = MAX_DRAWS_H32_MODE4;
-		context->flags &= (~FLAG_CAN_MASK & ~FLAG_MASKED);
 		CHECK_LIMIT
-	COLUMN_RENDER_BLOCK_MODE4(0, 254)
-	COLUMN_RENDER_BLOCK_MODE4(1, 2)
-	COLUMN_RENDER_BLOCK_MODE4(2, 6)
-	COLUMN_RENDER_BLOCK_MODE4(3, 10)
-	COLUMN_RENDER_BLOCK_MODE4(4, 14)
-	COLUMN_RENDER_BLOCK_MODE4(5, 18)
-	COLUMN_RENDER_BLOCK_REFRESH_MODE4(6, 22)
-	COLUMN_RENDER_BLOCK_MODE4(7, 26)
-	COLUMN_RENDER_BLOCK_MODE4(8, 30)
-	COLUMN_RENDER_BLOCK_MODE4(9, 34)
-	COLUMN_RENDER_BLOCK_MODE4(10, 38)
-	COLUMN_RENDER_BLOCK_MODE4(11, 42)
-	COLUMN_RENDER_BLOCK_MODE4(12, 46)
-	COLUMN_RENDER_BLOCK_MODE4(13, 50)
-	COLUMN_RENDER_BLOCK_REFRESH_MODE4(14, 54)
-	COLUMN_RENDER_BLOCK_MODE4(15, 58)
-	COLUMN_RENDER_BLOCK_MODE4(16, 62)
-	COLUMN_RENDER_BLOCK_MODE4(17, 66)
-	COLUMN_RENDER_BLOCK_MODE4(18, 70)
-	COLUMN_RENDER_BLOCK_MODE4(19, 74)
-	COLUMN_RENDER_BLOCK_MODE4(20, 78)
-	COLUMN_RENDER_BLOCK_MODE4(21, 82)
-	COLUMN_RENDER_BLOCK_REFRESH_MODE4(22, 86)
-	COLUMN_RENDER_BLOCK_MODE4(23, 90)
-	COLUMN_RENDER_BLOCK_MODE4(24, 94)
-	COLUMN_RENDER_BLOCK_MODE4(25, 98)
-	COLUMN_RENDER_BLOCK_MODE4(26, 102)
-	COLUMN_RENDER_BLOCK_MODE4(27, 106)
-	COLUMN_RENDER_BLOCK_MODE4(28, 110)
-	COLUMN_RENDER_BLOCK_MODE4(29, 114)
-	COLUMN_RENDER_BLOCK_REFRESH_MODE4(30, 118)
-	COLUMN_RENDER_BLOCK_MODE4(31, 122)
-	case 126:
-		external_slot(context);
-		CHECK_LIMIT
-	case 127:
-		external_slot(context);
-		CHECK_LIMIT
-	//sprite render to line buffer starts
-	case 128:
-		context->cur_slot = MAX_DRAWS_H32_MODE4-1;
-		memset(context->linebuf, 0, LINEBUF_SIZE);
-		fetch_sprite_cells_mode4(context);
-		CHECK_LIMIT
-	case 129:
-		render_sprite_cells_mode4(context);
-		CHECK_LIMIT
+	COLUMN_RENDER_BLOCK_MODE4(0, 2)
+	COLUMN_RENDER_BLOCK_MODE4(1, 6)
+	COLUMN_RENDER_BLOCK_MODE4(2, 10)
+	COLUMN_RENDER_BLOCK_MODE4(3, 14)
+	COLUMN_RENDER_BLOCK_MODE4(4, 18)
+	COLUMN_RENDER_BLOCK_MODE4(5, 22)
+	COLUMN_RENDER_BLOCK_MODE4(6, 26)
+	COLUMN_RENDER_BLOCK_MODE4(7, 30)
+	COLUMN_RENDER_BLOCK_MODE4(8, 34)
+	COLUMN_RENDER_BLOCK_MODE4(9, 38)
+	COLUMN_RENDER_BLOCK_MODE4(10, 42)
+	COLUMN_RENDER_BLOCK_MODE4(11, 46)
+	COLUMN_RENDER_BLOCK_MODE4(12, 50)
+	COLUMN_RENDER_BLOCK_MODE4(13, 54)
+	COLUMN_RENDER_BLOCK_MODE4(14, 58)
+	COLUMN_RENDER_BLOCK_MODE4(15, 62)
+	COLUMN_RENDER_BLOCK_MODE4(16, 66)
+	COLUMN_RENDER_BLOCK_MODE4(17, 70)
+	COLUMN_RENDER_BLOCK_MODE4(18, 74)
+	COLUMN_RENDER_BLOCK_MODE4(19, 78)
+	COLUMN_RENDER_BLOCK_MODE4(20, 82)
+	COLUMN_RENDER_BLOCK_MODE4(21, 86)
+	COLUMN_RENDER_BLOCK_MODE4(22, 90)
+	COLUMN_RENDER_BLOCK_MODE4(23, 94)
+	COLUMN_RENDER_BLOCK_MODE4(24, 98)
+	COLUMN_RENDER_BLOCK_MODE4(25, 102)
+	COLUMN_RENDER_BLOCK_MODE4(26, 106)
+	COLUMN_RENDER_BLOCK_MODE4(27, 110)
+	COLUMN_RENDER_BLOCK_MODE4(28, 114)
+	COLUMN_RENDER_BLOCK_MODE4(29, 118)
+	COLUMN_RENDER_BLOCK_MODE4(30, 122)
+	COLUMN_RENDER_BLOCK_MODE4(31, 126)
 	case 130:
-		fetch_sprite_cells_mode4(context);
+		external_slot(context);
 		CHECK_LIMIT
 	case 131:
-		render_sprite_cells_mode4(context);
+		external_slot(context);
 		vdp_advance_line(context);
 		if (context->vcounter == MODE4_INACTIVE_START) {
 			context->hslot++;
