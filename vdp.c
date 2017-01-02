@@ -983,7 +983,7 @@ static void read_map_mode4(uint16_t column, uint32_t line, vdp_context * context
 	}
 	address += (vscroll >> 3) * 2 * 32;
 	//add column
-	address += (((column << 3) + context->hscroll_a) >> 3) * 2;
+	address += ((column - (context->hscroll_a >> 3)) & 31) * 2;
 	//adjust for weird VRAM mapping in Mode 4
 	address = mode4_address_map[address];
 	context->col_1 = (context->vdpmem[address] << 8) | context->vdpmem[address+1];
