@@ -1824,7 +1824,12 @@ static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
 		CHECK_LIMIT
 	case 147:
 		external_slot(context);
-		CHECK_LIMIT
+		if (context->flags & FLAG_DMA_RUN) {
+			run_dma_src(context, -1);
+		}
+		context->hslot = 233;
+		context->cycles += slot_cycles;
+		CHECK_ONLY
 	//!HSYNC low
 	case 233:
 		external_slot(context);
