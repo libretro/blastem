@@ -18,7 +18,7 @@
 #define BORDER_BOTTOM 13 //TODO: Replace with actual value
 #define MAX_DRAWS 40
 #define MAX_DRAWS_H32 32
-#define MAX_DRAWS_H32_MODE4 16
+#define MAX_DRAWS_H32_MODE4 8
 #define MAX_SPRITES_LINE 20
 #define MAX_SPRITES_LINE_H32 16
 #define MAX_SPRITES_FRAME 80
