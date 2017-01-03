@@ -35,6 +35,8 @@ char is_path_sep(char c);
 char is_absolute_path(char *path);
 //Returns the basename of a path with th extension (if any) stripped
 char * basename_no_extension(char *path);
+//Returns the extension from a path or NULL if there is no extension
+char *path_extension(char *path);
 //Gets the smallest power of two that is >= a certain value, won't work for values > 0x80000000
 uint32_t nearest_pow2(uint32_t val);
 //Should be called by main with the value of argv[0] for use by get_exe_dir
@@ -48,7 +50,7 @@ char const *get_config_dir();
 //Returns an appropriate path for saving non-config data like savestates
 char const *get_save_dir();
 //Reads a file bundled with the executable
-char *read_bundled_file(char *name, long *sizeret);
+char *read_bundled_file(char *name, uint32_t *sizeret);
 //Retunrs an array of normal files and directories residing in a directory
 dir_entry *get_dir_list(char *path, size_t *numret);
 //Frees a dir list returned by get_dir_list
