@@ -49,7 +49,7 @@ tern_node * config;
 #define SMD_MAGIC3 0xBB
 #define SMD_BLOCK_SIZE 0x4000
 
-int load_smd_rom(long filesize, FILE * f, uint16_t **buffer)
+int load_smd_rom(long filesize, FILE * f, void **buffer)
 {
 	uint8_t block[SMD_BLOCK_SIZE];
 	filesize -= SMD_HEADER_SIZE;
@@ -67,7 +67,7 @@ int load_smd_rom(long filesize, FILE * f, uint16_t **buffer)
 	return rom_size;
 }
 
-int load_rom(char * filename, uint16_t **dst, system_type *stype)
+uint32_t load_rom(char * filename, void **dst, system_type *stype)
 {
 	uint8_t header[10];
 	FILE * f = fopen(filename, "rb");
@@ -102,9 +102,6 @@ int load_rom(char * filename, uint16_t **dst, system_type *stype)
 		fatal_error("Error reading from %s\n", filename);
 	}
 	fclose(f);
-	if (stype) {
-		*stype = detect_system_type((uint8_t *)*dst, filesize);
-	}
 	return filesize;
 }
 
@@ -177,12 +174,11 @@ int main(int argc, char ** argv)
 	int debug = 0;
 	uint32_t opts = 0;
 	int loaded = 0;
-	system_type stype;
+	system_type stype = SYSTEM_UNKNOWN, force_stype = SYSTEM_UNKNOWN;
 	uint8_t force_region = 0;
 	char * romfname = NULL;
 	char * statefile = NULL;
-	int rom_size, lock_on_size;
-	uint16_t *cart = NULL, *lock_on = NULL;
+	system_media cart = {.chain = NULL}, lock_on;
 	debugger_type dtype = DEBUGGER_NATIVE;
 	uint8_t start_in_debugger = 0;
 	uint8_t fullscreen = FULLSCREEN_DEFAULT, use_gl = 1;
@@ -235,6 +231,21 @@ int main(int argc, char ** argv)
 					fatal_error("'%c' is not a valid region character for the -r option\n", argv[i][0]);
 				}
 				break;
+			case 'm':
+				i++;
+				if (i >= argc) {
+					fatal_error("-r must be followed by a machine type (sms, gen or jag)\n");
+				}
+				if (!strcmp("sms", argv[i])) {
+					stype = force_stype = SYSTEM_SMS;
+				} else if (!strcmp("gen", argv[i])) {
+					stype = force_stype = SYSTEM_GENESIS;
+				} else if (!strcmp("jag", argv[i])) {
+					stype = force_stype = SYSTEM_JAGUAR;
+				} else {
+					fatal_error("Unrecognized machine type %s\n", argv[i]);
+				}
+				break;
 			case 's':
 				i++;
 				if (i >= argc) {
@@ -253,10 +264,12 @@ int main(int argc, char ** argv)
 				if (i >= argc) {
 					fatal_error("-o must be followed by a lock on cartridge filename\n");
 				}
-				lock_on_size = load_rom(argv[i], &lock_on, NULL);
-				if (!lock_on_size) {
+				lock_on.size = load_rom(argv[i], &lock_on.buffer, NULL);
+				if (!lock_on.size) {
 					fatal_error("Failed to load lock on cartridge %s\n", argv[i]);
 				}
+				lock_on.extension = path_extension(argv[i]);
+				cart.chain = &lock_on;
 				break;
 			}
 			case 'h':
@@ -265,6 +278,10 @@ int main(int argc, char ** argv)
 					"Options:\n"
 					"	-h          Print this help text\n"
 					"	-r (J|U|E)  Force region to Japan, US or Europe respectively\n"
+					"   -m MACHINE  Force emulated machine type to MACHINE. Valid values are:\n"
+					"                   sms - Sega Master System/Mark III\n"
+					"                   gen - Sega Genesis/Megadrive\n"
+					"                   jag - Atari Jaguar\n"
 					"	-f          Toggles fullscreen mode\n"
 					"	-g          Disable OpenGL rendering\n"
 					"	-s FILE     Load a GST format savestate from FILE\n"
@@ -280,9 +297,10 @@ int main(int argc, char ** argv)
 				fatal_error("Unrecognized switch %s\n", argv[i]);
 			}
 		} else if (!loaded) {
-			if (!(rom_size = load_rom(argv[i], &cart, &stype))) {
+			if (!(cart.size = load_rom(argv[i], &cart.buffer, stype == SYSTEM_UNKNOWN ? &stype : NULL))) {
 				fatal_error("Failed to open %s for reading\n", argv[i]);
 			}
+			cart.extension = path_extension(argv[i]);
 			romfname = argv[i];
 			loaded = 1;
 		} else if (width < 0) {
@@ -299,21 +317,23 @@ int main(int argc, char ** argv)
 			romfname = "menu.bin";
 		}
 		if (is_absolute_path(romfname)) {
-			if (!(rom_size = load_rom(romfname, &cart, &stype))) {
+			if (!(cart.size = load_rom(romfname, &cart.buffer, &stype))) {
 				fatal_error("Failed to open UI ROM %s for reading", romfname);
 			}
 		} else {
-			long fsize;
-			cart = (uint16_t *)read_bundled_file(romfname, &fsize);
-			if (!cart) {
+			cart.buffer = (uint16_t *)read_bundled_file(romfname, &cart.size);
+			if (!cart.buffer) {
 				fatal_error("Failed to open UI ROM %s for reading", romfname);
 			}
-			stype = detect_system_type((uint8_t *)cart, fsize);
-			rom_size = nearest_pow2(fsize);
-			if (rom_size > fsize) {
-				cart = realloc(cart, rom_size);
+			uint32_t rom_size = nearest_pow2(cart.size);
+			if (rom_size > cart.size) {
+				cart.buffer = realloc(cart.buffer, rom_size);
+				cart.size = rom_size;
 			}
 		}
+		//force system detection, value on command line is only for games not the menu
+		stype = detect_system_type(&cart);
+		cart.extension = path_extension(romfname);
 
 		loaded = 1;
 	}
@@ -337,10 +357,16 @@ int main(int argc, char ** argv)
 		render_init(width, height, "BlastEm", fullscreen);
 	}
 
-	rom_info info;
-	current_system = alloc_config_system(stype, cart, rom_size, lock_on, lock_on_size, menu ? 0 : opts, force_region, &info);
-	if (!current_system) {
+	if (stype == SYSTEM_UNKNOWN) {
+		stype = detect_system_type(&cart);
+	}
+	if (stype == SYSTEM_UNKNOWN) {
 		fatal_error("Failed to detect system type for %s\n", romfname);
+	}
+	rom_info info;
+	current_system = alloc_config_system(stype, &cart, menu ? 0 : opts, force_region, &info);
+	if (!current_system) {
+		fatal_error("Failed to configure emulated machine for %s\n", romfname);
 	}
 	setup_saves(romfname, &info, current_system);
 	update_title(info.name);
@@ -369,13 +395,21 @@ int main(int argc, char ** argv)
 				//start a new arena and save old one in suspended genesis context
 				current_system->arena = start_new_arena();
 			}
-			if (!(rom_size = load_rom(menu_context->next_rom, &cart, &stype))) {
+			if (!(cart.size = load_rom(menu_context->next_rom, &cart.buffer, &stype))) {
 				fatal_error("Failed to open %s for reading\n", menu_context->next_rom);
 			}
-			//allocate new genesis context
-			game_context = alloc_config_system(stype, cart, rom_size, lock_on, lock_on_size, opts,force_region, &info);
-			if (!game_context) {
+			cart.extension = path_extension(menu_context->next_rom);
+			stype = force_stype;
+			if (stype == SYSTEM_UNKNOWN) {
+				stype = detect_system_type(&cart);
+			}
+			if (stype == SYSTEM_UNKNOWN) {
 				fatal_error("Failed to detect system type for %s\n", menu_context->next_rom);
+			}
+			//allocate new genesis context
+			game_context = alloc_config_system(stype, &cart, opts,force_region, &info);
+			if (!game_context) {
+				fatal_error("Failed to configure emulated machine for %s\n", menu_context->next_rom);
 			}
 			menu_context->next_context = game_context;
 			game_context->next_context = menu_context;
