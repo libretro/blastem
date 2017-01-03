@@ -107,7 +107,7 @@ uint32_t ram_size(cpu_options *opts)
 	uint32_t size = 0;
 	for (int i = 0; i < opts->memmap_chunks; i++)
 	{
-		if ((opts->memmap[i].flags & (MMAP_WRITE | MMAP_CODE)) == (MMAP_WRITE | MMAP_CODE)) {
+		if (opts->memmap[i].flags & MMAP_CODE) {
 			if (opts->memmap[i].mask == opts->address_mask) {
 				size += opts->memmap[i].end - opts->memmap[i].start;
 			} else {

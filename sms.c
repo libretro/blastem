@@ -101,24 +101,19 @@ static void *mapper_write(uint32_t location, void *vcontext, uint8_t value)
 {
 	z80_context *z80 = vcontext;
 	sms_context *sms = z80->system;
+	void *old_value;
 	sms->ram[location & (sizeof(sms->ram)-1)] = value;
-	switch (location & 3)
-	{
-	case 0:
+	location &= 3;
+	if (location) {
+		uint32_t idx = location - 1;
+		old_value = z80->mem_pointers[idx];
+		z80->mem_pointers[idx] = sms->rom + (value << 14 & (sms->rom_size-1));
+		if (old_value != z80->mem_pointers[idx]) {
+			//invalidate any code we translated for the relevant bank
+			z80_invalidate_code_range(z80, idx ? idx * 0x4000 : 0x400, idx * 0x4000 + 0x4000);
+		}
+	} else {
 		//TODO: implement me
-		break;
-	case 1:
-		z80->mem_pointers[0] = sms->rom + (value << 14 & (sms->rom_size-1)) + 0x400;
-		//TODO: invalidate translated code in range 0x400-0x4000
-		break;
-	case 2:
-		z80->mem_pointers[1] = sms->rom + (value << 14 & (sms->rom_size-1));
-		//TODO: invalidate translated code in range 0x4000-0x8000
-		break;
-	case 3:
-		z80->mem_pointers[2] = sms->rom + (value << 14 & (sms->rom_size-1));
-		//TODO: invalidate translated code in range 0x8000-0xC000
-		break;
 	}
 	return vcontext;
 }
@@ -234,12 +229,12 @@ sms_context *alloc_configure_sms(void *rom, uint32_t rom_size, void *extra_rom, 
 	if (orig_size > 0xC000)  {
 		info_out->map_chunks = 6;
 		uint8_t *ram_reg_overlap = sms->ram + sizeof(sms->ram) - 4;
-		memory_map[0] = (memmap_chunk){0x0000, 0x0400,  0xFFFF,             0, 0, MMAP_READ,                      rom,      NULL, NULL, NULL, NULL};
-		memory_map[1] = (memmap_chunk){0x0400, 0x4000,  0xFFFF,             0, 0, MMAP_READ|MMAP_PTR_IDX,         NULL,     NULL, NULL, NULL, NULL};
-		memory_map[2] = (memmap_chunk){0x4000, 0x8000,  0x3FFF,             0, 1, MMAP_READ|MMAP_PTR_IDX,         NULL,     NULL, NULL, NULL, NULL};
-		memory_map[3] = (memmap_chunk){0x8000, 0xC000,  0x3FFF,             0, 2, MMAP_READ|MMAP_PTR_IDX,         NULL,     NULL, NULL, NULL, NULL};
-		memory_map[4] = (memmap_chunk){0xC000, 0xFFFC,  sizeof(sms->ram)-1, 0, 0, MMAP_READ|MMAP_WRITE|MMAP_CODE, sms->ram, NULL, NULL, NULL, NULL};
-		memory_map[5] = (memmap_chunk){0xFFFC, 0x10000, 0xFFFF,             0, 0, MMAP_READ,                      ram_reg_overlap, NULL, NULL, NULL, mapper_write};
+		memory_map[0] = (memmap_chunk){0x0000, 0x0400,  0xFFFF,             0, 0, MMAP_READ,                        rom,      NULL, NULL, NULL, NULL};
+		memory_map[1] = (memmap_chunk){0x0400, 0x4000,  0xFFFF,             0, 0, MMAP_READ|MMAP_PTR_IDX|MMAP_CODE, NULL,     NULL, NULL, NULL, NULL};
+		memory_map[2] = (memmap_chunk){0x4000, 0x8000,  0x3FFF,             0, 1, MMAP_READ|MMAP_PTR_IDX|MMAP_CODE, NULL,     NULL, NULL, NULL, NULL};
+		memory_map[3] = (memmap_chunk){0x8000, 0xC000,  0x3FFF,             0, 2, MMAP_READ|MMAP_PTR_IDX|MMAP_CODE, NULL,     NULL, NULL, NULL, NULL};
+		memory_map[4] = (memmap_chunk){0xC000, 0xFFFC,  sizeof(sms->ram)-1, 0, 0, MMAP_READ|MMAP_WRITE|MMAP_CODE,   sms->ram, NULL, NULL, NULL, NULL};
+		memory_map[5] = (memmap_chunk){0xFFFC, 0x10000, 0xFFFF,             0, 0, MMAP_READ,                        ram_reg_overlap, NULL, NULL, NULL, mapper_write};
 	} else {
 		info_out->map_chunks = 2;
 		memory_map[0] = (memmap_chunk){0x0000, 0xC000,  rom_size-1,         0, 0, MMAP_READ,                      rom,      NULL, NULL, NULL, NULL};

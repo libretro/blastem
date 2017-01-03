@@ -2905,7 +2905,7 @@ uint8_t * z80_get_native_address(z80_context * context, uint32_t address)
 uint8_t z80_get_native_inst_size(z80_options * opts, uint32_t address)
 {
 	uint32_t meta_off;
-	memmap_chunk const *chunk = find_map_chunk(address, &opts->gen, MMAP_WRITE | MMAP_CODE, &meta_off);
+	memmap_chunk const *chunk = find_map_chunk(address, &opts->gen, MMAP_CODE, &meta_off);
 	if (chunk) {
 		meta_off += (address - chunk->start) & chunk->mask;
 	}
@@ -2919,9 +2919,9 @@ void z80_map_native_address(z80_context * context, uint32_t address, uint8_t * n
 	
 	z80_options * opts = context->options;
 	uint32_t meta_off;
-	memmap_chunk const *mem_chunk = find_map_chunk(address, &opts->gen, MMAP_WRITE | MMAP_CODE, &meta_off);
+	memmap_chunk const *mem_chunk = find_map_chunk(address, &opts->gen, MMAP_CODE, &meta_off);
 	if (mem_chunk) {
-		if ((mem_chunk->flags & (MMAP_WRITE | MMAP_CODE)) == (MMAP_WRITE | MMAP_CODE)) {
+		if (mem_chunk->flags & MMAP_CODE) {
 			uint32_t masked = (address & mem_chunk->mask);
 			uint32_t final_off = masked + meta_off;
 			uint32_t ram_flags_off = final_off >> (opts->gen.ram_flags_shift + 3);
@@ -3006,6 +3006,41 @@ z80_context * z80_handle_code_write(uint32_t address, z80_context * context)
 		call(&code, opts->retrans_stub);
 	}
 	return context;
+}
+
+void z80_invalidate_code_range(z80_context *context, uint32_t start, uint32_t end)
+{
+	z80_options *opts = context->options;
+	native_map_slot * native_code_map = opts->gen.native_code_map;
+	memmap_chunk const *mem_chunk = find_map_chunk(start, &opts->gen, 0, NULL);
+	if (mem_chunk) {
+		//calculate the lowest alias for this address
+		start = mem_chunk->start + ((start - mem_chunk->start) & mem_chunk->mask);
+	}
+	mem_chunk = find_map_chunk(end, &opts->gen, 0, NULL);
+	if (mem_chunk) {
+		//calculate the lowest alias for this address
+		end = mem_chunk->start + ((end - mem_chunk->start) & mem_chunk->mask);
+	}
+	uint32_t start_chunk = start / NATIVE_CHUNK_SIZE, end_chunk = end / NATIVE_CHUNK_SIZE;
+	for (uint32_t chunk = start_chunk; chunk <= end_chunk; chunk++)
+	{
+		if (native_code_map[chunk].base) {
+			uint32_t start_offset = chunk == start_chunk ? start % NATIVE_CHUNK_SIZE : 0;
+			uint32_t end_offset = chunk == end_chunk ? end % NATIVE_CHUNK_SIZE : NATIVE_CHUNK_SIZE;
+			for (uint32_t offset = start_offset; offset < end_offset; offset++)
+			{
+				if (native_code_map[chunk].offsets[offset] != INVALID_OFFSET && native_code_map[chunk].offsets[offset] != EXTENSION_WORD) {
+					code_info code;
+					code.cur = native_code_map[chunk].base + native_code_map[chunk].offsets[offset];
+					code.last = code.cur + 32;
+					code.stack_off = 0;
+					mov_ir(&code, chunk * NATIVE_CHUNK_SIZE + offset, opts->gen.scratch1, SZ_D);
+					call(&code, opts->retrans_stub);
+				}
+			}
+		}
+	}
 }
 
 uint8_t * z80_get_native_address_trans(z80_context * context, uint32_t address)
