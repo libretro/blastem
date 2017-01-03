@@ -5,6 +5,7 @@
 #include "romdb.h"
 
 typedef struct system_header system_header;
+typedef struct system_media system_media;
 
 typedef enum {
 	SYSTEM_UNKNOWN,
@@ -45,9 +46,16 @@ struct system_header {
 	system_type       type;
 };
 
+struct system_media {
+	void         *buffer;
+	char         *extension;
+	system_media *chain;
+	uint32_t     size;
+};
+
 #define OPT_ADDRESS_LOG (1U << 31U)
 
-system_type detect_system_type(uint8_t *rom, long filesize);
-system_header *alloc_config_system(system_type stype, void *rom, uint32_t rom_size, void *lock_on, uint32_t lock_on_size, uint32_t opts, uint8_t force_region, rom_info *info_out);
+system_type detect_system_type(system_media *media);
+system_header *alloc_config_system(system_type stype, system_media *media, uint32_t opts, uint8_t force_region, rom_info *info_out);
 
 #endif //SYSTEM_H_

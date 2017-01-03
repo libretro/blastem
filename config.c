@@ -116,7 +116,7 @@ open_fail:
 
 tern_node *parse_bundled_config(char *config_name)
 {
-	long confsize;
+	uint32_t confsize;
 	char *confdata = read_bundled_file(config_name, &confsize);
 	tern_node *ret = NULL;
 	if (confdata) {

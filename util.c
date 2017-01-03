@@ -149,6 +149,26 @@ char * basename_no_extension(char *path)
 	return barename;
 }
 
+char *path_extension(char *path)
+{
+	char *lastdot = NULL;
+	char *lastslash = NULL;
+	char *cur;
+	for (cur = path; *cur; cur++)
+	{
+		if (*cur == '.') {
+			lastdot = cur;
+		} else if (is_path_sep(*cur)) {
+			lastslash = cur + 1;
+		}
+	}
+	if (!lastdot || (lastslash && lastslash > lastdot)) {
+		//no extension
+		return NULL;
+	}
+	return strdup(lastdot+1);
+}
+
 uint32_t nearest_pow2(uint32_t val)
 {
 	uint32_t ret = 1;
@@ -524,7 +544,7 @@ void free_dir_list(dir_entry *list, size_t numentries)
 #ifdef __ANDROID__
 
 #include <SDL.h>
-char *read_bundled_file(char *name, long *sizeret)
+char *read_bundled_file(char *name, uint32_t *sizeret)
 {
 	SDL_RWops *rw = SDL_RWFromFile(name, "rb");
 	if (!rw) {
@@ -564,7 +584,7 @@ char const *get_save_dir()
 
 #else
 
-char *read_bundled_file(char *name, long *sizeret)
+char *read_bundled_file(char *name, uint32_t *sizeret)
 {
 	char *exe_dir = get_exe_dir();
 	if (!exe_dir) {
