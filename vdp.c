@@ -470,7 +470,7 @@ static void scan_sprite_table_mode4(vdp_context * context)
 		line &= 0xFF;
 		
 		uint32_t sat_address = mode4_address_map[(context->regs[REG_SAT] << 7 & 0x3F00) + context->sprite_index];
-		uint32_t y = context->vdpmem[sat_address];
+		uint32_t y = context->vdpmem[sat_address+1];
 		uint32_t size = (context->regs[REG_MODE_2] & BIT_SPRITE_SZ) ? 16 : 8;
 		
 		if (y >= 0xd0) {
@@ -491,7 +491,7 @@ static void scan_sprite_table_mode4(vdp_context * context)
 		}
 		
 		if (context->sprite_index < MAX_SPRITES_FRAME_H32) {
-			y = context->vdpmem[sat_address+1];
+			y = context->vdpmem[sat_address];
 			if (y >= 0xd0) {
 				context->sprite_index = MAX_SPRITES_FRAME_H32;
 				return;
