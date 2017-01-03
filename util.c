@@ -479,7 +479,8 @@ time_t get_modification_time(char *path)
 #ifdef __APPLE__
     return st.st_mtimespec.tv_sec;
 #else
-	return st.st_mtim.tv_sec;
+	//Android's Bionic doesn't support the new style so we'll use the old one instead
+	return st.st_mtime;
 #endif
 }
 
