@@ -1298,7 +1298,7 @@ void io_data_write(io_port * port, uint8_t value, uint32_t current_cycle)
 			if (current_cycle >= port->device.pad.timeout_cycle) {
 				port->device.pad.th_counter = 0;
 			}
-			if (!(output & TH)) {
+			if ((output & TH)) {
 				port->device.pad.th_counter++;
 			}
 			port->device.pad.timeout_cycle = current_cycle + TH_TIMEOUT;
@@ -1389,9 +1389,9 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 				input = port->input[GAMEPAD_TH1];
 			}
 		} else {
-			if (port->device.pad.th_counter == 3) {
+			if (port->device.pad.th_counter == 2) {
 				input = port->input[GAMEPAD_TH0] | 0xF;
-			} else if(port->device.pad.th_counter == 4) {
+			} else if(port->device.pad.th_counter == 3) {
 				input = port->input[GAMEPAD_TH0]  & 0x30;
 			} else {
 				input = port->input[GAMEPAD_TH0] | 0xC;
