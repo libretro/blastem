@@ -12,8 +12,8 @@ static void *memory_io_write(uint32_t location, void *vcontext, uint8_t value)
 	z80_context *z80 = vcontext;
 	sms_context *sms = z80->system;
 	if (location & 1) {
-		sms->io.ports[0].control = ~(value << 5 & 0x60);
-		sms->io.ports[1].control = ~(value << 3 & 0x60);
+		sms->io.ports[0].control = (~value) << 5 & 0x60;
+		sms->io.ports[1].control = (~value) << 3 & 0x60;
 		io_data_write(sms->io.ports, value << 1, z80->current_cycle);
 		io_data_write(sms->io.ports + 1, value >> 1, z80->current_cycle);
 	} else {
