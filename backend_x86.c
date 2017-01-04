@@ -231,11 +231,6 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 				mov_rr(code, opts->scratch2, opts->scratch1, opts->address_size);
 				shr_ir(code, opts->ram_flags_shift, opts->scratch1, opts->address_size);
 				bt_rrdisp(code, opts->scratch1, opts->context_reg, ram_flags_off, opts->address_size);
-				if (memmap[chunk].mask == opts->address_mask) {
-					ram_flags_off += (memmap[chunk].end - memmap[chunk].start) / (1 << opts->ram_flags_shift) / 8; ;
-				} else {
-					ram_flags_off += (memmap[chunk].mask + 1) /  (1 << opts->ram_flags_shift) / 8;;
-				}
 				code_ptr not_code = code->cur + 1;
 				jcc(code, CC_NC, code->cur + 2);
 				if (memmap[chunk].mask != opts->address_mask) {
@@ -266,6 +261,13 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 				mov_ir(code, size == SZ_B ? 0xFF : 0xFFFF, opts->scratch1, size);
 			}
 			retn(code);
+		}
+		if (memmap[chunk].flags & MMAP_CODE) {
+			if (memmap[chunk].mask == opts->address_mask) {
+				ram_flags_off += (memmap[chunk].end - memmap[chunk].start) / (1 << opts->ram_flags_shift) / 8; ;
+			} else {
+				ram_flags_off += (memmap[chunk].mask + 1) /  (1 << opts->ram_flags_shift) / 8;;
+			}
 		}
 		if (lb_jcc) {
 			*lb_jcc = code->cur - (lb_jcc+1);
