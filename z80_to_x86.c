@@ -1411,7 +1411,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		code_ptr loop_top = code->cur;
 		//this isn't terribly efficient, but it's good enough for now
 		cycles(&opts->gen, num_cycles);
-		check_cycles_int(&opts->gen, address);
+		check_cycles_int(&opts->gen, address+1);
 		jmp(code, loop_top);
 		break;
 	}
