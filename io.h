@@ -10,6 +10,7 @@
 #include "romdb.h"
 
 enum {
+	IO_GAMEPAD2,
 	IO_GAMEPAD3,
 	IO_GAMEPAD6,
 	IO_MOUSE,

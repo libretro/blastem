@@ -25,6 +25,7 @@
 #define MIN_POLL_INTERVAL 6840
 
 const char * device_type_names[] = {
+	"SMS gamepad",
 	"3-button gamepad",
 	"6-button gamepad",
 	"Mega Mouse",
@@ -653,15 +654,15 @@ void process_device(char * device_type, io_port * port)
 	if (!strncmp(device_type, "gamepad", gamepad_len))
 	{
 		if (
-			(device_type[gamepad_len] != '3' && device_type[gamepad_len] != '6')
+			(device_type[gamepad_len] != '3' && device_type[gamepad_len] != '6' && device_type[gamepad_len] != '2')
 			|| device_type[gamepad_len+1] != '.' || device_type[gamepad_len+2] < '1'
 			|| device_type[gamepad_len+2] > '8' || device_type[gamepad_len+3] != 0
-		)
-		{
+		) {
 			warning("%s is not a valid gamepad type\n", device_type);
-		} else if (device_type[gamepad_len] == '3')
-		{
+		} else if (device_type[gamepad_len] == '3') {
 			port->device_type = IO_GAMEPAD3;
+		} else if (device_type[gamepad_len] == '2') {
+			port->device_type = IO_GAMEPAD2;
 		} else {
 			port->device_type = IO_GAMEPAD6;
 		}
@@ -803,7 +804,7 @@ cleanup_sock:
 			}
 		} else
 #endif
-		if (ports[i].device_type == IO_GAMEPAD3 || ports[i].device_type == IO_GAMEPAD6) {
+		if (ports[i].device_type == IO_GAMEPAD3 || ports[i].device_type == IO_GAMEPAD6 || ports[i].device_type == IO_GAMEPAD2) {
 			printf("IO port %s connected to gamepad #%d with type '%s'\n", io_name(i), ports[i].device.pad.gamepad_num + 1, device_type_names[ports[i].device_type]);
 		} else {
 			printf("IO port %s connected to device '%s'\n", io_name(i), device_type_names[ports[i].device_type]);
@@ -821,7 +822,8 @@ void map_bindings(io_port *ports, keybinding *bindings, int numbindings)
 			for (int j = 0; j < 3; j++)
 			{
 				if ((ports[j].device_type == IO_GAMEPAD3
-					 || ports[j].device_type ==IO_GAMEPAD6)
+					 || ports[j].device_type == IO_GAMEPAD6
+					 || ports[j].device_type == IO_GAMEPAD2)
 					 && ports[j].device.pad.gamepad_num == num
 				)
 				{
@@ -1364,6 +1366,9 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 	}
 	switch (port->device_type)
 	{
+	case IO_GAMEPAD2:
+		input = ~port->input[GAMEPAD_TH1];
+		break;
 	case IO_GAMEPAD3:
 	{
 		input = port->input[th ? GAMEPAD_TH1 : GAMEPAD_TH0];
