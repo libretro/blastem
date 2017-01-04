@@ -86,12 +86,12 @@ static uint8_t io_read(uint32_t location, void *vcontext)
 	sms_context *sms = z80->system;
 	if (location == 0xC0 || location == 0xDC) {
 		uint8_t port_a = io_data_read(sms->io.ports, z80->current_cycle);
-		uint8_t port_b = io_data_read(sms->io.ports, z80->current_cycle);
+		uint8_t port_b = io_data_read(sms->io.ports+1, z80->current_cycle);
 		return (port_a & 0x3F) | (port_b << 6);
 	}
 	if (location == 0xC1 || location == 0xDD) {
 		uint8_t port_a = io_data_read(sms->io.ports, z80->current_cycle);
-		uint8_t port_b = io_data_read(sms->io.ports, z80->current_cycle);
+		uint8_t port_b = io_data_read(sms->io.ports+1, z80->current_cycle);
 		return (port_a & 0x40) | (port_b >> 2 & 0xF) | (port_b << 1 & 0x80) | 0x10;
 	}
 	return 0xFF;
