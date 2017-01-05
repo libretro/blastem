@@ -2177,7 +2177,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 	} else {
 		uint8_t mode_5 = context->regs[REG_MODE_2] & BIT_MODE_5;
 		context->address = (context->address &0xC000) | (value & 0x3FFF);
-		//Genesis Plus GX doesn't clear out the mode bits in Mode 4, but instead
+		//Genesis Plus GX doesn't clear out the upper mode bits in Mode 4, but instead
 		//ignores the uppper mode bits when it comes to reads/writes
 		//testing on hardware is needed to determine which is truly correct
 		context->cd = (mode_5 ? context->cd &0x3C : 0) | (value >> 14);
@@ -2388,10 +2388,7 @@ uint8_t vdp_data_port_read_pbc(vdp_context * context)
 		//Should this happen after the prefetch or after the read?
 		increment_address(context);
 	}
-	context->cd &= ~1;
-	if (context->cd == VRAM_READ) {
-		context->cd = VRAM_READ8;
-	}
+	context->cd = VRAM_READ8;
 	return context->prefetch;
 }
 
