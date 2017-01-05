@@ -2140,6 +2140,39 @@ void vdp_run_dma_done(vdp_context * context, uint32_t target_cycles)
 	}
 }
 
+static uint16_t get_ext_vcounter(vdp_context *context)
+{
+	uint16_t line= context->vcounter & 0xFF;
+	if (context->double_res) {
+		line <<= 1;
+		if (line & 0x100) {
+			line |= 1;
+		}
+	}
+	return line << 8;
+}
+
+void vdp_latch_hv(vdp_context *context)
+{
+	context->hv_latch = context->hslot | get_ext_vcounter(context);
+}
+
+uint16_t vdp_hv_counter_read(vdp_context * context)
+{
+	if ((context->regs[REG_MODE_2] & BIT_MODE_5) && (context->regs[REG_MODE_1] & BIT_HVC_LATCH)) {
+		return context->hv_latch;
+	}
+	uint16_t hv;
+	if (context->regs[REG_MODE_2] & BIT_MODE_5) {
+		hv = context->hslot;
+	} else {
+		hv = context->hv_latch & 0xFF;
+	}
+	hv |= get_ext_vcounter(context);
+	
+	return hv;
+}
+
 int vdp_control_port_write(vdp_context * context, uint16_t value)
 {
 	//printf("control port write: %X at %d\n", value, context->cycles);
@@ -2184,7 +2217,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 			if (reg < (mode_5 ? VDP_REGS : 0xB)) {
 				//printf("register %d set to %X\n", reg, value & 0xFF);
 				if (reg == REG_MODE_1 && (value & BIT_HVC_LATCH) && !(context->regs[reg] & BIT_HVC_LATCH)) {
-					context->hv_latch = vdp_hv_counter_read(context);
+					vdp_latch_hv(context);
 				}
 				if (reg == REG_BG_COLOR) {
 					value &= 0x3F;
@@ -2386,23 +2419,6 @@ uint8_t vdp_data_port_read_pbc(vdp_context * context)
 		
 	context->cd = VRAM_READ8;
 	return context->prefetch;
-}
-
-uint16_t vdp_hv_counter_read(vdp_context * context)
-{
-	if ((context->regs[REG_MODE_2] & BIT_MODE_5) && (context->regs[REG_MODE_1] & BIT_HVC_LATCH)) {
-		return context->hv_latch;
-	}
-	uint32_t line= context->vcounter & 0xFF;
-	uint32_t linecyc = context->hslot;
-	linecyc &= 0xFF;
-	if (context->double_res) {
-		line <<= 1;
-		if (line & 0x100) {
-			line |= 1;
-		}
-	}
-	return (line << 8) | linecyc;
 }
 
 uint16_t vdp_test_port_read(vdp_context * context)
