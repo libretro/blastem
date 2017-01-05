@@ -1,8 +1,6 @@
 #ifndef SYSTEM_H_
 #define SYSTEM_H_
 #include <stdint.h>
-#include "arena.h"
-#include "romdb.h"
 
 typedef struct system_header system_header;
 typedef struct system_media system_media;
@@ -21,12 +19,16 @@ typedef enum {
 
 typedef void (*system_fun)(system_header *);
 typedef uint16_t (*system_fun_r16)(system_header *);
-typedef void (*start_system_fun)(system_header *, char *);
+typedef void (*system_str_fun)(system_header *, char *);
+typedef uint8_t (*system_str_fun_r8)(system_header *, char *);
 typedef void (*speed_system_fun)(system_header *, uint32_t);
+
+#include "arena.h"
+#include "romdb.h"
 
 struct system_header {
 	system_header     *next_context;
-	start_system_fun  start_context;
+	system_str_fun    start_context;
 	system_fun        resume_context;
 	system_fun        load_save;
 	system_fun        persist_save;

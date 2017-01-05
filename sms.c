@@ -62,7 +62,7 @@ static uint8_t vdp_read(uint32_t location, void *vcontext)
 		update_interrupts(sms);
 		return ret;
 	} else {
-		return vdp_data_port_read(sms->vdp);
+		return vdp_data_port_read_pbc(sms->vdp);
 	}
 }
 
@@ -104,6 +104,7 @@ static void *mapper_write(uint32_t location, void *vcontext, uint8_t value)
 	void *old_value;
 	sms->ram[location & (sizeof(sms->ram)-1)] = value;
 	location &= 3;
+	sms->bank_regs[location] = value;
 	if (location) {
 		uint32_t idx = location - 1;
 		old_value = z80->mem_pointers[idx];
@@ -113,9 +114,51 @@ static void *mapper_write(uint32_t location, void *vcontext, uint8_t value)
 			z80_invalidate_code_range(z80, idx ? idx * 0x4000 : 0x400, idx * 0x4000 + 0x4000);
 		}
 	} else {
-		//TODO: implement me
+		old_value = z80->mem_pointers[2];
+		if (value & 8) {
+			//cartridge RAM is enabled
+			z80->mem_pointers[2] = sms->cart_ram + (value & 4 ? (SMS_CART_RAM_SIZE/2) : 0);
+		} else {
+			//cartridge RAM is disabled
+			z80->mem_pointers[2] = sms->rom + (sms->bank_regs[3] << 14 & (sms->rom_size-1));
+		}
+		if (old_value != z80->mem_pointers[2]) {
+			//invalidate any code we translated for the relevant bank
+			z80_invalidate_code_range(z80, 0x8000, 0xC000);
+		}
 	}
 	return vcontext;
+}
+
+static void *cart_ram_write(uint32_t location, void *vcontext, uint8_t value)
+{
+	z80_context *z80 = vcontext;
+	sms_context *sms = z80->system;
+	if (sms->bank_regs[0] & 8) {
+		//cartridge RAM is enabled
+		location &= 0x3FFF;
+		z80->mem_pointers[2][location] = value;
+		z80_handle_code_write(0x8000 + location, z80);
+	}
+	return vcontext;
+}
+
+uint8_t debug_commands(system_header *system, char *input_buf)
+{
+	sms_context *sms = (sms_context *)system;
+	switch(input_buf[0])
+	{
+	case 'v':
+		if (input_buf[1] == 'r') {
+			vdp_print_reg_explain(sms->vdp);
+		} else if (input_buf[1] == 's') {
+			vdp_print_sprite_table(sms->vdp);
+		} else {
+			return 0;
+		}
+		break;
+	}
+	return 1;
 }
 
 static memmap_chunk io_map[] = {
@@ -232,7 +275,7 @@ sms_context *alloc_configure_sms(void *rom, uint32_t rom_size, void *extra_rom, 
 		memory_map[0] = (memmap_chunk){0x0000, 0x0400,  0xFFFF,             0, 0, MMAP_READ,                        rom,      NULL, NULL, NULL, NULL};
 		memory_map[1] = (memmap_chunk){0x0400, 0x4000,  0xFFFF,             0, 0, MMAP_READ|MMAP_PTR_IDX|MMAP_CODE, NULL,     NULL, NULL, NULL, NULL};
 		memory_map[2] = (memmap_chunk){0x4000, 0x8000,  0x3FFF,             0, 1, MMAP_READ|MMAP_PTR_IDX|MMAP_CODE, NULL,     NULL, NULL, NULL, NULL};
-		memory_map[3] = (memmap_chunk){0x8000, 0xC000,  0x3FFF,             0, 2, MMAP_READ|MMAP_PTR_IDX|MMAP_CODE, NULL,     NULL, NULL, NULL, NULL};
+		memory_map[3] = (memmap_chunk){0x8000, 0xC000,  0x3FFF,             0, 2, MMAP_READ|MMAP_PTR_IDX|MMAP_CODE, NULL,     NULL, NULL, NULL, cart_ram_write};
 		memory_map[4] = (memmap_chunk){0xC000, 0xFFFC,  sizeof(sms->ram)-1, 0, 0, MMAP_READ|MMAP_WRITE|MMAP_CODE,   sms->ram, NULL, NULL, NULL, NULL};
 		memory_map[5] = (memmap_chunk){0xFFFC, 0x10000, 0xFFFF,             0, 0, MMAP_READ,                        ram_reg_overlap, NULL, NULL, NULL, mapper_write};
 	} else {
@@ -246,6 +289,7 @@ sms_context *alloc_configure_sms(void *rom, uint32_t rom_size, void *extra_rom, 
 	init_z80_opts(zopts, info_out->map, info_out->map_chunks, io_map, 4, 15, 0xFF);
 	sms->z80 = init_z80_context(zopts);
 	sms->z80->system = sms;
+	sms->z80->options->gen.debug_cmd_handler = debug_commands;
 	
 	sms->rom = rom;
 	sms->rom_size = rom_size;
