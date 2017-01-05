@@ -184,6 +184,14 @@ static int is_refresh(vdp_context * context, uint32_t slot)
 	}
 }
 
+static void increment_address(vdp_context *context)
+{
+	context->address += context->regs[REG_AUTOINC];
+	if (!(context->regs[REG_MODE_2] & BIT_MODE_5)) {
+		context->address++;
+	}
+}
+
 static void render_sprite_cells(vdp_context * context)
 {
 	if (context->cur_slot >= context->sprite_draws) {
@@ -783,25 +791,30 @@ static void external_slot(vdp_context * context)
 				context->flags |= FLAG_READ_FETCHED;
 				context->flags2 &= ~FLAG2_READ_PENDING;
 				//Should this happen after the prefetch or after the read?
-				//context->address += context->regs[REG_AUTOINC];
+				//increment_address(context);
 			} else {
 				context->prefetch = context->vdpmem[context->address & 0xFFFE] << 8;
 				context->flags2 |= FLAG2_READ_PENDING;
 			}
 			break;
-		case VRAM_READ8:
-			context->prefetch = context->vdpmem[context->address ^ 1];
+		case VRAM_READ8: {
+			uint32_t address = context->address ^ 1;
+			if (!(context->regs[REG_MODE_2] & BIT_MODE_5)) {
+				address = mode4_address_map[address & 0x3FFF];
+			}
+			context->prefetch = context->vdpmem[address];
 			context->prefetch |= context->fifo[context->fifo_write].value & 0xFF00;
 			context->flags |= FLAG_READ_FETCHED;
 			//Should this happen after the prefetch or after the read?
-			//context->address += context->regs[REG_AUTOINC];
+			//increment_address(context);
 			break;
+		}
 		case CRAM_READ:
 			context->prefetch = context->cram[(context->address/2) & (CRAM_SIZE-1)] & CRAM_BITS;
 			context->prefetch |= context->fifo[context->fifo_write].value & ~CRAM_BITS;
 			context->flags |= FLAG_READ_FETCHED;
 			//Should this happen after the prefetch or after the read?
-			//context->address += context->regs[REG_AUTOINC];
+			//increment_address(context);
 			break;
 		case VSRAM_READ: {
 			uint16_t address = (context->address /2) & 63;
@@ -812,7 +825,7 @@ static void external_slot(vdp_context * context)
 			context->prefetch |= context->fifo[context->fifo_write].value & VSRAM_DIRTY_BITS;
 			context->flags |= FLAG_READ_FETCHED;
 			//Should this happen after the prefetch or after the read?
-			//context->address += context->regs[REG_AUTOINC];
+			//increment_address(context);
 			break;
 		}
 		}
@@ -2163,6 +2176,11 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 		}
 	} else {
 		uint8_t mode_5 = context->regs[REG_MODE_2] & BIT_MODE_5;
+		context->address = (context->address &0xC000) | (value & 0x3FFF);
+		//Genesis Plus GX doesn't clear out the mode bits in Mode 4, but instead
+		//ignores the uppper mode bits when it comes to reads/writes
+		//testing on hardware is needed to determine which is truly correct
+		context->cd = (mode_5 ? context->cd &0x3C : 0) | (value >> 14);
 		if ((value & 0xC000) == 0x8000) {
 			//Register write
 			uint8_t reg = (value >> 8) & 0x1F;
@@ -2184,18 +2202,13 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 						context->flags2 &= ~FLAG2_EVEN_FIELD;
 					}
 				}
-				context->cd &= 0x3C;
 			}
 		} else if (mode_5) {
 			context->flags |= FLAG_PENDING;
-			context->address = (context->address &0xC000) | (value & 0x3FFF);
-			context->cd = (context->cd &0x3C) | (value >> 14);
 			//Should these be taken care of here or after the second write?
 			//context->flags &= ~FLAG_READ_FETCHED;
 			//context->flags2 &= ~FLAG2_READ_PENDING;
 		} else {
-			context->address = value & 0x3FFF;
-			context->cd = value >> 14;
 			context->flags &= ~FLAG_READ_FETCHED;
 			context->flags2 &= ~FLAG2_READ_PENDING;
 		}
@@ -2210,6 +2223,9 @@ void vdp_control_port_write_pbc(vdp_context *context, uint8_t value)
 		context->flags2 &= ~FLAG2_BYTE_PENDING;
 		//TODO: Deal with fact that Vbus->VDP DMA doesn't do anything in PBC mode
 		vdp_control_port_write(context, full_val);
+		if (context->cd == VRAM_READ) {
+			context->cd = VRAM_READ8;
+		}
 	} else {
 		context->pending_byte = value;
 		context->flags2 |= FLAG2_BYTE_PENDING;
@@ -2247,10 +2263,7 @@ int vdp_data_port_write(vdp_context * context, uint16_t value)
 		context->fifo_read = context->fifo_write;
 	}
 	context->fifo_write = (context->fifo_write + 1) & (FIFO_SIZE-1);
-	context->address += context->regs[REG_AUTOINC];
-	if (!(context->regs[REG_MODE_2] & BIT_MODE_5)) {
-		context->address++;
-	}
+	increment_address(context);
 	return 0;
 }
 
@@ -2258,6 +2271,7 @@ void vdp_data_port_write_pbc(vdp_context * context, uint8_t value)
 {
 	if (context->flags & FLAG_PENDING) {
 		context->flags &= ~FLAG_PENDING;
+		context->flags2 &= ~FLAG2_BYTE_PENDING;
 		//Should these be cleared here?
 		context->flags &= ~FLAG_READ_FETCHED;
 		context->flags2 &= ~FLAG2_READ_PENDING;
@@ -2275,16 +2289,13 @@ void vdp_data_port_write_pbc(vdp_context * context, uint8_t value)
 	cur->cycle = context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20)*FIFO_LATENCY;
 	cur->address = context->address;
 	cur->value = value;
-	cur->cd = context->cd;
+	cur->cd = context->cd | 1;
 	cur->partial = 1;
 	if (context->fifo_read < 0) {
 		context->fifo_read = context->fifo_write;
 	}
 	context->fifo_write = (context->fifo_write + 1) & (FIFO_SIZE-1);
-	context->address += context->regs[REG_AUTOINC];
-	if (!(context->regs[REG_MODE_2] & BIT_MODE_5)) {
-		context->address++;
-	}
+	increment_address(context);
 }
 
 void vdp_test_port_write(vdp_context * context, uint16_t value)
@@ -2295,6 +2306,7 @@ void vdp_test_port_write(vdp_context * context, uint16_t value)
 uint16_t vdp_control_port_read(vdp_context * context)
 {
 	context->flags &= ~FLAG_PENDING;
+	context->flags2 &= ~FLAG2_BYTE_PENDING;
 	//Bits 15-10 are not fixed like Charles MacDonald's doc suggests, but instead open bus values that reflect 68K prefetch
 	uint16_t value = context->system->get_open_bus_value(context->system) & 0xFC00;
 	if (context->fifo_read < 0) {
@@ -2360,7 +2372,7 @@ uint16_t vdp_data_port_read(vdp_context * context)
 	}
 	context->flags &= ~FLAG_READ_FETCHED;
 	//Should this happen after the prefetch or after the read?
-	context->address += context->regs[REG_AUTOINC];
+	increment_address(context);
 	return context->prefetch;
 }
 
@@ -2368,13 +2380,18 @@ uint8_t vdp_data_port_read_pbc(vdp_context * context)
 {
 	if (context->flags & FLAG_PENDING) {
 		context->flags &= ~FLAG_PENDING;
-		//Should these be cleared here?
-		context->flags &= ~FLAG_READ_FETCHED;
-		context->flags2 &= ~FLAG2_READ_PENDING;
+		context->flags2 &= ~FLAG2_BYTE_PENDING;
+		
 	}
-	context->flags &= ~FLAG_READ_FETCHED;
-	//Should this happen after the prefetch or after the read?
-	context->address += context->regs[REG_AUTOINC];
+	if (context->flags & FLAG_READ_FETCHED) {
+		context->flags &= ~FLAG_READ_FETCHED;
+		//Should this happen after the prefetch or after the read?
+		increment_address(context);
+	}
+	context->cd &= ~1;
+	if (context->cd == VRAM_READ) {
+		context->cd = VRAM_READ8;
+	}
 	return context->prefetch;
 }
 
