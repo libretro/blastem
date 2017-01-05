@@ -421,7 +421,8 @@ void vdp_print_reg_explain(vdp_context * context)
 		   "VINT Pending: %s\n"
 		   "HINT Pending: %s\n"
 		   "Status: %X\n",
-	       context->address, context->cd, cd_name(context->cd), (context->flags & FLAG_PENDING) ? "true" : "false",
+	       context->address, context->cd, cd_name(context->cd), 
+		   (context->flags & FLAG_PENDING) ? "word" : (context->flags2 & FLAG2_BYTE_PENDING) ? "byte" : "none",
 		   context->vcounter, context->hslot*2, (context->flags2 & FLAG2_VINT_PENDING) ? "true" : "false",
 		   (context->flags2 & FLAG2_HINT_PENDING) ? "true" : "false", vdp_control_port_read(context));
 
