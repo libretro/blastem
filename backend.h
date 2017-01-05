@@ -76,6 +76,8 @@ typedef struct {
 	write_8_fun  write_8;
 } memmap_chunk;
 
+#include "system.h"
+
 typedef struct {
 	uint32_t flags;
 	native_map_slot    *native_code_map;
@@ -90,6 +92,7 @@ typedef struct {
 	code_ptr           handle_code_write;
 	code_ptr           handle_align_error_write;
 	code_ptr           handle_align_error_read;
+	system_str_fun_r8  debug_cmd_handler;
 	uint32_t           memmap_chunks;
 	uint32_t           address_mask;
 	uint32_t           max_address;
