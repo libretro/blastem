@@ -212,6 +212,7 @@ void vdp_data_port_write_pbc(vdp_context * context, uint8_t value);
 void vdp_test_port_write(vdp_context * context, uint16_t value);
 uint16_t vdp_control_port_read(vdp_context * context);
 uint16_t vdp_data_port_read(vdp_context * context);
+uint8_t vdp_data_port_read_pbc(vdp_context * context);
 uint16_t vdp_hv_counter_read(vdp_context * context);
 uint16_t vdp_test_port_read(vdp_context * context);
 void vdp_adjust_cycles(vdp_context * context, uint32_t deduction);

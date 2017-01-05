@@ -13,7 +13,6 @@
 #define SAVE_NONE     0xFF
 
 #include "tern.h"
-#include "backend.h"
 
 typedef struct {
 	uint32_t     start;
@@ -35,7 +34,12 @@ typedef struct {
 	uint8_t     latch;
 } eeprom_state;
 
-typedef struct {
+
+typedef struct rom_info rom_info;
+
+#include "backend.h"
+
+struct rom_info {
 	char          *name;
 	memmap_chunk  *map;
 	uint8_t       *save_buffer;
@@ -51,7 +55,7 @@ typedef struct {
 	uint16_t      mapper_start_index;
 	uint8_t       save_type;
 	uint8_t       regions;
-} rom_info;
+};
 
 tern_node *load_rom_db();
 rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, void *lock_on, uint32_t lock_on_size, memmap_chunk const *base_map, uint32_t base_chunks);

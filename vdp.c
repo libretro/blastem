@@ -255,24 +255,42 @@ static void render_sprite_cells_mode4(vdp_context * context)
 
 void vdp_print_sprite_table(vdp_context * context)
 {
-	uint16_t sat_address = (context->regs[REG_SAT] & 0x7F) << 9;
-	uint16_t current_index = 0;
-	uint8_t count = 0;
-	do {
-		uint16_t address = current_index * 8 + sat_address;
-		uint16_t cache_address = current_index * 4;
-		uint8_t height = ((context->sat_cache[cache_address+2] & 0x3) + 1) * 8;
-		uint8_t width = (((context->sat_cache[cache_address+2]  >> 2) & 0x3) + 1) * 8;
-		int16_t y = ((context->sat_cache[cache_address] & 0x3) << 8 | context->sat_cache[cache_address+1]) & 0x1FF;
-		int16_t x = ((context->vdpmem[address+ 6] & 0x3) << 8 | context->vdpmem[address + 7]) & 0x1FF;
-		uint16_t link = context->sat_cache[cache_address+3] & 0x7F;
-		uint8_t pal = context->vdpmem[address + 4] >> 5 & 0x3;
-		uint8_t pri = context->vdpmem[address + 4] >> 7;
-		uint16_t pattern = ((context->vdpmem[address + 4] << 8 | context->vdpmem[address + 5]) & 0x7FF) << 5;
-		printf("Sprite %d: X=%d(%d), Y=%d(%d), Width=%u, Height=%u, Link=%u, Pal=%u, Pri=%u, Pat=%X\n", current_index, x, x-128, y, y-128, width, height, link, pal, pri, pattern);
-		current_index = link;
-		count++;
-	} while (current_index != 0 && count < 80);
+	if (context->regs[REG_MODE_2] & BIT_MODE_5) {
+		uint16_t sat_address = (context->regs[REG_SAT] & 0x7F) << 9;
+		uint16_t current_index = 0;
+		uint8_t count = 0;
+		do {
+			uint16_t address = current_index * 8 + sat_address;
+			uint16_t cache_address = current_index * 4;
+			uint8_t height = ((context->sat_cache[cache_address+2] & 0x3) + 1) * 8;
+			uint8_t width = (((context->sat_cache[cache_address+2]  >> 2) & 0x3) + 1) * 8;
+			int16_t y = ((context->sat_cache[cache_address] & 0x3) << 8 | context->sat_cache[cache_address+1]) & 0x1FF;
+			int16_t x = ((context->vdpmem[address+ 6] & 0x3) << 8 | context->vdpmem[address + 7]) & 0x1FF;
+			uint16_t link = context->sat_cache[cache_address+3] & 0x7F;
+			uint8_t pal = context->vdpmem[address + 4] >> 5 & 0x3;
+			uint8_t pri = context->vdpmem[address + 4] >> 7;
+			uint16_t pattern = ((context->vdpmem[address + 4] << 8 | context->vdpmem[address + 5]) & 0x7FF) << 5;
+			printf("Sprite %d: X=%d(%d), Y=%d(%d), Width=%u, Height=%u, Link=%u, Pal=%u, Pri=%u, Pat=%X\n", current_index, x, x-128, y, y-128, width, height, link, pal, pri, pattern);
+			current_index = link;
+			count++;
+		} while (current_index != 0 && count < 80);
+	} else {
+		uint16_t sat_address = (context->regs[REG_SAT] & 0x7E) << 7;
+		for (int i = 0; i < 64; i++)
+		{
+			uint8_t y = context->vdpmem[sat_address + (i ^ 1)];
+			if (y >= 0xD0) {
+				break;
+			}
+			uint8_t x = context->vdpmem[sat_address + 0x80 + i*2 + 1];
+			uint16_t tile_address = context->vdpmem[sat_address + 0x80 + i*2] * 32
+				+ (context->regs[REG_STILE_BASE] << 11 & 0x2000);
+			if (context->regs[REG_MODE_2] & BIT_SPRITE_SZ) {
+				tile_address &= ~32;
+			}
+			printf("Sprite %d: X=%d, Y=%d, Pat=%X\n", i, x, y, tile_address);
+		}
+	}
 }
 
 #define VRAM_READ 0 //0000
@@ -344,17 +362,32 @@ void vdp_print_reg_explain(vdp_context * context)
 	       context->regs[REG_MODE_3], context->regs[REG_MODE_3] & BIT_EINT_EN ? "enabled" : "disabled", context->regs[REG_MODE_3] & BIT_VSCROLL ? "2 cell" : "full",
 	           hscroll[context->regs[REG_MODE_3] & 0x3],
 	       context->regs[REG_MODE_4], context->regs[REG_MODE_4] & BIT_H40 ? 40 : 32, context->regs[REG_MODE_4] & BIT_HILIGHT ? "enabled" : "disabled");
-	printf("\n**Table Group**\n"
-	       "02: %.2X | Scroll A Name Table:    $%.4X\n"
-	       "03: %.2X | Window Name Table:      $%.4X\n"
-	       "04: %.2X | Scroll B Name Table:    $%.4X\n"
-	       "05: %.2X | Sprite Attribute Table: $%.4X\n"
-	       "0D: %.2X | HScroll Data Table:     $%.4X\n",
-	       context->regs[REG_SCROLL_A], (context->regs[REG_SCROLL_A] & 0x38) << 10,
-	       context->regs[REG_WINDOW], (context->regs[REG_WINDOW] & (context->regs[REG_MODE_4] & BIT_H40 ? 0x3C : 0x3E)) << 10,
-	       context->regs[REG_SCROLL_B], (context->regs[REG_SCROLL_B] & 0x7) << 13,
-	       context->regs[REG_SAT], (context->regs[REG_SAT] & (context->regs[REG_MODE_4] & BIT_H40 ? 0x7E : 0x7F)) << 9,
-	       context->regs[REG_HSCROLL], (context->regs[REG_HSCROLL] & 0x3F) << 10);
+	if (context->regs[REG_MODE_2] & BIT_MODE_5) {
+		printf("\n**Table Group**\n"
+			   "02: %.2X | Scroll A Name Table:    $%.4X\n"
+			   "03: %.2X | Window Name Table:      $%.4X\n"
+			   "04: %.2X | Scroll B Name Table:    $%.4X\n"
+			   "05: %.2X | Sprite Attribute Table: $%.4X\n"
+			   "0D: %.2X | HScroll Data Table:     $%.4X\n",
+			   context->regs[REG_SCROLL_A], (context->regs[REG_SCROLL_A] & 0x38) << 10,
+			   context->regs[REG_WINDOW], (context->regs[REG_WINDOW] & (context->regs[REG_MODE_4] & BIT_H40 ? 0x3C : 0x3E)) << 10,
+			   context->regs[REG_SCROLL_B], (context->regs[REG_SCROLL_B] & 0x7) << 13,
+			   context->regs[REG_SAT], (context->regs[REG_SAT] & (context->regs[REG_MODE_4] & BIT_H40 ? 0x7E : 0x7F)) << 9,
+			   context->regs[REG_HSCROLL], (context->regs[REG_HSCROLL] & 0x3F) << 10);
+	} else {
+		printf("\n**Table Group**\n"
+			   "02: %.2X | Background Name Table:  $%.4X\n"
+			   "05: %.2X | Sprite Attribute Table: $%.4X\n"
+			   "06: %.2X | Sprite Tile Base:       $%.4X\n"
+			   "08: %.2X | Background X Scroll:    %d\n"
+			   "09: %.2X | Background Y Scroll:    %d\n",
+			   context->regs[REG_SCROLL_A], (context->regs[REG_SCROLL_A] & 0xE) << 10,
+			   context->regs[REG_SAT], (context->regs[REG_SAT] & 0x7E) << 7,
+			   context->regs[REG_STILE_BASE], (context->regs[REG_STILE_BASE] & 2) << 11,
+			   context->regs[REG_X_SCROLL], context->regs[REG_X_SCROLL],
+			   context->regs[REG_Y_SCROLL], context->regs[REG_Y_SCROLL]);
+			   
+	}
 	char * sizes[] = {"32", "64", "invalid", "128"};
 	printf("\n**Misc Group**\n"
 	       "07: %.2X | Backdrop Color: $%X\n"
@@ -2323,6 +2356,20 @@ uint16_t vdp_data_port_read(vdp_context * context)
 	}
 	while (!(context->flags & FLAG_READ_FETCHED)) {
 		vdp_run_context(context, context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20));
+	}
+	context->flags &= ~FLAG_READ_FETCHED;
+	//Should this happen after the prefetch or after the read?
+	context->address += context->regs[REG_AUTOINC];
+	return context->prefetch;
+}
+
+uint8_t vdp_data_port_read_pbc(vdp_context * context)
+{
+	if (context->flags & FLAG_PENDING) {
+		context->flags &= ~FLAG_PENDING;
+		//Should these be cleared here?
+		context->flags &= ~FLAG_READ_FETCHED;
+		context->flags2 &= ~FLAG2_READ_PENDING;
 	}
 	context->flags &= ~FLAG_READ_FETCHED;
 	//Should this happen after the prefetch or after the read?

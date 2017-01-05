@@ -523,7 +523,12 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 				break;
 			}
 			default:
-				fprintf(stderr, "Unrecognized debugger command %s\n", input_buf);
+				if (
+					!context->options->gen.debug_cmd_handler
+					|| !context->options->gen.debug_cmd_handler(&system->header, input_buf)
+				) {
+					fprintf(stderr, "Unrecognized debugger command %s\n", input_buf);
+				}
 				break;
 		}
 	}
