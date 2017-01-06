@@ -1373,19 +1373,24 @@ static void vdp_advance_line(vdp_context *context)
 {
 	context->vcounter++;
 	context->vcounter &= 0x1FF;
-	if (context->flags2 & FLAG2_REGION_PAL) {
-		if (context->latched_mode & BIT_PAL) {
-			if (context->vcounter == 0x10B) {
-				context->vcounter = 0x1D2;
+	uint8_t is_mode_5 = context->regs[REG_MODE_2] & BIT_MODE_5;
+	if (is_mode_5) {
+		if (context->flags2 & FLAG2_REGION_PAL) {
+			if (context->latched_mode & BIT_PAL) {
+				if (context->vcounter == 0x10B) {
+					context->vcounter = 0x1D2;
+				}
+			} else if (context->vcounter == 0x103){
+				context->vcounter = 0x1CA;
 			}
-		} else if (context->vcounter == 0x103){
-			context->vcounter = 0x1CA;
+		} else if (!(context->latched_mode & BIT_PAL) &&  context->vcounter == 0xEB) {
+			context->vcounter = 0x1E5;
 		}
-	} else if (!(context->latched_mode & BIT_PAL) &&  context->vcounter == 0xEB) {
-		context->vcounter = 0x1E5;
+	} else if (context->vcounter == 0xDB) {
+		context->vcounter = 0x1D5;
 	}
 	uint32_t inactive_start = (context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START);
-	if (!(context->regs[REG_MODE_2] & BIT_MODE_5)) {
+	if (!is_mode_5) {
 		inactive_start = MODE4_INACTIVE_START;
 	}
 	if (!headless) {
@@ -2363,6 +2368,7 @@ uint16_t vdp_control_port_read(vdp_context * context)
 	}
 	if (context->flags & FLAG_DOT_OFLOW) {
 		value |= 0x40;
+		context->flags &= ~FLAG_DOT_OFLOW;
 	}
 	if (context->flags2 & FLAG2_SPRITE_COLLIDE) {
 		value |= 0x20;
