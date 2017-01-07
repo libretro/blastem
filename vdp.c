@@ -1557,18 +1557,28 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	{
 	for (;;)
 	{
-	//sprite attribute table scan starts
 	case 165:
+		if (context->vcounter == 0x1FF) {
+			external_slot(context);
+		} else {
+			render_sprite_cells(context);
+		}
+		CHECK_LIMIT
+	case 166:
+		if (context->vcounter == 0x1FF) {
+			external_slot(context);
+		} else {
+			render_sprite_cells(context);
+		}
+		CHECK_LIMIT
+	//sprite attribute table scan starts
+	case 167:
 		context->sprite_index = 0x80;
 		context->slot_counter = MAX_SPRITES_LINE;
 		render_sprite_cells( context);
 		scan_sprite_table(context->vcounter, context);
 		CHECK_LIMIT
-	SPRITE_RENDER_H40(166)
-	SPRITE_RENDER_H40(167)
-	case 168:
-		external_slot(context);
-		CHECK_LIMIT
+	SPRITE_RENDER_H40(168)
 	SPRITE_RENDER_H40(169)
 	SPRITE_RENDER_H40(170)
 	SPRITE_RENDER_H40(171)
@@ -1582,12 +1592,14 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	SPRITE_RENDER_H40(179)
 	SPRITE_RENDER_H40(180)
 	SPRITE_RENDER_H40(181)
-	//!HSYNC asserted
 	SPRITE_RENDER_H40(182)
 	SPRITE_RENDER_H40(229)
+	//!HSYNC asserted
 	SPRITE_RENDER_H40(230)
 	SPRITE_RENDER_H40(231)
-	SPRITE_RENDER_H40(232)
+	case 232:
+		external_slot(context);
+		CHECK_LIMIT
 	SPRITE_RENDER_H40(233)
 	SPRITE_RENDER_H40(234)
 	SPRITE_RENDER_H40(235)
@@ -1597,7 +1609,9 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	SPRITE_RENDER_H40(239)
 	SPRITE_RENDER_H40(240)
 	SPRITE_RENDER_H40(241)
-	case 242:
+	SPRITE_RENDER_H40(242)
+	SPRITE_RENDER_H40(243)
+	case 244:
 		address = (context->regs[REG_HSCROLL] & 0x3F) << 10;
 		mask = 0;
 		if (context->regs[REG_MODE_3] & 0x2) {
@@ -1615,31 +1629,31 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		context->cycles += h40_hsync_cycles[14];
 		CHECK_ONLY
 	//!HSYNC high
-	SPRITE_RENDER_H40(243)
-	SPRITE_RENDER_H40(244)
 	SPRITE_RENDER_H40(245)
 	SPRITE_RENDER_H40(246)
-	case 247:
-		read_map_scroll_a(0, context->vcounter, context);
-		CHECK_LIMIT
+	SPRITE_RENDER_H40(247)
 	SPRITE_RENDER_H40(248)
 	case 249:
+		read_map_scroll_a(0, context->vcounter, context);
+		CHECK_LIMIT
+	SPRITE_RENDER_H40(250)
+	case 251:
 		render_map_1(context);
 		scan_sprite_table(context->vcounter, context);//Just a guess
 		CHECK_LIMIT
-	case 250:
+	case 252:
 		render_map_2(context);
 		scan_sprite_table(context->vcounter, context);//Just a guess
 		CHECK_LIMIT
-	case 251:
+	case 253:
 		read_map_scroll_b(0, context->vcounter, context);
 		CHECK_LIMIT
-	SPRITE_RENDER_H40(252)
-	case 253:
+	SPRITE_RENDER_H40(254)
+	case 255:
 		render_map_3(context);
 		scan_sprite_table(context->vcounter, context);//Just a guess
 		CHECK_LIMIT
-	case 254:
+	case 0:
 		if (context->vcounter == (context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START)) {
 			context->flags2 |= FLAG2_VINT_PENDING;
 			context->pending_vint_start = context->cycles;
@@ -1653,42 +1667,36 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		context->sprite_draws = MAX_DRAWS;
 		context->flags &= (~FLAG_CAN_MASK & ~FLAG_MASKED);
 		CHECK_LIMIT
-	COLUMN_RENDER_BLOCK(2, 255)
-	COLUMN_RENDER_BLOCK(4, 7)
-	COLUMN_RENDER_BLOCK(6, 15)
-	COLUMN_RENDER_BLOCK_REFRESH(8, 23)
-	COLUMN_RENDER_BLOCK(10, 31)
-	COLUMN_RENDER_BLOCK(12, 39)
-	COLUMN_RENDER_BLOCK(14, 47)
-	COLUMN_RENDER_BLOCK_REFRESH(16, 55)
-	COLUMN_RENDER_BLOCK(18, 63)
-	COLUMN_RENDER_BLOCK(20, 71)
-	COLUMN_RENDER_BLOCK(22, 79)
-	COLUMN_RENDER_BLOCK_REFRESH(24, 87)
-	COLUMN_RENDER_BLOCK(26, 95)
-	COLUMN_RENDER_BLOCK(28, 103)
-	COLUMN_RENDER_BLOCK(30, 111)
-	COLUMN_RENDER_BLOCK_REFRESH(32, 119)
-	COLUMN_RENDER_BLOCK(34, 127)
-	COLUMN_RENDER_BLOCK(36, 135)
-	COLUMN_RENDER_BLOCK(38, 143)
-	COLUMN_RENDER_BLOCK_REFRESH(40, 151)
-	case 159:
+	COLUMN_RENDER_BLOCK(2, 1)
+	COLUMN_RENDER_BLOCK(4, 9)
+	COLUMN_RENDER_BLOCK(6, 17)
+	COLUMN_RENDER_BLOCK_REFRESH(8, 25)
+	COLUMN_RENDER_BLOCK(10, 33)
+	COLUMN_RENDER_BLOCK(12, 41)
+	COLUMN_RENDER_BLOCK(14, 49)
+	COLUMN_RENDER_BLOCK_REFRESH(16, 57)
+	COLUMN_RENDER_BLOCK(18, 65)
+	COLUMN_RENDER_BLOCK(20, 73)
+	COLUMN_RENDER_BLOCK(22, 81)
+	COLUMN_RENDER_BLOCK_REFRESH(24, 89)
+	COLUMN_RENDER_BLOCK(26, 97)
+	COLUMN_RENDER_BLOCK(28, 105)
+	COLUMN_RENDER_BLOCK(30, 113)
+	COLUMN_RENDER_BLOCK_REFRESH(32, 121)
+	COLUMN_RENDER_BLOCK(34, 129)
+	COLUMN_RENDER_BLOCK(36, 137)
+	COLUMN_RENDER_BLOCK(38, 145)
+	COLUMN_RENDER_BLOCK_REFRESH(40, 153)
+	case 161:
 		external_slot(context);
 		CHECK_LIMIT
-	case 160:
+	case 162:
 		external_slot(context);
 		CHECK_LIMIT
 	//sprite render to line buffer starts
-	case 161:
+	case 163:
 		context->cur_slot = MAX_DRAWS-1;
 		memset(context->linebuf, 0, LINEBUF_SIZE);
-		render_sprite_cells(context);
-		CHECK_LIMIT
-	case 162:
-		render_sprite_cells(context);
-		CHECK_LIMIT
-	case 163:
 		render_sprite_cells(context);
 		CHECK_LIMIT
 	case 164:
