@@ -97,7 +97,7 @@ def analyze_refresh(chanmap, datafile):
 			
 table_start = 0x3800
 table_end = table_start + 0x600
-sat_start = 0x3F00 #0x3E00
+sat_start = 0x3E00 #0x3F00 
 sat_xname = sat_start + 0x80
 sat_end = sat_start + 0x100
 
