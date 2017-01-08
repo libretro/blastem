@@ -292,12 +292,12 @@ void vdp_print_sprite_table(vdp_context * context)
 		uint16_t sat_address = (context->regs[REG_SAT] & 0x7E) << 7;
 		for (int i = 0; i < 64; i++)
 		{
-			uint8_t y = context->vdpmem[sat_address + (i ^ 1)];
-			if (y >= 0xD0) {
+			uint8_t y = context->vdpmem[mode4_address_map[sat_address + (i ^ 1)]];
+			if (y == 0xD0) {
 				break;
 			}
-			uint8_t x = context->vdpmem[sat_address + 0x80 + i*2 + 1];
-			uint16_t tile_address = context->vdpmem[sat_address + 0x80 + i*2] * 32
+			uint8_t x = context->vdpmem[mode4_address_map[sat_address + 0x80 + i*2 + 1]];
+			uint16_t tile_address = context->vdpmem[mode4_address_map[sat_address + 0x80 + i*2]] * 32
 				+ (context->regs[REG_STILE_BASE] << 11 & 0x2000);
 			if (context->regs[REG_MODE_2] & BIT_SPRITE_SZ) {
 				tile_address &= ~32;
@@ -514,14 +514,14 @@ static void scan_sprite_table(uint32_t line, vdp_context * context)
 static void scan_sprite_table_mode4(vdp_context * context)
 {
 	if (context->sprite_index < MAX_SPRITES_FRAME_H32) {
-		uint32_t line = context->vcounter + 1;
+		uint32_t line = context->vcounter;
 		line &= 0xFF;
 		
 		uint32_t sat_address = mode4_address_map[(context->regs[REG_SAT] << 7 & 0x3F00) + context->sprite_index];
 		uint32_t y = context->vdpmem[sat_address+1];
 		uint32_t size = (context->regs[REG_MODE_2] & BIT_SPRITE_SZ) ? 16 : 8;
 		
-		if (y >= 0xd0) {
+		if (y == 0xd0) {
 			context->sprite_index = MAX_SPRITES_FRAME_H32;
 			return;
 		} else {
@@ -540,7 +540,7 @@ static void scan_sprite_table_mode4(vdp_context * context)
 		
 		if (context->sprite_index < MAX_SPRITES_FRAME_H32) {
 			y = context->vdpmem[sat_address];
-			if (y >= 0xd0) {
+			if (y == 0xd0) {
 				context->sprite_index = MAX_SPRITES_FRAME_H32;
 				return;
 			} else {
@@ -1544,27 +1544,28 @@ static void vdp_advance_line(vdp_context *context)
 		}\
 		context->cycles += slot_cycles;\
 		CHECK_ONLY
-		
+
+#define CALC_SLOT(slot, increment) ((slot+increment) > 147 && (slot+increment) < 233 ? (slot+increment-148+233): (slot+increment))
 		
 #define SPRITE_RENDER_H32_MODE4(slot) \
 	case slot:\
 		read_sprite_x_mode4(context);\
 		MODE4_CHECK_SLOT_LINE(slot)\
-	case (slot+1):\
+	case CALC_SLOT(slot, 1):\
 		read_sprite_x_mode4(context);\
-		MODE4_CHECK_SLOT_LINE(slot+1)\
-	case (slot+2):\
+		MODE4_CHECK_SLOT_LINE(CALC_SLOT(slot,1))\
+	case CALC_SLOT(slot, 2):\
 		fetch_sprite_cells_mode4(context);\
-		MODE4_CHECK_SLOT_LINE(slot+2)\
-	case (slot+3):\
+		MODE4_CHECK_SLOT_LINE(CALC_SLOT(slot, 2))\
+	case CALC_SLOT(slot, 3):\
 		render_sprite_cells_mode4(context);\
-		MODE4_CHECK_SLOT_LINE(slot+3)\
-	case (slot+4):\
+		MODE4_CHECK_SLOT_LINE(CALC_SLOT(slot, 3))\
+	case CALC_SLOT(slot, 4):\
 		fetch_sprite_cells_mode4(context);\
-		MODE4_CHECK_SLOT_LINE(slot+4)\
-	case (slot+5):\
+		MODE4_CHECK_SLOT_LINE(CALC_SLOT(slot, 4))\
+	case CALC_SLOT(slot, 5):\
 		render_sprite_cells_mode4(context);\
-		MODE4_CHECK_SLOT_LINE(slot+5)
+		MODE4_CHECK_SLOT_LINE(CALC_SLOT(slot, 5))
 
 static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 {
@@ -2078,13 +2079,22 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 					context->sprite_index = 0x80;
 					context->slot_counter = MAX_SPRITES_LINE;
 				}
-			} else {
+			} else if (mode_5){
 				if (context->hslot == 128) {
 					context->cur_slot = MAX_DRAWS_H32-1;
 					memset(context->linebuf, 0, LINEBUF_SIZE);
 				} else if (context->hslot == 132) {
 					context->sprite_index = 0x80;
 					context->slot_counter = MAX_SPRITES_LINE_H32;
+				}
+			} else {
+				if (context->hslot == 253) {
+					context->sprite_index = 0;
+					context->slot_counter = MAX_DRAWS_H32_MODE4;
+				} else if (context->hslot == 136) {
+					memset(context->linebuf, 0, LINEBUF_SIZE);
+					context->cur_slot = context->sprite_index = MAX_DRAWS_H32_MODE4-1;
+					context->sprite_draws = MAX_DRAWS_H32_MODE4;
 				}
 			}
 			if(context->vcounter == inactive_start) {
@@ -2127,7 +2137,7 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 					context->hslot = 229;
 				}
 			} else {
-				if (context->hslot == LINE_CHANGE_H32) {
+				if (context->hslot == (mode_5 ? LINE_CHANGE_H32 : LINE_CHANGE_MODE4)) {
 					vdp_advance_line(context);
 					if (context->vcounter == (inactive_start + 8)) {
 						context->frame++;
