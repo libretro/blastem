@@ -1293,7 +1293,7 @@ uint8_t * z80_decode(uint8_t * istream, z80inst * decoded)
 			decoded->immed |= *(++istream) << 8;
 		}
 	}
-	if (decoded->reg == Z80_USE_IMMED && decoded->op != Z80_BIT && decoded->op != Z80_RES && decoded->op != Z80_SET) {
+	if (decoded->reg == Z80_USE_IMMED && decoded->op != Z80_BIT && decoded->op != Z80_RES && decoded->op != Z80_SET && decoded->op != Z80_OUT) {
 		decoded->immed = *(++istream);
 	}
 	return istream+1;
