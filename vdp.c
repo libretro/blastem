@@ -27,15 +27,16 @@
 #define MCLKS_SLOT_H32  20
 #define VINT_SLOT_H40  255 //21 slots before HSYNC, 16 during, 10 after
 #define VINT_SLOT_H32  255  //old value was 23, but recent tests suggest the actual value is close to the H40 one
-#define HSYNC_SLOT_H40  228
+#define VINT_SLOT_MODE4 4
+#define HSYNC_SLOT_H40  230
 #define HSYNC_END_H40  (HSYNC_SLOT_H40+17)
-#define HSYNC_END_H32   (33 * MCLKS_SLOT_H32)
 #define HBLANK_START_H40 178 //should be 179 according to Nemesis, but 178 seems to fit slightly better with my test ROM results
 #define HBLANK_END_H40  0 //should be 5.5 according to Nemesis, but 0 seems to fit better with my test ROM results
 #define HBLANK_START_H32 233 //should be 147 according to Nemesis which is very different from my test ROM result
 #define HBLANK_END_H32 0 //should be 5 according to Nemesis, but 0 seems to fit better with my test ROM results
 #define LINE_CHANGE_H40 165
 #define LINE_CHANGE_H32 132
+#define LINE_CHANGE_MODE4 249
 #define VBLANK_START_H40 (LINE_CHANGE_H40+2)
 #define VBLANK_START_H32 (LINE_CHANGE_H32+2)
 #define FIFO_LATENCY    3
@@ -1528,25 +1529,42 @@ static void vdp_advance_line(vdp_context *context)
 		context->cycles += slot_cycles;\
 		CHECK_ONLY
 		
+#define MODE4_CHECK_SLOT_LINE(slot) \
+		if ((slot) == LINE_CHANGE_MODE4) {\
+			vdp_advance_line(context);\
+			if (context->vcounter == 192) {\
+				return;\
+			}\
+		}\
+		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); } \
+		if ((slot) == 147) {\
+			context->hslot = 233;\
+		} else {\
+			context->hslot++;\
+		}\
+		context->cycles += slot_cycles;\
+		CHECK_ONLY
+		
+		
 #define SPRITE_RENDER_H32_MODE4(slot) \
 	case slot:\
 		read_sprite_x_mode4(context);\
-		CHECK_LIMIT\
+		MODE4_CHECK_SLOT_LINE(slot)\
 	case (slot+1):\
 		read_sprite_x_mode4(context);\
-		CHECK_LIMIT\
+		MODE4_CHECK_SLOT_LINE(slot+1)\
 	case (slot+2):\
 		fetch_sprite_cells_mode4(context);\
-		CHECK_LIMIT\
+		MODE4_CHECK_SLOT_LINE(slot+2)\
 	case (slot+3):\
 		render_sprite_cells_mode4(context);\
-		CHECK_LIMIT\
+		MODE4_CHECK_SLOT_LINE(slot+3)\
 	case (slot+4):\
 		fetch_sprite_cells_mode4(context);\
-		CHECK_LIMIT\
+		MODE4_CHECK_SLOT_LINE(slot+4)\
 	case (slot+5):\
 		render_sprite_cells_mode4(context);\
-		CHECK_LIMIT
+		MODE4_CHECK_SLOT_LINE(slot+5)
 
 static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 {
@@ -1725,42 +1743,56 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 	{
 	for (;;)
 	{
+	case 133:
+		if (context->vcounter == 0x1FF) {
+			external_slot(context);
+		} else {
+			render_sprite_cells(context);
+		}
+		CHECK_LIMIT
+	case 134:
+		if (context->vcounter == 0x1FF) {
+			external_slot(context);
+		} else {
+			render_sprite_cells(context);
+		}
+		CHECK_LIMIT
 	//sprite attribute table scan starts
-	case 132:
+	case 135: //FIXME - Here
 		context->sprite_index = 0x80;
 		context->slot_counter = MAX_SPRITES_LINE_H32;
 		render_sprite_cells( context);
 		scan_sprite_table(context->vcounter, context);
 		CHECK_LIMIT
-	SPRITE_RENDER_H32(133)
-	SPRITE_RENDER_H32(134)
-	SPRITE_RENDER_H32(135)
 	SPRITE_RENDER_H32(136)
 	SPRITE_RENDER_H32(137)
 	SPRITE_RENDER_H32(138)
 	SPRITE_RENDER_H32(139)
 	SPRITE_RENDER_H32(140)
 	SPRITE_RENDER_H32(141)
-	case 142:
-		external_slot(context);
-		CHECK_LIMIT
+	SPRITE_RENDER_H32(142)
 	SPRITE_RENDER_H32(143)
 	SPRITE_RENDER_H32(144)
-	SPRITE_RENDER_H32(145)
+	case 145:
+		external_slot(context);
+		CHECK_LIMIT
 	SPRITE_RENDER_H32(146)
 	SPRITE_RENDER_H32(147)
-	//HSYNC start
 	SPRITE_RENDER_H32(233)
 	SPRITE_RENDER_H32(234)
 	SPRITE_RENDER_H32(235)
+	//HSYNC start
 	SPRITE_RENDER_H32(236)
 	SPRITE_RENDER_H32(237)
 	SPRITE_RENDER_H32(238)
 	SPRITE_RENDER_H32(239)
-	case 240:
+	SPRITE_RENDER_H32(240)
+	SPRITE_RENDER_H32(241)
+	SPRITE_RENDER_H32(242)
+	case 243:
 		external_slot(context);
 		CHECK_LIMIT
-	case 241:
+	case 244:
 		address = (context->regs[REG_HSCROLL] & 0x3F) << 10;
 		mask = 0;
 		if (context->regs[REG_MODE_3] & 0x2) {
@@ -1774,35 +1806,35 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 		context->hscroll_b = context->vdpmem[address+2] << 8 | context->vdpmem[address+3];
 		//printf("%d: HScroll A: %d, HScroll B: %d\n", context->vcounter, context->hscroll_a, context->hscroll_b);
 		CHECK_LIMIT
-	SPRITE_RENDER_H32(242)
-	SPRITE_RENDER_H32(243)
-	SPRITE_RENDER_H32(244)
 	SPRITE_RENDER_H32(245)
+	SPRITE_RENDER_H32(246)
+	SPRITE_RENDER_H32(247)
+	SPRITE_RENDER_H32(248)
 	//!HSYNC high
-	case 246:
+	case 249:
 		read_map_scroll_a(0, context->vcounter, context);
 		CHECK_LIMIT
-	SPRITE_RENDER_H32(247)
-	case 248:
+	SPRITE_RENDER_H32(250)
+	case 251:
 		render_map_1(context);
 		scan_sprite_table(context->vcounter, context);//Just a guess
 		CHECK_LIMIT
-	case 249:
+	case 252:
 		render_map_2(context);
 		scan_sprite_table(context->vcounter, context);//Just a guess
 		CHECK_LIMIT
-	case 250:
+	case 253:
 		read_map_scroll_b(0, context->vcounter, context);
 		CHECK_LIMIT
-	case 251:
+	case 254:
 		render_sprite_cells(context);
 		scan_sprite_table(context->vcounter, context);
 		CHECK_LIMIT
-	case 252:
+	case 255:
 		render_map_3(context);
 		scan_sprite_table(context->vcounter, context);//Just a guess
 		CHECK_LIMIT
-	case 253:
+	case 0:
 		render_map_output(context->vcounter, 0, context);
 		scan_sprite_table(context->vcounter, context);//Just a guess
 		//reverse context slot counter so it counts the number of sprite slots
@@ -1812,41 +1844,35 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 		context->sprite_draws = MAX_DRAWS_H32;
 		context->flags &= (~FLAG_CAN_MASK & ~FLAG_MASKED);
 		CHECK_LIMIT
-	COLUMN_RENDER_BLOCK(2, 254)
-	COLUMN_RENDER_BLOCK(4, 6)
-	COLUMN_RENDER_BLOCK(6, 14)
-	COLUMN_RENDER_BLOCK_REFRESH(8, 22)
-	COLUMN_RENDER_BLOCK(10, 30)
-	COLUMN_RENDER_BLOCK(12, 38)
-	COLUMN_RENDER_BLOCK(14, 46)
-	COLUMN_RENDER_BLOCK_REFRESH(16, 54)
-	COLUMN_RENDER_BLOCK(18, 62)
-	COLUMN_RENDER_BLOCK(20, 70)
-	COLUMN_RENDER_BLOCK(22, 78)
-	COLUMN_RENDER_BLOCK_REFRESH(24, 86)
-	COLUMN_RENDER_BLOCK(26, 94)
-	COLUMN_RENDER_BLOCK(28, 102)
-	COLUMN_RENDER_BLOCK(30, 110)
-	COLUMN_RENDER_BLOCK_REFRESH(32, 118)
-	case 126:
+	COLUMN_RENDER_BLOCK(2, 1)
+	COLUMN_RENDER_BLOCK(4, 9)
+	COLUMN_RENDER_BLOCK(6, 17)
+	COLUMN_RENDER_BLOCK_REFRESH(8, 25)
+	COLUMN_RENDER_BLOCK(10, 33)
+	COLUMN_RENDER_BLOCK(12, 41)
+	COLUMN_RENDER_BLOCK(14, 49)
+	COLUMN_RENDER_BLOCK_REFRESH(16, 57)
+	COLUMN_RENDER_BLOCK(18, 65)
+	COLUMN_RENDER_BLOCK(20, 73)
+	COLUMN_RENDER_BLOCK(22, 81)
+	COLUMN_RENDER_BLOCK_REFRESH(24, 89)
+	COLUMN_RENDER_BLOCK(26, 97)
+	COLUMN_RENDER_BLOCK(28, 105)
+	COLUMN_RENDER_BLOCK(30, 113)
+	COLUMN_RENDER_BLOCK_REFRESH(32, 121)
+	case 129:
 		external_slot(context);
 		CHECK_LIMIT
-	case 127:
+	case 130:
 		external_slot(context);
 		CHECK_LIMIT
 	//sprite render to line buffer starts
-	case 128:
+	case 131:
 		context->cur_slot = MAX_DRAWS_H32-1;
 		memset(context->linebuf, 0, LINEBUF_SIZE);
 		render_sprite_cells(context);
 		CHECK_LIMIT
-	case 129:
-		render_sprite_cells(context);
-		CHECK_LIMIT
-	case 130:
-		render_sprite_cells(context);
-		CHECK_LIMIT
-	case 131:
+	case 132:
 		render_sprite_cells(context);
 		vdp_advance_line(context);
 		if (context->vcounter == (context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START)) {
@@ -1871,46 +1897,31 @@ static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
 	{
 	for (;;)
 	{
-	case 132:
-		external_slot(context);
-		CHECK_LIMIT
-	case 133:
-		external_slot(context);
-		//set things up for sprite rendering in the next slot
-		memset(context->linebuf, 0, LINEBUF_SIZE);
-		context->cur_slot = context->sprite_index = MAX_DRAWS_H32_MODE4-1;
-		context->sprite_draws = MAX_DRAWS_H32_MODE4;
-		CHECK_LIMIT
 	//sprite rendering starts
-	SPRITE_RENDER_H32_MODE4(134)
-	SPRITE_RENDER_H32_MODE4(140)
-	case 146:
-		external_slot(context);
-		CHECK_LIMIT
-	case 147:
-		external_slot(context);
-		if (context->flags & FLAG_DMA_RUN) {
-			run_dma_src(context, -1);
-		}
-		context->hslot = 233;
-		context->cycles += slot_cycles;
-		CHECK_ONLY
-	//!HSYNC low
-	case 233:
-		external_slot(context);
-		CHECK_LIMIT
+	SPRITE_RENDER_H32_MODE4(137)
+	SPRITE_RENDER_H32_MODE4(143)
 	case 234:
 		external_slot(context);
 		CHECK_LIMIT
 	case 235:
 		external_slot(context);
 		CHECK_LIMIT
-	SPRITE_RENDER_H32_MODE4(236)
-	SPRITE_RENDER_H32_MODE4(242)
-	case 248:
+	//!HSYNC low
+	case 236:
 		external_slot(context);
 		CHECK_LIMIT
-	case 249:
+	case 237:
+		external_slot(context);
+		CHECK_LIMIT
+	case 238:
+		external_slot(context);
+		CHECK_LIMIT
+	SPRITE_RENDER_H32_MODE4(239)
+	SPRITE_RENDER_H32_MODE4(245)
+	case 251:
+		external_slot(context);
+		CHECK_LIMIT
+	case 252:
 		external_slot(context);
 		if (context->regs[REG_MODE_1] & BIT_HSCRL_LOCK && context->vcounter < 16) {
 			context->hscroll_a = 0;
@@ -1918,18 +1929,9 @@ static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
 			context->hscroll_a = context->regs[REG_X_SCROLL];
 		}
 		CHECK_LIMIT
-	case 250:
+	case 253:
 		context->sprite_index = 0;
 		context->slot_counter = MAX_DRAWS_H32_MODE4;
-		scan_sprite_table_mode4(context);
-		CHECK_LIMIT
-	case 251:
-		scan_sprite_table_mode4(context);
-		CHECK_LIMIT
-	case 252:
-		scan_sprite_table_mode4(context);
-		CHECK_LIMIT
-	case 253:
 		scan_sprite_table_mode4(context);
 		CHECK_LIMIT
 	case 254:
@@ -1943,52 +1945,65 @@ static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
 		CHECK_LIMIT
 	case 1:
 		scan_sprite_table_mode4(context);
+		CHECK_LIMIT
+	case 2:
+		scan_sprite_table_mode4(context);
+		CHECK_LIMIT
+	case 3:
+		scan_sprite_table_mode4(context);
+		CHECK_LIMIT
+	case 4:
+		scan_sprite_table_mode4(context);
 		context->buf_a_off = 8;
 		memset(context->tmp_buf_a, 0, 8);
 		CHECK_LIMIT
-	COLUMN_RENDER_BLOCK_MODE4(0, 2)
-	COLUMN_RENDER_BLOCK_MODE4(1, 6)
-	COLUMN_RENDER_BLOCK_MODE4(2, 10)
-	COLUMN_RENDER_BLOCK_MODE4(3, 14)
-	COLUMN_RENDER_BLOCK_MODE4(4, 18)
-	COLUMN_RENDER_BLOCK_MODE4(5, 22)
-	COLUMN_RENDER_BLOCK_MODE4(6, 26)
-	COLUMN_RENDER_BLOCK_MODE4(7, 30)
-	COLUMN_RENDER_BLOCK_MODE4(8, 34)
-	COLUMN_RENDER_BLOCK_MODE4(9, 38)
-	COLUMN_RENDER_BLOCK_MODE4(10, 42)
-	COLUMN_RENDER_BLOCK_MODE4(11, 46)
-	COLUMN_RENDER_BLOCK_MODE4(12, 50)
-	COLUMN_RENDER_BLOCK_MODE4(13, 54)
-	COLUMN_RENDER_BLOCK_MODE4(14, 58)
-	COLUMN_RENDER_BLOCK_MODE4(15, 62)
-	COLUMN_RENDER_BLOCK_MODE4(16, 66)
-	COLUMN_RENDER_BLOCK_MODE4(17, 70)
-	COLUMN_RENDER_BLOCK_MODE4(18, 74)
-	COLUMN_RENDER_BLOCK_MODE4(19, 78)
-	COLUMN_RENDER_BLOCK_MODE4(20, 82)
-	COLUMN_RENDER_BLOCK_MODE4(21, 86)
-	COLUMN_RENDER_BLOCK_MODE4(22, 90)
-	COLUMN_RENDER_BLOCK_MODE4(23, 94)
-	COLUMN_RENDER_BLOCK_MODE4(24, 98)
-	COLUMN_RENDER_BLOCK_MODE4(25, 102)
-	COLUMN_RENDER_BLOCK_MODE4(26, 106)
-	COLUMN_RENDER_BLOCK_MODE4(27, 110)
-	COLUMN_RENDER_BLOCK_MODE4(28, 114)
-	COLUMN_RENDER_BLOCK_MODE4(29, 118)
-	COLUMN_RENDER_BLOCK_MODE4(30, 122)
-	COLUMN_RENDER_BLOCK_MODE4(31, 126)
-	case 130:
+	COLUMN_RENDER_BLOCK_MODE4(0, 5)
+	COLUMN_RENDER_BLOCK_MODE4(1, 9)
+	COLUMN_RENDER_BLOCK_MODE4(2, 13)
+	COLUMN_RENDER_BLOCK_MODE4(3, 17)
+	COLUMN_RENDER_BLOCK_MODE4(4, 21)
+	COLUMN_RENDER_BLOCK_MODE4(5, 25)
+	COLUMN_RENDER_BLOCK_MODE4(6, 29)
+	COLUMN_RENDER_BLOCK_MODE4(7, 33)
+	COLUMN_RENDER_BLOCK_MODE4(8, 37)
+	COLUMN_RENDER_BLOCK_MODE4(9, 41)
+	COLUMN_RENDER_BLOCK_MODE4(10, 45)
+	COLUMN_RENDER_BLOCK_MODE4(11, 49)
+	COLUMN_RENDER_BLOCK_MODE4(12, 53)
+	COLUMN_RENDER_BLOCK_MODE4(13, 57)
+	COLUMN_RENDER_BLOCK_MODE4(14, 61)
+	COLUMN_RENDER_BLOCK_MODE4(15, 65)
+	COLUMN_RENDER_BLOCK_MODE4(16, 69)
+	COLUMN_RENDER_BLOCK_MODE4(17, 73)
+	COLUMN_RENDER_BLOCK_MODE4(18, 77)
+	COLUMN_RENDER_BLOCK_MODE4(19, 81)
+	COLUMN_RENDER_BLOCK_MODE4(20, 85)
+	COLUMN_RENDER_BLOCK_MODE4(21, 89)
+	COLUMN_RENDER_BLOCK_MODE4(22, 93)
+	COLUMN_RENDER_BLOCK_MODE4(23, 97)
+	COLUMN_RENDER_BLOCK_MODE4(24, 101)
+	COLUMN_RENDER_BLOCK_MODE4(25, 105)
+	COLUMN_RENDER_BLOCK_MODE4(26, 109)
+	COLUMN_RENDER_BLOCK_MODE4(27, 113)
+	COLUMN_RENDER_BLOCK_MODE4(28, 117)
+	COLUMN_RENDER_BLOCK_MODE4(29, 121)
+	COLUMN_RENDER_BLOCK_MODE4(30, 125)
+	COLUMN_RENDER_BLOCK_MODE4(31, 129)
+	case 133:
 		external_slot(context);
 		CHECK_LIMIT
-	case 131:
+	case 134:
 		external_slot(context);
-		vdp_advance_line(context);
-		if (context->vcounter == MODE4_INACTIVE_START) {
-			context->hslot++;
-			context->cycles += slot_cycles;
-			return;
-		}
+		CHECK_LIMIT
+	case 135:
+		external_slot(context);
+		CHECK_LIMIT
+	case 136:
+		external_slot(context);
+		//set things up for sprite rendering in the next slot
+		memset(context->linebuf, 0, LINEBUF_SIZE);
+		context->cur_slot = context->sprite_index = MAX_DRAWS_H32_MODE4-1;
+		context->sprite_draws = MAX_DRAWS_H32_MODE4;
 		CHECK_LIMIT
 	}
 	default:
@@ -2493,18 +2508,29 @@ static uint32_t vdp_cycles_hslot_wrap_h40(vdp_context * context)
 static uint32_t vdp_cycles_next_line(vdp_context * context)
 {
 	if (context->regs[REG_MODE_4] & BIT_H40) {
+		//TODO: Handle "illegal" Mode 4/H40 combo
 		if (context->hslot < LINE_CHANGE_H40) {
 			return (LINE_CHANGE_H40 - context->hslot) * MCLKS_SLOT_H40;
 		} else {
 			return vdp_cycles_hslot_wrap_h40(context) + LINE_CHANGE_H40 * MCLKS_SLOT_H40;
 		}
 	} else {
-		if (context->hslot < LINE_CHANGE_H32) {
-			return (LINE_CHANGE_H32 - context->hslot) * MCLKS_SLOT_H32;
-		} else if (context->hslot < 148) {
-			return MCLKS_LINE - (context->hslot - LINE_CHANGE_H32) * MCLKS_SLOT_H32;
+		if (context->regs[REG_MODE_2] & BIT_MODE_5) {
+			if (context->hslot < LINE_CHANGE_H32) {
+				return (LINE_CHANGE_H32 - context->hslot) * MCLKS_SLOT_H32;
+			} else if (context->hslot < 148) {
+				return MCLKS_LINE - (context->hslot - LINE_CHANGE_H32) * MCLKS_SLOT_H32;
+			} else {
+				return (256-context->hslot + LINE_CHANGE_H32) * MCLKS_SLOT_H32;
+			}
 		} else {
-			return (256-context->hslot + LINE_CHANGE_H32) * MCLKS_SLOT_H32;
+			if (context->hslot < 148) {
+				return (148 - context->hslot + LINE_CHANGE_MODE4 - 233) * MCLKS_SLOT_H32;
+			} else if (context->hslot < LINE_CHANGE_MODE4) {
+				return (LINE_CHANGE_MODE4 - context->hslot) * MCLKS_SLOT_H32;
+			} else {
+				return MCLKS_LINE - (context->hslot - LINE_CHANGE_MODE4) * MCLKS_SLOT_H32;
+			}
 		}
 	}
 }
@@ -2512,22 +2538,27 @@ static uint32_t vdp_cycles_next_line(vdp_context * context)
 static uint32_t vdp_cycles_to_line(vdp_context * context, uint32_t target)
 {
 	uint32_t jump_start, jump_dst;
-	if (context->flags2 & FLAG2_REGION_PAL) {
-		if (context->latched_mode & BIT_PAL) {
-			jump_start = 0x10B;
-			jump_dst = 0x1D2;
+	if (context->regs[REG_MODE_2] & BIT_MODE_5) {
+		if (context->flags2 & FLAG2_REGION_PAL) {
+			if (context->latched_mode & BIT_PAL) {
+				jump_start = 0x10B;
+				jump_dst = 0x1D2;
+			} else {
+				jump_start = 0x103;
+				jump_dst = 0x1CA;
+			}
 		} else {
-			jump_start = 0x103;
-			jump_dst = 0x1CA;
+			if (context->latched_mode & BIT_PAL) {
+				jump_start = 0;
+				jump_dst = 0;
+			} else {
+				jump_start = 0xEB;
+				jump_dst = 0x1E5;
+			}
 		}
 	} else {
-		if (context->latched_mode & BIT_PAL) {
-			jump_start = 0;
-			jump_dst = 0;
-		} else {
-			jump_start = 0xEB;
-			jump_dst = 0x1E5;
-		}
+		jump_start = 0xDB;
+		jump_dst = 0x1D5;
 	}
 	uint32_t lines;
 	if (context->vcounter < target) {
@@ -2619,55 +2650,71 @@ uint32_t vdp_next_vint_z80(vdp_context * context)
 		inactive_start = MODE4_INACTIVE_START;
 	}
 	if (context->vcounter == inactive_start) {
-		if (context->regs[REG_MODE_4] & BIT_H40) {
-			if (context->hslot >= LINE_CHANGE_H40 && context->hslot <= VINT_SLOT_H40) {
-				uint32_t cycles = context->cycles;
-				if (context->hslot < 182) {
-					cycles += (182 - context->hslot) * MCLKS_SLOT_H40;
+		if (context->regs[REG_MODE_2] & BIT_MODE_5) {
+			if (context->regs[REG_MODE_4] & BIT_H40) {
+				if (context->hslot >= LINE_CHANGE_H40 && context->hslot <= VINT_SLOT_H40) {
+					uint32_t cycles = context->cycles;
+					if (context->hslot < 182) {
+						cycles += (182 - context->hslot) * MCLKS_SLOT_H40;
+					}
+					
+					if (context->hslot < 229) {
+						cycles += h40_hsync_cycles[0];
+					}
+					for (int slot = context->hslot <= 229 ? 229 : context->hslot; slot < HSYNC_END_H40; slot++ )
+					{
+						cycles += h40_hsync_cycles[slot - HSYNC_SLOT_H40];
+					}
+					cycles += (VINT_SLOT_H40 - (context->hslot > HSYNC_SLOT_H40 ? context->hslot : HSYNC_SLOT_H40)) * MCLKS_SLOT_H40;
+					return cycles;
 				}
-				
-				if (context->hslot < 229) {
-					cycles += h40_hsync_cycles[0];
+			} else {
+				if (context->hslot >= LINE_CHANGE_H32 && context->hslot <= VINT_SLOT_H32) {
+					if (context->hslot < 233) {
+						return context->cycles + (148 - context->hslot + VINT_SLOT_H40 - 233) * MCLKS_SLOT_H32;
+					} else {
+						return context->cycles + (VINT_SLOT_H32 - context->hslot) * MCLKS_SLOT_H32;
+					}
 				}
-				for (int slot = context->hslot <= 229 ? 229 : context->hslot; slot < HSYNC_END_H40; slot++ )
-				{
-					cycles += h40_hsync_cycles[slot - HSYNC_SLOT_H40];
-				}
-				cycles += (VINT_SLOT_H40 - (context->hslot > HSYNC_SLOT_H40 ? context->hslot : HSYNC_SLOT_H40)) * MCLKS_SLOT_H40;
-				return cycles;
 			}
 		} else {
-			if (context->hslot >= LINE_CHANGE_H32 && context->hslot <= VINT_SLOT_H32) {
-				if (context->hslot < 233) {
-					return context->cycles + (148 - context->hslot + VINT_SLOT_H40 - 233) * MCLKS_SLOT_H32;
-				} else {
-					return context->cycles + (VINT_SLOT_H32 - context->hslot) * MCLKS_SLOT_H32;
-				}
+			if (context->hslot >= LINE_CHANGE_H40) {
+				return context->cycles + (VINT_SLOT_MODE4 + 256 - context->hslot) * MCLKS_SLOT_H32;
+			}
+			if (context->hslot <= VINT_SLOT_MODE4) {
+				return context->cycles + (VINT_SLOT_MODE4 - context->hslot) * MCLKS_SLOT_H32;
 			}
 		}
 	}
 	int32_t cycles_to_vint = vdp_cycles_to_line(context, inactive_start);
-	if (context->regs[REG_MODE_4] & BIT_H40) {
-		cycles_to_vint += MCLKS_LINE - (LINE_CHANGE_H40 + (256 - VINT_SLOT_H40)) * MCLKS_SLOT_H40;
+	if (context->regs[REG_MODE_2] & BIT_MODE_5) {
+		if (context->regs[REG_MODE_4] & BIT_H40) {
+			cycles_to_vint += MCLKS_LINE - (LINE_CHANGE_H40 + (256 - VINT_SLOT_H40)) * MCLKS_SLOT_H40;
+		} else {
+			cycles_to_vint += (VINT_SLOT_H32 - 233 + 148 - LINE_CHANGE_H32) * MCLKS_SLOT_H32;
+		}
 	} else {
-		cycles_to_vint += (VINT_SLOT_H32 - 233 + 148 - LINE_CHANGE_H32) * MCLKS_SLOT_H32;
+		cycles_to_vint += (256 - LINE_CHANGE_MODE4 + VINT_SLOT_MODE4) * MCLKS_SLOT_H32;
 	}
 	return context->cycles + cycles_to_vint;
 }
 
 void vdp_int_ack(vdp_context * context)
 {
-	//Apparently the VDP interrupt controller is not very smart
-	//Instead of paying attention to what interrupt is being acknowledged it just 
-	//clears the pending flag for whatever interrupt it is currently asserted
-	//which may be different from the interrupt it was asserting when the 68k
-	//started the interrupt process. The window for this is narrow and depends
-	//on the latency between the int enable register write and the interrupt being
-	//asserted, but Fatal Rewind depends on this due to some buggy code
-	if ((context->flags2 & FLAG2_VINT_PENDING) && (context->regs[REG_MODE_2] & BIT_VINT_EN)) {
-		context->flags2 &= ~FLAG2_VINT_PENDING;
-	} else if((context->flags2 & FLAG2_HINT_PENDING) && (context->regs[REG_MODE_1] & BIT_HINT_EN)) {
-		context->flags2 &= ~FLAG2_HINT_PENDING;
+	//CPU interrupt acknowledge is only used in Mode 5
+	if (context->regs[REG_MODE_2] & BIT_MODE_5) {
+		//Apparently the VDP interrupt controller is not very smart
+		//Instead of paying attention to what interrupt is being acknowledged it just 
+		//clears the pending flag for whatever interrupt it is currently asserted
+		//which may be different from the interrupt it was asserting when the 68k
+		//started the interrupt process. The window for this is narrow and depends
+		//on the latency between the int enable register write and the interrupt being
+		//asserted, but Fatal Rewind depends on this due to some buggy code
+		if ((context->flags2 & FLAG2_VINT_PENDING) && (context->regs[REG_MODE_2] & BIT_VINT_EN)) {
+			context->flags2 &= ~FLAG2_VINT_PENDING;
+		} else if((context->flags2 & FLAG2_HINT_PENDING) && (context->regs[REG_MODE_1] & BIT_HINT_EN)) {
+			context->flags2 &= ~FLAG2_HINT_PENDING;
+		}
 	}
 }
 
