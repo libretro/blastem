@@ -113,8 +113,8 @@ static void *mapper_write(uint32_t location, void *vcontext, uint8_t value)
 	z80_context *z80 = vcontext;
 	sms_context *sms = z80->system;
 	void *old_value;
-	sms->ram[location & (sizeof(sms->ram)-1)] = value;
 	location &= 3;
+	sms->ram[0x1FFC + location] = value;
 	sms->bank_regs[location] = value;
 	if (location) {
 		uint32_t idx = location - 1;
@@ -288,7 +288,7 @@ sms_context *alloc_configure_sms(void *rom, uint32_t rom_size, void *extra_rom, 
 		memory_map[2] = (memmap_chunk){0x4000, 0x8000,  0x3FFF,             0, 1, MMAP_READ|MMAP_PTR_IDX|MMAP_CODE, NULL,     NULL, NULL, NULL, NULL};
 		memory_map[3] = (memmap_chunk){0x8000, 0xC000,  0x3FFF,             0, 2, MMAP_READ|MMAP_PTR_IDX|MMAP_CODE, NULL,     NULL, NULL, NULL, cart_ram_write};
 		memory_map[4] = (memmap_chunk){0xC000, 0xFFFC,  sizeof(sms->ram)-1, 0, 0, MMAP_READ|MMAP_WRITE|MMAP_CODE,   sms->ram, NULL, NULL, NULL, NULL};
-		memory_map[5] = (memmap_chunk){0xFFFC, 0x10000, 0xFFFF,             0, 0, MMAP_READ,                        ram_reg_overlap, NULL, NULL, NULL, mapper_write};
+		memory_map[5] = (memmap_chunk){0xFFFC, 0x10000, 0x0003,             0, 0, MMAP_READ,                        ram_reg_overlap, NULL, NULL, NULL, mapper_write};
 	} else {
 		info_out->map_chunks = 2;
 		memory_map[0] = (memmap_chunk){0x0000, 0xC000,  rom_size-1,         0, 0, MMAP_READ,                      rom,      NULL, NULL, NULL, NULL};
@@ -308,6 +308,9 @@ sms_context *alloc_configure_sms(void *rom, uint32_t rom_size, void *extra_rom, 
 		sms->z80->mem_pointers[0] = sms->rom;
 		sms->z80->mem_pointers[1] = sms->rom + 0x4000;
 		sms->z80->mem_pointers[2] = sms->rom + 0x8000;
+		sms->bank_regs[1] = 0;
+		sms->bank_regs[2] = 0x4000 >> 14;
+		sms->bank_regs[3] = 0x8000 >> 14;
 	}
 	
 	char * lowpass_cutoff_str = tern_find_path(config, "audio\0lowpass_cutoff\0").ptrval;
