@@ -204,6 +204,7 @@ int main(int argc, char ** argv)
 			case 'D':
 				gdb_remote_init();
 				dtype = DEBUGGER_GDB;
+				start_in_debugger = 1;
 				break;
 			case 'f':
 				fullscreen = !fullscreen;
