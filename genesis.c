@@ -961,13 +961,12 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 		gen->save_storage = NULL;
 	}
 	
+	//This must happen before we generate memory access functions in init_m68k_opts
 	for (int i = 0; i < rom->map_chunks; i++)
 	{
-		if (rom->map[i].flags & MMAP_PTR_IDX) {
-			gen->m68k->mem_pointers[rom->map[i].ptr_index] = rom->map[i].buffer;
-		}
 		if (rom->map[i].start == 0xE00000) {
 			rom->map[i].buffer = gen->work_ram;
+			break;
 		}
 	}
 
@@ -978,6 +977,14 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	gen->m68k = init_68k_context(opts, NULL);
 	gen->m68k->system = gen;
 	opts->address_log = (system_opts & OPT_ADDRESS_LOG) ? fopen("address.log", "w") : NULL;
+	
+	//This must happen after the 68K context has been allocated
+	for (int i = 0; i < rom->map_chunks; i++)
+	{
+		if (rom->map[i].flags & MMAP_PTR_IDX) {
+			gen->m68k->mem_pointers[rom->map[i].ptr_index] = rom->map[i].buffer;
+		}
+	}
 
 	return gen;
 }
