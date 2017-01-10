@@ -1530,12 +1530,6 @@ static void vdp_advance_line(vdp_context *context)
 		CHECK_ONLY
 		
 #define MODE4_CHECK_SLOT_LINE(slot) \
-		if ((slot) == LINE_CHANGE_MODE4) {\
-			vdp_advance_line(context);\
-			if (context->vcounter == 192) {\
-				return;\
-			}\
-		}\
 		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); } \
 		if ((slot) == 147) {\
 			context->hslot = 233;\
@@ -1543,6 +1537,12 @@ static void vdp_advance_line(vdp_context *context)
 			context->hslot++;\
 		}\
 		context->cycles += slot_cycles;\
+		if ((slot+1) == LINE_CHANGE_MODE4) {\
+			vdp_advance_line(context);\
+			if (context->vcounter == 192) {\
+				return;\
+			}\
+		}\
 		CHECK_ONLY
 
 #define CALC_SLOT(slot, increment) ((slot+increment) > 147 && (slot+increment) < 233 ? (slot+increment-148+233): (slot+increment))
