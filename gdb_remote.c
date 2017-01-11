@@ -378,7 +378,7 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 		if (!memcmp("Supported", command+1, strlen("Supported"))) {
 			sprintf(send_buf, "PacketSize=%X", (int)bufsize);
 			gdb_send_command(send_buf);
-		} else if (!memcmp("Attached", command+1, strlen("Supported"))) {
+		} else if (!memcmp("Attached", command+1, strlen("Attached"))) {
 			//not really meaningful for us, but saying we spawned a new process
 			//is probably closest to the truth
 			gdb_send_command("0");
@@ -395,7 +395,12 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 			gdb_send_command("");
 		} else if (command[1] == 'C') {
 			//we only support a single thread currently, so send 1
-			gdb_send_command("1");
+			gdb_send_command("QC1");
+		} else if (!strcmp("fThreadInfo", command + 1)) {
+			//we only support a single thread currently, so send 1
+			gdb_send_command("m1");
+		} else if (!strcmp("sThreadInfo", command + 1)) {
+			gdb_send_command("l");
 		} else {
 			goto not_impl;
 		}
@@ -403,6 +408,8 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 	case 'v':
 		if (!memcmp("Cont?", command+1, strlen("Cont?"))) {
 			gdb_send_command("vCont;c;C;s;S");
+		} else if (!strcmp("MustReplyEmpty", command + 1)) {
+			gdb_send_command("");
 		} else if (!memcmp("Cont;", command+1, strlen("Cont;"))) {
 			switch (*(command + 1 + strlen("Cont;")))
 			{
