@@ -41,6 +41,20 @@
 #define VBLANK_START_H32 (LINE_CHANGE_H32+2)
 #define FIFO_LATENCY    3
 
+#define BORDER_TOP_V24     27
+#define BORDER_TOP_V28     11
+#define BORDER_TOP_V24_PAL 54
+#define BORDER_TOP_V28_PAL 38
+#define BORDER_TOP_V30_PAL 30
+
+#define BORDER_BOT_V24     24
+#define BORDER_BOT_V28     8
+#define BORDER_BOT_V24_PAL 48
+#define BORDER_BOT_V28_PAL 32
+#define BORDER_BOT_V30_PAL 24
+
+#define INVALID_LINE 0x200
+
 static int32_t color_map[1 << 12];
 static uint16_t mode4_address_map[0x4000];
 static uint32_t planar_to_chunky[256];
@@ -53,6 +67,40 @@ static uint8_t debug_base[][3] = {
 	{0, 127, 0},     //B
 	{127, 0, 127}    //Sprites
 };
+
+static void update_video_params(vdp_context *context)
+{
+	if (context->regs[REG_MODE_2] & BIT_MODE_5) {
+		if (context->latched_mode & BIT_PAL) {
+			if (context->flags2 & FLAG2_REGION_PAL) {
+				context->inactive_start = PAL_INACTIVE_START;
+				context->border_top = BORDER_TOP_V30_PAL;
+				context->border_bot = BORDER_BOT_V30_PAL;
+			} else {
+				context->inactive_start = 0x200;
+				context->border_top = context->border_bot = 0;
+			}
+		} else {
+			context->inactive_start = NTSC_INACTIVE_START;
+			if (context->flags2 & FLAG2_REGION_PAL) {
+				context->border_top = BORDER_TOP_V28_PAL;
+				context->border_bot = BORDER_BOT_V28_PAL;
+			} else {
+				context->border_top = BORDER_TOP_V28;
+				context->border_bot = BORDER_TOP_V28;
+			}
+		}
+	} else {
+		context->inactive_start = MODE4_INACTIVE_START;
+		if (context->flags2 & FLAG2_REGION_PAL) {
+			context->border_top = BORDER_TOP_V24_PAL;
+			context->border_bot = BORDER_BOT_V24_PAL;
+		} else {
+			context->border_top = BORDER_TOP_V24;
+			context->border_bot = BORDER_BOT_V24;
+		}
+	}
+}
 
 static uint8_t color_map_init_done;
 
@@ -67,7 +115,7 @@ void init_vdp_context(vdp_context * context, uint8_t region_pal)
 		context->output = malloc(LINEBUF_SIZE);
 		context->output_pitch = 0;
 	} else {
-		context->output = render_get_framebuffer(FRAMEBUFFER_ODD, &context->output_pitch);
+		context->fb = render_get_framebuffer(FRAMEBUFFER_ODD, &context->output_pitch);
 	}
 	context->linebuf = malloc(LINEBUF_SIZE + SCROLL_BUFFER_SIZE*2);
 	memset(context->linebuf, 0, LINEBUF_SIZE + SCROLL_BUFFER_SIZE*2);
@@ -162,6 +210,10 @@ void init_vdp_context(vdp_context * context, uint8_t region_pal)
 	}
 	if (region_pal) {
 		context->flags2 |= FLAG2_REGION_PAL;
+	}
+	update_video_params(context);
+	if (!headless) {
+		context->output = (uint32_t *)(((char *)context->fb) + context->output_pitch * context->border_top);
 	}
 }
 
@@ -1115,15 +1167,28 @@ static void fetch_map_mode4(uint16_t col, uint32_t line, vdp_context *context)
 
 static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 {
+	uint32_t *dst;
+	if (line == 0x1FF) {
+		if (!col) {
+			return;
+		}
+		col -= 2;
+		dst = context->output + col * 8;
+		uint32_t color = context->colors[context->regs[REG_BG_COLOR]];
+		for (int i = 0; i < 16; i++)
+		{
+			*(dst++) = color;
+		}
+		return;
+	}
 	if (line >= 240) {
 		return;
 	}
-	render_map(context->col_2, context->tmp_buf_b, context->buf_b_off+8, context);
-	uint32_t *dst;
 	uint8_t *sprite_buf,  *plane_a, *plane_b;
 	int plane_a_off, plane_b_off;
 	if (col)
 	{
+		render_map(context->col_2, context->tmp_buf_b, context->buf_b_off+8, context);
 		col-=2;
 		dst = context->output + col * 8;
 		if (context->debug < 2) {
@@ -1373,7 +1438,7 @@ static uint32_t const h40_hsync_cycles[] = {19, 20, 20, 20, 18, 20, 20, 20, 18, 
 static void vdp_advance_line(vdp_context *context)
 {
 	context->vcounter++;
-	context->vcounter &= 0x1FF;
+	
 	uint8_t is_mode_5 = context->regs[REG_MODE_2] & BIT_MODE_5;
 	if (is_mode_5) {
 		if (context->flags2 & FLAG2_REGION_PAL) {
@@ -1390,29 +1455,34 @@ static void vdp_advance_line(vdp_context *context)
 	} else if (context->vcounter == 0xDB) {
 		context->vcounter = 0x1D5;
 	}
-	uint32_t inactive_start = (context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START);
-	if (!is_mode_5) {
-		inactive_start = MODE4_INACTIVE_START;
-	}
-	if (!headless) {
-		if (!context->vcounter && !context->output) {
-			context->output = render_get_framebuffer(context->flags2 & FLAG2_EVEN_FIELD ? FRAMEBUFFER_EVEN : FRAMEBUFFER_ODD, &context->output_pitch);
-			context->h40_lines = 0;
-		} else if (context->vcounter == inactive_start) { //TODO: Change this once border emulation is added
-			context->output = NULL;
-			render_framebuffer_updated(context->flags2 & FLAG2_EVEN_FIELD ? FRAMEBUFFER_EVEN: FRAMEBUFFER_ODD, context->h40_lines > inactive_start / 2 ? 320 : 256);
+	if (headless) {
+		context->vcounter &= 0x1FF;
+	} else {
+		if (context->vcounter == context->inactive_start) {
+			render_framebuffer_updated(context->flags2 & FLAG2_EVEN_FIELD ? FRAMEBUFFER_EVEN: FRAMEBUFFER_ODD, context->h40_lines > (context->inactive_start + context->border_top) / 2 ? 320 : 256);
 			if (context->double_res) {
 				context->flags2 ^= FLAG2_EVEN_FIELD;
 			}
-		} else if (context->output) {
-			context->output = (uint32_t *)(((char *)context->output) + context->output_pitch);
-			if (context->regs[REG_MODE_4] & BIT_H40) {
-				context->h40_lines++;
-			}
+			context->fb = render_get_framebuffer(context->flags2 & FLAG2_EVEN_FIELD ? FRAMEBUFFER_EVEN : FRAMEBUFFER_ODD, &context->output_pitch);
+			context->h40_lines = 0;
+			context->frame++;
+		}
+		context->vcounter &= 0x1FF;
+		uint32_t output_line;
+		if (context->vcounter < context->inactive_start + context->border_bot) {
+			output_line = context->border_top + context->vcounter;
+		} else if (context->vcounter > 0x200 - context->border_top) {
+			output_line = context->vcounter - (0x200 - context->border_top);
+		} else {
+			output_line = INVALID_LINE;
+		}		
+		context->output = (uint32_t *)(((char *)context->fb) + context->output_pitch * output_line);
+		if (output_line != INVALID_LINE && (context->regs[REG_MODE_4] & BIT_H40)) {
+			context->h40_lines++;
 		}
 	}
 
-	if (context->vcounter > inactive_start) {
+	if (context->vcounter > context->inactive_start) {
 		context->hint_counter = context->regs[REG_HINT];
 	} else if (context->hint_counter) {
 		context->hint_counter--;
@@ -1673,7 +1743,7 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		scan_sprite_table(context->vcounter, context);//Just a guess
 		CHECK_LIMIT
 	case 0:
-		if (context->vcounter == (context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START)) {
+		if (context->vcounter == context->inactive_start) {
 			context->flags2 |= FLAG2_VINT_PENDING;
 			context->pending_vint_start = context->cycles;
 		}
@@ -1721,7 +1791,7 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	case 164:
 		render_sprite_cells(context);
 		vdp_advance_line(context);
-		if (context->vcounter == (context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START)) {
+		if (context->vcounter == context->inactive_start) {
 			context->hslot++;
 			context->cycles += slot_cycles;
 			return;
@@ -1876,7 +1946,7 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 	case 132:
 		render_sprite_cells(context);
 		vdp_advance_line(context);
-		if (context->vcounter == (context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START)) {
+		if (context->vcounter == context->inactive_start) {
 			context->hslot++;
 			context->cycles += slot_cycles;
 			return;
@@ -2016,6 +2086,7 @@ static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
 void latch_mode(vdp_context * context)
 {
 	context->latched_mode = context->regs[REG_MODE_2] & BIT_PAL;
+	update_video_params(context);
 }
 
 static void check_render_bg(vdp_context * context, int32_t line, uint32_t slot)
@@ -2031,7 +2102,9 @@ static void check_render_bg(vdp_context * context, int32_t line, uint32_t slot)
 		}
 	}
 	if (starti >= 0) {
-		uint32_t color = context->colors[context->regs[REG_BG_COLOR]];
+		uint32_t color = (context->regs[REG_MODE_2] & BIT_MODE_5)
+			? context->colors[context->regs[REG_BG_COLOR]]
+			: context->colors[CRAM_SIZE * 3 + 0x10 + (context->regs[REG_BG_COLOR] & 0xF)];
 		uint32_t * start = context->output + starti;
 		for (int i = 0; i < 2; i++) {
 			*(start++) = color;
@@ -2042,22 +2115,17 @@ static void check_render_bg(vdp_context * context, int32_t line, uint32_t slot)
 
 void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 {
+	uint8_t is_h40 = context->regs[REG_MODE_4] & BIT_H40;
+	uint8_t mode_5 = context->regs[REG_MODE_2] & BIT_MODE_5;
 	while(context->cycles < target_cycles)
 	{
-		uint8_t is_h40 = context->regs[REG_MODE_4] & BIT_H40;
-		uint8_t active_slot, mode_5;
-		uint32_t inactive_start;
-		if (context->regs[REG_MODE_2] & BIT_MODE_5) {
-			//Mode 5 selected
-			mode_5 = 1;
-			inactive_start = context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START;
+		uint8_t active_slot;
+		if (mode_5) {
 			//line 0x1FF is basically active even though it's not displayed
-			active_slot = (context->vcounter < inactive_start || context->vcounter == 0x1FF) && (context->regs[REG_MODE_2] & DISPLAY_ENABLE);
+			active_slot = (context->vcounter < context->inactive_start || context->vcounter == 0x1FF) && (context->regs[REG_MODE_2] & DISPLAY_ENABLE);
 		} else {
-			mode_5 = 0;
-			inactive_start = MODE4_INACTIVE_START;
 			//display is effectively disabled if neither mode 5 nor mode 4 are selected
-			active_slot = context->vcounter < inactive_start && (context->regs[REG_MODE_2] & DISPLAY_ENABLE) && (context->regs[REG_MODE_1] & BIT_MODE_4);
+			active_slot = context->vcounter < context->inactive_start && (context->regs[REG_MODE_2] & DISPLAY_ENABLE) && (context->regs[REG_MODE_1] & BIT_MODE_4);
 		}
 		
 		if (active_slot) {
@@ -2097,7 +2165,7 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 					context->sprite_draws = MAX_DRAWS_H32_MODE4;
 				}
 			}
-			if(context->vcounter == inactive_start) {
+			if(context->vcounter == context->inactive_start) {
 				uint32_t intslot = context->regs[REG_MODE_4] & BIT_H40 ? VINT_SLOT_H40 :  VINT_SLOT_H32;
 				if (context->hslot == intslot) {
 					context->flags2 |= FLAG2_VINT_PENDING;
@@ -2119,7 +2187,7 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 			if (!is_refresh(context, context->hslot)) {
 				external_slot(context);
 			}
-			if (context->vcounter < inactive_start) {
+			if (context->vcounter < (context->inactive_start + context->border_bot) || context->vcounter > 0x200 - context->border_top) {
 				check_render_bg(context, context->vcounter, context->hslot);
 			}
 			if (context->flags & FLAG_DMA_RUN && !is_refresh(context, context->hslot)) {
@@ -2130,18 +2198,12 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 			if (is_h40) {
 				if (context->hslot == LINE_CHANGE_H40) {
 					vdp_advance_line(context);
-					if (context->vcounter == (inactive_start + 8)) {
-						context->frame++;
-					}
 				} else if (context->hslot == 183) {
 					context->hslot = 229;
 				}
 			} else {
 				if (context->hslot == (mode_5 ? LINE_CHANGE_H32 : LINE_CHANGE_MODE4)) {
 					vdp_advance_line(context);
-					if (context->vcounter == (inactive_start + 8)) {
-						context->frame++;
-					}
 				} else if (context->hslot == 148) {
 					context->hslot = 233;
 				}
@@ -2152,8 +2214,10 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 
 uint32_t vdp_run_to_vblank(vdp_context * context)
 {
-	uint32_t target_cycles = ((context->latched_mode & BIT_PAL) ? PAL_INACTIVE_START : NTSC_INACTIVE_START) * MCLKS_LINE;
-	vdp_run_context(context, target_cycles);
+	uint32_t old_frame = context->frame;
+	while (context->frame == old_frame) {
+		vdp_run_context(context, MCLKS_LINE);
+	}
 	return context->cycles;
 }
 
@@ -2274,6 +2338,9 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 					if (!context->double_res) {
 						context->flags2 &= ~FLAG2_EVEN_FIELD;
 					}
+				}
+				if (reg == REG_MODE_2) {
+					update_video_params(context);
 				}
 			}
 		} else if (mode_5) {
@@ -2412,11 +2479,7 @@ uint16_t vdp_control_port_read(vdp_context * context)
 	}
 	uint32_t line= context->vcounter;
 	uint32_t slot = context->hslot;
-	uint32_t inactive_start = (context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START);
-	if (!(context->regs[REG_MODE_2] & BIT_MODE_5)) {
-		inactive_start = MODE4_INACTIVE_START;
-	}
-	if ((line >= inactive_start && line < 0x1FF) || !(context->regs[REG_MODE_2] & BIT_DISP_EN)) {
+	if ((line >= context->inactive_start && line < 0x1FF) || !(context->regs[REG_MODE_2] & BIT_DISP_EN)) {
 		value |= 0x8;
 	}
 	if (context->regs[REG_MODE_4] & BIT_H40) {
@@ -2592,28 +2655,9 @@ static uint32_t vdp_cycles_to_line(vdp_context * context, uint32_t target)
 	return MCLKS_LINE * (lines - 1) + vdp_cycles_next_line(context);
 }
 
-static uint32_t vdp_frame_end_line(vdp_context * context)
-{
-	uint32_t frame_end;
-	if (context->flags2 & FLAG2_REGION_PAL) {
-		if (context->latched_mode & BIT_PAL) {
-			frame_end = PAL_INACTIVE_START + 8;
-		} else {
-			frame_end = NTSC_INACTIVE_START + 8;
-		}
-	} else {
-		if (context->latched_mode & BIT_PAL) {
-			frame_end = 512;
-		} else {
-			frame_end = NTSC_INACTIVE_START + 8;
-		}
-	}
-	return frame_end;
-}
-
 uint32_t vdp_cycles_to_frame_end(vdp_context * context)
 {
-	return context->cycles + vdp_cycles_to_line(context, vdp_frame_end_line(context));
+	return context->cycles + vdp_cycles_to_line(context, context->inactive_start);
 }
 
 uint32_t vdp_next_hint(vdp_context * context)
@@ -2624,12 +2668,9 @@ uint32_t vdp_next_hint(vdp_context * context)
 	if (context->flags2 & FLAG2_HINT_PENDING) {
 		return context->pending_hint_start;
 	}
-	uint32_t inactive_start = (context->regs[REG_MODE_2] & BIT_MODE_5)
-		? (context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START)
-		: MODE4_INACTIVE_START;
 	uint32_t hint_line;
-	if (context->vcounter + context->hint_counter >= inactive_start) {
-		if (context->regs[REG_HINT] > inactive_start) {
+	if (context->vcounter + context->hint_counter >= context->inactive_start) {
+		if (context->regs[REG_HINT] > context->inactive_start) {
 			return 0xFFFFFFFF;
 		}
 		hint_line = context->regs[REG_HINT];
@@ -2655,11 +2696,7 @@ uint32_t vdp_next_vint(vdp_context * context)
 
 uint32_t vdp_next_vint_z80(vdp_context * context)
 {
-	uint32_t inactive_start = context->latched_mode & BIT_PAL ? PAL_INACTIVE_START : NTSC_INACTIVE_START;
-	if (!(context->regs[REG_MODE_2] & BIT_MODE_5)) {
-		inactive_start = MODE4_INACTIVE_START;
-	}
-	if (context->vcounter == inactive_start) {
+	if (context->vcounter == context->inactive_start) {
 		if (context->regs[REG_MODE_2] & BIT_MODE_5) {
 			if (context->regs[REG_MODE_4] & BIT_H40) {
 				if (context->hslot >= LINE_CHANGE_H40 && context->hslot <= VINT_SLOT_H40) {
@@ -2696,7 +2733,7 @@ uint32_t vdp_next_vint_z80(vdp_context * context)
 			}
 		}
 	}
-	int32_t cycles_to_vint = vdp_cycles_to_line(context, inactive_start);
+	int32_t cycles_to_vint = vdp_cycles_to_line(context, context->inactive_start);
 	if (context->regs[REG_MODE_2] & BIT_MODE_5) {
 		if (context->regs[REG_MODE_4] & BIT_H40) {
 			cycles_to_vint += MCLKS_LINE - (LINE_CHANGE_H40 + (256 - VINT_SLOT_H40)) * MCLKS_SLOT_H40;
