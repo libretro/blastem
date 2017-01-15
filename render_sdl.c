@@ -187,7 +187,7 @@ static GLuint load_shader(char * fname, GLenum shader_type)
 }
 #endif
 
-static uint32_t texture_buf[512 * 256];
+static uint32_t texture_buf[512 * 513];
 static void render_alloc_surfaces()
 {
 	static uint8_t texture_init;
@@ -210,6 +210,7 @@ static void render_alloc_surfaces()
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 			if (i < 2) {
+				//TODO: Fixme for PAL + invalid display mode
 				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 512, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, texture_buf);
 			} else {
 				uint32_t blank = 255 << 24;
@@ -242,7 +243,7 @@ static void render_alloc_surfaces()
 	} else {
 #endif
 		
-		//height=480 to fit interlaced output
+		//TODO: Fixme for PAL + invalid display mode
 		sdl_textures[0] = sdl_textures[1] = SDL_CreateTexture(main_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, 320, 480);
 #ifndef DISABLE_OPENGL
 	}
