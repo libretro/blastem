@@ -112,7 +112,7 @@ void init_vdp_context(vdp_context * context, uint8_t region_pal)
 	/*
 	*/
 	if (headless) {
-		context->output = malloc(LINEBUF_SIZE);
+		context->output = malloc(LINEBUF_SIZE * sizeof(uint32_t));
 		context->output_pitch = 0;
 	} else {
 		context->fb = render_get_framebuffer(FRAMEBUFFER_ODD, &context->output_pitch);
@@ -1456,6 +1456,9 @@ static void vdp_advance_line(vdp_context *context)
 		context->vcounter = 0x1D5;
 	}
 	if (headless) {
+		if (context->vcounter == context->inactive_start) {
+			context->frame++;
+		}
 		context->vcounter &= 0x1FF;
 	} else {
 		if (context->vcounter == context->inactive_start) {
