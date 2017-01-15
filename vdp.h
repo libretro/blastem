@@ -155,6 +155,7 @@ typedef struct {
 	uint8_t     *linebuf;
 	//pointer to current line in framebuffer
 	uint32_t    *output;
+	uint32_t    *fb;
 	system_header  *system;
 	uint16_t    cram[CRAM_SIZE];
 	uint32_t    colors[CRAM_SIZE*4];
@@ -164,13 +165,16 @@ typedef struct {
 	uint32_t    output_pitch;
 	uint32_t    frame;
 	uint16_t    vcounter;
+	uint16_t    inactive_start;
+	uint16_t    border_top;
+	uint16_t    border_bot;
 	uint16_t    hscroll_a;
 	uint16_t    hscroll_b;
+	uint16_t     h40_lines;
 	uint8_t     hslot; //hcounter/2
 	uint8_t     latched_mode;
 	uint8_t	    sprite_index;
 	uint8_t     sprite_draws;
-	uint8_t     h40_lines;
 	int8_t      slot_counter;
 	int8_t      cur_slot;
 	sprite_draw sprite_draw_list[MAX_DRAWS];
