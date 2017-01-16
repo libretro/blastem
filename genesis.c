@@ -148,6 +148,10 @@ uint32_t last_sync_cycle;
 uint32_t refresh_counter;
 #endif
 
+#include <limits.h>
+#define ADJUST_BUFFER (8*MCLKS_LINE*313)
+#define MAX_NO_ADJUST (UINT_MAX-ADJUST_BUFFER)
+
 m68k_context * sync_components(m68k_context * context, uint32_t address)
 {
 	genesis_context * gen = context->system;
@@ -176,17 +180,19 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 				exit(0);
 			}
 		}
-
-		vdp_adjust_cycles(v_context, mclks);
-		io_adjust_cycles(gen->io.ports, context->current_cycle, mclks);
-		io_adjust_cycles(gen->io.ports+1, context->current_cycle, mclks);
-		io_adjust_cycles(gen->io.ports+2, context->current_cycle, mclks);
-		context->current_cycle -= mclks;
-		z80_adjust_cycles(z_context, mclks);
-		gen->ym->current_cycle -= mclks;
-		gen->psg->cycles -= mclks;
-		if (gen->ym->write_cycle != CYCLE_NEVER) {
-			gen->ym->write_cycle = gen->ym->write_cycle >= mclks ? gen->ym->write_cycle - mclks : 0;
+		if (context->current_cycle > MAX_NO_ADJUST) {
+			uint32_t deduction = mclks - ADJUST_BUFFER;
+			vdp_adjust_cycles(v_context, deduction);
+			io_adjust_cycles(gen->io.ports, context->current_cycle, deduction);
+			io_adjust_cycles(gen->io.ports+1, context->current_cycle, deduction);
+			io_adjust_cycles(gen->io.ports+2, context->current_cycle, deduction);
+			context->current_cycle -= deduction;
+			z80_adjust_cycles(z_context, deduction);
+			gen->ym->current_cycle -= deduction;
+			gen->psg->cycles -= deduction;
+			if (gen->ym->write_cycle != CYCLE_NEVER) {
+				gen->ym->write_cycle = gen->ym->write_cycle >= deduction ? gen->ym->write_cycle - deduction : 0;
+			}
 		}
 	}
 	gen->frame_end = vdp_cycles_to_frame_end(v_context);
