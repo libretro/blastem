@@ -1174,7 +1174,7 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		}
 		col -= 2;
 		dst = context->output + col * 8;
-		uint32_t color = context->colors[context->regs[REG_BG_COLOR]];
+		uint32_t color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
 		for (int i = 0; i < 16; i++)
 		{
 			*(dst++) = color;
