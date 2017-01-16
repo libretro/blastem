@@ -35,7 +35,7 @@
 #define HBLANK_START_H32 233 //should be 147 according to Nemesis which is very different from my test ROM result
 #define HBLANK_END_H32 0 //should be 5 according to Nemesis, but 0 seems to fit better with my test ROM results
 #define LINE_CHANGE_H40 165
-#define LINE_CHANGE_H32 132
+#define LINE_CHANGE_H32 133
 #define LINE_CHANGE_MODE4 249
 #define VBLANK_START_H40 (LINE_CHANGE_H40+2)
 #define VBLANK_START_H32 (LINE_CHANGE_H32+2)
@@ -1437,6 +1437,16 @@ static uint32_t const h40_hsync_cycles[] = {19, 20, 20, 20, 18, 20, 20, 20, 18, 
 
 static void vdp_advance_line(vdp_context *context)
 {
+#ifdef TIMING_DEBUG
+	static uint32_t last_line = 0xFFFFFFFF;
+	if (last_line != 0xFFFFFFFF) {
+		uint32_t diff = context->cycles - last_line;
+		if (diff != MCLKS_LINE) {
+			printf("Line %d took %d cycles\n", context->vcounter, diff);
+		}
+	}
+	last_line = context->cycles;
+#endif
 	context->vcounter++;
 	
 	uint8_t is_mode_5 = context->regs[REG_MODE_2] & BIT_MODE_5;
@@ -1570,23 +1580,26 @@ static void vdp_advance_line(vdp_context *context)
 	case ((startcyc+3)&0xFF):\
 		render_map_mode4(context->vcounter, column, context);\
 		CHECK_LIMIT
+		
+#define CHECK_LIMIT_HSYNC(slot) \
+	if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); } \
+	if (slot >= HSYNC_SLOT_H40 && slot < HSYNC_END_H40) {\
+		context->cycles += h40_hsync_cycles[slot - HSYNC_SLOT_H40];\
+	} else {\
+		context->cycles += slot_cycles;\
+	}\
+	if (slot == 182) {\
+		context->hslot = 229;\
+	} else {\
+		context->hslot++;\
+	}\
+	CHECK_ONLY
 
 #define SPRITE_RENDER_H40(slot) \
 	case slot:\
 		render_sprite_cells( context);\
 		scan_sprite_table(context->vcounter, context);\
-		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); } \
-		if (slot == 182) {\
-			context->hslot = 229;\
-		} else {\
-			context->hslot++;\
-		}\
-		if (slot >= HSYNC_SLOT_H40 && slot < HSYNC_END_H40) {\
-			context->cycles += h40_hsync_cycles[slot - HSYNC_SLOT_H40];\
-		} else {\
-			context->cycles += slot_cycles;\
-		}\
-		CHECK_ONLY
+		CHECK_LIMIT_HSYNC(slot)
 
 #define SPRITE_RENDER_H32(slot) \
 	case slot:\
@@ -1690,7 +1703,7 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	SPRITE_RENDER_H40(231)
 	case 232:
 		external_slot(context);
-		CHECK_LIMIT
+		CHECK_LIMIT_HSYNC(232)
 	SPRITE_RENDER_H40(233)
 	SPRITE_RENDER_H40(234)
 	SPRITE_RENDER_H40(235)
@@ -1788,13 +1801,16 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		CHECK_LIMIT
 	case 164:
 		render_sprite_cells(context);
+		if (context->flags & FLAG_DMA_RUN) {
+			run_dma_src(context, -1);
+		}
+		context->hslot++;
+		context->cycles += slot_cycles;
 		vdp_advance_line(context);
 		if (context->vcounter == context->inactive_start) {
-			context->hslot++;
-			context->cycles += slot_cycles;
 			return;
 		}
-		CHECK_LIMIT
+		CHECK_ONLY
 	}
 	default:
 		context->hslot++;
@@ -2187,11 +2203,6 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 			*(dst++) = bg_color;
 			*(dst++) = bg_color;
 		}
-		if (context->hslot == jump_start) {
-			context->hslot = jump_dest;
-		} else {
-			context->hslot++;
-		}
 		if (is_h40) {
 			if (context->hslot >= HSYNC_SLOT_H40 && context->hslot < HSYNC_END_H40) {
 				context->cycles += h40_hsync_cycles[context->hslot - HSYNC_SLOT_H40];
@@ -2200,6 +2211,11 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 			}
 		} else {
 			context->cycles += MCLKS_SLOT_H32;
+		}
+		if (context->hslot == jump_start) {
+			context->hslot = jump_dest;
+		} else {
+			context->hslot++;
 		}
 		if (context->hslot == line_change) {
 			vdp_advance_line(context);
@@ -2710,7 +2726,7 @@ uint32_t vdp_next_hint(vdp_context * context)
 	return context->cycles + vdp_cycles_to_line(context, hint_line);
 }
 
-uint32_t vdp_next_vint(vdp_context * context)
+static uint32_t vdp_next_vint_real(vdp_context * context)
 {
 	if (!(context->regs[REG_MODE_2] & BIT_VINT_EN)) {
 		return 0xFFFFFFFF;
@@ -2721,6 +2737,19 @@ uint32_t vdp_next_vint(vdp_context * context)
 
 
 	return vdp_next_vint_z80(context);
+}
+
+uint32_t vdp_next_vint(vdp_context *context)
+{
+	uint32_t ret = vdp_next_vint_real(context);
+#ifdef TIMING_DEBUG
+	static uint32_t last = 0xFFFFFFFF;
+	if (last != ret) {
+		printf("vdp_next_vint is %d at frame %d, line %d, hslot %d\n", ret, context->frame, context->vcounter, context->hslot);
+	}
+	last = ret;
+#endif
+	return ret;
 }
 
 uint32_t vdp_next_vint_z80(vdp_context * context)
