@@ -1960,13 +1960,16 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 		CHECK_LIMIT
 	case 132:
 		render_sprite_cells(context);
+		if (context->flags & FLAG_DMA_RUN) {
+			run_dma_src(context, -1);
+		}
+		context->hslot++;
+		context->cycles += slot_cycles;
 		vdp_advance_line(context);
 		if (context->vcounter == context->inactive_start) {
-			context->hslot++;
-			context->cycles += slot_cycles;
 			return;
 		}
-		CHECK_LIMIT
+		CHECK_ONLY
 	}
 	default:
 		context->hslot++;
