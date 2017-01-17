@@ -2264,7 +2264,7 @@ uint32_t vdp_run_to_vblank(vdp_context * context)
 {
 	uint32_t old_frame = context->frame;
 	while (context->frame == old_frame) {
-		vdp_run_context(context, MCLKS_LINE);
+		vdp_run_context(context, context->cycles + MCLKS_LINE);
 	}
 	return context->cycles;
 }
