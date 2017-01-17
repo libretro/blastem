@@ -209,6 +209,9 @@ test_x86 : test_x86.o gen_x86.o gen.o
 
 test_arm : test_arm.o gen_arm.o mem.o gen.o
 	$(CC) -o test_arm test_arm.o gen_arm.o mem.o gen.o
+	
+test_int_timing : test_int_timing.o vdp.o
+	$(CC) -o $@ $^
 
 gen_fib : gen_fib.o gen_x86.o mem.o
 	$(CC) -o gen_fib gen_fib.o gen_x86.o mem.o
