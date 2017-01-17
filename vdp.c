@@ -54,7 +54,6 @@
 #define BORDER_BOT_V30_PAL 24
 
 #define INVALID_LINE 0x200
-#define TIMING_DEBUG
 
 static int32_t color_map[1 << 12];
 static uint16_t mode4_address_map[0x4000];
