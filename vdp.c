@@ -2151,7 +2151,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 		index_reset_value = 0;
 		vint_line = context->inactive_start + 1;
 		vint_slot = VINT_SLOT_MODE4;
-		line_change = LINE_CHANGE_H40;
+		line_change = LINE_CHANGE_MODE4;
 		bg_color = render_map_color(0, 0, 0);
 		jump_start = 147;
 		jump_dest = 233;
@@ -2794,7 +2794,7 @@ uint32_t vdp_next_vint_z80(vdp_context * context)
 				}
 			}
 		} else {
-			if (context->hslot >= LINE_CHANGE_H40) {
+			if (context->hslot >= LINE_CHANGE_MODE4) {
 				return context->cycles + (VINT_SLOT_MODE4 + 256 - context->hslot) * MCLKS_SLOT_H32;
 			}
 			if (context->hslot <= VINT_SLOT_MODE4) {
