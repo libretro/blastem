@@ -25,8 +25,8 @@
 
 #define MCLKS_SLOT_H40  16
 #define MCLKS_SLOT_H32  20
-#define VINT_SLOT_H40  255 //21 slots before HSYNC, 16 during, 10 after
-#define VINT_SLOT_H32  255  //old value was 23, but recent tests suggest the actual value is close to the H40 one
+#define VINT_SLOT_H40  0 //21 slots before HSYNC, 16 during, 10 after
+#define VINT_SLOT_H32  0  //old value was 23, but recent tests suggest the actual value is close to the H40 one
 #define VINT_SLOT_MODE4 4
 #define HSYNC_SLOT_H40  230
 #define HSYNC_END_H40  (HSYNC_SLOT_H40+17)
@@ -2125,7 +2125,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 			max_draws = MAX_DRAWS-1;
 			max_sprites = MAX_SPRITES_LINE;
 			index_reset_value = 0x80;
-			vint_slot = (VINT_SLOT_H40+1) & 0xFF;
+			vint_slot = VINT_SLOT_H40;
 			line_change = LINE_CHANGE_H40;
 			jump_start = 182;
 			jump_dest = 229;
@@ -2136,7 +2136,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 			buf_clear_slot = 128;
 			index_reset_slot = 132;
 			index_reset_value = 0x80;
-			vint_slot = (VINT_SLOT_H32+1) & 0xFF;
+			vint_slot = VINT_SLOT_H32;
 			line_change = LINE_CHANGE_H32;
 			jump_start = 147;
 			jump_dest = 233;
@@ -2779,11 +2779,13 @@ uint32_t vdp_next_vint_z80(vdp_context * context)
 					return cycles;
 				}
 			} else {
-				if (context->hslot >= LINE_CHANGE_H32 && context->hslot <= VINT_SLOT_H32) {
-					if (context->hslot < 233) {
-						return context->cycles + (148 - context->hslot + VINT_SLOT_H40 - 233) * MCLKS_SLOT_H32;
-					} else {
+				if (context->hslot >= LINE_CHANGE_H32 || context->hslot <= VINT_SLOT_H32) {
+					if (context->hslot <= VINT_SLOT_H32) {
 						return context->cycles + (VINT_SLOT_H32 - context->hslot) * MCLKS_SLOT_H32;
+					} else if (context->hslot < 233) {
+						return context->cycles + (VINT_SLOT_H32 + 256 - 233 + 148 - context->hslot) * MCLKS_SLOT_H32;
+					} else {
+						return context->cycles + (VINT_SLOT_H32 + 256 - context->hslot) * MCLKS_SLOT_H32;
 					}
 				}
 			}
@@ -2801,7 +2803,7 @@ uint32_t vdp_next_vint_z80(vdp_context * context)
 		if (context->regs[REG_MODE_4] & BIT_H40) {
 			cycles_to_vint += MCLKS_LINE - (LINE_CHANGE_H40 + (256 - VINT_SLOT_H40)) * MCLKS_SLOT_H40;
 		} else {
-			cycles_to_vint += (VINT_SLOT_H32 - 233 + 148 - LINE_CHANGE_H32) * MCLKS_SLOT_H32;
+			cycles_to_vint += (VINT_SLOT_H32 + 256 - 233 + 148 - LINE_CHANGE_H32) * MCLKS_SLOT_H32;
 		}
 	} else {
 		cycles_to_vint += (256 - LINE_CHANGE_MODE4 + VINT_SLOT_MODE4) * MCLKS_SLOT_H32;
