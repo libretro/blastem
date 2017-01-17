@@ -2762,20 +2762,24 @@ uint32_t vdp_next_vint_z80(vdp_context * context)
 	if (context->vcounter == vint_line) {
 		if (context->regs[REG_MODE_2] & BIT_MODE_5) {
 			if (context->regs[REG_MODE_4] & BIT_H40) {
-				if (context->hslot >= LINE_CHANGE_H40 && context->hslot <= VINT_SLOT_H40) {
+				if (context->hslot >= LINE_CHANGE_H40 || context->hslot <= VINT_SLOT_H40) {
 					uint32_t cycles = context->cycles;
-					if (context->hslot < 183) {
-						cycles += (183 - context->hslot) * MCLKS_SLOT_H40;
+					if (context->hslot >= LINE_CHANGE_H40) {
+						if (context->hslot < 183) {
+							cycles += (183 - context->hslot) * MCLKS_SLOT_H40;
+						}
+						
+						if (context->hslot < HSYNC_SLOT_H40) {
+							cycles += (HSYNC_SLOT_H40 - (context->hslot >= 229 ? context->hslot : 229)) * MCLKS_SLOT_H40;
+						}
+						for (int slot = context->hslot <= HSYNC_SLOT_H40 ? HSYNC_SLOT_H40 : context->hslot; slot < HSYNC_END_H40; slot++ )
+						{
+							cycles += h40_hsync_cycles[slot - HSYNC_SLOT_H40];
+						}
+						cycles += (256 - (context->hslot > HSYNC_END_H40 ? context->hslot : HSYNC_END_H40)) * MCLKS_SLOT_H40;
 					}
 					
-					if (context->hslot < HSYNC_SLOT_H40) {
-						cycles += (HSYNC_SLOT_H40 - (context->hslot >= 229 ? context->hslot : 229)) * MCLKS_SLOT_H40;
-					}
-					for (int slot = context->hslot <= HSYNC_SLOT_H40 ? HSYNC_SLOT_H40 : context->hslot; slot < HSYNC_END_H40; slot++ )
-					{
-						cycles += h40_hsync_cycles[slot - HSYNC_SLOT_H40];
-					}
-					cycles += (VINT_SLOT_H40 - (context->hslot > HSYNC_END_H40 ? context->hslot : HSYNC_END_H40)) * MCLKS_SLOT_H40;
+					cycles += (VINT_SLOT_H40 - (context->hslot >= LINE_CHANGE_H40 ? 0 : context->hslot)) * MCLKS_SLOT_H40;
 					return cycles;
 				}
 			} else {
@@ -2801,7 +2805,7 @@ uint32_t vdp_next_vint_z80(vdp_context * context)
 	int32_t cycles_to_vint = vdp_cycles_to_line(context, vint_line);
 	if (context->regs[REG_MODE_2] & BIT_MODE_5) {
 		if (context->regs[REG_MODE_4] & BIT_H40) {
-			cycles_to_vint += MCLKS_LINE - (LINE_CHANGE_H40 + (256 - VINT_SLOT_H40)) * MCLKS_SLOT_H40;
+			cycles_to_vint += MCLKS_LINE - (LINE_CHANGE_H40 - VINT_SLOT_H40) * MCLKS_SLOT_H40;
 		} else {
 			cycles_to_vint += (VINT_SLOT_H32 + 256 - 233 + 148 - LINE_CHANGE_H32) * MCLKS_SLOT_H32;
 		}
