@@ -54,6 +54,7 @@
 #define BORDER_BOT_V30_PAL 24
 
 #define INVALID_LINE 0x200
+#define TIMING_DEBUG
 
 static int32_t color_map[1 << 12];
 static uint16_t mode4_address_map[0x4000];
@@ -2760,18 +2761,18 @@ uint32_t vdp_next_vint_z80(vdp_context * context)
 			if (context->regs[REG_MODE_4] & BIT_H40) {
 				if (context->hslot >= LINE_CHANGE_H40 && context->hslot <= VINT_SLOT_H40) {
 					uint32_t cycles = context->cycles;
-					if (context->hslot < 182) {
-						cycles += (182 - context->hslot) * MCLKS_SLOT_H40;
+					if (context->hslot < 183) {
+						cycles += (183 - context->hslot) * MCLKS_SLOT_H40;
 					}
 					
-					if (context->hslot < 229) {
-						cycles += h40_hsync_cycles[0];
+					if (context->hslot < HSYNC_SLOT_H40) {
+						cycles += (HSYNC_SLOT_H40 - (context->hslot >= 229 ? context->hslot : 229)) * MCLKS_SLOT_H40;
 					}
-					for (int slot = context->hslot <= 229 ? 229 : context->hslot; slot < HSYNC_END_H40; slot++ )
+					for (int slot = context->hslot <= HSYNC_SLOT_H40 ? HSYNC_SLOT_H40 : context->hslot; slot < HSYNC_END_H40; slot++ )
 					{
 						cycles += h40_hsync_cycles[slot - HSYNC_SLOT_H40];
 					}
-					cycles += (VINT_SLOT_H40 - (context->hslot > HSYNC_SLOT_H40 ? context->hslot : HSYNC_SLOT_H40)) * MCLKS_SLOT_H40;
+					cycles += (VINT_SLOT_H40 - (context->hslot > HSYNC_END_H40 ? context->hslot : HSYNC_END_H40)) * MCLKS_SLOT_H40;
 					return cycles;
 				}
 			} else {
