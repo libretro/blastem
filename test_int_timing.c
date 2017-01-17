@@ -18,6 +18,20 @@ uint16_t read_dma_value(uint32_t address)
 	return 0;
 }
 
+uint32_t *render_get_framebuffer(uint8_t which, int *pitch)
+{
+	*pitch = 0;
+	return NULL;
+}
+
+void render_framebuffer_updated(uint8_t which, int width)
+{
+}
+
+void warning(char *format, ...)
+{
+}
+
 
 int main(int argc, char **argv)
 {
