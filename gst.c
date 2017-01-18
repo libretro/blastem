@@ -222,11 +222,14 @@ uint8_t vdp_load_gst(vdp_context * context, FILE * state_file)
 {
 	uint8_t tmp_buf[VRAM_SIZE];
 	fseek(state_file, GST_VDP_REGS, SEEK_SET);
-	if (fread(context->regs, 1, VDP_REGS, state_file) != VDP_REGS) {
+	if (fread(tmp_buf, 1, VDP_REGS, state_file) != VDP_REGS) {
 		fputs("Failed to read VDP registers from savestate\n", stderr);
 		return 0;
 	}
-	context->double_res = (context->regs[REG_MODE_4] & (BIT_INTERLACE | BIT_DOUBLE_RES)) == (BIT_INTERLACE | BIT_DOUBLE_RES);
+	for (uint16_t i = 0; i < VDP_REGS; i++)
+	{
+		vdp_control_port_write(context, 0x8000 | (i << 8) | tmp_buf[i]);
+	}
 	latch_mode(context);
 	if (fread(tmp_buf, 1, CRAM_SIZE*2, state_file) != CRAM_SIZE*2) {
 		fputs("Failed to read CRAM from savestate\n", stderr);
@@ -234,7 +237,7 @@ uint8_t vdp_load_gst(vdp_context * context, FILE * state_file)
 	}
 	for (int i = 0; i < CRAM_SIZE; i++) {
 		uint16_t value;
-		write_cram(context, i, (tmp_buf[i*2+1] << 8) | tmp_buf[i*2]);
+		write_cram(context, i*2, (tmp_buf[i*2+1] << 8) | tmp_buf[i*2]);
 	}
 	if (fread(tmp_buf, 2, VSRAM_SIZE, state_file) != VSRAM_SIZE) {
 		fputs("Failed to read VSRAM from savestate\n", stderr);
