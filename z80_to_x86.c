@@ -2915,8 +2915,6 @@ uint8_t z80_get_native_inst_size(z80_options * opts, uint32_t address)
 
 void z80_map_native_address(z80_context * context, uint32_t address, uint8_t * native_address, uint8_t size, uint8_t native_size)
 {
-	uint32_t orig_address = address;
-	
 	z80_options * opts = context->options;
 	uint32_t meta_off;
 	memmap_chunk const *mem_chunk = find_map_chunk(address, &opts->gen, MMAP_CODE, &meta_off);
@@ -2950,7 +2948,7 @@ void z80_map_native_address(z80_context * context, uint32_t address, uint8_t * n
 		memset(map->offsets, 0xFF, sizeof(int32_t) * NATIVE_CHUNK_SIZE);
 	}
 	map->offsets[address % NATIVE_CHUNK_SIZE] = native_address - map->base;
-	for(--size, address++; size; --size, orig_address++) {
+	for(--size, address++; size; --size, address++) {
 		address &= opts->gen.address_mask;
 		map = opts->gen.native_code_map + address / NATIVE_CHUNK_SIZE;
 		if (!map->base) {
