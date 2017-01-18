@@ -1184,11 +1184,11 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 	if (line >= 240) {
 		return;
 	}
+	render_map(context->col_2, context->tmp_buf_b, context->buf_b_off+8, context);
 	uint8_t *sprite_buf,  *plane_a, *plane_b;
 	int plane_a_off, plane_b_off;
 	if (col)
 	{
-		render_map(context->col_2, context->tmp_buf_b, context->buf_b_off+8, context);
 		col-=2;
 		dst = context->output + col * 8;
 		if (context->debug < 2) {
