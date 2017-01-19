@@ -133,7 +133,7 @@ uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b)
 }
 
 #ifndef DISABLE_OPENGL
-static GLuint textures[3], buffers[2], vshader, fshader, program, un_textures[2], un_width, at_pos;
+static GLuint textures[3], buffers[2], vshader, fshader, program, un_textures[2], un_width, un_height, at_pos;
 
 static GLfloat vertex_data[] = {
 	-1.0f, -1.0f,
@@ -211,7 +211,7 @@ static void render_alloc_surfaces()
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 			if (i < 2) {
 				//TODO: Fixme for PAL + invalid display mode
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 512, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, texture_buf);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 512, 512, 0, GL_BGRA, GL_UNSIGNED_BYTE, texture_buf);
 			} else {
 				uint32_t blank = 255 << 24;
 				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_BGRA, GL_UNSIGNED_BYTE, &blank);
@@ -239,12 +239,13 @@ static void render_alloc_surfaces()
 		un_textures[0] = glGetUniformLocation(program, "textures[0]");
 		un_textures[1] = glGetUniformLocation(program, "textures[1]");
 		un_width = glGetUniformLocation(program, "width");
+		un_height = glGetUniformLocation(program, "height");
 		at_pos = glGetAttribLocation(program, "pos");
 	} else {
 #endif
 		
-		//TODO: Fixme for PAL + invalid display mode
-		sdl_textures[0] = sdl_textures[1] = SDL_CreateTexture(main_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, 320, 480);
+		//TODO: Fixme for invalid display mode
+		sdl_textures[0] = sdl_textures[1] = SDL_CreateTexture(main_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, 320, 588);
 #ifndef DISABLE_OPENGL
 	}
 #endif
@@ -264,6 +265,10 @@ static void render_quit()
 	}
 }
 
+static uint32_t overscan_top[NUM_VID_STD] = {2, 21};
+static uint32_t overscan_bot[NUM_VID_STD] = {1, 17};
+static vid_std video_standard = VID_NTSC;
+static char *vid_std_names[NUM_VID_STD] = {"ntsc", "pal"};
 void render_init(int width, int height, char * title, uint8_t fullscreen)
 {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK) < 0) {
@@ -291,6 +296,29 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 	render_gl = 0;
 	tern_val def = {.ptrval = "off"};
 	char *vsync = tern_find_path_default(config, "video\0vsync\0", def).ptrval;
+	
+	tern_val video_node = {.ptrval = NULL};
+	tern_find(config, "video", &video_node);
+	tern_node *video = tern_get_node(video_node);
+	if (video)
+	{
+		for (int i = 0; i < NUM_VID_STD; i++)
+		{
+			video_node.ptrval = NULL;
+			tern_find(video, vid_std_names[i], &video_node);
+			tern_node *std_settings = tern_get_node(video_node);
+			if (std_settings) {
+				char *val = tern_find_path_default(std_settings, "overscan\0top\0", (tern_val){.ptrval = NULL}).ptrval;
+				if (val) {
+					overscan_top[i] = atoi(val);
+				}
+				val = tern_find_path_default(std_settings, "overscan\0bottom\0", (tern_val){.ptrval = NULL}).ptrval;
+				if (val) {
+					overscan_bot[i] = atoi(val);
+				}
+			}
+		}
+	}
 
 #ifndef DISABLE_OPENGL
 	flags |= SDL_WINDOW_OPENGL;
@@ -418,6 +446,11 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 	atexit(render_quit);
 }
 
+void render_set_video_standard(vid_std std)
+{
+	video_standard = std;
+}
+
 void render_update_caption(char *title)
 {
 	caption = title;
@@ -472,10 +505,13 @@ uint8_t events_processed;
 void render_framebuffer_updated(uint8_t which, int width)
 {
 	static uint8_t last;
+	uint32_t height = which <= FRAMEBUFFER_EVEN 
+		? (video_standard == VID_NTSC ? 243 : 294) - (overscan_top[video_standard] + overscan_bot[video_standard])
+		: 240;
 #ifndef DISABLE_OPENGL
 	if (render_gl && which <= FRAMEBUFFER_EVEN) {
 		glBindTexture(GL_TEXTURE_2D, textures[which]);
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 320, 240, GL_BGRA, GL_UNSIGNED_BYTE, texture_buf);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 320, height, GL_BGRA, GL_UNSIGNED_BYTE, texture_buf + 320 * overscan_top[video_standard]);
 
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
@@ -490,6 +526,7 @@ void render_framebuffer_updated(uint8_t which, int width)
 		glUniform1i(un_textures[1], 1);
 
 		glUniform1f(un_width, width);
+		glUniform1f(un_height, height);
 
 		glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
 		glVertexAttribPointer(at_pos, 2, GL_FLOAT, GL_FALSE, sizeof(GLfloat[2]), (void *)0);
@@ -503,13 +540,12 @@ void render_framebuffer_updated(uint8_t which, int width)
 		SDL_GL_SwapWindow(main_window);
 	} else {
 #endif
-		uint32_t height = 240;
 		if (which <= FRAMEBUFFER_EVEN && last != which) {
 			uint8_t *cur_dst = (uint8_t *)locked_pixels;
 			uint8_t *cur_saved = (uint8_t *)texture_buf;
 			uint32_t dst_off = which == FRAMEBUFFER_EVEN ? 0 : locked_pitch;
 			uint32_t src_off = which == FRAMEBUFFER_EVEN ? locked_pitch : 0;
-			for (int i = 0; i < 240; ++i)
+			for (int i = 0; i < height; ++i)
 			{
 				//copy saved line from other field
 				memcpy(cur_dst + dst_off, cur_saved, locked_pitch);
@@ -523,7 +559,7 @@ void render_framebuffer_updated(uint8_t which, int width)
 		SDL_UnlockTexture(sdl_textures[which]);
 		SDL_Rect src_clip = {
 			.x = 0,
-			.y = 0,
+			.y = overscan_top[video_standard],
 			.w = width,
 			.h = height
 		};
