@@ -711,6 +711,9 @@ static void read_sprite_x_mode4(vdp_context * context)
 #define VSRAM_BITS 0x7FF
 #define VSRAM_DIRTY_BITS 0xF800
 
+//rough estimate of slot number at which active display starts
+#define BG_START_SLOT 9
+
 void write_cram(vdp_context * context, uint16_t address, uint16_t value)
 {
 	uint16_t addr;
@@ -725,6 +728,17 @@ void write_cram(vdp_context * context, uint16_t address, uint16_t value)
 	context->colors[addr + CRAM_SIZE] = color_map[(value & CRAM_BITS) | FBUF_SHADOW];
 	context->colors[addr + CRAM_SIZE*2] = color_map[(value & CRAM_BITS) | FBUF_HILIGHT];
 	context->colors[addr + CRAM_SIZE*3] = color_map[(value & CRAM_BITS) | FBUF_MODE4];
+	
+	if (context->hslot >= BG_START_SLOT && (
+		context->vcounter < context->inactive_start + context->border_bot 
+		|| context->vcounter > 0x200 - context->border_top
+	)) {
+		uint8_t bg_end_slot = BG_START_SLOT + (context->regs[REG_MODE_4] & BIT_H40) ? 320/2 : 256/2;
+		if (context->hslot < bg_end_slot) {
+			uint32_t color = (context->regs[REG_MODE_2] & BIT_MODE_5) ? context->colors[addr] : context->colors[addr + CRAM_SIZE*3];
+			context->output[(context->hslot - BG_START_SLOT)*2 + 1] = color;
+		}
+	}
 }
 
 static void vdp_advance_dma(vdp_context * context)
@@ -2106,9 +2120,6 @@ void latch_mode(vdp_context * context)
 	update_video_params(context);
 }
 
-//rough estimate of slot number at which active display starts
-#define BG_START_SLOT 9
-
 static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t is_h40, uint8_t mode_5)
 {
 	uint8_t buf_clear_slot, index_reset_slot, bg_end_slot, vint_slot, line_change, jump_start, jump_dest;
@@ -2190,13 +2201,6 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 			context->pending_vint_start = context->cycles;
 		}
 		
-		if (!is_refresh(context, context->hslot)) {
-			external_slot(context);
-			if (context->flags & FLAG_DMA_RUN && !is_refresh(context, context->hslot)) {
-				run_dma_src(context, context->hslot);
-			}
-		}
-		
 		if (dst) {
 			if (mode_5) {
 				bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
@@ -2206,6 +2210,14 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 			*(dst++) = bg_color;
 			*(dst++) = bg_color;
 		}
+		
+		if (!is_refresh(context, context->hslot)) {
+			external_slot(context);
+			if (context->flags & FLAG_DMA_RUN && !is_refresh(context, context->hslot)) {
+				run_dma_src(context, context->hslot);
+			}
+		}
+		
 		if (is_h40) {
 			if (context->hslot >= HSYNC_SLOT_H40 && context->hslot < HSYNC_END_H40) {
 				context->cycles += h40_hsync_cycles[context->hslot - HSYNC_SLOT_H40];
