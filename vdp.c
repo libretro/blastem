@@ -1677,6 +1677,16 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	{
 	case 165:
 		if (context->vcounter == 0x1FF) {
+			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
+			uint32_t *dst;
+			if (headless) {
+				dst = context->output;
+			} else {
+				dst = ((uint32_t *)(((char *)context->fb) + context->output_pitch * (context->border_top - 2)))
+					+ (context->hslot - BG_START_SLOT) * 2;
+			}
+			*(dst++) = bg_color;
+			*dst = bg_color;
 			external_slot(context);
 		} else {
 			render_sprite_cells(context);
@@ -1684,6 +1694,16 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		CHECK_LIMIT
 	case 166:
 		if (context->vcounter == 0x1FF) {
+			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
+			uint32_t *dst;
+			if (headless) {
+				dst = context->output;
+			} else {
+				dst = ((uint32_t *)(((char *)context->fb) + context->output_pitch * (context->border_top - 2)))
+					+ (context->hslot - BG_START_SLOT) * 2;
+			}
+			*(dst++) = bg_color;
+			*dst = bg_color;
 			external_slot(context);
 		} else {
 			render_sprite_cells(context);
@@ -1691,6 +1711,20 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		CHECK_LIMIT
 	//sprite attribute table scan starts
 	case 167:
+		if (context->vcounter == 0x1FF) {
+			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
+			uint32_t *dst;
+			if (headless) {
+				dst = context->output;
+			} else {
+				dst = ((uint32_t *)(((char *)context->fb) + context->output_pitch * (context->border_top - 2)))
+					+ (context->hslot - BG_START_SLOT) * 2;
+			}
+			*(dst++) = bg_color;
+			*(dst++) = bg_color;
+			*(dst++) = bg_color;
+			*dst = bg_color;
+		}
 		context->sprite_index = 0x80;
 		context->slot_counter = MAX_SPRITES_LINE;
 		render_sprite_cells( context);
@@ -1844,6 +1878,16 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 	{
 	case 133:
 		if (context->vcounter == 0x1FF) {
+			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
+			uint32_t *dst;
+			if (headless) {
+				dst = context->output;
+			} else {
+				dst = ((uint32_t *)(((char *)context->fb) + context->output_pitch * (context->border_top - 2)))
+					+ (context->hslot - BG_START_SLOT) * 2;
+			}
+			*(dst++) = bg_color;
+			*dst = bg_color;
 			external_slot(context);
 		} else {
 			render_sprite_cells(context);
@@ -1851,6 +1895,16 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 		CHECK_LIMIT
 	case 134:
 		if (context->vcounter == 0x1FF) {
+			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
+			uint32_t *dst;
+			if (headless) {
+				dst = context->output;
+			} else {
+				dst = ((uint32_t *)(((char *)context->fb) + context->output_pitch * (context->border_top - 2)))
+					+ (context->hslot - BG_START_SLOT) * 2;
+			}
+			*(dst++) = bg_color;
+			*dst = bg_color;
 			external_slot(context);
 		} else {
 			render_sprite_cells(context);
@@ -1858,6 +1912,20 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 		CHECK_LIMIT
 	//sprite attribute table scan starts
 	case 135: //FIXME - Here
+		if (context->vcounter == 0x1FF) {
+			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
+			uint32_t *dst;
+			if (headless) {
+				dst = context->output;
+			} else {
+				dst = ((uint32_t *)(((char *)context->fb) + context->output_pitch * (context->border_top - 2)))
+					+ (context->hslot - BG_START_SLOT) * 2;
+			}
+			*(dst++) = bg_color;
+			*(dst++) = bg_color;
+			*(dst++) = bg_color;
+			*dst = bg_color;
+		}
 		context->sprite_index = 0x80;
 		context->slot_counter = MAX_SPRITES_LINE_H32;
 		render_sprite_cells( context);
