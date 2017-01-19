@@ -792,6 +792,7 @@ static void start_genesis(system_header *system, char *statefile)
 {
 	genesis_context *gen = (genesis_context *)system;
 	set_keybindings(&gen->io);
+	render_set_video_standard((gen->version_reg & HZ50) ? VID_PAL : VID_NTSC);
 	if (statefile) {
 		uint32_t pc = load_gst(gen, statefile);
 		if (!pc) {
@@ -818,6 +819,7 @@ static void resume_genesis(system_header *system)
 {
 	genesis_context *gen = (genesis_context *)system;
 	map_all_bindings(&gen->io);
+	render_set_video_standard((gen->version_reg & HZ50) ? VID_PAL : VID_NTSC);
 	resume_68k(gen->m68k);
 }
 
