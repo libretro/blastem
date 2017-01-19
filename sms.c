@@ -193,6 +193,8 @@ static void run_sms(system_header *system)
 	render_disable_ym();
 	sms_context *sms = (sms_context *)system;
 	uint32_t target_cycle = sms->z80->current_cycle + 3420*262;
+	//TODO: PAL support
+	render_set_video_standard(VID_NTSC);
 	while (!sms->should_return)
 	{
 		if (system->enter_debugger && sms->z80->pc) {
