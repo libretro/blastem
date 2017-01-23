@@ -6,6 +6,7 @@
 #include "genesis.h"
 #include "blastem.h"
 #include <stdlib.h>
+#include <ctype.h>
 #include "render.h"
 #include "gst.h"
 #include "util.h"
