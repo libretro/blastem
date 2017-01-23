@@ -63,6 +63,12 @@ typedef enum {
 	NUM_VID_STD
 } vid_std;
 
+#define RENDER_DPAD_BIT 0x40000000
+#define RENDER_AXIS_BIT 0x20000000
+#define RENDER_INVALID_NAME -1
+#define RENDER_NOT_MAPPED -2
+#define RENDER_NOT_PLUGGED_IN -3
+
 uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b);
 uint32_t *render_get_framebuffer(uint8_t which, int *pitch);
 void render_framebuffer_updated(uint8_t which, int width);
@@ -81,6 +87,9 @@ int render_width();
 int render_height();
 int render_fullscreen();
 void process_events();
+int32_t render_translate_input_name(int32_t controller, char *name);
+int32_t render_dpad_part(int32_t input);
+uint8_t render_direction_part(int32_t input);
 void render_errorbox(char *title, char *message);
 void render_warnbox(char *title, char *message);
 void render_infobox(char *title, char *message);
