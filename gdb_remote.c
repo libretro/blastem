@@ -577,10 +577,10 @@ void gdb_remote_init(void)
 
 	struct addrinfo request, *result;
 	memset(&request, 0, sizeof(request));
-	request.ai_family = AF_UNSPEC;
+	request.ai_family = AF_INET;
 	request.ai_socktype = SOCK_STREAM;
 	request.ai_flags = AI_PASSIVE;
-	getaddrinfo(NULL, "1234", &request, &result);
+	getaddrinfo("localhost", "1234", &request, &result);
 
 	int listen_sock = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
 	if (listen_sock < 0) {
