@@ -111,6 +111,7 @@ static void render_close_audio()
 }
 
 static SDL_Joystick * joysticks[MAX_JOYSTICKS];
+static int joystick_sdl_index[MAX_JOYSTICKS];
 
 int render_width()
 {
@@ -271,7 +272,7 @@ static vid_std video_standard = VID_NTSC;
 static char *vid_std_names[NUM_VID_STD] = {"ntsc", "pal"};
 void render_init(int width, int height, char * title, uint8_t fullscreen)
 {
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK) < 0) {
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER) < 0) {
 		fatal_error("Unable to init SDL: %s\n", SDL_GetError());
 	}
 	atexit(SDL_Quit);
@@ -626,6 +627,66 @@ static int lowest_unused_joystick_index()
 	return -1;
 }
 
+int32_t render_translate_input_name(int32_t controller, char *name)
+{
+	static tern_node *button_lookup;
+	if (controller > MAX_JOYSTICKS || !joysticks[controller]) {
+		return RENDER_NOT_PLUGGED_IN;
+	}
+	
+	if (!SDL_IsGameController(joystick_sdl_index[controller])) {
+		return RENDER_NOT_MAPPED;
+	}
+	
+	if (!button_lookup) {
+		for (int i = SDL_CONTROLLER_BUTTON_A; i < SDL_CONTROLLER_BUTTON_MAX; i++)
+		{
+			button_lookup = tern_insert_int(button_lookup, SDL_GameControllerGetStringForButton(i), i);
+		}
+		//alternative Playstation-style names
+		button_lookup = tern_insert_int(button_lookup, "cross", SDL_CONTROLLER_BUTTON_A);
+		button_lookup = tern_insert_int(button_lookup, "circle", SDL_CONTROLLER_BUTTON_B);
+		button_lookup = tern_insert_int(button_lookup, "square", SDL_CONTROLLER_BUTTON_X);
+		button_lookup = tern_insert_int(button_lookup, "triangle", SDL_CONTROLLER_BUTTON_Y);
+		button_lookup = tern_insert_int(button_lookup, "share", SDL_CONTROLLER_BUTTON_BACK);
+		button_lookup = tern_insert_int(button_lookup, "select", SDL_CONTROLLER_BUTTON_BACK);
+		button_lookup = tern_insert_int(button_lookup, "options", SDL_CONTROLLER_BUTTON_START);
+		button_lookup = tern_insert_int(button_lookup, "l1", SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
+		button_lookup = tern_insert_int(button_lookup, "r1", SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
+	}
+	intptr_t sdl_button = tern_find_int(button_lookup, name, SDL_CONTROLLER_BUTTON_INVALID);
+	if (sdl_button == SDL_CONTROLLER_BUTTON_INVALID) {
+		return RENDER_INVALID_NAME;
+	}
+	SDL_GameController *control = SDL_GameControllerOpen(joystick_sdl_index[controller]);
+	if (!control) {
+		warning("Failed to open game controller %d: %s\n", controller, SDL_GetError());
+		return RENDER_NOT_PLUGGED_IN;
+	}
+	SDL_GameControllerButtonBind cbind = SDL_GameControllerGetBindForButton(control, sdl_button);
+	SDL_GameControllerClose(control);
+	switch (cbind.bindType)
+	{
+	case SDL_CONTROLLER_BINDTYPE_BUTTON:
+		return cbind.value.button;
+	case SDL_CONTROLLER_BINDTYPE_AXIS:
+		return RENDER_AXIS_BIT | cbind.value.axis;
+	case SDL_CONTROLLER_BINDTYPE_HAT:
+		return RENDER_DPAD_BIT | (cbind.value.hat.hat << 4) | cbind.value.hat.hat_mask;
+	}
+	return RENDER_NOT_MAPPED;
+}
+
+int32_t render_dpad_part(int32_t input)
+{
+	return input >> 4 & 0x7FFFFF;
+}
+
+uint8_t render_direction_part(int32_t input)
+{
+	return input & 0xF;
+}
+
 static uint8_t scancode_map[SDL_NUM_SCANCODES] = {
 	[SDL_SCANCODE_A] = 0x1C,
 	[SDL_SCANCODE_B] = 0x32,
@@ -753,6 +814,7 @@ static int32_t handle_event(SDL_Event *event)
 			int index = lowest_unused_joystick_index();
 			if (index >= 0) {
 				SDL_Joystick * joy = joysticks[index] = SDL_JoystickOpen(event->jdevice.which);
+				joystick_sdl_index[index] = event->jdevice.which;
 				if (joy) {
 					printf("Joystick %d added: %s\n", index, SDL_JoystickName(joy));
 					printf("\tNum Axes: %d\n\tNum Buttons: %d\n\tNum Hats: %d\n", SDL_JoystickNumAxes(joy), SDL_JoystickNumButtons(joy), SDL_JoystickNumHats(joy));
