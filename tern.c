@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include "util.h"
 
-tern_node * tern_insert(tern_node * head, char * key, tern_val value)
+tern_node * tern_insert(tern_node * head, char const * key, tern_val value)
 {
 	tern_node ** cur = &head;
 	while(*key)
@@ -49,7 +49,7 @@ tern_node * tern_insert(tern_node * head, char * key, tern_val value)
 	return head;
 }
 
-int tern_find(tern_node * head, char * key, tern_val *ret)
+int tern_find(tern_node * head, char const * key, tern_val *ret)
 {
 	tern_node * cur = head;
 	while (cur)
@@ -71,7 +71,7 @@ int tern_find(tern_node * head, char * key, tern_val *ret)
 	return 0;
 }
 
-tern_node * tern_find_prefix(tern_node * head, char * key)
+tern_node * tern_find_prefix(tern_node * head, char const * key)
 {
 	tern_node * cur = head;
 	while (cur && *key)
@@ -88,7 +88,7 @@ tern_node * tern_find_prefix(tern_node * head, char * key)
 	return cur;
 }
 
-intptr_t tern_find_int(tern_node * head, char * key, intptr_t def)
+intptr_t tern_find_int(tern_node * head, char const * key, intptr_t def)
 {
 	tern_val ret;
 	if (tern_find(head, key, &ret)) {
@@ -97,14 +97,14 @@ intptr_t tern_find_int(tern_node * head, char * key, intptr_t def)
 	return def;
 }
 
-tern_node * tern_insert_int(tern_node * head, char * key, intptr_t value)
+tern_node * tern_insert_int(tern_node * head, char const * key, intptr_t value)
 {
 	tern_val val;
 	val.intval = value;
 	return tern_insert(head, key, val);
 }
 
-void * tern_find_ptr_default(tern_node * head, char * key, void * def)
+void * tern_find_ptr_default(tern_node * head, char const * key, void * def)
 {
 	tern_val ret;
 	if (tern_find(head, key, &ret)) {
@@ -117,12 +117,12 @@ void * tern_find_ptr_default(tern_node * head, char * key, void * def)
 	return def;
 }
 
-void * tern_find_ptr(tern_node * head, char * key)
+void * tern_find_ptr(tern_node * head, char const * key)
 {
 	return tern_find_ptr_default(head, key, NULL);
 }
 
-tern_val tern_find_path_default(tern_node *head, char *key, tern_val def)
+tern_val tern_find_path_default(tern_node *head, char const *key, tern_val def)
 {
 	tern_val ret;
 	while (*key)
@@ -141,21 +141,21 @@ tern_val tern_find_path_default(tern_node *head, char *key, tern_val def)
 	return ret;
 }
 
-tern_val tern_find_path(tern_node *head, char *key)
+tern_val tern_find_path(tern_node *head, char const *key)
 {
 	tern_val def;
 	def.ptrval = NULL;
 	return tern_find_path_default(head, key, def);
 }
 
-tern_node * tern_insert_ptr(tern_node * head, char * key, void * value)
+tern_node * tern_insert_ptr(tern_node * head, char const * key, void * value)
 {
 	tern_val val;
 	val.ptrval = value;
 	return tern_insert(head, key, val);
 }
 
-tern_node * tern_insert_node(tern_node *head, char *key, tern_node *value)
+tern_node * tern_insert_node(tern_node *head, char const *key, tern_node *value)
 {
 	tern_val val;
 	val.intval = ((intptr_t)value) | 1;
