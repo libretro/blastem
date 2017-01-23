@@ -923,6 +923,49 @@ void process_mouse(char *mousenum, tern_val value, void *data)
 	}
 }
 
+typedef struct {
+	int       padnum;
+	tern_node *padbuttons;
+	tern_node *mousebuttons;
+} pad_button_state;
+
+void process_pad_button(char *key, tern_val val, void *data)
+{
+	pad_button_state *state = data;
+	int hostpadnum = state->padnum;
+	int ui_func, padnum, button;
+	int bindtype = parse_binding_target(val.ptrval, state->padbuttons, state->mousebuttons, &ui_func, &padnum, &button);
+	char *end;
+	long hostbutton = strtol(key, &end, 10);
+	if (*end) {
+		//key is not a valid base 10 integer
+		hostbutton = render_translate_input_name(hostpadnum, key);
+		if (hostbutton < 0) {
+			if (hostbutton == RENDER_INVALID_NAME) {
+				warning("%s is not a valid gamepad input name\n", key);
+			} else if (hostbutton == RENDER_NOT_MAPPED) {
+				warning("No mapping exists for input %s on gamepad %d\n", key, hostpadnum);
+			}
+			return;
+		}
+		if (hostbutton & RENDER_DPAD_BIT) {
+			if (bindtype == BIND_GAMEPAD1) {
+				bind_dpad_gamepad(hostpadnum, render_dpad_part(hostbutton), render_direction_part(hostbutton), padnum, button);
+			} else {
+				bind_dpad_ui(hostpadnum, render_dpad_part(hostbutton), render_direction_part(hostbutton), ui_func, button);
+			}
+		} else if (hostbutton & RENDER_AXIS_BIT) {
+			//TODO: support analog axes
+			return;
+		}
+	}
+	if (bindtype == BIND_GAMEPAD1) {
+		bind_button_gamepad(hostpadnum, hostbutton, padnum, button);
+	} else if (bindtype == BIND_UI) {
+		bind_button_ui(hostpadnum, hostbutton, ui_func, button);
+	}
+}
+
 void set_keybindings(sega_io *io)
 {
 	static uint8_t already_done;
@@ -988,6 +1031,9 @@ void set_keybindings(sega_io *io)
 	mousebuttons = tern_insert_int(mousebuttons, ".start", MOUSE_START);
 	mousebuttons = tern_insert_int(mousebuttons, ".motion", PSEUDO_BUTTON_MOTION);
 
+	//pump event loop, so initial joystick insertion events are processed
+	process_events();
+	
 	tern_node * keys = tern_get_node(tern_find_path(config, "bindings\0keys\0"));
 	process_keys(keys, special, padbuttons, mousebuttons, NULL);
 	char numstr[] = "00";
@@ -1030,26 +1076,13 @@ void set_keybindings(sega_io *io)
 				}
 				tern_node *button_node = tern_find_ptr(pad, "buttons");
 				if (button_node) {
-					for (int but = 0; but < 30; but++)
-					{
-						if (but < 10) {
-							numstr[0] = but + '0';
-							numstr[1] = 0;
-						} else {
-							numstr[0] = but/10 + '0';
-							numstr[1] = but%10 + '0';
-						}
-						char * target = tern_find_ptr(button_node, numstr);
-						if (target) {
-							int ui_func, padnum, button;
-							int bindtype = parse_binding_target(target, padbuttons, mousebuttons, &ui_func, &padnum, &button);
-							if (bindtype == BIND_GAMEPAD1) {
-								bind_button_gamepad(i, but, padnum, button);
-							} else if (bindtype == BIND_UI) {
-								bind_button_ui(i, but, ui_func, button);
-							}
-						}
-					}
+					pad_button_state state = {
+						.padnum = i,
+						.padbuttons = padbuttons,
+						.mousebuttons = mousebuttons
+					};
+					tern_foreach(button_node, process_pad_button, &state);
+					
 				}
 			}
 		}
