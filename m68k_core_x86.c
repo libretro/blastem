@@ -2263,11 +2263,13 @@ void nop_fill_or_jmp_next(code_info *code, code_ptr old_end, code_ptr next_inst)
 	}
 }
 
+#define M68K_MAX_INST_SIZE (2*(1+2+2))
+
 m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context)
 {
 	m68k_options * options = context->options;
 	uint32_t inst_start = get_instruction_start(options, address);
-	if (inst_start) {
+	while (inst_start && (address - inst_start) < M68K_MAX_INST_SIZE) {
 		code_info *code = &options->gen.code;
 		code_ptr dst = get_native_address(context->options, inst_start);
 		code_info orig = {dst, dst + 128, 0};
@@ -2284,6 +2286,7 @@ m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context)
 			jmp_r(code, options->gen.scratch1);
 		}
 		jmp(&orig, options->retrans_stub);
+		inst_start = get_instruction_start(options, inst_start - 2);
 	}
 	return context;
 }
