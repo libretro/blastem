@@ -441,18 +441,36 @@ char *get_header_name(uint8_t *rom)
 	}
 }
 
-char *region_chars = "UB4JEA";
-uint8_t region_bits[] = {REGION_U, REGION_U, REGION_U, REGION_J, REGION_E, REGION_E};
+char *region_chars = "JUEW";
+uint8_t region_bits[] = {REGION_J, REGION_U, REGION_E, REGION_J|REGION_U|REGION_E};
 
 uint8_t translate_region_char(uint8_t c)
-{
+{	
 	for (int i = 0; i < sizeof(region_bits); i++)
 	{
 		if (c == region_chars[i]) {
 			return region_bits[i];
 		}
 	}
-	return 0;
+	uint8_t bin_region = 0;
+	if (c >= '0' && c <= '9') {
+		bin_region = c - '0';
+	} else if (c >= 'A' && c <= 'F') {
+		bin_region = c - 'A' + 0xA;
+	} else if (c >= 'a' && c <= 'f') {
+		bin_region = c - 'a' + 0xA;
+	}
+	uint8_t ret = 0;
+	if (bin_region & 8) {
+		ret |= REGION_E;
+	}
+	if (bin_region & 4) {
+		ret |= REGION_U;
+	}
+	if (bin_region & 1) {
+		ret |= REGION_J;
+	}
+	return ret;
 }
 
 uint8_t get_header_regions(uint8_t *rom)
