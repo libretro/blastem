@@ -835,7 +835,7 @@ static int32_t handle_event(SDL_Event *event)
 		break;
 	}
 	case SDL_MOUSEMOTION:
-		handle_mouse_moved(event->motion.which, event->motion.x, event->motion.y, event->motion.xrel, event->motion.yrel);
+		handle_mouse_moved(event->motion.which, event->motion.x, event->motion.y + overscan_top[video_standard], event->motion.xrel, event->motion.yrel);
 		break;
 	case SDL_MOUSEBUTTONDOWN:
 		handle_mousedown(event->button.which, event->button.button);
