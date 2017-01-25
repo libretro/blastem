@@ -269,6 +269,7 @@ int main(int argc, char ** argv)
 				if (!lock_on.size) {
 					fatal_error("Failed to load lock on cartridge %s\n", argv[i]);
 				}
+				lock_on.name = basename_no_extension(argv[i]);
 				lock_on.extension = path_extension(argv[i]);
 				cart.chain = &lock_on;
 				break;
@@ -301,6 +302,7 @@ int main(int argc, char ** argv)
 			if (!(cart.size = load_rom(argv[i], &cart.buffer, stype == SYSTEM_UNKNOWN ? &stype : NULL))) {
 				fatal_error("Failed to open %s for reading\n", argv[i]);
 			}
+			cart.name = basename_no_extension(argv[i]);
 			cart.extension = path_extension(argv[i]);
 			romfname = argv[i];
 			loaded = 1;
@@ -334,8 +336,8 @@ int main(int argc, char ** argv)
 		}
 		//force system detection, value on command line is only for games not the menu
 		stype = detect_system_type(&cart);
+		cart.name = basename_no_extension(romfname);
 		cart.extension = path_extension(romfname);
-
 		loaded = 1;
 	}
 	
@@ -399,6 +401,7 @@ int main(int argc, char ** argv)
 			if (!(cart.size = load_rom(menu_context->next_rom, &cart.buffer, &stype))) {
 				fatal_error("Failed to open %s for reading\n", menu_context->next_rom);
 			}
+			cart.name = basename_no_extension(menu_context->next_rom);
 			cart.extension = path_extension(menu_context->next_rom);
 			stype = force_stype;
 			if (stype == SYSTEM_UNKNOWN) {
