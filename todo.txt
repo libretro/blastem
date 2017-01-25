@@ -19,6 +19,8 @@ Horizontal border emulation
 Integrate Jaguar emulation into main executable
 Fullscreen toggle in menu
 Realtec mapper support
+Gamepad analog axis mapping
+64-bit Windows Build
 
 Future Releases (no particular order)
 ---------------
