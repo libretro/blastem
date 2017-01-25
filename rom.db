@@ -432,6 +432,11 @@ G-4060 {
 		}
 	}
 }
+T-70106- {
+	name Another World
+	#European version of this game has EUROPE in the region field rather than just E
+	regions E
+}
 T-48036 {
 	name Ms. Pac-Man
 	#Ms. Pac-Man doesn't like 6-button controllers
