@@ -818,6 +818,7 @@ static int32_t handle_event(SDL_Event *event)
 				if (joy) {
 					printf("Joystick %d added: %s\n", index, SDL_JoystickName(joy));
 					printf("\tNum Axes: %d\n\tNum Buttons: %d\n\tNum Hats: %d\n", SDL_JoystickNumAxes(joy), SDL_JoystickNumButtons(joy), SDL_JoystickNumHats(joy));
+					handle_joy_added(index);
 				}
 			}
 		}
