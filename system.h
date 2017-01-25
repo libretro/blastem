@@ -50,6 +50,7 @@ struct system_header {
 
 struct system_media {
 	void         *buffer;
+	char         *name;
 	char         *extension;
 	system_media *chain;
 	uint32_t     size;
