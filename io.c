@@ -476,7 +476,6 @@ void handle_mouse_moved(int mouse, uint16_t x, uint16_t y, int16_t deltax, int16
 	if (mouse >= MAX_MICE || !mice[mouse].motion_port) {
 		return;
 	}
-	//TODO: relative mode
 	switch(current_io->mouse_mode)
 	{
 	case MOUSE_ABSOLUTE: {
@@ -497,6 +496,7 @@ void handle_mouse_moved(int mouse, uint16_t x, uint16_t y, int16_t deltax, int16
 			mice[mouse].motion_port->device.mouse.cur_x += deltax;
 			mice[mouse].motion_port->device.mouse.cur_y += deltay;
 		}
+		break;
 	}
 	}
 }
