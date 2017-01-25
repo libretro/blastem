@@ -275,17 +275,16 @@ static void inc_debug_pal(system_header *system)
 	}
 }
 
-sms_context *alloc_configure_sms(void *rom, uint32_t rom_size, void *extra_rom, uint32_t extra_rom_size, uint32_t opts, uint8_t force_region, rom_info *info_out)
+sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t force_region, rom_info *info_out)
 {
 	memset(info_out, 0, sizeof(*info_out));
 	sms_context *sms = calloc(1, sizeof(sms_context));
-	uint32_t orig_size = rom_size;
-	rom_size = nearest_pow2(rom_size);
+	uint32_t rom_size = nearest_pow2(media->size);
 	memmap_chunk memory_map[6];
-	if (orig_size > 0xC000)  {
+	if (media->size > 0xC000)  {
 		info_out->map_chunks = 6;
 		uint8_t *ram_reg_overlap = sms->ram + sizeof(sms->ram) - 4;
-		memory_map[0] = (memmap_chunk){0x0000, 0x0400,  0xFFFF,             0, 0, MMAP_READ,                        rom,      NULL, NULL, NULL, NULL};
+		memory_map[0] = (memmap_chunk){0x0000, 0x0400,  0xFFFF,             0, 0, MMAP_READ,                        media->buffer, NULL, NULL, NULL, NULL};
 		memory_map[1] = (memmap_chunk){0x0400, 0x4000,  0xFFFF,             0, 0, MMAP_READ|MMAP_PTR_IDX|MMAP_CODE, NULL,     NULL, NULL, NULL, NULL};
 		memory_map[2] = (memmap_chunk){0x4000, 0x8000,  0x3FFF,             0, 1, MMAP_READ|MMAP_PTR_IDX|MMAP_CODE, NULL,     NULL, NULL, NULL, NULL};
 		memory_map[3] = (memmap_chunk){0x8000, 0xC000,  0x3FFF,             0, 2, MMAP_READ|MMAP_PTR_IDX|MMAP_CODE, NULL,     NULL, NULL, NULL, cart_ram_write};
@@ -293,7 +292,7 @@ sms_context *alloc_configure_sms(void *rom, uint32_t rom_size, void *extra_rom, 
 		memory_map[5] = (memmap_chunk){0xFFFC, 0x10000, 0x0003,             0, 0, MMAP_READ,                        ram_reg_overlap, NULL, NULL, NULL, mapper_write};
 	} else {
 		info_out->map_chunks = 2;
-		memory_map[0] = (memmap_chunk){0x0000, 0xC000,  rom_size-1,         0, 0, MMAP_READ,                      rom,      NULL, NULL, NULL, NULL};
+		memory_map[0] = (memmap_chunk){0x0000, 0xC000,  rom_size-1,         0, 0, MMAP_READ,                      media->buffer,  NULL, NULL, NULL, NULL};
 		memory_map[1] = (memmap_chunk){0xC000, 0x10000, sizeof(sms->ram)-1, 0, 0, MMAP_READ|MMAP_WRITE|MMAP_CODE, sms->ram, NULL, NULL, NULL, NULL};
 	};
 	info_out->map = malloc(sizeof(memmap_chunk) * info_out->map_chunks);
@@ -304,7 +303,7 @@ sms_context *alloc_configure_sms(void *rom, uint32_t rom_size, void *extra_rom, 
 	sms->z80->system = sms;
 	sms->z80->options->gen.debug_cmd_handler = debug_commands;
 	
-	sms->rom = rom;
+	sms->rom = media->buffer;
 	sms->rom_size = rom_size;
 	if (info_out->map_chunks > 2) {
 		sms->z80->mem_pointers[0] = sms->rom;
@@ -329,7 +328,7 @@ sms_context *alloc_configure_sms(void *rom, uint32_t rom_size, void *extra_rom, 
 	sms->vdp->system = &sms->header;
 	
 	info_out->save_type = SAVE_NONE;
-	info_out->name = strdup("Master System Game");
+	info_out->name = strdup(media->name);
 	
 	setup_io_devices(config, info_out, &sms->io);
 	

@@ -26,6 +26,6 @@ typedef struct {
 	uint8_t       cart_ram[SMS_CART_RAM_SIZE];
 } sms_context;
 
-sms_context *alloc_configure_sms(void *rom, uint32_t rom_size, void *extra_rom, uint32_t extra_rom_size, uint32_t opts, uint8_t force_region, rom_info *info_out);
+sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t force_region, rom_info *info_out);
 
 #endif //SMS_H_

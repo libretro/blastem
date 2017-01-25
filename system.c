@@ -62,7 +62,7 @@ system_header *alloc_config_system(system_type stype, system_media *media, uint3
 		return &(alloc_config_genesis(media->buffer, media->size, lock_on, lock_on_size, opts, force_region, info_out))->header;
 #ifndef NO_Z80
 	case SYSTEM_SMS:
-		return &(alloc_configure_sms(media->buffer, media->size, lock_on, lock_on_size, opts, force_region, info_out))->header;
+		return &(alloc_configure_sms(media, opts, force_region, info_out))->header;
 #endif
 	default:
 		return NULL;
