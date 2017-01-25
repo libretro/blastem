@@ -59,6 +59,10 @@ void handle_joy_dpad(int joystick, int dpadnum, uint8_t value)
 {
 }
 
+void handle_joy_added(int joystick)
+{
+}
+
 void handle_mousedown(int mouse, int button)
 {
 }
