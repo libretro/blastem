@@ -175,6 +175,28 @@ void bind_dpad(int joystick, int dpad, int direction, uint8_t bind_type, uint8_t
 	}
 }
 
+void reset_joystick_bindings(int joystick)
+{
+	if (joystick >= MAX_JOYSTICKS) {
+		return;
+	}
+	if (joysticks[joystick].buttons) {
+		for (int i = 0; i < joysticks[joystick].num_buttons; i++)
+		{
+			joysticks[joystick].buttons[i].bind_type = BIND_NONE;
+		}
+	}
+	if (joysticks[joystick].dpads) {
+		for (int i = 0; i < joysticks[joystick].num_dpads; i++)
+		{
+			for (int dir = 0; dir < 4; dir++)
+			{
+				joysticks[joystick].dpads[i].bindings[dir].bind_type = BIND_NONE;
+			}
+		}
+	}
+}
+
 #define GAMEPAD_BUTTON(PRI_SLOT, SEC_SLOT, VALUE)  (PRI_SLOT << 12 | SEC_SLOT << 8 | VALUE)
 
 #define DPAD_UP      GAMEPAD_BUTTON(GAMEPAD_TH0, GAMEPAD_TH1, 0x01)
@@ -966,6 +988,98 @@ void process_pad_button(char *key, tern_val val, void *data)
 	}
 }
 
+static tern_node *get_pad_buttons()
+{
+	static tern_node *padbuttons;
+	if (!padbuttons) {
+		padbuttons = tern_insert_int(NULL, ".up", DPAD_UP);
+		padbuttons = tern_insert_int(padbuttons, ".down", DPAD_DOWN);
+		padbuttons = tern_insert_int(padbuttons, ".left", DPAD_LEFT);
+		padbuttons = tern_insert_int(padbuttons, ".right", DPAD_RIGHT);
+		padbuttons = tern_insert_int(padbuttons, ".a", BUTTON_A);
+		padbuttons = tern_insert_int(padbuttons, ".b", BUTTON_B);
+		padbuttons = tern_insert_int(padbuttons, ".c", BUTTON_C);
+		padbuttons = tern_insert_int(padbuttons, ".x", BUTTON_X);
+		padbuttons = tern_insert_int(padbuttons, ".y", BUTTON_Y);
+		padbuttons = tern_insert_int(padbuttons, ".z", BUTTON_Z);
+		padbuttons = tern_insert_int(padbuttons, ".start", BUTTON_START);
+		padbuttons = tern_insert_int(padbuttons, ".mode", BUTTON_MODE);
+	}
+	return padbuttons;
+}
+
+static tern_node *get_mouse_buttons()
+{
+	static tern_node *mousebuttons;
+	if (!mousebuttons) {
+		mousebuttons = tern_insert_int(NULL, ".left", MOUSE_LEFT);
+		mousebuttons = tern_insert_int(mousebuttons, ".middle", MOUSE_MIDDLE);
+		mousebuttons = tern_insert_int(mousebuttons, ".right", MOUSE_RIGHT);
+		mousebuttons = tern_insert_int(mousebuttons, ".start", MOUSE_START);
+		mousebuttons = tern_insert_int(mousebuttons, ".motion", PSEUDO_BUTTON_MOTION);
+	}
+	return mousebuttons;
+}
+
+void handle_joy_added(int joystick)
+{
+	if (joystick > MAX_JOYSTICKS) {
+		return;
+	}
+	tern_node * pads = tern_get_node(tern_find_path(config, "bindings\0pads\0"));
+	if (pads) {
+		char numstr[11];
+		sprintf(numstr, "%d", joystick);
+		tern_node * pad = tern_find_ptr(pads, numstr);
+		if (pad) {
+			tern_node * dpad_node = tern_find_ptr(pad, "dpads");
+			if (dpad_node) {
+				for (int dpad = 0; dpad < 10; dpad++)
+				{
+					numstr[0] = dpad + '0';
+					numstr[1] = 0;
+					tern_node * pad_dpad = tern_find_ptr(dpad_node, numstr);
+					char * dirs[] = {"up", "down", "left", "right"};
+					int dirnums[] = {RENDER_DPAD_UP, RENDER_DPAD_DOWN, RENDER_DPAD_LEFT, RENDER_DPAD_RIGHT};
+					for (int dir = 0; dir < sizeof(dirs)/sizeof(dirs[0]); dir++) {
+						char * target = tern_find_ptr(pad_dpad, dirs[dir]);
+						if (target) {
+							int ui_func, padnum, button;
+							int bindtype = parse_binding_target(target, get_pad_buttons(), get_mouse_buttons(), &ui_func, &padnum, &button);
+							if (bindtype == BIND_GAMEPAD1) {
+								bind_dpad_gamepad(joystick, dpad, dirnums[dir], padnum, button);
+							} else if (bindtype == BIND_UI) {
+								bind_dpad_ui(joystick, dpad, dirnums[dir], ui_func, button);
+							}
+						}
+					}
+				}
+			}
+			tern_node *button_node = tern_find_ptr(pad, "buttons");
+			if (button_node) {
+				pad_button_state state = {
+					.padnum = joystick,
+					.padbuttons = get_pad_buttons(),
+					.mousebuttons = get_mouse_buttons()
+				};
+				tern_foreach(button_node, process_pad_button, &state);
+			}
+			if (current_io) {
+				if (joysticks[joystick].buttons) {
+					map_bindings(current_io->ports, joysticks[joystick].buttons, joysticks[joystick].num_buttons);
+				}
+				if (joysticks[joystick].dpads)
+				{
+					for (uint32_t i = 0; i < joysticks[joystick].num_dpads; i++) {
+						map_bindings(current_io->ports, joysticks[joystick].dpads[i].bindings, 4);
+					}
+				}
+			}
+		}
+	}
+	
+}
+
 void set_keybindings(sega_io *io)
 {
 	static uint8_t already_done;
@@ -1012,27 +1126,9 @@ void set_keybindings(sega_io *io)
 	special = tern_insert_int(special, "search", RENDERKEY_SEARCH);
 	special = tern_insert_int(special, "back", RENDERKEY_BACK);
 
-	tern_node * padbuttons = tern_insert_int(NULL, ".up", DPAD_UP);
-	padbuttons = tern_insert_int(padbuttons, ".down", DPAD_DOWN);
-	padbuttons = tern_insert_int(padbuttons, ".left", DPAD_LEFT);
-	padbuttons = tern_insert_int(padbuttons, ".right", DPAD_RIGHT);
-	padbuttons = tern_insert_int(padbuttons, ".a", BUTTON_A);
-	padbuttons = tern_insert_int(padbuttons, ".b", BUTTON_B);
-	padbuttons = tern_insert_int(padbuttons, ".c", BUTTON_C);
-	padbuttons = tern_insert_int(padbuttons, ".x", BUTTON_X);
-	padbuttons = tern_insert_int(padbuttons, ".y", BUTTON_Y);
-	padbuttons = tern_insert_int(padbuttons, ".z", BUTTON_Z);
-	padbuttons = tern_insert_int(padbuttons, ".start", BUTTON_START);
-	padbuttons = tern_insert_int(padbuttons, ".mode", BUTTON_MODE);
+	tern_node *padbuttons = get_pad_buttons();
 
-	tern_node *mousebuttons = tern_insert_int(NULL, ".left", MOUSE_LEFT);
-	mousebuttons = tern_insert_int(mousebuttons, ".middle", MOUSE_MIDDLE);
-	mousebuttons = tern_insert_int(mousebuttons, ".right", MOUSE_RIGHT);
-	mousebuttons = tern_insert_int(mousebuttons, ".start", MOUSE_START);
-	mousebuttons = tern_insert_int(mousebuttons, ".motion", PSEUDO_BUTTON_MOTION);
-
-	//pump event loop, so initial joystick insertion events are processed
-	process_events();
+	tern_node *mousebuttons = get_mouse_buttons();
 	
 	tern_node * keys = tern_get_node(tern_find_path(config, "bindings\0keys\0"));
 	process_keys(keys, special, padbuttons, mousebuttons, NULL);
@@ -1049,42 +1145,7 @@ void set_keybindings(sega_io *io)
 				numstr[0] = i/10 + '0';
 				numstr[1] = i%10 + '0';
 			}
-			tern_node * pad = tern_find_ptr(pads, numstr);
-			if (pad) {
-				tern_node * dpad_node = tern_find_ptr(pad, "dpads");
-				if (dpad_node) {
-					for (int dpad = 0; dpad < 10; dpad++)
-					{
-						numstr[0] = dpad + '0';
-						numstr[1] = 0;
-						tern_node * pad_dpad = tern_find_ptr(dpad_node, numstr);
-						char * dirs[] = {"up", "down", "left", "right"};
-						int dirnums[] = {RENDER_DPAD_UP, RENDER_DPAD_DOWN, RENDER_DPAD_LEFT, RENDER_DPAD_RIGHT};
-						for (int dir = 0; dir < sizeof(dirs)/sizeof(dirs[0]); dir++) {
-							char * target = tern_find_ptr(pad_dpad, dirs[dir]);
-							if (target) {
-								int ui_func, padnum, button;
-								int bindtype = parse_binding_target(target, padbuttons, mousebuttons, &ui_func, &padnum, &button);
-								if (bindtype == BIND_GAMEPAD1) {
-									bind_dpad_gamepad(i, dpad, dirnums[dir], padnum, button);
-								} else if (bindtype == BIND_UI) {
-									bind_dpad_ui(i, dpad, dirnums[dir], ui_func, button);
-								}
-							}
-						}
-					}
-				}
-				tern_node *button_node = tern_find_ptr(pad, "buttons");
-				if (button_node) {
-					pad_button_state state = {
-						.padnum = i,
-						.padbuttons = padbuttons,
-						.mousebuttons = mousebuttons
-					};
-					tern_foreach(button_node, process_pad_button, &state);
-					
-				}
-			}
+			
 		}
 	}
 	memset(mice, 0, sizeof(mice));
