@@ -417,7 +417,7 @@ handle_mouse:
 	move.b d2, (-5, a2, d4.w)
 	lea (0, a2, d4.w), a2
 	move.l a2, mouse_sprite.w
-	move.l #$01000500, (a2)+
+	move.l #$00EA0500, (a2)+
 	move.w #$8083, (a2)
 	move.w #$100, mouse_x.w
 	addq #1, d2
