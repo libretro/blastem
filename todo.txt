@@ -1,41 +1,39 @@
-Feature			Status			Priority
-----------------------------------------
-Z80				mostly done		10
- |--Decoder		complete
- |--Translator  mostly done
- |--Banked mem	complete
- |--Test gen	complete
+0.5.0 TODO List
+----------------
+Fix MULU/MULS timing
+Fix DIVU/DIVS timing
+movem extra memory access
+Implement SSG-EG Mode
+Implement CSM Mode
+Provide an option to save SRAM/save states relative to ROM
+SMS region handling
+Update README
+	- New controller mapping stuff
+	- Overscan
+Update Changelog
 
-PSG				complete		9
-YM-2612			partial			9
-H-Ints			complete		8
-Interlace		complete		7
-save states		partial			6
-mappers			partial			5
-save ram		complete		5
-basic UI		not started		5
-x86-32 backend	not started		5
-Sega CD			not started		4
- |--Comm regs
- |--CDC
- |--CDD
- |--PCM
+0.5.0 Nice to Haves
+-------------------
+Basic GG support
+Horizontal border emulation
+Integrate Jaguar emulation into main executable
+Fullscreen toggle in menu
+Realtec mapper support
 
-Laser Active	not started		4
-ARM backend		not started		4
-32X				not started		3
- |--SH2
- |--PWM
- |--Framebuffer
- |--Comm regs
-
-mega mouse		not started		1
-multitap		not started		1
-ligh gun(s)		not started		1
-SVP chip		not started		1
-cheat codes		not started		0
-VDP Mode 4		not started		0
-SMS/GG			not started		0
-
-Priority 6 and above items MUST be finished before release
-Priority 5 would be nice to have at least partial support for before release
+Future Releases (no particular order)
+---------------
+32X
+Sega CD
+Full SMS/GG VDP emulation
+Laser Active
+Finish Jaguar emulation
+Multitap
+Light Guns
+XE-1 AP
+Cheat Codes
+Controller Mapping UI
+SVP emulation
+Rewind
+Netplay
+Rewrite CPUs with dynarec DSL
+ARM support
