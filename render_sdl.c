@@ -26,7 +26,7 @@ static uint8_t num_textures;
 static SDL_Rect      main_clip;
 static SDL_GLContext *main_context;
 
-static int main_width, main_height, is_fullscreen;
+static int main_width, main_height, windowed_width, windowed_height, is_fullscreen;
 
 static uint8_t render_gl = 1;
 static uint8_t scanlines = 0;
@@ -136,12 +136,14 @@ uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b)
 #ifndef DISABLE_OPENGL
 static GLuint textures[3], buffers[2], vshader, fshader, program, un_textures[2], un_width, un_height, at_pos;
 
-static GLfloat vertex_data[] = {
+static GLfloat vertex_data_default[] = {
 	-1.0f, -1.0f,
 	 1.0f, -1.0f,
 	-1.0f,  1.0f,
 	 1.0f,  1.0f
 };
+
+static GLfloat vertex_data[8];
 
 static const GLushort element_data[] = {0, 1, 2, 3};
 
@@ -189,6 +191,52 @@ static GLuint load_shader(char * fname, GLenum shader_type)
 #endif
 
 static uint32_t texture_buf[512 * 513];
+#ifndef DISABLE_OPENGL
+static void gl_setup()
+{
+	glGenTextures(3, textures);
+	for (int i = 0; i < 3; i++)
+	{
+		glBindTexture(GL_TEXTURE_2D, textures[i]);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		if (i < 2) {
+			//TODO: Fixme for PAL + invalid display mode
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 512, 512, 0, GL_BGRA, GL_UNSIGNED_BYTE, texture_buf);
+		} else {
+			uint32_t blank = 255 << 24;
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_BGRA, GL_UNSIGNED_BYTE, &blank);
+		}
+	}
+	glGenBuffers(2, buffers);
+	glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_data), vertex_data, GL_STATIC_DRAW);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[1]);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(element_data), element_data, GL_STATIC_DRAW);
+	tern_val def = {.ptrval = "default.v.glsl"};
+	vshader = load_shader(tern_find_path_default(config, "video\0vertex_shader\0", def).ptrval, GL_VERTEX_SHADER);
+	def.ptrval = "default.f.glsl";
+	fshader = load_shader(tern_find_path_default(config, "video\0fragment_shader\0", def).ptrval, GL_FRAGMENT_SHADER);
+	program = glCreateProgram();
+	glAttachShader(program, vshader);
+	glAttachShader(program, fshader);
+	glLinkProgram(program);
+	GLint link_status;
+	glGetProgramiv(program, GL_LINK_STATUS, &link_status);
+	if (!link_status) {
+		fputs("Failed to link shader program\n", stderr);
+		exit(1);
+	}
+	un_textures[0] = glGetUniformLocation(program, "textures[0]");
+	un_textures[1] = glGetUniformLocation(program, "textures[1]");
+	un_width = glGetUniformLocation(program, "width");
+	un_height = glGetUniformLocation(program, "height");
+	at_pos = glGetAttribLocation(program, "pos");
+}
+#endif
+
 static void render_alloc_surfaces()
 {
 	static uint8_t texture_init;
@@ -202,46 +250,7 @@ static void render_alloc_surfaces()
 #ifndef DISABLE_OPENGL
 	if (render_gl) {
 		sdl_textures[0] = sdl_textures[1] = NULL;
-		glGenTextures(3, textures);
-		for (int i = 0; i < 3; i++)
-		{
-			glBindTexture(GL_TEXTURE_2D, textures[i]);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			if (i < 2) {
-				//TODO: Fixme for PAL + invalid display mode
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 512, 512, 0, GL_BGRA, GL_UNSIGNED_BYTE, texture_buf);
-			} else {
-				uint32_t blank = 255 << 24;
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_BGRA, GL_UNSIGNED_BYTE, &blank);
-			}
-		}
-		glGenBuffers(2, buffers);
-		glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_data), vertex_data, GL_STATIC_DRAW);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[1]);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(element_data), element_data, GL_STATIC_DRAW);
-		tern_val def = {.ptrval = "default.v.glsl"};
-		vshader = load_shader(tern_find_path_default(config, "video\0vertex_shader\0", def).ptrval, GL_VERTEX_SHADER);
-		def.ptrval = "default.f.glsl";
-		fshader = load_shader(tern_find_path_default(config, "video\0fragment_shader\0", def).ptrval, GL_FRAGMENT_SHADER);
-		program = glCreateProgram();
-		glAttachShader(program, vshader);
-		glAttachShader(program, fshader);
-		glLinkProgram(program);
-		GLint link_status;
-		glGetProgramiv(program, GL_LINK_STATUS, &link_status);
-		if (!link_status) {
-			fputs("Failed to link shader program\n", stderr);
-			exit(1);
-		}
-		un_textures[0] = glGetUniformLocation(program, "textures[0]");
-		un_textures[1] = glGetUniformLocation(program, "textures[1]");
-		un_width = glGetUniformLocation(program, "width");
-		un_height = glGetUniformLocation(program, "height");
-		at_pos = glGetAttribLocation(program, "pos");
+		gl_setup();
 	} else {
 #endif
 		
@@ -266,6 +275,52 @@ static void render_quit()
 	}
 }
 
+static void update_aspect()
+{
+	//reset default values
+	memcpy(vertex_data, vertex_data_default, sizeof(vertex_data));
+	main_clip.w = main_width;
+	main_clip.h = main_height;
+	main_clip.x = main_clip.y = 0;
+	//calculate configured aspect ratio
+	char *config_aspect = tern_find_path_default(config, "video\0aspect\0", (tern_val){.ptrval = "4:3"}).ptrval;
+	if (strcmp("stretch", config_aspect)) {
+		float src_aspect = 4.0f/3.0f;
+		char *end;
+		float aspect_numerator = strtof(config_aspect, &end);
+		if (aspect_numerator > 0.0f && *end == ':') {
+			float aspect_denominator = strtof(end+1, &end);
+			if (aspect_denominator > 0.0f && !*end) {
+				src_aspect = aspect_numerator / aspect_denominator;
+			}
+		}
+		float aspect = (float)main_width / main_height;
+		if (fabs(aspect - src_aspect) < 0.01f) {
+			//close enough for government work
+			return;
+		}
+#ifndef DISABLE_OPENGL
+		if (render_gl) {
+			for (int i = 0; i < 4; i++)
+			{
+				if (aspect > src_aspect) {
+					vertex_data[i*2] *= src_aspect/aspect;
+				} else {
+					vertex_data[i*2+1] *= aspect/src_aspect;
+				}
+			}
+		} else {
+#endif
+			main_clip.w = aspect > src_aspect ? src_aspect * (float)main_height : main_width;
+			main_clip.h = aspect > src_aspect ? main_height : main_width / src_aspect;
+			main_clip.x = (main_width  - main_clip.w) / 2;
+			main_clip.y = (main_height - main_clip.h) / 2;
+#ifndef DISABLE_OPENGL
+		}
+#endif
+	}
+}
+
 static uint32_t overscan_top[NUM_VID_STD] = {2, 21};
 static uint32_t overscan_bot[NUM_VID_STD] = {1, 17};
 static vid_std video_standard = VID_NTSC;
@@ -277,8 +332,10 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 	}
 	atexit(SDL_Quit);
 	printf("width: %d, height: %d\n", width, height);
-
-	uint32_t flags = 0;
+	windowed_width = width;
+	windowed_height = height;
+	
+	uint32_t flags = SDL_WINDOW_RESIZABLE;
 
 	if (fullscreen) {
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
@@ -374,37 +431,9 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 	}
 #endif
 
-	SDL_GetWindowSize(main_window, &width, &height);
-	printf("Window created with size: %d x %d\n", width, height);
-	float src_aspect = 4.0/3.0;
-	float aspect     = (float)width / height;
-	def.ptrval = "normal";
-	int stretch = fabs(aspect - src_aspect) > 0.01 && !strcmp(tern_find_path_default(config, "video\0aspect\0", def).ptrval, "stretch");
-
-	if (!stretch) {
-#ifndef DISABLE_OPENGL
-		if (render_gl) {
-			for (int i = 0; i < 4; i++)
-			{
-				if (aspect > src_aspect) {
-					vertex_data[i*2] *= src_aspect/aspect;
-				} else {
-					vertex_data[i*2+1] *= aspect/src_aspect;
-				}
-			}
-		} else {
-#endif
-			float scale_x = (float)width / 320.0;
-			float scale_y = (float)height / 240.0;
-			float scale   = scale_x > scale_y ? scale_y : scale_x;
-			main_clip.w = 320.0 * scale;
-			main_clip.h = 240.0 * scale;
-			main_clip.x = (width  - main_clip.w) / 2;
-			main_clip.y = (height - main_clip.h) / 2;
-#ifndef DISABLE_OPENGL
-		}
-#endif
-	}
+	SDL_GetWindowSize(main_window, &main_width, &main_height);
+	printf("Window created with size: %d x %d\n", main_width, main_height);
+	update_aspect();
 	render_alloc_surfaces();
 	def.ptrval = "off";
 	scanlines = !strcmp(tern_find_path_default(config, "video\0scanlines\0", def).ptrval, "on");
@@ -843,6 +872,23 @@ static int32_t handle_event(SDL_Event *event)
 	case SDL_MOUSEBUTTONUP:
 		handle_mouseup(event->button.which, event->button.button);
 		break;
+	case SDL_WINDOWEVENT:
+		switch (event->window.event)
+		{
+		case SDL_WINDOWEVENT_SIZE_CHANGED:
+			main_width = event->window.data1;
+			main_height = event->window.data2;
+			update_aspect();
+#ifndef DISABLE_OPENGL
+			if (render_gl) {
+				SDL_GL_DeleteContext(main_context);
+				main_context = SDL_GL_CreateContext(main_window);
+				gl_setup();
+			}
+#endif
+			break;
+		}
+		break;
 	case SDL_QUIT:
 		puts("");
 		exit(0);
@@ -850,16 +896,65 @@ static int32_t handle_event(SDL_Event *event)
 	return 0;
 }
 
+static void drain_events()
+{
+	SDL_Event event;
+	while(SDL_PollEvent(&event))
+	{
+		handle_event(&event);
+	}
+}
+
 void process_events()
 {
 	if (events_processed > MAX_EVENT_POLL_PER_FRAME) {
 		return;
 	}
-	SDL_Event event;
-	while(SDL_PollEvent(&event)) {
-		handle_event(&event);
-	}
+	drain_events();
 	events_processed++;
+}
+
+#define TOGGLE_MIN_DELAY 250
+void render_toggle_fullscreen()
+{
+	static int in_toggle;
+	//protect against event processing causing us to attempt to toggle while still toggling
+	if (in_toggle) {
+		return;
+	}
+	in_toggle = 1;
+	
+	//toggling too fast seems to cause a deadlock
+	static uint32_t last_toggle;
+	uint32_t cur = SDL_GetTicks();
+	if (last_toggle && cur - last_toggle < TOGGLE_MIN_DELAY) {
+		in_toggle = 0;
+		return;
+	}
+	last_toggle = cur;
+	
+	drain_events();
+	is_fullscreen = !is_fullscreen;
+	if (is_fullscreen) {
+		SDL_DisplayMode mode;
+		//TODO: Multiple monitor support
+		SDL_GetCurrentDisplayMode(0, &mode);
+		//In theory, the SDL2 docs suggest this is unnecessary
+		//but without it the OpenGL context remains the original size
+		//This needs to happen before the fullscreen transition to have any effect
+		//because SDL does not apply window size changes in fullscreen
+		SDL_SetWindowSize(main_window, mode.w, mode.h);
+	}
+	SDL_SetWindowFullscreen(main_window, is_fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+	//Since we change the window size on transition to full screen
+	//we need to set it back to normal so we can also go back to windowed mode
+	//normally you would think that this should only be done when actually transitioning
+	//but something is screwy in the guts of SDL (at least on Linux) and setting it each time
+	//is the only thing that seems to work reliably
+	//when we've just switched to fullscreen mode this should be harmless though
+	SDL_SetWindowSize(main_window, windowed_width, windowed_height);
+	drain_events();
+	in_toggle = 0;
 }
 
 void render_wait_psg(psg_context * context)
