@@ -10,6 +10,8 @@ SMS region handling
 Update README
 	- New controller mapping stuff
 	- Overscan
+	- Full screen toggle
+	- Aspect ratio control
 Update Changelog
 
 0.5.0 Nice to Haves
@@ -17,16 +19,17 @@ Update Changelog
 Basic GG support
 Horizontal border emulation
 Integrate Jaguar emulation into main executable
-Fullscreen toggle in menu
 Realtec mapper support
 Gamepad analog axis mapping
 64-bit Windows Build
 
 Future Releases (no particular order)
 ---------------
+MegaWIFI
 32X
 Sega CD
 Full SMS/GG VDP emulation
+YM2413 emulation
 Laser Active
 Finish Jaguar emulation
 Multitap
