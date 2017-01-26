@@ -70,6 +70,7 @@ typedef enum {
 	UI_NEXT_SPEED,
 	UI_PREV_SPEED,
 	UI_RELEASE_MOUSE,
+	UI_TOGGLE_FULLSCREEN,
 	UI_EXIT
 } ui_action;
 
@@ -415,6 +416,9 @@ void handle_binding_up(keybinding * binding)
 				render_relative_mouse(0);
 			}
 			break;
+		case UI_TOGGLE_FULLSCREEN:
+			render_toggle_fullscreen();
+			break;
 		case UI_EXIT:
 			current_system->request_exit(current_system);
 			break;
@@ -560,6 +564,8 @@ int parse_binding_target(char * target, tern_node * padbuttons, tern_node *mouse
 			*ui_out = UI_PREV_SPEED;
 		} else if(!strcmp(target + 3, "release_mouse")) {
 			*ui_out = UI_RELEASE_MOUSE;
+		} else if (!strcmp(target + 3, "toggle_fullscreen")) {
+			*ui_out = UI_TOGGLE_FULLSCREEN;
 		} else if(!strcmp(target + 3, "exit")) {
 			*ui_out = UI_EXIT;
 		} else {
