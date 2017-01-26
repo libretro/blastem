@@ -74,6 +74,7 @@ uint32_t *render_get_framebuffer(uint8_t which, int *pitch);
 void render_framebuffer_updated(uint8_t which, int width);
 void render_init(int width, int height, char * title, uint8_t fullscreen);
 void render_set_video_standard(vid_std std);
+void render_toggle_fullscreen();
 void render_update_caption(char *title);
 void render_wait_quit(vdp_context * context);
 void render_wait_psg(psg_context * context);
