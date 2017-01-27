@@ -95,10 +95,18 @@ typedef struct {
 } joydpad;
 
 typedef struct {
+	keybinding positive;
+	keybinding negative;
+	int16_t    value;
+} joyaxis;
+
+typedef struct {
 	keybinding *buttons;
 	joydpad    *dpads;
+	joyaxis    *axes;
 	uint32_t   num_buttons; //number of entries in the buttons array, not necessarily the number of buttons on the device
 	uint32_t   num_dpads;   //number of entries in the dpads array, not necessarily the number of dpads on the device
+	uint32_t   num_axes;    //number of entries in the axes array, not necessarily the number of dpads on the device
 } joystick;
 
 typedef struct {
@@ -116,6 +124,14 @@ static mousebinding mice[MAX_MICE];
 static io_port *keyboard_port;
 const uint8_t dpadbits[] = {RENDER_DPAD_UP, RENDER_DPAD_DOWN, RENDER_DPAD_LEFT, RENDER_DPAD_RIGHT};
 
+static void do_bind(keybinding *binding, uint8_t bind_type, uint8_t subtype_a, uint8_t subtype_b, uint8_t value)
+{
+	binding->bind_type = bind_type;
+	binding->subtype_a = subtype_a;
+	binding->subtype_b = subtype_b;
+	binding->value = value;
+}
+
 void bind_key(int keycode, uint8_t bind_type, uint8_t subtype_a, uint8_t subtype_b, uint8_t value)
 {
 	int bucket = keycode >> 15 & 0xFFFF;
@@ -124,10 +140,7 @@ void bind_key(int keycode, uint8_t bind_type, uint8_t subtype_a, uint8_t subtype
 		memset(bindings[bucket], 0, sizeof(keybinding) * 0x8000);
 	}
 	int idx = keycode & 0x7FFF;
-	bindings[bucket][idx].bind_type = bind_type;
-	bindings[bucket][idx].subtype_a = subtype_a;
-	bindings[bucket][idx].subtype_b = subtype_b;
-	bindings[bucket][idx].value = value;
+	do_bind(bindings[bucket] + idx, bind_type, subtype_a, subtype_b, value);
 }
 
 void bind_button(int joystick, int button, uint8_t bind_type, uint8_t subtype_a, uint8_t subtype_b, uint8_t value)
@@ -144,10 +157,7 @@ void bind_button(int joystick, int button, uint8_t bind_type, uint8_t subtype_a,
 		joysticks[joystick].buttons = realloc(joysticks[joystick].buttons, sizeof(keybinding) * joysticks[joystick].num_buttons);
 		memset(joysticks[joystick].buttons + old_capacity, 0, joysticks[joystick].num_buttons - old_capacity);
 	}
-	joysticks[joystick].buttons[button].bind_type = bind_type;
-	joysticks[joystick].buttons[button].subtype_a = subtype_a;
-	joysticks[joystick].buttons[button].subtype_b = subtype_b;
-	joysticks[joystick].buttons[button].value = value;
+	do_bind(joysticks[joystick].buttons + button, bind_type, subtype_a, subtype_b, value);
 }
 
 void bind_dpad(int joystick, int dpad, int direction, uint8_t bind_type, uint8_t subtype_a, uint8_t subtype_b, uint8_t value)
@@ -156,23 +166,42 @@ void bind_dpad(int joystick, int dpad, int direction, uint8_t bind_type, uint8_t
 		return;
 	}
 	if (!joysticks[joystick].dpads) {
-		//multiple D-pads hats are not common, so don't allocate any extra space
+		//multiple D-pads/hats are not common, so don't allocate any extra space
 		joysticks[joystick].dpads = calloc(dpad+1, sizeof(joydpad));
 		joysticks[joystick].num_dpads = dpad+1;
 	} else if (joysticks[joystick].num_dpads <= dpad) {
 		uint32_t old_capacity = joysticks[joystick].num_dpads;
 		joysticks[joystick].num_dpads *= 2;
 		joysticks[joystick].dpads = realloc(joysticks[joystick].dpads, sizeof(joydpad) * joysticks[joystick].num_dpads);
-		memset(joysticks[joystick].dpads + old_capacity, 0, joysticks[joystick].num_dpads - old_capacity);
+		memset(joysticks[joystick].dpads + old_capacity, 0, (joysticks[joystick].num_dpads - old_capacity) * sizeof(joydpad));
 	}
 	for (int i = 0; i < 4; i ++) {
 		if (dpadbits[i] & direction) {
-			joysticks[joystick].dpads[dpad].bindings[i].bind_type = bind_type;
-			joysticks[joystick].dpads[dpad].bindings[i].subtype_a = subtype_a;
-			joysticks[joystick].dpads[dpad].bindings[i].subtype_b = subtype_b;
-			joysticks[joystick].dpads[dpad].bindings[i].value = value;
+			do_bind(joysticks[joystick].dpads[dpad].bindings + i, bind_type, subtype_a, subtype_b, value);
 			break;
 		}
+	}
+}
+
+void bind_axis(int joystick, int axis, int positive, uint8_t bind_type, uint8_t subtype_a, uint8_t subtype_b, uint8_t value)
+{
+	if (joystick >= MAX_JOYSTICKS) {
+		return;
+	}
+	if (!joysticks[joystick].axes) {
+		//typical gamepad has 4 axes
+		joysticks[joystick].num_axes = axis+1 > 4 ? axis+1 : 4;
+		joysticks[joystick].axes = calloc(joysticks[joystick].num_axes, sizeof(joyaxis));
+	} else if (joysticks[joystick].num_axes <= axis) {
+		uint32_t old_capacity = joysticks[joystick].num_axes;
+		joysticks[joystick].num_axes *= 2;
+		joysticks[joystick].axes = realloc(joysticks[joystick].axes, sizeof(joyaxis) * joysticks[joystick].num_axes);
+		memset(joysticks[joystick].axes + old_capacity, 0, (joysticks[joystick].num_axes - old_capacity) * sizeof(joyaxis));
+	}
+	if (positive) {
+		do_bind(&joysticks[joystick].axes[axis].positive, bind_type, subtype_a, subtype_b, value);
+	} else {
+		do_bind(&joysticks[joystick].axes[axis].negative, bind_type, subtype_a, subtype_b, value);
 	}
 }
 
@@ -194,6 +223,13 @@ void reset_joystick_bindings(int joystick)
 			{
 				joysticks[joystick].dpads[i].bindings[dir].bind_type = BIND_NONE;
 			}
+		}
+	}
+	if (joysticks[joystick].axes) {
+		for (int i = 0; i < joysticks[joystick].num_axes; i++)
+		{
+			joysticks[joystick].axes[i].positive.bind_type = BIND_NONE;
+			joysticks[joystick].axes[i].negative.bind_type = BIND_NONE;
 		}
 	}
 }
@@ -218,8 +254,6 @@ void reset_joystick_bindings(int joystick)
 #define MOUSE_RIGHT          2
 #define MOUSE_MIDDLE         4
 #define MOUSE_START          8
-
-
 
 void bind_gamepad(int keycode, int gamepadnum, int button)
 {
@@ -249,6 +283,15 @@ void bind_dpad_gamepad(int joystick, int dpad, uint8_t direction, int gamepadnum
 	bind_dpad(joystick, dpad, direction, bind_type, button >> 12, button >> 8 & 0xF, button & 0xFF);
 }
 
+void bind_axis_gamepad(int joystick, int axis, uint8_t positive, int gamepadnum, int button)
+{
+	if (gamepadnum < 1 || gamepadnum > 8) {
+		return;
+	}
+	uint8_t bind_type = gamepadnum - 1 + BIND_GAMEPAD1;
+	bind_axis(joystick, axis, positive, bind_type, button >> 12, button >> 8 & 0xF, button & 0xFF);
+}
+
 void bind_ui(int keycode, ui_action action, uint8_t param)
 {
 	bind_key(keycode, BIND_UI, action, 0, param);
@@ -262,6 +305,11 @@ void bind_button_ui(int joystick, int joybutton, ui_action action, uint8_t param
 void bind_dpad_ui(int joystick, int dpad, uint8_t direction, ui_action action, uint8_t param)
 {
 	bind_dpad(joystick, dpad, direction, BIND_UI, action, 0, param);
+}
+
+void bind_axis_ui(int joystick, int axis, uint8_t positive, ui_action action, uint8_t param)
+{
+	bind_axis(joystick, axis, positive, BIND_UI, action, 0, param);
 }
 
 void handle_binding_down(keybinding * binding)
@@ -463,6 +511,29 @@ void handle_joy_dpad(int joystick, int dpadnum, uint8_t value)
 		} else if(newup & dpadbits[i]) {
 			handle_binding_up(dpad->bindings + i);
 		}
+	}
+}
+
+#define JOY_AXIS_THRESHOLD 2000
+
+void handle_joy_axis(int joystick, int axis, int16_t value)
+{
+	if (joystick >= MAX_JOYSTICKS  || axis >= joysticks[joystick].num_axes) {
+		return;
+	}
+	joyaxis *jaxis = joysticks[joystick].axes + axis;
+	int old_active = abs(jaxis->value) > JOY_AXIS_THRESHOLD;
+	int new_active = abs(value) > JOY_AXIS_THRESHOLD;
+	int old_pos = jaxis->value > 0;
+	int new_pos = value > 0;
+	jaxis->value = value;
+	if (old_active && (!new_active || old_pos != new_pos)) {
+		//previously activated direction is no longer active
+		handle_binding_up(old_pos ? &jaxis->positive : &jaxis->negative);
+	}
+	if (new_active && (!old_active || old_pos != new_pos)) {
+		//previously unactivated direction is now active
+		handle_binding_down(new_pos ? &jaxis->positive : &jaxis->negative);
 	}
 }
 
@@ -967,7 +1038,7 @@ void process_pad_button(char *key, tern_val val, void *data)
 	long hostbutton = strtol(key, &end, 10);
 	if (*end) {
 		//key is not a valid base 10 integer
-		hostbutton = render_translate_input_name(hostpadnum, key);
+		hostbutton = render_translate_input_name(hostpadnum, key, 0);
 		if (hostbutton < 0) {
 			if (hostbutton == RENDER_INVALID_NAME) {
 				warning("%s is not a valid gamepad input name\n", key);
@@ -982,8 +1053,13 @@ void process_pad_button(char *key, tern_val val, void *data)
 			} else {
 				bind_dpad_ui(hostpadnum, render_dpad_part(hostbutton), render_direction_part(hostbutton), ui_func, button);
 			}
+			return;
 		} else if (hostbutton & RENDER_AXIS_BIT) {
-			//TODO: support analog axes
+			if (bindtype == BIND_GAMEPAD1) {
+				bind_axis_gamepad(hostpadnum, render_axis_part(hostbutton), 1, padnum, button);
+			} else {
+				bind_axis_ui(hostpadnum, render_axis_part(hostbutton), 1, padnum, button);
+			}
 			return;
 		}
 	}
@@ -992,6 +1068,65 @@ void process_pad_button(char *key, tern_val val, void *data)
 	} else if (bindtype == BIND_UI) {
 		bind_button_ui(hostpadnum, hostbutton, ui_func, button);
 	}
+}
+
+void process_pad_axis(char *key, tern_val val, void *data)
+{
+	key = strdup(key);
+	pad_button_state *state = data;
+	int hostpadnum = state->padnum;
+	int ui_func, padnum, button;
+	int bindtype = parse_binding_target(val.ptrval, state->padbuttons, state->mousebuttons, &ui_func, &padnum, &button);
+	char *modifier = strchr(key, '.');
+	int positive = 1;
+	if (modifier) {
+		*modifier = 0;
+		modifier++;
+		if (!strcmp("negative", modifier)) {
+			positive = 0;
+		} else if(strcmp("positive", modifier)) {
+			warning("Invalid axis modifier %s for axis %s on pad %d\n", modifier, key, hostpadnum);
+		}
+	}
+	char *end;
+	long axis = strtol(key, &end, 10);
+	if (*end) {
+		//key is not a valid base 10 integer
+		axis = render_translate_input_name(hostpadnum, key, 1);
+		if (axis < 0) {
+			if (axis == RENDER_INVALID_NAME) {
+				warning("%s is not a valid gamepad input name\n", key);
+			} else if (axis == RENDER_NOT_MAPPED) {
+				warning("No mapping exists for input %s on gamepad %d\n", key, hostpadnum);
+			}
+			goto done;
+		}
+		if (axis & RENDER_DPAD_BIT) {
+			if (bindtype == BIND_GAMEPAD1) {
+				bind_dpad_gamepad(hostpadnum, render_dpad_part(axis), render_direction_part(axis), padnum, button);
+			} else {
+				bind_dpad_ui(hostpadnum, render_dpad_part(axis), render_direction_part(axis), ui_func, button);
+			}
+			goto done;
+		} else if (axis & RENDER_AXIS_BIT) {
+			axis = render_axis_part(axis);
+		} else {
+			if (bindtype == BIND_GAMEPAD1) {
+				bind_button_gamepad(hostpadnum, axis, padnum, button);
+			} else if (bindtype == BIND_UI) {
+				bind_button_ui(hostpadnum, axis, ui_func, button);
+			}
+			goto done;
+		}
+	}
+	if (bindtype == BIND_GAMEPAD1) {
+		bind_axis_gamepad(hostpadnum, axis, positive, padnum, button);
+	} else {
+		bind_axis_ui(hostpadnum, axis, positive, ui_func, button);
+	}
+done:
+	free(key);
+	return;
 }
 
 static tern_node *get_pad_buttons()
@@ -1070,14 +1205,31 @@ void handle_joy_added(int joystick)
 				};
 				tern_foreach(button_node, process_pad_button, &state);
 			}
+			tern_node *axes_node = tern_find_ptr(pad, "axes");
+			if (axes_node) {
+				pad_button_state state = {
+					.padnum = joystick,
+					.padbuttons = get_pad_buttons(),
+					.mousebuttons = get_mouse_buttons()
+				};
+				tern_foreach(axes_node, process_pad_axis, &state);
+			}
 			if (current_io) {
 				if (joysticks[joystick].buttons) {
 					map_bindings(current_io->ports, joysticks[joystick].buttons, joysticks[joystick].num_buttons);
 				}
 				if (joysticks[joystick].dpads)
 				{
-					for (uint32_t i = 0; i < joysticks[joystick].num_dpads; i++) {
+					for (uint32_t i = 0; i < joysticks[joystick].num_dpads; i++)
+					{
 						map_bindings(current_io->ports, joysticks[joystick].dpads[i].bindings, 4);
+					}
+				}
+				if (joysticks[joystick].axes) {
+					for (uint32_t i = 0; i < joysticks[joystick].num_axes; i++)
+					{
+						map_bindings(current_io->ports, &joysticks[joystick].axes[i].positive, 1);
+						map_bindings(current_io->ports, &joysticks[joystick].axes[i].negative, 1);
 					}
 				}
 			}
@@ -1193,9 +1345,15 @@ void map_all_bindings(sega_io *io)
 		}
 		if (joysticks[stick].dpads)
 		{
-			for (uint32_t i = 0; i < joysticks[stick].num_dpads; i++) {
+			for (uint32_t i = 0; i < joysticks[stick].num_dpads; i++)
+			{
 				map_bindings(ports, joysticks[stick].dpads[i].bindings, 4);
 			}
+		}
+		for (uint32_t i = 0; i < joysticks[stick].num_axes; i++)
+		{
+			map_bindings(current_io->ports, &joysticks[stick].axes[i].positive, 1);
+			map_bindings(current_io->ports, &joysticks[stick].axes[i].negative, 1);
 		}
 	}
 	for (int mouse = 0; mouse < MAX_MICE; mouse++)
