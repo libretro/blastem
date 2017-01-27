@@ -682,6 +682,8 @@ int32_t render_translate_input_name(int32_t controller, char *name)
 		button_lookup = tern_insert_int(button_lookup, "options", SDL_CONTROLLER_BUTTON_START);
 		button_lookup = tern_insert_int(button_lookup, "l1", SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
 		button_lookup = tern_insert_int(button_lookup, "r1", SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
+		button_lookup = tern_insert_int(button_lookup, "l3", SDL_CONTROLLER_BUTTON_LEFTSTICK);
+		button_lookup = tern_insert_int(button_lookup, "r3", SDL_CONTROLLER_BUTTON_RIGHTSTICK);
 	}
 	intptr_t sdl_button = tern_find_int(button_lookup, name, SDL_CONTROLLER_BUTTON_INVALID);
 	if (sdl_button == SDL_CONTROLLER_BUTTON_INVALID) {
