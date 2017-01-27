@@ -656,9 +656,9 @@ static int lowest_unused_joystick_index()
 	return -1;
 }
 
-int32_t render_translate_input_name(int32_t controller, char *name)
+int32_t render_translate_input_name(int32_t controller, char *name, uint8_t is_axis)
 {
-	static tern_node *button_lookup;
+	static tern_node *button_lookup, *axis_lookup;
 	if (controller > MAX_JOYSTICKS || !joysticks[controller]) {
 		return RENDER_NOT_PLUGGED_IN;
 	}
@@ -666,35 +666,55 @@ int32_t render_translate_input_name(int32_t controller, char *name)
 	if (!SDL_IsGameController(joystick_sdl_index[controller])) {
 		return RENDER_NOT_MAPPED;
 	}
-	
-	if (!button_lookup) {
-		for (int i = SDL_CONTROLLER_BUTTON_A; i < SDL_CONTROLLER_BUTTON_MAX; i++)
-		{
-			button_lookup = tern_insert_int(button_lookup, SDL_GameControllerGetStringForButton(i), i);
-		}
-		//alternative Playstation-style names
-		button_lookup = tern_insert_int(button_lookup, "cross", SDL_CONTROLLER_BUTTON_A);
-		button_lookup = tern_insert_int(button_lookup, "circle", SDL_CONTROLLER_BUTTON_B);
-		button_lookup = tern_insert_int(button_lookup, "square", SDL_CONTROLLER_BUTTON_X);
-		button_lookup = tern_insert_int(button_lookup, "triangle", SDL_CONTROLLER_BUTTON_Y);
-		button_lookup = tern_insert_int(button_lookup, "share", SDL_CONTROLLER_BUTTON_BACK);
-		button_lookup = tern_insert_int(button_lookup, "select", SDL_CONTROLLER_BUTTON_BACK);
-		button_lookup = tern_insert_int(button_lookup, "options", SDL_CONTROLLER_BUTTON_START);
-		button_lookup = tern_insert_int(button_lookup, "l1", SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
-		button_lookup = tern_insert_int(button_lookup, "r1", SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
-		button_lookup = tern_insert_int(button_lookup, "l3", SDL_CONTROLLER_BUTTON_LEFTSTICK);
-		button_lookup = tern_insert_int(button_lookup, "r3", SDL_CONTROLLER_BUTTON_RIGHTSTICK);
-	}
-	intptr_t sdl_button = tern_find_int(button_lookup, name, SDL_CONTROLLER_BUTTON_INVALID);
-	if (sdl_button == SDL_CONTROLLER_BUTTON_INVALID) {
-		return RENDER_INVALID_NAME;
-	}
 	SDL_GameController *control = SDL_GameControllerOpen(joystick_sdl_index[controller]);
 	if (!control) {
 		warning("Failed to open game controller %d: %s\n", controller, SDL_GetError());
 		return RENDER_NOT_PLUGGED_IN;
 	}
-	SDL_GameControllerButtonBind cbind = SDL_GameControllerGetBindForButton(control, sdl_button);
+	
+	SDL_GameControllerButtonBind cbind;
+	if (is_axis) {
+		if (!axis_lookup) {
+			for (int i = SDL_CONTROLLER_AXIS_LEFTX; i < SDL_CONTROLLER_AXIS_MAX; i++)
+			{
+				axis_lookup = tern_insert_int(axis_lookup, SDL_GameControllerGetStringForAxis(i), i);
+			}
+			//alternative Playstation-style names
+			axis_lookup = tern_insert_int(axis_lookup, "l2", SDL_CONTROLLER_AXIS_TRIGGERLEFT);
+			axis_lookup = tern_insert_int(axis_lookup, "r2", SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
+		}
+		intptr_t sdl_axis = tern_find_int(axis_lookup, name, SDL_CONTROLLER_AXIS_INVALID);
+		if (sdl_axis == SDL_CONTROLLER_AXIS_INVALID) {
+			SDL_GameControllerClose(control);
+			return RENDER_INVALID_NAME;
+		}
+		cbind = SDL_GameControllerGetBindForAxis(control, sdl_axis);
+	} else {
+		if (!button_lookup) {
+			for (int i = SDL_CONTROLLER_BUTTON_A; i < SDL_CONTROLLER_BUTTON_MAX; i++)
+			{
+				button_lookup = tern_insert_int(button_lookup, SDL_GameControllerGetStringForButton(i), i);
+			}
+			//alternative Playstation-style names
+			button_lookup = tern_insert_int(button_lookup, "cross", SDL_CONTROLLER_BUTTON_A);
+			button_lookup = tern_insert_int(button_lookup, "circle", SDL_CONTROLLER_BUTTON_B);
+			button_lookup = tern_insert_int(button_lookup, "square", SDL_CONTROLLER_BUTTON_X);
+			button_lookup = tern_insert_int(button_lookup, "triangle", SDL_CONTROLLER_BUTTON_Y);
+			button_lookup = tern_insert_int(button_lookup, "share", SDL_CONTROLLER_BUTTON_BACK);
+			button_lookup = tern_insert_int(button_lookup, "select", SDL_CONTROLLER_BUTTON_BACK);
+			button_lookup = tern_insert_int(button_lookup, "options", SDL_CONTROLLER_BUTTON_START);
+			button_lookup = tern_insert_int(button_lookup, "l1", SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
+			button_lookup = tern_insert_int(button_lookup, "r1", SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
+			button_lookup = tern_insert_int(button_lookup, "l3", SDL_CONTROLLER_BUTTON_LEFTSTICK);
+			button_lookup = tern_insert_int(button_lookup, "r3", SDL_CONTROLLER_BUTTON_RIGHTSTICK);
+		}
+		intptr_t sdl_button = tern_find_int(button_lookup, name, SDL_CONTROLLER_BUTTON_INVALID);
+		if (sdl_button == SDL_CONTROLLER_BUTTON_INVALID) {
+			SDL_GameControllerClose(control);
+			return RENDER_INVALID_NAME;
+		}
+		cbind = SDL_GameControllerGetBindForButton(control, sdl_button);
+	}
 	SDL_GameControllerClose(control);
 	switch (cbind.bindType)
 	{
@@ -710,12 +730,17 @@ int32_t render_translate_input_name(int32_t controller, char *name)
 
 int32_t render_dpad_part(int32_t input)
 {
-	return input >> 4 & 0x7FFFFF;
+	return input >> 4 & 0xFFFFFF;
 }
 
 uint8_t render_direction_part(int32_t input)
 {
 	return input & 0xF;
+}
+
+int32_t render_axis_part(int32_t input)
+{
+	return input & 0xFFFFFFF;
 }
 
 static uint8_t scancode_map[SDL_NUM_SCANCODES] = {
@@ -839,6 +864,9 @@ static int32_t handle_event(SDL_Event *event)
 		break;
 	case SDL_JOYHATMOTION:
 		handle_joy_dpad(find_joystick_index(event->jbutton.which), event->jhat.hat, event->jhat.value);
+		break;
+	case SDL_JOYAXISMOTION:
+		handle_joy_axis(find_joystick_index(event->jaxis.which), event->jaxis.axis, event->jaxis.value);
 		break;
 	case SDL_JOYDEVICEADDED:
 		if (event->jdevice.which < MAX_JOYSTICKS) {
