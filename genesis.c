@@ -7,6 +7,7 @@
 #include "blastem.h"
 #include <stdlib.h>
 #include <ctype.h>
+#include <time.h>
 #include "render.h"
 #include "gst.h"
 #include "util.h"
@@ -766,8 +767,8 @@ static void set_speed_percent(system_header * system, uint32_t percent)
 void set_region(genesis_context *gen, rom_info *info, uint8_t region)
 {
 	if (!region) {
-		char * def_region = tern_find_ptr(config, "default_region");
-		if (def_region && (!info->regions || (info->regions & translate_region_char(toupper(*def_region))))) {
+		char * def_region = tern_find_path_default(config, "system\0default_region\0", (tern_val){.ptrval = "U"}).ptrval;
+		if (!info->regions || (info->regions & translate_region_char(toupper(*def_region)))) {
 			region = translate_region_char(toupper(*def_region));
 		} else {
 			region = info->regions;
@@ -953,6 +954,30 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	gen->cart = main_rom;
 	gen->lock_on = lock_on;
 	gen->work_ram = calloc(2, RAM_WORDS);
+	if (!strcmp("random", tern_find_path_default(config, "system\0ram_init\0", (tern_val){.ptrval = "zero"}).ptrval))
+	{
+		srand(time(NULL));
+		for (int i = 0; i < RAM_WORDS; i++)
+		{
+			gen->work_ram[i] = rand();
+		}
+		for (int i = 0; i < Z80_RAM_BYTES; i++)
+		{
+			gen->zram[i] = rand();
+		}
+		for (int i = 0; i < VRAM_SIZE; i++)
+		{
+			write_vram_byte(gen->vdp, i, rand());
+		}
+		for (int i = 0; i < CRAM_SIZE; i++)
+		{
+			write_cram(gen->vdp, i, rand());
+		}
+		for (int i = 0; i < VSRAM_SIZE; i++)
+		{
+			gen->vdp->vsram[i] = rand();
+		}
+	}
 	setup_io_devices(config, rom, &gen->io);
 
 	gen->save_type = rom->save_type;
