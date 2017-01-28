@@ -202,6 +202,9 @@ static void run_sms(system_header *system)
 			zdebugger(sms->z80, sms->z80->pc);
 		}
 		z80_run(sms->z80, target_cycle);
+		if (sms->z80->reset) {
+			z80_clear_reset(sms->z80, sms->z80->current_cycle + 128*15);
+		}
 		target_cycle = sms->z80->current_cycle;
 		vdp_run_context(sms->vdp, target_cycle);
 		psg_run(sms->psg, target_cycle);
@@ -234,6 +237,13 @@ static void start_sms(system_header *system, char *statefile)
 	z80_clear_reset(sms->z80, 128*15);
 	
 	run_sms(system);
+}
+
+static void soft_reset(system_header *system)
+{
+	sms_context *sms = (sms_context *)system;
+	z80_assert_reset(sms->z80, sms->z80->current_cycle);
+	sms->z80->target_cycle = sms->z80->sync_cycle = sms->z80->current_cycle;
 }
 
 static void free_sms(system_header *system)
@@ -341,6 +351,7 @@ sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t for
 	sms->header.free_context = free_sms;
 	sms->header.get_open_bus_value = get_open_bus_value;
 	sms->header.request_exit = request_exit;
+	sms->header.soft_reset = soft_reset;
 	sms->header.inc_debug_mode = inc_debug_mode;
 	sms->header.inc_debug_pal = inc_debug_pal;
 	
