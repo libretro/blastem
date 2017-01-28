@@ -46,6 +46,7 @@ struct genesis_context {
 	sega_io         io;
 	uint8_t         version_reg;
 	uint8_t         bus_busy;
+	uint8_t         reset_requested;
 	eeprom_state    eeprom;
 };
 

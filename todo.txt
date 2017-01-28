@@ -12,7 +12,9 @@ Update README
 	- Overscan
 	- Full screen toggle
 	- Aspect ratio control
+	- Soft Reset
 Update Changelog
+SMS Pause NMI
 
 0.5.0 Nice to Haves
 -------------------
