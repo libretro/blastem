@@ -33,6 +33,7 @@ struct system_header {
 	system_fun        load_save;
 	system_fun        persist_save;
 	system_fun        request_exit;
+	system_fun        soft_reset;
 	system_fun        free_context;
 	system_fun_r16    get_open_bus_value;
 	speed_system_fun  set_speed_percent;

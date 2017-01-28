@@ -790,6 +790,18 @@ void set_region(genesis_context *gen, rom_info *info, uint8_t region)
 	gen->master_clock = gen->normal_clock;
 }
 
+static void handle_reset_requests(genesis_context *gen)
+{
+	while (gen->reset_requested)
+	{
+		gen->reset_requested = 0;
+		z80_assert_reset(gen->z80, gen->m68k->current_cycle);
+		z80_clear_busreq(gen->z80, gen->m68k->current_cycle);
+		//Is there any sort of VDP reset?
+		m68k_reset(gen->m68k);
+	}
+}
+
 static void start_genesis(system_header *system, char *statefile)
 {
 	genesis_context *gen = (genesis_context *)system;
@@ -815,6 +827,7 @@ static void start_genesis(system_header *system, char *statefile)
 		}
 		m68k_reset(gen->m68k);
 	}
+	handle_reset_requests(gen);
 }
 
 static void resume_genesis(system_header *system)
@@ -823,6 +836,7 @@ static void resume_genesis(system_header *system)
 	map_all_bindings(&gen->io);
 	render_set_video_standard((gen->version_reg & HZ50) ? VID_PAL : VID_NTSC);
 	resume_68k(gen->m68k);
+	handle_reset_requests(gen);
 }
 
 static void inc_debug_mode(system_header *system)
@@ -878,6 +892,13 @@ static void load_save(system_header *system)
 	}
 }
 
+static void soft_reset(system_header *system)
+{
+	genesis_context *gen = (genesis_context *)system;
+	gen->m68k->should_return = 1;
+	gen->reset_requested = 1;
+}
+
 static void free_genesis(system_header *system)
 {
 	genesis_context *gen = (genesis_context *)system;
@@ -912,6 +933,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	gen->header.resume_context = resume_genesis;
 	gen->header.load_save = load_save;
 	gen->header.persist_save = persist_save;
+	gen->header.soft_reset = soft_reset;
 	gen->header.free_context = free_genesis;
 	gen->header.get_open_bus_value = get_open_bus_value;
 	gen->header.request_exit = request_exit;
