@@ -2,7 +2,6 @@
 ----------------
 Fix MULU/MULS timing
 Fix DIVU/DIVS timing
-movem extra memory access
 Implement SSG-EG Mode
 Implement CSM Mode
 Provide an option to save SRAM/save states relative to ROM
