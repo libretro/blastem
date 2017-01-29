@@ -59,6 +59,10 @@ void handle_joy_dpad(int joystick, int dpadnum, uint8_t value)
 {
 }
 
+void handle_joy_axis(int joystick, int axis, int16_t value)
+{
+}
+
 void handle_joy_added(int joystick)
 {
 }
