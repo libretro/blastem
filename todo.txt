@@ -30,6 +30,8 @@ MegaWIFI
 32X
 Sega CD
 Full SMS/GG VDP emulation
+Improve internal CPU debugger
+Allow "debug windows" so VDP debug output can be viewed simultaneously with normal output
 YM2413 emulation
 Laser Active
 Finish Jaguar emulation
