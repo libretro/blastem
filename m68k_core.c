@@ -461,7 +461,7 @@ static void translate_m68k_movem(m68k_options * opts, m68kinst * inst)
 		}
 	} else {
 		//mem to reg
-		early_cycles = 4;
+		early_cycles = 8; //includes prefetch
 		switch (inst->src.addr_mode)
 		{
 		case MODE_AREG_INDIRECT:
@@ -520,9 +520,9 @@ static void translate_m68k_movem(m68k_options * opts, m68kinst * inst)
 		if (inst->src.addr_mode == MODE_AREG_POSTINC) {
 			native_to_areg(opts, opts->gen.scratch1, inst->src.params.regs.pri);
 		}
+		//Extra read
+		call(code, opts->read_16);
 	}
-	//prefetch
-	cycles(&opts->gen, 4);
 }
 
 static void translate_m68k_nop(m68k_options *opts, m68kinst *inst)
