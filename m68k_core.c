@@ -565,6 +565,8 @@ code_ptr get_native_address(m68k_options *opts, uint32_t address)
 	if (mem_chunk) {
 		//calculate the lowest alias for this address
 		address = mem_chunk->start + ((address - mem_chunk->start) & mem_chunk->mask);
+	} else {
+		address &= opts->gen.address_mask;
 	}
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
 	if (!native_code_map[chunk].base) {
@@ -589,6 +591,8 @@ uint32_t get_instruction_start(m68k_options *opts, uint32_t address)
 	if (mem_chunk) {
 		//calculate the lowest alias for this address
 		address = mem_chunk->start + ((address - mem_chunk->start) & mem_chunk->mask);
+	} else {
+		address &= opts->gen.address_mask;
 	}
 	
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
@@ -635,6 +639,8 @@ static void map_native_address(m68k_context * context, uint32_t address, code_pt
 		}
 		//calculate the lowest alias for this address
 		address = mem_chunk->start + ((address - mem_chunk->start) & mem_chunk->mask);
+	} else {
+		address &= opts->gen.address_mask;
 	}
 	
 	uint32_t chunk = address / NATIVE_CHUNK_SIZE;
