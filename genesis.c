@@ -517,6 +517,29 @@ static m68k_context * io_write(uint32_t location, m68k_context * context, uint8_
 			case 0x6:
 				gen->io.ports[2].control = value;
 				break;
+			case 0x7:
+				gen->io.ports[0].serial_out = value;
+				break;
+			case 0x8:
+			case 0xB:
+			case 0xE:
+				//serial input port is not writeable
+				break;
+			case 0x9:
+				gen->io.ports[0].serial_ctrl = value;
+				break;
+			case 0xA:
+				gen->io.ports[1].serial_out = value;
+				break;
+			case 0xC:
+				gen->io.ports[1].serial_ctrl = value;
+				break;
+			case 0xD:
+				gen->io.ports[2].serial_out = value;
+				break;
+			case 0xF:
+				gen->io.ports[2].serial_ctrl = value;
+				break;
 			}
 		} else {
 			if (location == 0x1100) {
@@ -627,6 +650,33 @@ static uint8_t io_read(uint32_t location, m68k_context * context)
 				break;
 			case 0x6:
 				value = gen->io.ports[2].control;
+				break;
+			case 0x7:
+				value = gen->io.ports[0].serial_out;
+				break;
+			case 0x8:
+				value = gen->io.ports[0].serial_in;
+				break;
+			case 0x9:
+				value = gen->io.ports[0].serial_ctrl;
+				break;
+			case 0xA:
+				value = gen->io.ports[1].serial_out;
+				break;
+			case 0xB:
+				value = gen->io.ports[1].serial_in;
+				break;
+			case 0xC:
+				value = gen->io.ports[1].serial_ctrl;
+				break;
+			case 0xD:
+				value = gen->io.ports[2].serial_out;
+				break;
+			case 0xE:
+				value = gen->io.ports[2].serial_in;
+				break;
+			case 0xF:
+				value = gen->io.ports[2].serial_ctrl;
 				break;
 			default:
 				value = 0xFF;
