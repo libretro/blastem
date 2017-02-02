@@ -57,6 +57,9 @@ typedef struct {
 	uint8_t  output;
 	uint8_t  control;
 	uint8_t  input[3];
+	uint8_t  serial_out;
+	uint8_t  serial_in;
+	uint8_t  serial_ctrl;
 	uint8_t  device_type;
 } io_port;
 
