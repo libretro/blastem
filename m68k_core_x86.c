@@ -1807,11 +1807,40 @@ void translate_m68k_exg(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 	}
 }
 
+
+
+static uint32_t mulu_cycles(uint16_t value)
+{
+	//4 for prefetch, 2-cycles per bit x 16, 2 for cleanup
+	uint32_t cycles = 38;
+	uint16_t a = (value & 0b1010101010101010) >> 1;
+	uint16_t b = value & 0b0101010101010101;
+	value = a + b;
+	a = (value & 0b1100110011001100) >> 2;
+	b = value & 0b0011001100110011;
+	value = a + b;
+	a = (value & 0b1111000011110000) >> 4;
+	b = value & 0b0000111100001111;
+	value = a + b;
+	a = (value & 0b1111111100000000) >> 8;
+	b = value & 0b0000000011111111;
+	value = a + b;
+	return cycles + 2*value;
+}
+
+static uint32_t muls_cycles(uint16_t value)
+{
+	//muls timing is essentially the same as muls, but it's based on the number of 0/1
+	//transitions rather than the number of 1 bits. xoring the value with itself shifted
+	//by one effectively sets one bit for every transition
+	return mulu_cycles((value << 1) ^ value);
+}
+
 void translate_m68k_mul(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op)
 {
 	code_info *code = &opts->gen.code;
-	cycles(&opts->gen, 70); //TODO: Calculate the actual value based on the value of the <ea> parameter
 	if (src_op->mode == MODE_IMMED) {
+		cycles(&opts->gen, inst->op == M68K_MULU ? mulu_cycles(src_op->disp) : muls_cycles(src_op->disp));
 		mov_ir(code, inst->op == M68K_MULU ? (src_op->disp & 0xFFFF) : ((src_op->disp & 0x8000) ? src_op->disp | 0xFFFF0000 : src_op->disp), opts->gen.scratch1, SZ_D);
 	} else if (src_op->mode == MODE_REG_DIRECT) {
 		if (inst->op == M68K_MULS) {
@@ -1826,6 +1855,22 @@ void translate_m68k_mul(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 			movzx_rdispr(code, src_op->base, src_op->disp, opts->gen.scratch1, SZ_W, SZ_D);
 		}
 	}
+	if (src_op->mode != MODE_IMMED) {
+		//TODO: Inline cycle calculation so we don't need to save/restore a bunch of registers
+		//save context to memory and call the relevant C function for calculating the cycle count
+		call(code, opts->gen.save_context);
+		push_r(code, opts->gen.scratch1);
+		push_r(code, opts->gen.context_reg);
+		call_args(code, (code_ptr)(inst->op == M68K_MULS ? muls_cycles : mulu_cycles), 1, opts->gen.scratch1);
+		pop_r(code, opts->gen.context_reg);
+		//turn 68K cycles into master clock cycles and add to the current cycle count
+		imul_irr(code, opts->gen.clock_divider, RAX, RAX, SZ_D);
+		add_rrdisp(code, RAX, opts->gen.context_reg, offsetof(m68k_context, current_cycle), SZ_D);
+		//restore context and scratch1
+		call(code, opts->gen.load_context);
+		pop_r(code, opts->gen.scratch1);
+	}
+	
 	uint8_t dst_reg;
 	if (dst_op->mode == MODE_REG_DIRECT) {
 		dst_reg = dst_op->base;
