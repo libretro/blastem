@@ -1,6 +1,5 @@
 0.5.0 TODO List
 ----------------
-Fix MULU/MULS timing
 Fix DIVU/DIVS timing
 Implement SSG-EG Mode
 Implement CSM Mode
