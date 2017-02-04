@@ -148,6 +148,7 @@ void sbb_rrdisp(code_info *code, uint8_t src, uint8_t dst_base, int32_t disp, ui
 void sbb_rdispr(code_info *code, uint8_t src_base, int32_t disp, uint8_t dst, uint8_t size);
 void cmp_rrdisp(code_info *code, uint8_t src, uint8_t dst_base, int32_t disp, uint8_t size);
 void cmp_rdispr(code_info *code, uint8_t src_base, int32_t disp, uint8_t dst, uint8_t size);
+void imul_irr(code_info *code, int32_t val, uint8_t src, uint8_t dst, uint8_t size);
 void imul_rr(code_info *code, uint8_t src, uint8_t dst, uint8_t size);
 void imul_rrdisp(code_info *code, uint8_t src, uint8_t dst_base, int32_t disp, uint8_t size);
 void imul_rdispr(code_info *code, uint8_t src_base, int32_t disp, uint8_t dst, uint8_t size);

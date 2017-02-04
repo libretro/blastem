@@ -31,6 +31,7 @@
 #define OP_POP 0x58
 #define OP_MOVSXD 0x63
 #define PRE_SIZE 0x66
+#define OP_IMUL 0x69
 #define OP_JCC 0x70
 #define OP_IMMED_ARITH 0x80
 #define OP_TEST 0x84
@@ -530,7 +531,7 @@ void x86_ir(code_info *code, uint8_t opcode, uint8_t op_ex, uint8_t al_opcode, i
 	if (size == SZ_W) {
 		*(out++) = PRE_SIZE;
 	}
-	if (dst == RAX && !sign_extend) {
+	if (dst == RAX && !sign_extend && al_opcode) {
 		if (size != SZ_B) {
 			al_opcode |= BIT_SIZE;
 			if (size == SZ_Q) {
@@ -1144,6 +1145,15 @@ void imul_rr(code_info *code, uint8_t src, uint8_t dst, uint8_t size)
 void imul_rdispr(code_info *code, uint8_t src_base, int32_t disp, uint8_t dst, uint8_t size)
 {
 	x86_rrdisp_sizedir(code, OP2_IMUL | (PRE_2BYTE << 8), dst, src_base, disp, size, 0);
+}
+
+void imul_irr(code_info *code, int32_t val, uint8_t src, uint8_t dst, uint8_t size)
+{
+	if (size == SZ_B) {
+		fatal_error("imul immediate only supports 16-bit sizes and up");
+	}
+	
+	x86_ir(code, OP_IMUL, dst, 0, val, src, size);
 }
 
 void not_r(code_info *code, uint8_t dst, uint8_t size)
