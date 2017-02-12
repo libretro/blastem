@@ -1273,11 +1273,32 @@ void op_rdispr(code_info *code, m68kinst *inst, uint8_t src, int32_t disp, uint8
 void translate_m68k_arith(m68k_options *opts, m68kinst * inst, uint32_t flag_mask, host_ea *src_op, host_ea *dst_op)
 {
 	code_info *code = &opts->gen.code;
-	cycles(&opts->gen, BUS);
+	uint8_t size = inst->dst.addr_mode == MODE_AREG ? OPSIZE_LONG : inst->extra.size;
+	
+	uint32_t numcycles;
+	if ((inst->op == M68K_ADDX || inst->op == M68K_SUBX) && inst->src.addr_mode != MODE_REG) {
+		numcycles = 6;
+	} else if (size == OPSIZE_LONG) {
+		if (inst->op == M68K_CMP) {
+			numcycles = 6;
+		} else if (inst->op == M68K_AND && inst->variant == VAR_IMMEDIATE) {
+			numcycles = 6;
+		} else if (inst->op == M68K_ADD && inst->dst.addr_mode == MODE_AREG && inst->extra.size == OPSIZE_WORD && inst->variant == VAR_QUICK) {
+			numcycles = 4;
+		} else if (inst->dst.addr_mode <= MODE_AREG) {
+			numcycles = inst->src.addr_mode <= MODE_AREG || inst->src.addr_mode == MODE_IMMEDIATE ? 8 : 6;
+		} else {
+			numcycles = 4;
+		}
+	} else {
+		numcycles = 4;
+	}
+	cycles(&opts->gen, numcycles);
+	
 	if (inst->op == M68K_ADDX || inst->op == M68K_SUBX) {
 		flag_to_carry(opts, FLAG_X);
 	}
-	uint8_t size = inst->dst.addr_mode == MODE_AREG ? OPSIZE_LONG : inst->extra.size;
+	
 	if (src_op->mode == MODE_REG_DIRECT) {
 		if (dst_op->mode == MODE_REG_DIRECT) {
 			op_rr(code, inst, src_op->base, dst_op->base, size);
