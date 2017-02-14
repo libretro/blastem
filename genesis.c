@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <time.h>
+#include <string.h>
 #include "render.h"
 #include "gst.h"
 #include "util.h"
