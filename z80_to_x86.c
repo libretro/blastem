@@ -2939,6 +2939,8 @@ void z80_map_native_address(z80_context * context, uint32_t address, uint8_t * n
 		}
 		//calculate the lowest alias for this address
 		address = mem_chunk->start + ((address - mem_chunk->start) & mem_chunk->mask);
+	} else {
+		address &= opts->gen.address_mask;
 	}
 	
 	native_map_slot *map = opts->gen.native_code_map + address / NATIVE_CHUNK_SIZE;
@@ -2957,9 +2959,8 @@ void z80_map_native_address(z80_context * context, uint32_t address, uint8_t * n
 			memset(map->offsets, 0xFF, sizeof(int32_t) * NATIVE_CHUNK_SIZE);
 		}
 	
-		if (map->offsets[address % NATIVE_CHUNK_SIZE] == INVALID_OFFSET) {
-			map->offsets[address % NATIVE_CHUNK_SIZE] = EXTENSION_WORD;
-		}
+		//TODO: better handling of potentially overlapping instructions
+		map->offsets[address % NATIVE_CHUNK_SIZE] = EXTENSION_WORD;
 	}
 }
 
