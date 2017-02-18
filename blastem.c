@@ -280,7 +280,7 @@ int main(int argc, char ** argv)
 					"Options:\n"
 					"	-h          Print this help text\n"
 					"	-r (J|U|E)  Force region to Japan, US or Europe respectively\n"
-					"   -m MACHINE  Force emulated machine type to MACHINE. Valid values are:\n"
+					"	-m MACHINE  Force emulated machine type to MACHINE. Valid values are:\n"
 					"                   sms - Sega Master System/Mark III\n"
 					"                   gen - Sega Genesis/Megadrive\n"
 					"                   jag - Atari Jaguar\n"
