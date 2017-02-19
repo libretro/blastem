@@ -2959,8 +2959,10 @@ void z80_map_native_address(z80_context * context, uint32_t address, uint8_t * n
 			memset(map->offsets, 0xFF, sizeof(int32_t) * NATIVE_CHUNK_SIZE);
 		}
 	
-		//TODO: better handling of potentially overlapping instructions
-		map->offsets[address % NATIVE_CHUNK_SIZE] = EXTENSION_WORD;
+		if (map->offsets[address % NATIVE_CHUNK_SIZE] == INVALID_OFFSET) {
+			//TODO: better handling of potentially overlapping instructions
+			map->offsets[address % NATIVE_CHUNK_SIZE] = EXTENSION_WORD;
+		}
 	}
 }
 
@@ -2993,16 +2995,20 @@ uint32_t z80_get_instruction_start(z80_context *context, uint32_t address)
 	return address;
 }
 
+//Technically unbounded due to redundant prefixes, but this is the max useful size
+#define Z80_MAX_INST_SIZE 4
+
 z80_context * z80_handle_code_write(uint32_t address, z80_context * context)
 {
 	uint32_t inst_start = z80_get_instruction_start(context, address);
-	if (inst_start != INVALID_INSTRUCTION_START) {
+	while (inst_start != INVALID_INSTRUCTION_START && (address - inst_start) < Z80_MAX_INST_SIZE) {
 		code_ptr dst = z80_get_native_address(context, inst_start);
 		code_info code = {dst, dst+32, 0};
 		z80_options * opts = context->options;
 		dprintf("patching code at %p for Z80 instruction at %X due to write to %X\n", code.cur, inst_start, address);
 		mov_ir(&code, inst_start, opts->gen.scratch1, SZ_D);
 		call(&code, opts->retrans_stub);
+		inst_start = z80_get_instruction_start(context, inst_start - 1);
 	}
 	return context;
 }
@@ -3712,7 +3718,7 @@ uint32_t zbreakpoint_patch(z80_context * context, uint16_t address, code_ptr dst
 
 void zcreate_stub(z80_context * context)
 {
-	//FIXME: Stack offset stuff is still a bit broken
+	//FIXME: Stack offset stuff is probably broken on 32-bit
 	z80_options * opts = context->options;
 	code_info *code = &opts->gen.code;
 	uint32_t start_stack_off = code->stack_off;
@@ -3744,6 +3750,9 @@ void zcreate_stub(z80_context * context)
 	jcc(code, CC_NS, code->cur + 7);
 	pop_r(code, opts->gen.scratch1);
 	add_ir(code, check_int_size - patch_size, opts->gen.scratch1, SZ_PTR);
+#ifdef X86_64
+	sub_ir(code, 8, RSP, SZ_PTR);
+#endif
 	push_r(code, opts->gen.scratch1);
 	jmp(code, opts->gen.handle_cycle_limit_int);
 	*jmp_off = code->cur - (jmp_off+1);
