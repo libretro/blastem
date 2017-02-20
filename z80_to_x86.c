@@ -3277,9 +3277,6 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 			or_rrdisp(code, options->regs[Z80_R], options->gen.context_reg, zr_off(Z80_R), SZ_B);
 		} else if (options->regs[reg] >= 0) {
 			mov_rrdisp(code, options->regs[reg], options->gen.context_reg, zr_off(reg), size);
-			if (reg == Z80_R) {
-				and_irdisp(code, 0x80, options->gen.context_reg, zr_off(reg), SZ_B);
-			}	
 		}
 		if (size == SZ_W) {
 			i++;
@@ -3310,6 +3307,9 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 		}
 		if (options->regs[reg] >= 0) {
 			mov_rdispr(code, options->gen.context_reg, offsetof(z80_context, regs) + i, options->regs[reg], size);
+			if (reg == Z80_R) {
+				and_irdisp(code, 0x80, options->gen.context_reg, zr_off(reg), SZ_B);
+			}
 		}
 		if (size == SZ_W) {
 			i++;
