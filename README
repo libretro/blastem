@@ -1,4 +1,4 @@
-BlastEm 0.4.1
+BlastEm 0.5.0
 -------------
 
 Installation
@@ -104,12 +104,30 @@ don't correspond to a normal character, check the list below:
   search
   back
 
-The pads subsection is used to map gamepads and joysticks. Analog axes are not
-currently supported. An example configuration is provided in default.cfg to map
-SDL joystick 0 to the first controller and SDL joystick 1 to the second
-controller. The button assignments there work well for a 360 controller (at 
-least on Linux, it's possible the physical button to button number is different
-on other operating systems).
+The pads subsection is used to map gamepads and joysticks. Gamepads that are
+recognized, can have their buttons and axes mapped with semantic names. 
+Xbox 360, PS4 and PS3 style names are supported. Unrecognized gamepads can be 
+mapped using numeric button and axis ids. The following button names are
+recognized by BlastEm:
+	a, cross
+	b, circle
+	x, square
+	y, trinagle
+	start, options
+	back, select, share
+	guide
+	leftbutton, l1
+	rightbutton, r1
+	leftstick, l3
+	rightstick, r3
+The following axis names are recognized by BlastEm:
+	leftx
+	lefty
+	rightx
+	righty
+	lefttrigger, l2
+	righttrigger, r2
+	
 
 The mice subsection is used to map mice to emulated Mega/Sega mice. The default
 configuration maps both the first and second host mice to the first emulated
