@@ -57,6 +57,9 @@ struct rom_info {
 	uint8_t       regions;
 };
 
+#define GAME_ID_OFF 0x183
+#define GAME_ID_LEN 8
+
 tern_node *load_rom_db();
 rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, void *lock_on, uint32_t lock_on_size, memmap_chunk const *base_map, uint32_t base_chunks);
 rom_info configure_rom_heuristics(uint8_t *rom, uint32_t rom_size, memmap_chunk const *base_map, uint32_t base_chunks);
