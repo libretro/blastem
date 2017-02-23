@@ -5,13 +5,12 @@
 #include "util.h"
 #include "genesis.h"
 #include "menu.h"
+#include "xband.h"
 
 #define DOM_TITLE_START 0x120
 #define DOM_TITLE_END 0x150
 #define TITLE_START DOM_TITLE_END
 #define TITLE_END (TITLE_START+48)
-#define GAME_ID_OFF 0x183
-#define GAME_ID_LEN 8
 #define ROM_END   0x1A4
 #define RAM_ID    0x1B0
 #define RAM_FLAGS 0x1B2
@@ -848,6 +847,9 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, void *l
 	tern_node * entry = tern_find_ptr(rom_db, product_id);
 	if (!entry) {
 		puts("Not found in ROM DB, examining header\n");
+			if (xband_detect(rom, rom_size)) {
+				return xband_configure_rom(rom_db, rom, rom_size, lock_on, lock_on_size, base_map, base_chunks);
+			}
 		return configure_rom_heuristics(rom, rom_size, base_map, base_chunks);
 	}
 	rom_info info;

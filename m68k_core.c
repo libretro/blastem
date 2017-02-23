@@ -617,10 +617,10 @@ static void map_native_address(m68k_context * context, uint32_t address, code_pt
 	m68k_options * opts = context->options;
 	native_map_slot * native_code_map = opts->gen.native_code_map;
 	uint32_t meta_off;
-	memmap_chunk const *mem_chunk = find_map_chunk(address, &opts->gen, MMAP_WRITE | MMAP_CODE, &meta_off);
+	memmap_chunk const *mem_chunk = find_map_chunk(address, &opts->gen, MMAP_CODE, &meta_off);
 	if (mem_chunk) {
-		if ((mem_chunk->flags & (MMAP_WRITE | MMAP_CODE)) == (MMAP_WRITE | MMAP_CODE)) {
-			uint32_t masked = (address & mem_chunk->mask);
+		if (mem_chunk->flags & MMAP_CODE) {
+			uint32_t masked = (address - mem_chunk->start) & mem_chunk->mask;
 			uint32_t final_off = masked + meta_off;
 			uint32_t ram_flags_off = final_off >> (opts->gen.ram_flags_shift + 3);
 			context->ram_code_flags[ram_flags_off] |= 1 << ((final_off >> opts->gen.ram_flags_shift) & 7);
@@ -670,7 +670,7 @@ static void map_native_address(m68k_context * context, uint32_t address, code_pt
 static uint8_t get_native_inst_size(m68k_options * opts, uint32_t address)
 {
 	uint32_t meta_off;
-	memmap_chunk const *chunk = find_map_chunk(address, &opts->gen, MMAP_WRITE | MMAP_CODE, &meta_off);
+	memmap_chunk const *chunk = find_map_chunk(address, &opts->gen, MMAP_CODE, &meta_off);
 	if (chunk) {
 		meta_off += (address - chunk->start) & chunk->mask;
 	}
@@ -882,8 +882,10 @@ void translate_m68k_stream(uint32_t address, m68k_context * context)
 		do {
 			encoded = get_native_pointer(address, (void **)context->mem_pointers, &opts->gen);
 			if (!encoded) {
-				map_native_address(context, address, code->cur, 2, 1);
+				code_ptr start = code->cur;
 				translate_out_of_bounds(opts, address);
+				code_ptr after = code->cur;
+				map_native_address(context, address, code->cur, 2, after-start);
 				break;
 			}
 			code_ptr existing = get_native_address(opts, address);
