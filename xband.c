@@ -9,6 +9,69 @@
 
 #define BIT_ROM_HI 4
 
+enum {
+	PATCH0_LOW,
+	PATCH0_MID,
+	PATCH0_HI,
+	PATCH1_LOW=4,
+	PATCH1_MID,
+	PATCH1_HI,
+	PATCH2_LOW=8,
+	PATCH2_MID,
+	PATCH2_HI,
+	PATCH3_LOW=12,
+	PATCH3_MID,
+	PATCH3_HI,
+	PATCH4_LOW=16,
+	PATCH4_MID,
+	PATCH4_HI,
+	PATCH5_LOW=20,
+	PATCH5_MID,
+	PATCH5_HI,
+	PATCH6_LOW=24,
+	PATCH6_MID,
+	PATCH6_HI,
+	PATCH7_LOW=28,
+	PATCH7_MID,
+	PATCH7_HI,
+	PATCH8_LOW=32,
+	PATCH8_MID,
+	PATCH8_HI,
+	PATCH9_LOW=36,
+	PATCH9_MID,
+	PATCH9_HI,
+	PATCH10_LOW=40,
+	PATCH10_MID,
+	PATCH10_HI,
+	RANGE0_START_LOW=44,
+	RANGE0_START_MID,
+	RANGE0_START_HI,
+	RANGE1_START=48,
+	RANGE1_START_MID,
+	RANGE1_START_HI,
+	MAGIC_LOW=56,
+	MAGIC_MID,
+	MAGIC_HI,
+	RANGE0_END_LOW=64,
+	RANGE0_END_MID,
+	RANGE0_END_HI,
+	RANGE1_END_LOW=68,
+	RANGE1_END_MID,
+	RANGE1_END_HI,
+	RANGE0_DEST_LOW=80,
+	RANGE0_DEST_HI,
+	RANGE0_MASK,
+	RANGE1_DEST_LOW=84,
+	RANGE1_DEST_HI,
+	RANGE1_MASK,
+	
+	MORE_MYSTERY=219,
+	UNKNOWN_REG=221,
+	UNKNOWN_REG2,
+	UNKNOWN_REG3,
+	
+};
+
 uint8_t xband_detect(uint8_t *rom, uint32_t rom_size)
 {
 	//Internal ROM is 512KB, accept larger ones for overdumps and custom firmware
@@ -146,8 +209,20 @@ static void *xband_reg_write_b(uint32_t address, void *context, uint8_t value)
 	if (address < 0x3BFE00) {
 		uint32_t offset = (address - 0x3BC001) / 2;
 		if (offset < XBAND_REGS) {
+			switch (offset)
+			{
+			case MORE_MYSTERY:
+			case UNKNOWN_REG:
+				printf("Write to mysterious reg: %X: %X\n", address, value);
+				value = value & 0x7F;
+				break;
+			case UNKNOWN_REG3:
+				printf("Write to mysterious reg: %X: %X\n", address, value);
+				value = value & 0xFE;
+				break;
+			}
 			x->regs[offset] = value;
-			printf("Write to register %X: %X\n", address, value);
+			printf("Write to register %X(%d): %X\n", address, offset, value);
 		} else {
 			printf("Unhandled register write %X: %X\n", address, value);
 		}
@@ -250,10 +325,11 @@ rom_info xband_configure_rom(tern_node *rom_db, void *rom, uint32_t rom_size, vo
 		memcpy(x->cart_space + 0x80, ((uint16_t *)lock_on) + 0x80, 0x100);
 	}
 	//observed power on values
-	memset(x->regs, 0x5D, sizeof(x->regs));
+	memset(x->regs, 0, sizeof(x->regs));
 	x->regs[0x7C] = 0;
 	x->regs[0x7D] = 0x80;
 	x->regs[0xB4] = 0x7F;
+	x->regs[UNKNOWN_REG2] = 8;
 	
 	byteswap_rom(0x400000, x->cart_space);
 	
