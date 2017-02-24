@@ -2,7 +2,7 @@
 #define XBAND_H_
 #include <stdint.h>
 
-#define XBAND_REGS 0xB6
+#define XBAND_REGS 0xE0
 
 typedef struct {
 	uint16_t cart_space[0x200000];

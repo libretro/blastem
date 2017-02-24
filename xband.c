@@ -47,7 +47,7 @@ static void update_control(genesis_context *gen, uint8_t value)
 		if (value & BIT_ROM_HI) {
 			gen->m68k->mem_pointers[0] = (uint16_t *)gen->save_storage;
 			gen->m68k->mem_pointers[1] = NULL;
-			gen->m68k->mem_pointers[2] = x->cart_space;
+			gen->m68k->mem_pointers[2] = gen->cart;
 			gen->m68k->mem_pointers[3] = x->cart_space - 0x100000;
 		} else {
 			gen->m68k->mem_pointers[0] = x->cart_space;
@@ -182,6 +182,7 @@ static uint8_t xband_reg_read_b(uint32_t address, void *context)
 	if (address < 0x3BFE00) {
 		uint32_t offset = (address - 0x3BC001) / 2;
 		if (offset < XBAND_REGS) {
+			printf("Regsister read: %X\n", address);
 			return x->regs[offset];
 		} else {
 			printf("Unhandled register read from address %X\n", address);
@@ -248,6 +249,12 @@ rom_info xband_configure_rom(tern_node *rom_db, void *rom, uint32_t rom_size, vo
 	if (lock_on && lock_on_size >= 0x200) {
 		memcpy(x->cart_space + 0x80, ((uint16_t *)lock_on) + 0x80, 0x100);
 	}
+	//observed power on values
+	memset(x->regs, 0x5D, sizeof(x->regs));
+	x->regs[0x7C] = 0;
+	x->regs[0x7D] = 0x80;
+	x->regs[0xB4] = 0x7F;
+	
 	byteswap_rom(0x400000, x->cart_space);
 	
 	info.map_chunks = base_chunks + 5;
