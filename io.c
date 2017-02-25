@@ -30,6 +30,7 @@ const char * device_type_names[] = {
 	"6-button gamepad",
 	"Mega Mouse",
 	"Saturn Keyboard",
+	"XBAND Keyboard",
 	"Menacer",
 	"Justifier",
 	"Sega multi-tap",
@@ -488,7 +489,7 @@ void handle_keyup(int keycode, uint8_t scancode)
 	int idx = keycode & 0x7FFF;
 	keybinding * binding = bindings[bucket] + idx;
 	handle_binding_up(binding);
-	store_key_event(0x100 | scancode);
+	store_key_event(0xF000 | scancode);
 }
 
 void handle_joyup(int joystick, int button)
@@ -785,6 +786,10 @@ void process_device(char * device_type, io_port * port)
 		port->device.mouse.tr_counter = 0;
 	} else if(!strcmp(device_type, "saturn keyboard")) {
 		port->device_type = IO_SATURN_KEYBOARD;
+		port->device.keyboard.read_pos = 0xFF;
+		port->device.keyboard.write_pos = 0;
+	} else if(!strcmp(device_type, "xband keyboard")) {
+		port->device_type = IO_XBAND_KEYBOARD;
 		port->device.keyboard.read_pos = 0xFF;
 		port->device.keyboard.write_pos = 0;
 	} else if(!strcmp(device_type, "sega_parallel")) {
@@ -1381,7 +1386,7 @@ void map_all_bindings(sega_io *io)
 	keyboard_port = NULL;
 	for (int i = 0; i < 3; i++)
 	{
-		if (ports[i].device_type == IO_SATURN_KEYBOARD) {
+		if (ports[i].device_type == IO_SATURN_KEYBOARD || ports[i].device_type == IO_XBAND_KEYBOARD) {
 			keyboard_port = ports + i;
 			break;
 		}
@@ -1552,6 +1557,12 @@ static void service_socket(io_port *port)
 
 const int mouse_delays[] = {112*7, 120*7, 96*7, 132*7, 104*7, 96*7, 112*7, 96*7};
 
+enum {
+	KB_SETUP,
+	KB_READ,
+	KB_WRITE
+};
+
 void io_data_write(io_port * port, uint8_t value, uint32_t current_cycle)
 {
 	uint8_t old_output = (port->control & port->output) | (~port->control & 0xFF);
@@ -1606,6 +1617,68 @@ void io_data_write(io_port * port, uint8_t value, uint32_t current_cycle)
 			}
 		}
 		break;
+	case IO_XBAND_KEYBOARD:
+		if (output & TH) {
+			//request is over
+			if (
+				port->device.keyboard.mode == KB_READ && port->device.keyboard.tr_counter > 7
+				&& (port->device.keyboard.tr_counter & 1)
+			) {
+				if (port->device.keyboard.events[port->device.keyboard.read_pos] & 0xFF00) {
+					port->device.keyboard.events[port->device.keyboard.read_pos] &= 0xFF;
+				} else {
+					port->device.keyboard.read_pos++;
+					port->device.keyboard.read_pos &= 7;
+					if (port->device.keyboard.read_pos == port->device.keyboard.write_pos) {
+						port->device.keyboard.read_pos = 0xFF;
+					}
+				}
+			}
+			port->device.keyboard.tr_counter = 0;
+			port->device.keyboard.mode = KB_SETUP;
+		} else {
+			if ((output & TR) != (old_output & TR)) {
+				port->device.keyboard.tr_counter++;
+				if (port->device.keyboard.tr_counter == 2) {
+					port->device.keyboard.mode = (output & 0xF) ? KB_READ : KB_WRITE;
+				} else if (port->device.keyboard.mode == KB_WRITE) {
+					switch (port->device.keyboard.tr_counter)
+					{
+					case 3:
+						//host writes 0b0001
+						break;
+					case 4:
+						//host writes 0b0000
+						break;
+					case 5:
+						//host writes 0b0000
+						break;
+					case 6:
+						port->device.keyboard.cmd = output << 4;
+						break;
+					case 7:
+						port->device.keyboard.cmd |= output & 0xF;
+						//TODO: actually do something with the command
+						break;
+					}
+				} else if (
+					port->device.keyboard.mode == KB_READ && port->device.keyboard.tr_counter > 7
+					&& !(port->device.keyboard.tr_counter & 1)
+				) {
+					
+					if (port->device.keyboard.events[port->device.keyboard.read_pos] & 0xFF00) {
+						port->device.keyboard.events[port->device.keyboard.read_pos] &= 0xFF;
+					} else {
+						port->device.keyboard.read_pos++;
+						port->device.keyboard.read_pos &= 7;
+						if (port->device.keyboard.read_pos == port->device.keyboard.write_pos) {
+							port->device.keyboard.read_pos = 0xFF;
+						}
+					}
+				}
+			}
+		}
+		break;
 #ifndef _WIN32
 	case IO_GENERIC:
 		wait_for_connection(port);
@@ -1616,6 +1689,21 @@ void io_data_write(io_port * port, uint8_t value, uint32_t current_cycle)
 	}
 	port->output = value;
 
+}
+
+uint8_t get_scancode_bytes(io_port *port)
+{
+	if (port->device.keyboard.read_pos == 0xFF) {
+		return 0;
+	}
+	uint8_t bytes = 0, read_pos = port->device.keyboard.read_pos;
+	do {
+		bytes += port->device.keyboard.events[read_pos] & 0xFF00 ? 2 : 1;
+		read_pos++;
+		read_pos &= 7;
+	} while (read_pos != port->device.keyboard.write_pos);
+	
+	return bytes;
 }
 
 uint8_t io_data_read(io_port * port, uint32_t current_cycle)
@@ -1777,7 +1865,7 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 				break;
 			case 8:
 				input = 6;
-				if (code & 0x100) {
+				if (code & 0xFF00) {
 					//break
 					input |= 1;
 				} else if (code) {
@@ -1796,6 +1884,68 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 			default:
 				input = 1;
 				break;
+			}
+			input |= ((port->device.keyboard.tr_counter & 1) == 0) << 4;
+		}
+		break;
+	}
+	case IO_XBAND_KEYBOARD:
+	{
+		if (th) {
+			input = 0x1C;
+		} else {
+			uint8_t size;
+			if (port->device.keyboard.mode == KB_SETUP || port->device.keyboard.mode == KB_READ) {
+				switch (port->device.keyboard.tr_counter)
+				{
+				case 0:
+					input = 0x3;
+					break;
+				case 1:
+					input = 0x6;
+					break;
+				case 2:
+					//This is where thoe host indicates a read or write
+					//presumably, the keyboard only outputs this if the host
+					//is not already driving the data bus low
+					input = 0x9;
+					break;
+				case 3:
+					size = get_scancode_bytes(port);
+					if (size) {
+						++size;
+					}
+					if (size > 15) {
+						size = 15;
+					}
+					input = size;
+					break;
+				case 4:
+				case 5:
+					//always send packet type 0 for now
+					input = 0;
+					break;
+				default:
+					if (port->device.keyboard.read_pos == 0xFF) {
+						//we've run out of bytes
+						input = 0;
+					} else if (port->device.keyboard.events[port->device.keyboard.read_pos] & 0xFF00) {
+						if (port->device.keyboard.tr_counter & 1) {
+							input = port->device.keyboard.events[port->device.keyboard.read_pos] >> 8 & 0xF;
+						} else {
+							input = port->device.keyboard.events[port->device.keyboard.read_pos] >> 12;
+						}
+					} else {
+						if (port->device.keyboard.tr_counter & 1) {
+							input = port->device.keyboard.events[port->device.keyboard.read_pos] & 0xF;
+						} else {
+							input = port->device.keyboard.events[port->device.keyboard.read_pos] >> 4;
+						}
+					}
+					break;
+				}
+			} else {
+				input = 0xF;
 			}
 			input |= ((port->device.keyboard.tr_counter & 1) == 0) << 4;
 		}
