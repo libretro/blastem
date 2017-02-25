@@ -72,6 +72,15 @@ enum {
 	
 };
 
+//#define DO_DEBUG_PRINT
+#ifdef DO_DEBUG_PRINT
+#define dprintf printf
+#define dputs puts
+#else
+#define dprintf
+#define dputs
+#endif
+
 uint8_t xband_detect(uint8_t *rom, uint32_t rom_size)
 {
 	//Internal ROM is 512KB, accept larger ones for overdumps and custom firmware
@@ -130,10 +139,10 @@ static void *xband_write_b(uint32_t address, void *context, uint8_t value)
 	xband *x = get_xband(gen);
 	if (address == 0x181) {
 		x->kill = value;
-		printf("Write to \"soft\" kill register %X\n", value);
+		dprintf("Write to \"soft\" kill register %X\n", value);
 	} else if (address == 0x183) {
 		update_control(gen, value);
-		printf("Write to \"soft\" control register %X\n", value);
+		dprintf("Write to \"soft\" control register %X\n", value);
 	} else if ((x->control & BIT_ROM_HI && address < 0x200000) || (address >= 0x200000 && !(x->control & BIT_ROM_HI))) {
 		gen->save_storage[(address & 0xFFFF) ^ 1] = value;
 		m68k_handle_code_write(address, m68k);
@@ -213,26 +222,26 @@ static void *xband_reg_write_b(uint32_t address, void *context, uint8_t value)
 			{
 			case MORE_MYSTERY:
 			case UNKNOWN_REG:
-				printf("Write to mysterious reg: %X: %X\n", address, value);
+				dprintf("Write to mysterious reg: %X: %X\n", address, value);
 				value = value & 0x7F;
 				break;
 			case UNKNOWN_REG3:
-				printf("Write to mysterious reg: %X: %X\n", address, value);
+				dprintf("Write to mysterious reg: %X: %X\n", address, value);
 				value = value & 0xFE;
 				break;
 			}
 			x->regs[offset] = value;
-			printf("Write to register %X(%d): %X\n", address, offset, value);
+			dprintf("Write to register %X(%d): %X\n", address, offset, value);
 		} else {
 			printf("Unhandled register write %X: %X\n", address, value);
 		}
 	} else {
 		if (address == 0x3BFE01) {
 			x->kill = value;
-			printf("Write to kill register %X\n", value);
+			dprintf("Write to kill register %X\n", value);
 		} else if (address == 0x3BFE03) {
 			update_control(gen, value);
-			printf("Write to control register %X\n", value);
+			dprintf("Write to control register %X\n", value);
 		} else {
 			printf("Unhandled register write %X: %X\n", address, value);
 		}
@@ -257,7 +266,7 @@ static uint8_t xband_reg_read_b(uint32_t address, void *context)
 	if (address < 0x3BFE00) {
 		uint32_t offset = (address - 0x3BC001) / 2;
 		if (offset < XBAND_REGS) {
-			printf("Regsister read: %X\n", address);
+			dprintf("Regsister read: %X\n", address);
 			return x->regs[offset];
 		} else {
 			printf("Unhandled register read from address %X\n", address);
