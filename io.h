@@ -15,6 +15,7 @@ enum {
 	IO_GAMEPAD6,
 	IO_MOUSE,
 	IO_SATURN_KEYBOARD,
+	IO_XBAND_KEYBOARD,
 	IO_MENACER,
 	IO_JUSTIFIER,
 	IO_SEGA_MULTI,
@@ -52,6 +53,8 @@ typedef struct {
 			uint8_t  read_pos;
 			uint8_t  write_pos;
 			uint8_t  tr_counter;
+			uint8_t  mode;
+			uint8_t  cmd;
 		} keyboard;
 	} device;
 	uint8_t  output;
