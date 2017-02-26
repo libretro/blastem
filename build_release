@@ -9,7 +9,7 @@ fi
 if [ $OS = "Linux" ]; then
 	cd sdl
 	./configure
-	make clean all
+	make all
 	cd ..
 	rm -rf lib
 	mkdir lib
@@ -21,7 +21,7 @@ if [ $OS = "Linux" ]; then
 	ln -s "$sdl" libSDL2.so
 	cd ..
 	cd glew
-	make clean all
+	make all
 	cd ..
 fi
 
