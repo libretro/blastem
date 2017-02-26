@@ -1,0 +1,15 @@
+#!/bin/sh
+
+build_user=$1
+if [ $USER != $build_user ]; then
+	su $build_user -c $0 "$@";
+	exit
+fi
+
+cd /home/$build_user/blastem
+hg revert -a
+hg pull
+hg up
+rev=`hg summary |  sed -E -n 's/^parent: [^:]+:([^ ]+) .*$/\1/p'`
+sed -i -E "s/(define BLASTEM_VERSION \"[^-]+)-pre\"/\1-pre-$rev\"/"" blastem.c
+./build_release
