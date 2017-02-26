@@ -11,5 +11,5 @@ hg revert -a
 hg pull
 hg up
 rev=`hg summary |  sed -E -n 's/^parent: [^:]+:([^ ]+) .*$/\1/p'`
-sed -i -E "s/(define BLASTEM_VERSION \"[^-]+)-pre\"/\1-pre-$rev\"/"" blastem.c
+sed -i -E "s/(define BLASTEM_VERSION \"[^-]+)-pre\"/\1-pre-$rev\"/" blastem.c
 ./build_release
