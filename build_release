@@ -9,7 +9,7 @@ fi
 if [ $OS = "Linux" ]; then
 	cd sdl
 	./configure
-	make clean all
+	make -j4 clean all
 	cd ..
 	rm -rf lib
 	mkdir lib
@@ -25,7 +25,7 @@ if [ $OS = "Linux" ]; then
 	cd ..
 fi
 
-make PORTABLE=1 clean all
+make PORTABLE=1 -j4 clean all
 make menu.bin
 if [ $OS = "Windows" ]; then
 	binaries="dis.exe zdis.exe stateview.exe vgmplay.exe blastem.exe SDL2.dll"
