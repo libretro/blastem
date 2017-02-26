@@ -2,7 +2,7 @@
 
 build_user=$1
 if [ $USER != $build_user ]; then
-	su $build_user -c $0 "$@";
+	su $build_user -c "$0 $@";
 	exit
 fi
 
