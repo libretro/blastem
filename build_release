@@ -68,7 +68,9 @@ cp glew/LICENSE.txt "$dir"/GLEW-LICENSE$txt
 if [ $OS = "Windows" ]; then
 	rm -f "${dir}.zip"
 	zip -r "${dir}.zip" "$dir"
+	echo "${dir}.zip"
 else
 	rm -f "${dir}.tar.gz"
 	tar -cvzf "${dir}.tar.gz" "$dir"
+	echo "${dir}.tar.gz"
 fi
