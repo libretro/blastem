@@ -242,7 +242,7 @@ vos_prog_info : vos_prog_info.o vos_program_module.o
 %.bin : %.sz8
 	vasmz80_mot -Fbin -spaces -o $@ $<
 res.o : blastem.rc
-	wine windres blastem.rc res.o
+	i686-w64-mingw32-windres blastem.rc res.o
 
 arrow.tiles : arrow.png
 cursor.tiles : cursor.png
