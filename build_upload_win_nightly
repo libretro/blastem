@@ -1,0 +1,11 @@
+#!/bin/sh
+name=$1
+
+cd $HOME/blastem_win
+hg pull
+hg up
+export OS=Windows
+./build_release > /tmp/build_${name}_out.log
+. $HOME/remote.params
+artifact=$(tail -n 1 /tmp/build_${name}_out.log)
+scp -i "$REMOTE_IDENT" "$HOME/.local/share/lxc/$CONTAINER_NAME/rootfs/home/$BUILD_USER/blastem/$artifact" $REMOTE_USER@$REMOTE_HOST:/home/$REMOTE_USER/nightlies
