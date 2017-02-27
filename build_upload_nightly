@@ -16,4 +16,4 @@ fi
 lxc-stop -n "$CONTAINER_NAME"
 . $HOME/remote.params
 artifact=$(tail -n 1 /tmp/build_${name}_out.log)
-echo $REMOTE_PASS | scp "$HOME/.local/share/lxc/$CONTAINER_NAME/rootfs/home/$BUILD_USER/blastem/$artifact" $REMOTE_USER@$REMOTE_HOST:/home/$REMOTE_USER/nightlies
+scp -i "$REMOTE_IDENT" "$HOME/.local/share/lxc/$CONTAINER_NAME/rootfs/home/$BUILD_USER/blastem/$artifact" $REMOTE_USER@$REMOTE_HOST:/home/$REMOTE_USER/nightlies
