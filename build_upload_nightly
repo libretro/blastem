@@ -1,15 +1,19 @@
 #!/bin/sh
 
 name=$1
-source $HOME/$name.params
+. "$HOME/$name.params"
+echo Starting $CONTAINER_NAME
 lxc-start -n "$CONTAINER_NAME"
-if [ $? -ne 0]; then
+if [ $? -ne 0 ]; then
 	exit $?
 fi
-build_output=$(lxc-attach -n "$CONTAINER_NAME" -- /home/$BUILD_USER/blastem/build_nightly > /tmp/build_${name}_out.log)
-if [ $? -ne 0]; then
+echo Starting build by $BUILD_USER in $CONTAINER_NAME
+lxc-attach -n "$CONTAINER_NAME" -- /home/$BUILD_USER/blastem/build_nightly $BUILD_USER > /tmp/build_${name}_out.log
+if [ $? -ne 0 ]; then
+	lxc-stop -n "$CONTAINER_NAME"
 	exit $?
 fi
-source $HOME/remote.params
+lxc-stop -n "$CONTAINER_NAME"
+. $HOME/remote.params
 artifact=$(tail -n 1 /tmp/build_${name}_out.log)
-echo $REMOTE_PASS | scp "$artifact" $REMOTE_USER@$REMOTE_HOST:/home/$REMOTE_USER/nightlies
+echo $REMOTE_PASS | scp "$HOME/.local/share/lxc/$CONTAINER_NAME/rootfs/home/$BUILD_USER/blastem/$artifact" $REMOTE_USER@$REMOTE_HOST:/home/$REMOTE_USER/nightlies
