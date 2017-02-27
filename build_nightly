@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -e
+
 build_user=$1
 if [ $USER != $build_user ]; then
 	su $build_user -c "$0 $@";
