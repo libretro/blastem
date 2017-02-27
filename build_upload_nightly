@@ -7,6 +7,7 @@ lxc-start -n "$CONTAINER_NAME"
 if [ $? -ne 0 ]; then
 	exit $?
 fi
+sleep 10
 echo Starting build by $BUILD_USER in $CONTAINER_NAME
 lxc-attach -n "$CONTAINER_NAME" -- /home/$BUILD_USER/blastem/build_nightly $BUILD_USER > /tmp/build_${name}_out.log
 if [ $? -ne 0 ]; then
