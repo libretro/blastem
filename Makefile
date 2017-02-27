@@ -5,17 +5,20 @@ FIXUP:=true
 
 ifeq ($(OS),Windows)
 ifndef SDL2_PREFIX
-SDL2_PREFIX:="C:/MinGW/usr"
+SDL2_PREFIX:="sdl/i686-w64-mingw32"
+endif
+ifndef GLEW_PREFIX
+GLEW_PREFIX:=glew
 endif
 ifndef GLEW32S_LIB
-GLEW32S_LIB=glew32s.lib
+GLEW32S_LIB:=$(GLEW_PREFIX)/lib/Release/Win32/glew32s.lib
 endif
 
 MEM:=mem_win.o
 TERMINAL:=terminal_win.o
 EXE:=.exe
-CC:=wine gcc.exe
-CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -I"$(SDL2_PREFIX)/include/SDL2" -DGLEW_STATIC
+CC:=i686-w64-mingw32-gcc-win32
+CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -I"$(SDL2_PREFIX)/include/SDL2" -I"$(GLEW_PREFIX)/include" -DGLEW_STATIC
 LDFLAGS:= $(GLEW32S_LIB) -L"$(SDL2_PREFIX)/lib" -lm -lmingw32 -lSDL2main -lSDL2 -lws2_32 -lopengl32 -lglu32 -mwindows
 CPU:=i686
 

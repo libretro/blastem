@@ -111,8 +111,13 @@ cleanup:
 
 #ifdef _WIN32
 #define localtime_r(a,b) localtime(a)
-#undef N
+//windows inclues seem not to like certain single letter defines from m68k_internal.h
+//get rid of them here
 #undef X
+#undef N
+#undef Z
+#undef V
+#undef C
 #include <windows.h>
 #endif
 
