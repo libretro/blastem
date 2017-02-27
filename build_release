@@ -29,7 +29,7 @@ make PORTABLE=1 clean all
 make menu.bin
 if [ $OS = "Windows" ]; then
 	binaries="dis.exe zdis.exe stateview.exe vgmplay.exe blastem.exe SDL2.dll"
-	cmd="wine blastem.exe"
+	verstr=`sed -E -n 's/^[^B]+BLASTEM_VERSION "([^"]+)"/blastem \1/p' blastem.c`
 	txt=".txt"
 else
 	binaries="dis zdis stateview vgmplay blastem termhelper"
@@ -38,11 +38,11 @@ else
 	else
 		binaries="$binaries lib"
 	fi
-	cmd="./blastem"
+	verstr=`./blastem -v`
 	txt=""
 fi
 binaries="$binaries menu.bin"
-ver=`$cmd -v | awk '/blastem/ { gsub(/\r/, "", $2); print $2 }'`
+ver=`echo $verstr | awk '/blastem/ { gsub(/\r/, "", $2); print $2 }'`
 if [ $OS = "Windows" ]; then
 	suffix='-win32'
 elif [ $OS = "Darwin" ]; then
