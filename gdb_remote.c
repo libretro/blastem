@@ -517,7 +517,7 @@ m68k_context *  gdb_debug_enter(m68k_context * context, uint32_t pc)
 				memmove(curbuf, buf, end-curbuf);
 				end -= curbuf - buf;
 			}
-			int numread = read(GDB_IN_FD, end, bufsize - (end-buf));
+			int numread = GDB_READ(GDB_IN_FD, end, bufsize - (end-buf));
 			end += numread;
 			curbuf = buf;
 		}
