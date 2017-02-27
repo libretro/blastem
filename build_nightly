@@ -3,8 +3,9 @@
 set -e
 
 build_user=$1
-if [ $USER != $build_user ]; then
-	su $build_user -c "$0 $@";
+needsu=$2
+if [ "$needsu" = needsu ]; then
+	su $build_user -c "$0 $1";
 	exit
 fi
 
