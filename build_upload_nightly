@@ -9,9 +9,10 @@ if [ $? -ne 0 ]; then
 fi
 sleep 10
 echo Starting build by $BUILD_USER in $CONTAINER_NAME
-lxc-attach -n "$CONTAINER_NAME" -- /home/$BUILD_USER/blastem/build_nightly $BUILD_USER > /tmp/build_${name}_out.log
-if [ $? -ne 0 ]; then
-	echo Build falied with return code $? stopping $CONTAINER_NAME
+lxc-attach -n "$CONTAINER_NAME" -- /home/$BUILD_USER/blastem/build_nightly $BUILD_USER 2>&1 > /tmp/build_${name}_out.log
+result=$?
+if [ $result -ne 0 ]; then
+	echo Build falied with return code $result stopping $CONTAINER_NAME
 	lxc-stop -n "$CONTAINER_NAME"
 	exit $?
 fi
