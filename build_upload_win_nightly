@@ -2,8 +2,11 @@
 name=$1
 
 cd $HOME/blastem_win
+hg revert -a
 hg pull
 hg up
+rev=`hg summary |  sed -E -n 's/^parent: [^:]+:([^ ]+) .*$/\1/p'`
+sed -i -E "s/(define BLASTEM_VERSION \"[^-]+)-pre\"/\1-pre-$rev\"/" blastem.c
 export OS=Windows
 ./build_release > /tmp/build_${name}_out.log
 . $HOME/remote.params
