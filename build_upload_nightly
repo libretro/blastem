@@ -1,0 +1,15 @@
+#!/bin/sh
+
+name=$1
+source $HOME/$name.params
+lxc-start -n "$CONTAINER_NAME"
+if [ $? -ne 0]; then
+	exit $?
+fi
+build_output=$(lxc-attach -n "$CONTAINER_NAME" -- /home/$BUILD_USER/blastem/build_nightly > /tmp/build_${name}_out.log)
+if [ $? -ne 0]; then
+	exit $?
+fi
+source $HOME/remote.params
+artifact=$(tail -n 1 /tmp/build_${name}_out.log)
+echo $REMOTE_PASS | scp "$artifact" $REMOTE_USER@$REMOTE_HOST:/home/$REMOTE_USER/nightlies
