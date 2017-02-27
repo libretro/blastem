@@ -9,6 +9,12 @@ rev=`hg summary |  sed -E -n 's/^parent: [^:]+:([^ ]+) .*$/\1/p'`
 sed -i -E "s/(define BLASTEM_VERSION \"[^-]+)-pre\"/\1-pre-$rev\"/" blastem.c
 export OS=Windows
 ./build_release > /tmp/build_${name}_out.log
+result=$?
+if [ $result -ne 0 ]; then
+	echo Build falied with return code $result
+	exit $result
+fi
 . $HOME/remote.params
 artifact=$(tail -n 1 /tmp/build_${name}_out.log)
-scp -i "$REMOTE_IDENT" "$HOME/.local/share/lxc/$CONTAINER_NAME/rootfs/home/$BUILD_USER/blastem/$artifact" $REMOTE_USER@$REMOTE_HOST:/home/$REMOTE_USER/nightlies
+echo "Uploaing $artifact to $REMOTE_HOST"
+scp -i "$REMOTE_IDENT" "$HOME/blastem_win/$artifact" $REMOTE_USER@$REMOTE_HOST:/home/$REMOTE_USER/nightlies
