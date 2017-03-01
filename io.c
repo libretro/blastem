@@ -392,6 +392,16 @@ int current_speed = 0;
 int num_speeds = 1;
 uint32_t * speeds = NULL;
 
+uint8_t is_keyboard(io_port *port)
+{
+	return port->device_type == IO_SATURN_KEYBOARD || port->device_type == IO_XBAND_KEYBOARD;
+}
+
+uint8_t keyboard_connected(sega_io *io)
+{
+	return is_keyboard(io->ports) || is_keyboard(io->ports+1) || is_keyboard(io->ports+2);
+}
+
 void handle_binding_up(keybinding * binding)
 {
 	switch(binding->bind_type)
@@ -471,7 +481,9 @@ void handle_binding_up(keybinding * binding)
 			}
 			break;
 		case UI_TOGGLE_KEYBOARD_CAPTURE:
-			current_io->keyboard_captured = !current_io->keyboard_captured;
+			if (keyboard_connected(current_io)) {
+				current_io->keyboard_captured = !current_io->keyboard_captured;
+			}
 			break;
 		case UI_TOGGLE_FULLSCREEN:
 			render_toggle_fullscreen();
