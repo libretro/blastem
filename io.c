@@ -1642,7 +1642,7 @@ void io_data_write(io_port * port, uint8_t value, uint32_t current_cycle)
 		if (output & TH) {
 			//request is over
 			if (
-				port->device.keyboard.mode == KB_READ && port->device.keyboard.tr_counter > 7
+				port->device.keyboard.mode == KB_READ && port->device.keyboard.tr_counter > 6
 				&& (port->device.keyboard.tr_counter & 1)
 			) {
 				if (port->device.keyboard.events[port->device.keyboard.read_pos] & 0xFF00) {
