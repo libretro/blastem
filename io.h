@@ -70,6 +70,7 @@ typedef struct {
 	io_port	ports[3];
 	uint8_t mouse_mode;
 	uint8_t mouse_captured;
+	uint8_t keyboard_captured;
 } sega_io;
 
 #define GAMEPAD_TH0 0
