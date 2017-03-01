@@ -321,7 +321,8 @@ rom_info xband_configure_rom(tern_node *rom_db, void *rom, uint32_t rom_size, vo
 	info.save_buffer = malloc(info.save_size);
 	info.save_mask = info.save_size-1;
 	info.save_type = RAM_FLAG_BOTH;
-	info.port1_override = info.port2_override = info.ext_override = info.mouse_mode = NULL;
+	info.port1_override = info.ext_override = info.mouse_mode = NULL;
+	info.port2_override = strdup("xband keyboard");
 	info.eeprom_map = NULL;
 	info.num_eeprom = 0;
 	xband *x = calloc(sizeof(xband), 1);
