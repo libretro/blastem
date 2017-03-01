@@ -71,6 +71,7 @@ typedef enum {
 	UI_NEXT_SPEED,
 	UI_PREV_SPEED,
 	UI_RELEASE_MOUSE,
+	UI_TOGGLE_KEYBOARD_CAPTURE,
 	UI_TOGGLE_FULLSCREEN,
 	UI_SOFT_RESET,
 	UI_EXIT
@@ -348,14 +349,17 @@ void store_key_event(uint16_t code)
 
 void handle_keydown(int keycode, uint8_t scancode)
 {
-	int bucket = keycode >> 15 & 0xFFFF;
-	if (!bindings[bucket]) {
-		return;
+	if (current_io->keyboard_captured) {
+		store_key_event(scancode);
+	} else {
+		int bucket = keycode >> 15 & 0xFFFF;
+		if (!bindings[bucket]) {
+			return;
+		}
+		int idx = keycode & 0x7FFF;
+		keybinding * binding = bindings[bucket] + idx;
+		handle_binding_down(binding);
 	}
-	int idx = keycode & 0x7FFF;
-	keybinding * binding = bindings[bucket] + idx;
-	handle_binding_down(binding);
-	store_key_event(scancode);
 }
 
 void handle_joydown(int joystick, int button)
@@ -466,6 +470,9 @@ void handle_binding_up(keybinding * binding)
 				render_relative_mouse(0);
 			}
 			break;
+		case UI_TOGGLE_KEYBOARD_CAPTURE:
+			current_io->keyboard_captured = !current_io->keyboard_captured;
+			break;
 		case UI_TOGGLE_FULLSCREEN:
 			render_toggle_fullscreen();
 			break;
@@ -483,13 +490,13 @@ void handle_binding_up(keybinding * binding)
 void handle_keyup(int keycode, uint8_t scancode)
 {
 	int bucket = keycode >> 15 & 0xFFFF;
-	if (!bindings[bucket]) {
-		return;
-	}
 	int idx = keycode & 0x7FFF;
-	keybinding * binding = bindings[bucket] + idx;
-	handle_binding_up(binding);
-	store_key_event(0xF000 | scancode);
+	keybinding * binding = bindings[bucket] ? bindings[bucket] + idx : NULL;
+	if (binding && (!current_io->keyboard_captured || (binding->bind_type == BIND_UI && binding->subtype_a == UI_TOGGLE_KEYBOARD_CAPTURE))) {
+		handle_binding_up(binding);
+	} else {
+		store_key_event(0xF000 | scancode);
+	}
 }
 
 void handle_joyup(int joystick, int button)
@@ -640,6 +647,8 @@ int parse_binding_target(char * target, tern_node * padbuttons, tern_node *mouse
 			*ui_out = UI_PREV_SPEED;
 		} else if(!strcmp(target + 3, "release_mouse")) {
 			*ui_out = UI_RELEASE_MOUSE;
+		} else if(!strcmp(target + 3, "toggle_keyboard_captured")) {
+			*ui_out = UI_TOGGLE_KEYBOARD_CAPTURE;
 		} else if (!strcmp(target + 3, "toggle_fullscreen")) {
 			*ui_out = UI_TOGGLE_FULLSCREEN;
 		} else if (!strcmp(target + 3, "soft_reset")) {
