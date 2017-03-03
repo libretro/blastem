@@ -72,14 +72,14 @@ rom_info realtec_configure_rom(uint8_t *rom, uint32_t rom_size, memmap_chunk con
 	byteswap_rom(512*1024, (uint16_t *)r->rom_space);
 	
 	uint8_t *name_start = NULL, *name_end = NULL;
-	for (int i = 0x90; i < 0xE0; i++)
+	for (int i = 0x94; i < 0xE0; i++)
 	{
 		if (name_start) {
-			if (rom[i] < ' ' || rom[i] > 0x80 || !memcmp(rom+i, "ARE", 3)) {
+			if (rom[i] < ' ' || rom[i] > 0x80 || !memcmp(rom+i, "ARE", 3) || !memcmp(rom+i, "are", 3)) {
 				name_end = rom+i;
 				break;
 			}
-		} else if (rom[i] > ' ' && rom[i] < 0x80) {
+		} else if (rom[i] > ' ' && rom[i] < 0x80 && rom[i] != ':') {
 			name_start = rom + i;
 		}
 	}
