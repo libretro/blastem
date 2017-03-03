@@ -6,6 +6,7 @@
 #include "genesis.h"
 #include "menu.h"
 #include "xband.h"
+#include "realtec.h"
 
 #define DOM_TITLE_START 0x120
 #define DOM_TITLE_END 0x150
@@ -847,9 +848,12 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, void *l
 	tern_node * entry = tern_find_ptr(rom_db, product_id);
 	if (!entry) {
 		puts("Not found in ROM DB, examining header\n");
-			if (xband_detect(rom, rom_size)) {
-				return xband_configure_rom(rom_db, rom, rom_size, lock_on, lock_on_size, base_map, base_chunks);
-			}
+		if (xband_detect(rom, rom_size)) {
+			return xband_configure_rom(rom_db, rom, rom_size, lock_on, lock_on_size, base_map, base_chunks);
+		}
+		if (realtec_detect(rom, rom_size)) {
+			return realtec_configure_rom(rom, rom_size, base_map, base_chunks);
+		}
 		return configure_rom_heuristics(rom, rom_size, base_map, base_chunks);
 	}
 	rom_info info;
