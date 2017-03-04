@@ -1692,6 +1692,111 @@ void translate_m68k_chk(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 	cycles(&opts->gen, 4);
 }
 
+static uint32_t divu(uint32_t dividend, m68k_context *context, uint32_t divisor_shift)
+{
+	uint16_t quotient = 0;
+	uint8_t force = 0;
+	uint16_t bit = 0;
+	uint32_t cycles = 6;
+	for (int i = 0; i < 16; i++)
+	{
+		force = dividend >> 31;
+		quotient = quotient << 1 | bit;
+		dividend = dividend << 1;
+		
+		if (force || dividend >= divisor_shift) {
+			dividend -= divisor_shift;
+			cycles += force ? 4 : 6;
+			bit = 1;
+		} else {
+			bit = 0;
+			cycles += 8;
+		}
+	}
+	cycles += force ? 6 : bit ? 4 : 2;
+	context->current_cycle += cycles * context->options->gen.clock_divider;
+	quotient = quotient << 1 | bit;
+	return dividend | quotient;
+}
+
+void translate_m68k_divu(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op)
+{
+	code_info *code = &opts->gen.code;
+	check_alloc_code(code, MAX_NATIVE_SIZE);
+	set_flag(opts, 0, FLAG_C);
+	if (dst_op->mode == MODE_REG_DIRECT) {
+		mov_rr(code, dst_op->base, opts->gen.scratch2, SZ_D);
+	} else {
+		mov_rdispr(code, dst_op->base, dst_op->disp, opts->gen.scratch2, SZ_D);
+	}
+	if (src_op->mode == MODE_IMMED) {
+		mov_ir(code, src_op->disp << 16, opts->gen.scratch1, SZ_D);
+	} else {
+		if (src_op->mode == MODE_REG_DISPLACE8) {
+			movzx_rdispr(code, src_op->base, src_op->disp, opts->gen.scratch1, SZ_W, SZ_D);
+		} else if (src_op->base != opts->gen.scratch1) {
+			movzx_rr(code, src_op->base, opts->gen.scratch1, SZ_W, SZ_D);
+		}
+		shl_ir(code, 16, opts->gen.scratch1, SZ_D);
+	}
+	cmp_ir(code, 0, opts->gen.scratch1, SZ_D);
+	code_ptr not_zero = code->cur+1;
+	jcc(code, CC_NZ, not_zero);
+	
+	//TODO: Check that opts->trap includes the cycles conumed by the first trap0 microinstruction
+	cycles(&opts->gen, 4);
+	uint32_t isize = 2;
+	switch(inst->src.addr_mode)
+	{
+	case MODE_AREG_DISPLACE:
+	case MODE_AREG_INDEX_DISP8:
+	case MODE_ABSOLUTE_SHORT:
+	case MODE_PC_INDEX_DISP8:
+	case MODE_IMMEDIATE:
+		isize = 4;
+		break;
+	case MODE_ABSOLUTE:
+		isize = 6;
+		break;
+	}
+	mov_ir(code, VECTOR_INT_DIV_ZERO, opts->gen.scratch2, SZ_D);
+	mov_ir(code, inst->address+isize, opts->gen.scratch1, SZ_D);
+	jmp(code, opts->trap);
+	
+	*not_zero = code->cur - (not_zero + 1);
+	cmp_rr(code, opts->gen.scratch1, opts->gen.scratch2, SZ_D);
+	code_ptr not_overflow = code->cur+1;
+	jcc(code, CC_C, not_overflow);
+	
+	//flags N and Z flags are set based on internal subtraction of src from top 16-bits of dst
+	and_ir(code, 0xFFFF0000, opts->gen.scratch2, SZ_D);
+	cmp_rr(code, opts->gen.scratch1, opts->gen.scratch2, SZ_D);
+	//TODO: verify N and Z flags are set like I think they are, microcode was a bit confusing
+	update_flags(opts, N|Z|V1);
+	cycles(&opts->gen, 10);
+	code_ptr end = code->cur+1;
+	jmp(code, end);
+	
+	*not_overflow = code->cur - (not_overflow + 1);
+	call(code, opts->gen.save_context);
+	push_r(code, opts->gen.context_reg);
+	//TODO: inline the functionality of divu so we don't need to dump context to memory
+	call_args(code, (code_ptr)divu, 3, opts->gen.scratch2, opts->gen.context_reg, opts->gen.scratch1);
+	pop_r(code, opts->gen.context_reg);
+	if (dst_op->mode == MODE_REG_DIRECT) {
+		mov_rr(code, RAX, opts->gen.scratch1, SZ_D);
+	} else {
+		mov_rrdisp(code, RAX, dst_op->base, dst_op->disp, SZ_D);
+	}	
+	call(code, opts->gen.load_context);
+	
+	if (dst_op->mode == MODE_REG_DIRECT) {
+		mov_rr(code, opts->gen.scratch1, dst_op->base, SZ_D);
+	}
+	
+	*end = code->cur - (end + 1);
+}
+
 void translate_m68k_div(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op)
 {
 	code_info *code = &opts->gen.code;
