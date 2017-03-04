@@ -12,6 +12,7 @@
 #include "genesis.h"
 #include "io.h"
 #include "util.h"
+#include "ppm.h"
 
 #ifndef DISABLE_OPENGL
 #include <GL/glew.h>
@@ -488,6 +489,15 @@ void render_update_caption(char *title)
 	fps_caption = NULL;
 }
 
+static char *screenshot_path;
+void render_save_screenshot(char *path)
+{
+	if (screenshot_path) {
+		free(screenshot_path);
+	}
+	screenshot_path = path;
+}
+
 uint32_t *locked_pixels;
 uint32_t locked_pitch;
 uint32_t *render_get_framebuffer(uint8_t which, int *pitch)
@@ -538,6 +548,19 @@ void render_framebuffer_updated(uint8_t which, int width)
 	uint32_t height = which <= FRAMEBUFFER_EVEN 
 		? (video_standard == VID_NTSC ? 243 : 294) - (overscan_top[video_standard] + overscan_bot[video_standard])
 		: 240;
+	FILE *screenshot_file = NULL;
+	uint32_t shot_height;
+	if (screenshot_path && which == FRAMEBUFFER_ODD) {
+		screenshot_file = fopen(screenshot_path, "wb");
+		if (screenshot_file) {
+			info_message("Saving screenshot to %s\n", screenshot_path);
+		} else {
+			warning("Failed to open screenshot file %s for writing\n", screenshot_path);
+		}
+		free(screenshot_path);
+		screenshot_path = NULL;
+		shot_height = video_standard == VID_NTSC ? 243 : 294;
+	}
 #ifndef DISABLE_OPENGL
 	if (render_gl && which <= FRAMEBUFFER_EVEN) {
 		glBindTexture(GL_TEXTURE_2D, textures[which]);
@@ -568,6 +591,11 @@ void render_framebuffer_updated(uint8_t which, int width)
 		glDisableVertexAttribArray(at_pos);
 
 		SDL_GL_SwapWindow(main_window);
+		
+		if (screenshot_file) {
+			//properly supporting interlaced modes here is non-trivial, so only save the odd field for now
+			save_ppm(screenshot_file, texture_buf, width, shot_height, 320*sizeof(uint32_t));
+		}
 	} else {
 #endif
 		if (which <= FRAMEBUFFER_EVEN && last != which) {
@@ -586,6 +614,15 @@ void render_framebuffer_updated(uint8_t which, int width)
 			}
 			height = 480;
 		}
+		if (screenshot_file) {
+			uint32_t shot_pitch = locked_pitch;
+			if (which == FRAMEBUFFER_EVEN) {
+				shot_height *= 2;
+			} else {
+				shot_pitch *= 2;
+			}
+			save_ppm(screenshot_file, locked_pixels, width, shot_height, shot_pitch);
+		}
 		SDL_UnlockTexture(sdl_textures[which]);
 		SDL_Rect src_clip = {
 			.x = 0,
@@ -598,6 +635,9 @@ void render_framebuffer_updated(uint8_t which, int width)
 #ifndef DISABLE_OPENGL
 	}
 #endif
+	if (screenshot_file) {
+		fclose(screenshot_file);
+	}
 	if (which <= FRAMEBUFFER_EVEN) {
 		last = which;
 		static uint32_t frame_counter, start;
