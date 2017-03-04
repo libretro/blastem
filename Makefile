@@ -190,11 +190,11 @@ ztestrun : ztestrun.o $(Z80OBJS) $(TRANSOBJS)
 ztestgen : ztestgen.o z80inst.o
 	$(CC) -ggdb -o ztestgen ztestgen.o z80inst.o
 
-stateview$(EXE) : stateview.o vdp.o render_sdl.o $(CONFIGOBJS) gst.o
+stateview$(EXE) : stateview.o vdp.o render_sdl.o ppm.o $(CONFIGOBJS) gst.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 	$(FIXUP) ./$@
 
-vgmplay$(EXE) : vgmplay.o render_sdl.o $(CONFIGOBJS) $(AUDIOOBJS)
+vgmplay$(EXE) : vgmplay.o render_sdl.o ppm.o $(CONFIGOBJS) $(AUDIOOBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
 	$(FIXUP) ./$@
 
