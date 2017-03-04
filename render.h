@@ -70,6 +70,7 @@ typedef enum {
 #define RENDER_NOT_PLUGGED_IN -3
 
 uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b);
+void render_save_screenshot(char *path);
 uint32_t *render_get_framebuffer(uint8_t which, int *pitch);
 void render_framebuffer_updated(uint8_t which, int width);
 void render_init(int width, int height, char * title, uint8_t fullscreen);

@@ -74,6 +74,7 @@ typedef enum {
 	UI_TOGGLE_KEYBOARD_CAPTURE,
 	UI_TOGGLE_FULLSCREEN,
 	UI_SOFT_RESET,
+	UI_SCREENSHOT,
 	UI_EXIT
 } ui_action;
 
@@ -402,6 +403,10 @@ uint8_t keyboard_connected(sega_io *io)
 	return is_keyboard(io->ports) || is_keyboard(io->ports+1) || is_keyboard(io->ports+2);
 }
 
+#ifdef _WIN32
+#define localtime_r(a,b) localtime(a)
+#endif
+
 void handle_binding_up(keybinding * binding)
 {
 	switch(binding->bind_type)
@@ -491,6 +496,24 @@ void handle_binding_up(keybinding * binding)
 		case UI_SOFT_RESET:
 			current_system->soft_reset(current_system);
 			break;
+		case UI_SCREENSHOT: {
+			char *screenshot_base = tern_find_path(config, "ui\0screenshot_path\0").ptrval;
+			if (!screenshot_base) {
+				screenshot_base = get_home_dir();
+			}
+			time_t now = time(NULL);
+			struct tm local_store;
+			char fname_part[256];
+			char *template = tern_find_path(config, "ui\0screenshot_template\0").ptrval;
+			if (!template) {
+				template = "blastem_%c.ppm";
+			}
+			strftime(fname_part, sizeof(fname_part), template, localtime_r(&now, &local_store));
+			char const *parts[] = {screenshot_base, PATH_SEP, fname_part};
+			char *path = alloc_concat_m(3, parts);
+			render_save_screenshot(path);
+			break;
+		}
 		case UI_EXIT:
 			current_system->request_exit(current_system);
 			break;
@@ -665,6 +688,8 @@ int parse_binding_target(char * target, tern_node * padbuttons, tern_node *mouse
 			*ui_out = UI_TOGGLE_FULLSCREEN;
 		} else if (!strcmp(target + 3, "soft_reset")) {
 			*ui_out = UI_SOFT_RESET;
+		} else if (!strcmp(target + 3, "screenshot")) {
+			*ui_out = UI_SCREENSHOT;
 		} else if(!strcmp(target + 3, "exit")) {
 			*ui_out = UI_EXIT;
 		} else {
