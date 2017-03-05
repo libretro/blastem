@@ -350,16 +350,13 @@ void store_key_event(uint16_t code)
 
 void handle_keydown(int keycode, uint8_t scancode)
 {
-	if (current_io->keyboard_captured) {
-		store_key_event(scancode);
-	} else {
-		int bucket = keycode >> 15 & 0xFFFF;
-		if (!bindings[bucket]) {
-			return;
-		}
-		int idx = keycode & 0x7FFF;
-		keybinding * binding = bindings[bucket] + idx;
+	int bucket = keycode >> 15 & 0xFFFF;
+	int idx = keycode & 0x7FFF;
+	keybinding * binding = bindings[bucket] ? bindings[bucket] + idx : NULL;
+	if (binding && (!current_io->keyboard_captured || (binding->bind_type == BIND_UI && binding->subtype_a == UI_TOGGLE_KEYBOARD_CAPTURE))) {
 		handle_binding_down(binding);
+	} else if (current_io->keyboard_captured) {
+		store_key_event(scancode);
 	}
 }
 
@@ -529,7 +526,7 @@ void handle_keyup(int keycode, uint8_t scancode)
 	keybinding * binding = bindings[bucket] ? bindings[bucket] + idx : NULL;
 	if (binding && (!current_io->keyboard_captured || (binding->bind_type == BIND_UI && binding->subtype_a == UI_TOGGLE_KEYBOARD_CAPTURE))) {
 		handle_binding_up(binding);
-	} else {
+	} else if (current_io->keyboard_captured) {
 		store_key_event(0xF000 | scancode);
 	}
 }
