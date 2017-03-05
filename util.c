@@ -192,11 +192,17 @@ void fatal_error(char *format, ...)
 	va_start(args, format);
 	if (!headless) {
 		//take a guess at the final size
-		size_t size = strlen(format) * 2;
+		int32_t size = strlen(format) * 2;
 		char *buf = malloc(size);
-		size_t actual = vsnprintf(buf, size, format, args);
-		if (actual >= size) {
-			actual++;
+		int32_t actual = vsnprintf(buf, size, format, args);
+		if (actual >= size || actual < 0) {
+			if (actual < 0) {
+				//seems on windows, vsnprintf is returning -1 when the buffer is too small
+				//since we don't know the proper size, a generous multiplier will hopefully suffice
+				actual = size * 4;
+			} else {
+				actual++;
+			}
 			free(buf);
 			buf = malloc(actual);
 			va_end(args);
@@ -222,11 +228,17 @@ void warning(char *format, ...)
 		warning_printf(format, args);
 	} else {
 #endif
-		size_t size = strlen(format) * 2;
+		int32_t size = strlen(format) * 2;
 		char *buf = malloc(size);
-		size_t actual = vsnprintf(buf, size, format, args);
-		if (actual >= size) {
-			actual++;
+		int32_t actual = vsnprintf(buf, size, format, args);
+		if (actual >= size || actual < 0) {
+			if (actual < 0) {
+				//seems on windows, vsnprintf is returning -1 when the buffer is too small
+				//since we don't know the proper size, a generous multiplier will hopefully suffice
+				actual = size * 4;
+			} else {
+				actual++;
+			}
 			free(buf);
 			buf = malloc(actual);
 			va_end(args);
@@ -251,11 +263,17 @@ void info_message(char *format, ...)
 		info_printf(format, args);
 	} else {
 #endif
-		size_t size = strlen(format) * 2;
+		int32_t size = strlen(format) * 2;
 		char *buf = malloc(size);
-		size_t actual = vsnprintf(buf, size, format, args);
-		if (actual >= size) {
-			actual++;
+		int32_t actual = vsnprintf(buf, size, format, args);
+		if (actual >= size || actual < 0) {
+			if (actual < 0) {
+				//seems on windows, vsnprintf is returning -1 when the buffer is too small
+				//since we don't know the proper size, a generous multiplier will hopefully suffice
+				actual = size * 4;
+			} else {
+				actual++;
+			}
 			free(buf);
 			buf = malloc(actual);
 			va_end(args);
