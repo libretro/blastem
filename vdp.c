@@ -2042,9 +2042,15 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 	case 129:
 		external_slot(context);
 		CHECK_LIMIT
-	case 130:
+	case 130: {
 		external_slot(context);
+		uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
+		for (int i = 256+BORDER_LEFT; i < 256+HORIZ_BORDER; i++)
+		{
+			context->output[i] = bg_color;
+		}
 		CHECK_LIMIT
+	}
 	//sprite render to line buffer starts
 	case 131:
 		context->cur_slot = MAX_DRAWS_H32-1;
