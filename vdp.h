@@ -14,7 +14,10 @@
 #define CRAM_SIZE 64
 #define VSRAM_SIZE 40
 #define VRAM_SIZE (64*1024)
-#define LINEBUF_SIZE (320+27) //H40 + full border
+#define BORDER_LEFT 13
+#define BORDER_RIGHT 14
+#define HORIZ_BORDER (BORDER_LEFT+BORDER_RIGHT)
+#define LINEBUF_SIZE (320+HORIZ_BORDER) //H40 + full border
 #define BORDER_BOTTOM 13 //TODO: Replace with actual value
 #define MAX_DRAWS 40
 #define MAX_DRAWS_H32 32
