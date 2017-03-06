@@ -256,7 +256,7 @@ static void render_alloc_surfaces()
 #endif
 		
 		//TODO: Fixme for invalid display mode
-		sdl_textures[0] = sdl_textures[1] = SDL_CreateTexture(main_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, 320, 588);
+		sdl_textures[0] = sdl_textures[1] = SDL_CreateTexture(main_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, LINEBUF_SIZE, 588);
 #ifndef DISABLE_OPENGL
 	}
 #endif
@@ -324,6 +324,8 @@ static void update_aspect()
 
 static uint32_t overscan_top[NUM_VID_STD] = {2, 21};
 static uint32_t overscan_bot[NUM_VID_STD] = {1, 17};
+static uint32_t overscan_left[NUM_VID_STD] = {13, 13};
+static uint32_t overscan_right[NUM_VID_STD] = {14, 14};
 static vid_std video_standard = VID_NTSC;
 static char *vid_std_names[NUM_VID_STD] = {"ntsc", "pal"};
 void render_init(int width, int height, char * title, uint8_t fullscreen)
@@ -374,6 +376,14 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 				val = tern_find_path_default(std_settings, "overscan\0bottom\0", (tern_val){.ptrval = NULL}).ptrval;
 				if (val) {
 					overscan_bot[i] = atoi(val);
+				}
+				val = tern_find_path_default(std_settings, "overscan\0left\0", (tern_val){.ptrval = NULL}).ptrval;
+				if (val) {
+					overscan_left[i] = atoi(val);
+				}
+				val = tern_find_path_default(std_settings, "overscan\0right\0", (tern_val){.ptrval = NULL}).ptrval;
+				if (val) {
+					overscan_right[i] = atoi(val);
 				}
 			}
 		}
@@ -504,7 +514,7 @@ uint32_t *render_get_framebuffer(uint8_t which, int *pitch)
 {
 #ifndef DISABLE_OPENGL
 	if (render_gl && which <= FRAMEBUFFER_EVEN) {
-		*pitch = 320 * sizeof(uint32_t); //TODO: change this to LINEBUF_SIZE once border rendering is added
+		*pitch = LINEBUF_SIZE * sizeof(uint32_t);
 		return texture_buf;
 	} else {
 #endif
@@ -548,6 +558,7 @@ void render_framebuffer_updated(uint8_t which, int width)
 	uint32_t height = which <= FRAMEBUFFER_EVEN 
 		? (video_standard == VID_NTSC ? 243 : 294) - (overscan_top[video_standard] + overscan_bot[video_standard])
 		: 240;
+	width -= overscan_left[video_standard] + overscan_right[video_standard];
 	FILE *screenshot_file = NULL;
 	uint32_t shot_height;
 	if (screenshot_path && which == FRAMEBUFFER_ODD) {
@@ -564,7 +575,7 @@ void render_framebuffer_updated(uint8_t which, int width)
 #ifndef DISABLE_OPENGL
 	if (render_gl && which <= FRAMEBUFFER_EVEN) {
 		glBindTexture(GL_TEXTURE_2D, textures[which]);
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 320, height, GL_BGRA, GL_UNSIGNED_BYTE, texture_buf + 320 * overscan_top[video_standard]);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGRA, GL_UNSIGNED_BYTE, texture_buf + overscan_left[video_standard] + LINEBUF_SIZE * overscan_top[video_standard]);
 
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
@@ -594,7 +605,7 @@ void render_framebuffer_updated(uint8_t which, int width)
 		
 		if (screenshot_file) {
 			//properly supporting interlaced modes here is non-trivial, so only save the odd field for now
-			save_ppm(screenshot_file, texture_buf, width, shot_height, 320*sizeof(uint32_t));
+			save_ppm(screenshot_file, texture_buf, width, shot_height, LINEBUF_SIZE*sizeof(uint32_t));
 		}
 	} else {
 #endif
@@ -625,7 +636,7 @@ void render_framebuffer_updated(uint8_t which, int width)
 		}
 		SDL_UnlockTexture(sdl_textures[which]);
 		SDL_Rect src_clip = {
-			.x = 0,
+			.x = overscan_left[video_standard],
 			.y = overscan_top[video_standard],
 			.w = width,
 			.h = height

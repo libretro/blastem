@@ -711,8 +711,8 @@ static void read_sprite_x_mode4(vdp_context * context)
 #define VSRAM_BITS 0x7FF
 #define VSRAM_DIRTY_BITS 0xF800
 
-//rough estimate of slot number at which active display starts
-#define BG_START_SLOT 9
+//rough estimate of slot number at which border display starts
+#define BG_START_SLOT 0
 
 void write_cram(vdp_context * context, uint16_t address, uint16_t value)
 {
@@ -733,7 +733,7 @@ void write_cram(vdp_context * context, uint16_t address, uint16_t value)
 		context->vcounter < context->inactive_start + context->border_bot 
 		|| context->vcounter > 0x200 - context->border_top
 	)) {
-		uint8_t bg_end_slot = BG_START_SLOT + (context->regs[REG_MODE_4] & BIT_H40) ? 320/2 : 256/2;
+		uint8_t bg_end_slot = BG_START_SLOT + (context->regs[REG_MODE_4] & BIT_H40) ? LINEBUF_SIZE/2 : (256+HORIZ_BORDER)/2;
 		if (context->hslot < bg_end_slot) {
 			uint32_t color = (context->regs[REG_MODE_2] & BIT_MODE_5) ? context->colors[addr] : context->colors[addr + CRAM_SIZE*3];
 			context->output[(context->hslot - BG_START_SLOT)*2 + 1] = color;
@@ -1204,7 +1204,7 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 	if (col)
 	{
 		col-=2;
-		dst = context->output + col * 8;
+		dst = context->output + BORDER_LEFT + col * 8;
 		if (context->debug < 2) {
 			sprite_buf = context->linebuf + col * 8;
 			uint8_t a_src, src;
@@ -1486,7 +1486,7 @@ static void vdp_advance_line(vdp_context *context)
 		context->vcounter &= 0x1FF;
 	} else {
 		if (context->vcounter == context->inactive_start) {
-			render_framebuffer_updated(context->flags2 & FLAG2_EVEN_FIELD ? FRAMEBUFFER_EVEN: FRAMEBUFFER_ODD, context->h40_lines > (context->inactive_start + context->border_top) / 2 ? 320 : 256);
+			render_framebuffer_updated(context->flags2 & FLAG2_EVEN_FIELD ? FRAMEBUFFER_EVEN: FRAMEBUFFER_ODD, context->h40_lines > (context->inactive_start + context->border_top) / 2 ? LINEBUF_SIZE : (256+HORIZ_BORDER));
 			if (context->double_res) {
 				context->flags2 ^= FLAG2_EVEN_FIELD;
 			}
@@ -1528,6 +1528,12 @@ static void vdp_advance_line(vdp_context *context)
 		read_map_scroll_a(column, context->vcounter, context);\
 		CHECK_LIMIT\
 	case ((startcyc+1)&0xFF):\
+		if (column == 2) {\
+			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];\
+			for (int i = 0; i < BORDER_LEFT; i++) {\
+				context->output[i] = bg_color;\
+			}\
+		}\
 		external_slot(context);\
 		CHECK_LIMIT\
 	case ((startcyc+2)&0xFF):\
@@ -1838,9 +1844,15 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	case 161:
 		external_slot(context);
 		CHECK_LIMIT
-	case 162:
+	case 162: {
 		external_slot(context);
+		uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
+		for (int i = LINEBUF_SIZE-BORDER_RIGHT; i < LINEBUF_SIZE; i++)
+		{
+			context->output[i] = bg_color;
+		}
 		CHECK_LIMIT
+	}
 	//sprite render to line buffer starts
 	case 163:
 		context->cur_slot = MAX_DRAWS-1;
@@ -2199,7 +2211,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 		if (is_h40) {
 			buf_clear_slot = 161;
 			index_reset_slot = 165;
-			bg_end_slot = BG_START_SLOT + 320/2;
+			bg_end_slot = BG_START_SLOT + LINEBUF_SIZE/2;
 			max_draws = MAX_DRAWS-1;
 			max_sprites = MAX_SPRITES_LINE;
 			index_reset_value = 0x80;
@@ -2208,7 +2220,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 			jump_start = 182;
 			jump_dest = 229;
 		} else {
-			bg_end_slot = BG_START_SLOT + 256/2;
+			bg_end_slot = BG_START_SLOT + (256+HORIZ_BORDER)/2;
 			max_draws = MAX_DRAWS_H32-1;
 			max_sprites = MAX_SPRITES_LINE_H32;
 			buf_clear_slot = 128;
@@ -2222,7 +2234,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 		vint_line = context->inactive_start;
 		active_line = 0x1FF;
 	} else {
-		bg_end_slot = BG_START_SLOT + 256/2;
+		bg_end_slot = BG_START_SLOT + (256+HORIZ_BORDER)/2;
 		max_draws = MAX_DRAWS_H32_MODE4;
 		buf_clear_slot = 136;
 		index_reset_slot = 253;
@@ -2277,6 +2289,9 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 			}
 			*(dst++) = bg_color;
 			*(dst++) = bg_color;
+			if (context->hslot == (bg_end_slot-1)) {
+				*(dst++) = bg_color;
+			}
 		}
 		
 		if (!is_refresh(context, context->hslot)) {
