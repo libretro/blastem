@@ -1187,7 +1187,7 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 			return;
 		}
 		col -= 2;
-		dst = context->output + col * 8;
+		dst = context->output + BORDER_LEFT + col * 8;
 		uint32_t color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
 		for (int i = 0; i < 16; i++)
 		{
@@ -1513,6 +1513,12 @@ static void vdp_advance_line(vdp_context *context)
 			output_line = INVALID_LINE;
 		}		
 		context->output = (uint32_t *)(((char *)context->fb) + context->output_pitch * output_line);
+#ifdef DEBUG_FB_FILL
+		for (int i = 0; i < LINEBUF_SIZE; i++)
+		{
+			context->output[i] = 0xFFFF00FF;
+		}
+#endif
 		if (output_line != INVALID_LINE && (context->regs[REG_MODE_4] & BIT_H40)) {
 			context->h40_lines++;
 		}
@@ -1729,10 +1735,10 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 				dst = ((uint32_t *)(((char *)context->fb) + context->output_pitch * (context->border_top - 2)))
 					+ (context->hslot - BG_START_SLOT) * 2;
 			}
-			*(dst++) = bg_color;
-			*(dst++) = bg_color;
-			*(dst++) = bg_color;
-			*dst = bg_color;
+			for (int i = 0; i < LINEBUF_SIZE - 2 * (context->hslot - BG_START_SLOT); i++)
+			{
+				*(dst++) = bg_color;
+			}
 		}
 		context->sprite_index = 0x80;
 		context->slot_counter = MAX_SPRITES_LINE;
@@ -1936,10 +1942,10 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 				dst = ((uint32_t *)(((char *)context->fb) + context->output_pitch * (context->border_top - 2)))
 					+ (context->hslot - BG_START_SLOT) * 2;
 			}
-			*(dst++) = bg_color;
-			*(dst++) = bg_color;
-			*(dst++) = bg_color;
-			*dst = bg_color;
+			for (int i = 0; i < (256+HORIZ_BORDER) - 2 * (context->hslot - BG_START_SLOT); i++)
+			{
+				*(dst++) = bg_color;
+			}
 		}
 		context->sprite_index = 0x80;
 		context->slot_counter = MAX_SPRITES_LINE_H32;
