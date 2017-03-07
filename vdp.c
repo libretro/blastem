@@ -712,7 +712,7 @@ static void read_sprite_x_mode4(vdp_context * context)
 #define VSRAM_DIRTY_BITS 0xF800
 
 //rough estimate of slot number at which border display starts
-#define BG_START_SLOT 0
+#define BG_START_SLOT 6
 
 void write_cram(vdp_context * context, uint16_t address, uint16_t value)
 {
@@ -1204,7 +1204,16 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 	if (col)
 	{
 		col-=2;
-		dst = context->output + BORDER_LEFT + col * 8;
+		if (col) {
+			dst = context->output + BORDER_LEFT + col * 8;
+		} else {
+			dst = context->output;
+			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
+			for (int i = 0; i < BORDER_LEFT; i++, dst++)
+			{
+				*dst = bg_color;
+			}
+		}
 		if (context->debug < 2) {
 			sprite_buf = context->linebuf + col * 8;
 			uint8_t a_src, src;
@@ -1528,12 +1537,6 @@ static void vdp_advance_line(vdp_context *context)
 		read_map_scroll_a(column, context->vcounter, context);\
 		CHECK_LIMIT\
 	case ((startcyc+1)&0xFF):\
-		if (column == 2) {\
-			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];\
-			for (int i = 0; i < BORDER_LEFT; i++) {\
-				context->output[i] = bg_color;\
-			}\
-		}\
 		external_slot(context);\
 		CHECK_LIMIT\
 	case ((startcyc+2)&0xFF):\
