@@ -1187,7 +1187,16 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 			return;
 		}
 		col -= 2;
-		dst = context->output + BORDER_LEFT + col * 8;
+		if (col) {
+			dst = context->output + BORDER_LEFT + col * 8;
+		} else {
+			dst = context->output;
+			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
+			for (int i = 0; i < BORDER_LEFT; i++, dst++)
+			{
+				*dst = bg_color;
+			}
+		}
 		uint32_t color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
 		for (int i = 0; i < 16; i++)
 		{
@@ -1488,6 +1497,20 @@ static void vdp_advance_line(vdp_context *context)
 	} else if (context->vcounter == 0xDB) {
 		context->vcounter = 0x1D5;
 	}
+
+	if (context->vcounter > context->inactive_start) {
+		context->hint_counter = context->regs[REG_HINT];
+	} else if (context->hint_counter) {
+		context->hint_counter--;
+	} else {
+		context->flags2 |= FLAG2_HINT_PENDING;
+		context->pending_hint_start = context->cycles;
+		context->hint_counter = context->regs[REG_HINT];
+	}
+}
+
+static void advance_output_line(vdp_context *context)
+{
 	if (headless) {
 		if (context->vcounter == context->inactive_start) {
 			context->frame++;
@@ -1518,20 +1541,10 @@ static void vdp_advance_line(vdp_context *context)
 		{
 			context->output[i] = 0xFFFF00FF;
 		}
-#endif
+#endif	
 		if (output_line != INVALID_LINE && (context->regs[REG_MODE_4] & BIT_H40)) {
 			context->h40_lines++;
 		}
-	}
-
-	if (context->vcounter > context->inactive_start) {
-		context->hint_counter = context->regs[REG_HINT];
-	} else if (context->hint_counter) {
-		context->hint_counter--;
-	} else {
-		context->flags2 |= FLAG2_HINT_PENDING;
-		context->pending_hint_start = context->cycles;
-		context->hint_counter = context->regs[REG_HINT];
 	}
 }
 
@@ -1626,12 +1639,20 @@ static void vdp_advance_line(vdp_context *context)
 
 #define SPRITE_RENDER_H40(slot) \
 	case slot:\
+		if ((slot) == BG_START_SLOT + LINEBUF_SIZE/2) {\
+			advance_output_line(context);\
+		}\
 		render_sprite_cells( context);\
 		scan_sprite_table(context->vcounter, context);\
 		CHECK_LIMIT_HSYNC(slot)
 
+//Note that the line advancement check will fail if BG_START_SLOT is > 6
+//as we're bumping up against the hcounter jump
 #define SPRITE_RENDER_H32(slot) \
 	case slot:\
+		if ((slot) == BG_START_SLOT + (256+HORIZ_BORDER)/2) {\
+			advance_output_line(context);\
+		}\
 		render_sprite_cells( context);\
 		scan_sprite_table(context->vcounter, context);\
 		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); } \
@@ -2277,6 +2298,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 		)) {
 			dst = context->output + (context->hslot - BG_START_SLOT) * 2;
 		} else if (context->hslot == bg_end_slot) {
+			advance_output_line(context);
 			dst = NULL;
 		}
 		
