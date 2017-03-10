@@ -1497,6 +1497,7 @@ static void vdp_advance_line(vdp_context *context)
 	} else if (context->vcounter == 0xDB) {
 		context->vcounter = 0x1D5;
 	}
+	context->vcounter &= 0x1FF;
 
 	if (context->vcounter > context->inactive_start) {
 		context->hint_counter = context->regs[REG_HINT];
@@ -1517,7 +1518,7 @@ static void advance_output_line(vdp_context *context)
 		}
 		context->vcounter &= 0x1FF;
 	} else {
-		if (context->vcounter == context->inactive_start) {
+		if (context->vcounter == (context->inactive_start & 0x1FF)) {
 			render_framebuffer_updated(context->flags2 & FLAG2_EVEN_FIELD ? FRAMEBUFFER_EVEN: FRAMEBUFFER_ODD, context->h40_lines > (context->inactive_start + context->border_top) / 2 ? LINEBUF_SIZE : (256+HORIZ_BORDER));
 			if (context->double_res) {
 				context->flags2 ^= FLAG2_EVEN_FIELD;
@@ -1526,7 +1527,6 @@ static void advance_output_line(vdp_context *context)
 			context->h40_lines = 0;
 			context->frame++;
 		}
-		context->vcounter &= 0x1FF;
 		uint32_t output_line;
 		if (context->vcounter < context->inactive_start + context->border_bot) {
 			output_line = context->border_top + context->vcounter;
