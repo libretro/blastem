@@ -1783,15 +1783,17 @@ void translate_m68k_divu(m68k_options *opts, m68kinst *inst, host_ea *src_op, ho
 	//TODO: inline the functionality of divu so we don't need to dump context to memory
 	call_args(code, (code_ptr)divu, 3, opts->gen.scratch2, opts->gen.context_reg, opts->gen.scratch1);
 	pop_r(code, opts->gen.context_reg);
-	if (dst_op->mode == MODE_REG_DIRECT) {
-		mov_rr(code, RAX, opts->gen.scratch1, SZ_D);
-	} else {
-		mov_rrdisp(code, RAX, dst_op->base, dst_op->disp, SZ_D);
-	}	
+	mov_rr(code, RAX, opts->gen.scratch1, SZ_D);
+	
 	call(code, opts->gen.load_context);
+	
+	cmp_ir(code, 0, opts->gen.scratch1, SZ_W);
+	update_flags(opts, V0|Z|N);
 	
 	if (dst_op->mode == MODE_REG_DIRECT) {
 		mov_rr(code, opts->gen.scratch1, dst_op->base, SZ_D);
+	} else {
+		mov_rrdisp(code, RAX, dst_op->base, dst_op->disp, SZ_D);
 	}
 	
 	*end = code->cur - (end + 1);
