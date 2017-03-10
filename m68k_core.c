@@ -885,7 +885,7 @@ void translate_m68k_stream(uint32_t address, m68k_context * context)
 				code_ptr start = code->cur;
 				translate_out_of_bounds(opts, address);
 				code_ptr after = code->cur;
-				map_native_address(context, address, code->cur, 2, after-start);
+				map_native_address(context, address, start, 2, after-start);
 				break;
 			}
 			code_ptr existing = get_native_address(opts, address);
