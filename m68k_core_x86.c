@@ -1759,6 +1759,8 @@ void translate_m68k_divu(m68k_options *opts, m68kinst *inst, host_ea *src_op, ho
 		isize = 6;
 		break;
 	}
+	//zero seems to clear all flags
+	update_flags(opts, N0|Z0|V0);
 	mov_ir(code, VECTOR_INT_DIV_ZERO, opts->gen.scratch2, SZ_D);
 	mov_ir(code, inst->address+isize, opts->gen.scratch1, SZ_D);
 	jmp(code, opts->trap);
@@ -1768,11 +1770,8 @@ void translate_m68k_divu(m68k_options *opts, m68kinst *inst, host_ea *src_op, ho
 	code_ptr not_overflow = code->cur+1;
 	jcc(code, CC_C, not_overflow);
 	
-	//flags N and Z flags are set based on internal subtraction of src from top 16-bits of dst
-	and_ir(code, 0xFFFF0000, opts->gen.scratch2, SZ_D);
-	cmp_rr(code, opts->gen.scratch1, opts->gen.scratch2, SZ_D);
-	//TODO: verify N and Z flags are set like I think they are, microcode was a bit confusing
-	update_flags(opts, N|Z|V1);
+	//overflow seems to always set the N and clear Z
+	update_flags(opts, N1|Z0|V1);
 	cycles(&opts->gen, 10);
 	code_ptr end = code->cur+1;
 	jmp(code, end);
@@ -1793,7 +1792,7 @@ void translate_m68k_divu(m68k_options *opts, m68kinst *inst, host_ea *src_op, ho
 	if (dst_op->mode == MODE_REG_DIRECT) {
 		mov_rr(code, opts->gen.scratch1, dst_op->base, SZ_D);
 	} else {
-		mov_rrdisp(code, RAX, dst_op->base, dst_op->disp, SZ_D);
+		mov_rrdisp(code, opts->gen.scratch1, dst_op->base, dst_op->disp, SZ_D);
 	}
 	
 	*end = code->cur - (end + 1);
