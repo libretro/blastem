@@ -656,7 +656,11 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			decoded->dst.addr_mode = MODE_AREG;
 			decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
 			istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
-			if (!istream || decoded->src.addr_mode == MODE_REG) {
+			if (
+				!istream || decoded->src.addr_mode == MODE_REG || decoded->src.addr_mode == MODE_AREG 
+				|| decoded->src.addr_mode == MODE_AREG_POSTINC || decoded->src.addr_mode == MODE_AREG_PREDEC
+				|| decoded->src.addr_mode == MODE_IMMEDIATE
+			) {
 				decoded->op = M68K_INVALID;
 				break;
 			}
@@ -844,7 +848,11 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 								decoded->op = M68K_PEA;
 								decoded->extra.size = OPSIZE_LONG;
 								istream = m68k_decode_op(istream, OPSIZE_LONG, &(decoded->src));
-								if (!istream) {
+								if (
+									!istream || decoded->src.addr_mode == MODE_REG || decoded->src.addr_mode == MODE_AREG 
+									|| decoded->src.addr_mode == MODE_AREG_POSTINC || decoded->src.addr_mode == MODE_AREG_PREDEC
+									|| decoded->src.addr_mode == MODE_IMMEDIATE
+								) {
 									decoded->op = M68K_INVALID;
 									break;
 								}
