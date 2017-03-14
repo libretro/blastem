@@ -681,7 +681,7 @@ static uint8_t get_native_inst_size(m68k_options * opts, uint32_t address)
 uint8_t m68k_is_terminal(m68kinst * inst)
 {
 	return inst->op == M68K_RTS || inst->op == M68K_RTE || inst->op == M68K_RTR || inst->op == M68K_JMP
-		|| inst->op == M68K_TRAP || inst->op == M68K_ILLEGAL || inst->op == M68K_INVALID || inst->op == M68K_RESET
+		|| inst->op == M68K_TRAP || inst->op == M68K_ILLEGAL || inst->op == M68K_INVALID
 		|| (inst->op == M68K_BCC && inst->extra.cond == COND_TRUE);
 }
 
