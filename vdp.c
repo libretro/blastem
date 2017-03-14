@@ -2272,6 +2272,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 	} else {
 		bg_end_slot = BG_START_SLOT + (256+HORIZ_BORDER)/2;
 		max_draws = MAX_DRAWS_H32_MODE4;
+		max_sprites = 8;
 		buf_clear_slot = 136;
 		index_reset_slot = 253;
 		index_reset_value = 0;
@@ -2312,7 +2313,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 			memset(context->linebuf, 0, LINEBUF_SIZE);
 		} else if (context->hslot == index_reset_slot) {
 			context->sprite_index = index_reset_value;
-			context->slot_counter = max_draws;
+			context->slot_counter = max_sprites;
 		} else if (context->vcounter == vint_line && context->hslot == vint_slot) {
 			context->flags2 |= FLAG2_VINT_PENDING;
 			context->pending_vint_start = context->cycles;
