@@ -529,6 +529,9 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 
 		if (ram_start >= rom_end) {
 			info->map[0].end = rom_end < 0x400000 ? nearest_pow2(rom_end) - 1 : 0xFFFFFF;
+			if (info->map[0].end > ram_start) {
+				info->map[0].end = ram_start;
+			}
 			//TODO: ROM mirroring
 			info->map[0].mask = 0xFFFFFF;
 			info->map[0].flags = MMAP_READ;
