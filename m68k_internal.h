@@ -72,7 +72,6 @@ void translate_m68k_lsr(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 void translate_m68k_bit(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op);
 void translate_m68k_chk(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op);
 void translate_m68k_div(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op);
-void translate_m68k_divu(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op);
 void translate_m68k_exg(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op);
 void translate_m68k_mul(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op);
 void translate_m68k_negx(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op);
