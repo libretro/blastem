@@ -744,7 +744,7 @@ static impl_info m68k_impls[] = {
 	BINARY_IMPL(M68K_OR, N|Z|V0|C0),
 	RAW_IMPL(M68K_CMP, translate_m68k_cmp),
 	OP_IMPL(M68K_DIVS, translate_m68k_div),
-	OP_IMPL(M68K_DIVU, translate_m68k_divu),
+	OP_IMPL(M68K_DIVU, translate_m68k_div),
 	OP_IMPL(M68K_MULS, translate_m68k_mul),
 	OP_IMPL(M68K_MULU, translate_m68k_mul),
 	RAW_IMPL(M68K_EXT, translate_m68k_ext),
