@@ -1719,7 +1719,100 @@ static uint32_t divu(uint32_t dividend, m68k_context *context, uint32_t divisor_
 	return dividend | quotient;
 }
 
-void translate_m68k_divu(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op)
+static uint32_t divs(uint32_t dividend, m68k_context *context, uint32_t divisor_shift)
+{
+	uint32_t orig_divisor = divisor_shift, orig_dividend = dividend;
+	if (divisor_shift & 0x80000000) {
+		divisor_shift = 0 - divisor_shift;
+	}
+	
+	uint32_t cycles = 12;
+	if (dividend & 0x80000000) {
+		//dvs10
+		dividend = 0 - dividend;
+		cycles += 2;
+	}
+	if (divisor_shift <= dividend) {
+		context->flags[FLAG_V] = 1;
+		context->flags[FLAG_N] = 1;
+		context->flags[FLAG_Z] = 0;
+		//TODO: FIXME - this cycle count probably changes based on whether the dividend is negative
+		context->current_cycle += 16 * context->options->gen.clock_divider;
+		return orig_dividend;
+	}
+	uint16_t quotient = 0;
+	uint16_t bit = 0;
+	for (int i = 0; i < 15; i++)
+	{
+		quotient = quotient << 1 | bit;
+		dividend = dividend << 1;
+		
+		if (dividend >= divisor_shift) {
+			dividend -= divisor_shift;
+			cycles += 6;
+			bit = 1;
+		} else {
+			bit = 0;
+			cycles += 8;
+		}
+	}
+	quotient = quotient << 1 | bit;
+	dividend = dividend << 1;
+	if (dividend >= divisor_shift) {
+		dividend -= divisor_shift;
+		quotient = quotient << 1 | 1;
+	} else {
+		quotient = quotient << 1;
+	}
+	cycles += 4;
+	
+	context->flags[FLAG_V] = 0;
+	if (orig_divisor & 0x80000000) {
+		cycles += 16; //was 10
+		if (orig_dividend & 0x80000000) {
+			if (quotient & 0x8000) {
+				context->flags[FLAG_V] = 1;
+				context->flags[FLAG_N] = 1;
+				context->flags[FLAG_Z] = 0;
+				context->current_cycle += cycles * context->options->gen.clock_divider;
+				return orig_dividend;
+			} else {
+				dividend = -dividend;
+			}
+		} else {
+			quotient = -quotient;
+			if (quotient && !(quotient & 0x8000)) {
+				context->flags[FLAG_V] = 1;
+			}
+		}
+	} else if (orig_dividend & 0x80000000) {
+		cycles += 18; // was 12
+		quotient = -quotient;
+		if (quotient && !(quotient & 0x8000)) {
+			context->flags[FLAG_V] = 1;
+		} else {
+			dividend = -dividend;
+		}
+	} else {
+		cycles += 14; //was 10
+		if (quotient & 0x8000) {
+			context->flags[FLAG_V] = 1;
+		}
+	}
+	if (context->flags[FLAG_V]) {
+		context->flags[FLAG_N] = 1;
+		context->flags[FLAG_Z] = 0;
+		context->current_cycle += cycles * context->options->gen.clock_divider;
+		return orig_dividend;
+	}
+	context->flags[FLAG_N] = (quotient & 0x8000) ? 1 : 0;
+	context->flags[FLAG_Z] = quotient == 0;
+	//V was cleared above, C is cleared by the generated machine code
+	context->current_cycle += cycles * context->options->gen.clock_divider;
+	return dividend | quotient;
+}
+
+void translate_m68k_div(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op)
 {
 	code_info *code = &opts->gen.code;
 	check_alloc_code(code, MAX_NATIVE_SIZE);
@@ -1766,146 +1859,44 @@ void translate_m68k_divu(m68k_options *opts, m68kinst *inst, host_ea *src_op, ho
 	jmp(code, opts->trap);
 	
 	*not_zero = code->cur - (not_zero + 1);
-	cmp_rr(code, opts->gen.scratch1, opts->gen.scratch2, SZ_D);
-	code_ptr not_overflow = code->cur+1;
-	jcc(code, CC_C, not_overflow);
-	
-	//overflow seems to always set the N and clear Z
-	update_flags(opts, N1|Z0|V1);
-	cycles(&opts->gen, 10);
-	code_ptr end = code->cur+1;
-	jmp(code, end);
-	
-	*not_overflow = code->cur - (not_overflow + 1);
+	code_ptr end = NULL;
+	if (inst->op == M68K_DIVU) {
+		//initial overflow check needs to be done in the C code for divs
+		//but can be done before dumping state to mem in divu as an optimization
+		cmp_rr(code, opts->gen.scratch1, opts->gen.scratch2, SZ_D);
+		code_ptr not_overflow = code->cur+1;
+		jcc(code, CC_C, not_overflow);
+		
+		//overflow seems to always set the N and clear Z
+		update_flags(opts, N1|Z0|V1);
+		cycles(&opts->gen, 10);
+		end = code->cur+1;
+		jmp(code, end);
+		
+		*not_overflow = code->cur - (not_overflow + 1);
+	}
 	call(code, opts->gen.save_context);
 	push_r(code, opts->gen.context_reg);
-	//TODO: inline the functionality of divu so we don't need to dump context to memory
-	call_args(code, (code_ptr)divu, 3, opts->gen.scratch2, opts->gen.context_reg, opts->gen.scratch1);
+	//TODO: inline the functionality of divudivs/ so we don't need to dump context to memory
+	call_args(code, (code_ptr)(inst->op == M68K_DIVU ? divu : divs), 3, opts->gen.scratch2, opts->gen.context_reg, opts->gen.scratch1);
 	pop_r(code, opts->gen.context_reg);
 	mov_rr(code, RAX, opts->gen.scratch1, SZ_D);
 	
 	call(code, opts->gen.load_context);
 	
-	cmp_ir(code, 0, opts->gen.scratch1, SZ_W);
-	update_flags(opts, V0|Z|N);
+	if (inst->op == M68K_DIVU) {
+		cmp_ir(code, 0, opts->gen.scratch1, SZ_W);
+		update_flags(opts, V0|Z|N);
+	}
 	
 	if (dst_op->mode == MODE_REG_DIRECT) {
 		mov_rr(code, opts->gen.scratch1, dst_op->base, SZ_D);
 	} else {
 		mov_rrdisp(code, opts->gen.scratch1, dst_op->base, dst_op->disp, SZ_D);
 	}
-	
-	*end = code->cur - (end + 1);
-}
-
-void translate_m68k_div(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op)
-{
-	code_info *code = &opts->gen.code;
-	check_alloc_code(code, MAX_NATIVE_SIZE);
-	//TODO: cycle exact division
-	cycles(&opts->gen, inst->op == M68K_DIVS ? 158 : 140);
-	set_flag(opts, 0, FLAG_C);
-	push_r(code, RDX);
-	push_r(code, RAX);
-	uint32_t tmp_stack_off = code->stack_off;
-	if (dst_op->mode == MODE_REG_DIRECT) {
-		mov_rr(code, dst_op->base, RAX, SZ_D);
-	} else {
-		mov_rdispr(code, dst_op->base, dst_op->disp, RAX, SZ_D);
+	if (end) {
+		*end = code->cur - (end + 1);
 	}
-	if (src_op->mode == MODE_IMMED) {
-		mov_ir(code, (src_op->disp & 0x8000) && inst->op == M68K_DIVS ? src_op->disp | 0xFFFF0000 : src_op->disp, opts->gen.scratch2, SZ_D);
-	} else if (src_op->mode == MODE_REG_DIRECT) {
-		if (inst->op == M68K_DIVS) {
-			movsx_rr(code, src_op->base, opts->gen.scratch2, SZ_W, SZ_D);
-		} else {
-			movzx_rr(code, src_op->base, opts->gen.scratch2, SZ_W, SZ_D);
-		}
-	} else if (src_op->mode == MODE_REG_DISPLACE8) {
-		if (inst->op == M68K_DIVS) {
-			movsx_rdispr(code, src_op->base, src_op->disp, opts->gen.scratch2, SZ_W, SZ_D);
-		} else {
-			movzx_rdispr(code, src_op->base, src_op->disp, opts->gen.scratch2, SZ_W, SZ_D);
-		}
-	}
-	uint32_t isize = 2;
-	switch(inst->src.addr_mode)
-	{
-	case MODE_AREG_DISPLACE:
-	case MODE_AREG_INDEX_DISP8:
-	case MODE_ABSOLUTE_SHORT:
-	case MODE_PC_INDEX_DISP8:
-	case MODE_IMMEDIATE:
-		isize = 4;
-		break;
-	case MODE_ABSOLUTE:
-		isize = 6;
-		break;
-	}
-	cmp_ir(code, 0, opts->gen.scratch2, SZ_D);
-	check_alloc_code(code, 6*MAX_INST_LEN);
-	code_ptr not_zero = code->cur + 1;
-	jcc(code, CC_NZ, code->cur + 2);
-	pop_r(code, RAX);
-	pop_r(code, RDX);
-	mov_ir(code, VECTOR_INT_DIV_ZERO, opts->gen.scratch2, SZ_D);
-	mov_ir(code, inst->address+isize, opts->gen.scratch1, SZ_D);
-	jmp(code, opts->trap);
-
-	code->stack_off = tmp_stack_off;
-	*not_zero = code->cur - (not_zero+1);
-	if (inst->op == M68K_DIVS) {
-		cdq(code);
-	} else {
-		xor_rr(code, RDX, RDX, SZ_D);
-	}
-	if (inst->op == M68K_DIVS) {
-		idiv_r(code, opts->gen.scratch2, SZ_D);
-	} else {
-		div_r(code, opts->gen.scratch2, SZ_D);
-	}
-	code_ptr skip_sec_check, norm_off;
-	if (inst->op == M68K_DIVS) {
-		cmp_ir(code, 0x8000, RAX, SZ_D);
-		skip_sec_check = code->cur + 1;
-		jcc(code, CC_GE, code->cur + 2);
-		cmp_ir(code, -0x8000, RAX, SZ_D);
-		norm_off = code->cur + 1;
-		jcc(code, CC_L, code->cur + 2);
-	} else {
-		cmp_ir(code, 0x10000, RAX, SZ_D);
-		norm_off = code->cur + 1;
-		jcc(code, CC_NC, code->cur + 2);
-	}
-	if (dst_op->mode == MODE_REG_DIRECT) {
-		mov_rr(code, RDX, dst_op->base, SZ_W);
-		shl_ir(code, 16, dst_op->base, SZ_D);
-		mov_rr(code, RAX, dst_op->base, SZ_W);
-	} else {
-		mov_rrdisp(code, RDX, dst_op->base, dst_op->disp, SZ_W);
-		shl_irdisp(code, 16, dst_op->base, dst_op->disp, SZ_D);
-		mov_rrdisp(code, RAX, dst_op->base, dst_op->disp, SZ_W);
-	}
-	cmp_ir(code, 0, RAX, SZ_W);
-	pop_r(code, RAX);
-	if (dst_op->base == RDX) {
-		update_flags(opts, V0|Z|N);
-		add_ir(code, sizeof(void *), RSP, SZ_D);
-	} else {
-		pop_r(code, RDX);
-		update_flags(opts, V0|Z|N);
-	}
-	code_ptr end_off = code->cur + 1;
-	jmp(code, code->cur + 2);
-	code->stack_off = tmp_stack_off;
-	*norm_off = code->cur - (norm_off + 1);
-	if (inst->op == M68K_DIVS) {
-		*skip_sec_check = code->cur - (skip_sec_check+1);
-	}
-	pop_r(code, RAX);
-	pop_r(code, RDX);
-	set_flag(opts, 1, FLAG_V);
-	*end_off = code->cur - (end_off + 1);
 }
 
 void translate_m68k_exg(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op)
