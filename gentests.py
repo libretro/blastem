@@ -61,7 +61,7 @@ class Program(object):
 			outfile.write('lbl_' + str(already['label']) + ':\n')
 		outfile.write('\t'+str(self.inst)+'\n')
 		outfile.write('\t'+self.inst.save_result(self.get_dreg(), False) + '\n')
-		outfile.write('\treset\n')
+		outfile.write('\treset\nforever:\n\tbra.s forever\n')
 	
 	def consume_dreg(self, num):
 		self.avail_dregs.discard(num)
@@ -109,7 +109,7 @@ def valid_ram_address(address, size='b'):
 	return address >= 0xE00000 and address <= 0xFFFFFFFC and (address & 0xE00000) == 0xE00000 and (size == 'b' or not address & 1)
 
 def random_ram_address(mina=0xE00000, maxa=0xFFFFFFFC):
-	return randint(mina, maxa) | 0xE00000
+	return randint(mina/2, maxa/2)*2 | 0xE00000
 
 class Indexed(object):
 	def __init__(self, base, index, index_size, disp):
@@ -128,13 +128,15 @@ class Indexed(object):
 					if index & 0x8000:
 						index -= 65536
 				if index > -1024:
-					index = already[str(self.index)] = randint(-32768, -1024)
+					index = already[str(self.index)] = 2 * randint(-16384, -512)
 					outfile.write('\tmove.l #' + str(index) + ', ' + str(self.index) + '\n')
 			else:
-				index = already[str(self.index)] = randint(-32768, -1024)
+				index = already[str(self.index)] = 2 * randint(-16384, -512)
 				outfile.write('\tmove.l #' + str(index) + ', ' + str(self.index) + '\n')
 			num = already.get('label', 0)+1
 			already['label'] = num
+			if (already[str(self.index)] + self.disp) & 1:
+				self.disp += 1
 			address = 'lbl_' + str(num) + ' + 2 + ' + str(self.disp) + ' + ' + str(index)
 		else:
 			if self.base == self.index:
@@ -206,7 +208,9 @@ class Indexed(object):
 class Displacement(object):
 	def __init__(self, base, disp):
 		self.base = base
-		self.disp = disp
+		if disp & 1:
+			disp += 1
+		self.disp = disp 
 	
 	def write_init(self, outfile, size, already):
 		if self.base.kind == 'pc':
@@ -374,10 +378,10 @@ def all_pc_indexed():
 	return [Indexed(Register('pc', 0), index, index_size, randint(-128, 127)) for index in all_dregs + all_aregs for index_size in ('w','l')]
 
 def rand_abs_short():
-	return [Absolute(0xFFFF8000 + randint(0, 32767), 'w') for x in xrange(0, 8)]
+	return [Absolute(random_ram_address(0xFFFF8000), 'w') for x in xrange(0, 8)]
 
 def rand_abs_long():
-	return [Absolute(0xFF0000 + randint(0, 65535), 'l') for x in xrange(0, 8)]
+	return [Absolute(random_ram_address(), 'l') for x in xrange(0, 8)]
 
 def get_size_range(size):
 	if size == 'b':
