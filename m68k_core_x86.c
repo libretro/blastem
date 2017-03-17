@@ -1736,8 +1736,8 @@ static uint32_t divs(uint32_t dividend, m68k_context *context, uint32_t divisor_
 		context->flags[FLAG_V] = 1;
 		context->flags[FLAG_N] = 1;
 		context->flags[FLAG_Z] = 0;
-		//TODO: FIXME - this cycle count probably changes based on whether the dividend is negative
-		context->current_cycle += 16 * context->options->gen.clock_divider;
+		cycles += 2;
+		context->current_cycle += cycles * context->options->gen.clock_divider;
 		return orig_dividend;
 	}
 	uint16_t quotient = 0;
