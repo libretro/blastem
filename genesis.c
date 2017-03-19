@@ -296,12 +296,6 @@ static m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, 
 							sync_components(context, 0);
 							gen->bus_busy = 0;
 						}
-						if (!(v_context->flags & FLAG_DMA_RUN)) {
-							//two more slots of delay are needed to kill sufficient sprite capacity in Overdrive
-							//TODO: Measure exact value with logic analyzer
-							vdp_run_context(v_context, v_context->cycles + 1);
-							vdp_run_context(v_context, v_context->cycles + 1);
-						}
 					}
 					
 					if (blocked < 0) {
