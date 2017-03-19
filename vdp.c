@@ -2486,8 +2486,11 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 				//printf("DMA start (length: %X) at cycle %d, frame: %d, vcounter: %d, hslot: %d\n", (context->regs[REG_DMALEN_H] << 8) | context->regs[REG_DMALEN_L], context->cycles, context->frame, context->vcounter, context->hslot);
 				if (!(context->regs[REG_DMASRC_H] & 0x80)) {
 					//printf("DMA Address: %X, New CD: %X, Source: %X, Length: %X\n", context->address, context->cd, (context->regs[REG_DMASRC_H] << 17) | (context->regs[REG_DMASRC_M] << 9) | (context->regs[REG_DMASRC_L] << 1), context->regs[REG_DMALEN_H] << 8 | context->regs[REG_DMALEN_L]);
-					//68K -> VDP DMA takes 4 slots to actually start reading even though it acquires the bus immediately
-					vdp_run_context(context, context->cycles + 16 * ((context->regs[REG_MODE_2] & BIT_MODE_5) && (context->regs[REG_MODE_4] & BIT_H40) ? 4 : 5));
+					//68K -> VDP DMA takes a few slots to actually start reading even though it acquires the bus immediately
+					//logic analyzer captures made it seem like the proper value is 4 slots, but that seems to cause trouble with the Nemesis' FIFO Wait State test
+					//only captures are from a direct color DMA demo which will generally start DMA at a very specific point in display so other values are plausible
+					//sticking with 3 slots for now until I can do some more captures
+					vdp_run_context(context, context->cycles + 12 * ((context->regs[REG_MODE_2] & BIT_MODE_5) && (context->regs[REG_MODE_4] & BIT_H40) ? 4 : 5));
 					context->flags |= FLAG_DMA_RUN;
 					return 1;
 				} else {
