@@ -323,7 +323,9 @@ static m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, 
 			context->current_cycle += m68k_cycle_diff;
 #ifdef REFRESH_EMULATION
 			last_sync_cycle = context->current_cycle;
-			refresh_counter = 0;
+			if (vdp_port >= 4 && vdp_port < 8) {
+				refresh_counter = 0;
+			}
 #endif
 			//Lock the Z80 out of the bus until the VDP access is complete
 			gen->bus_busy = 1;
