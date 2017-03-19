@@ -144,6 +144,7 @@ static void sync_sound(genesis_context * gen, uint32_t target)
 static uint32_t last_frame_num;
 
 //My refresh emulation isn't currently good enough and causes more problems than it solves
+#define REFRESH_EMULATION
 #ifdef REFRESH_EMULATION
 #define REFRESH_INTERVAL 128
 #define REFRESH_DELAY 2
@@ -322,6 +323,7 @@ static m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, 
 			context->current_cycle += m68k_cycle_diff;
 #ifdef REFRESH_EMULATION
 			last_sync_cycle = context->current_cycle;
+			refresh_counter = 0;
 #endif
 			//Lock the Z80 out of the bus until the VDP access is complete
 			gen->bus_busy = 1;
@@ -396,7 +398,7 @@ static uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 	if (v_context->cycles != before_cycle) {
 		//printf("68K paused for %d (%d) cycles at cycle %d (%d) for read\n", v_context->cycles - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
 		context->current_cycle = v_context->cycles;
-#ifdef REFRES_EMULATION
+#ifdef REFRESH_EMULATION
 		last_sync_cycle = context->current_cycle;
 #endif
 		//Lock the Z80 out of the bus until the VDP access is complete
