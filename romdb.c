@@ -295,6 +295,7 @@ m68k_context * write_bank_reg_w(uint32_t address, m68k_context * context, uint16
 			}
 		}
 	} else {
+		m68k_invalidate_code_range(gen->m68k, address * 0x80000, (address + 1) * 0x80000);
 		context->mem_pointers[gen->mapper_start_index + address] = gen->cart + 0x40000*value;
 	}
 	return context;
@@ -508,7 +509,35 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 	} else if (rom_end > nearest_pow2(size)) {
 		rom_end = nearest_pow2(size);
 	}
-	if (rom[RAM_ID] == 'R' && rom[RAM_ID+1] == 'A') {
+	if (size >= 0x80000 && !memcmp("SEGA SSF", rom + 0x100, 8)) {
+		info->mapper_start_index = 0;
+		info->map_chunks = base_chunks + 9;
+		info->map = malloc(sizeof(memmap_chunk) * info->map_chunks);
+		memset(info->map, 0, sizeof(memmap_chunk)*9);
+		memcpy(info->map+9, base_map, sizeof(memmap_chunk) * base_chunks);
+		
+		info->map[0].start = 0;
+		info->map[0].end = 0x80000;
+		info->map[0].mask = 0xFFFFFF;
+		info->map[0].flags = MMAP_READ;
+		info->map[0].buffer = rom;
+		
+		for (int i = 1; i < 8; i++)
+		{
+			info->map[i].start = i * 0x80000;
+			info->map[i].end = (i + 1) * 0x80000;
+			info->map[i].mask = 0x7FFFF;
+			info->map[i].buffer = (i + 1) * 0x80000 <= size ? rom + i * 0x80000 : rom;
+			info->map[i].ptr_index = i;
+			info->map[i].flags = MMAP_READ | MMAP_PTR_IDX | MMAP_CODE;
+			
+		}
+		info->map[8].start = 0xA13000;
+		info->map[8].end = 0xA13100;
+		info->map[8].mask = 0xFF;
+		info->map[8].write_16 = (write_16_fun)write_bank_reg_w;
+		info->map[8].write_8 = (write_8_fun)write_bank_reg_b;
+	} else if (rom[RAM_ID] == 'R' && rom[RAM_ID+1] == 'A') {
 		uint32_t ram_start = get_u32be(rom + RAM_START);
 		uint32_t ram_end = get_u32be(rom + RAM_END);
 		uint32_t ram_flags = info->save_type = rom[RAM_FLAGS] & RAM_FLAG_MASK;
@@ -799,9 +828,9 @@ void map_iter_fun(char *key, tern_val val, void *data)
 			map->buffer = state->rom + offset + i * 0x80000;
 			map->ptr_index = state->ptr_index++;
 			if (i < 3 || !save_device) {
-				map->flags = MMAP_READ | MMAP_PTR_IDX;
+				map->flags = MMAP_READ | MMAP_PTR_IDX | MMAP_CODE;
 			} else {
-				map->flags = MMAP_READ | MMAP_PTR_IDX | MMAP_FUNC_NULL;
+				map->flags = MMAP_READ | MMAP_PTR_IDX | MMAP_CODE | MMAP_FUNC_NULL;
 				if (!strcmp(save_device, "SRAM")) {
 					process_sram_def(key, state);
 					map->read_16 = (read_16_fun)read_sram_w;//these will only be called when mem_pointers[2] == NULL
