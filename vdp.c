@@ -998,23 +998,8 @@ static void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, 
 		}
 		context->flags &= ~FLAG_WINDOW;
 	}
-	uint16_t vscroll;
-	switch(context->regs[REG_SCROLL] & 0x30)
-	{
-	case 0:
-		vscroll = 0xFF;
-		break;
-	case 0x10:
-		vscroll = 0x1FF;
-		break;
-	case 0x20:
-		//TODO: Verify this behavior
-		vscroll = 0;
-		break;
-	case 0x30:
-		vscroll = 0x3FF;
-		break;
-	}
+	//TODO: Verify behavior for 0x20 case
+	uint16_t vscroll = 0xFF | (context->regs[REG_SCROLL] & 0x30) << 4;
 	if (context->double_res) {
 		vscroll <<= 1;
 		vscroll |= 1;
@@ -1057,7 +1042,7 @@ static void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, 
 		break;
 	case 0x2:
 		//TODO: Verify this behavior
-		hscroll_mask = 0;
+		hscroll_mask = 0x5F;
 		v_mul = 0;
 		break;
 	case 0x3:
