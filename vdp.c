@@ -2482,13 +2482,16 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 			//
 			if((context->regs[REG_DMASRC_H] & 0xC0) != 0x80) {
 				//DMA copy or 68K -> VDP, transfer starts immediately
-				context->flags |= FLAG_DMA_RUN;
 				context->dma_cd = context->cd;
 				//printf("DMA start (length: %X) at cycle %d, frame: %d, vcounter: %d, hslot: %d\n", (context->regs[REG_DMALEN_H] << 8) | context->regs[REG_DMALEN_L], context->cycles, context->frame, context->vcounter, context->hslot);
 				if (!(context->regs[REG_DMASRC_H] & 0x80)) {
 					//printf("DMA Address: %X, New CD: %X, Source: %X, Length: %X\n", context->address, context->cd, (context->regs[REG_DMASRC_H] << 17) | (context->regs[REG_DMASRC_M] << 9) | (context->regs[REG_DMASRC_L] << 1), context->regs[REG_DMALEN_H] << 8 | context->regs[REG_DMALEN_L]);
+					//68K -> VDP DMA takes 4 slots to actually start reading even though it acquires the bus immediately
+					vdp_run_context(context, context->cycles + 16 * ((context->regs[REG_MODE_2] & BIT_MODE_5) && (context->regs[REG_MODE_4] & BIT_H40) ? 4 : 5));
+					context->flags |= FLAG_DMA_RUN;
 					return 1;
 				} else {
+					context->flags |= FLAG_DMA_RUN;
 					//printf("DMA Copy Address: %X, New CD: %X, Source: %X\n", context->address, context->cd, (context->regs[REG_DMASRC_M] << 8) | context->regs[REG_DMASRC_L]);
 				}
 			} else {
