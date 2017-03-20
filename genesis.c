@@ -21,6 +21,7 @@ uint32_t MCLKS_PER_68K;
 #define MCLKS_PER_YM  7
 #define MCLKS_PER_Z80 15
 #define MCLKS_PER_PSG (MCLKS_PER_Z80*16)
+#define Z80_INT_PULSE_MCLKS 2573 //measured value is ~171.5 Z80 clocks
 #define DEFAULT_SYNC_INTERVAL MCLKS_LINE
 #define DEFAULT_LOWPASS_CUTOFF 3390
 
@@ -108,8 +109,7 @@ static void z80_next_int_pulse(z80_context * z_context)
 {
 	genesis_context * gen = z_context->system;
 	z_context->int_pulse_start = vdp_next_vint_z80(gen->vdp);
-	//Notes in the Genesis Plus GX code suggest this is asserted for one line
-	z_context->int_pulse_end = z_context->int_pulse_start + MCLKS_LINE;
+	z_context->int_pulse_end = z_context->int_pulse_start + Z80_INT_PULSE_MCLKS;
 }
 
 static void sync_z80(z80_context * z_context, uint32_t mclks)
