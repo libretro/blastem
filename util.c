@@ -57,6 +57,92 @@ char * alloc_concat_m(int num_parts, char const ** parts)
 	return ret;
 }
 
+typedef struct {
+	uint32_t start;
+	uint32_t end;
+	char *value;
+} var_pos;
+
+char *replace_vars(char *base, tern_node *vars, uint8_t allow_env)
+{
+	uint32_t num_vars = 0;
+	for (char *cur = base; *cur; ++cur)
+	{
+		//TODO: Support escaping $ and allow brace syntax
+		if (*cur == '$') {
+			num_vars++;
+		}
+	}
+	var_pos *positions = calloc(num_vars, sizeof(var_pos));
+	num_vars = 0;
+	uint8_t in_var = 0;
+	uint32_t max_var_len = 0;
+	for (char *cur = base; *cur; ++cur)
+	{
+		if (in_var) {
+			if (!(*cur == '_' || isalnum(*cur))) {
+				positions[num_vars].end = cur-base;
+				if (positions[num_vars].end - positions[num_vars].start > max_var_len) {
+					max_var_len = positions[num_vars].end - positions[num_vars].start;
+				}
+				num_vars++;
+				in_var = 0;
+			}
+		} else if (*cur == '$') {
+			positions[num_vars].start = cur-base+1;
+			in_var = 1;
+		}
+	}
+	if (in_var) {
+		positions[num_vars].end = strlen(base);
+		if (positions[num_vars].end - positions[num_vars].start > max_var_len) {
+			max_var_len = positions[num_vars].end - positions[num_vars].start;
+		}
+		num_vars++;
+	}
+	char *varname = malloc(max_var_len+1);
+	uint32_t total_len = 0;
+	uint32_t cur = 0;
+	for (uint32_t i = 0; i < num_vars; i++)
+	{
+		total_len += (positions[i].start - 1) - cur;
+		cur = positions[i].start;
+		memcpy(varname, base + positions[i].start, positions[i].end-positions[i].start);
+		varname[positions[i].end-positions[i].start] = 0;
+		positions[i].value = tern_find_ptr(vars, varname);
+		if (!positions[i].value && allow_env) {
+			positions[i].value = getenv(varname);
+		}
+		if (positions[i].value) {
+			total_len += strlen(positions[i].value);
+		}
+	}
+	total_len += strlen(base+cur);
+	free(varname);
+	char *output = malloc(total_len+1);
+	cur = 0;
+	char *curout = output;
+	for (uint32_t i = 0; i < num_vars; i++)
+	{
+		if (positions[i].start-1 > cur) {
+			memcpy(curout, base + cur, (positions[i].start-1) - cur);
+			curout += (positions[i].start-1) - cur;
+		}
+		if (positions[i].value) {
+			strcpy(curout, positions[i].value);
+			curout += strlen(curout);
+		}
+		cur = positions[i].end;
+	};
+	if (base[cur]) {
+		strcpy(curout, base+cur);
+	} else {
+		*curout = 0;
+	}
+	free(positions);
+	return output;
+}
+
 void byteswap_rom(int filesize, uint16_t *cart)
 {
 	for(uint16_t *cur = cart; cur - cart < filesize/2; ++cur)

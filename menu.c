@@ -167,15 +167,16 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 	if (!menu) {
 		gen->extra = menu = calloc(1, sizeof(menu_context));
 		menu->curpath = tern_find_path(config, "ui\0initial_path\0").ptrval;
-		if (menu->curpath) {
-			menu->curpath = strdup(menu->curpath);
-		} else {
+		if (!menu->curpath){
 #ifdef __ANDROID__
-			menu->curpath = strdup(get_external_storage_path());
+			menu->curpath = get_external_storage_path();
 #else
-			menu->curpath = strdup(get_home_dir());
+			menu->curpath = "$HOME";
 #endif
 		}
+		tern_node *vars = tern_insert_ptr(NULL, "HOME", get_home_dir());
+		vars = tern_insert_ptr(vars, "EXEDIR", get_exe_dir());
+		menu->curpath = replace_vars(menu->curpath, vars, 1);
 	}
 	if (menu->state) {
 		uint32_t dst = menu->latch << 16 | value;
