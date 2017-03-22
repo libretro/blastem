@@ -140,14 +140,21 @@ void update_title(char *rom_name)
 void setup_saves(char *fname, rom_info *info, system_header *context)
 {
 	static uint8_t persist_save_registered;
+	char *savedir_template = tern_find_path(config, "ui\0save_path\0").ptrval;
+	if (!savedir_template) {
+		savedir_template = "$USERDATA/blastem/$ROMNAME";
+	}
 	char * barename = basename_no_extension(fname);
-	char const * parts[3] = {get_save_dir(), PATH_SEP, barename};
-	char *save_dir = alloc_concat_m(3, parts);
+	tern_node *vars = tern_insert_ptr(NULL, "ROMNAME", barename);
+	vars = tern_insert_ptr(vars, "HOME", get_home_dir());
+	vars = tern_insert_ptr(vars, "EXEDIR", get_exe_dir());
+	vars = tern_insert_ptr(vars, "USERDATA", (char *)get_userdata_dir());
+	char *save_dir = replace_vars(savedir_template, vars, 1);
+	tern_free(vars);
 	if (!ensure_dir_exists(save_dir)) {
 		warning("Failed to create save directory %s\n", save_dir);
 	}
-	parts[0] = save_dir;
-	parts[2] = info->save_type == SAVE_I2C ? "save.eeprom" : "save.sram";
+	char const *parts[] = {save_dir, PATH_SEP, info->save_type == SAVE_I2C ? "save.eeprom" : "save.sram"};
 	free(save_filename);
 	save_filename = alloc_concat_m(3, parts);
 	//TODO: make quick save filename dependent on system type

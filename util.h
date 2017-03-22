@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <time.h>
+#include "tern.h"
 
 typedef struct {
 	char    *name;
@@ -50,7 +51,7 @@ char * get_home_dir();
 //Returns an appropriate path for storing config files
 char const *get_config_dir();
 //Returns an appropriate path for saving non-config data like savestates
-char const *get_save_dir();
+char const *get_userdata_dir();
 //Reads a file bundled with the executable
 char *read_bundled_file(char *name, uint32_t *sizeret);
 //Retunrs an array of normal files and directories residing in a directory
