@@ -681,7 +681,7 @@ char const *get_config_dir()
 	return SDL_AndroidGetInternalStoragePath();
 }
 
-char const *get_save_dir()
+char const *get_userdata_dir()
 {
 	return SDL_AndroidGetInternalStoragePath();
 }
@@ -729,7 +729,7 @@ char *read_bundled_file(char *name, uint32_t *sizeret)
 
 
 #ifdef _WIN32
-char const *get_save_base_dir()
+char const *get_userdata_dir()
 {
 	static char path[MAX_PATH];
 	if (S_OK == SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA | CSIDL_FLAG_CREATE, NULL, 0, path))
@@ -738,22 +738,24 @@ char const *get_save_base_dir()
 	}
 	return NULL;
 }
+
+char const *get_config_dir()
+{
+	return get_userdata_dir();
+}
 #define CONFIG_PREFIX ""
 #define SAVE_PREFIX ""
 
 #else
 
-#define get_save_base_dir get_home_dir
 #define CONFIG_PREFIX "/.config"
-#define SAVE_PREFIX "/.local/share"
-
-#endif
+#define USERDATA_SUFFIX "/.local/share"
 
 char const *get_config_dir()
 {
 	static char* confdir;
 	if (!confdir) {
-		char const *base = get_save_base_dir();
+		char const *base = get_home_dir();
 		if (base) {
 			confdir = alloc_concat(base, CONFIG_PREFIX PATH_SEP "blastem");
 		}
@@ -761,16 +763,21 @@ char const *get_config_dir()
 	return confdir;
 }
 
-char const *get_save_dir()
+char const *get_userdata_dir()
 {
 	static char* savedir;
 	if (!savedir) {
-		char const *base = get_save_base_dir();
+		char const *base = get_home_dir();
 		if (base) {
-			savedir = alloc_concat(base, SAVE_PREFIX PATH_SEP "blastem");
+			savedir = alloc_concat(base, USERDATA_SUFFIX);
 		}
 	}
 	return savedir;
 }
+
+
+#endif
+
+
 
 #endif
