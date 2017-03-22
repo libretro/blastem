@@ -177,6 +177,8 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 		tern_node *vars = tern_insert_ptr(NULL, "HOME", get_home_dir());
 		vars = tern_insert_ptr(vars, "EXEDIR", get_exe_dir());
 		menu->curpath = replace_vars(menu->curpath, vars, 1);
+		tern_free(vars);
+		
 	}
 	if (menu->state) {
 		uint32_t dst = menu->latch << 16 | value;
