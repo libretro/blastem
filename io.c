@@ -496,8 +496,12 @@ void handle_binding_up(keybinding * binding)
 		case UI_SCREENSHOT: {
 			char *screenshot_base = tern_find_path(config, "ui\0screenshot_path\0").ptrval;
 			if (!screenshot_base) {
-				screenshot_base = get_home_dir();
+				screenshot_base = "$HOME";
 			}
+			tern_node *vars = tern_insert_ptr(NULL, "HOME", get_home_dir());
+			vars = tern_insert_ptr(vars, "EXEDIR", get_exe_dir());
+			screenshot_base = replace_vars(screenshot_base, vars, 1);
+			tern_free(vars);
 			time_t now = time(NULL);
 			struct tm local_store;
 			char fname_part[256];
@@ -508,6 +512,7 @@ void handle_binding_up(keybinding * binding)
 			strftime(fname_part, sizeof(fname_part), template, localtime_r(&now, &local_store));
 			char const *parts[] = {screenshot_base, PATH_SEP, fname_part};
 			char *path = alloc_concat_m(3, parts);
+			free(screenshot_base);
 			render_save_screenshot(path);
 			break;
 		}
