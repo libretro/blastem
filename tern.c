@@ -224,3 +224,16 @@ tern_node * tern_get_node(tern_val value)
 {
 	return value.intval & 1 ? (tern_node *)(value.intval & ~1) : NULL;
 }
+
+void tern_free(tern_node *head)
+{
+	if (head->left) {
+		tern_free(head->left);
+	}
+	if (head->right) {
+		tern_free(head->right);
+	}
+	if (head->el) {
+		tern_free(head->straight.next);
+	}
+}
