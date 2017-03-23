@@ -1472,7 +1472,7 @@ void translate_m68k_abcd_sbcd(m68k_options *opts, m68kinst *inst, host_ea *src_o
 	} else {
 		sbb_rr(code, other_reg + (AH-RAX), opts->gen.scratch1 + (AH-RAX), SZ_B);
 	}
-	cmp_ir(code, 0xA, opts->gen.scratch1 + (AH-RAX), SZ_B);
+	cmp_ir(code, inst->op == M68K_SBCD ? 0x10 : 0xA, opts->gen.scratch1 + (AH-RAX), SZ_B);
 	mov_ir(code, 0xA0, other_reg + (AH-RAX), SZ_B);
 	code_ptr no_adjust = code->cur+1;
 	//add correction factor if necessary
@@ -1497,9 +1497,14 @@ void translate_m68k_abcd_sbcd(m68k_options *opts, m68kinst *inst, host_ea *src_o
 	//determine if we need a correction on the upper nibble
 	code_ptr def_adjust = code->cur+1;
 	jcc(code, CC_C, def_adjust);
-	cmp_rr(code, other_reg + (AH-RAX), opts->gen.scratch1, SZ_B);
-	no_adjust = code->cur+1;
-	jcc(code, CC_B, no_adjust);
+	if (inst->op == M68K_SBCD) {
+		no_adjust = code->cur+1;
+		jmp(code, no_adjust);
+	} else {
+		cmp_rr(code, other_reg + (AH-RAX), opts->gen.scratch1, SZ_B);
+		no_adjust = code->cur+1;
+		jcc(code, CC_B, no_adjust);
+	}
 	*def_adjust = code->cur - (def_adjust + 1);
 	set_flag(opts, 1, FLAG_C);
 	or_ir(code, 0x60, opts->gen.scratch1 + (AH-RAX), SZ_B);
