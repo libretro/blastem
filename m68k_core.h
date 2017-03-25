@@ -24,6 +24,14 @@ struct m68kinst;
 typedef void (*start_fun)(uint8_t * addr, void * context);
 
 typedef struct {
+	code_ptr impl;
+	uint16_t reglist;
+	uint8_t  reg_to_mem;
+	uint8_t  size;
+	int8_t   dir;
+} movem_fun;
+
+typedef struct {
 	cpu_options     gen;
 
 	int8_t          dregs[8];
@@ -46,6 +54,10 @@ typedef struct {
 	code_ptr		get_sr;
 	code_ptr		set_sr;
 	code_ptr		set_ccr;
+	code_info       extra_code;
+	movem_fun       *big_movem;
+	uint32_t        num_movem;
+	uint32_t        movem_storage;
 } m68k_options;
 
 typedef struct m68k_context {

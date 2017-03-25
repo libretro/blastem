@@ -24,6 +24,8 @@ void init_code_info(code_info *code);
 void call(code_info *code, code_ptr fun);
 void jmp(code_info *code, code_ptr dest);
 void jmp_r(code_info *code, uint8_t dst);
+//standard return from subroutine instruction
+void rts(code_info *code);
 //call a function and put the arguments in the appropriate place according to the host ABI
 void call_args(code_info *code, code_ptr fun, uint32_t num_args, ...);
 //like the above, but call a function pointer stored in a register
