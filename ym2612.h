@@ -42,6 +42,7 @@ typedef struct {
 	uint8_t  ams;
 	uint8_t  pms;
 	uint8_t  lr;
+	uint8_t  keyon;
 } ym_channel;
 
 typedef struct {
@@ -93,6 +94,7 @@ typedef struct {
 	uint8_t     lfo_counter;
 	uint8_t     lfo_am_step;
 	uint8_t     lfo_pm_step;
+	uint8_t     csm_keyon;
 	uint8_t     status;
 	uint8_t     selected_reg;
 	uint8_t     selected_part;

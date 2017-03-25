@@ -252,6 +252,39 @@ void ym_free(ym2612_context *context)
 #define TIMER_A_MAX 1023
 #define TIMER_B_MAX 255
 
+#define CSM_MODE 0x80
+
+static void keyon(ym_operator *op, ym_channel *channel)
+{
+	//Deal with "infinite" attack rates
+	uint8_t rate = op->rates[PHASE_ATTACK];
+	if (rate) {
+		uint8_t ks = channel->keycode >> op->key_scaling;;
+		rate = rate*2 + ks;
+	}
+	if (rate >= 62) {
+		op->env_phase = PHASE_DECAY;
+		op->envelope = 0;
+	} else {
+		op->env_phase = PHASE_ATTACK;
+	}
+	op->phase_counter = 0;
+}
+
+static const uint8_t keyon_bits[] = {0x10, 0x40, 0x20, 0x80};
+
+static void csm_keyoff(ym2612_context *context)
+{
+	context->csm_keyon = 0;
+	uint8_t changes = 0xF0 ^ context->channels[2].keyon;
+	for (uint8_t op = 2*4, bit = 0; op < 3*4; op++, bit++)
+	{
+		if (changes & keyon_bits[bit]) {
+			context->operators[op].env_phase = PHASE_RELEASE;
+		}
+	}
+}
+
 void ym_run(ym2612_context * context, uint32_t to_cycle)
 {
 	//printf("Running YM2612 from cycle %d to cycle %d\n", context->current_cycle, to_cycle);
@@ -262,6 +295,9 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			if (context->timer_control & BIT_TIMERA_ENABLE) {
 				if (context->timer_a != TIMER_A_MAX) {
 					context->timer_a++;
+					if (context->csm_keyon) {
+						csm_keyoff(context);
+					}
 				} else {
 					if (context->timer_control & BIT_TIMERA_LOAD) {
 						context->timer_control &= ~BIT_TIMERA_LOAD;
@@ -269,6 +305,16 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 						context->status |= BIT_STATUS_TIMERA;
 					}
 					context->timer_a = context->timer_a_load;
+					if (!context->csm_keyon && context->ch3_mode == CSM_MODE) {
+						context->csm_keyon = 0xF0;
+						uint8_t changes = 0xF0 ^ context->channels[2].keyon;;
+						for (uint8_t op = 2*4, bit = 0; op < 3*4; op++, bit++)
+						{
+							if (changes & keyon_bits[bit]) {
+								keyon(context->operators + op, context->channels + 2);
+							}
+						}
+					}
 				}
 			}
 			if (!context->sub_timer_b) {
@@ -309,22 +355,12 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				//operator->envelope = operator->sustain_level;
 				operator->env_phase = PHASE_SUSTAIN;
 			}
-			for(;;) {
-				rate = operator->rates[operator->env_phase];
-				if (rate) {
-					uint8_t ks = channel->keycode >> operator->key_scaling;;
-					rate = rate*2 + ks;
-					if (rate > 63) {
-						rate = 63;
-					}
-				}
-				//Deal with "infinite" rates
-				//According to Nemesis this should be handled in key-on instead
-				if (rate >= 62 && operator->env_phase == PHASE_ATTACK) {
-					operator->env_phase = PHASE_DECAY;
-					operator->envelope = 0;
-				} else {
-					break;
+			rate = operator->rates[operator->env_phase];
+			if (rate) {
+				uint8_t ks = channel->keycode >> operator->key_scaling;;
+				rate = rate*2 + ks;
+				if (rate > 63) {
+					rate = 63;
 				}
 			}
 			uint32_t cycle_shift = rate < 0x30 ? ((0x2F - rate) >> 2) : 0;
@@ -727,6 +763,9 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 			if (value & BIT_TIMERB_RESET) {
 				context->status &= ~BIT_STATUS_TIMERB;
 			}
+			if (context->ch3_mode == CSM_MODE && (value & 0xC0) != CSM_MODE && context->csm_keyon) {
+				csm_keyoff(context);
+			}
 			context->ch3_mode = value & 0xC0;
 			break;
 		}
@@ -736,19 +775,20 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 				if (channel > 2) {
 					channel--;
 				}
-				uint8_t bits[] = {0x10, 0x40, 0x20, 0x80};
+				uint8_t changes = channel == 2 
+					? (value | context->csm_keyon) ^  (context->channels[channel].keyon | context->csm_keyon)
+					: value ^ context->channels[channel].keyon;
+				context->channels[channel].keyon = value & 0xF0;
 				for (uint8_t op = channel * 4, bit = 0; op < (channel + 1) * 4; op++, bit++) {
-					if (value & bits[bit]) {
-						if (context->operators[op].env_phase == PHASE_RELEASE)
-						{
+					if (changes & keyon_bits[bit]) {
+						if (value & keyon_bits[bit]) {
 							first_key_on = 1;
 							//printf("Key On for operator %d in channel %d\n", op, channel);
-							context->operators[op].phase_counter = 0;
-							context->operators[op].env_phase = PHASE_ATTACK;
+							keyon(context->operators + op, context->channels + channel);
+						} else {
+							//printf("Key Off for operator %d in channel %d\n", op, channel);
+							context->operators[op].env_phase = PHASE_RELEASE;
 						}
-					} else {
-						//printf("Key Off for operator %d in channel %d\n", op, channel);
-						context->operators[op].env_phase = PHASE_RELEASE;
 					}
 				}
 			}
