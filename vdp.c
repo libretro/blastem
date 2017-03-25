@@ -1479,6 +1479,9 @@ static void vdp_advance_line(vdp_context *context)
 		} else if (!(context->latched_mode & BIT_PAL) &&  context->vcounter == 0xEB) {
 			context->vcounter = 0x1E5;
 		}
+		if (context->vcounter == 0x200 - context->border_top) {
+			latch_mode(context);
+		}
 	} else if (context->vcounter == 0xDB) {
 		context->vcounter = 0x1D5;
 	}
