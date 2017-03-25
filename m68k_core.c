@@ -385,15 +385,127 @@ static void translate_m68k_move_usp(m68k_options *opts, m68kinst *inst)
 	}
 }
 
+static void translate_movem_regtomem_reglist(m68k_options * opts, m68kinst *inst)
+{
+	code_info *code = &opts->gen.code;
+	int8_t bit,reg,dir;
+	if (inst->dst.addr_mode == MODE_AREG_PREDEC) {
+		reg = 15;
+		dir = -1;
+	} else {
+		reg = 0;
+		dir = 1;
+	}
+	for(bit=0; reg < 16 && reg >= 0; reg += dir, bit++) {
+		if (inst->src.params.immed & (1 << bit)) {
+			if (inst->dst.addr_mode == MODE_AREG_PREDEC) {
+				subi_native(opts, (inst->extra.size == OPSIZE_LONG) ? 4 : 2, opts->gen.scratch2);
+			}
+			push_native(opts, opts->gen.scratch2);
+			if (reg > 7) {
+				areg_to_native(opts, reg-8, opts->gen.scratch1);
+			} else {
+				dreg_to_native(opts, reg, opts->gen.scratch1);
+			}
+			if (inst->extra.size == OPSIZE_LONG) {
+				call(code, opts->write_32_lowfirst);
+			} else {
+				call(code, opts->write_16);
+			}
+			pop_native(opts, opts->gen.scratch2);
+			if (inst->dst.addr_mode != MODE_AREG_PREDEC) {
+				addi_native(opts, (inst->extra.size == OPSIZE_LONG) ? 4 : 2, opts->gen.scratch2);
+			}
+		}
+	}
+}
+
+static void translate_movem_memtoreg_reglist(m68k_options * opts, m68kinst *inst)
+{
+	code_info *code = &opts->gen.code;
+	for(uint8_t reg = 0; reg < 16; reg ++) {
+		if (inst->dst.params.immed & (1 << reg)) {
+			push_native(opts, opts->gen.scratch1);
+			if (inst->extra.size == OPSIZE_LONG) {
+				call(code, opts->read_32);
+			} else {
+				call(code, opts->read_16);
+			}
+			if (inst->extra.size == OPSIZE_WORD) {
+				sign_extend16_native(opts, opts->gen.scratch1);
+			}
+			if (reg > 7) {
+				native_to_areg(opts, opts->gen.scratch1, reg-8);
+			} else {
+				native_to_dreg(opts, opts->gen.scratch1, reg);
+			}
+			pop_native(opts, opts->gen.scratch1);
+			addi_native(opts, (inst->extra.size == OPSIZE_LONG) ? 4 : 2, opts->gen.scratch1);
+		}
+	}
+}
+
+static code_ptr get_movem_impl(m68k_options *opts, m68kinst *inst)
+{
+	uint8_t reg_to_mem = inst->src.addr_mode == MODE_REG;
+	uint8_t size = inst->extra.size;
+	int8_t dir = reg_to_mem && inst->dst.addr_mode == MODE_AREG_PREDEC ? -1 : 1;
+	uint16_t reglist = reg_to_mem ? inst->src.params.immed : inst->dst.params.immed;
+	for (uint32_t i = 0; i < opts->num_movem; i++)
+	{
+		if (
+			opts->big_movem[i].reglist == reglist && opts->big_movem[i].reg_to_mem == reg_to_mem
+			&& opts->big_movem[i].size == size && opts->big_movem[i].dir == dir
+		) {
+			return opts->big_movem[i].impl;
+		}
+	}
+	if (opts->num_movem == opts->movem_storage) {
+		opts->movem_storage *= 2;
+		opts->big_movem = realloc(opts->big_movem, sizeof(movem_fun) * opts->movem_storage);
+	}
+	if (!opts->extra_code.cur) {
+		init_code_info(&opts->extra_code);
+	}
+	check_alloc_code(&opts->extra_code, 512);
+	code_ptr impl = opts->extra_code.cur;
+	code_info tmp = opts->gen.code;
+	opts->gen.code = opts->extra_code;
+	if (reg_to_mem) {
+		translate_movem_regtomem_reglist(opts, inst);
+	} else {
+		translate_movem_memtoreg_reglist(opts, inst);
+	}
+	opts->extra_code = opts->gen.code;
+	opts->gen.code = tmp;
+	
+	rts(&opts->extra_code);
+	return impl;
+}
+
 static void translate_m68k_movem(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
-	int8_t bit,reg,sec_reg;
 	uint8_t early_cycles;
+	uint16_t num_regs = inst->src.addr_mode == MODE_REG ? inst->src.params.immed : inst->dst.params.immed;
+	{	
+		//TODO: Move this popcount alg to a utility function
+		uint16_t a = (num_regs & 0b1010101010101010) >> 1;
+		uint16_t b = num_regs & 0b0101010101010101;
+		num_regs = a + b;
+		a = (num_regs & 0b1100110011001100) >> 2;
+		b = num_regs & 0b0011001100110011;
+		num_regs = a + b;
+		a = (num_regs & 0b1111000011110000) >> 4;
+		b = num_regs & 0b0000111100001111;
+		num_regs = a + b;
+		a = (num_regs & 0b1111111100000000) >> 8;
+		b = num_regs & 0b0000000011111111;
+		num_regs = a + b;
+	}
 	if(inst->src.addr_mode == MODE_REG) {
 		//reg to mem
 		early_cycles = 8;
-		int8_t dir;
 		switch (inst->dst.addr_mode)
 		{
 		case MODE_AREG_INDIRECT:
@@ -426,35 +538,12 @@ static void translate_m68k_movem(m68k_options * opts, m68kinst * inst)
 			m68k_disasm(inst, disasm_buf);
 			fatal_error("%X: %s\naddress mode %d not implemented (movem dst)\n", inst->address, disasm_buf, inst->dst.addr_mode);
 		}
-		if (inst->dst.addr_mode == MODE_AREG_PREDEC) {
-			reg = 15;
-			dir = -1;
-		} else {
-			reg = 0;
-			dir = 1;
-		}
+		
 		cycles(&opts->gen, early_cycles);
-		for(bit=0; reg < 16 && reg >= 0; reg += dir, bit++) {
-			if (inst->src.params.immed & (1 << bit)) {
-				if (inst->dst.addr_mode == MODE_AREG_PREDEC) {
-					subi_native(opts, (inst->extra.size == OPSIZE_LONG) ? 4 : 2, opts->gen.scratch2);
-				}
-				push_native(opts, opts->gen.scratch2);
-				if (reg > 7) {
-					areg_to_native(opts, reg-8, opts->gen.scratch1);
-				} else {
-					dreg_to_native(opts, reg, opts->gen.scratch1);
-				}
-				if (inst->extra.size == OPSIZE_LONG) {
-					call(code, opts->write_32_lowfirst);
-				} else {
-					call(code, opts->write_16);
-				}
-				pop_native(opts, opts->gen.scratch2);
-				if (inst->dst.addr_mode != MODE_AREG_PREDEC) {
-					addi_native(opts, (inst->extra.size == OPSIZE_LONG) ? 4 : 2, opts->gen.scratch2);
-				}
-			}
+		if (num_regs <= 9) {
+			translate_movem_regtomem_reglist(opts, inst);
+		} else {
+			call(code, get_movem_impl(opts, inst));
 		}
 		if (inst->dst.addr_mode == MODE_AREG_PREDEC) {
 			native_to_areg(opts, opts->gen.scratch2, inst->dst.params.regs.pri);
@@ -470,7 +559,6 @@ static void translate_m68k_movem(m68k_options * opts, m68kinst * inst)
 			break;
 		case MODE_AREG_DISPLACE:
 			early_cycles += BUS;
-			reg = opts->gen.scratch2;
 			calc_areg_displace(opts, &inst->src, opts->gen.scratch1);
 			break;
 		case MODE_AREG_INDEX_DISP8:
@@ -497,25 +585,11 @@ static void translate_m68k_movem(m68k_options * opts, m68kinst * inst)
 			fatal_error("%X: %s\naddress mode %d not implemented (movem src)\n", inst->address, disasm_buf, inst->src.addr_mode);
 		}
 		cycles(&opts->gen, early_cycles);
-		for(reg = 0; reg < 16; reg ++) {
-			if (inst->dst.params.immed & (1 << reg)) {
-				push_native(opts, opts->gen.scratch1);
-				if (inst->extra.size == OPSIZE_LONG) {
-					call(code, opts->read_32);
-				} else {
-					call(code, opts->read_16);
-				}
-				if (inst->extra.size == OPSIZE_WORD) {
-					sign_extend16_native(opts, opts->gen.scratch1);
-				}
-				if (reg > 7) {
-					native_to_areg(opts, opts->gen.scratch1, reg-8);
-				} else {
-					native_to_dreg(opts, opts->gen.scratch1, reg);
-				}
-				pop_native(opts, opts->gen.scratch1);
-				addi_native(opts, (inst->extra.size == OPSIZE_LONG) ? 4 : 2, opts->gen.scratch1);
-			}
+		
+		if (num_regs <= 9) {
+			translate_movem_memtoreg_reglist(opts, inst);
+		} else {
+			call(code, get_movem_impl(opts, inst));
 		}
 		if (inst->src.addr_mode == MODE_AREG_POSTINC) {
 			native_to_areg(opts, opts->gen.scratch1, inst->src.params.regs.pri);
