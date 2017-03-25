@@ -82,8 +82,7 @@ CFLAGS+= -DZ80_LOG_ADDRESS
 endif
 
 ifdef PROFILE
-CFLAGS+= -pg
-LDFLAGS+= -pg
+LDFLAGS+= -Wl,--no-as-needed -lprofiler -Wl,--as-needed
 endif
 ifdef NOGL
 CFLAGS+= -DDISABLE_OPENGL
