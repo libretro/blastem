@@ -1999,9 +1999,10 @@ void call_noalign(code_info *code, code_ptr fun)
 	code->cur = out;
 }
 
-
+volatile int foo;
 void call(code_info *code, code_ptr fun)
 {
+	foo = *fun;
 	code->stack_off += sizeof(void *);
 	int32_t adjust = 0;
 	if (code->stack_off & 0xF) {
@@ -2062,6 +2063,11 @@ void retn(code_info *code)
 	code_ptr out = code->cur;
 	*(out++) = OP_RETN;
 	code->cur = out;
+}
+
+void rts(code_info *code)
+{
+	retn(code);
 }
 
 void cdq(code_info *code)
