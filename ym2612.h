@@ -27,6 +27,8 @@ typedef struct {
 	uint8_t  detune;
 	uint8_t  am;
 	uint8_t  env_phase;
+	uint8_t  ssg;
+	uint8_t  inverted;
 } ym_operator;
 
 typedef struct {
@@ -118,6 +120,7 @@ enum {
 	REG_DECAY_AM     = 0x60,
 	REG_SUSTAIN_RATE = 0x70,
 	REG_S_LVL_R_RATE = 0x80,
+	REG_SSG_EG       = 0x90,
 
 	REG_FNUM_LOW     = 0xA0,
 	REG_BLOCK_FNUM_H = 0xA4,
