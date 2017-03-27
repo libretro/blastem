@@ -254,7 +254,14 @@ void ym_free(ym2612_context *context)
 
 #define CSM_MODE 0x80
 
-static void keyon(ym_operator *op, ym_channel *channel)
+#define SSG_ENABLE    8
+#define SSG_INVERT    4
+#define SSG_ALTERNATE 2
+#define SSG_HOLD      1
+
+#define SSG_CENTER 0x800
+
+static void start_envelope(ym_operator *op, ym_channel *channel)
 {
 	//Deal with "infinite" attack rates
 	uint8_t rate = op->rates[PHASE_ATTACK];
@@ -268,10 +275,26 @@ static void keyon(ym_operator *op, ym_channel *channel)
 	} else {
 		op->env_phase = PHASE_ATTACK;
 	}
+}
+
+static void keyon(ym_operator *op, ym_channel *channel)
+{
+	start_envelope(op, channel);
 	op->phase_counter = 0;
+	op->inverted = op->ssg & SSG_INVERT;
 }
 
 static const uint8_t keyon_bits[] = {0x10, 0x40, 0x20, 0x80};
+
+static void keyoff(ym_operator *op)
+{
+	op->env_phase = PHASE_RELEASE;
+	if (op->inverted) {
+		//Nemesis says the inversion state doesn't change here, but I don't see how that is observable either way
+		op->inverted = 0;
+		op->envelope = (SSG_CENTER - op->envelope) & MAX_ENVELOPE;
+	}
+}
 
 static void csm_keyoff(ym2612_context *context)
 {
@@ -280,7 +303,7 @@ static void csm_keyoff(ym2612_context *context)
 	for (uint8_t op = 2*4, bit = 0; op < 3*4; op++, bit++)
 	{
 		if (changes & keyon_bits[bit]) {
-			context->operators[op].env_phase = PHASE_RELEASE;
+			keyoff(context->operators + op);
 		}
 	}
 }
@@ -389,10 +412,20 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 						dfprintf(debug_file, "Changing op %d envelope %d by %d in %s phase\n", op, operator->envelope, envelope_inc,
 							operator->env_phase == PHASE_SUSTAIN ? "sustain" : (operator->env_phase == PHASE_DECAY ? "decay": "release"));
 					}
+					if (operator->ssg) {
+						if (operator->envelope < SSG_CENTER) {
+							envelope_inc *= 4;
+						} else {
+							envelope_inc = 0;
+						}
+					}
 					//envelope value is 10-bits, but it will be used as a 4.8 value
 					operator->envelope += envelope_inc << 2;
 					//clamp to max attenuation value
-					if (operator->envelope > MAX_ENVELOPE) {
+					if (
+						operator->envelope > MAX_ENVELOPE 
+						|| (operator->env_phase == PHASE_RELEASE && operator->envelope >= SSG_CENTER)
+					) {
 						operator->envelope = MAX_ENVELOPE;
 					}
 				}
@@ -468,7 +501,31 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				}
 				break;
 			}
-			uint16_t env = operator->envelope + operator->total_level;
+			uint16_t env = operator->envelope;
+			if (operator->ssg) {
+				if (env >= SSG_CENTER) {
+					if (operator->ssg & SSG_ALTERNATE) {
+						if (operator->env_phase != PHASE_RELEASE && (
+							!(operator->ssg & SSG_HOLD) || ((operator->ssg ^ operator->inverted) & SSG_INVERT) == 0
+						)) {
+							operator->inverted ^= SSG_INVERT;
+						}
+					} else if (!(operator->ssg & SSG_HOLD)) {
+						phase = operator->phase_counter = 0;
+					}
+					if (
+						(operator->env_phase == PHASE_DECAY || operator->env_phase == PHASE_SUSTAIN) 
+						&& !(operator->ssg & SSG_HOLD)
+					) {
+						start_envelope(operator, chan);
+						env = operator->envelope;
+					}
+				}
+				if (operator->inverted) {
+					env = (SSG_CENTER - env) & MAX_ENVELOPE;
+				}
+			}
+			env += operator->total_level;
 			if (operator->am) {
 				uint16_t base_am = (context->lfo_am_step & 0x80 ? context->lfo_am_step : ~context->lfo_am_step) & 0x7E;
 				if (ams_shift[chan->ams] >= 0) {
@@ -787,7 +844,7 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 							keyon(context->operators + op, context->channels + channel);
 						} else {
 							//printf("Key Off for operator %d in channel %d\n", op, channel);
-							context->operators[op].env_phase = PHASE_RELEASE;
+							keyoff(context->operators + op);
 						}
 					}
 				}
@@ -840,6 +897,15 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 				if (operator->sustain_level == 0x780) {
 					operator->sustain_level = MAX_ENVELOPE;
 				}
+				break;
+			case REG_SSG_EG:
+				if (!(value & SSG_ENABLE)) {
+					value = 0;
+				}
+				if ((value ^ operator->ssg) & SSG_INVERT) {
+					operator->inverted ^= SSG_INVERT;
+				}
+				operator->ssg = value;
 				break;
 			}
 		}
