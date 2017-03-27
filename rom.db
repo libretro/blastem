@@ -371,6 +371,20 @@ T-12056 {
 		}
 	}
 }
+T-12043 {
+	name Super Street Fighter 2: The New Challengers
+	map {
+		0 {
+			device ROM
+			last 7FFFF
+		}
+		80000 {
+			device Sega mapper
+			last 3FFFFF
+			offset 80000
+		}
+	}
+}
 T-12046 {
 	name Mega Man - The Wily Wars
 	EEPROM {
