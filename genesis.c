@@ -82,6 +82,11 @@ static void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 		printf("int cycle changed to: %d, level: %d @ %d(%d), frame: %d, vcounter: %d, hslot: %d, mask: %d, hint_counter: %d\n", context->int_cycle, context->int_num, v_context->cycles, context->current_cycle, v_context->frame, v_context->vcounter, v_context->hslot, context->status & 0x7, v_context->hint_counter);
 		old_int_cycle = context->int_cycle;
 	}*/
+	
+	if (context->status & M68K_STATUS_TRACE) {
+		context->target_cycle = context->current_cycle;
+		return;
+	}
 
 	context->target_cycle = context->int_cycle < context->sync_cycle ? context->int_cycle : context->sync_cycle;
 	if (context->should_return) {

@@ -111,7 +111,7 @@ CPU:=i686
 endif
 endif
 
-TRANSOBJS=gen.o backend.o $(MEM) arena.o
+TRANSOBJS=gen.o backend.o $(MEM) arena.o tern.o
 M68KOBJS=68kinst.o m68k_core.o
 ifeq ($(CPU),x86_64)
 M68KOBJS+= m68k_core_x86.o

@@ -2197,7 +2197,7 @@ void translate_m68k_andi_ori_ccr_sr(m68k_options *opts, m68kinst *inst)
 			swap_ssp_usp(opts);
 		}
 		if ((inst->op == M68K_ANDI_SR && (inst->src.params.immed  & 0x700) != 0x700)
-		    || (inst->op == M68K_ORI_SR && inst->src.params.immed & 0x700)) {
+		    || (inst->op == M68K_ORI_SR && inst->src.params.immed & 0x8700)) {
 			if (inst->op == M68K_ANDI_SR) {
 				//set int pending flag in case we trigger an interrupt as a result of the mask change
 				mov_irdisp(code, INT_PENDING_SR_CHANGE, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
@@ -2929,10 +2929,17 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	add_ir(code, 16-sizeof(void*), RSP, SZ_PTR);
 	uint32_t adjust_size = code->cur - opts->gen.handle_cycle_limit_int;
 	code->cur = opts->gen.handle_cycle_limit_int;
-
+	bt_irdisp(code, 7, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
+	code_ptr no_trace = code->cur + 1;
+	jcc(code, CC_NC, no_trace);
+	cmp_irdisp(code, 0, opts->gen.context_reg, offsetof(m68k_context, trace_pending), SZ_B);
+	code_ptr do_trace = code->cur + 1;
+	jcc(code, CC_NZ, do_trace);
+	mov_irdisp(code, 1, opts->gen.context_reg, offsetof(m68k_context, trace_pending), SZ_B);
+	*no_trace = code->cur - (no_trace + 1);
 	cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_cycle), opts->gen.cycles, SZ_D);
-	code_ptr do_int = code->cur + 1;
-	jcc(code, CC_NC, code->cur + 2);
+	code_ptr do_int = code->cur + 2; 
+	jcc(code, CC_NC, do_int+512);//force 32-bit displacement
 	cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, sync_cycle), opts->gen.cycles, SZ_D);
 	skip_sync = code->cur + 1;
 	jcc(code, CC_C, code->cur + 2);
@@ -2955,7 +2962,42 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, offsetof(m68k_context, resume_pc), SZ_PTR);
 	retn(code);
 	code->stack_off = tmp_stack_off;
-	*do_int = code->cur - (do_int+1);
+	*do_trace = code->cur - (do_trace + 1);
+	//clear out trace pending flag
+	mov_irdisp(code, 0, opts->gen.context_reg, offsetof(m68k_context, trace_pending), SZ_B);
+	//save PC as stored in scratch1 for later
+	push_r(code, opts->gen.scratch1);
+	//swap USP and SSP if not already in supervisor mode
+	check_user_mode_swap_ssp_usp(opts);
+	//save status register
+	subi_areg(opts, 6, 7);
+	call(code, opts->get_sr);
+	cycles(&opts->gen, 6);
+	//save SR to stack
+	areg_to_native(opts, 7, opts->gen.scratch2);
+	call(code, opts->write_16);
+	//update the status register
+	and_irdisp(code, 0x7F, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
+	or_irdisp(code, 0x20, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
+	//save PC
+	areg_to_native(opts, 7, opts->gen.scratch2);
+	add_ir(code, 2, opts->gen.scratch2, SZ_D);
+	pop_r(code, opts->gen.scratch1);
+	call(code, opts->write_32_lowfirst);
+	//read vector
+	mov_ir(code, 0x24, opts->gen.scratch1, SZ_D);
+	call(code, opts->read_32);
+	call(code, opts->native_addr_and_sync);
+	//2 prefetch bus operations + 2 idle bus cycles
+	cycles(&opts->gen, 10);
+	//discard function return address
+	pop_r(code, opts->gen.scratch2);
+	add_ir(code, 16-sizeof(void *), RSP, SZ_PTR);
+	jmp_r(code, opts->gen.scratch1);
+	
+	code->stack_off = tmp_stack_off;
+	
+	*((uint32_t *)do_int) = code->cur - (do_int+4);
 	//implement 1 instruction latency
 	cmp_irdisp(code, INT_PENDING_NONE, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
 	do_int = code->cur + 1;
