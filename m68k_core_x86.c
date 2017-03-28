@@ -2231,7 +2231,7 @@ void translate_m68k_eori_ccr_sr(m68k_options *opts, m68kinst *inst)
 	}
 	if (inst->op == M68K_EORI_SR) {
 		xor_irdisp(code, inst->src.params.immed >> 8, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
-		if (inst->src.params.immed & 0x700) {
+		if (inst->src.params.immed & 0x8700) {
 			//set int pending flag in case we trigger an interrupt as a result of the mask change
 			mov_irdisp(code, INT_PENDING_SR_CHANGE, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
 			call(code, opts->do_sync);
@@ -2929,17 +2929,20 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	add_ir(code, 16-sizeof(void*), RSP, SZ_PTR);
 	uint32_t adjust_size = code->cur - opts->gen.handle_cycle_limit_int;
 	code->cur = opts->gen.handle_cycle_limit_int;
-	bt_irdisp(code, 7, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
-	code_ptr no_trace = code->cur + 1;
-	jcc(code, CC_NC, no_trace);
+	//handle trace mode
 	cmp_irdisp(code, 0, opts->gen.context_reg, offsetof(m68k_context, trace_pending), SZ_B);
 	code_ptr do_trace = code->cur + 1;
 	jcc(code, CC_NZ, do_trace);
+	bt_irdisp(code, 7, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
+	code_ptr no_trace = code->cur + 1;
+	jcc(code, CC_NC, no_trace);
 	mov_irdisp(code, 1, opts->gen.context_reg, offsetof(m68k_context, trace_pending), SZ_B);
 	*no_trace = code->cur - (no_trace + 1);
+	//handle interrupts
 	cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_cycle), opts->gen.cycles, SZ_D);
 	code_ptr do_int = code->cur + 2; 
 	jcc(code, CC_NC, do_int+512);//force 32-bit displacement
+	//handle component synchronization
 	cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, sync_cycle), opts->gen.cycles, SZ_D);
 	skip_sync = code->cur + 1;
 	jcc(code, CC_C, code->cur + 2);
