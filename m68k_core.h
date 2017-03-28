@@ -21,6 +21,8 @@ struct m68kinst;
 #define INT_PENDING_SR_CHANGE 254
 #define INT_PENDING_NONE 255
 
+#define M68K_STATUS_TRACE 0x80
+
 typedef void (*start_fun)(uint8_t * addr, void * context);
 
 typedef struct {
@@ -78,6 +80,7 @@ typedef struct m68k_context {
 	m68k_options    *options;
 	void            *system;
 	uint8_t         int_pending;
+	uint8_t         trace_pending;
 	uint8_t         should_return;
 	uint8_t         ram_code_flags[];
 } m68k_context;
