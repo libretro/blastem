@@ -24,7 +24,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	if (context->current_cycle > 0x80000000) {
 		context->current_cycle -= 0x80000000;
 	}
-	if (context->status & 0x80) {
+	if (context->status & M68K_STATUS_TRACE || context->trace_pending) {
 		context->target_cycle = context->current_cycle;
 	}
 	return context;
