@@ -83,7 +83,7 @@ static void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 		old_int_cycle = context->int_cycle;
 	}*/
 	
-	if (context->status & M68K_STATUS_TRACE) {
+	if (context->status & M68K_STATUS_TRACE || context->trace_pending) {
 		context->target_cycle = context->current_cycle;
 		return;
 	}
