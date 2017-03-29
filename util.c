@@ -189,6 +189,21 @@ char * split_keyval(char * text)
 	return text+1;
 }
 
+void bin_to_hex(uint8_t *output, uint8_t *input, uint64_t size)
+{
+	while (size)
+	{
+		uint8_t digit = *input >> 4;
+		digit += digit > 9 ? 'a' - 0xa : '0';
+		*(output++) = digit;
+		digit = *(input++) & 0xF;
+		digit += digit > 9 ? 'a' - 0xa : '0';
+		*(output++) = digit;
+		size--;
+	}
+	*(output++) = 0;
+}
+
 char is_path_sep(char c)
 {
 #ifdef _WIN32

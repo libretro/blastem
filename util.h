@@ -32,6 +32,8 @@ long file_size(FILE * f);
 char * strip_ws(char * text);
 //Inserts a null after the first word, returns a pointer to the second word
 char * split_keyval(char * text);
+//Takes a binary byte buffer and produces a lowercase hex string
+void bin_to_hex(uint8_t *output, uint8_t *input, uint64_t size);
 //Determines whether a character is a valid path separator for the current platform
 char is_path_sep(char c);
 //Determines whether a path is considered an absolute path on the current platform

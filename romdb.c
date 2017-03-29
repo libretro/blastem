@@ -3,6 +3,7 @@
 #include "config.h"
 #include "romdb.h"
 #include "util.h"
+#include "hash.h"
 #include "genesis.h"
 #include "menu.h"
 #include "xband.h"
@@ -856,6 +857,12 @@ void map_iter_fun(char *key, tern_val val, void *data)
 		map->mask = 0xFF;
 		map->write_16 = menu_write_w;
 		map->read_16 = menu_read_w;
+	} else if (!strcmp(dtype, "fixed")) {
+		uint16_t *value =  malloc(2);
+		map->buffer = value;
+		map->mask = 0;
+		map->flags = MMAP_READ;
+		*value = strtol(tern_find_ptr_default(node, "value", "0"), NULL, 16);
 	} else {
 		fatal_error("Invalid device type %s for ROM DB map entry %d with address %s\n", dtype, state->index, key);
 	}
@@ -877,7 +884,15 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, void *l
 
 	}
 	printf("Product ID: %s\n", product_id);
-	tern_node * entry = tern_find_ptr(rom_db, product_id);
+	uint8_t raw_hash[20];
+	sha1(vrom, rom_size, raw_hash);
+	uint8_t hex_hash[41];
+	bin_to_hex(hex_hash, raw_hash, 20);
+	printf("SHA1: %s\n", hex_hash);
+	tern_node * entry = tern_find_ptr(rom_db, hex_hash);
+	if (!entry) {
+		entry = tern_find_ptr(rom_db, product_id);
+	}
 	if (!entry) {
 		puts("Not found in ROM DB, examining header\n");
 		if (xband_detect(rom, rom_size)) {
