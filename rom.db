@@ -549,6 +549,10 @@ ACLD012 {
 	}
 }
 
+9bed099693c27a6575b394bdd150efb7cc53c5c6 {
+	name Atomic Robo-Kid
+	regions J
+}
 8fe0806427e123717ba20478ab1410c25fa942e6 {
 	name Ya Se Chuan Shuo
 	map {
@@ -574,6 +578,150 @@ ACLD012 {
 		400006 {
 			device fixed
 			value 1800
+			last 400007
+		}
+	}
+}
+7857c797245b52641a3d1d4512089bccb0ed5359 {
+	name 16 Zhang Ma Jiang
+	map {
+		0 {
+			device ROM
+			last 3FFFFF
+		}
+		400002 {
+			device fixed
+			value AA00
+			last 400003
+		}
+		400006 {
+			device fixed
+			value F000
+			last 400007
+		}
+	}
+}
+5fc4591fbb1acc64e184466c7b6287c7f64e0b7a {
+	name Elf Wor
+	map {
+		0 {
+			device ROM
+			last 3FFFFF
+		}
+		400000 {
+			device fixed
+			value 5500
+			last 400001
+		}
+		400002 {
+			device fixed
+			value 0F00
+			last 400003
+		}
+		400004 {
+			device fixed
+			value C900
+			last 400005
+		}
+		400006 {
+			device fixed
+			value 1800
+			last 400007
+		}
+	}
+}
+df7a2527875317406b466175f0614d343dd32117 {
+	name Huan Le Tao Qi Shu: Smart Mouse
+	map {
+		0 {
+			device ROM
+			last 3FFFFF
+		}
+		400000 {
+			device fixed
+			value 5500
+			last 400001
+		}
+		400002 {
+			device fixed
+			value 0F00
+			last 400003
+		}
+		400004 {
+			device fixed
+			value AA00
+			last 400005
+		}
+		400006 {
+			device fixed
+			value F000
+			last 400007
+		}
+	}
+}
+25d2d6a5ab20e16b8b42b67e5fb338421b64b29b {
+	name Mighty Morphin' Power Rangers: The Fighting Edition
+	map {
+		0 {
+			device ROM
+			last 3FFFFF
+		}
+		400000 {
+			device fixed
+			value 5500
+			last 400001
+		}
+		400002 {
+			device fixed
+			value 0F00
+			last 400003
+		}
+		400004 {
+			device fixed
+			value C900
+			last 400005
+		}
+		400006 {
+			device fixed
+			value 1800
+			last 400007
+		}
+	}
+}
+03f40c14624f1522d6e3105997d14e8eaba12257 {
+	name Super Bubble Bobble MD
+	map {
+		0 {
+			device ROM
+			last 3FFFFF
+		}
+		400000 {
+			device fixed
+			value 5500
+			last 400001
+		}
+		400002 {
+			device fixed
+			value 0F00
+			last 400003
+		}
+	}
+}
+3dca68795b6c9a16cafa5e71218d5ce83aa465fc {
+	name Thunderbolt II
+	map {
+		0 {
+			device ROM
+			last 3FFFFF
+		}
+		400000 {
+			device fixed
+			value 5500
+			last 400001
+		}
+		400006 {
+			device fixed
+			value F000
 			last 400007
 		}
 	}
