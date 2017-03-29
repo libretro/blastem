@@ -549,6 +549,36 @@ ACLD012 {
 	}
 }
 
+8fe0806427e123717ba20478ab1410c25fa942e6 {
+	name Ya Se Chuan Shuo
+	map {
+		0 {
+			device ROM
+			last 3FFFFF
+		}
+		400000 {
+			device fixed
+			value 6300
+			last 400001
+		}
+		400002 {
+			device fixed
+			value 9800
+			last 400003
+		}
+		400004 {
+			device fixed
+			value C900
+			last 400005
+		}
+		400006 {
+			device fixed
+			value 1800
+			last 400007
+		}
+	}
+}
+
 #This entry is used by the GUI ROM
 BlstMenu {
 	map {
