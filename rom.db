@@ -553,6 +553,23 @@ ACLD012 {
 	name Atomic Robo-Kid
 	regions J
 }
+d366d05644eb59a14baf3c2e7281c1584630c021 {
+	name Might and Magic III - Isles of Terra
+	SRAM {
+		size 32768
+		bus odd
+	}
+	map {
+		0 {
+			device ROM
+			last 1FFFFF
+		}
+		200000 {
+			device SRAM
+			last 3FFFFF
+		}
+	}
+}
 8fe0806427e123717ba20478ab1410c25fa942e6 {
 	name Ya Se Chuan Shuo
 	map {
