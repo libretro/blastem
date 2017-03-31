@@ -588,6 +588,7 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 				(*target)->commands = commands;
 			} else {
 			}
+			break;
 		case 'b':
 			if (input_buf[1] == 't') {
 				uint32_t stack = context->aregs[7];
