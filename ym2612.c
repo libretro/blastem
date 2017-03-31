@@ -128,6 +128,41 @@ void ym_adjust_master_clock(ym2612_context * context, uint32_t master_clock)
 #define log2(x) (log(x)/log(2))
 #endif
 
+
+#define TIMER_A_MAX 1023
+#define TIMER_B_MAX 255
+
+void ym_reset(ym2612_context *context)
+{
+	memset(context->part1_regs, 0, sizeof(context->part1_regs));
+	memset(context->part2_regs, 0, sizeof(context->part2_regs));
+	memset(context->operators, 0, sizeof(context->operators));
+	memset(context->channels, 0, sizeof(context->channels));
+	memset(context->ch3_supp, 0, sizeof(context->ch3_supp));
+	context->selected_reg = 0;
+	context->csm_keyon = 0;
+	context->ch3_mode = 0;
+	context->dac_enable = 0;
+	context->status = 0;
+	context->timer_a_load = 0;
+	context->timer_b_load = 0;
+	//TODO: Confirm these on hardware
+	context->timer_a = TIMER_A_MAX;
+	context->timer_b = TIMER_B_MAX;
+	
+	//TODO: Reset LFO state
+	
+	//some games seem to expect that the LR flags start out as 1
+	for (int i = 0; i < NUM_CHANNELS; i++) {
+		context->channels[i].lr = 0xC0;
+	}
+	context->write_cycle = CYCLE_NEVER;
+	for (int i = 0; i < NUM_OPERATORS; i++) {
+		context->operators[i].envelope = MAX_ENVELOPE;
+		context->operators[i].env_phase = PHASE_RELEASE;
+	}
+}
+
 void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t sample_limit, uint32_t options, uint32_t lowpass_cutoff)
 {
 	static uint8_t registered_finalize;
@@ -145,14 +180,9 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clo
 	context->lowpass_alpha = (int32_t)(((double)0x10000) * alpha);
 
 	context->sample_limit = sample_limit*2;
-	context->write_cycle = CYCLE_NEVER;
-	for (int i = 0; i < NUM_OPERATORS; i++) {
-		context->operators[i].envelope = MAX_ENVELOPE;
-		context->operators[i].env_phase = PHASE_RELEASE;
-	}
+	
 	//some games seem to expect that the LR flags start out as 1
 	for (int i = 0; i < NUM_CHANNELS; i++) {
-		context->channels[i].lr = 0xC0;
 		if (options & YM_OPT_WAVE_LOG) {
 			char fname[64];
 			sprintf(fname, "ym_channel_%d.wav", i);
@@ -231,6 +261,7 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clo
 			}
 		}
 	}
+	ym_reset(context);
 }
 
 void ym_free(ym2612_context *context)
@@ -248,9 +279,6 @@ void ym_free(ym2612_context *context)
 #define YM_VOLUME_MULTIPLIER 2
 #define YM_VOLUME_DIVIDER 3
 #define YM_MOD_SHIFT 1
-
-#define TIMER_A_MAX 1023
-#define TIMER_B_MAX 255
 
 #define CSM_MODE 0x80
 

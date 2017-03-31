@@ -585,6 +585,7 @@ static m68k_context * io_write(uint32_t location, m68k_context * context, uint8_
 					} else {
 						gen->z80->reset = 1;
 					}
+					ym_reset(gen->ym);
 				}
 			}
 		}

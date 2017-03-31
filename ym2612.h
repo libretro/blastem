@@ -131,6 +131,7 @@ enum {
 };
 
 void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t sample_limit, uint32_t options, uint32_t lowpass_cutoff);
+void ym_reset(ym2612_context *context);
 void ym_free(ym2612_context *context);
 void ym_adjust_master_clock(ym2612_context * context, uint32_t master_clock);
 void ym_run(ym2612_context * context, uint32_t to_cycle);
