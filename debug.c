@@ -117,6 +117,9 @@ void debugger_print(m68k_context *context, char format_char, char *param)
 		}
 	} else if(param[0] == 'c') {
 		value = context->current_cycle;
+	} else if(param[0] == 'f') {
+		genesis_context *gen = context->system;
+		value = gen->vdp->frame;
 	} else if ((param[0] == '0' && param[1] == 'x') || param[0] == '$') {
 		uint32_t p_addr = strtol(param+(param[0] == '0' ? 2 : 1), NULL, 16);
 		if ((p_addr & 0xFFFFFF) == 0xC00004) {
