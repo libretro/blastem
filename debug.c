@@ -108,8 +108,22 @@ void debugger_print(m68k_context *context, char format_char, char *param)
 	}
 	if (param[0] == 'd' && param[1] >= '0' && param[1] <= '7') {
 		value = context->dregs[param[1]-'0'];
+		if (param[2] == '.') {
+			if (param[3] == 'w') {
+				value &= 0xFFFF;
+			} else if (param[3] == 'b') {
+				value &= 0xFF;
+			}
+		}
 	} else if (param[0] == 'a' && param[1] >= '0' && param[1] <= '7') {
 		value = context->aregs[param[1]-'0'];
+		if (param[2] == '.') {
+			if (param[3] == 'w') {
+				value &= 0xFFFF;
+			} else if (param[3] == 'b') {
+				value &= 0xFF;
+			}
+		}
 	} else if (param[0] == 'S' && param[1] == 'R') {
 		value = (context->status << 8);
 		for (int flag = 0; flag < 5; flag++) {
