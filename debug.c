@@ -88,6 +88,16 @@ void strip_nl(char * buf)
 	}
 }
 
+uint16_t m68k_read_word(uint32_t address, m68k_context *context)
+{
+	return read_word(address, (void **)context->mem_pointers, &context->options->gen, context);
+}
+
+uint32_t m68k_read_long(uint32_t address, m68k_context *context)
+{
+	return m68k_read_word(address, context) << 16 | m68k_read_word(address + 2, context);
+}
+
 void debugger_print(m68k_context *context, char format_char, char *param)
 {
 	uint32_t value;
@@ -136,13 +146,11 @@ void debugger_print(m68k_context *context, char format_char, char *param)
 		value = gen->vdp->frame;
 	} else if ((param[0] == '0' && param[1] == 'x') || param[0] == '$') {
 		uint32_t p_addr = strtol(param+(param[0] == '0' ? 2 : 1), NULL, 16);
-		if ((p_addr & 0xFFFFFF) == 0xC00004) {
-			genesis_context * gen = context->system;
-			value = vdp_hv_counter_read(gen->vdp);
-		} else {
-			uint16_t *word = get_native_pointer(p_addr & 0xFFFFFE, (void **)context->mem_pointers, &context->options->gen);
-			value = *word;
-		}
+		value = m68k_read_word(p_addr, context);
+	} else if(param[0] == '(' && (param[1] == 'a' || param[1] == 'd') && param[2] >= '0' && param[2] <= '7' && param[3] == ')') {
+		uint8_t reg = param[2] - '0';
+		uint32_t p_addr = param[1] == 'a' ? context->aregs[reg] : context->dregs[reg];
+		value = m68k_read_word(p_addr, context);
 	} else {
 		fprintf(stderr, "Unrecognized parameter to p: %s\n", param);
 		return;
@@ -714,9 +722,9 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 			break;
 		case 'n':
 			if (inst.op == M68K_RTS) {
-				after = (read_dma_value(context->aregs[7]/2) << 16) | read_dma_value(context->aregs[7]/2 + 1);
+				after = m68k_read_long(context->aregs[7], context);
 			} else if (inst.op == M68K_RTE || inst.op == M68K_RTR) {
-				after = (read_dma_value((context->aregs[7]+2)/2) << 16) | read_dma_value((context->aregs[7]+2)/2 + 1);
+				after = m68k_read_long(context->aregs[7] + 2, context);
 			} else if(m68k_is_noncall_branch(&inst)) {
 				if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
 					branch_f = after;
@@ -740,9 +748,9 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 			return 0;
 		case 'o':
 			if (inst.op == M68K_RTS) {
-				after = (read_dma_value(context->aregs[7]/2) << 16) | read_dma_value(context->aregs[7]/2 + 1);
+				after = m68k_read_long(context->aregs[7], context);
 			} else if (inst.op == M68K_RTE || inst.op == M68K_RTR) {
-				after = (read_dma_value((context->aregs[7]+2)/2) << 16) | read_dma_value((context->aregs[7]+2)/2 + 1);
+				after = m68k_read_long(context->aregs[7] + 2, context);
 			} else if(m68k_is_noncall_branch(&inst)) {
 				if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
 					branch_t = m68k_branch_target(&inst, context->dregs, context->aregs)  & 0xFFFFFF;
@@ -771,9 +779,9 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 			return 0;
 		case 's':
 			if (inst.op == M68K_RTS) {
-				after = (read_dma_value(context->aregs[7]/2) << 16) | read_dma_value(context->aregs[7]/2 + 1);
+				after = m68k_read_long(context->aregs[7], context);
 			} else if (inst.op == M68K_RTE || inst.op == M68K_RTR) {
-				after = (read_dma_value((context->aregs[7]+2)/2) << 16) | read_dma_value((context->aregs[7]+2)/2 + 1);
+				after = m68k_read_long(context->aregs[7] + 2, context);
 			} else if(m68k_is_branch(&inst)) {
 				if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
 					branch_f = after;
