@@ -145,12 +145,21 @@ void debugger_print(m68k_context *context, char format_char, char *param)
 		genesis_context *gen = context->system;
 		value = gen->vdp->frame;
 	} else if ((param[0] == '0' && param[1] == 'x') || param[0] == '$') {
-		uint32_t p_addr = strtol(param+(param[0] == '0' ? 2 : 1), NULL, 16);
-		value = m68k_read_word(p_addr, context);
+		char *after;
+		uint32_t p_addr = strtol(param+(param[0] == '0' ? 2 : 1), &after, 16);
+		if (after[0] == '.' && after[1] == 'l') {
+			value = m68k_read_long(p_addr, context);
+		} else {
+			value = m68k_read_word(p_addr, context);
+		}
 	} else if(param[0] == '(' && (param[1] == 'a' || param[1] == 'd') && param[2] >= '0' && param[2] <= '7' && param[3] == ')') {
 		uint8_t reg = param[2] - '0';
 		uint32_t p_addr = param[1] == 'a' ? context->aregs[reg] : context->dregs[reg];
-		value = m68k_read_word(p_addr, context);
+		if (param[4] == '.' && param[5] == 'l') {
+			value = m68k_read_long(p_addr, context);
+		} else {
+			value = m68k_read_word(p_addr, context);
+		}
 	} else {
 		fprintf(stderr, "Unrecognized parameter to p: %s\n", param);
 		return;
