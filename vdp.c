@@ -1235,7 +1235,7 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 					uint8_t intensity = *plane_b & BUF_BIT_PRIORITY;
 					if (*plane_a & 0xF && (*plane_a & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
 						pixel = *plane_a;
-						src = DBG_SRC_A;
+						src = a_src;
 					}
 					intensity |= *plane_a & BUF_BIT_PRIORITY;
 					if (*sprite_buf & 0xF && (*sprite_buf & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
@@ -1281,7 +1281,7 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 					}
 					if (*plane_a & 0xF && (*plane_a & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
 						pixel = *plane_a;
-						src = DBG_SRC_A;
+						src = a_src;
 					}
 					if (*sprite_buf & 0xF && (*sprite_buf & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
 						pixel = *sprite_buf;
