@@ -101,6 +101,7 @@ enum {
 #define BIT_DISP_DIS   0x01
 
 //Mode reg 2
+#define BIT_128K_VRAM  0x80
 #define BIT_DISP_EN    0x40
 #define BIT_VINT_EN    0x20
 #define BIT_DMA_ENABLE 0x10
@@ -135,7 +136,7 @@ typedef struct {
 
 typedef struct {
 	uint32_t cycle;
-	uint16_t address;
+	uint32_t address;
 	uint16_t value;
 	uint8_t  cd;
 	uint8_t  partial;
@@ -145,7 +146,7 @@ typedef struct {
 	fifo_entry  fifo[FIFO_SIZE];
 	int32_t     fifo_write;
 	int32_t     fifo_read;
-	uint16_t    address;
+	uint32_t    address;
 	uint8_t     cd;
 	uint8_t	    flags;
 	uint8_t     regs[VDP_REGS];
@@ -187,6 +188,7 @@ typedef struct {
 	uint16_t    col_2;
 	uint16_t    hv_latch;
 	uint16_t    prefetch;
+	uint16_t    test_port;
 	uint8_t     fetch_tmp[2];
 	uint8_t     v_offset;
 	uint8_t     dma_cd;
@@ -233,6 +235,6 @@ void vdp_print_reg_explain(vdp_context * context);
 void latch_mode(vdp_context * context);
 uint32_t vdp_cycles_to_frame_end(vdp_context * context);
 void write_cram(vdp_context * context, uint16_t address, uint16_t value);
-void write_vram_byte(vdp_context *context, uint16_t address, uint8_t value);
+void write_vram_byte(vdp_context *context, uint32_t address, uint8_t value);
 
 #endif //VDP_H_

@@ -340,7 +340,7 @@ static m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, 
 	} else if (vdp_port < 0x18) {
 		psg_write(gen->psg, value);
 	} else {
-		//TODO: Implement undocumented test register(s)
+		vdp_test_port_write(gen->vdp, value);
 	}
 	return context;
 }
