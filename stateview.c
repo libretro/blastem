@@ -119,6 +119,10 @@ int main(int argc, char ** argv)
 	vdp_run_to_vblank(&context);
 	vdp_print_sprite_table(&context);
 	printf("Display %s\n", (context.regs[REG_MODE_2] & DISPLAY_ENABLE) ? "enabled" : "disabled");
+	if (!(context.regs[REG_MODE_2] & DISPLAY_ENABLE)) {
+		puts("Forcing display on");
+		vdp_control_port_write(&context, 0x8000 | REG_MODE_2 << 8 | context.regs[REG_MODE_2] | DISPLAY_ENABLE);
+	}
     render_wait_quit(&context);
     return 0;
 }
