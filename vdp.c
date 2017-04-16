@@ -757,9 +757,15 @@ static void vdp_advance_dma(vdp_context * context)
 	}
 }
 
-void write_vram_byte(vdp_context *context, uint16_t address, uint8_t value)
+void write_vram_byte(vdp_context *context, uint32_t address, uint8_t value)
 {
 	if (context->regs[REG_MODE_2] & BIT_MODE_5) {
+		if (context->regs[REG_MODE_2] & BIT_128K_VRAM) {
+			address = (address & 0x3FC) | (address >> 1 & 0xFC01) | (address >> 9 & 0x2);
+			address ^= 1;
+		} else {
+			address &= 0xFFFF;
+		}
 		if (!(address & 4)) {
 			uint16_t sat_address = (context->regs[REG_SAT] & 0x7F) << 9;
 			if(address >= sat_address && address < (sat_address + SAT_CACHE_SIZE*2)) {
@@ -789,7 +795,8 @@ static void external_slot(vdp_context * context)
 		switch (start->cd & 0xF)
 		{
 		case VRAM_WRITE:
-			if (start->partial) {
+			//TODO: Support actually having 128K VRAM as an option
+			if (start->partial || (context->regs[REG_MODE_2] & BIT_128K_VRAM)) {
 				//printf("VRAM Write: %X to %X at %d (line %d, slot %d)\n", start->value, start->address ^ 1, context->cycles, context->cycles/MCLKS_LINE, (context->cycles%MCLKS_LINE)/16);
 				write_vram_byte(context, start->address ^ 1, start->partial == 2 ? start->value >> 8 : start->value);
 			} else {
@@ -865,6 +872,7 @@ static void external_slot(vdp_context * context)
 				//Should this happen after the prefetch or after the read?
 				increment_address(context);
 			} else {
+				//TODO: 128K VRAM Mode
 				context->prefetch = context->vdpmem[context->address & 0xFFFE] << 8;
 				context->flags2 |= FLAG2_READ_PENDING;
 			}
@@ -2456,7 +2464,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 		return -1;
 	}
 	if (context->flags & FLAG_PENDING) {
-		context->address = (context->address & 0x3FFF) | (value << 14);
+		context->address = (context->address & 0x3FFF) | (value << 14 & 0x1C000);
 		//It seems like the DMA enable bit doesn't so much enable DMA so much 
 		//as it enables changing CD5 from control port writes
 		uint8_t preserve = (context->regs[REG_MODE_2] & BIT_DMA_ENABLE) ? 0x3 : 0x23;
@@ -2623,7 +2631,7 @@ void vdp_data_port_write_pbc(vdp_context * context, uint8_t value)
 
 void vdp_test_port_write(vdp_context * context, uint16_t value)
 {
-	//TODO: implement test register
+	context->test_port = value;
 }
 
 uint16_t vdp_control_port_read(vdp_context * context)
@@ -2706,7 +2714,7 @@ uint8_t vdp_data_port_read_pbc(vdp_context * context)
 uint16_t vdp_test_port_read(vdp_context * context)
 {
 	//TODO: Find out what actually gets returned here
-	return 0xFFFF;
+	return context->test_port;
 }
 
 void vdp_adjust_cycles(vdp_context * context, uint32_t deduction)
