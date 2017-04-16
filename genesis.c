@@ -453,7 +453,7 @@ static uint8_t z80_vdp_port_read(uint32_t vdp_port, void * vcontext)
 		} else if (vdp_port < 8) {
 			ret = vdp_control_port_read(gen->vdp);
 		} else {
-			fatal_error("Illegal write to HV Counter port %X\n", vdp_port);
+			ret = vdp_hv_counter_read(gen->vdp);
 		}
 	} else {
 		//TODO: Figure out the correct value today
