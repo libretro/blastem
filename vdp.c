@@ -757,23 +757,35 @@ static void vdp_advance_dma(vdp_context * context)
 	}
 }
 
+void write_vram_word(vdp_context *context, uint32_t address, uint8_t value)
+{
+	if (!(address & 4)) {
+		uint32_t sat_address = (context->regs[REG_SAT] & 0xFF) << 9;
+		if(address >= sat_address && address < (sat_address + SAT_CACHE_SIZE*2)) {
+			uint16_t cache_address = address - sat_address;
+			cache_address = (cache_address & 3) | (cache_address >> 1 & 0x1FC);
+			context->sat_cache[cache_address] = value >> 8;
+			context->sat_cache[cache_address^1] = value;
+		}
+	}
+	address = (address & 0x3FC) | (address >> 1 & 0xFC01) | (address >> 9 & 0x2);
+	address ^= 1;
+	//TODO: Support an option to actually have 128KB of VRAM
+	context->vdpmem[address] = value;
+}
+
 void write_vram_byte(vdp_context *context, uint32_t address, uint8_t value)
 {
 	if (context->regs[REG_MODE_2] & BIT_MODE_5) {
-		if (context->regs[REG_MODE_2] & BIT_128K_VRAM) {
-			address = (address & 0x3FC) | (address >> 1 & 0xFC01) | (address >> 9 & 0x2);
-			address ^= 1;
-		} else {
-			address &= 0xFFFF;
-		}
 		if (!(address & 4)) {
-			uint16_t sat_address = (context->regs[REG_SAT] & 0x7F) << 9;
+			uint32_t sat_address = (context->regs[REG_SAT] & 0x7F) << 9;
 			if(address >= sat_address && address < (sat_address + SAT_CACHE_SIZE*2)) {
 				uint16_t cache_address = address - sat_address;
 				cache_address = (cache_address & 3) | (cache_address >> 1 & 0x1FC);
 				context->sat_cache[cache_address] = value;
 			}
 		}
+		address &= 0xFFFF;
 	} else {
 		address = mode4_address_map[address & 0x3FFF];
 	}
@@ -796,7 +808,9 @@ static void external_slot(vdp_context * context)
 		{
 		case VRAM_WRITE:
 			//TODO: Support actually having 128K VRAM as an option
-			if (start->partial || (context->regs[REG_MODE_2] & BIT_128K_VRAM)) {
+			if ((context->regs[REG_MODE_2] & (BIT_128K_VRAM|BIT_MODE_5)) == (BIT_128K_VRAM|BIT_MODE_5)) {
+				write_vram_word(context, start->address, start->value);
+			} else if (start->partial) {
 				//printf("VRAM Write: %X to %X at %d (line %d, slot %d)\n", start->value, start->address ^ 1, context->cycles, context->cycles/MCLKS_LINE, (context->cycles%MCLKS_LINE)/16);
 				write_vram_byte(context, start->address ^ 1, start->partial == 2 ? start->value >> 8 : start->value);
 			} else {
