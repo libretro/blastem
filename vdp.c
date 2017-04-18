@@ -319,10 +319,22 @@ static void render_sprite_cells_mode4(vdp_context * context)
 	}
 }
 
+static uint32_t mode5_sat_address(vdp_context *context)
+{
+	uint32_t addr = context->regs[REG_SAT] << 9;
+	if (!(context->regs[REG_MODE_2] & BIT_128K_VRAM)) {
+		addr &= 0xFFFF;
+	}
+	if (context->regs[REG_MODE_4] & BIT_H40) {
+		addr &= 0x1FC00;
+	}
+	return addr;
+}
+
 void vdp_print_sprite_table(vdp_context * context)
 {
 	if (context->regs[REG_MODE_2] & BIT_MODE_5) {
-		uint16_t sat_address = (context->regs[REG_SAT] & 0x7F) << 9;
+		uint16_t sat_address = mode5_sat_address(context);
 		uint16_t current_index = 0;
 		uint8_t count = 0;
 		do {
@@ -438,7 +450,7 @@ void vdp_print_reg_explain(vdp_context * context)
 			   context->regs[REG_SCROLL_A], (context->regs[REG_SCROLL_A] & 0x38) << 10,
 			   context->regs[REG_WINDOW], (context->regs[REG_WINDOW] & (context->regs[REG_MODE_4] & BIT_H40 ? 0x3C : 0x3E)) << 10,
 			   context->regs[REG_SCROLL_B], (context->regs[REG_SCROLL_B] & 0x7) << 13,
-			   context->regs[REG_SAT], (context->regs[REG_SAT] & (context->regs[REG_MODE_4] & BIT_H40 ? 0x7E : 0x7F)) << 9,
+			   context->regs[REG_SAT], mode5_sat_address(context),
 			   context->regs[REG_HSCROLL], (context->regs[REG_HSCROLL] & 0x3F) << 10);
 	} else {
 		printf("\n**Table Group**\n"
@@ -630,7 +642,7 @@ static void read_sprite_x(uint32_t line, vdp_context * context)
 				}
 				height *= 2;
 			}
-			uint16_t att_addr = ((context->regs[REG_SAT] & 0x7F) << 9) + context->sprite_info_list[context->cur_slot].index * 8 + 4;
+			uint16_t att_addr = mode5_sat_address(context) + context->sprite_info_list[context->cur_slot].index * 8 + 4;
 			uint16_t tileinfo = (context->vdpmem[att_addr] << 8) | context->vdpmem[att_addr+1];
 			uint8_t pal_priority = (tileinfo >> 9) & 0x70;
 			uint8_t row;
@@ -760,7 +772,7 @@ static void vdp_advance_dma(vdp_context * context)
 void write_vram_word(vdp_context *context, uint32_t address, uint8_t value)
 {
 	if (!(address & 4)) {
-		uint32_t sat_address = (context->regs[REG_SAT] & 0xFF) << 9;
+		uint32_t sat_address = mode5_sat_address(context);
 		if(address >= sat_address && address < (sat_address + SAT_CACHE_SIZE*2)) {
 			uint16_t cache_address = address - sat_address;
 			cache_address = (cache_address & 3) | (cache_address >> 1 & 0x1FC);
@@ -778,7 +790,7 @@ void write_vram_byte(vdp_context *context, uint32_t address, uint8_t value)
 {
 	if (context->regs[REG_MODE_2] & BIT_MODE_5) {
 		if (!(address & 4)) {
-			uint32_t sat_address = (context->regs[REG_SAT] & 0x7F) << 9;
+			uint32_t sat_address = mode5_sat_address(context);
 			if(address >= sat_address && address < (sat_address + SAT_CACHE_SIZE*2)) {
 				uint16_t cache_address = address - sat_address;
 				cache_address = (cache_address & 3) | (cache_address >> 1 & 0x1FC);
