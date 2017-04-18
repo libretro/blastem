@@ -2432,9 +2432,12 @@ void vdp_run_dma_done(vdp_context * context, uint32_t target_cycles)
 			dmalen = 0x10000;
 		}
 		uint32_t min_dma_complete = dmalen * (context->regs[REG_MODE_4] & BIT_H40 ? 16 : 20);
-		if ((context->regs[REG_DMASRC_H] & 0xC0) == 0xC0 || (context->cd & 0xF) == VRAM_WRITE) {
+		if (
+			(context->regs[REG_DMASRC_H] & 0xC0) == 0xC0 
+			|| (((context->cd & 0xF) == VRAM_WRITE) && !(context->regs[REG_MODE_2] & BIT_128K_VRAM))) {
 			//DMA copies take twice as long to complete since they require a read and a write
 			//DMA Fills and transfers to VRAM also take twice as long as it requires 2 writes for a single word
+			//unless 128KB mode is enabled
 			min_dma_complete *= 2;
 		}
 		min_dma_complete += context->cycles;
