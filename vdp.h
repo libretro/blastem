@@ -119,6 +119,9 @@ enum {
 #define BIT_DOUBLE_RES 0x4
 #define BIT_INTERLACE  0x2
 
+//Test register
+#define TEST_BIT_DISABLE 0x40
+
 typedef struct {
 	uint16_t address;
 	int16_t x_pos;
