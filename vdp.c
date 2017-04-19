@@ -1254,6 +1254,8 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 			}
 			plane_b_off = context->buf_b_off - (context->hscroll_b & 0xF);
 			//printf("A | tmp_buf offset: %d\n", 8 - (context->hscroll_a & 0x7));
+			uint8_t output_disabled = (context->test_port & TEST_BIT_DISABLE) != 0;
+			uint8_t test_layer = context->test_port >> 7 & 3;
 
 			if (context->regs[REG_MODE_4] & BIT_HILIGHT) {
 				for (int i = 0; i < 16; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i) {
@@ -1287,12 +1289,29 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 							}
 						}
 					}
+					if (output_disabled) {
+						pixel = 0x3F;
+					}
 					if (!intensity) {
 						src |= DBG_SHADOW;
 						colors += CRAM_SIZE;
 					} else if (intensity ==  BUF_BIT_PRIORITY*2) {
 						src |= DBG_HILIGHT;
 						colors += CRAM_SIZE*2;
+					}
+					//TODO: Verify how test register stuff interacts with shadow/highlight
+					//TODO: Simulate CRAM corruption from bus fight
+					switch (test_layer)
+					{
+					case 1:
+						pixel &= *sprite_buf;
+						break;
+					case 2:
+						pixel &= *plane_a;
+						break;
+					case 3:
+						pixel &= *plane_b;
+						break;
 					}
 
 					uint32_t outpixel;
@@ -1309,17 +1328,34 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 					plane_b = context->tmp_buf_b + (plane_b_off & SCROLL_BUFFER_MASK);
 					uint8_t pixel = context->regs[REG_BG_COLOR];
 					src = DBG_SRC_BG;
-					if (*plane_b & 0xF) {
-						pixel = *plane_b;
-						src = DBG_SRC_B;
+					if (output_disabled) {
+						pixel = 0x3F;
+					} else {
+						if (*plane_b & 0xF) {
+							pixel = *plane_b;
+							src = DBG_SRC_B;
+						}
+						if (*plane_a & 0xF && (*plane_a & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
+							pixel = *plane_a;
+							src = a_src;
+						}
+						if (*sprite_buf & 0xF && (*sprite_buf & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
+							pixel = *sprite_buf;
+							src = DBG_SRC_S;
+						}
 					}
-					if (*plane_a & 0xF && (*plane_a & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
-						pixel = *plane_a;
-						src = a_src;
-					}
-					if (*sprite_buf & 0xF && (*sprite_buf & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
-						pixel = *sprite_buf;
-						src = DBG_SRC_S;
+					//TODO: Simulate CRAM corruption from bus fight
+					switch (test_layer)
+					{
+					case 1:
+						pixel &= *sprite_buf;
+						break;
+					case 2:
+						pixel &= *plane_a;
+						break;
+					case 3:
+						pixel &= *plane_b;
+						break;
 					}
 					uint32_t outpixel;
 					if (context->debug) {
