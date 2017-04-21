@@ -230,7 +230,6 @@ uint8_t vdp_load_gst(vdp_context * context, FILE * state_file)
 	{
 		vdp_control_port_write(context, 0x8000 | (i << 8) | tmp_buf[i]);
 	}
-	latch_mode(context);
 	if (fread(tmp_buf, 1, CRAM_SIZE*2, state_file) != CRAM_SIZE*2) {
 		fputs("Failed to read CRAM from savestate\n", stderr);
 		return 0;
