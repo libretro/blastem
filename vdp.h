@@ -177,9 +177,9 @@ typedef struct {
 	uint16_t    border_bot;
 	uint16_t    hscroll_a;
 	uint16_t    hscroll_b;
-	uint16_t     h40_lines;
+	uint16_t    h40_lines;
+	uint16_t    output_lines;
 	uint8_t     hslot; //hcounter/2
-	uint8_t     latched_mode;
 	uint8_t	    sprite_index;
 	uint8_t     sprite_draws;
 	int8_t      slot_counter;
@@ -204,6 +204,7 @@ typedef struct {
 	uint8_t     debug;
 	uint8_t     debug_pal;
 	uint8_t     pending_byte;
+	uint8_t     state;
 	uint8_t     *tmp_buf_a;
 	uint8_t     *tmp_buf_b;
 } vdp_context;
