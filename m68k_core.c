@@ -305,10 +305,10 @@ static void translate_m68k_link(m68k_options * opts, m68kinst * inst)
 static void translate_m68k_rts(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
-	//TODO: Add cycles
 	areg_to_native(opts, 7, opts->gen.scratch1);
 	addi_areg(opts, 4, 7);
 	call(code, opts->read_32);
+	cycles(&opts->gen, 2*BUS);
 	call(code, opts->native_addr);
 	jmp_r(code, opts->gen.scratch1);
 }
@@ -626,6 +626,7 @@ static void translate_m68k_rte(m68k_options *opts, m68kinst *inst)
 	call(code, opts->read_32);
 	addi_areg(opts, 4, 7);
 	check_user_mode_swap_ssp_usp(opts);
+	cycles(&opts->gen, 2*BUS);
 	//Get native address, sync components, recalculate integer points and jump to returned address
 	call(code, opts->native_addr_and_sync);
 	jmp_r(code, opts->gen.scratch1);
