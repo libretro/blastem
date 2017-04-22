@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include "util.h"
 
-tern_node * tern_insert(tern_node * head, char const * key, tern_val value)
+tern_node * tern_insert(tern_node * head, char const * key, tern_val value, uint8_t valtype)
 {
 	tern_node ** cur = &head;
 	while(*key)
@@ -31,6 +31,7 @@ tern_node * tern_insert(tern_node * head, char const * key, tern_val value)
 			(*cur)->right = NULL;
 			(*cur)->straight.next = NULL;
 			(*cur)->el = *key;
+			(*cur)->valtype = TVAL_NONE;
 		}
 		cur = &((*cur)->straight.next);
 		key++;
@@ -46,10 +47,11 @@ tern_node * tern_insert(tern_node * head, char const * key, tern_val value)
 		(*cur)->el = 0;
 	}
 	(*cur)->straight.value = value;
+	(*cur)->valtype = valtype;
 	return head;
 }
 
-int tern_find(tern_node * head, char const * key, tern_val *ret)
+uint8_t tern_find(tern_node * head, char const * key, tern_val *ret)
 {
 	tern_node * cur = head;
 	while (cur)
@@ -60,7 +62,7 @@ int tern_find(tern_node * head, char const * key, tern_val *ret)
 				key++;
 			} else {
 				*ret = cur->straight.value;
-				return 1;
+				return cur->valtype;
 			}
 		} else if (*key < cur->el) {
 			cur = cur->left;
@@ -68,7 +70,7 @@ int tern_find(tern_node * head, char const * key, tern_val *ret)
 			cur = cur->right;
 		}
 	}
-	return 0;
+	return TVAL_NONE;
 }
 
 tern_node * tern_find_prefix(tern_node * head, char const * key)
@@ -91,7 +93,8 @@ tern_node * tern_find_prefix(tern_node * head, char const * key)
 intptr_t tern_find_int(tern_node * head, char const * key, intptr_t def)
 {
 	tern_val ret;
-	if (tern_find(head, key, &ret)) {
+	uint8_t valtype = tern_find(head, key, &ret);
+	if (valtype == TVAL_INT) {
 		return ret.intval;
 	}
 	return def;
@@ -101,18 +104,15 @@ tern_node * tern_insert_int(tern_node * head, char const * key, intptr_t value)
 {
 	tern_val val;
 	val.intval = value;
-	return tern_insert(head, key, val);
+	return tern_insert(head, key, val, TVAL_INT);
 }
 
 void * tern_find_ptr_default(tern_node * head, char const * key, void * def)
 {
 	tern_val ret;
-	if (tern_find(head, key, &ret)) {
-		if (ret.intval & 1) {
-			return (void *)(ret.intval & ~1);
-		} else {
-			return ret.ptrval;
-		}
+	uint8_t valtype = tern_find(head, key, &ret);
+	if (valtype == TVAL_PTR) {
+		return ret.ptrval;
 	}
 	return def;
 }
@@ -122,44 +122,57 @@ void * tern_find_ptr(tern_node * head, char const * key)
 	return tern_find_ptr_default(head, key, NULL);
 }
 
-tern_val tern_find_path_default(tern_node *head, char const *key, tern_val def)
+tern_node *tern_find_node(tern_node *head, char const *key)
+{
+	tern_val ret;
+	uint8_t valtype = tern_find(head, key, &ret);
+	if (valtype == TVAL_NODE) {
+		return ret.ptrval;
+	}
+	return NULL;
+}
+
+tern_val tern_find_path_default(tern_node *head, char const *key, tern_val def, uint8_t req_valtype)
 {
 	tern_val ret;
 	while (*key)
 	{
-		if (!tern_find(head, key, &ret)) {
+		uint8_t valtype = tern_find(head, key, &ret);
+		if (!valtype) {
 			return def;
 		}
 		key = key + strlen(key) + 1;
 		if (*key) {
-			head = tern_get_node(ret);
-			if (!head) {
+			if (valtype != TVAL_NODE) {
 				return def;
 			}
+			head = ret.ptrval;
+		} else if (req_valtype && req_valtype != valtype) {
+			return def;
 		}
 	}
 	return ret;
 }
 
-tern_val tern_find_path(tern_node *head, char const *key)
+tern_val tern_find_path(tern_node *head, char const *key, uint8_t valtype)
 {
 	tern_val def;
 	def.ptrval = NULL;
-	return tern_find_path_default(head, key, def);
+	return tern_find_path_default(head, key, def, valtype);
 }
 
 tern_node * tern_insert_ptr(tern_node * head, char const * key, void * value)
 {
 	tern_val val;
 	val.ptrval = value;
-	return tern_insert(head, key, val);
+	return tern_insert(head, key, val, TVAL_PTR);
 }
 
 tern_node * tern_insert_node(tern_node *head, char const *key, tern_node *value)
 {
 	tern_val val;
-	val.intval = ((intptr_t)value) | 1;
-	return tern_insert(head, key, val);
+	val.ptrval = value;
+	return tern_insert(head, key, val, TVAL_NODE);
 }
 
 uint32_t tern_count(tern_node *head)
@@ -184,7 +197,7 @@ void tern_foreach_int(tern_node *head, iter_fun fun, void *data, char *keybuf, i
 {
 	if (!head->el) {
 		keybuf[pos] = 0;
-		fun(keybuf, head->straight.value, data);
+		fun(keybuf, head->straight.value, head->valtype, data);
 	}
 	if (head->left) {
 		tern_foreach_int(head->left, fun, data, keybuf, pos);
@@ -220,11 +233,6 @@ char * tern_int_key(uint32_t key, char * buf)
 	return buf;
 }
 
-tern_node * tern_get_node(tern_val value)
-{
-	return value.intval & 1 ? (tern_node *)(value.intval & ~1) : NULL;
-}
-
 void tern_free(tern_node *head)
 {
 	if (head->left) {
@@ -236,4 +244,5 @@ void tern_free(tern_node *head)
 	if (head->el) {
 		tern_free(head->straight.next);
 	}
+	free(head);
 }

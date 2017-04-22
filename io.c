@@ -494,7 +494,7 @@ void handle_binding_up(keybinding * binding)
 			current_system->soft_reset(current_system);
 			break;
 		case UI_SCREENSHOT: {
-			char *screenshot_base = tern_find_path(config, "ui\0screenshot_path\0").ptrval;
+			char *screenshot_base = tern_find_path(config, "ui\0screenshot_path\0", TVAL_PTR).ptrval;
 			if (!screenshot_base) {
 				screenshot_base = "$HOME";
 			}
@@ -505,7 +505,7 @@ void handle_binding_up(keybinding * binding)
 			time_t now = time(NULL);
 			struct tm local_store;
 			char fname_part[256];
-			char *template = tern_find_path(config, "ui\0screenshot_template\0").ptrval;
+			char *template = tern_find_path(config, "ui\0screenshot_template\0", TVAL_PTR).ptrval;
 			if (!template) {
 				template = "blastem_%c.ppm";
 			}
@@ -876,10 +876,10 @@ void setup_io_devices(tern_node * config, rom_info *rom, sega_io *io)
 {
 	current_io = io;
 	io_port * ports = current_io->ports;
-	tern_node *io_nodes = tern_get_node(tern_find_path(config, "io\0devices\0"));
-	char * io_1 = rom->port1_override ? rom->port1_override : tern_find_ptr(io_nodes, "1");
-	char * io_2 = rom->port2_override ? rom->port2_override : tern_find_ptr(io_nodes, "2");
-	char * io_ext = rom->ext_override ? rom->ext_override : tern_find_ptr(io_nodes, "ext");
+	tern_node *io_nodes = tern_find_path(config, "io\0devices\0", TVAL_NODE).ptrval;
+	char * io_1 = rom->port1_override ? rom->port1_override : io_nodes ? tern_find_ptr(io_nodes, "1") : NULL;
+	char * io_2 = rom->port2_override ? rom->port2_override : io_nodes ? tern_find_ptr(io_nodes, "2") : NULL;
+	char * io_ext = rom->ext_override ? rom->ext_override : io_nodes ? tern_find_ptr(io_nodes, "ext") : NULL;
 
 	process_device(io_1, ports);
 	process_device(io_2, ports+1);
@@ -901,7 +901,7 @@ void setup_io_devices(tern_node * config, rom_info *rom, sega_io *io)
 #ifndef _WIN32
 		if (ports[i].device_type == IO_SEGA_PARALLEL)
 		{
-			char *pipe_name = tern_find_path(config, "io\0parallel_pipe\0").ptrval;
+			char *pipe_name = tern_find_path(config, "io\0parallel_pipe\0", TVAL_PTR).ptrval;
 			if (!pipe_name)
 			{
 				warning("IO port %s is configured to use the sega parallel board, but no paralell_pipe is set!\n", io_name(i));
@@ -927,7 +927,7 @@ void setup_io_devices(tern_node * config, rom_info *rom, sega_io *io)
 				}
 			}
 		} else if (ports[i].device_type == IO_GENERIC) {
-			char *sock_name = tern_find_path(config, "io\0socket\0").ptrval;
+			char *sock_name = tern_find_path(config, "io\0socket\0", TVAL_PTR).ptrval;
 			if (!sock_name)
 			{
 				warning("IO port %s is configured to use generic IO, but no socket is set!\n", io_name(i));
@@ -1013,12 +1013,16 @@ typedef struct {
 	int       mouseidx;
 } pmb_state;
 
-void process_mouse_button(char *buttonstr, tern_val value, void *data)
+void process_mouse_button(char *buttonstr, tern_val value, uint8_t valtype, void *data)
 {
 	pmb_state *state = data;
 	int buttonnum = atoi(buttonstr);
 	if (buttonnum < 1 || buttonnum > MAX_MOUSE_BUTTONS) {
 		warning("Mouse button %s is out of the supported range of 1-8\n", buttonstr);
+		return;
+	}
+	if (valtype != TVAL_PTR) {
+		warning("Mouse button %s is not a scalar value!\n", buttonstr);
 		return;
 	}
 	buttonnum--;
@@ -1045,17 +1049,17 @@ void process_mouse_button(char *buttonstr, tern_val value, void *data)
 
 }
 
-void process_mouse(char *mousenum, tern_val value, void *data)
+void process_mouse(char *mousenum, tern_val value, uint8_t valtype, void *data)
 {
 	tern_node **buttonmaps = data;
-	tern_node *mousedef = tern_get_node(value);
-	tern_node *padbuttons = buttonmaps[0];
-	tern_node *mousebuttons = buttonmaps[1];
-
-	if (!mousedef) {
+	if (valtype != TVAL_NODE) {
 		warning("Binding for mouse %s is a scalar!\n", mousenum);
 		return;
 	}
+	tern_node *mousedef = value.ptrval;
+	tern_node *padbuttons = buttonmaps[0];
+	tern_node *mousebuttons = buttonmaps[1];
+
 	int mouseidx = atoi(mousenum);
 	if (mouseidx < 0 || mouseidx >= MAX_MICE) {
 		warning("Mouse numbers must be between 0 and %d, but %d is not\n", MAX_MICE, mouseidx);
@@ -1074,7 +1078,7 @@ void process_mouse(char *mousenum, tern_val value, void *data)
 			warning("Mouse motion can't be bound to target %s\n", motion);
 		}
 	}
-	tern_node *buttons = tern_get_node(tern_find_path(mousedef, "buttons\0\0"));
+	tern_node *buttons = tern_find_path(mousedef, "buttons\0\0", TVAL_NODE).ptrval;
 	if (buttons) {
 		pmb_state state = {padbuttons, mousebuttons, mouseidx};
 		tern_foreach(buttons, process_mouse_button, &state);
@@ -1087,11 +1091,15 @@ typedef struct {
 	tern_node *mousebuttons;
 } pad_button_state;
 
-void process_pad_button(char *key, tern_val val, void *data)
+void process_pad_button(char *key, tern_val val, uint8_t valtype, void *data)
 {
 	pad_button_state *state = data;
 	int hostpadnum = state->padnum;
 	int ui_func, padnum, button;
+	if (valtype != TVAL_PTR) {
+		warning("Pad button %s has a non-scalar value\n", key);
+		return;
+	}
 	int bindtype = parse_binding_target(val.ptrval, state->padbuttons, state->mousebuttons, &ui_func, &padnum, &button);
 	char *end;
 	long hostbutton = strtol(key, &end, 10);
@@ -1129,12 +1137,16 @@ void process_pad_button(char *key, tern_val val, void *data)
 	}
 }
 
-void process_pad_axis(char *key, tern_val val, void *data)
+void process_pad_axis(char *key, tern_val val, uint8_t valtype, void *data)
 {
 	key = strdup(key);
 	pad_button_state *state = data;
 	int hostpadnum = state->padnum;
 	int ui_func, padnum, button;
+	if (valtype != TVAL_PTR) {
+		warning("Mapping for axis %s has a non-scalar value", key);
+		return;
+	}
 	int bindtype = parse_binding_target(val.ptrval, state->padbuttons, state->mousebuttons, &ui_func, &padnum, &button);
 	char *modifier = strchr(key, '.');
 	int positive = 1;
@@ -1226,19 +1238,19 @@ void handle_joy_added(int joystick)
 	if (joystick > MAX_JOYSTICKS) {
 		return;
 	}
-	tern_node * pads = tern_get_node(tern_find_path(config, "bindings\0pads\0"));
+	tern_node * pads = tern_find_path(config, "bindings\0pads\0", TVAL_NODE).ptrval;
 	if (pads) {
 		char numstr[11];
 		sprintf(numstr, "%d", joystick);
-		tern_node * pad = tern_find_ptr(pads, numstr);
+		tern_node * pad = tern_find_node(pads, numstr);
 		if (pad) {
-			tern_node * dpad_node = tern_find_ptr(pad, "dpads");
+			tern_node * dpad_node = tern_find_node(pad, "dpads");
 			if (dpad_node) {
 				for (int dpad = 0; dpad < 10; dpad++)
 				{
 					numstr[0] = dpad + '0';
 					numstr[1] = 0;
-					tern_node * pad_dpad = tern_find_ptr(dpad_node, numstr);
+					tern_node * pad_dpad = tern_find_node(dpad_node, numstr);
 					char * dirs[] = {"up", "down", "left", "right"};
 					int dirnums[] = {RENDER_DPAD_UP, RENDER_DPAD_DOWN, RENDER_DPAD_LEFT, RENDER_DPAD_RIGHT};
 					for (int dir = 0; dir < sizeof(dirs)/sizeof(dirs[0]); dir++) {
@@ -1255,7 +1267,7 @@ void handle_joy_added(int joystick)
 					}
 				}
 			}
-			tern_node *button_node = tern_find_ptr(pad, "buttons");
+			tern_node *button_node = tern_find_node(pad, "buttons");
 			if (button_node) {
 				pad_button_state state = {
 					.padnum = joystick,
@@ -1264,7 +1276,7 @@ void handle_joy_added(int joystick)
 				};
 				tern_foreach(button_node, process_pad_button, &state);
 			}
-			tern_node *axes_node = tern_find_ptr(pad, "axes");
+			tern_node *axes_node = tern_find_node(pad, "axes");
 			if (axes_node) {
 				pad_button_state state = {
 					.padnum = joystick,
@@ -1347,10 +1359,10 @@ void set_keybindings(sega_io *io)
 
 	tern_node *mousebuttons = get_mouse_buttons();
 	
-	tern_node * keys = tern_get_node(tern_find_path(config, "bindings\0keys\0"));
+	tern_node * keys = tern_find_path(config, "bindings\0keys\0", TVAL_NODE).ptrval;
 	process_keys(keys, special, padbuttons, mousebuttons, NULL);
 	char numstr[] = "00";
-	tern_node * pads = tern_get_node(tern_find_path(config, "bindings\0pads\0"));
+	tern_node * pads = tern_find_path(config, "bindings\0pads\0", TVAL_NODE).ptrval;
 	if (pads) {
 		for (int i = 0; i < MAX_JOYSTICKS; i++)
 		{
@@ -1366,12 +1378,12 @@ void set_keybindings(sega_io *io)
 		}
 	}
 	memset(mice, 0, sizeof(mice));
-	tern_node * mice = tern_get_node(tern_find_path(config, "bindings\0mice\0"));
+	tern_node * mice = tern_find_path(config, "bindings\0mice\0", TVAL_NODE).ptrval;
 	if (mice) {
 		tern_node *buttonmaps[2] = {padbuttons, mousebuttons};
 		tern_foreach(mice, process_mouse, buttonmaps);
 	}
-	tern_node * speed_nodes = tern_get_node(tern_find_path(config, "clocks\0speeds\0"));
+	tern_node * speed_nodes = tern_find_path(config, "clocks\0speeds\0", TVAL_NODE).ptrval;
 	speeds = malloc(sizeof(uint32_t));
 	speeds[0] = 100;
 	process_speeds(speed_nodes, NULL);
