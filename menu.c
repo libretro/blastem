@@ -166,7 +166,7 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 	menu_context *menu = gen->extra;
 	if (!menu) {
 		gen->extra = menu = calloc(1, sizeof(menu_context));
-		menu->curpath = tern_find_path(config, "ui\0initial_path\0").ptrval;
+		menu->curpath = tern_find_path(config, "ui\0initial_path\0", TVAL_PTR).ptrval;
 		if (!menu->curpath){
 #ifdef __ANDROID__
 			menu->curpath = get_external_storage_path();

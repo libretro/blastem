@@ -324,7 +324,7 @@ sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t for
 		sms->bank_regs[3] = 0x8000 >> 14;
 	}
 	
-	char * lowpass_cutoff_str = tern_find_path(config, "audio\0lowpass_cutoff\0").ptrval;
+	char * lowpass_cutoff_str = tern_find_path(config, "audio\0lowpass_cutoff\0", TVAL_PTR).ptrval;
 	uint32_t lowpass_cutoff = lowpass_cutoff_str ? atoi(lowpass_cutoff_str) : 3390;
 	
 	//TODO: Detect region and pick master clock based off of that

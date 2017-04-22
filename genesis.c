@@ -822,7 +822,7 @@ static void set_speed_percent(system_header * system, uint32_t percent)
 void set_region(genesis_context *gen, rom_info *info, uint8_t region)
 {
 	if (!region) {
-		char * def_region = tern_find_path_default(config, "system\0default_region\0", (tern_val){.ptrval = "U"}).ptrval;
+		char * def_region = tern_find_path_default(config, "system\0default_region\0", (tern_val){.ptrval = "U"}, TVAL_PTR).ptrval;
 		if (!info->regions || (info->regions & translate_region_char(toupper(*def_region)))) {
 			region = translate_region_char(toupper(*def_region));
 		} else {
@@ -1001,10 +1001,10 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	init_vdp_context(gen->vdp, gen->version_reg & 0x40);
 	gen->vdp->system = &gen->header;
 	gen->frame_end = vdp_cycles_to_frame_end(gen->vdp);
-	char * config_cycles = tern_find_path(config, "clocks\0max_cycles\0").ptrval;
+	char * config_cycles = tern_find_path(config, "clocks\0max_cycles\0", TVAL_PTR).ptrval;
 	gen->max_cycles = config_cycles ? atoi(config_cycles) : DEFAULT_SYNC_INTERVAL;
 
-	char * lowpass_cutoff_str = tern_find_path(config, "audio\0lowpass_cutoff\0").ptrval;
+	char * lowpass_cutoff_str = tern_find_path(config, "audio\0lowpass_cutoff\0", TVAL_PTR).ptrval;
 	uint32_t lowpass_cutoff = lowpass_cutoff_str ? atoi(lowpass_cutoff_str) : DEFAULT_LOWPASS_CUTOFF;
 	
 	gen->ym = malloc(sizeof(ym2612_context));
@@ -1032,7 +1032,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	gen->cart = main_rom;
 	gen->lock_on = lock_on;
 	gen->work_ram = calloc(2, RAM_WORDS);
-	if (!strcmp("random", tern_find_path_default(config, "system\0ram_init\0", (tern_val){.ptrval = "zero"}).ptrval))
+	if (!strcmp("random", tern_find_path_default(config, "system\0ram_init\0", (tern_val){.ptrval = "zero"}, TVAL_PTR).ptrval))
 	{
 		srand(time(NULL));
 		for (int i = 0; i < RAM_WORDS; i++)
@@ -1124,7 +1124,7 @@ genesis_context *alloc_config_genesis(void *rom, uint32_t rom_size, void *lock_o
 		byteswap_rom(lock_on_size, lock_on);
 	}
 #endif
-	char *m68k_divider = tern_find_path(config, "clocks\0m68k_divider\0").ptrval;
+	char *m68k_divider = tern_find_path(config, "clocks\0m68k_divider\0", TVAL_PTR).ptrval;
 	if (!m68k_divider) {
 		m68k_divider = "7";
 	}

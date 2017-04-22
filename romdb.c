@@ -643,11 +643,15 @@ typedef struct {
 	uint16_t     ptr_index;
 } map_iter_state;
 
-void eeprom_read_fun(char *key, tern_val val, void *data)
+void eeprom_read_fun(char *key, tern_val val, uint8_t valtype, void *data)
 {
 	int bit = atoi(key);
 	if (bit < 0 || bit > 15) {
 		fprintf(stderr, "bit %s is out of range", key);
+		return;
+	}
+	if (valtype != TVAL_PTR) {
+		fprintf(stderr, "bit %s has a non-scalar value", key);
 		return;
 	}
 	char *pin = val.ptrval;
@@ -659,11 +663,15 @@ void eeprom_read_fun(char *key, tern_val val, void *data)
 	map->sda_read_bit = bit;
 }
 
-void eeprom_write_fun(char *key, tern_val val, void *data)
+void eeprom_write_fun(char *key, tern_val val, uint8_t valtype, void *data)
 {
 	int bit = atoi(key);
 	if (bit < 0 || bit > 15) {
 		fprintf(stderr, "bit %s is out of range", key);
+		return;
+	}
+	if (valtype != TVAL_PTR) {
+		fprintf(stderr, "bit %s has a non-scalar value", key);
 		return;
 	}
 	char *pin = val.ptrval;
@@ -682,7 +690,7 @@ void eeprom_write_fun(char *key, tern_val val, void *data)
 void process_sram_def(char *key, map_iter_state *state)
 {
 	if (!state->info->save_size) {
-		char * size = tern_find_path(state->root, "SRAM\0size\0").ptrval;
+		char * size = tern_find_path(state->root, "SRAM\0size\0", TVAL_PTR).ptrval;
 		if (!size) {
 			fatal_error("ROM DB map entry %d with address %s has device type SRAM, but the SRAM size is not defined\n", state->index, key);
 		}
@@ -693,7 +701,7 @@ void process_sram_def(char *key, map_iter_state *state)
 		state->info->save_mask = nearest_pow2(state->info->save_size)-1;
 		state->info->save_buffer = malloc(state->info->save_size);
 		memset(state->info->save_buffer, 0, state->info->save_size);
-		char *bus = tern_find_path(state->root, "SRAM\0bus\0").ptrval;
+		char *bus = tern_find_path(state->root, "SRAM\0bus\0", TVAL_PTR).ptrval;
 		if (!strcmp(bus, "odd")) {
 			state->info->save_type = RAM_FLAG_ODD;
 		} else if(!strcmp(bus, "even")) {
@@ -707,7 +715,7 @@ void process_sram_def(char *key, map_iter_state *state)
 void process_eeprom_def(char * key, map_iter_state *state)
 {
 	if (!state->info->save_size) {
-		char * size = tern_find_path(state->root, "EEPROM\0size\0").ptrval;
+		char * size = tern_find_path(state->root, "EEPROM\0size\0", TVAL_PTR).ptrval;
 		if (!size) {
 			fatal_error("ROM DB map entry %d with address %s has device type EEPROM, but the EEPROM size is not defined\n", state->index, key);
 		}
@@ -715,7 +723,7 @@ void process_eeprom_def(char * key, map_iter_state *state)
 		if (!state->info->save_size) {
 			fatal_error("EEPROM size %s is invalid\n", size);
 		}
-		char *etype = tern_find_path(state->root, "EEPROM\0type\0").ptrval;
+		char *etype = tern_find_path(state->root, "EEPROM\0type\0", TVAL_PTR).ptrval;
 		if (!etype) {
 			etype = "i2c";
 		}
@@ -737,11 +745,11 @@ void add_eeprom_map(tern_node *node, uint32_t start, uint32_t end, map_iter_stat
 	eep_map->start = start;
 	eep_map->end = end;
 	eep_map->sda_read_bit = 0xFF;
-	tern_node * bits_read = tern_find_ptr(node, "bits_read");
+	tern_node * bits_read = tern_find_node(node, "bits_read");
 	if (bits_read) {
 		tern_foreach(bits_read, eeprom_read_fun, eep_map);
 	}
-	tern_node * bits_write = tern_find_ptr(node, "bits_write");
+	tern_node * bits_write = tern_find_node(node, "bits_write");
 	if (bits_write) {
 		tern_foreach(bits_write, eeprom_write_fun, eep_map);
 	}
@@ -749,13 +757,13 @@ void add_eeprom_map(tern_node *node, uint32_t start, uint32_t end, map_iter_stat
 	state->info->num_eeprom++;
 }
 
-void map_iter_fun(char *key, tern_val val, void *data)
+void map_iter_fun(char *key, tern_val val, uint8_t valtype, void *data)
 {
 	map_iter_state *state = data;
-	tern_node *node = tern_get_node(val);
-	if (!node) {
+	if (valtype != TVAL_NODE) {
 		fatal_error("ROM DB map entry %d with address %s is not a node\n", state->index, key);
 	}
+	tern_node *node = val.ptrval;
 	uint32_t start = strtol(key, NULL, 16);
 	uint32_t end = strtol(tern_find_ptr_default(node, "last", "0"), NULL, 16);
 	if (!end || end < start) {
@@ -819,7 +827,7 @@ void map_iter_fun(char *key, tern_val val, void *data)
 		state->info->map = realloc(state->info->map, sizeof(memmap_chunk) * state->info->map_chunks);
 		memset(state->info->map + state->info->map_chunks - 7, 0, sizeof(memmap_chunk) * 7);
 		map = state->info->map + state->index;
-		char *save_device = tern_find_path(node, "save\0device\0").ptrval;
+		char *save_device = tern_find_path(node, "save\0device\0", TVAL_PTR).ptrval;
 		if (save_device && !strcmp(save_device, "EEPROM")) {
 			process_eeprom_def(key, state);
 			add_eeprom_map(node, start & map->mask, end & map->mask, state);
@@ -892,9 +900,9 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, void *l
 	uint8_t hex_hash[41];
 	bin_to_hex(hex_hash, raw_hash, 20);
 	printf("SHA1: %s\n", hex_hash);
-	tern_node * entry = tern_find_ptr(rom_db, hex_hash);
+	tern_node * entry = tern_find_node(rom_db, hex_hash);
 	if (!entry) {
-		entry = tern_find_ptr(rom_db, product_id);
+		entry = tern_find_node(rom_db, product_id);
 	}
 	if (!entry) {
 		puts("Not found in ROM DB, examining header\n");
@@ -927,7 +935,7 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, void *l
 		info.regions = get_header_regions(rom);
 	}
 
-	tern_node *map = tern_find_ptr(entry, "map");
+	tern_node *map = tern_find_node(entry, "map");
 	if (map) {
 		info.save_type = SAVE_NONE;
 		info.map_chunks = tern_count(map);
@@ -959,7 +967,7 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, void *l
 		add_memmap_header(&info, rom, rom_size, base_map, base_chunks);
 	}
 
-	tern_node *device_overrides = tern_find_ptr(entry, "device_overrides");
+	tern_node *device_overrides = tern_find_node(entry, "device_overrides");
 	if (device_overrides) {
 		info.port1_override = tern_find_ptr(device_overrides, "1");
 		info.port2_override = tern_find_ptr(device_overrides, "2");
