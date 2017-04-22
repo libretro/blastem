@@ -217,9 +217,9 @@ static void gl_setup()
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[1]);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(element_data), element_data, GL_STATIC_DRAW);
 	tern_val def = {.ptrval = "default.v.glsl"};
-	vshader = load_shader(tern_find_path_default(config, "video\0vertex_shader\0", def).ptrval, GL_VERTEX_SHADER);
+	vshader = load_shader(tern_find_path_default(config, "video\0vertex_shader\0", def, TVAL_PTR).ptrval, GL_VERTEX_SHADER);
 	def.ptrval = "default.f.glsl";
-	fshader = load_shader(tern_find_path_default(config, "video\0fragment_shader\0", def).ptrval, GL_FRAGMENT_SHADER);
+	fshader = load_shader(tern_find_path_default(config, "video\0fragment_shader\0", def, TVAL_PTR).ptrval, GL_FRAGMENT_SHADER);
 	program = glCreateProgram();
 	glAttachShader(program, vshader);
 	glAttachShader(program, fshader);
@@ -284,7 +284,7 @@ static void update_aspect()
 	main_clip.h = main_height;
 	main_clip.x = main_clip.y = 0;
 	//calculate configured aspect ratio
-	char *config_aspect = tern_find_path_default(config, "video\0aspect\0", (tern_val){.ptrval = "4:3"}).ptrval;
+	char *config_aspect = tern_find_path_default(config, "video\0aspect\0", (tern_val){.ptrval = "4:3"}, TVAL_PTR).ptrval;
 	if (strcmp("stretch", config_aspect)) {
 		float src_aspect = 4.0f/3.0f;
 		char *end;
@@ -356,32 +356,28 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 
 	render_gl = 0;
 	tern_val def = {.ptrval = "off"};
-	char *vsync = tern_find_path_default(config, "video\0vsync\0", def).ptrval;
+	char *vsync = tern_find_path_default(config, "video\0vsync\0", def, TVAL_PTR).ptrval;
 	
-	tern_val video_node = {.ptrval = NULL};
-	tern_find(config, "video", &video_node);
-	tern_node *video = tern_get_node(video_node);
+	tern_node *video = tern_find_node(config, "video");
 	if (video)
 	{
 		for (int i = 0; i < NUM_VID_STD; i++)
 		{
-			video_node.ptrval = NULL;
-			tern_find(video, vid_std_names[i], &video_node);
-			tern_node *std_settings = tern_get_node(video_node);
+			tern_node *std_settings = tern_find_node(video, vid_std_names[i]);
 			if (std_settings) {
-				char *val = tern_find_path_default(std_settings, "overscan\0top\0", (tern_val){.ptrval = NULL}).ptrval;
+				char *val = tern_find_path_default(std_settings, "overscan\0top\0", (tern_val){.ptrval = NULL}, TVAL_PTR).ptrval;
 				if (val) {
 					overscan_top[i] = atoi(val);
 				}
-				val = tern_find_path_default(std_settings, "overscan\0bottom\0", (tern_val){.ptrval = NULL}).ptrval;
+				val = tern_find_path_default(std_settings, "overscan\0bottom\0", (tern_val){.ptrval = NULL}, TVAL_PTR).ptrval;
 				if (val) {
 					overscan_bot[i] = atoi(val);
 				}
-				val = tern_find_path_default(std_settings, "overscan\0left\0", (tern_val){.ptrval = NULL}).ptrval;
+				val = tern_find_path_default(std_settings, "overscan\0left\0", (tern_val){.ptrval = NULL}, TVAL_PTR).ptrval;
 				if (val) {
 					overscan_left[i] = atoi(val);
 				}
-				val = tern_find_path_default(std_settings, "overscan\0right\0", (tern_val){.ptrval = NULL}).ptrval;
+				val = tern_find_path_default(std_settings, "overscan\0right\0", (tern_val){.ptrval = NULL}, TVAL_PTR).ptrval;
 				if (val) {
 					overscan_right[i] = atoi(val);
 				}
@@ -447,7 +443,7 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 	update_aspect();
 	render_alloc_surfaces();
 	def.ptrval = "off";
-	scanlines = !strcmp(tern_find_path_default(config, "video\0scanlines\0", def).ptrval, "on");
+	scanlines = !strcmp(tern_find_path_default(config, "video\0scanlines\0", def, TVAL_PTR).ptrval, "on");
 
 	caption = title;
 
@@ -457,7 +453,7 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 	audio_ready = SDL_CreateCond();
 
 	SDL_AudioSpec desired, actual;
-    char * rate_str = tern_find_path(config, "audio\0rate\0").ptrval;
+    char * rate_str = tern_find_path(config, "audio\0rate\0", TVAL_PTR).ptrval;
    	int rate = rate_str ? atoi(rate_str) : 0;
    	if (!rate) {
    		rate = 48000;
@@ -465,7 +461,7 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
     desired.freq = rate;
 	desired.format = AUDIO_S16SYS;
 	desired.channels = 2;
-    char * samples_str = tern_find_path(config, "audio\0buffer\0").ptrval;
+    char * samples_str = tern_find_path(config, "audio\0buffer\0", TVAL_PTR).ptrval;
    	int samples = samples_str ? atoi(samples_str) : 0;
    	if (!samples) {
    		samples = 512;

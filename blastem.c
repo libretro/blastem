@@ -140,7 +140,7 @@ void update_title(char *rom_name)
 void setup_saves(char *fname, rom_info *info, system_header *context)
 {
 	static uint8_t persist_save_registered;
-	char *savedir_template = tern_find_path(config, "ui\0save_path\0").ptrval;
+	char *savedir_template = tern_find_path(config, "ui\0save_path\0", TVAL_PTR).ptrval;
 	if (!savedir_template) {
 		savedir_template = "$USERDATA/blastem/$ROMNAME";
 	}
@@ -322,7 +322,7 @@ int main(int argc, char ** argv)
 	uint8_t menu = !loaded;
 	if (!loaded) {
 		//load menu
-		romfname = tern_find_path(config, "ui\0rom\0").ptrval;
+		romfname = tern_find_path(config, "ui\0rom\0", TVAL_PTR).ptrval;
 		if (!romfname) {
 			romfname = "menu.bin";
 		}
@@ -349,7 +349,7 @@ int main(int argc, char ** argv)
 	}
 	
 	int def_width = 0;
-	char *config_width = tern_find_path(config, "video\0width\0").ptrval;
+	char *config_width = tern_find_path(config, "video\0width\0", TVAL_PTR).ptrval;
 	if (config_width) {
 		def_width = atoi(config_width);
 	}
@@ -359,7 +359,7 @@ int main(int argc, char ** argv)
 	width = width < 320 ? def_width : width;
 	height = height < 240 ? (width/320) * 240 : height;
 
-	char *config_fullscreen = tern_find_path(config, "video\0fullscreen\0").ptrval;
+	char *config_fullscreen = tern_find_path(config, "video\0fullscreen\0", TVAL_PTR).ptrval;
 	if (config_fullscreen && !strcmp("on", config_fullscreen)) {
 		fullscreen = !fullscreen;
 	}
