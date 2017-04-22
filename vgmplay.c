@@ -104,7 +104,7 @@ int main(int argc, char ** argv)
 		opts |= YM_OPT_WAVE_LOG;
 	}
 	
-	char * lowpass_cutoff_str = tern_find_path(config, "audio\0lowpass_cutoff\0").ptrval;
+	char * lowpass_cutoff_str = tern_find_path(config, "audio\0lowpass_cutoff\0", TVAL_PTR).ptrval;
 	uint32_t lowpass_cutoff = lowpass_cutoff_str ? atoi(lowpass_cutoff_str) : 3390;
 
 	ym2612_context y_context;
