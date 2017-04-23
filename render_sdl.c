@@ -386,41 +386,51 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 	}
 
 #ifndef DISABLE_OPENGL
-	flags |= SDL_WINDOW_OPENGL;
-	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 5);
-	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 5);
-	SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 5);
-	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
-	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+	char *gl_enabled_str = tern_find_path_default(config, "video\0gl\0", def, TVAL_PTR).ptrval;
+	uint8_t gl_enabled = strcmp(gl_enabled_str, "off") != 0;
+	if (gl_enabled)
+	{
+		flags |= SDL_WINDOW_OPENGL;
+		SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 5);
+		SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 5);
+		SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 5);
+		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
+		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+	}
 #endif
 	main_window = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, flags);
 	if (!main_window) {
 		fatal_error("Unable to create SDL window: %s\n", SDL_GetError());
 	}
 #ifndef DISABLE_OPENGL
-	main_context = SDL_GL_CreateContext(main_window);
-	GLenum res = glewInit();
-	if (res != GLEW_OK) {
-		warning("Initialization of GLEW failed with code %d\n", res);
-	}
+	if (gl_enabled)
+	{
+		main_context = SDL_GL_CreateContext(main_window);
+		GLenum res = glewInit();
+		if (res != GLEW_OK) {
+			warning("Initialization of GLEW failed with code %d\n", res);
+		}
 
-	if (res == GLEW_OK && GLEW_VERSION_2_0) {
-		render_gl = 1;
-		if (!strcmp("tear", vsync)) {
-			if (SDL_GL_SetSwapInterval(-1) < 0) {
-				warning("late tear is not available (%s), using normal vsync\n", SDL_GetError());
-				vsync = "on";
-			} else {
-				vsync = NULL;
+		if (res == GLEW_OK && GLEW_VERSION_2_0) {
+			render_gl = 1;
+			if (!strcmp("tear", vsync)) {
+				if (SDL_GL_SetSwapInterval(-1) < 0) {
+					warning("late tear is not available (%s), using normal vsync\n", SDL_GetError());
+					vsync = "on";
+				} else {
+					vsync = NULL;
+				}
 			}
-		}
-		if (vsync) {
-			if (SDL_GL_SetSwapInterval(!strcmp("on", vsync)) < 0) {
-				warning("Failed to set vsync to %s: %s\n", vsync, SDL_GetError());
+			if (vsync) {
+				if (SDL_GL_SetSwapInterval(!strcmp("on", vsync)) < 0) {
+					warning("Failed to set vsync to %s: %s\n", vsync, SDL_GetError());
+				}
 			}
+		} else {
+			warning("OpenGL 2.0 is unavailable, falling back to SDL2 renderer\n");
 		}
-	} else {
-		warning("OpenGL 2.0 is unavailable, falling back to SDL2 renderer\n");
+	}
+	if (!render_gl) {
 #endif
 		flags = SDL_RENDERER_ACCELERATED;
 		if (!strcmp("on", vsync) || !strcmp("tear", vsync)) {
