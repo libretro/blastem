@@ -35,6 +35,7 @@ void check_user_mode_swap_ssp_usp(m68k_options *opts);
 void m68k_set_last_prefetch(m68k_options *opts, uint32_t address);
 void translate_m68k_odd(m68k_options *opts, m68kinst *inst);
 void m68k_trap_if_not_supervisor(m68k_options *opts, m68kinst *inst);
+void m68k_breakpoint_patch(m68k_context *context, uint32_t address, m68k_debug_handler bp_handler, code_ptr native_addr);
 
 //functions implemented in m68k_core.c
 int8_t native_reg(m68k_op_info * op, m68k_options * opts);
@@ -51,6 +52,7 @@ code_ptr get_native_address(m68k_options *opts, uint32_t address);
 uint8_t m68k_is_terminal(m68kinst * inst);
 code_ptr get_native_address_trans(m68k_context * context, uint32_t address);
 void * m68k_retranslate_inst(uint32_t address, m68k_context * context);
+m68k_context *m68k_bp_dispatcher(m68k_context *context, uint32_t address);
 
 //individual instructions
 void translate_m68k_bcc(m68k_options * opts, m68kinst * inst);

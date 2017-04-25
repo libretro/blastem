@@ -474,7 +474,7 @@ not_impl:
 	fatal_error("Command %s is not implemented, exiting...\n", command);
 }
 
-m68k_context *  gdb_debug_enter(m68k_context * context, uint32_t pc)
+void  gdb_debug_enter(m68k_context * context, uint32_t pc)
 {
 	dfprintf(stderr, "Entered debugger at address %X\n", pc);
 	if (expect_break_response) {
@@ -556,7 +556,6 @@ m68k_context *  gdb_debug_enter(m68k_context * context, uint32_t pc)
 			curbuf = NULL;
 		}
 	}
-	return context;
 }
 
 #ifdef _WIN32
