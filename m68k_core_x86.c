@@ -2484,51 +2484,27 @@ void m68k_invalidate_code_range(m68k_context *context, uint32_t start, uint32_t 
 	}
 }
 
-void insert_breakpoint(m68k_context * context, uint32_t address, m68k_debug_handler bp_handler)
+void m68k_breakpoint_patch(m68k_context *context, uint32_t address, m68k_debug_handler bp_handler, code_ptr native_addr)
 {
-	static code_ptr bp_stub = NULL;
 	m68k_options * opts = context->options;
 	code_info native;
-	native.cur = get_native_address_trans(context, address);
+	native.cur = native_addr ? native_addr : get_native_address(context->options, address);
+	
+	if (!native.cur) {
+		return;
+	}
+	
+	if (*native.cur != opts->prologue_start) {
+		//instruction has already been patched, probably for retranslation
+		return;
+	}
 	native.last = native.cur + 128;
 	native.stack_off = 0;
 	code_ptr start_native = native.cur;
 	mov_ir(&native, address, opts->gen.scratch1, SZ_D);
-	if (!bp_stub) {
-		code_info *code = &opts->gen.code;
-		check_code_prologue(code);
-		bp_stub = code->cur;
-		call(&native, bp_stub);
-
-		uint32_t tmp_stack_off = code->stack_off;
-		//Calculate length of prologue
-		check_cycles_int(&opts->gen, address);
-		int check_int_size = code->cur-bp_stub;
-		code->cur = bp_stub;
-		code->stack_off = tmp_stack_off;
-
-		//Save context and call breakpoint handler
-		call(code, opts->gen.save_context);
-		push_r(code, opts->gen.scratch1);
-		call_args_abi(code, (code_ptr)bp_handler, 2, opts->gen.context_reg, opts->gen.scratch1);
-		mov_rr(code, RAX, opts->gen.context_reg, SZ_PTR);
-		//Restore context
-		call(code, opts->gen.load_context);
-		pop_r(code, opts->gen.scratch1);
-		//do prologue stuff
-		cmp_rr(code, opts->gen.cycles, opts->gen.limit, SZ_D);
-		code_ptr jmp_off = code->cur + 1;
-		jcc(code, CC_NC, code->cur + 7);
-		call(code, opts->gen.handle_cycle_limit_int);
-		*jmp_off = code->cur - (jmp_off+1);
-		//jump back to body of translated instruction
-		pop_r(code, opts->gen.scratch1);
-		add_ir(code, check_int_size - (native.cur-start_native), opts->gen.scratch1, SZ_PTR);
-		jmp_r(code, opts->gen.scratch1);
-		code->stack_off = tmp_stack_off;
-	} else {
-		call(&native, bp_stub);
-	}
+	
+	
+	call(&native, opts->bp_stub);
 }
 
 void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chunks, uint32_t clock_divider)
@@ -3129,4 +3105,42 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	mov_rr(code, RAX, opts->gen.scratch1, SZ_PTR);
 	call(code, opts->gen.load_context);
 	jmp_r(code, opts->gen.scratch1);
+	
+	
+	check_code_prologue(code);
+	opts->bp_stub = code->cur;
+
+	tmp_stack_off = code->stack_off;
+	//Calculate length of prologue
+	check_cycles_int(&opts->gen, 0x1234);
+	int check_int_size = code->cur-opts->bp_stub;
+	code->cur = opts->bp_stub;
+	code->stack_off = tmp_stack_off;
+	opts->prologue_start = *opts->bp_stub;
+	//Calculate length of patch
+	mov_ir(code, 0x1234, opts->gen.scratch1, SZ_D);
+	call(code, opts->bp_stub);
+	int patch_size = code->cur - opts->bp_stub;
+	code->cur = opts->bp_stub;
+	code->stack_off = tmp_stack_off;
+
+	//Save context and call breakpoint handler
+	call(code, opts->gen.save_context);
+	push_r(code, opts->gen.scratch1);
+	call_args_abi(code, (code_ptr)m68k_bp_dispatcher, 2, opts->gen.context_reg, opts->gen.scratch1);
+	mov_rr(code, RAX, opts->gen.context_reg, SZ_PTR);
+	//Restore context
+	call(code, opts->gen.load_context);
+	pop_r(code, opts->gen.scratch1);
+	//do prologue stuff
+	cmp_rr(code, opts->gen.cycles, opts->gen.limit, SZ_D);
+	code_ptr jmp_off = code->cur + 1;
+	jcc(code, CC_NC, code->cur + 7);
+	call(code, opts->gen.handle_cycle_limit_int);
+	*jmp_off = code->cur - (jmp_off+1);
+	//jump back to body of translated instruction
+	pop_r(code, opts->gen.scratch1);
+	add_ir(code, check_int_size - patch_size, opts->gen.scratch1, SZ_PTR);
+	jmp_r(code, opts->gen.scratch1);
+	code->stack_off = tmp_stack_off;
 }

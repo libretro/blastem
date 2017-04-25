@@ -56,13 +56,23 @@ typedef struct {
 	code_ptr		get_sr;
 	code_ptr		set_sr;
 	code_ptr		set_ccr;
+	code_ptr        bp_stub;
 	code_info       extra_code;
 	movem_fun       *big_movem;
 	uint32_t        num_movem;
 	uint32_t        movem_storage;
+	code_word       prologue_start;
 } m68k_options;
 
-typedef struct m68k_context {
+typedef struct m68k_context m68k_context;
+typedef void (*m68k_debug_handler)(m68k_context *context, uint32_t pc);
+
+typedef struct {
+	m68k_debug_handler handler;
+	uint32_t           address;
+} m68k_breakpoint;
+
+struct m68k_context {
 	uint8_t         flags[5];
 	uint8_t         status;
 	uint16_t        int_ack;
@@ -79,14 +89,17 @@ typedef struct m68k_context {
 	code_ptr        reset_handler;
 	m68k_options    *options;
 	void            *system;
+	m68k_breakpoint *breakpoints;
+	uint32_t        num_breakpoints;
+	uint32_t        bp_storage;
 	uint8_t         int_pending;
 	uint8_t         trace_pending;
 	uint8_t         should_return;
 	uint8_t         ram_code_flags[];
-} m68k_context;
+};
 
 typedef m68k_context *(*m68k_reset_handler)(m68k_context *context);
-typedef m68k_context *(*m68k_debug_handler)(m68k_context *context, uint32_t pc);
+
 
 void translate_m68k_stream(uint32_t address, m68k_context * context);
 void start_68k_context(m68k_context * context, uint32_t address);
