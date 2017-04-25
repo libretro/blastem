@@ -780,6 +780,49 @@ uint16_t m68k_get_ir(m68k_context *context)
 	return 0xFFFF;
 }
 
+static m68k_debug_handler find_breakpoint(m68k_context *context, uint32_t address)
+{
+	for (uint32_t i = 0; i < context->num_breakpoints; i++)
+	{
+		if (context->breakpoints[i].address == address) {
+			return context->breakpoints[i].handler;
+		}
+	}
+	return NULL;
+}
+
+void insert_breakpoint(m68k_context * context, uint32_t address, m68k_debug_handler bp_handler)
+{
+	if (!find_breakpoint(context, address)) {
+		if (context->bp_storage == context->num_breakpoints) {
+			context->bp_storage *= 2;
+			if (context->bp_storage < 4) {
+				context->bp_storage = 4;
+			}
+			context->breakpoints = realloc(context->breakpoints, context->bp_storage * sizeof(m68k_breakpoint));
+		}
+		context->breakpoints[context->num_breakpoints++] = (m68k_breakpoint){
+			.handler = bp_handler,
+			.address = address
+		};
+		m68k_breakpoint_patch(context, address, bp_handler, NULL);
+	}
+}
+
+m68k_context *m68k_bp_dispatcher(m68k_context *context, uint32_t address)
+{
+	m68k_debug_handler handler = find_breakpoint(context, address);
+	if (handler) {
+		handler(context, address);
+	} else {
+		//spurious breakoint?
+		warning("Spurious breakpoing at %X\n", address);
+		remove_breakpoint(context, address);
+	}
+	
+	return context;
+}
+
 typedef enum {
 	RAW_FUNC = 1,
 	BINARY_ARITH,
@@ -895,13 +938,21 @@ static impl_info m68k_impls[] = {
 	RAW_IMPL(M68K_TAS, translate_m68k_tas),
 };
 
-static void translate_m68k(m68k_options * opts, m68kinst * inst)
+static void translate_m68k(m68k_context *context, m68kinst * inst)
 {
+	m68k_options * opts = context->options;
 	if (inst->address & 1) {
 		translate_m68k_odd(opts, inst);
 		return;
 	}
+	code_ptr start = opts->gen.code.cur;
 	check_cycles_int(&opts->gen, inst->address);
+	
+	m68k_debug_handler bp;
+	if ((bp = find_breakpoint(context, inst->address))) {
+		m68k_breakpoint_patch(context, inst->address, bp, start);
+	}
+	
 	//log_address(&opts->gen, inst->address, "M68K: %X @ %d\n");
 	if (
 		(inst->src.addr_mode > MODE_AREG && inst->src.addr_mode < MODE_IMMEDIATE) 
@@ -981,7 +1032,7 @@ void translate_m68k_stream(uint32_t address, m68k_context * context)
 			//make sure the beginning of the code for an instruction is contiguous
 			check_code_prologue(code);
 			code_ptr start = code->cur;
-			translate_m68k(opts, &instbuf);
+			translate_m68k(context, &instbuf);
 			code_ptr after = code->cur;
 			map_native_address(context, instbuf.address, start, m68k_size, after-start);
 		} while(!m68k_is_terminal(&instbuf) && !(address & 1));
@@ -1009,7 +1060,7 @@ void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
 		//make sure we have enough code space for the max size instruction
 		check_alloc_code(code, MAX_NATIVE_SIZE);
 		code_ptr native_start = code->cur;
-		translate_m68k(opts, &instbuf);
+		translate_m68k(context, &instbuf);
 		code_ptr native_end = code->cur;
 		/*uint8_t is_terminal = m68k_is_terminal(&instbuf);
 		if ((native_end - native_start) <= orig_size) {
@@ -1025,7 +1076,7 @@ void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
 				tmp.last = code->last;
 				code->cur = orig_code.cur;
 				code->last = orig_code.last;
-				translate_m68k(opts, &instbuf);
+				translate_m68k(context, &instbuf);
 				native_end = orig_code.cur = code->cur;
 				code->cur = tmp.cur;
 				code->last = tmp.last;
@@ -1056,7 +1107,7 @@ void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
 	} else {
 		code_info tmp = *code;
 		*code = orig_code;
-		translate_m68k(opts, &instbuf);
+		translate_m68k(context, &instbuf);
 		orig_code = *code;
 		*code = tmp;
 		if (!m68k_is_terminal(&instbuf)) {
@@ -1079,7 +1130,20 @@ code_ptr get_native_address_trans(m68k_context * context, uint32_t address)
 
 void remove_breakpoint(m68k_context * context, uint32_t address)
 {
+	for (uint32_t i = 0; i < context->num_breakpoints; i++)
+	{
+		if (context->breakpoints[i].address == address) {
+			if (i != (context->num_breakpoints-1)) {
+				context->breakpoints[i] = context->breakpoints[context->num_breakpoints-1];
+			}
+			context->num_breakpoints--;
+			break;
+		}
+	}
 	code_ptr native = get_native_address(context->options, address);
+	if (!native) {
+		return;
+	}
 	code_info tmp = context->options->gen.code;
 	context->options->gen.code.cur = native;
 	context->options->gen.code.last = native + MAX_NATIVE_SIZE;

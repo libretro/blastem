@@ -885,7 +885,7 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 }
 
 
-m68k_context * debugger(m68k_context * context, uint32_t address)
+void debugger(m68k_context * context, uint32_t address)
 {
 	static char last_cmd[1024];
 	char input_buf[1024];
@@ -938,7 +938,7 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 		if (debugging) {
 			printf("68K Breakpoint %d hit\n", (*this_bp)->index);
 		} else {
-			return context;
+			return;
 		}
 	} else {
 		remove_breakpoint(context, address);
@@ -986,5 +986,5 @@ m68k_context * debugger(m68k_context * context, uint32_t address)
 		}
 		debugging = run_debugger_command(context, input_buf, inst, after);
 	}
-	return context;
+	return;
 }
