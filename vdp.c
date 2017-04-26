@@ -460,13 +460,13 @@ void vdp_print_reg_explain(vdp_context * context)
 	char * hscroll[] = {"full", "7-line", "cell", "line"};
 	printf("**Mode Group**\n"
 	       "00: %.2X | H-ints %s, Pal Select %d, HVC latch %s, Display gen %s\n"
-	       "01: %.2X | Display %s, V-ints %s, Height: %d, Mode %d\n"
+	       "01: %.2X | Display %s, V-ints %s, Height: %d, Mode %d, %dK VRAM\n"
 	       "0B: %.2X | E-ints %s, V-Scroll: %s, H-Scroll: %s\n"
 	       "0C: %.2X | Width: %d, Shadow/Highlight: %s\n",
 	       context->regs[REG_MODE_1], context->regs[REG_MODE_1] & BIT_HINT_EN ? "enabled" : "disabled", (context->regs[REG_MODE_1] & BIT_PAL_SEL) != 0,
 	           context->regs[REG_MODE_1] & BIT_HVC_LATCH ? "enabled" : "disabled", context->regs[REG_MODE_1] & BIT_DISP_DIS ? "disabled" : "enabled",
 	       context->regs[REG_MODE_2], context->regs[REG_MODE_2] & BIT_DISP_EN ? "enabled" : "disabled", context->regs[REG_MODE_2] & BIT_VINT_EN ? "enabled" : "disabled",
-	           context->regs[REG_MODE_2] & BIT_PAL ? 30 : 28, context->regs[REG_MODE_2] & BIT_MODE_5 ? 5 : 4,
+	           context->regs[REG_MODE_2] & BIT_PAL ? 30 : 28, context->regs[REG_MODE_2] & BIT_MODE_5 ? 5 : 4, context->regs[REG_MODE_1] & BIT_128K_VRAM ? 128 : 64, 
 	       context->regs[REG_MODE_3], context->regs[REG_MODE_3] & BIT_EINT_EN ? "enabled" : "disabled", context->regs[REG_MODE_3] & BIT_VSCROLL ? "2 cell" : "full",
 	           hscroll[context->regs[REG_MODE_3] & 0x3],
 	       context->regs[REG_MODE_4], context->regs[REG_MODE_4] & BIT_H40 ? 40 : 32, context->regs[REG_MODE_4] & BIT_HILIGHT ? "enabled" : "disabled");
