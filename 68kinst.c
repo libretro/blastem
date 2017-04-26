@@ -1574,6 +1574,9 @@ uint32_t m68k_branch_target(m68kinst * inst, uint32_t *dregs, uint32_t *aregs)
 		case MODE_AREG_INDIRECT:
 			ret = aregs[inst->src.params.regs.pri];
 			break;
+		case MODE_AREG_DISPLACE:
+			ret = aregs[inst->src.params.regs.pri] + inst->src.params.regs.displacement;
+			break;
 		case MODE_AREG_INDEX_DISP8: {
 			uint8_t sec_reg = inst->src.params.regs.sec >> 1 & 0x7;
 			ret = aregs[inst->src.params.regs.pri];
