@@ -804,24 +804,22 @@ static void vdp_advance_dma(vdp_context * context)
 	}
 }
 
-void write_vram_word(vdp_context *context, uint32_t address, uint8_t value)
+static void vdp_check_update_sat(vdp_context *context, uint32_t address, uint16_t value)
 {
-	if (!(address & 4)) {
-		uint32_t sat_address = mode5_sat_address(context);
-		if(address >= sat_address && address < (sat_address + SAT_CACHE_SIZE*2)) {
-			uint16_t cache_address = address - sat_address;
-			cache_address = (cache_address & 3) | (cache_address >> 1 & 0x1FC);
-			context->sat_cache[cache_address] = value >> 8;
-			context->sat_cache[cache_address^1] = value;
+	if (context->regs[REG_MODE_2] & BIT_MODE_5) {
+		if (!(address & 4)) {
+			uint32_t sat_address = mode5_sat_address(context);
+			if(address >= sat_address && address < (sat_address + SAT_CACHE_SIZE*2)) {
+				uint16_t cache_address = address - sat_address;
+				cache_address = (cache_address & 3) | (cache_address >> 1 & 0x1FC);
+				context->sat_cache[cache_address] = value >> 8;
+				context->sat_cache[cache_address^1] = value;
+			}
 		}
 	}
-	address = (address & 0x3FC) | (address >> 1 & 0xFC01) | (address >> 9 & 0x2);
-	address ^= 1;
-	//TODO: Support an option to actually have 128KB of VRAM
-	context->vdpmem[address] = value;
 }
 
-void write_vram_byte(vdp_context *context, uint32_t address, uint8_t value)
+void vdp_check_update_sat_byte(vdp_context *context, uint32_t address, uint8_t value)
 {
 	if (context->regs[REG_MODE_2] & BIT_MODE_5) {
 		if (!(address & 4)) {
@@ -832,6 +830,20 @@ void write_vram_byte(vdp_context *context, uint32_t address, uint8_t value)
 				context->sat_cache[cache_address] = value;
 			}
 		}
+	}
+}
+
+static void write_vram_word(vdp_context *context, uint32_t address, uint16_t value)
+{
+	address = (address & 0x3FC) | (address >> 1 & 0xFC01) | (address >> 9 & 0x2);
+	address ^= 1;
+	//TODO: Support an option to actually have 128KB of VRAM
+	context->vdpmem[address] = value;
+}
+
+static void write_vram_byte(vdp_context *context, uint32_t address, uint8_t value)
+{
+	if (context->regs[REG_MODE_2] & BIT_MODE_5) {
 		address &= 0xFFFF;
 	} else {
 		address = mode4_address_map[address & 0x3FFF];
@@ -854,14 +866,19 @@ static void external_slot(vdp_context * context)
 		switch (start->cd & 0xF)
 		{
 		case VRAM_WRITE:
-			//TODO: Support actually having 128K VRAM as an option
 			if ((context->regs[REG_MODE_2] & (BIT_128K_VRAM|BIT_MODE_5)) == (BIT_128K_VRAM|BIT_MODE_5)) {
+				vdp_check_update_sat(context, start->address, start->value);
 				write_vram_word(context, start->address, start->value);
 			} else if (start->partial) {
 				//printf("VRAM Write: %X to %X at %d (line %d, slot %d)\n", start->value, start->address ^ 1, context->cycles, context->cycles/MCLKS_LINE, (context->cycles%MCLKS_LINE)/16);
-				write_vram_byte(context, start->address ^ 1, start->partial == 2 ? start->value >> 8 : start->value);
+				uint8_t byte = start->partial == 2 ? start->value >> 8 : start->value;
+				if (start->partial > 1) {
+					vdp_check_update_sat_byte(context, start->address ^ 1, byte);
+				}
+				write_vram_byte(context, start->address ^ 1, byte);
 			} else {
 				//printf("VRAM Write High: %X to %X at %d (line %d, slot %d)\n", start->value >> 8, start->address, context->cycles, context->cycles/MCLKS_LINE, (context->cycles%MCLKS_LINE)/16);
+				vdp_check_update_sat(context, start->address, start->value);
 				write_vram_byte(context, start->address, start->value >> 8);
 				start->partial = 1;
 				//skip auto-increment and removal of entry from fifo
@@ -870,7 +887,7 @@ static void external_slot(vdp_context * context)
 			break;
 		case CRAM_WRITE: {
 			//printf("CRAM Write | %X to %X\n", start->value, (start->address/2) & (CRAM_SIZE-1));
-			if (start->partial == 1) {
+			if (start->partial == 3) {
 				uint16_t val;
 				if ((start->address & 1) && (context->regs[REG_MODE_2] & BIT_MODE_5)) {
 					val = (context->cram[start->address >> 1 & (CRAM_SIZE-1)] & 0xFF) | start->value << 8;
@@ -887,7 +904,7 @@ static void external_slot(vdp_context * context)
 		case VSRAM_WRITE:
 			if (((start->address/2) & 63) < VSRAM_SIZE) {
 				//printf("VSRAM Write: %X to %X @ vcounter: %d, hslot: %d, cycle: %d\n", start->value, context->address, context->vcounter, context->hslot, context->cycles);
-				if (start->partial == 1) {
+				if (start->partial == 3) {
 					if (start->address & 1) {
 						context->vsram[(start->address/2) & 63] &= 0xFF;
 						context->vsram[(start->address/2) & 63] |= start->value << 8;
@@ -2744,7 +2761,7 @@ void vdp_data_port_write_pbc(vdp_context * context, uint8_t value)
 	} else {
 		cur->cd = (context->cd & 2) | 1;
 	}
-	cur->partial = 1;
+	cur->partial = 3;
 	if (context->fifo_read < 0) {
 		context->fifo_read = context->fifo_write;
 	}
