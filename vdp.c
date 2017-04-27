@@ -1128,7 +1128,7 @@ static void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, 
 		break;
 	case 0x2:
 		//TODO: Verify this behavior
-		hscroll_mask = 0x5F;
+		hscroll_mask = 0x1F;
 		v_mul = 0;
 		break;
 	case 0x3:
