@@ -1045,7 +1045,11 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 		}
 		for (int i = 0; i < VRAM_SIZE; i++)
 		{
-			write_vram_byte(gen->vdp, i, rand());
+			gen->vdp->vdpmem[i] = rand();
+		}
+		for (int i = 0; i < SAT_CACHE_SIZE; i++)
+		{
+			gen->vdp->sat_cache[i] = rand();
 		}
 		for (int i = 0; i < CRAM_SIZE; i++)
 		{
