@@ -251,7 +251,8 @@ uint8_t vdp_load_gst(vdp_context * context, FILE * state_file)
 		return 0;
 	}
 	for (int i = 0; i < VRAM_SIZE; i++) {
-		write_vram_byte(context, i, tmp_buf[i]);
+		context->vdpmem[i] = tmp_buf[i];
+		vdp_check_update_sat_byte(context, i, tmp_buf[i]);
 	}
 	return 1;
 }
