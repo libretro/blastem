@@ -794,20 +794,32 @@ uint8_t m68k_eval_cond(m68k_options * opts, uint8_t cc)
 void translate_m68k_bcc(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
-	cycles(&opts->gen, 10);//TODO: Adjust this for branch not taken case
+	
 	int32_t disp = inst->src.params.immed;
 	uint32_t after = inst->address + 2;
 	if (inst->extra.cond == COND_TRUE) {
+		cycles(&opts->gen, 10);
 		jump_m68k_abs(opts, after + disp);
 	} else {
-		code_ptr dest_addr = get_native_address(opts, after + disp);
 		uint8_t cond = m68k_eval_cond(opts, inst->extra.cond);
+		code_ptr do_branch = code->cur + 1;
+		jcc(code, cond, do_branch);
+		
+		cycles(&opts->gen, inst->variant == VAR_BYTE ? 8 : 12);
+		code_ptr done = code->cur + 1;
+		jmp(code, done);
+		
+		*do_branch = code->cur - (do_branch + 1);
+		cycles(&opts->gen, 10);
+		code_ptr dest_addr = get_native_address(opts, after + disp);
 		if (!dest_addr) {
-			opts->gen.deferred = defer_address(opts->gen.deferred, after + disp, code->cur + 2);
+			opts->gen.deferred = defer_address(opts->gen.deferred, after + disp, code->cur + 1);
 			//dummy address to be replaced later, make sure it generates a 4-byte displacement
 			dest_addr = code->cur + 256;
 		}
-		jcc(code, cond, dest_addr);
+		jmp(code, dest_addr);
+		
+		*done = code->cur - (done + 1);
 	}
 }
 
