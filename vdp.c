@@ -98,6 +98,13 @@ static void update_video_params(vdp_context *context)
 				context->border_bot = BORDER_TOP_V28;
 			}
 		}
+		if (context->regs[REG_MODE_4] & BIT_H40) {
+			context->max_sprites_frame = MAX_SPRITES_FRAME;
+			context->max_sprites_line = MAX_SPRITES_LINE;
+		} else {
+			context->max_sprites_frame = MAX_SPRITES_FRAME_H32;
+			context->max_sprites_line = MAX_SPRITES_LINE_H32;
+		}
 		if (context->state == INACTIVE) {
 			//Undo forced INACTIVE state due to neither Mode 4 nor Mode 5 being active
 			if (context->vcounter < context->inactive_start) {
@@ -544,7 +551,7 @@ static uint8_t is_active(vdp_context *context)
 
 static void scan_sprite_table(uint32_t line, vdp_context * context)
 {
-	if (context->sprite_index && context->slot_counter) {
+	if (context->sprite_index && ((uint8_t)context->slot_counter) < context->max_sprites_line) {
 		line += 1;
 		line &= 0xFF;
 		uint16_t ymask, ymin;
@@ -563,12 +570,8 @@ static void scan_sprite_table(uint32_t line, vdp_context * context)
 			height_mult = 8;
 		}
 		context->sprite_index &= 0x7F;
-		if (context->regs[REG_MODE_4] & BIT_H40) {
-			if (context->sprite_index >= MAX_SPRITES_FRAME) {
-				context->sprite_index = 0;
-				return;
-			}
-		} else if(context->sprite_index >= MAX_SPRITES_FRAME_H32) {
+		//TODO: Implement squirelly behavior documented by Kabuto
+		if (context->sprite_index >= context->max_sprites_frame) {
 			context->sprite_index = 0;
 			return;
 		}
@@ -579,19 +582,15 @@ static void scan_sprite_table(uint32_t line, vdp_context * context)
 		//printf("Sprite %d | y: %d, height: %d\n", context->sprite_index, y, height);
 		if (y <= line && line < (y + height)) {
 			//printf("Sprite %d at y: %d with height %d is on line %d\n", context->sprite_index, y, height, line);
-			context->sprite_info_list[--(context->slot_counter)].size = context->sat_cache[address+2];
+			context->sprite_info_list[context->slot_counter].size = context->sat_cache[address+2];
 			context->sprite_info_list[context->slot_counter].index = context->sprite_index;
-			context->sprite_info_list[context->slot_counter].y = y-ymin;
+			context->sprite_info_list[context->slot_counter++].y = y-ymin;
 		}
 		context->sprite_index = context->sat_cache[address+3] & 0x7F;
-		if (context->sprite_index && context->slot_counter)
+		if (context->sprite_index && ((uint8_t)context->slot_counter) < context->max_sprites_line)
 		{
-			if (context->regs[REG_MODE_4] & BIT_H40) {
-				if (context->sprite_index >= MAX_SPRITES_FRAME) {
-					context->sprite_index = 0;
-					return;
-				}
-			} else if(context->sprite_index >= MAX_SPRITES_FRAME_H32) {
+			//TODO: Implement squirelly behavior documented by Kabuto
+			if (context->sprite_index >= context->max_sprites_frame) {
 				context->sprite_index = 0;
 				return;
 			}
@@ -601,13 +600,14 @@ static void scan_sprite_table(uint32_t line, vdp_context * context)
 			//printf("Sprite %d | y: %d, height: %d\n", context->sprite_index, y, height);
 			if (y <= line && line < (y + height)) {
 				//printf("Sprite %d at y: %d with height %d is on line %d\n", context->sprite_index, y, height, line);
-				context->sprite_info_list[--(context->slot_counter)].size = context->sat_cache[address+2];
+				context->sprite_info_list[context->slot_counter].size = context->sat_cache[address+2];
 				context->sprite_info_list[context->slot_counter].index = context->sprite_index;
-				context->sprite_info_list[context->slot_counter].y = y-ymin;
+				context->sprite_info_list[context->slot_counter++].y = y-ymin;
 			}
 			context->sprite_index = context->sat_cache[address+3] & 0x7F;
 		}
 	}
+	//TODO: Seems like the overflow flag should be set here if we run out of sprite info slots without hitting the end of the list
 }
 
 static void scan_sprite_table_mode4(vdp_context * context)
@@ -632,7 +632,6 @@ static void scan_sprite_table_mode4(vdp_context * context)
 				}
 				context->sprite_info_list[--(context->slot_counter)].size = size;
 				context->sprite_info_list[context->slot_counter].index = context->sprite_index;
-				context->sprite_info_list[context->slot_counter].y = y;
 			}
 			context->sprite_index++;
 		}
@@ -651,7 +650,6 @@ static void scan_sprite_table_mode4(vdp_context * context)
 					}
 					context->sprite_info_list[--(context->slot_counter)].size = size;
 					context->sprite_info_list[context->slot_counter].index = context->sprite_index;
-					context->sprite_info_list[context->slot_counter].y = y;
 				}
 				context->sprite_index++;
 			}
@@ -662,7 +660,10 @@ static void scan_sprite_table_mode4(vdp_context * context)
 
 static void read_sprite_x(uint32_t line, vdp_context * context)
 {
-	if (context->cur_slot >= context->slot_counter) {
+	if (context->cur_slot == context->max_sprites_line) {
+		context->cur_slot = 0;
+	}
+	if (context->cur_slot < context->slot_counter) {
 		if (context->sprite_draws) {
 			line += 1;
 			line &= 0xFF;
@@ -677,15 +678,26 @@ static void read_sprite_x(uint32_t line, vdp_context * context)
 				}
 				height *= 2;
 			}
+			uint16_t ymask, ymin;
+			if (context->double_res) {
+				ymask = 0x3FF;
+				ymin = 256;
+			} else {
+				ymask = 0x1FF;
+				ymin = 128;
+			}
 			uint16_t att_addr = mode5_sat_address(context) + context->sprite_info_list[context->cur_slot].index * 8 + 4;
 			uint16_t tileinfo = (context->vdpmem[att_addr] << 8) | context->vdpmem[att_addr+1];
 			uint8_t pal_priority = (tileinfo >> 9) & 0x70;
 			uint8_t row;
+			uint16_t cache_addr = context->sprite_info_list[context->cur_slot].index * 4;
+			int16_t y = ((context->sat_cache[cache_addr] << 8 | context->sat_cache[cache_addr+1]) & ymask) - ymin;
 			if (tileinfo & MAP_BIT_V_FLIP) {
-				row = (context->sprite_info_list[context->cur_slot].y + height - 1) - line;
+				row = (y + height - 1) - line;
 			} else {
-				row = line-context->sprite_info_list[context->cur_slot].y;
+				row = line-y;
 			}
+			row &= ymask >> 4;
 			uint16_t address;
 			if (context->double_res) {
 				address = ((tileinfo & 0x3FF) << 6) + row * 4;
@@ -730,11 +742,11 @@ static void read_sprite_x(uint32_t line, vdp_context * context)
 			if (!context->sprite_draws) {
 				context->flags |= FLAG_DOT_OFLOW;
 			}
-			context->cur_slot--;
 		} else {
 			context->flags |= FLAG_DOT_OFLOW;
 		}
 	}
+	context->cur_slot++;
 }
 
 static void read_sprite_x_mode4(vdp_context * context)
@@ -1899,7 +1911,7 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 			}
 		}
 		context->sprite_index = 0x80;
-		context->slot_counter = MAX_SPRITES_LINE;
+		context->slot_counter = 0;
 		render_sprite_cells( context);
 		scan_sprite_table(context->vcounter, context);
 		CHECK_LIMIT
@@ -1981,10 +1993,11 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	case 0:
 		render_map_output(context->vcounter, 0, context);
 		scan_sprite_table(context->vcounter, context);//Just a guess
-		//reverse context slot counter so it counts the number of sprite slots
-		//filled rather than the number of available slots
-		//context->slot_counter = MAX_SPRITES_LINE - context->slot_counter;
-		context->cur_slot = MAX_SPRITES_LINE-1;
+		//seems like the sprite table scan fills a shift register
+		//values are FIFO, but unused slots precede used slots
+		//so we set cur_slot to slot_counter and let it wrap around to
+		//the beginning of the list
+		context->cur_slot = context->slot_counter;
 		context->sprite_draws = MAX_DRAWS;
 		context->flags &= (~FLAG_CAN_MASK & ~FLAG_MASKED);
 		CHECK_LIMIT
@@ -2106,7 +2119,7 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 			}
 		}
 		context->sprite_index = 0x80;
-		context->slot_counter = MAX_SPRITES_LINE_H32;
+		context->slot_counter = 0;
 		render_sprite_cells( context);
 		scan_sprite_table(context->vcounter, context);
 		CHECK_LIMIT
@@ -2186,7 +2199,7 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 		//reverse context slot counter so it counts the number of sprite slots
 		//filled rather than the number of available slots
 		//context->slot_counter = MAX_SPRITES_LINE - context->slot_counter;
-		context->cur_slot = MAX_SPRITES_LINE_H32-1;
+		context->cur_slot = context->slot_counter;
 		context->sprite_draws = MAX_DRAWS_H32;
 		context->flags &= (~FLAG_CAN_MASK & ~FLAG_MASKED);
 		CHECK_LIMIT
@@ -2376,8 +2389,8 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 	
 	if (mode_5) {
 		if (is_h40) {
-			buf_clear_slot = 161;
-			index_reset_slot = 165;
+			buf_clear_slot = 163;
+			index_reset_slot = 167;
 			bg_end_slot = BG_START_SLOT + LINEBUF_SIZE/2;
 			max_draws = MAX_DRAWS-1;
 			max_sprites = MAX_SPRITES_LINE;
@@ -2450,7 +2463,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 			memset(context->linebuf, 0, LINEBUF_SIZE);
 		} else if (context->hslot == index_reset_slot) {
 			context->sprite_index = index_reset_value;
-			context->slot_counter = max_sprites;
+			context->slot_counter = mode_5 ? 0 : max_sprites;
 		} else if (context->vcounter == vint_line && context->hslot == vint_slot) {
 			context->flags2 |= FLAG2_VINT_PENDING;
 			context->pending_vint_start = context->cycles;
@@ -2662,7 +2675,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 						context->flags2 &= ~FLAG2_EVEN_FIELD;
 					}
 				}
-				if (reg == REG_MODE_2) {
+				if (reg == REG_MODE_1 || reg == REG_MODE_2 || reg == REG_MODE_4) {
 					update_video_params(context);
 				}
 			}
