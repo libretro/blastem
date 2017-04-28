@@ -179,11 +179,6 @@ typedef struct {
 	uint16_t    hscroll_b;
 	uint16_t    h40_lines;
 	uint16_t    output_lines;
-	uint8_t     hslot; //hcounter/2
-	uint8_t	    sprite_index;
-	uint8_t     sprite_draws;
-	int8_t      slot_counter;
-	int8_t      cur_slot;
 	sprite_draw sprite_draw_list[MAX_DRAWS];
 	sprite_info sprite_info_list[MAX_SPRITES_LINE];
 	uint8_t     sat_cache[SAT_CACHE_SIZE];
@@ -192,6 +187,13 @@ typedef struct {
 	uint16_t    hv_latch;
 	uint16_t    prefetch;
 	uint16_t    test_port;
+	uint8_t     hslot; //hcounter/2
+	uint8_t	    sprite_index;
+	uint8_t     sprite_draws;
+	int8_t      slot_counter;
+	int8_t      cur_slot;
+	uint8_t     max_sprites_frame;
+	uint8_t     max_sprites_line;
 	uint8_t     fetch_tmp[2];
 	uint8_t     v_offset;
 	uint8_t     dma_cd;
