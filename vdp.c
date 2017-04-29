@@ -316,6 +316,8 @@ static void render_sprite_cells(vdp_context * context)
 			}
 			x += dir;
 		}
+	} else {
+		context->cur_slot--;
 	}
 }
 
@@ -717,6 +719,7 @@ static void read_sprite_x(uint32_t line, vdp_context * context)
 				for (i=0; i < width && context->sprite_draws; i++) {
 					--context->sprite_draws;
 					context->sprite_draw_list[context->sprite_draws].x_pos = -128;
+					context->sprite_draw_list[context->sprite_draws].address = address + i * height * 4;
 				}
 			} else {
 				x -= 128;
@@ -1265,12 +1268,11 @@ static void fetch_map_mode4(uint16_t col, uint32_t line, vdp_context *context)
 static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 {
 	uint32_t *dst;
+	uint8_t output_disabled = (context->test_port & TEST_BIT_DISABLE) != 0;
+	uint8_t test_layer = context->test_port >> 7 & 3;
 	if (context->state == PREPARING) {
-		if (!col) {
-			return;
-		}
-		col -= 2;
 		if (col) {
+			col -= 2;
 			dst = context->output + BORDER_LEFT + col * 8;
 		} else {
 			dst = context->output;
@@ -1279,6 +1281,7 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 			{
 				*dst = bg_color;
 			}
+			return;
 		}
 		uint32_t color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
 		for (int i = 0; i < 16; i++)
@@ -1294,16 +1297,7 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 	if (col)
 	{
 		col-=2;
-		if (col) {
-			dst = context->output + BORDER_LEFT + col * 8;
-		} else {
-			dst = context->output;
-			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
-			for (int i = 0; i < BORDER_LEFT; i++, dst++)
-			{
-				*dst = bg_color;
-			}
-		}
+		dst = context->output + BORDER_LEFT + col * 8;
 		if (context->debug < 2) {
 			sprite_buf = context->linebuf + col * 8;
 			uint8_t a_src, src;
@@ -1316,8 +1310,6 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 			}
 			plane_b_off = context->buf_b_off - (context->hscroll_b & 0xF);
 			//printf("A | tmp_buf offset: %d\n", 8 - (context->hscroll_a & 0x7));
-			uint8_t output_disabled = (context->test_port & TEST_BIT_DISABLE) != 0;
-			uint8_t test_layer = context->test_port >> 7 & 3;
 
 			if (context->regs[REG_MODE_4] & BIT_HILIGHT) {
 				for (int i = 0; i < 16; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i) {
@@ -1488,6 +1480,63 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 				*(dst++) = context->colors[(context->debug_pal << 4) | (context->vdpmem[address] >> 4)];
 				*(dst++) = context->colors[(context->debug_pal << 4) | (context->vdpmem[address] & 0xF)];
 				address++;
+			}
+		}
+	} else {
+		dst = context->output;
+		uint8_t pixel = context->regs[REG_BG_COLOR] & 0x3F;
+		if (output_disabled) {
+			pixel = 0x3F;
+		}
+		uint32_t bg_color = context->colors[pixel];
+		if (test_layer) {
+			switch(test_layer)
+			{
+			case 1:
+				//TODO: Display garbage from bus?
+				for (int i = 0; i < BORDER_LEFT; i++, dst++)
+				{
+					*dst = bg_color;
+				}
+				break;
+			case 2: {
+				//plane A
+				//TODO: Deal with Window layer
+				int i;
+				/*for (i = 0; i < (context->hscroll_a & 0xF) - (16 - BORDER_LEFT); i++, dst++)
+				{
+					*dst = bg_color;
+				}*/
+				i = 0;
+				uint8_t buf_off = context->buf_a_off - (context->hscroll_a & 0xF) + (16 - BORDER_LEFT);
+				//uint8_t *src = context->tmp_buf_a + ((context->buf_a_off + (i ? 0 : (16 - BORDER_LEFT) - (context->hscroll_a & 0xF))) & SCROLL_BUFFER_MASK); 
+				for (; i < BORDER_LEFT; buf_off++, i++, dst++)
+				{
+					*dst = context->colors[context->tmp_buf_a[buf_off & SCROLL_BUFFER_MASK]];
+				}
+				break;
+			}
+			case 3: {
+				//plane B
+				int i;
+				/*for (i = 0; i < (context->hscroll_b & 0xF) - (16 - BORDER_LEFT); i++, dst++)
+				{
+					*dst = bg_color;
+				}*/
+				i = 0;
+				uint8_t buf_off = context->buf_b_off - (context->hscroll_b & 0xF) + (16 - BORDER_LEFT);
+				//uint8_t *src = context->tmp_buf_b + ((context->buf_b_off + (i ? 0 : (16 - BORDER_LEFT) - (context->hscroll_b & 0xF))) & SCROLL_BUFFER_MASK); 
+				for (; i < BORDER_LEFT; buf_off++, i++, dst++)
+				{
+					*dst = context->colors[context->tmp_buf_b[buf_off & SCROLL_BUFFER_MASK]];
+				}
+				break;
+			}
+			}
+		} else {
+			for (int i = 0; i < BORDER_LEFT; i++, dst++)
+			{
+				*dst = bg_color;
 			}
 		}
 	}
@@ -1697,6 +1746,80 @@ static void advance_output_line(vdp_context *context)
 	}
 }
 
+static void render_border_garbage(vdp_context *context, uint32_t address, uint8_t *buf, uint8_t buf_off, uint16_t col)
+{
+	uint8_t base = col >> 9 & 0x30;
+	for (int i = 0; i < 4; i++, address++)
+	{
+		uint8_t byte = context->vdpmem[address & 0xFFFF];
+		buf[(buf_off++) & SCROLL_BUFFER_MASK] = base | byte >> 4;
+		buf[(buf_off++) & SCROLL_BUFFER_MASK] = base | byte & 0xF;
+	}
+}
+
+static void draw_right_border(vdp_context *context)
+{
+	uint32_t *dst = context->output + BORDER_LEFT + ((context->regs[REG_MODE_4] & BIT_H40) ? 320 : 256);
+	uint8_t pixel = context->regs[REG_BG_COLOR] & 0x3F;
+	if ((context->test_port & TEST_BIT_DISABLE) != 0) {
+		pixel = 0x3F;
+	}
+	uint32_t bg_color = context->colors[pixel];
+	uint8_t test_layer = context->test_port >> 7 & 3;
+	if (test_layer) {
+		switch(test_layer)
+			{
+			case 1:
+				//TODO: Display garbage from bus?
+				for (int i = 0; i < BORDER_RIGHT; i++, dst++)
+				{
+					*dst = bg_color;
+				}
+				break;
+			case 2: {
+				//plane A
+				//TODO: Deal with Window layer
+				int i;
+				/*for (i = 0; i < (context->hscroll_a & 0xF) - (16 - BORDER_LEFT); i++, dst++)
+				{
+					*dst = bg_color;
+				}*/
+				i = 0;
+				uint8_t buf_off = context->buf_a_off - (context->hscroll_a & 0xF);
+				//uint8_t *src = context->tmp_buf_a + ((context->buf_a_off + (i ? 0 : (16 - BORDER_LEFT) - (context->hscroll_a & 0xF))) & SCROLL_BUFFER_MASK); 
+				for (; i < BORDER_RIGHT; buf_off++, i++, dst++)
+				{
+					*dst = context->colors[context->tmp_buf_a[buf_off & SCROLL_BUFFER_MASK] & 0x3F];
+				}
+				break;
+			}
+			case 3: {
+				//plane B
+				int i;
+				/*for (i = 0; i < (context->hscroll_b & 0xF) - (16 - BORDER_LEFT); i++, dst++)
+				{
+					*dst = bg_color;
+				}*/
+				i = 0;
+				uint8_t buf_off = context->buf_b_off - (context->hscroll_b & 0xF);
+				//uint8_t *src = context->tmp_buf_b + ((context->buf_b_off + (i ? 0 : (16 - BORDER_LEFT) - (context->hscroll_b & 0xF))) & SCROLL_BUFFER_MASK); 
+				for (; i < BORDER_RIGHT; buf_off++, i++, dst++)
+				{
+					*dst = context->colors[context->tmp_buf_b[buf_off & SCROLL_BUFFER_MASK] & 0x3F];
+				}
+				break;
+			}
+			}
+	} else {
+		for (int i = 0; i < BORDER_RIGHT; i++, dst++)
+		{
+			*dst = bg_color;
+		}
+	}
+	context->buf_a_off = (context->buf_a_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
+	context->buf_b_off = (context->buf_b_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
+}
+
 #define CHECK_ONLY if (context->cycles >= target_cycles) { return; }
 #define CHECK_LIMIT if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); } context->hslot++; context->cycles += slot_cycles; CHECK_ONLY
 
@@ -1790,6 +1913,29 @@ static void advance_output_line(vdp_context *context)
 	case slot:\
 		if ((slot) == BG_START_SLOT + LINEBUF_SIZE/2) {\
 			advance_output_line(context);\
+		}\
+		if (slot == 168 || slot == 247 || slot == 248) {\
+			render_border_garbage(\
+				context,\
+				context->sprite_draw_list[context->cur_slot].address,\
+				context->tmp_buf_b,\
+				context->buf_b_off + (slot == 247 ? 0 : 8),\
+				slot == 247 ? context->col_1 : context->col_2\
+			);\
+			if (slot == 248) {\
+				context->buf_a_off = (context->buf_a_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;\
+				context->buf_b_off = (context->buf_b_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;\
+			}\
+		} else if (slot == 243) {\
+			render_border_garbage(\
+				context,\
+				context->sprite_draw_list[context->cur_slot].address,\
+				context->tmp_buf_a,\
+				context->buf_a_off,\
+				context->col_1\
+			);\
+		} else if (slot == 169) {\
+			draw_right_border(context);\
 		}\
 		render_sprite_cells( context);\
 		scan_sprite_table(context->vcounter, context);\
@@ -1912,6 +2058,12 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		}
 		context->sprite_index = 0x80;
 		context->slot_counter = 0;
+		render_border_garbage(
+			context,
+			context->sprite_draw_list[context->cur_slot].address,
+			context->tmp_buf_b, context->buf_b_off,
+			context->col_1
+		);
 		render_sprite_cells( context);
 		scan_sprite_table(context->vcounter, context);
 		CHECK_LIMIT
@@ -1947,7 +2099,7 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	SPRITE_RENDER_H40(240)
 	SPRITE_RENDER_H40(241)
 	SPRITE_RENDER_H40(242)
-	SPRITE_RENDER_H40(243)
+	SPRITE_RENDER_H40(243) //provides "garbage" for border when plane A selected
 	case 244:
 		address = (context->regs[REG_HSCROLL] & 0x3F) << 10;
 		mask = 0;
@@ -1957,6 +2109,7 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		if (context->regs[REG_MODE_3] & 0x1) {
 			mask |= 0x7;
 		}
+		render_border_garbage(context, address, context->tmp_buf_a, context->buf_a_off+8, context->col_2);
 		address += (context->vcounter & mask) * 4;
 		context->hscroll_a = context->vdpmem[address] << 8 | context->vdpmem[address+1];
 		context->hscroll_b = context->vdpmem[address+2] << 8 | context->vdpmem[address+3];
@@ -1964,12 +2117,12 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); }
 		context->hslot++;
 		context->cycles += h40_hsync_cycles[14];
-		CHECK_ONLY
+		CHECK_ONLY //provides "garbage" for border when plane A selected
 	//!HSYNC high
 	SPRITE_RENDER_H40(245)
 	SPRITE_RENDER_H40(246)
-	SPRITE_RENDER_H40(247)
-	SPRITE_RENDER_H40(248)
+	SPRITE_RENDER_H40(247) //provides "garbage" for border when plane B selected
+	SPRITE_RENDER_H40(248) //provides "garbage" for border when plane B selected
 	case 249:
 		read_map_scroll_a(0, context->vcounter, context);
 		CHECK_LIMIT
@@ -2037,9 +2190,21 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	case 163:
 		context->cur_slot = MAX_DRAWS-1;
 		memset(context->linebuf, 0, LINEBUF_SIZE);
+		render_border_garbage(
+			context,
+			context->sprite_draw_list[context->cur_slot].address,
+			context->tmp_buf_a, context->buf_a_off,
+			context->col_1
+		);
 		render_sprite_cells(context);
 		CHECK_LIMIT
 	case 164:
+		render_border_garbage(
+			context,
+			context->sprite_draw_list[context->cur_slot].address,
+			context->tmp_buf_a, context->buf_a_off + 8,
+			context->col_2
+		);
 		render_sprite_cells(context);
 		if (context->flags & FLAG_DMA_RUN) {
 			run_dma_src(context, -1);
