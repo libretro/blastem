@@ -564,9 +564,8 @@ void render_framebuffer_updated(uint8_t which, int width)
 	uint32_t height = which <= FRAMEBUFFER_EVEN 
 		? (video_standard == VID_NTSC ? 243 : 294) - (overscan_top[video_standard] + overscan_bot[video_standard])
 		: 240;
-	width -= overscan_left[video_standard] + overscan_right[video_standard];
 	FILE *screenshot_file = NULL;
-	uint32_t shot_height;
+	uint32_t shot_height, shot_width;
 	if (screenshot_path && which == FRAMEBUFFER_ODD) {
 		screenshot_file = fopen(screenshot_path, "wb");
 		if (screenshot_file) {
@@ -577,7 +576,9 @@ void render_framebuffer_updated(uint8_t which, int width)
 		free(screenshot_path);
 		screenshot_path = NULL;
 		shot_height = video_standard == VID_NTSC ? 243 : 294;
+		shot_width = width;
 	}
+	width -= overscan_left[video_standard] + overscan_right[video_standard];
 #ifndef DISABLE_OPENGL
 	if (render_gl && which <= FRAMEBUFFER_EVEN) {
 		glBindTexture(GL_TEXTURE_2D, textures[which]);
@@ -611,7 +612,7 @@ void render_framebuffer_updated(uint8_t which, int width)
 		
 		if (screenshot_file) {
 			//properly supporting interlaced modes here is non-trivial, so only save the odd field for now
-			save_ppm(screenshot_file, texture_buf, width, shot_height, LINEBUF_SIZE*sizeof(uint32_t));
+			save_ppm(screenshot_file, texture_buf, shot_width, shot_height, LINEBUF_SIZE*sizeof(uint32_t));
 		}
 	} else {
 #endif
@@ -638,7 +639,7 @@ void render_framebuffer_updated(uint8_t which, int width)
 			} else {
 				shot_pitch *= 2;
 			}
-			save_ppm(screenshot_file, locked_pixels, width, shot_height, shot_pitch);
+			save_ppm(screenshot_file, locked_pixels, shot_width, shot_height, shot_pitch);
 		}
 		SDL_UnlockTexture(sdl_textures[which]);
 		SDL_Rect src_clip = {
