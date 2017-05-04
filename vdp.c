@@ -284,8 +284,9 @@ static void increment_address(vdp_context *context)
 
 static void render_sprite_cells(vdp_context * context)
 {
+	sprite_draw * d = context->sprite_draw_list + context->cur_slot;
+	context->serial_address = d->address;
 	if (context->cur_slot >= context->sprite_draws) {
-		sprite_draw * d = context->sprite_draw_list + context->cur_slot;
 
 		uint16_t dir;
 		int16_t x;
@@ -1270,7 +1271,7 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 	uint32_t *dst;
 	uint8_t output_disabled = (context->test_port & TEST_BIT_DISABLE) != 0;
 	uint8_t test_layer = context->test_port >> 7 & 3;
-	if (context->state == PREPARING) {
+	if (context->state == PREPARING && !test_layer) {
 		if (col) {
 			col -= 2;
 			dst = context->output + BORDER_LEFT + col * 8;
@@ -2039,6 +2040,11 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		} else {
 			render_sprite_cells(context);
 		}
+		if (context->vcounter == context->inactive_start) {
+			context->hslot++;
+			context->cycles += slot_cycles;
+			return;
+		}
 		CHECK_LIMIT
 	//sprite attribute table scan starts
 	case 167:
@@ -2177,15 +2183,9 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	case 161:
 		external_slot(context);
 		CHECK_LIMIT
-	case 162: {
+	case 162:
 		external_slot(context);
-		uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
-		for (int i = LINEBUF_SIZE-BORDER_RIGHT; i < LINEBUF_SIZE; i++)
-		{
-			context->output[i] = bg_color;
-		}
 		CHECK_LIMIT
-	}
 	//sprite render to line buffer starts
 	case 163:
 		context->cur_slot = MAX_DRAWS-1;
@@ -2212,9 +2212,6 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		context->hslot++;
 		context->cycles += slot_cycles;
 		vdp_advance_line(context);
-		if (context->vcounter == context->inactive_start) {
-			return;
-		}
 		CHECK_ONLY
 	}
 	default:
@@ -2265,6 +2262,11 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 			external_slot(context);
 		} else {
 			render_sprite_cells(context);
+		}
+		if (context->vcounter == context->inactive_start) {
+			context->hslot++;
+			context->cycles += slot_cycles;
+			return;
 		}
 		CHECK_LIMIT
 	//sprite attribute table scan starts
@@ -2410,9 +2412,6 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 		context->hslot++;
 		context->cycles += slot_cycles;
 		vdp_advance_line(context);
-		if (context->vcounter == context->inactive_start) {
-			return;
-		}
 		CHECK_ONLY
 	}
 	default:
@@ -2545,6 +2544,41 @@ static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
 	}
 }
 
+static void inactive_test_output(vdp_context *context, uint8_t is_h40, uint8_t test_layer)
+{
+	uint8_t max_slot = is_h40 ? 169 : 136;
+	if (context->hslot > max_slot) {
+		return;
+	}
+	uint32_t *dst = context->output + (context->hslot >> 3) * SCROLL_BUFFER_DRAW;
+	int32_t len;
+	uint32_t src_off;
+	if (context->hslot) {
+		dst -= SCROLL_BUFFER_DRAW - BORDER_LEFT;
+		src_off = 0;
+		len = context->hslot == max_slot ? BORDER_RIGHT : SCROLL_BUFFER_DRAW;
+	} else {
+		src_off = SCROLL_BUFFER_DRAW - BORDER_LEFT;
+		len = BORDER_LEFT;
+	}
+	uint8_t *src;
+	if (test_layer == 2) {
+		//plane A
+		src_off += context->buf_a_off + context->hscroll_a;
+		src = context->tmp_buf_a;
+	} else {
+		//plane B
+		src_off += context->buf_b_off + context->hscroll_b;
+		src = context->tmp_buf_b;
+	}
+	for (; len >=0; len--, dst++, src_off++)
+	{
+		*dst = context->colors[src[src_off & SCROLL_BUFFER_MASK] & 0x3F];
+	}
+	context->buf_a_off = (context->buf_a_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_DRAW;
+	context->buf_b_off = (context->buf_b_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_DRAW;
+}
+
 static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t is_h40, uint8_t mode_5)
 {
 	uint8_t buf_clear_slot, index_reset_slot, bg_end_slot, vint_slot, line_change, jump_start, jump_dest;
@@ -2605,10 +2639,18 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 	) && context->hslot >= BG_START_SLOT && context->hslot < bg_end_slot
 		? context->output + 2 * (context->hslot - BG_START_SLOT)
 		: NULL;
+		
+	uint8_t test_layer = context->test_port >> 7 & 3;
+	if (test_layer == 1) {
+		//sprite layer doesn't do anything interesting in the passive area
+		test_layer = 0;
+	} else if (test_layer) {
+		dst = NULL;
+	}
 	
 	while(context->cycles < target_cycles)
 	{
-		if (context->hslot == BG_START_SLOT && (
+		if (context->hslot == BG_START_SLOT && !test_layer && (
 			context->vcounter < context->inactive_start + context->border_bot 
 			|| context->vcounter > 0x200 - context->border_top
 		)) {
@@ -2616,6 +2658,27 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 		} else if (context->hslot == bg_end_slot) {
 			advance_output_line(context);
 			dst = NULL;
+		}
+		//this will need some tweaking to properly interact with 128K mode, 
+		//but this should be good enough for now
+		context->serial_address += 1024;
+		if (test_layer) {
+			switch (context->hslot & 7)
+			{
+			case 3:
+				render_border_garbage(context, context->serial_address, context->tmp_buf_a, context->buf_a_off, context->col_1);
+				break;
+			case 4:
+				render_border_garbage(context, context->serial_address, context->tmp_buf_a, context->buf_a_off+8, context->col_2);
+				break;
+			case 7:
+				render_border_garbage(context, context->serial_address, context->tmp_buf_b, context->buf_b_off, context->col_1);
+				break;
+			case 0:
+				render_border_garbage(context, context->serial_address, context->tmp_buf_b, context->buf_b_off+8, context->col_2);
+				inactive_test_output(context, is_h40, test_layer);
+				break;
+			}
 		}
 		
 		if (context->hslot == buf_clear_slot) {
@@ -2684,7 +2747,8 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 	uint8_t mode_5 = context->regs[REG_MODE_2] & BIT_MODE_5;
 	while(context->cycles < target_cycles)
 	{
-		if (context->state == ACTIVE && context->vcounter == context->inactive_start) {
+		//technically the second hcounter check should be different for H40, but this is probably close enough for now
+		if (context->state == ACTIVE && context->vcounter == context->inactive_start && (context->hslot >= (is_h40 ? 167 : 135) || context->hslot < 133)) {
 			context->state = INACTIVE;
 		}
 		
