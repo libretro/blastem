@@ -150,6 +150,7 @@ typedef struct {
 	int32_t     fifo_write;
 	int32_t     fifo_read;
 	uint32_t    address;
+	uint32_t    serial_address;
 	uint8_t     cd;
 	uint8_t	    flags;
 	uint8_t     regs[VDP_REGS];
