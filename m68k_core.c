@@ -1095,10 +1095,12 @@ void * m68k_retranslate_inst(uint32_t address, m68k_context * context)
 			code_ptr native_end = code->cur;
 			code->cur = native_start + MAX_NATIVE_SIZE;
 			code_ptr rest = get_native_address_trans(context, orig + (after-inst)*2);
-			code_ptr tmp = code->cur;
-			code->cur = native_end;
-			jmp(code, rest);
-			code->cur = tmp;
+			code_info tmp_code = {
+				.cur = native_end,
+				.last = native_start + MAX_NATIVE_SIZE,
+				.stack_off = code->stack_off
+			};
+			jmp(&tmp_code, rest);
 		} else {
 			code->cur = native_start + MAX_NATIVE_SIZE;
 		}
