@@ -30,8 +30,10 @@ void * alloc_code(size_t *size)
 	if (ret) {
 		return ret;
 	}
-	*size += PAGE_SIZE - (*size & (PAGE_SIZE - 1));
-	ret = mmap(NULL, *size, PROT_EXEC | PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0);
+	if (*size & (PAGE_SIZE -1)) {
+		*size += PAGE_SIZE - (*size & (PAGE_SIZE - 1));
+	}
+	ret = mmap(next, *size, PROT_EXEC | PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0);
 	if (ret == MAP_FAILED) {
 		perror("alloc_code");
 		return NULL;
