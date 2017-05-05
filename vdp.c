@@ -2635,10 +2635,17 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 	}
 	uint32_t *dst = (
 		context->vcounter < context->inactive_start + context->border_bot 
-		|| context->vcounter > 0x200 - context->border_top
+		|| context->vcounter >= 0x200 - context->border_top
 	) && context->hslot >= BG_START_SLOT && context->hslot < bg_end_slot
 		? context->output + 2 * (context->hslot - BG_START_SLOT)
 		: NULL;
+		
+	if (
+		!dst && context->vcounter == context->inactive_start + context->border_bot
+		&& context->hslot >= line_change  && context->hslot < bg_end_slot
+	) {
+		dst = context->output + 2 * (context->hslot - BG_START_SLOT);
+	}
 		
 	uint8_t test_layer = context->test_port >> 7 & 3;
 	if (test_layer == 1) {
@@ -2652,7 +2659,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 	{
 		if (context->hslot == BG_START_SLOT && !test_layer && (
 			context->vcounter < context->inactive_start + context->border_bot 
-			|| context->vcounter > 0x200 - context->border_top
+			|| context->vcounter >= 0x200 - context->border_top
 		)) {
 			dst = context->output + (context->hslot - BG_START_SLOT) * 2;
 		} else if (context->hslot == bg_end_slot) {
