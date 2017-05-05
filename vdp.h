@@ -163,6 +163,7 @@ typedef struct {
 	uint8_t     *linebuf;
 	//pointer to current line in framebuffer
 	uint32_t    *output;
+	uint32_t    *done_output;
 	uint32_t    *fb;
 	system_header  *system;
 	uint16_t    cram[CRAM_SIZE];
