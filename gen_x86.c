@@ -207,7 +207,6 @@ void check_alloc_code(code_info *code, uint32_t inst_size)
 			//new chunk is not contiguous with the current one
 			jmp_nocheck(code, next_code);
 			code->cur = next_code;
-			code->last = next_code + size/sizeof(RESERVE_WORDS);
 		}
 		code->last = next_code + size/sizeof(code_word) - RESERVE_WORDS;
 	}
