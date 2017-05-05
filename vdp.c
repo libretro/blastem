@@ -1541,6 +1541,7 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 			}
 		}
 	}
+	context->done_output = dst;
 	context->buf_a_off = (context->buf_a_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
 	context->buf_b_off = (context->buf_b_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
 }
@@ -1735,6 +1736,7 @@ static void advance_output_line(vdp_context *context)
 			output_line = INVALID_LINE;
 		}
 		context->output = (uint32_t *)(((char *)context->fb) + context->output_pitch * output_line);
+		context->done_output = context->output;
 #ifdef DEBUG_FB_FILL
 		for (int i = 0; i < LINEBUF_SIZE; i++)
 		{
@@ -2710,8 +2712,16 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 			} else if (context->regs[REG_MODE_1] & BIT_MODE_4) {
 				bg_color = context->colors[CRAM_SIZE * 3 + 0x10 + (context->regs[REG_BG_COLOR] & 0xF)];
 			}
-			*(dst++) = bg_color;
-			*(dst++) = bg_color;
+			if (dst >= context->done_output) {
+				*(dst++) = bg_color;
+			} else {
+				dst++;
+			}
+			if (dst >= context->done_output) {
+				*(dst++) = bg_color;
+			} else {
+				dst++;
+			}
 			if (context->hslot == (bg_end_slot-1)) {
 				*(dst++) = bg_color;
 			}
