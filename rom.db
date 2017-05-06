@@ -459,6 +459,14 @@ T-48036 {
 		2 gamepad3.2
 	}
 }
+T-103026 {
+	name King of the Monsters
+	#This game won't work at all with a properly emualted 6-button controller
+	device_overrides {
+		1 gamepad3.1
+		2 gamepad3.2
+	}
+}
 #Automatically hook up the mouse in the appropriate port for the games I've tested
 T-76076 {
 	name Nobunaga's Ambition
