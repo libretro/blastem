@@ -1052,6 +1052,26 @@ static void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, 
 		v_offset_mask = 0x7;
 		vscroll_shift = 3;
 	}
+	//TODO: Further research on vscroll latch behavior and the "first column bug"
+	if (!column) {
+		if (context->regs[REG_MODE_3] & BIT_VSCROLL) {
+			if (context->regs[REG_MODE_4] & BIT_H40) {
+				//Based on observed behavior documented by Eke-Eke, I'm guessing the VDP
+				//ends up fetching the last value on the VSRAM bus in the H40 case
+				//getting the last latched value should be close enough for now
+				if (!vsram_off) {
+					context->vscroll_latch[0] = context->vscroll_latch[1];
+				}
+			} else {
+				//supposedly it's always forced to 0 in the H32 case
+				context->vscroll_latch[0] = context->vscroll_latch[1] = 0;
+			}
+		} else {
+			context->vscroll_latch[vsram_off] = context->vsram[vsram_off];
+		}
+	} else if (context->regs[REG_MODE_3] & BIT_VSCROLL) {
+		context->vscroll_latch[vsram_off] = context->vsram[column - 2 + vsram_off];
+	}
 	if (!vsram_off) {
 		uint16_t left_col, right_col;
 		if (context->regs[REG_WINDOW_H] & WINDOW_RIGHT) {
@@ -1105,26 +1125,6 @@ static void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, 
 	if (context->double_res) {
 		vscroll <<= 1;
 		vscroll |= 1;
-	}
-	//TODO: Further research on vscroll latch behavior and the "first column bug"
-	if (!column) {
-		if (context->regs[REG_MODE_3] & BIT_VSCROLL) {
-			if (context->regs[REG_MODE_4] & BIT_H40) {
-				//Based on observed behavior documented by Eke-Eke, I'm guessing the VDP
-				//ends up fetching the last value on the VSRAM bus in the H40 case
-				//getting the last latched value should be close enough for now
-				if (!vsram_off) {
-					context->vscroll_latch[0] = context->vscroll_latch[1];
-				}
-			} else {
-				//supposedly it's always forced to 0 in the H32 case
-				context->vscroll_latch[0] = context->vscroll_latch[1] = 0;
-			}
-		} else {
-			context->vscroll_latch[vsram_off] = context->vsram[vsram_off];
-		}
-	} else if (context->regs[REG_MODE_3] & BIT_VSCROLL) {
-		context->vscroll_latch[vsram_off] = context->vsram[column - 2 + vsram_off];
 	}
 	vscroll &= context->vscroll_latch[vsram_off] + line;
 	context->v_offset = vscroll & v_offset_mask;
