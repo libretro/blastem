@@ -904,7 +904,11 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 							}
 							decoded->extra.size = OPSIZE_UNSIZED;
 							istream = m68k_decode_op(istream, OPSIZE_UNSIZED, &(decoded->src));
-							if (!istream) {
+							if (
+								!istream 
+								|| (decoded->src.addr_mode < MODE_AREG_DISPLACE && decoded->src.addr_mode != MODE_AREG_INDIRECT)
+								|| decoded->src.addr_mode == MODE_IMMEDIATE
+							) {
 								decoded->op = M68K_INVALID;
 								break;
 							}
