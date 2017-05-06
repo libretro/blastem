@@ -579,7 +579,7 @@ static void scan_sprite_table(uint32_t line, vdp_context * context)
 		}
 		uint16_t address = context->sprite_index * 4;
 		line += ymin;
-		line &= 0x1FF;
+		line &= ymask;
 		uint16_t y = ((context->sat_cache[address] & 0x3) << 8 | context->sat_cache[address+1]) & ymask;
 		uint8_t height = ((context->sat_cache[address+2] & 0x3) + 1) * height_mult;
 		//printf("Sprite %d | y: %d, height: %d\n", context->sprite_index, y, height);
@@ -693,7 +693,7 @@ static void read_sprite_x(uint32_t line, vdp_context * context)
 			uint8_t pal_priority = (tileinfo >> 9) & 0x70;
 			uint8_t row;
 			uint16_t cache_addr = context->sprite_info_list[context->cur_slot].index * 4;
-			line = (line + ymin) & 0x1FF;
+			line = (line + ymin) & ymask;
 			int16_t y = ((context->sat_cache[cache_addr] << 8 | context->sat_cache[cache_addr+1]) & ymask)/* - ymin*/;
 			if (tileinfo & MAP_BIT_V_FLIP) {
 				row = (y + height - 1) - line;
