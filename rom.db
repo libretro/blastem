@@ -458,6 +458,11 @@ G-004130 {
 	#if they are running the Japanese version rather than the European one
 	regions J
 }
+00004042 {
+	name Castle of Illusion: Fushigi no Oshiro Daibouken
+	#Has JAPAN in header rather than J, A gets interpreted as a "new-style" code
+	regions J
+}
 T-48036 {
 	name Ms. Pac-Man
 	#Ms. Pac-Man doesn't like 6-button controllers
