@@ -513,13 +513,13 @@ static m68k_context * io_write(uint32_t location, m68k_context * context, uint8_
 				io_data_write(gen->io.ports+2, value, context->current_cycle);
 				break;
 			case 0x4:
-				gen->io.ports[0].control = value;
+				io_control_write(gen->io.ports, value, context->current_cycle);
 				break;
 			case 0x5:
-				gen->io.ports[1].control = value;
+				io_control_write(gen->io.ports+1, value, context->current_cycle);
 				break;
 			case 0x6:
-				gen->io.ports[2].control = value;
+				io_control_write(gen->io.ports+2, value, context->current_cycle);
 				break;
 			case 0x7:
 				gen->io.ports[0].serial_out = value;
