@@ -446,6 +446,30 @@ G-4060 {
 		}
 	}
 }
+G-4524 {
+	name Ninja Burai Densetsu
+	EEPROM {
+		type i2c
+		size 128
+	}
+	map {
+		0 {
+			device ROM
+			last 1FFFFF
+		}
+		200000 {
+			device EEPROM
+			last 3FFFFF
+			bits_read {
+				0 sda
+			}
+			bits_write {
+				0 sda
+				1 scl
+			}
+		}
+	}
+}
 T-70106- {
 	name Another World
 	#European version of this game has EUROPE in the region field rather than just E
