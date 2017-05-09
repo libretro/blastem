@@ -451,6 +451,13 @@ T-70106- {
 	#European version of this game has EUROPE in the region field rather than just E
 	regions E
 }
+G-004130 {
+	name Alien Soldier
+	#Japanese version of this game seems to indicate support for European consoles in
+	#the header. While the game does indeed run, most people probably expect 60Hz
+	#if they are running the Japanese version rather than the European one
+	regions J
+}
 T-48036 {
 	name Ms. Pac-Man
 	#Ms. Pac-Man doesn't like 6-button controllers
