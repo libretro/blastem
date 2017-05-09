@@ -1506,6 +1506,16 @@ void io_adjust_cycles(io_port * port, uint32_t current_cycle, uint32_t deduction
 			port->device.mouse.ready_cycle -= deduction;
 		}
 	}
+	for (int i = 0; i < 8; i++)
+	{
+		if (port->slow_rise_start[i] != CYCLE_NEVER) {
+			if (port->slow_rise_start[i] >= deduction) {
+				port->slow_rise_start[i] -= deduction;
+			} else {
+				port->slow_rise_start[i] = CYCLE_NEVER;
+			}
+		}
+	}
 	if (last_poll_cycle >= deduction) {
 		last_poll_cycle -= deduction;
 	} else {
@@ -1622,6 +1632,25 @@ enum {
 	KB_READ,
 	KB_WRITE
 };
+
+void io_control_write(io_port *port, uint8_t value, uint32_t current_cycle)
+{
+	uint8_t changes = value ^ port->control;
+	if (changes) {
+		for (int i = 0; i < 8; i++)
+		{
+			if (!(value & 1 << i) && !(port->output & 1 << i)) {
+				//port switched from output to input and the output value was 0
+				//since there is a weak pull-up on input pins, this will lead
+				//to a slow rise from 0 to 1 if the pin isn't being externally driven
+				port->slow_rise_start[i] = current_cycle;
+			} else {
+				port->slow_rise_start[i] = CYCLE_NEVER;
+			}
+		}
+		port->control = value;
+	}
+}
 
 void io_data_write(io_port * port, uint8_t value, uint32_t current_cycle)
 {
@@ -1766,12 +1795,34 @@ uint8_t get_scancode_bytes(io_port *port)
 	return bytes;
 }
 
+#define SLOW_RISE_DEVICE (30*7)
+#define SLOW_RISE_INPUT (12*7)
+
+static uint8_t get_output_value(io_port *port, uint32_t current_cycle, uint32_t slow_rise_delay)
+{
+	uint8_t output = (port->control | 0x80) & port->output;
+	for (int i = 0; i < 8; i++)
+	{
+		if (!(port->control & 1 << i)) {
+			if (port->slow_rise_start[i] != CYCLE_NEVER) {
+				if (current_cycle - port->slow_rise_start[i] >= slow_rise_delay) {
+					output |= 1 << i;
+				}
+			} else {
+				output |= 1 << i;
+			}
+		}
+	}
+	return output;
+}
+
 uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 {
+	uint8_t output = get_output_value(port, current_cycle, SLOW_RISE_DEVICE);
 	uint8_t control = port->control | 0x80;
-	uint8_t output = (control & port->output) | (~control & 0xFF);
 	uint8_t th = output & 0x40;
 	uint8_t input;
+	uint8_t device_driven;
 	if (current_cycle - last_poll_cycle > MIN_POLL_INTERVAL) {
 		process_events();
 		last_poll_cycle = current_cycle;
@@ -1789,6 +1840,7 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 		}
 		//controller output is logically inverted
 		input = ~input;
+		device_driven = 0x3F;
 		break;
 	}
 	case IO_GAMEPAD6:
@@ -1816,6 +1868,7 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 		}
 		//controller output is logically inverted
 		input = ~input;
+		device_driven = 0x3F;
 		break;
 	}
 	case IO_MOUSE:
@@ -1875,6 +1928,7 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 			}
 			input |= ((port->device.mouse.tr_counter & 1) == 0) << 4;
 		}
+		device_driven = 0x1F;
 		break;
 	}
 	case IO_SATURN_KEYBOARD:
@@ -1947,6 +2001,7 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 			}
 			input |= ((port->device.keyboard.tr_counter & 1) == 0) << 4;
 		}
+		device_driven = 0x1F;
 		break;
 	}
 	case IO_XBAND_KEYBOARD:
@@ -2008,6 +2063,8 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 				input = 0xF;
 			}
 			input |= ((port->device.keyboard.tr_counter & 1) == 0) << 4;
+			//this is not strictly correct at all times, but good enough for now
+			device_driven = 0x1F;
 		}
 		break;
 	}
@@ -2018,6 +2075,7 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 			service_pipe(port);
 		}
 		input = port->input[th ? IO_TH1 : IO_TH0];
+		device_driven = 0x3F;
 		break;
 	case IO_GENERIC:
 		if (port->input[IO_TH0] & 0x80 && port->input[IO_STATE] == IO_WRITTEN)
@@ -2027,13 +2085,20 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 		}
 		service_socket(port);
 		input = port->input[IO_TH0];
+		device_driven = 0x7F;
 		break;
 #endif
 	default:
-		input = 0xFF;
+		input = 0;
+		device_driven = 0;
 		break;
 	}
-	uint8_t value = (input & (~control)) | (port->output & control);
+	uint8_t value = (input & (~control) & device_driven) | (port->output & control);
+	//deal with pins that are configured as inputs, but not being actively driven by the device
+	uint8_t floating = (~device_driven) & (~control);
+	if (floating) {
+		value |= get_output_value(port, current_cycle, SLOW_RISE_INPUT) & floating;
+	}
 	/*if (port->input[GAMEPAD_TH0] || port->input[GAMEPAD_TH1]) {
 		printf ("value: %X\n", value);
 	}*/
