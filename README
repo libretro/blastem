@@ -186,6 +186,32 @@ This can be overridden on the command line with the -f flag. If fullscreen
 is set to "off", -f will turn it on. Conversely, if fullscreen is set to "on"
 in the config, -f will turn it off.
 
+The "ntsc" and "pal" sub-sections control overscan settings for the emulated
+video output for NTSC and PAL consoles respectively. More details are available
+in the Overscan section.
+
+Overscan
+--------
+
+Analog televisions generally don't display the entirety of a video frame. Some
+portion is cropped at the edges of the display. This is called overscan.
+Unfortunately, the amount of cropping performed varies considerably and is even
+adjustable on many TV sets. To deal with this, BlastEm allows overscan to be
+customized.
+
+Overscan values are specified in the "ntsc" and "pal" sub-sections of the
+"video" section of the config file. The "overscan" sub-section contains four
+settings for specifying the number of pixels cropped on each side of the
+display: "top", "bottom", "left" and "right".
+
+The default settings hide the horizontal border completely for both NTSC and
+PAL consoles. For the vertical borders, the NTSC overscan settings are chosen
+to give square pixels with the default aspect ratio of 4:3. For PAL, the
+default settings are set so that the PAL-exclusive V30 mode will produce a
+visible border that is the same size as what is shown in V28 mode in NTSC. This
+results in a slightly squished picture compared to NTSC which is probably
+appropriate given that a PAL display has more lines than an NTSC one.
+
 Audio
 -----
 
@@ -335,7 +361,7 @@ most likely lower than your refresh rate. As long as this is true, VSync will
 generally work as long as your computer is fast enough to cope with the time
 lost waiting for VSync and the audio buffer is large enough to not run out of
 samples during that delay. Latency will suffer a bit and you'll get a doubled
-frame, but things will be fine.
+frame every once and a while, but generally things will be fine.
 
 If you enable VSync and you're getting audio dropouts, first try doubling the
 audio buffer setting. If you still experience dropouts, it's possible your
