@@ -488,6 +488,15 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 	sample_rate = actual.freq;
 	printf("Initialized audio at frequency %d with a %d sample buffer\n", actual.freq, actual.samples);
 	SDL_PauseAudio(0);
+	
+	uint32_t db_size;
+	char *db_data = read_bundled_file("gamecontrollerdb.txt", &db_size);
+	if (db_data) {
+		int added = SDL_GameControllerAddMappingsFromRW(SDL_RWFromMem(db_data, db_size), 1);
+		free(db_data);
+		info_message("Added %d game controller mappings from gamecontrollerdb.txt\n", added);
+	}
+	
 	SDL_JoystickEventState(SDL_ENABLE);
 
 	atexit(render_quit);
