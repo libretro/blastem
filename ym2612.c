@@ -635,7 +635,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			left = tmp >> 16;
 			tmp = right * context->lowpass_alpha + context->last_right * (0x10000 - context->lowpass_alpha);
 			right = tmp >> 16;
-			if (context->buffer_fraction > BUFFER_INC_RES) {
+			while (context->buffer_fraction > BUFFER_INC_RES) {
 				context->buffer_fraction -= BUFFER_INC_RES;
 
 				int64_t tmp = context->last_left * ((context->buffer_fraction << 16) / context->buffer_inc);
