@@ -1239,8 +1239,8 @@ prev_str:
 	dc.b "Prev", 0
 	
 about_text:
-	dc.b "BlastEm v0.4.1", 0
-	dc.b "Copyright 2011-2016 Michael Pavone", 0
+	dc.b "BlastEm v0.5.0", 0
+	dc.b "Copyright 2011-2017 Michael Pavone", 0
 	dc.b " ", 0
 	dc.b "BlastEm is a high performance, open", 0
 	dc.b "source (GPLv3) Genesis/Megadrive", 0
@@ -1256,7 +1256,10 @@ about_text:
 	dc.b "Eke-Eke: Documentation", 0
 	dc.b "Bart Trzynadlowski: Documentation", 0
 	dc.b "KanedaFR: Hosting the best Sega forum", 0
+	dc.b "Titan: Awesome demos and documentation", 0
 	dc.b "micky: Testing", 0
+	dc.b "Sasha: Testing", 0
+	dc.b "lol-frank: Testing", 0
 	dc.b "Sik: Testing", 0
 	dc.b "Tim Lawrence : Testing", 0
 	dc.b "ComradeOj: Testing", 0
