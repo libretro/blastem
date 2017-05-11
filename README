@@ -470,11 +470,17 @@ Bart Trzynadlowski - His documents on the Genecyst save-state format and the
                      
 KanedaFR           - Kaneda's SpritesMind forum is a great resource for the
                      Sega development community.
+					 
+Titan              - Titan has created what are without a doubt the most
+                     impressive demos on the Megadrive. Additionally, I am very
+                     grateful for the documentation provided by Kabuto and the
+                     assistance of Kabuto, Sik and Jorge in getting Overdrive 2
+                     to run properly in BlastEm.					 
 
 I'd also like to thank the following people who have performed compatibility
 testing or submitted helpful bug reports
 
-micky, Sik, Tim Lawrence, ComradeOj, Vladikcomper
+micky, Sasha, lol-frank, Sik, Tim Lawrence, ComradeOj, Vladikcomper
 
 License
 -------
