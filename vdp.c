@@ -1972,6 +1972,7 @@ static void draw_right_border(vdp_context *context)
 		context->cycles += slot_cycles;\
 		if ((slot+1) == LINE_CHANGE_MODE4) {\
 			vdp_advance_line(context);\
+			advance_output_line(context);\
 			if (context->vcounter == 192) {\
 				return;\
 			}\
