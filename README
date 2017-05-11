@@ -140,6 +140,34 @@ will then be "captured" and the cursor will be both made invisible and locked
 to the window. The ui.release_mouse binding releases the mouse so it can be
 used normally.
 
+UI Actions
+----------
+
+This section lists the various "UI" actions that can be triggered by a key or
+gamepad binding.
+
+ui.release_mouse             Releases the mouse if it is currently captured
+ui.vdp_debug_mode            Cycles through the various VDP debug views
+ui.vdp_debug_pal             Cycles through the selected palette when viewing
+                             the VDP memory viewer
+ui.enter_debugger            Enters the debugger for the main CPU of the
+							 currently emulated system
+ui.screenshot                Takes an internal screenshot
+ui.exit                      Returns to the menu ROM if currently in a game
+                             that was launched from the menu. Exits otherwise
+ui.save_state                Saves a savestate to the quicksave slot
+ui.set_speed.N               Selects a specific machine speed specified by N
+                             which should be a number between 0-9. Speeds are
+                             specified in the "clocks" section of the config				
+ui.next_speed                Selects the next machine speed
+ui.prev_speed                Selects the previous machine speed
+ui.toggle_fullscreen         Toggles between fullscreen and windowed mode
+ui.soft_reset                Resets a portion of the emulated machine
+                             Equivalent to pushing the reset button on the
+                             emulated device
+ui.toggle_keyboard_captured  Toggles the capture state of the host keyboard
+                             when an emulated keyboard is present
+		
 IO
 --
 
@@ -155,9 +183,12 @@ Video
 
 The video section contains settings that affect the visual output of BlastEm.
 
+"aspect" is used to control the aspect ratio of the emulated display. The
+default of 4:3 matches that of a standard definition television.
+
 "width" is used to control the window size when not in fullscreen mode. The
-height of the window is calculated from this value. Both width and height can
-be overridden from the command line.
+height of the window is calculated from this value and "aspect". Both width
+and height can be overridden from the command line.
 
 "vertex_shader" and "fragment_shader" define the GLSL shader program that
 produces the final image for each frame. Shaders can be used to add various
@@ -185,6 +216,12 @@ vsync, please see the VSync section at the bottom of the README.
 This can be overridden on the command line with the -f flag. If fullscreen
 is set to "off", -f will turn it on. Conversely, if fullscreen is set to "on"
 in the config, -f will turn it off.
+
+"gl" controls whether OpenGL is used for rendering. The default value is on.
+If it is set to off instead, the fallback renderer which uses SDL2's render API
+will be used instead. This option is mostly useful for users on hardware that
+lacks OpenGL 2 support. While BlastEm will fall back automatically even if gl
+is set to on there will be a warning. Disabling gl eliminates this warning.
 
 The "ntsc" and "pal" sub-sections control overscan settings for the emulated
 video output for NTSC and PAL consoles respectively. More details are available
@@ -258,13 +295,49 @@ other presets enable the slow/turbo mode functionality.
 UI
 --
 
-The UI section contains settings that affect the graphical user interface.
+The UI section contains settings that affect the user interface.
 
 "rom" determines the path of the Genesis/Megadrive ROM that implements the UI.
 Relative paths will be loaded relative to the BlastEm executable.
 
-Other Settings
+"initial_path" specifies the starting path for the ROM browser. It can contain
+the following special variables: $HOME, $EXEDIR. Additionally, variables
+defined in the OS environment can be used.
+
+"screenshot_path" specifies the directory "internal" screenshots will be saved
+in. It accepts the same special variables as "initial_path".
+
+"screenshot_template" specifies a template for creating screenshot filenames.
+It is specified as a format string for the C library function strftime
+
+"save_path" specifies the directory that savestates, SRAM and EEPROM data will
+be saved in for a given game. It can contain the following special variables:
+$HOME, $EXEDIR, $USERDATA, $ROMNAME. Like "initial_path" it can also reference
+variables from the environment.
+
+Path Variables
 --------------
+
+This section explains the meaning of the special path variables referenced
+in the previous section.
+
+$HOME      The home directory of the current user. On most Unix variants, it
+           will be a subdirectory of /home. On Windows it will typically be a 
+           subdirectory of C:\Users
+$EXEDIR    The directory the BlastEm executable is located in
+$USERDATA  This is an OS-specific path used for storing application specific
+           user data. On Unix variants, it will be  $HOME/.local/share/blastem
+           On Windows it will be %LOCALDATA%/blastem
+$ROMNAME   The name of the currently loaded ROM file without the extension
+
+System
+------
+
+"ram_init" determines how the RAM in the emulated system is initialized. The
+default value of "zero" will cause all RAM to be zeroed out before the system
+is started. Alternatively, "random" can be used to initialize RAM with values
+from a pseudo-random number generator. This option is mostly useful for
+developers that want to debug initialization issues in their code.
 
 "default_region" determines the console region that will be used when region
 detection fails and when there are multiple valid regions. The default of 'U'
