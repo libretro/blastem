@@ -135,7 +135,7 @@ void psg_run(psg_context * context, uint32_t cycles)
 		context->accum = tmp >> 16;
 
 		context->buffer_fraction += context->buffer_inc;
-		if (context->buffer_fraction >= BUFFER_INC_RES) {
+		while (context->buffer_fraction >= BUFFER_INC_RES) {
 			context->buffer_fraction -= BUFFER_INC_RES;
 			int32_t tmp = context->last_sample * ((context->buffer_fraction << 16) / context->buffer_inc);
 			tmp += context->accum * (0x10000 - ((context->buffer_fraction << 16) / context->buffer_inc));
