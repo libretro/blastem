@@ -586,8 +586,7 @@ static void scan_sprite_table(uint32_t line, vdp_context * context)
 		if (y <= line && line < (y + height)) {
 			//printf("Sprite %d at y: %d with height %d is on line %d\n", context->sprite_index, y, height, line);
 			context->sprite_info_list[context->slot_counter].size = context->sat_cache[address+2];
-			context->sprite_info_list[context->slot_counter].index = context->sprite_index;
-			context->sprite_info_list[context->slot_counter++].y = y-ymin;
+			context->sprite_info_list[context->slot_counter++].index = context->sprite_index;
 		}
 		context->sprite_index = context->sat_cache[address+3] & 0x7F;
 		if (context->sprite_index && ((uint8_t)context->slot_counter) < context->max_sprites_line)
@@ -604,8 +603,7 @@ static void scan_sprite_table(uint32_t line, vdp_context * context)
 			if (y <= line && line < (y + height)) {
 				//printf("Sprite %d at y: %d with height %d is on line %d\n", context->sprite_index, y, height, line);
 				context->sprite_info_list[context->slot_counter].size = context->sat_cache[address+2];
-				context->sprite_info_list[context->slot_counter].index = context->sprite_index;
-				context->sprite_info_list[context->slot_counter++].y = y-ymin;
+				context->sprite_info_list[context->slot_counter++].index = context->sprite_index;
 			}
 			context->sprite_index = context->sat_cache[address+3] & 0x7F;
 		}
@@ -635,6 +633,7 @@ static void scan_sprite_table_mode4(vdp_context * context)
 				}
 				context->sprite_info_list[--(context->slot_counter)].size = size;
 				context->sprite_info_list[context->slot_counter].index = context->sprite_index;
+				context->sprite_info_list[context->slot_counter].y = y;
 			}
 			context->sprite_index++;
 		}
@@ -653,6 +652,7 @@ static void scan_sprite_table_mode4(vdp_context * context)
 					}
 					context->sprite_info_list[--(context->slot_counter)].size = size;
 					context->sprite_info_list[context->slot_counter].index = context->sprite_index;
+					context->sprite_info_list[context->slot_counter].y = y;
 				}
 				context->sprite_index++;
 			}
