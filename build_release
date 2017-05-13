@@ -24,7 +24,7 @@ if [ $OS = "Linux" ]; then
 	make all
 	cd ..
 fi
-
+echo "Path is: $PATH"
 make PORTABLE=1 clean all
 make menu.bin
 if [ $OS = "Windows" ]; then
