@@ -494,7 +494,7 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 	if (db_data) {
 		int added = SDL_GameControllerAddMappingsFromRW(SDL_RWFromMem(db_data, db_size), 1);
 		free(db_data);
-		info_message("Added %d game controller mappings from gamecontrollerdb.txt\n", added);
+		printf("Added %d game controller mappings from gamecontrollerdb.txt\n", added);
 	}
 	
 	SDL_JoystickEventState(SDL_ENABLE);
