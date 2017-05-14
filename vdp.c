@@ -2583,6 +2583,14 @@ static void inactive_test_output(vdp_context *context, uint8_t is_h40, uint8_t t
 	context->buf_b_off = (context->buf_b_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_DRAW;
 }
 
+static void check_switch_inactive(vdp_context *context, uint8_t is_h40)
+{
+	//technically the second hcounter check should be different for H40, but this is probably close enough for now
+	if (context->state == ACTIVE && context->vcounter == context->inactive_start && (context->hslot >= (is_h40 ? 167 : 135) || context->hslot < 133)) {
+		context->state = INACTIVE;
+	}
+}
+
 static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t is_h40, uint8_t mode_5)
 {
 	uint8_t buf_clear_slot, index_reset_slot, bg_end_slot, vint_slot, line_change, jump_start, jump_dest;
@@ -2661,6 +2669,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 	
 	while(context->cycles < target_cycles)
 	{
+		check_switch_inactive(context, is_h40);
 		if (context->hslot == BG_START_SLOT && !test_layer && (
 			context->vcounter < context->inactive_start + context->border_bot 
 			|| context->vcounter >= 0x200 - context->border_top
@@ -2768,10 +2777,7 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 	uint8_t mode_5 = context->regs[REG_MODE_2] & BIT_MODE_5;
 	while(context->cycles < target_cycles)
 	{
-		//technically the second hcounter check should be different for H40, but this is probably close enough for now
-		if (context->state == ACTIVE && context->vcounter == context->inactive_start && (context->hslot >= (is_h40 ? 167 : 135) || context->hslot < 133)) {
-			context->state = INACTIVE;
-		}
+		check_switch_inactive(context, is_h40);
 		
 		if (is_active(context)) {
 			if (mode_5) {
@@ -2914,9 +2920,6 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 				}
 				if (reg == REG_BG_COLOR) {
 					value &= 0x3F;
-				}
-				if (reg == REG_MODE_2 && ((value ^ context->regs[reg]) & BIT_DISP_EN)) {
-					printf("Display %s at %d, %d, %d\n", value & BIT_DISP_EN ? "enabled" : "disabled", context->frame, context->vcounter, context->hslot);
 				}
 				/*if (reg == REG_MODE_4 && ((value ^ context->regs[reg]) & BIT_H40)) {
 					printf("Mode changed from H%d to H%d @ %d, frame: %d\n", context->regs[reg] & BIT_H40 ? 40 : 32, value & BIT_H40 ? 40 : 32, context->cycles, context->frame);
