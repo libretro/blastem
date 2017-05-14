@@ -2057,12 +2057,13 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 			if (headless) {
 				dst = context->output;
 			} else {
-				dst = ((uint32_t *)(((char *)context->fb) + context->output_pitch * (context->border_top - 2)))
-					+ (context->hslot - BG_START_SLOT) * 2;
+				dst = context->output + (context->hslot - BG_START_SLOT) * 2;
 			}
-			for (int i = 0; i < LINEBUF_SIZE - 2 * (context->hslot - BG_START_SLOT); i++)
+			for (int i = 0; i < LINEBUF_SIZE - 2 * (context->hslot - BG_START_SLOT); i++, dst++)
 			{
-				*(dst++) = bg_color;
+				if (dst >= context->done_output) {
+					*dst = bg_color;
+				}
 			}
 		}
 		context->sprite_index = 0x80;
@@ -2720,11 +2721,13 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 			}
 			if (dst >= context->done_output) {
 				*(dst++) = bg_color;
+				context->done_output = dst;
 			} else {
 				dst++;
 			}
 			if (context->hslot == (bg_end_slot-1)) {
 				*(dst++) = bg_color;
+				context->done_output = dst;
 			}
 		}
 		
@@ -2911,6 +2914,9 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 				}
 				if (reg == REG_BG_COLOR) {
 					value &= 0x3F;
+				}
+				if (reg == REG_MODE_2 && ((value ^ context->regs[reg]) & BIT_DISP_EN)) {
+					printf("Display %s at %d, %d, %d\n", value & BIT_DISP_EN ? "enabled" : "disabled", context->frame, context->vcounter, context->hslot);
 				}
 				/*if (reg == REG_MODE_4 && ((value ^ context->regs[reg]) & BIT_H40)) {
 					printf("Mode changed from H%d to H%d @ %d, frame: %d\n", context->regs[reg] & BIT_H40 ? 40 : 32, value & BIT_H40 ? 40 : 32, context->cycles, context->frame);
