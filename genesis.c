@@ -96,6 +96,19 @@ static void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 		//This can cause issues with the implementation of STOP though
 		context->target_cycle = context->current_cycle;
 	}
+	if (context->target_cycle == context->int_cycle) {
+		//Currently delays from Z80 access and refresh are applied only when we sync
+		//this can cause extra latency when it comes to interrupts
+		//to prevent this code forces some extra synchronization in the period immediately before an interrupt
+		if ((context->target_cycle - context->current_cycle) > gen->int_latency_prev1) {
+			context->target_cycle = context->sync_cycle = context->int_cycle - gen->int_latency_prev1;
+		} else if ((context->target_cycle - context->current_cycle) > gen->int_latency_prev2) {
+			context->target_cycle = context->sync_cycle = context->int_cycle - gen->int_latency_prev2;
+		} else {
+			context->target_cycle = context->sync_cycle = context->current_cycle;
+		}
+		
+	}
 	/*printf("Cyc: %d, Trgt: %d, Int Cyc: %d, Int: %d, Mask: %X, V: %d, H: %d, HICount: %d, HReg: %d, Line: %d\n",
 		context->current_cycle, context->target_cycle, context->int_cycle, context->int_num, (context->status & 0x7),
 		v_context->regs[REG_MODE_2] & 0x20, v_context->regs[REG_MODE_1] & 0x10, v_context->hint_counter, v_context->regs[REG_HINT], v_context->cycles / MCLKS_LINE);*/
@@ -1003,6 +1016,8 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	gen->frame_end = vdp_cycles_to_frame_end(gen->vdp);
 	char * config_cycles = tern_find_path(config, "clocks\0max_cycles\0", TVAL_PTR).ptrval;
 	gen->max_cycles = config_cycles ? atoi(config_cycles) : DEFAULT_SYNC_INTERVAL;
+	gen->int_latency_prev1 = MCLKS_PER_68K * 32;
+	gen->int_latency_prev2 = MCLKS_PER_68K * 16;
 
 	char * lowpass_cutoff_str = tern_find_path(config, "audio\0lowpass_cutoff\0", TVAL_PTR).ptrval;
 	uint32_t lowpass_cutoff = lowpass_cutoff_str ? atoi(lowpass_cutoff_str) : DEFAULT_LOWPASS_CUTOFF;
