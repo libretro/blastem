@@ -40,6 +40,8 @@ struct genesis_context {
 	uint32_t        normal_clock; //Normal master clock (used to restore master clock after turbo mode)
 	uint32_t        frame_end;
 	uint32_t        max_cycles;
+	uint32_t        int_latency_prev1;
+	uint32_t        int_latency_prev2;
 	uint8_t         bank_regs[8];
 	uint16_t        mapper_start_index;
 	uint8_t         save_type;
