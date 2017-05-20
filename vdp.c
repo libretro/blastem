@@ -2086,7 +2086,7 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	SPRITE_RENDER_H40(174)
 	SPRITE_RENDER_H40(175)
 	SPRITE_RENDER_H40(176)
-	SPRITE_RENDER_H40(177)
+	SPRITE_RENDER_H40(177)//End of border?
 	SPRITE_RENDER_H40(178)
 	SPRITE_RENDER_H40(179)
 	SPRITE_RENDER_H40(180)
@@ -3256,13 +3256,18 @@ uint32_t vdp_cycles_to_frame_end(vdp_context * context)
 	return context->cycles + vdp_cycles_to_line(context, context->inactive_start);
 }
 
+//This gives correct values in my test ROM. Kind of a hack, might be partly
+//due to interrupts getting latched at the end of a "dbi" micro-instruction
+//but that would only account for 28 of the 36 cycles. More hardware testing
+//necessary to determine the cause of the discrepency
+#define HINT_FUDGE 36
 uint32_t vdp_next_hint(vdp_context * context)
 {
 	if (!(context->regs[REG_MODE_1] & BIT_HINT_EN)) {
 		return 0xFFFFFFFF;
 	}
 	if (context->flags2 & FLAG2_HINT_PENDING) {
-		return context->pending_hint_start;
+		return context->pending_hint_start - HINT_FUDGE;
 	}
 	uint32_t hint_line;
 	if (context->state != ACTIVE) {
@@ -3290,7 +3295,7 @@ uint32_t vdp_next_hint(vdp_context * context)
 			}
 		}
 	}
-	return context->cycles + vdp_cycles_to_line(context, hint_line);
+	return context->cycles + vdp_cycles_to_line(context, hint_line) - HINT_FUDGE;
 }
 
 static uint32_t vdp_next_vint_real(vdp_context * context)
