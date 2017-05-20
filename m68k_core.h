@@ -48,6 +48,7 @@ typedef struct {
 	code_ptr        write_32_lowfirst;
 	code_ptr        write_32_highfirst;
 	code_ptr        do_sync;
+	code_ptr        handle_int_latch;
 	code_ptr        trap;
 	start_fun       start_context;
 	code_ptr        retrans_stub;

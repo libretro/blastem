@@ -350,12 +350,30 @@ void calc_areg_index_disp8(m68k_options *opts, m68k_op_info *op, uint8_t native_
 	calc_index_disp8(opts, op, native_reg);
 }
 
-void translate_m68k_op(m68kinst * inst, host_ea * ea, m68k_options * opts, uint8_t dst)
+void m68k_check_cycles_int_latch(m68k_options *opts)
+{
+	code_info *code = &opts->gen.code;
+	uint8_t cc;
+	if (opts->gen.limit < 0) {
+		cmp_ir(code, 1, opts->gen.cycles, SZ_D);
+		cc = CC_NS;
+	} else {
+		cmp_rr(code, opts->gen.cycles, opts->gen.limit, SZ_D);
+		cc = CC_A;
+	}
+	code_ptr jmp_off = code->cur+1;
+	jcc(code, cc, jmp_off+1);
+	call(code, opts->handle_int_latch);
+	*jmp_off = code->cur - (jmp_off+1);
+}
+
+uint8_t translate_m68k_op(m68kinst * inst, host_ea * ea, m68k_options * opts, uint8_t dst)
 {
 	code_info *code = &opts->gen.code;
 	m68k_op_info *op = dst ? &inst->dst : &inst->src;
 	int8_t reg = native_reg(op, opts);
 	uint8_t sec_reg;
+	uint8_t ret = 1;
 	int32_t dec_amount, inc_amount;
 	if (reg >= 0) {
 		ea->mode = MODE_REG_DIRECT;
@@ -365,7 +383,7 @@ void translate_m68k_op(m68kinst * inst, host_ea * ea, m68k_options * opts, uint8
 		} else {
 			ea->base = reg;
 		}
-		return;
+		return 0;
 	}
 	switch (op->addr_mode)
 	{
@@ -388,8 +406,9 @@ void translate_m68k_op(m68kinst * inst, host_ea * ea, m68k_options * opts, uint8
 			ea->mode = MODE_REG_DIRECT;
 			ea->base = opts->gen.scratch1;
 			//we're explicitly handling the areg dest here, so we exit immediately
-			return;
+			return 0;
 		}
+		ret = 0;
 		break;
 	case MODE_AREG_PREDEC:
 		if (dst && inst->src.addr_mode == MODE_AREG_PREDEC) {
@@ -505,7 +524,7 @@ void translate_m68k_op(m68kinst * inst, host_ea * ea, m68k_options * opts, uint8
 		if (inst->dst.addr_mode == MODE_AREG && inst->extra.size == OPSIZE_WORD && ea->disp & 0x8000) {
 			ea->disp |= 0xFFFF0000;
 		}
-		return;
+		return inst->variant != VAR_QUICK;
 	default:
 		m68k_disasm(inst, disasm_buf);
 		fatal_error("%X: %s\naddress mode %d not implemented (%s)\n", inst->address, disasm_buf, op->addr_mode, dst ? "dst" : "src");
@@ -519,6 +538,7 @@ void translate_m68k_op(m68kinst * inst, host_ea * ea, m68k_options * opts, uint8
 		}
 		ea->base = opts->gen.scratch1;
 	}
+	return ret;
 }
 
 void check_user_mode_swap_ssp_usp(m68k_options *opts)
@@ -540,7 +560,9 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 	int32_t offset;
 	int32_t inc_amount, dec_amount;
 	host_ea src;
-	translate_m68k_op(inst, &src, opts, 0);
+	if (translate_m68k_op(inst, &src, opts, 0)) {
+		m68k_check_cycles_int_latch(opts);
+	}
 	reg = native_reg(&(inst->dst), opts);
 
 	if (inst->dst.addr_mode != MODE_AREG) {
@@ -3085,6 +3107,24 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	add_ir(code, 16-sizeof(void *), RSP, SZ_PTR);
 	jmp_r(code, opts->gen.scratch1);
 	code->stack_off = tmp_stack_off;
+	
+	opts->handle_int_latch = code->cur;
+	cmp_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_cycle), opts->gen.cycles, SZ_D);
+	code_ptr do_latch = code->cur + 1; 
+	jcc(code, CC_NC, do_latch);
+	retn(code);
+	*do_latch = code->cur - (do_latch + 1);
+	cmp_irdisp(code, INT_PENDING_NONE, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
+	do_latch = code->cur + 1;
+	jcc(code, CC_Z, do_latch);
+	retn(code);
+	*do_latch = code->cur - (do_latch + 1);
+	//store current interrupt number so it doesn't change before we start processing the vector
+	push_r(code, opts->gen.scratch1);
+	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_num), opts->gen.scratch1, SZ_B);
+	mov_rrdisp(code, opts->gen.scratch1, opts->gen.context_reg, offsetof(m68k_context, int_pending), SZ_B);
+	pop_r(code, opts->gen.scratch1);
+	retn(code);
 
 	opts->trap = code->cur;
 	push_r(code, opts->gen.scratch2);
