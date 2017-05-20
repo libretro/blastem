@@ -969,11 +969,15 @@ static void translate_m68k(m68k_context *context, m68kinst * inst)
 	}
 
 	host_ea src_op, dst_op;
+	uint8_t needs_int_latch = 0;
 	if (inst->src.addr_mode != MODE_UNUSED) {
-		translate_m68k_op(inst, &src_op, opts, 0);
+		needs_int_latch |= translate_m68k_op(inst, &src_op, opts, 0);
 	}
 	if (inst->dst.addr_mode != MODE_UNUSED) {
-		translate_m68k_op(inst, &dst_op, opts, 1);
+		needs_int_latch |= translate_m68k_op(inst, &dst_op, opts, 1);
+	}
+	if (needs_int_latch) {
+		m68k_check_cycles_int_latch(opts);
 	}
 	if (info->itype == OP_FUNC) {
 		info->impl.op(opts, inst, &src_op, &dst_op);
