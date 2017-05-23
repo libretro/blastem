@@ -2014,14 +2014,15 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		if (context->state == PREPARING) {
 			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
 			uint32_t *dst;
-			if (headless) {
-				dst = context->output;
-			} else {
-				dst = ((uint32_t *)(((char *)context->fb) + context->output_pitch * (context->border_top - 2)))
+			dst = ((uint32_t *)(((char *)context->fb) + context->output_pitch * (context->border_top - 2)))
 					+ (context->hslot - BG_START_SLOT) * 2;
+			if (dst >= context->done_output) {
+				*dst = bg_color;
 			}
-			*(dst++) = bg_color;
-			*dst = bg_color;
+			dst++;
+			if (dst >= context->done_output) {
+				*dst = bg_color;
+			}
 			external_slot(context);
 		} else {
 			render_sprite_cells(context);
@@ -2031,14 +2032,15 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		if (context->state == PREPARING) {
 			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
 			uint32_t *dst;
-			if (headless) {
-				dst = context->output;
-			} else {
-				dst = ((uint32_t *)(((char *)context->fb) + context->output_pitch * (context->border_top - 2)))
+			dst = ((uint32_t *)(((char *)context->fb) + context->output_pitch * (context->border_top - 2)))
 					+ (context->hslot - BG_START_SLOT) * 2;
+			if (dst >= context->done_output) {
+				*dst = bg_color;
 			}
-			*(dst++) = bg_color;
-			*dst = bg_color;
+			dst++;
+			if (dst >= context->done_output) {
+				*dst = bg_color;
+			}
 			external_slot(context);
 		} else {
 			render_sprite_cells(context);
@@ -2054,11 +2056,7 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		if (context->state == PREPARING) {
 			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
 			uint32_t *dst;
-			if (headless) {
-				dst = context->output;
-			} else {
-				dst = context->output + (context->hslot - BG_START_SLOT) * 2;
-			}
+			dst = context->output + (context->hslot - BG_START_SLOT) * 2;
 			for (int i = 0; i < LINEBUF_SIZE - 2 * (context->hslot - BG_START_SLOT); i++, dst++)
 			{
 				if (dst >= context->done_output) {
@@ -2579,6 +2577,7 @@ static void inactive_test_output(vdp_context *context, uint8_t is_h40, uint8_t t
 	{
 		*dst = context->colors[src[src_off & SCROLL_BUFFER_MASK] & 0x3F];
 	}
+	context->done_output = dst;
 	context->buf_a_off = (context->buf_a_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_DRAW;
 	context->buf_b_off = (context->buf_b_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_DRAW;
 }
