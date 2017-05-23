@@ -503,6 +503,15 @@ T-103026 {
 		2 gamepad3.2
 	}
 }
+T-119106 {
+	name Combat Cars
+	#Routine in the main game seems to work fine with 6-button controllers,
+	#but options menu has problems.
+	device_overrides {
+		1 gamepad3.1
+		2 gamepad3.2
+	}
+}
 #Automatically hook up the mouse in the appropriate port for the games I've tested
 T-76076 {
 	name Nobunaga's Ambition
