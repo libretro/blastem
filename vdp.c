@@ -3283,6 +3283,13 @@ uint32_t vdp_next_hint(vdp_context * context)
 				if (hint_line > context->inactive_start) {
 					return 0xFFFFFFFF;
 				}
+				if (hint_line >= context->vcounter) {
+					//Next interrupt is for a line in the next frame that
+					//is higher than the line we're on now so just passing
+					//that line number to vdp_cycles_to_line will yield the wrong
+					//result
+					return context->cycles + vdp_cycles_to_line(context,  0) + hint_line * MCLKS_LINE - HINT_FUDGE;
+				}
 			}
 		} else {
 			uint32_t jump_start, jump_dst;
