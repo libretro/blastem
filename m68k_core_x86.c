@@ -560,9 +560,7 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 	int32_t offset;
 	int32_t inc_amount, dec_amount;
 	host_ea src;
-	if (translate_m68k_op(inst, &src, opts, 0)) {
-		m68k_check_cycles_int_latch(opts);
-	}
+	uint8_t needs_int_latch = translate_m68k_op(inst, &src, opts, 0);
 	reg = native_reg(&(inst->dst), opts);
 
 	if (inst->dst.addr_mode != MODE_AREG) {
@@ -714,11 +712,24 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 		update_flags(opts, N|Z|V0|C0);
 	}
 	if (inst->dst.addr_mode != MODE_REG && inst->dst.addr_mode != MODE_AREG) {
+		if (inst->extra.size == OPSIZE_LONG) {
+			//We want the int latch to occur between the two writes,
+			//but that's a pain to do without refactoring how 32-bit writes work
+			//workaround it by temporarily increasing the cycle count before the check
+			cycles(&opts->gen, BUS);
+		}
+		m68k_check_cycles_int_latch(opts);
+		if (inst->extra.size == OPSIZE_LONG) {
+			//and then backing out that extra increment here before the write happens
+			cycles(&opts->gen, -BUS);
+		}
 		m68k_write_size(opts, inst->extra.size, inst->dst.addr_mode == MODE_AREG_PREDEC);
 		if (inst->dst.addr_mode == MODE_AREG_POSTINC) {
 			inc_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (inst->dst.params.regs.pri == 7 ? 2 : 1));
 			addi_areg(opts, inc_amount, inst->dst.params.regs.pri);
 		}
+	} else {
+		m68k_check_cycles_int_latch(opts);
 	}
 
 	//add cycles for prefetch
