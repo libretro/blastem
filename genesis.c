@@ -306,6 +306,7 @@ static m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, 
 			}
 		} else if(vdp_port < 8) {
 			vdp_run_context_full(v_context, context->current_cycle);
+			before_cycle = v_context->cycles;
 			blocked = vdp_control_port_write(v_context, value);
 			if (blocked) {
 				while (blocked) {
