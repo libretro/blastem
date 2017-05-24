@@ -299,6 +299,7 @@ static m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, 
 				//context->current_cycle = v_context->cycles;
 			}
 		} else if(vdp_port < 8) {
+			vdp_run_context_full(v_context, context->current_cycle);
 			blocked = vdp_control_port_write(v_context, value);
 			if (blocked) {
 				while (blocked) {
@@ -373,10 +374,11 @@ static void * z80_vdp_port_write(uint32_t vdp_port, void * vcontext, uint8_t val
 	}
 	if (vdp_port < 0x10) {
 		//These probably won't currently interact well with the 68K accessing the VDP
-		vdp_run_context(gen->vdp, context->current_cycle);
 		if (vdp_port < 4) {
+			vdp_run_context(gen->vdp, context->current_cycle);
 			vdp_data_port_write(gen->vdp, value << 8 | value);
 		} else if (vdp_port < 8) {
+			vdp_run_context_full(gen->vdp, context->current_cycle);
 			vdp_control_port_write(gen->vdp, value << 8 | value);
 		} else {
 			fatal_error("Illegal write to HV Counter port %X\n", vdp_port);

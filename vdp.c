@@ -2758,7 +2758,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 	}
 }
 
-void vdp_run_context(vdp_context * context, uint32_t target_cycles)
+void vdp_run_context_full(vdp_context * context, uint32_t target_cycles)
 {
 	uint8_t is_h40 = context->regs[REG_MODE_4] & BIT_H40;
 	uint8_t mode_5 = context->regs[REG_MODE_2] & BIT_MODE_5;
@@ -2782,11 +2782,22 @@ void vdp_run_context(vdp_context * context, uint32_t target_cycles)
 	}
 }
 
+void vdp_run_context(vdp_context *context, uint32_t target_cycles)
+{
+	//TODO: Deal with H40 hsync shenanigans
+	uint32_t slot_cyc = context->regs[REG_MODE_4] & BIT_H40 ? 15 : 19;
+	if (target_cycles < slot_cyc) {
+		//avoid overflow
+		return;
+	}
+	vdp_run_context_full(context, target_cycles - slot_cyc);
+}
+
 uint32_t vdp_run_to_vblank(vdp_context * context)
 {
 	uint32_t old_frame = context->frame;
 	while (context->frame == old_frame) {
-		vdp_run_context(context, context->cycles + MCLKS_LINE);
+		vdp_run_context_full(context, context->cycles + MCLKS_LINE);
 	}
 	return context->cycles;
 }
@@ -2809,10 +2820,10 @@ void vdp_run_dma_done(vdp_context * context, uint32_t target_cycles)
 		}
 		min_dma_complete += context->cycles;
 		if (target_cycles < min_dma_complete) {
-			vdp_run_context(context, target_cycles);
+			vdp_run_context_full(context, target_cycles);
 			return;
 		} else {
-			vdp_run_context(context, min_dma_complete);
+			vdp_run_context_full(context, min_dma_complete);
 			if (!(context->flags & FLAG_DMA_RUN)) {
 				return;
 			}
@@ -2882,7 +2893,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 					//logic analyzer captures made it seem like the proper value is 4 slots, but that seems to cause trouble with the Nemesis' FIFO Wait State test
 					//only captures are from a direct color DMA demo which will generally start DMA at a very specific point in display so other values are plausible
 					//sticking with 3 slots for now until I can do some more captures
-					vdp_run_context(context, context->cycles + 12 * ((context->regs[REG_MODE_2] & BIT_MODE_5) && (context->regs[REG_MODE_4] & BIT_H40) ? 4 : 5));
+					vdp_run_context_full(context, context->cycles + 12 * ((context->regs[REG_MODE_2] & BIT_MODE_5) && (context->regs[REG_MODE_4] & BIT_H40) ? 4 : 5));
 					context->flags |= FLAG_DMA_RUN;
 					return 1;
 				} else {
@@ -2970,7 +2981,7 @@ int vdp_data_port_write(vdp_context * context, uint16_t value)
 		context->flags &= ~FLAG_DMA_RUN;
 	}
 	while (context->fifo_write == context->fifo_read) {
-		vdp_run_context(context, context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20));
+		vdp_run_context_full(context, context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20));
 	}
 	fifo_entry * cur = context->fifo + context->fifo_write;
 	cur->cycle = context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20)*FIFO_LATENCY;
@@ -3006,7 +3017,7 @@ void vdp_data_port_write_pbc(vdp_context * context, uint8_t value)
 		context->flags &= ~FLAG_DMA_RUN;
 	}
 	while (context->fifo_write == context->fifo_read) {
-		vdp_run_context(context, context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20));
+		vdp_run_context_full(context, context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20));
 	}
 	fifo_entry * cur = context->fifo + context->fifo_write;
 	cur->cycle = context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20)*FIFO_LATENCY;
@@ -3091,7 +3102,7 @@ uint16_t vdp_data_port_read(vdp_context * context)
 		warning("Read from VDP data port while writes are configured, CPU is now frozen. VDP Address: %X, CD: %X\n", context->address, context->cd);
 	}
 	while (!(context->flags & FLAG_READ_FETCHED)) {
-		vdp_run_context(context, context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20));
+		vdp_run_context_full(context, context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20));
 	}
 	context->flags &= ~FLAG_READ_FETCHED;
 	return context->prefetch;
@@ -3243,18 +3254,13 @@ uint32_t vdp_cycles_to_frame_end(vdp_context * context)
 	return context->cycles + vdp_cycles_to_line(context, context->inactive_start);
 }
 
-//This gives correct values in my test ROM. Kind of a hack, might be partly
-//due to interrupts getting latched at the end of a "dbi" micro-instruction
-//but that would only account for 28 of the 36 cycles. More hardware testing
-//necessary to determine the cause of the discrepency
-#define HINT_FUDGE 36
 uint32_t vdp_next_hint(vdp_context * context)
 {
 	if (!(context->regs[REG_MODE_1] & BIT_HINT_EN)) {
 		return 0xFFFFFFFF;
 	}
 	if (context->flags2 & FLAG2_HINT_PENDING) {
-		return context->pending_hint_start - HINT_FUDGE;
+		return context->pending_hint_start;
 	}
 	uint32_t hint_line;
 	if (context->state != ACTIVE) {
@@ -3275,7 +3281,7 @@ uint32_t vdp_next_hint(vdp_context * context)
 					//is higher than the line we're on now so just passing
 					//that line number to vdp_cycles_to_line will yield the wrong
 					//result
-					return context->cycles + vdp_cycles_to_line(context,  0) + hint_line * MCLKS_LINE - HINT_FUDGE;
+					return context->cycles + vdp_cycles_to_line(context,  0) + hint_line * MCLKS_LINE;
 				}
 			}
 		} else {
@@ -3289,7 +3295,7 @@ uint32_t vdp_next_hint(vdp_context * context)
 			}
 		}
 	}
-	return context->cycles + vdp_cycles_to_line(context, hint_line) - HINT_FUDGE;
+	return context->cycles + vdp_cycles_to_line(context, hint_line);
 }
 
 static uint32_t vdp_next_vint_real(vdp_context * context)
