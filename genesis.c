@@ -283,9 +283,9 @@ static m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, 
 	sync_components(context, 0);
 	genesis_context * gen = context->system;
 	vdp_context *v_context = gen->vdp;
+	uint32_t before_cycle = v_context->cycles;
 	if (vdp_port < 0x10) {
 		int blocked;
-		uint32_t before_cycle = v_context->cycles;
 		if (vdp_port < 4) {
 			while (vdp_data_port_write(v_context, value) < 0) {
 				while(v_context->flags & FLAG_DMA_RUN) {
@@ -361,8 +361,12 @@ static m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, 
 	last_sync_cycle -= 4;
 	//refresh may have happened while we were waiting on the VDP,
 	//so advance refresh_counter but don't add any delays
-	refresh_counter += (context->current_cycle - last_sync_cycle);
-	refresh_counter = refresh_counter % (MCLKS_PER_68K * REFRESH_INTERVAL);
+	if (vdp_port >= 4 && vdp_port < 8 && v_context->cycles != before_cycle) {
+		refresh_counter = 0;
+	} else {
+		refresh_counter += (context->current_cycle - last_sync_cycle);
+		refresh_counter = refresh_counter % (MCLKS_PER_68K * REFRESH_INTERVAL);
+	}
 	last_sync_cycle = context->current_cycle;
 #endif
 	return context;
