@@ -1494,7 +1494,7 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 			switch(test_layer)
 			{
 			case 1:
-				//TODO: Display garbage from bus?
+				bg_color = context->colors[0];
 				for (int i = 0; i < BORDER_LEFT; i++, dst++)
 				{
 					*dst = bg_color;
@@ -1504,10 +1504,6 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 				//plane A
 				//TODO: Deal with Window layer
 				int i;
-				/*for (i = 0; i < (context->hscroll_a & 0xF) - (16 - BORDER_LEFT); i++, dst++)
-				{
-					*dst = bg_color;
-				}*/
 				i = 0;
 				uint8_t buf_off = context->buf_a_off - (context->hscroll_a & 0xF) + (16 - BORDER_LEFT);
 				//uint8_t *src = context->tmp_buf_a + ((context->buf_a_off + (i ? 0 : (16 - BORDER_LEFT) - (context->hscroll_a & 0xF))) & SCROLL_BUFFER_MASK); 
@@ -1520,10 +1516,6 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 			case 3: {
 				//plane B
 				int i;
-				/*for (i = 0; i < (context->hscroll_b & 0xF) - (16 - BORDER_LEFT); i++, dst++)
-				{
-					*dst = bg_color;
-				}*/
 				i = 0;
 				uint8_t buf_off = context->buf_b_off - (context->hscroll_b & 0xF) + (16 - BORDER_LEFT);
 				//uint8_t *src = context->tmp_buf_b + ((context->buf_b_off + (i ? 0 : (16 - BORDER_LEFT) - (context->hscroll_b & 0xF))) & SCROLL_BUFFER_MASK); 
@@ -1773,7 +1765,7 @@ static void draw_right_border(vdp_context *context)
 		switch(test_layer)
 			{
 			case 1:
-				//TODO: Display garbage from bus?
+				bg_color = context->colors[0];
 				for (int i = 0; i < BORDER_RIGHT; i++, dst++)
 				{
 					*dst = bg_color;
@@ -1783,10 +1775,6 @@ static void draw_right_border(vdp_context *context)
 				//plane A
 				//TODO: Deal with Window layer
 				int i;
-				/*for (i = 0; i < (context->hscroll_a & 0xF) - (16 - BORDER_LEFT); i++, dst++)
-				{
-					*dst = bg_color;
-				}*/
 				i = 0;
 				uint8_t buf_off = context->buf_a_off - (context->hscroll_a & 0xF);
 				//uint8_t *src = context->tmp_buf_a + ((context->buf_a_off + (i ? 0 : (16 - BORDER_LEFT) - (context->hscroll_a & 0xF))) & SCROLL_BUFFER_MASK); 
@@ -1799,10 +1787,6 @@ static void draw_right_border(vdp_context *context)
 			case 3: {
 				//plane B
 				int i;
-				/*for (i = 0; i < (context->hscroll_b & 0xF) - (16 - BORDER_LEFT); i++, dst++)
-				{
-					*dst = bg_color;
-				}*/
 				i = 0;
 				uint8_t buf_off = context->buf_b_off - (context->hscroll_b & 0xF);
 				//uint8_t *src = context->tmp_buf_b + ((context->buf_b_off + (i ? 0 : (16 - BORDER_LEFT) - (context->hscroll_b & 0xF))) & SCROLL_BUFFER_MASK); 
@@ -1819,6 +1803,7 @@ static void draw_right_border(vdp_context *context)
 			*dst = bg_color;
 		}
 	}
+	context->done_output = dst;
 	context->buf_a_off = (context->buf_a_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
 	context->buf_b_off = (context->buf_b_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
 }
@@ -2568,10 +2553,16 @@ static void inactive_test_output(vdp_context *context, uint8_t is_h40, uint8_t t
 		//plane A
 		src_off += context->buf_a_off + context->hscroll_a;
 		src = context->tmp_buf_a;
-	} else {
+	} else if (test_layer == 3){
 		//plane B
 		src_off += context->buf_b_off + context->hscroll_b;
 		src = context->tmp_buf_b;
+	} else {
+		//sprite layer
+		for (; len >=0; len--, dst++, src_off++)
+		{
+			*dst = context->colors[0];
+		}
 	}
 	for (; len >=0; len--, dst++, src_off++)
 	{
@@ -2659,10 +2650,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 	}
 		
 	uint8_t test_layer = context->test_port >> 7 & 3;
-	if (test_layer == 1) {
-		//sprite layer doesn't do anything interesting in the passive area
-		test_layer = 0;
-	} else if (test_layer) {
+	if (test_layer) {
 		dst = NULL;
 	}
 	
