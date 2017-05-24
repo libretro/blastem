@@ -81,11 +81,12 @@ static void *vdp_write(uint32_t location, void *vcontext, uint8_t value)
 {
 	z80_context *z80 = vcontext;
 	sms_context *sms = z80->system;
-	vdp_run_context(sms->vdp, z80->current_cycle);
 	if (location & 1) {
+		vdp_run_context_full(sms->vdp, z80->current_cycle);
 		vdp_control_port_write_pbc(sms->vdp, value);
 		update_interrupts(sms);
 	} else {
+		vdp_run_context(sms->vdp, z80->current_cycle);
 		vdp_data_port_write_pbc(sms->vdp, value);
 	}
 	return vcontext;
