@@ -353,6 +353,7 @@ void calc_areg_index_disp8(m68k_options *opts, m68k_op_info *op, uint8_t native_
 void m68k_check_cycles_int_latch(m68k_options *opts)
 {
 	code_info *code = &opts->gen.code;
+	check_alloc_code(code, 3*MAX_INST_LEN);
 	uint8_t cc;
 	if (opts->gen.limit < 0) {
 		cmp_ir(code, 1, opts->gen.cycles, SZ_D);
@@ -728,7 +729,7 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 			inc_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (inst->dst.params.regs.pri == 7 ? 2 : 1));
 			addi_areg(opts, inc_amount, inst->dst.params.regs.pri);
 		}
-	} else {
+	} else if (needs_int_latch) {
 		m68k_check_cycles_int_latch(opts);
 	}
 
