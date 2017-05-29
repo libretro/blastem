@@ -193,7 +193,7 @@ static void run_sms(system_header *system)
 {
 	render_disable_ym();
 	sms_context *sms = (sms_context *)system;
-	uint32_t target_cycle = sms->z80->current_cycle + 3420*262;
+	uint32_t target_cycle = sms->z80->current_cycle + 3420*16;
 	//TODO: PAL support
 	render_set_video_standard(VID_NTSC);
 	while (!sms->should_return)
@@ -202,6 +202,12 @@ static void run_sms(system_header *system)
 			system->enter_debugger = 0;
 			zdebugger(sms->z80, sms->z80->pc);
 		}
+		if (sms->z80->nmi_start == CYCLE_NEVER) {
+			uint32_t nmi = vdp_next_nmi(sms->vdp);
+			if (nmi != CYCLE_NEVER) {
+				z80_assert_nmi(sms->z80, nmi);
+			}
+		}
 		z80_run(sms->z80, target_cycle);
 		if (sms->z80->reset) {
 			z80_clear_reset(sms->z80, sms->z80->current_cycle + 128*15);
@@ -209,7 +215,7 @@ static void run_sms(system_header *system)
 		target_cycle = sms->z80->current_cycle;
 		vdp_run_context(sms->vdp, target_cycle);
 		psg_run(sms->psg, target_cycle);
-		target_cycle += 3420*262;
+		target_cycle += 3420*16;
 		if (target_cycle > 0x10000000) {
 			uint32_t adjust = sms->z80->current_cycle - 3420*262*2;
 			io_adjust_cycles(sms->io.ports, sms->z80->current_cycle, adjust);
@@ -355,6 +361,7 @@ sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t for
 	sms->header.soft_reset = soft_reset;
 	sms->header.inc_debug_mode = inc_debug_mode;
 	sms->header.inc_debug_pal = inc_debug_pal;
+	sms->header.type = SYSTEM_SMS;
 	
 	return sms;
 }

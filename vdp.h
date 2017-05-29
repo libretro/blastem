@@ -59,6 +59,7 @@
 #define FLAG2_REGION_PAL     0x10
 #define FLAG2_EVEN_FIELD     0x20
 #define FLAG2_BYTE_PENDING   0x40
+#define FLAG2_PAUSE          0x80
 
 #define DISPLAY_ENABLE 0x40
 
@@ -238,6 +239,7 @@ void vdp_adjust_cycles(vdp_context * context, uint32_t deduction);
 uint32_t vdp_next_hint(vdp_context * context);
 uint32_t vdp_next_vint(vdp_context * context);
 uint32_t vdp_next_vint_z80(vdp_context * context);
+uint32_t vdp_next_nmi(vdp_context *context);
 void vdp_int_ack(vdp_context * context);
 void vdp_print_sprite_table(vdp_context * context);
 void vdp_print_reg_explain(vdp_context * context);
@@ -245,5 +247,6 @@ void latch_mode(vdp_context * context);
 uint32_t vdp_cycles_to_frame_end(vdp_context * context);
 void write_cram(vdp_context * context, uint16_t address, uint16_t value);
 void vdp_check_update_sat_byte(vdp_context *context, uint32_t address, uint8_t value);
+void vdp_pbc_pause(vdp_context *context);
 
 #endif //VDP_H_
