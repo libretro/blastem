@@ -76,6 +76,7 @@ struct z80_context {
 	uint16_t          pc;
 	uint32_t          int_pulse_start;
 	uint32_t          int_pulse_end;
+	uint32_t          nmi_start;
 	uint8_t           breakpoint_flags[(16 * 1024)/sizeof(uint8_t)];
 	uint8_t *         bp_handler;
 	uint8_t *         bp_stub;
@@ -84,6 +85,7 @@ struct z80_context {
 	uint8_t           reset;
 	uint8_t           busreq;
 	uint8_t           busack;
+	uint8_t           int_is_nmi;
 	uint8_t           ram_code_flags[];
 };
 
@@ -103,6 +105,7 @@ void z80_assert_reset(z80_context * context, uint32_t cycle);
 void z80_clear_reset(z80_context * context, uint32_t cycle);
 void z80_assert_busreq(z80_context * context, uint32_t cycle);
 void z80_clear_busreq(z80_context * context, uint32_t cycle);
+void z80_assert_nmi(z80_context *context, uint32_t cycle);
 uint8_t z80_get_busack(z80_context * context, uint32_t cycle);
 void z80_adjust_cycles(z80_context * context, uint32_t deduction);
 

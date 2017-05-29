@@ -3416,8 +3416,18 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	neg_r(code, options->gen.cycles, SZ_D);
 	add_rr(code, options->gen.scratch2, options->gen.cycles, SZ_D);
 	//disable interrupts
+	cmp_irdisp(code, 0, options->gen.context_reg, offsetof(z80_context, int_is_nmi), SZ_B);
+	code_ptr is_nmi = code->cur + 1;
+	jcc(code, CC_NZ, is_nmi);
 	mov_irdisp(code, 0, options->gen.context_reg, offsetof(z80_context, iff1), SZ_B);
 	mov_irdisp(code, 0, options->gen.context_reg, offsetof(z80_context, iff2), SZ_B);
+	code_ptr after_int_disable = code->cur + 1;
+	jmp(code, after_int_disable);
+	*is_nmi = code->cur - (is_nmi + 1);
+	mov_rdispr(code, options->gen.context_reg, offsetof(z80_context, iff1), options->gen.scratch2, SZ_B);
+	mov_irdisp(code, 0, options->gen.context_reg, offsetof(z80_context, iff1), SZ_B);
+	mov_rrdisp(code, options->gen.scratch2, options->gen.context_reg, offsetof(z80_context, iff2), SZ_B);
+	*after_int_disable = code->cur - (after_int_disable + 1);
 	cycles(&options->gen, 7);
 	//save return address (in scratch1) to Z80 stack
 	sub_ir(code, 2, options->regs[Z80_SP], SZ_W);
@@ -3441,8 +3451,18 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	call(code, options->write_8_noinc);
 	//dispose of return address as we'll be jumping somewhere else
 	add_ir(code, 16, RSP, SZ_PTR);
+	cmp_irdisp(code, 0, options->gen.context_reg, offsetof(z80_context, int_is_nmi), SZ_B);
+	is_nmi = code->cur + 1;
+	jcc(code, CC_NZ, is_nmi);
 	//TODO: Support interrupt mode 0 and 2
 	mov_ir(code, 0x38, options->gen.scratch1, SZ_W);
+	code_ptr after_int_dest = code->cur + 1;
+	jmp(code, after_int_dest);
+	*is_nmi = code->cur - (is_nmi + 1);
+	mov_irdisp(code, 0, options->gen.context_reg, offsetof(z80_context, int_is_nmi), SZ_B);
+	mov_irdisp(code, CYCLE_NEVER, options->gen.context_reg, offsetof(z80_context, nmi_start), SZ_D);
+	mov_ir(code, 0x66, options->gen.scratch1, SZ_W);
+	*after_int_dest = code->cur - (after_int_dest + 1);
 	call(code, options->native_addr);
 	mov_rrind(code, options->gen.scratch1, options->gen.context_reg, SZ_PTR);
 	tmp_stack_off = code->stack_off;
@@ -3571,8 +3591,17 @@ z80_context *init_z80_context(z80_options * options)
 	context->int_cycle = CYCLE_NEVER;
 	context->int_pulse_start = CYCLE_NEVER;
 	context->int_pulse_end = CYCLE_NEVER;
+	context->nmi_start = CYCLE_NEVER;
 	
 	return context;
+}
+
+static void check_nmi(z80_context *context)
+{
+	if (context->nmi_start < context->int_cycle) {
+		context->int_cycle = context->nmi_start;
+		context->int_is_nmi = 1;
+	}
 }
 
 void z80_run(z80_context * context, uint32_t target_cycle)
@@ -3594,9 +3623,12 @@ void z80_run(z80_context * context, uint32_t target_cycle)
 				}
 				if (context->iff1) {
 					context->int_cycle = context->int_pulse_start < context->int_enable_cycle ? context->int_enable_cycle : context->int_pulse_start;
+					context->int_is_nmi = 0;
 				} else {
 					context->int_cycle = CYCLE_NEVER;
 				}
+				check_nmi(context);
+				
 				context->target_cycle = context->sync_cycle < context->int_cycle ? context->sync_cycle : context->int_cycle;
 				dprintf("Running Z80 from cycle %d to cycle %d. Int cycle: %d (%d - %d)\n", context->current_cycle, context->sync_cycle, context->int_cycle, context->int_pulse_start, context->int_pulse_end);
 				context->options->run(context);
@@ -3666,6 +3698,12 @@ uint8_t z80_get_busack(z80_context * context, uint32_t cycle)
 {
 	z80_run(context, cycle);
 	return context->busack;
+}
+
+void z80_assert_nmi(z80_context *context, uint32_t cycle)
+{
+	context->nmi_start = cycle;
+	check_nmi(context);
 }
 
 void z80_adjust_cycles(z80_context * context, uint32_t deduction)
