@@ -1035,6 +1035,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	gen->header.request_exit = request_exit;
 	gen->header.inc_debug_mode = inc_debug_mode;
 	gen->header.inc_debug_pal = inc_debug_pal;
+	gen->header.type = SYSTEM_GENESIS;
 	set_region(gen, rom, force_region);
 
 	gen->vdp = malloc(sizeof(vdp_context));
