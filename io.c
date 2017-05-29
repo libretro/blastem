@@ -18,6 +18,7 @@
 #include "io.h"
 #include "blastem.h"
 #include "genesis.h"
+#include "sms.h"
 #include "render.h"
 #include "util.h"
 
@@ -74,6 +75,7 @@ typedef enum {
 	UI_TOGGLE_KEYBOARD_CAPTURE,
 	UI_TOGGLE_FULLSCREEN,
 	UI_SOFT_RESET,
+	UI_SMS_PAUSE,
 	UI_SCREENSHOT,
 	UI_EXIT
 } ui_action;
@@ -493,6 +495,12 @@ void handle_binding_up(keybinding * binding)
 		case UI_SOFT_RESET:
 			current_system->soft_reset(current_system);
 			break;
+		case UI_SMS_PAUSE:
+			if (current_system->type == SYSTEM_SMS) {
+				sms_context *sms = (sms_context *)current_system;
+				vdp_pbc_pause(sms->vdp);
+			}
+			break;
 		case UI_SCREENSHOT: {
 			char *screenshot_base = tern_find_path(config, "ui\0screenshot_path\0", TVAL_PTR).ptrval;
 			if (!screenshot_base) {
@@ -690,6 +698,8 @@ int parse_binding_target(char * target, tern_node * padbuttons, tern_node *mouse
 			*ui_out = UI_TOGGLE_FULLSCREEN;
 		} else if (!strcmp(target + 3, "soft_reset")) {
 			*ui_out = UI_SOFT_RESET;
+		} else if (!strcmp(target + 3, "sms_pause")) {
+			*ui_out = UI_SMS_PAUSE;
 		} else if (!strcmp(target + 3, "screenshot")) {
 			*ui_out = UI_SCREENSHOT;
 		} else if(!strcmp(target + 3, "exit")) {

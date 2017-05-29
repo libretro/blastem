@@ -1685,6 +1685,9 @@ static void vdp_advance_line(vdp_context *context)
 	if (context->state == PREPARING) {
 		context->state = ACTIVE;
 	}
+	if (context->vcounter == 0x1FF) {
+		context->flags2 &= ~FLAG2_PAUSE;
+	}
 
 	if (context->state != ACTIVE) {
 		context->hint_counter = context->regs[REG_HINT];
@@ -3381,6 +3384,19 @@ uint32_t vdp_next_vint_z80(vdp_context * context)
 		cycles_to_vint += (256 - LINE_CHANGE_MODE4 + VINT_SLOT_MODE4) * MCLKS_SLOT_H32;
 	}
 	return context->cycles + cycles_to_vint;
+}
+
+uint32_t vdp_next_nmi(vdp_context *context)
+{
+	if (!(context->flags2 & FLAG2_PAUSE)) {
+		return 0xFFFFFFFF;
+	}
+	return context->cycles + vdp_cycles_to_line(context, 0x1FF);
+}
+
+void vdp_pbc_pause(vdp_context *context)
+{
+	context->flags2 |= FLAG2_PAUSE;
 }
 
 void vdp_int_ack(vdp_context * context)
