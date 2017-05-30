@@ -129,12 +129,9 @@ static void update_video_params(vdp_context *context)
 			if (context->vcounter < context->inactive_start) {
 				context->state = ACTIVE;
 			}
-			/*
-			FIXME: uncomment this once mode 4 renderer is updated to handle this
 			else if (context->vcounter == 0x1FF) {
 				context->state = PREPARING;
 			}
-			*/
 		}
 	}
 }
@@ -1282,6 +1279,7 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 			{
 				*dst = bg_color;
 			}
+			context->done_output = dst;
 			return;
 		}
 		uint32_t color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
@@ -1289,6 +1287,7 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		{
 			*(dst++) = color;
 		}
+		context->done_output = dst;
 		return;
 	}
 	line &= 0xFF;
@@ -1579,7 +1578,15 @@ static void render_map_mode4(uint32_t line, int32_t col, vdp_context * context)
 	context->buf_a_off = (context->buf_a_off + 8) & 15;
 	
 	uint8_t bgcolor = 0x10 | (context->regs[REG_BG_COLOR] & 0xF) + CRAM_SIZE*3;
-	uint32_t *dst = context->output + col * 8;
+	uint32_t *dst = context->output + col * 8 + BORDER_LEFT;
+	if (context->state == PREPARING) {
+		for (int i = 0; i < 16; i++)
+		{
+			*(dst++) = context->colors[bgcolor];
+		}
+		context->done_output = dst;
+		return;
+	}
 	if (context->debug < 2) {
 		if (col || !(context->regs[REG_MODE_1] & BIT_COL0_MASK)) {
 			uint8_t *sprite_src = context->linebuf + col * 8;
@@ -1641,6 +1648,7 @@ static void render_map_mode4(uint32_t line, int32_t col, vdp_context * context)
 			}
 		}
 	}
+	context->done_output = dst;
 }
 
 static uint32_t const h40_hsync_cycles[] = {19, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20, 20, 19};
@@ -1722,10 +1730,14 @@ static void advance_output_line(vdp_context *context)
 			context->frame++;
 			context->output_lines = 0;
 		}
-		uint32_t output_line;
-		if (context->vcounter < context->inactive_start + context->border_bot && context->output_lines > 0) {
+		uint32_t output_line = context->vcounter;
+		if (!(context->regs[REG_MODE_2] & BIT_MODE_5)) {
+			//vcounter increment occurs much later in Mode 4
+			output_line++;
+		} 
+		if (output_line < context->inactive_start + context->border_bot && context->output_lines > 0) {
 			output_line = context->output_lines++;//context->border_top + context->vcounter;
-		} else if (context->vcounter >= 0x200 - context->border_top) {
+		} else if (output_line >= 0x200 - context->border_top) {
 			output_line = context->output_lines++;//context->vcounter - (0x200 - context->border_top);
 		} else {
 			output_line = INVALID_LINE;
@@ -1967,6 +1979,9 @@ static void draw_right_border(vdp_context *context)
 		
 #define MODE4_CHECK_SLOT_LINE(slot) \
 		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); } \
+		if ((slot) == BG_START_SLOT + (256+HORIZ_BORDER)/2) {\
+			advance_output_line(context);\
+		}\
 		if ((slot) == 147) {\
 			context->hslot = 233;\
 		} else {\
@@ -1975,7 +1990,6 @@ static void draw_right_border(vdp_context *context)
 		context->cycles += slot_cycles;\
 		if ((slot+1) == LINE_CHANGE_MODE4) {\
 			vdp_advance_line(context);\
-			advance_output_line(context);\
 			if (context->vcounter == 192) {\
 				return;\
 			}\
@@ -1995,6 +2009,15 @@ static void draw_right_border(vdp_context *context)
 		fetch_sprite_cells_mode4(context);\
 		MODE4_CHECK_SLOT_LINE(CALC_SLOT(slot, 2))\
 	case CALC_SLOT(slot, 3):\
+		if ((slot + 3) == 140) {\
+			uint32_t *dst = context->output + BORDER_LEFT + 256 + 8;\
+			uint32_t bgcolor = context->colors[0x10 | (context->regs[REG_BG_COLOR] & 0xF) + CRAM_SIZE*3];\
+			for (int i = 0; i < BORDER_RIGHT-8; i++, dst++)\
+			{\
+				*dst = bgcolor;\
+			}\
+			context->done_output = dst;\
+		}\
 		render_sprite_cells_mode4(context);\
 		MODE4_CHECK_SLOT_LINE(CALC_SLOT(slot, 3))\
 	case CALC_SLOT(slot, 4):\
@@ -2488,9 +2511,17 @@ static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
 	case 255:
 		scan_sprite_table_mode4(context);
 		CHECK_LIMIT
-	case 0:
+	case 0: {
 		scan_sprite_table_mode4(context);
+		uint32_t *dst = context->output;;
+		uint32_t bgcolor = context->colors[0x10 | (context->regs[REG_BG_COLOR] & 0xF) + CRAM_SIZE*3];
+		for (int i = 0; i < BORDER_LEFT-8; i++, dst++)
+		{
+			*dst = bgcolor;
+		}
+		context->done_output = dst;
 		CHECK_LIMIT
+	}
 	case 1:
 		scan_sprite_table_mode4(context);
 		CHECK_LIMIT
@@ -2500,11 +2531,19 @@ static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
 	case 3:
 		scan_sprite_table_mode4(context);
 		CHECK_LIMIT
-	case 4:
+	case 4: {
 		scan_sprite_table_mode4(context);
 		context->buf_a_off = 8;
 		memset(context->tmp_buf_a, 0, 8);
+		uint32_t *dst = context->output + BORDER_LEFT - 8;
+		uint32_t bgcolor = context->colors[0x10 | (context->regs[REG_BG_COLOR] & 0xF) + CRAM_SIZE*3];
+		for (int i = 0; i < 8; i++, dst++)
+		{
+			*dst = bgcolor;
+		}
+		context->done_output = dst;
 		CHECK_LIMIT
+	}
 	COLUMN_RENDER_BLOCK_MODE4(0, 5)
 	COLUMN_RENDER_BLOCK_MODE4(1, 9)
 	COLUMN_RENDER_BLOCK_MODE4(2, 13)
@@ -2546,14 +2585,21 @@ static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
 	case 135:
 		external_slot(context);
 		CHECK_LIMIT
-	case 136:
+	case 136: {
 		external_slot(context);
 		//set things up for sprite rendering in the next slot
 		memset(context->linebuf, 0, LINEBUF_SIZE);
 		context->cur_slot = context->sprite_index = MAX_DRAWS_H32_MODE4-1;
 		context->sprite_draws = MAX_DRAWS_H32_MODE4;
+		uint32_t *dst = context->output + BORDER_LEFT + 256;
+		uint32_t bgcolor = context->colors[0x10 | (context->regs[REG_BG_COLOR] & 0xF) + CRAM_SIZE*3];
+		for (int i = 0; i < 8; i++, dst++)
+		{
+			*dst = bgcolor;
+		}
+		context->done_output = dst;
 		CHECK_LIMIT
-	}
+	}}
 	default:
 		context->hslot++;
 		context->cycles += MCLKS_SLOT_H32;
@@ -2657,8 +2703,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 		jump_start = 147;
 		jump_dest = 233;
 		if (context->regs[REG_MODE_1] & BIT_MODE_4) {
-			//FIXME: This is actually 0x1FF like in Mode 5
-			active_line = 0;
+			active_line = 0x1FF;
 		} else {
 			//never active unless either mode 4 or mode 5 is turned on
 			active_line = 0x200;
