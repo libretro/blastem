@@ -1841,6 +1841,7 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 	{
 	case IO_GAMEPAD2:
 		input = ~port->input[GAMEPAD_TH1];
+		device_driven = 0x3F;
 		break;
 	case IO_GAMEPAD3:
 	{
