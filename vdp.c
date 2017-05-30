@@ -1939,6 +1939,21 @@ static void draw_right_border(vdp_context *context)
 		if ((slot) == BG_START_SLOT + (256+HORIZ_BORDER)/2) {\
 			advance_output_line(context);\
 		}\
+		if (slot == 136 || slot == 247 || slot == 248) {\
+			render_border_garbage(\
+				context,\
+				context->sprite_draw_list[context->cur_slot].address,\
+				context->tmp_buf_b,\
+				context->buf_b_off + (slot == 247 ? 0 : 8),\
+				slot == 247 ? context->col_1 : context->col_2\
+			);\
+			if (slot == 248) {\
+				context->buf_a_off = (context->buf_a_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;\
+				context->buf_b_off = (context->buf_b_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;\
+			}\
+		} else if (slot == 137) {\
+			draw_right_border(context);\
+		}\
 		render_sprite_cells( context);\
 		scan_sprite_table(context->vcounter, context);\
 		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); } \
@@ -2001,9 +2016,7 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	case 165:
 		if (context->state == PREPARING) {
 			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
-			uint32_t *dst;
-			dst = ((uint32_t *)(((char *)context->fb) + context->output_pitch * (context->border_top - 2)))
-					+ (context->hslot - BG_START_SLOT) * 2;
+			uint32_t *dst = context->output + (context->hslot - BG_START_SLOT) * 2;
 			if (dst >= context->done_output) {
 				*dst = bg_color;
 			}
@@ -2019,9 +2032,7 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	case 166:
 		if (context->state == PREPARING) {
 			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
-			uint32_t *dst;
-			dst = ((uint32_t *)(((char *)context->fb) + context->output_pitch * (context->border_top - 2)))
-					+ (context->hslot - BG_START_SLOT) * 2;
+			uint32_t *dst = context->output + (context->hslot - BG_START_SLOT) * 2;
 			if (dst >= context->done_output) {
 				*dst = bg_color;
 			}
@@ -2043,8 +2054,7 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	case 167:
 		if (context->state == PREPARING) {
 			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
-			uint32_t *dst;
-			dst = context->output + (context->hslot - BG_START_SLOT) * 2;
+			uint32_t *dst = context->output + (context->hslot - BG_START_SLOT) * 2;
 			for (int i = 0; i < LINEBUF_SIZE - 2 * (context->hslot - BG_START_SLOT); i++, dst++)
 			{
 				if (dst >= context->done_output) {
@@ -2060,7 +2070,7 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 			context->tmp_buf_b, context->buf_b_off,
 			context->col_1
 		);
-		render_sprite_cells( context);
+		render_sprite_cells(context);
 		scan_sprite_table(context->vcounter, context);
 		CHECK_LIMIT
 	SPRITE_RENDER_H40(168)
@@ -2223,15 +2233,14 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 	case 133:
 		if (context->state == PREPARING) {
 			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
-			uint32_t *dst;
-			if (headless) {
-				dst = context->output;
-			} else {
-				dst = ((uint32_t *)(((char *)context->fb) + context->output_pitch * (context->border_top - 2)))
-					+ (context->hslot - BG_START_SLOT) * 2;
+			uint32_t *dst = context->output + (context->hslot - BG_START_SLOT) * 2;
+			if (dst >= context->done_output) {
+				*dst = bg_color;
 			}
-			*(dst++) = bg_color;
-			*dst = bg_color;
+			dst++;
+			if (dst >= context->done_output) {
+				*dst = bg_color;
+			}
 			external_slot(context);
 		} else {
 			render_sprite_cells(context);
@@ -2240,15 +2249,14 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 	case 134:
 		if (context->state == PREPARING) {
 			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
-			uint32_t *dst;
-			if (headless) {
-				dst = context->output;
-			} else {
-				dst = ((uint32_t *)(((char *)context->fb) + context->output_pitch * (context->border_top - 2)))
-					+ (context->hslot - BG_START_SLOT) * 2;
+			uint32_t *dst = context->output + (context->hslot - BG_START_SLOT) * 2;
+			if (dst >= context->done_output) {
+				*dst = bg_color;
 			}
-			*(dst++) = bg_color;
-			*dst = bg_color;
+			dst++;
+			if (dst >= context->done_output) {
+				*dst = bg_color;
+			}
 			external_slot(context);
 		} else {
 			render_sprite_cells(context);
@@ -2260,24 +2268,26 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 		}
 		CHECK_LIMIT
 	//sprite attribute table scan starts
-	case 135: //FIXME - Here
+	case 135:
 		if (context->state == PREPARING) {
 			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
-			uint32_t *dst;
-			if (headless) {
-				dst = context->output;
-			} else {
-				dst = ((uint32_t *)(((char *)context->fb) + context->output_pitch * (context->border_top - 2)))
-					+ (context->hslot - BG_START_SLOT) * 2;
-			}
+			uint32_t *dst = context->output + (context->hslot - BG_START_SLOT) * 2;
 			for (int i = 0; i < (256+HORIZ_BORDER) - 2 * (context->hslot - BG_START_SLOT); i++)
 			{
-				*(dst++) = bg_color;
+				if (dst >= context->done_output) {
+					*(dst++) = bg_color;
+				}
 			}
 		}
 		context->sprite_index = 0x80;
 		context->slot_counter = 0;
-		render_sprite_cells( context);
+		render_border_garbage(
+			context,
+			context->sprite_draw_list[context->cur_slot].address,
+			context->tmp_buf_b, context->buf_b_off,
+			context->col_1
+		);
+		render_sprite_cells(context);
 		scan_sprite_table(context->vcounter, context);
 		CHECK_LIMIT
 	SPRITE_RENDER_H32(136)
@@ -2307,6 +2317,14 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 	SPRITE_RENDER_H32(242)
 	case 243:
 		external_slot(context);
+		//provides "garbage" for border when plane A selected
+		render_border_garbage(
+				context,
+				context->sprite_draw_list[context->cur_slot].address,
+				context->tmp_buf_a,
+				context->buf_a_off,
+				context->col_1
+			);
 		CHECK_LIMIT
 	case 244:
 		address = (context->regs[REG_HSCROLL] & 0x3F) << 10;
@@ -2317,15 +2335,16 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 		if (context->regs[REG_MODE_3] & 0x1) {
 			mask |= 0x7;
 		}
+		render_border_garbage(context, address, context->tmp_buf_a, context->buf_a_off+8, context->col_2);
 		address += (context->vcounter & mask) * 4;
 		context->hscroll_a = context->vdpmem[address] << 8 | context->vdpmem[address+1];
 		context->hscroll_b = context->vdpmem[address+2] << 8 | context->vdpmem[address+3];
 		//printf("%d: HScroll A: %d, HScroll B: %d\n", context->vcounter, context->hscroll_a, context->hscroll_b);
-		CHECK_LIMIT
+		CHECK_LIMIT //provides "garbage" for border when plane A selected
 	SPRITE_RENDER_H32(245)
 	SPRITE_RENDER_H32(246)
-	SPRITE_RENDER_H32(247)
-	SPRITE_RENDER_H32(248)
+	SPRITE_RENDER_H32(247) //provides "garbage" for border when plane B selected
+	SPRITE_RENDER_H32(248) //provides "garbage" for border when plane B selected
 	//!HSYNC high
 	case 249:
 		read_map_scroll_a(0, context->vcounter, context);
@@ -2381,20 +2400,27 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 		CHECK_LIMIT
 	case 130: {
 		external_slot(context);
-		uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
-		for (int i = 256+BORDER_LEFT; i < 256+HORIZ_BORDER; i++)
-		{
-			context->output[i] = bg_color;
-		}
 		CHECK_LIMIT
 	}
 	//sprite render to line buffer starts
 	case 131:
 		context->cur_slot = MAX_DRAWS_H32-1;
 		memset(context->linebuf, 0, LINEBUF_SIZE);
+		render_border_garbage(
+			context,
+			context->sprite_draw_list[context->cur_slot].address,
+			context->tmp_buf_a, context->buf_a_off,
+			context->col_1
+		);
 		render_sprite_cells(context);
 		CHECK_LIMIT
 	case 132:
+		render_border_garbage(
+			context,
+			context->sprite_draw_list[context->cur_slot].address,
+			context->tmp_buf_a, context->buf_a_off + 8,
+			context->col_2
+		);
 		render_sprite_cells(context);
 		if (context->flags & FLAG_DMA_RUN) {
 			run_dma_src(context, -1);
