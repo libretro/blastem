@@ -536,6 +536,14 @@ T-119106 {
 		2 gamepad3.2
 	}
 }
+T-113106 {
+	name Second Samurai
+	#Pause doesn't work right with a 6-button controller
+	device_overrides {
+		1 gamepad3.1
+		2 gamepad3.2
+	}
+}
 #Automatically hook up the mouse in the appropriate port for the games I've tested
 T-76076 {
 	name Nobunaga's Ambition
