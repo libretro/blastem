@@ -292,6 +292,16 @@ static void inc_debug_pal(system_header *system)
 	}
 }
 
+static void load_save(system_header *system)
+{
+	//TODO: Implement me
+}
+
+static void persist_save(system_header *system)
+{
+	//TODO: Implement me
+}
+
 sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t force_region, rom_info *info_out)
 {
 	memset(info_out, 0, sizeof(*info_out));
@@ -352,9 +362,8 @@ sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t for
 	sms->header.set_speed_percent = set_speed_percent;
 	sms->header.start_context = start_sms;
 	sms->header.resume_context = run_sms;
-	//TODO: Fill in NULL values
-	sms->header.load_save = NULL;
-	sms->header.persist_save = NULL;
+	sms->header.load_save = load_save;
+	sms->header.persist_save = persist_save;
 	sms->header.free_context = free_sms;
 	sms->header.get_open_bus_value = get_open_bus_value;
 	sms->header.request_exit = request_exit;
