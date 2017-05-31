@@ -409,6 +409,30 @@ T-12046 {
 		}
 	}
 }
+T-12053 {
+	name Rockman Mega World
+	EEPROM {
+		type i2c
+		size 128
+	}
+	map {
+		0 {
+			device ROM
+			last 1FFFFF
+		}
+		200000 {
+			device EEPROM
+			last 3FFFFF
+			bits_read {
+				0 sda
+			}
+			bits_write {
+				0 sda
+				1 scl
+			}
+		}
+	}
+}
 MK-1563 {
 	name Sonic & Knuckles
 	map {
