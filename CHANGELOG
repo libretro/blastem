@@ -1,3 +1,87 @@
+0.5.0
+-----
+*New Features*
+
+ - SMS emulation in the form of the Gensis/MD's backwards compatibility mode
+ - Added support for SMS controllers
+ - Support for the mapper used by Realtec games
+ - Support for carts with fixed value registers
+ - Support for enough of the XBAND cartridge hardware to allow the menu to boot
+ - Basic XBAND keyboard emulation
+ - Configurable display overscan
+ - Fullscreen mode can now be toggled at runtime
+ - Window can now be resized at runtime
+ - Support for "semantic" controller button names in the gamepad mapping using SDL2's game controller API
+ - Analog axes can now be mapped to emulated gamepad buttons or UI actions
+ - System soft reset
+ - Keyboard can now be captured when a Saturn or XBAND keyboard is connected to the emulated system
+ - Internal screenshots that bypass all output filtering/overscan
+ - Homebrew using the "SSF2 Mapper" is now supported via header detection like on the Mega Everdrive
+ - Directory used for SRAM, EEPROM and savestates is now configurable
+ - Path configuration values can now contain both BlastEm-specific and environment variable references
+ - Open GL based rendering can be disabled in favor of the SDL2 render API fallback
+ 
+ *Bugfixes*
+ 
+ - Fixed a bug that would cause a crash in certain games that have SRAM and ROM at the same address
+ - Fixed some issues with Z80 interrupts that caused issues with sound/music in Sonic 2 and Puyo Puyo 2
+ - Z80 debugger no longer crashes when resuming execution
+ - Undocumented Z80 instruction "out (c), 0" now decodes properly
+ - GDB remote debugging should now work with more recent versions of GDB
+ - GDB remote debugging should now work on more recent versions of Windows
+ - Overlapping instructions in self-modifying code no longer causes incorrect behavior
+ - Z80 instructions "in c" and "out c" now work correclty on 32-bit builds
+ - Specifying an output audio frequency higher than the FM frequency no longer deadlocks the emulator
+ - Fixed memory map generation for games with 3MB ROM and SRAM at the 3MB mark 
+ 
+ *Accuracy/Completeness Improvements*
+ - YM2612 SSG-EG and CSM modes are now implemented
+ - VDP Mode 4 is now implemented in both Genesis and SMS mode
+ - Basic emulation of refresh delays has been added
+ - 68K interrupt latency has been made more accurate
+ - CRAM contention artifacts (aka CRAM dots) are now emulated
+ - DIVU/DIVS and MULU/MULS are now cycle accurate
+ - MOVEM now performs the extra ignored read and has correct timing
+ - The timing of serveral other 68K instructions has been fixed
+ - Implemented 68K trace mode
+ - SBCD flag calculation now matches hardware in 100% of cases
+ - 68K -> VDP DMA now properly has a delay at DMA start rather than at the end of the transfer
+ - A number of illegal effective address mode/operation combinations now properly decode as illegal instructions
+ - Added emulation of the slow rise time of an IO pin that was changed to an input when it was previously outputting 0
+ - Partial support for the VDP test register
+ - Partial support for the 128KB VRAM mode bit
+ - Improved accuracy of low level sprite rendering details
+ - Fixed handling of active/passive display transitions so that border extension tricks work
+ - Fixed handling of horizontal interrupts in extended display areas
+ - More accurate correspondance between horizontal counter and raster beam
+ - Partial emulation of serial IO registers
+ 
+ *Other Changes*
+ - Added Japanese version of Street Fighter 2: The New Challengers to ROM DB
+ - Added the following EEPROM games to ROM DB:
+       Ninja Burai Densetsu
+       Rockman Mega World
+ - Added ROM DB entries for the following games with incorrect region headers: 
+       Another World (E)
+       Alien Soldier (J)
+       Castle of Illusion: Fushigi no Oshiro Daibouken (J)
+       Atomic Robo-Kid (J)
+ - Added ROM DB entries for the following games which are incompatible with 6-button controllers:
+       King of Monsters
+       Combat Cars
+       Second Samurai
+ - Added ROM DB entries for the following games with fixed value registers:
+       Ya Se Chuan Sho
+       16 Zhang Ma Jiang
+       Elf Wor
+       Huan Le Tao Qi Shu: Smart Mouse
+       Mighty Morphin' Power Rangers: The Fighting Edition
+       Super Bubble Bobble MD
+       Thunderbolt II
+ - Added ROM DB entries for the following games that have bad/missing SRAM headers:
+       Hardball III
+       Might and Magic III - Isles of Terra
+
 0.4.1
 -----
 *New Features*
