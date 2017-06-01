@@ -1738,6 +1738,11 @@ static void advance_output_line(vdp_context *context)
 		if (output_line < context->inactive_start + context->border_bot && context->output_lines > 0) {
 			output_line = context->output_lines++;//context->border_top + context->vcounter;
 		} else if (output_line >= 0x200 - context->border_top) {
+			if (output_line == 0x200 - context->border_top) {
+				//We're at the top of the display, force context->output_lines to be zero to avoid
+				//potential screen rolling if the mode is changed at an inopportune time
+				context->output_lines = 0;
+			}
 			output_line = context->output_lines++;//context->vcounter - (0x200 - context->border_top);
 		} else {
 			output_line = INVALID_LINE;
