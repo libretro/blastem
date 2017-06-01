@@ -506,6 +506,14 @@ G-004130 {
 	#if they are running the Japanese version rather than the European one
 	regions J
 }
+G-005545 {
+	name Light Crusader
+	#Japanese version of this game seems to indicate support for European consoles in
+	#the header. While the game does indeed run, most people probably expect 60Hz
+	#if they are running the Japanese version rather than the European one
+	regions J
+}
+
 00004042 {
 	name Castle of Illusion: Fushigi no Oshiro Daibouken
 	#Has JAPAN in header rather than J, A gets interpreted as a "new-style" code
