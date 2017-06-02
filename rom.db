@@ -641,7 +641,23 @@ ACLD012 {
 		}
 	}
 }
-
+T-50166 {
+	name Might and Magic - Gates to Another World
+	SRAM {
+		size 32768
+		bus odd
+	}
+	map {
+		0 {
+			device ROM
+			last 1FFFFF
+		}
+		200000 {
+			device SRAM
+			last 3FFFFF
+		}
+	}
+}
 9bed099693c27a6575b394bdd150efb7cc53c5c6 {
 	name Atomic Robo-Kid
 	regions J
