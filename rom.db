@@ -577,6 +577,12 @@ MK-1713 {
 		2 mouse.1
 	}
 }
+T-97056- {
+	name Fun 'n' Games
+	device_overrides {
+		2 mouse.1
+	}
+}
 T-130016 {
 	name Shanghai II: Dragon's Eye
 	device_overrides {
