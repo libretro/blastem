@@ -24,7 +24,7 @@
 #include "arena.h"
 #include "config.h"
 
-#define BLASTEM_VERSION "0.5.0"
+#define BLASTEM_VERSION "0.5.1-pre"
 
 #ifdef __ANDROID__
 #define FULLSCREEN_DEFAULT 1
