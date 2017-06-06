@@ -814,9 +814,9 @@ void map_iter_fun(char *key, tern_val val, uint8_t valtype, void *data)
 		map->mask = calc_mask(size, start, end);
 		map->flags = MMAP_READ | MMAP_WRITE;
 		char *bus = tern_find_ptr_default(node, "bus", "both");
-		if (!strcmp(dtype, "odd")) {
+		if (!strcmp(bus, "odd")) {
 			map->flags |= MMAP_ONLY_ODD;
-		} else if (!strcmp(dtype, "even")) {
+		} else if (!strcmp(bus, "even")) {
 			map->flags |= MMAP_ONLY_EVEN;
 		} else {
 			map->flags |= MMAP_CODE;
