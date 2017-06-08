@@ -154,7 +154,7 @@ void setup_saves(char *fname, rom_info *info, system_header *context)
 	if (!ensure_dir_exists(save_dir)) {
 		warning("Failed to create save directory %s\n", save_dir);
 	}
-	char const *parts[] = {save_dir, PATH_SEP, info->save_type == SAVE_I2C ? "save.eeprom" : "save.sram"};
+	char const *parts[] = {save_dir, PATH_SEP, info->save_type == SAVE_I2C ? "save.eeprom" : info->save_type == SAVE_NOR ? "save.nor" : "save.sram"};
 	free(save_filename);
 	save_filename = alloc_concat_m(3, parts);
 	//TODO: make quick save filename dependent on system type
