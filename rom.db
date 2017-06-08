@@ -891,3 +891,29 @@ BlstMenu {
 	}
 	mouse_mode absolute
 }
+
+6568b3a4e096159776ef8687a80d43589741fd60 {
+	name Magistr 16 BIOS
+	NOR {
+		size 262144
+		page_size 128
+		product_id DA45
+		bus even
+	}
+	map {
+		0 {
+			device ROM
+			last 3FFFFF
+		}
+		400000 {
+			device NOR
+			last 7FFFFF
+		}
+		E00000 {
+			device RAM
+			size 40000
+			last FFFFFF
+			bus both
+		}
+	}
+}
