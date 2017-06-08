@@ -20,6 +20,16 @@
 #define RAM_END   0x1B8
 #define REGION_START 0x1F0
 
+char const *save_type_name(uint8_t save_type)
+{
+	if (save_type == SAVE_I2C) {
+		return "EEPROM";
+	} else if(save_type == SAVE_NOR) {
+		return "NOR Flash";
+	}
+	return "SRAM";
+}
+
 enum {
 	I2C_IDLE,
 	I2C_START,
@@ -185,6 +195,207 @@ void set_scl(eeprom_state *state, uint8_t val)
 uint8_t get_sda(eeprom_state *state)
 {
 	return state->host_sda & state->slave_sda;
+}
+
+enum {
+	NOR_NORMAL,
+	NOR_PRODUCTID,
+	NOR_BOOTBLOCK
+};
+
+enum {
+	NOR_CMD_IDLE,
+	NOR_CMD_AA,
+	NOR_CMD_55
+};
+
+//Technically this value shoudl be slightly different between NTSC and PAL
+//as it's defined as 200 micro-seconds, not in clock cycles
+#define NOR_WRITE_PAUSE 10690 
+
+void nor_flash_init(nor_state *state, uint8_t *buffer, uint32_t size, uint32_t page_size, uint16_t product_id, uint8_t bus_flags)
+{
+	state->buffer = buffer;
+	state->page_buffer = malloc(page_size);
+	memset(state->page_buffer, 0xFF, page_size);
+	state->size = size;
+	state->page_size = page_size;
+	state->product_id = product_id;
+	state->last_write_cycle = 0xFFFFFFFF;
+	state->mode = NOR_NORMAL;
+	state->cmd_state = NOR_CMD_IDLE;
+	state->alt_cmd = 0;
+	state->bus_flags = bus_flags;
+}
+
+void nor_run(nor_state *state, uint32_t cycle)
+{
+	if (state->last_write_cycle == 0xFFFFFFFF) {
+		return;
+	}
+	if (cycle - state->last_write_cycle >= NOR_WRITE_PAUSE) {
+		state->last_write_cycle = 0xFFFFFFFF;
+		for (uint32_t i = 0; i < state->page_size; i++) {
+			state->buffer[state->current_page + i] = state->page_buffer[i];
+		}
+		memset(state->page_buffer, 0xFF, state->page_size);
+	}
+}
+
+uint8_t nor_flash_read_b(uint32_t address, void *vcontext)
+{
+	m68k_context *m68k = vcontext;
+	genesis_context *gen = m68k->system;
+	nor_state *state = &gen->nor;
+	if (
+		((address & 1) && state->bus_flags == RAM_FLAG_EVEN) ||
+		(!(address & 1) && state->bus_flags == RAM_FLAG_ODD)
+	) {
+		return 0xFF;
+	}
+	if (state->bus_flags != RAM_FLAG_BOTH) {
+		address = address >> 1;
+	}
+	
+	nor_run(state, m68k->current_cycle);
+	switch (state->mode)
+	{
+	case NOR_NORMAL:
+		return state->buffer[address & (state->size-1)];
+		break;
+	case NOR_PRODUCTID:
+		switch (address & (state->size - 1))
+		{
+		case 0:
+			return state->product_id >> 8;
+		case 1:
+			return state->product_id;
+		case 2:
+			//TODO: Implement boot block protection
+			return 0xFE;
+		default:
+			return 0xFE;
+		}
+		break;
+	case NOR_BOOTBLOCK:
+		break;
+	}
+	return 0xFF;
+}
+
+uint16_t nor_flash_read_w(uint32_t address, void *context)
+{
+	uint16_t value = nor_flash_read_b(address, context) << 8;
+	value |= nor_flash_read_b(address+1, context);
+	return value;
+}
+
+void nor_write_byte(nor_state *state, uint32_t address, uint8_t value, uint32_t cycle)
+{
+	switch(state->mode)
+	{
+	case NOR_NORMAL:
+		if (state->last_write_cycle != 0xFFFFFFFF) {
+			state->current_page = address & (state->size - 1) & ~(state->page_size - 1);
+		}
+		state->page_buffer[address & (state->page_size - 1)] = value;
+		break;
+	case NOR_PRODUCTID:
+		break;
+	case NOR_BOOTBLOCK:
+		//TODO: Implement boot block protection
+		state->mode = NOR_NORMAL;
+		break;
+	}
+}
+
+void *nor_flash_write_b(uint32_t address, void *vcontext, uint8_t value)
+{
+	m68k_context *m68k = vcontext;
+	genesis_context *gen = m68k->system;
+	nor_state *state = &gen->nor;
+	if (
+		((address & 1) && state->bus_flags == RAM_FLAG_EVEN) ||
+		(!(address & 1) && state->bus_flags == RAM_FLAG_ODD)
+	) {
+		return vcontext;
+	}
+	if (state->bus_flags != RAM_FLAG_BOTH) {
+		address = address >> 1;
+	}
+	
+	nor_run(state, m68k->current_cycle);
+	switch (state->cmd_state)
+	{
+	case NOR_CMD_IDLE:
+		if (value == 0xAA && (address & (state->size - 1)) == 0x5555) {
+			state->cmd_state = NOR_CMD_AA;
+		} else {
+			nor_write_byte(state, address, value, m68k->current_cycle);
+			state->cmd_state = NOR_CMD_IDLE;
+		}
+		break;
+	case NOR_CMD_AA:
+		if (value == 0x55 && (address & (state->size - 1)) == 0x2AAA) {
+			state->cmd_state = NOR_CMD_55;
+		} else {
+			nor_write_byte(state, 0x5555, 0xAA, m68k->current_cycle);
+			nor_write_byte(state, address, value, m68k->current_cycle);
+			state->cmd_state = NOR_CMD_IDLE;
+		}
+		break;
+	case NOR_CMD_55:
+		if ((address & (state->size - 1)) == 0x5555) {
+			if (state->alt_cmd) {
+				switch(value)
+				{
+				case 0x10:
+					puts("UNIMPLEMENTED: NOR flash erase");
+					break;
+				case 0x20:
+					puts("UNIMPLEMENTED: NOR flash disable protection");
+					break;
+				case 0x40:
+					state->mode = NOR_BOOTBLOCK;
+					break;
+				case 0x60:
+					state->mode = NOR_PRODUCTID;
+					break;
+				}
+			} else {
+				switch(value)
+				{
+				case 0x80:
+					state->alt_cmd = 1;
+					break;
+				case 0x90:
+					state->mode = NOR_PRODUCTID;
+					break;
+				case 0xA0:
+					puts("UNIMPLEMENTED: NOR flash enable protection");
+					break;
+				case 0xF0:
+					state->mode = NOR_NORMAL;
+					break;
+				default:
+					printf("Unrecognized unshifted NOR flash command %X\n", value);
+				}
+			}
+		} else {
+			nor_write_byte(state, 0x5555, 0xAA, m68k->current_cycle);
+			nor_write_byte(state, 0x2AAA, 0x55, m68k->current_cycle);
+			nor_write_byte(state, address, value, m68k->current_cycle);
+		}
+		state->cmd_state = NOR_CMD_IDLE;
+		break;
+	}
+	return vcontext;
+}
+
+void *nor_flash_write_w(uint32_t address, void *vcontext, uint16_t value)
+{
+	nor_flash_write_b(address, vcontext, value >> 8);
+	return nor_flash_write_b(address + 1, vcontext, value);
 }
 
 uint16_t read_sram_w(uint32_t address, m68k_context * context)
@@ -739,6 +950,44 @@ void process_eeprom_def(char * key, map_iter_state *state)
 	}
 }
 
+void process_nor_def(char *key, map_iter_state *state)
+{
+	if (!state->info->save_size) {
+		char *size = tern_find_path(state->root, "NOR\0size\0", TVAL_PTR).ptrval;
+		if (!size) {
+			fatal_error("ROM DB map entry %d with address %s has device type NOR, but the NOR size is not defined\n", state->index, key);
+		}
+		state->info->save_size = atoi(size);
+		if (!state->info->save_size) {
+			fatal_error("NOR size %s is invalid\n", size);
+		}
+		char *page_size = tern_find_path(state->root, "NOR\0page_size\0", TVAL_PTR).ptrval;
+		if (!page_size) {
+			fatal_error("ROM DB map entry %d with address %s has device type NOR, but the NOR page size is not defined\n", state->index, key);
+		}
+		state->info->save_page_size = atoi(size);
+		if (!state->info->save_page_size) {
+			fatal_error("NOR page size %s is invalid\n", size);
+		}
+		char *product_id = tern_find_path(state->root, "NOR\0product_id\0", TVAL_PTR).ptrval;
+		if (!product_id) {
+			fatal_error("ROM DB map entry %d with address %s has device type NOR, but the NOR product ID is not defined\n", state->index, key);
+		}
+		state->info->save_product_id = strtol(product_id, NULL, 16);
+		char *bus = tern_find_path(state->root, "NOR\0bus\0", TVAL_PTR).ptrval;
+		if (!strcmp(bus, "odd")) {
+			state->info->save_bus = RAM_FLAG_ODD;
+		} else if(!strcmp(bus, "even")) {
+			state->info->save_bus = RAM_FLAG_EVEN;
+		} else {
+			state->info->save_bus = RAM_FLAG_BOTH;
+		}
+		state->info->save_type = SAVE_NOR;
+		state->info->save_buffer = malloc(state->info->save_size);
+		memset(state->info->save_buffer, 0xFF, state->info->save_size);
+	}
+}
+
 void add_eeprom_map(tern_node *node, uint32_t start, uint32_t end, map_iter_state *state)
 {
 	eeprom_map *eep_map = state->info->eeprom_map + state->info->num_eeprom;
@@ -821,6 +1070,14 @@ void map_iter_fun(char *key, tern_val val, uint8_t valtype, void *data)
 		} else {
 			map->flags |= MMAP_CODE;
 		}
+	} else if (!strcmp(dtype, "NOR")) {
+		process_nor_def(key, state);
+		
+		map->write_16 = nor_flash_write_w;
+		map->write_8 = nor_flash_write_b;
+		map->read_16 = nor_flash_read_w;
+		map->read_8 = nor_flash_read_b;
+		map->mask = 0xFFFFFF;
 	} else if (!strcmp(dtype, "Sega mapper")) {
 		state->info->mapper_start_index = state->ptr_index++;
 		state->info->map_chunks+=7;

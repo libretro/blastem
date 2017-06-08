@@ -967,12 +967,12 @@ static void persist_save(system_header *system)
 	}
 	FILE * f = fopen(save_filename, "wb");
 	if (!f) {
-		fprintf(stderr, "Failed to open %s file %s for writing\n", gen->save_type == SAVE_I2C ? "EEPROM" : "SRAM", save_filename);
+		fprintf(stderr, "Failed to open %s file %s for writing\n", save_type_name(gen->save_type), save_filename);
 		return;
 	}
 	fwrite(gen->save_storage, 1, gen->save_size, f);
 	fclose(f);
-	printf("Saved %s to %s\n", gen->save_type == SAVE_I2C ? "EEPROM" : "SRAM", save_filename);
+	printf("Saved %s to %s\n", save_type_name(gen->save_type), save_filename);
 }
 
 static void load_save(system_header *system)
@@ -983,7 +983,7 @@ static void load_save(system_header *system)
 		uint32_t read = fread(gen->save_storage, 1, gen->save_size, f);
 		fclose(f);
 		if (read > 0) {
-			printf("Loaded %s from %s\n", gen->save_type == SAVE_I2C ? "EEPROM" : "SRAM", save_filename);
+			printf("Loaded %s from %s\n", save_type_name(gen->save_type), save_filename);
 		}
 	}
 }
@@ -1115,6 +1115,8 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 		gen->num_eeprom = rom->num_eeprom;
 		if (gen->save_type == SAVE_I2C) {
 			eeprom_init(&gen->eeprom, gen->save_storage, gen->save_size);
+		} else if (gen->save_type == SAVE_NOR) {
+			nor_flash_init(&gen->nor, gen->save_storage, gen->save_size, rom->save_page_size, rom->save_product_id, rom->save_bus);
 		}
 	} else {
 		gen->save_storage = NULL;

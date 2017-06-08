@@ -50,6 +50,7 @@ struct genesis_context {
 	uint8_t         bus_busy;
 	uint8_t         reset_requested;
 	eeprom_state    eeprom;
+	nor_state       nor;
 };
 
 #define RAM_WORDS 32 * 1024

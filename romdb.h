@@ -10,6 +10,7 @@
 #define RAM_FLAG_BOTH 0x00
 #define RAM_FLAG_MASK RAM_FLAG_ODD
 #define SAVE_I2C      0x01
+#define SAVE_NOR      0x02
 #define SAVE_NONE     0xFF
 
 #include "tern.h"
@@ -34,6 +35,20 @@ typedef struct {
 	uint8_t     latch;
 } eeprom_state;
 
+typedef struct {
+	uint8_t     *buffer;
+	uint8_t     *page_buffer;
+	uint32_t    size;
+	uint32_t    page_size;
+	uint32_t    current_page;
+	uint32_t    last_write_cycle;
+	uint16_t    product_id;
+	uint8_t     mode;
+	uint8_t     cmd_state;
+	uint8_t     alt_cmd;
+	uint8_t     bus_flags;
+} nor_state;
+
 
 typedef struct rom_info rom_info;
 
@@ -52,8 +67,11 @@ struct rom_info {
 	uint32_t      map_chunks;
 	uint32_t      save_size;
 	uint32_t      save_mask;
+	uint32_t      save_page_size;
+	uint16_t      save_product_id;
 	uint16_t      mapper_start_index;
 	uint8_t       save_type;
+	uint8_t       save_bus; //only used for NOR currently
 	uint8_t       regions;
 };
 
@@ -65,5 +83,7 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, void *l
 rom_info configure_rom_heuristics(uint8_t *rom, uint32_t rom_size, memmap_chunk const *base_map, uint32_t base_chunks);
 uint8_t translate_region_char(uint8_t c);
 void eeprom_init(eeprom_state *state, uint8_t *buffer, uint32_t size);
+void nor_flash_init(nor_state *state, uint8_t *buffer, uint32_t size, uint32_t page_size, uint16_t product_id, uint8_t bus_flags);
+char const *save_type_name(uint8_t save_type);
 
 #endif //ROMDB_H_
