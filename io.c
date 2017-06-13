@@ -81,6 +81,7 @@ typedef enum {
 } ui_action;
 
 typedef enum {
+	MOUSE_NONE,     //mouse is ignored
 	MOUSE_ABSOLUTE, //really only useful for menu ROM
 	MOUSE_RELATIVE, //for full screen
 	MOUSE_CAPTURE   //for windowed mode
@@ -610,6 +611,8 @@ void handle_mouse_moved(int mouse, uint16_t x, uint16_t y, int16_t deltax, int16
 	}
 	switch(current_io->mouse_mode)
 	{
+	case MOUSE_NONE:
+		break;
 	case MOUSE_ABSOLUTE: {
 		float scale_x = 640.0 / ((float)render_width());
 		float scale_y = 480.0 / ((float)render_height());
@@ -895,15 +898,19 @@ void setup_io_devices(tern_node * config, rom_info *rom, sega_io *io)
 	process_device(io_2, ports+1);
 	process_device(io_ext, ports+2);
 
-	if (render_fullscreen()) {
-			current_io->mouse_mode = MOUSE_RELATIVE;
-			render_relative_mouse(1);
-	} else {
-		if (rom->mouse_mode && !strcmp(rom->mouse_mode, "absolute")) {
-			current_io->mouse_mode = MOUSE_ABSOLUTE;
+	if (ports[0].device_type == IO_MOUSE || ports[1].device_type == IO_MOUSE || ports[2].device_type == IO_MOUSE) {
+		if (render_fullscreen()) {
+				current_io->mouse_mode = MOUSE_RELATIVE;
+				render_relative_mouse(1);
 		} else {
-			current_io->mouse_mode = MOUSE_CAPTURE;
+			if (rom->mouse_mode && !strcmp(rom->mouse_mode, "absolute")) {
+				current_io->mouse_mode = MOUSE_ABSOLUTE;
+			} else {
+				current_io->mouse_mode = MOUSE_CAPTURE;
+			}
 		}
+	} else {
+		current_io->mouse_mode = MOUSE_NONE;
 	}
 
 	for (int i = 0; i < 3; i++)
