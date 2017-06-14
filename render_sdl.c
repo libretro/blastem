@@ -914,6 +914,12 @@ static uint8_t scancode_map[SDL_NUM_SCANCODES] = {
 	[SDL_SCANCODE_KP_PERIOD] = 0x71,
 };
 
+static drop_handler drag_drop_handler;
+void render_set_drag_drop_handler(drop_handler handler)
+{
+	drag_drop_handler = handler;
+}
+
 static int32_t handle_event(SDL_Event *event)
 {
 	switch (event->type) {
@@ -985,6 +991,12 @@ static int32_t handle_event(SDL_Event *event)
 #endif
 			break;
 		}
+		break;
+	case SDL_DROPFILE:
+		if (drag_drop_handler) {
+			drag_drop_handler(event->drop.file);
+		}
+		SDL_free(event->drop.file);
 		break;
 	case SDL_QUIT:
 		puts("");

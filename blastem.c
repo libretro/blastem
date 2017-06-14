@@ -172,6 +172,15 @@ void setup_saves(char *fname, rom_info *info, system_header *context)
 	}
 }
 
+static void on_drag_drop(const char *filename)
+{
+	if (current_system->next_rom) {
+		free(current_system->next_rom);
+	}
+	current_system->next_rom = strdup(filename);
+	current_system->request_exit(current_system);
+}
+
 int main(int argc, char ** argv)
 {
 	set_exe_str(argv[0]);
@@ -365,6 +374,7 @@ int main(int argc, char ** argv)
 	}
 	if (!headless) {
 		render_init(width, height, "BlastEm", fullscreen);
+		render_set_drag_drop_handler(on_drag_drop);
 	}
 
 	if (stype == SYSTEM_UNKNOWN) {
@@ -394,40 +404,43 @@ int main(int argc, char ** argv)
 		if (current_system->should_exit) {
 			break;
 		}
-		if (menu && menu_context->next_rom) {
+		if (current_system->next_rom) {
+			char *next_rom = current_system->next_rom;
+			current_system->next_rom = NULL;
 			if (game_context) {
 				game_context->persist_save(game_context);
 				//swap to game context arena and mark all allocated pages in it free
-				current_system->arena = set_current_arena(game_context->arena);
+				if (menu) {
+					current_system->arena = set_current_arena(game_context->arena);
+				}
 				mark_all_free();
 				game_context->free_context(game_context);
 			} else {
 				//start a new arena and save old one in suspended genesis context
 				current_system->arena = start_new_arena();
 			}
-			if (!(cart.size = load_rom(menu_context->next_rom, &cart.buffer, &stype))) {
-				fatal_error("Failed to open %s for reading\n", menu_context->next_rom);
+			if (!(cart.size = load_rom(next_rom, &cart.buffer, &stype))) {
+				fatal_error("Failed to open %s for reading\n", next_rom);
 			}
-			cart.name = basename_no_extension(menu_context->next_rom);
-			cart.extension = path_extension(menu_context->next_rom);
+			cart.name = basename_no_extension(next_rom);
+			cart.extension = path_extension(next_rom);
 			stype = force_stype;
 			if (stype == SYSTEM_UNKNOWN) {
 				stype = detect_system_type(&cart);
 			}
 			if (stype == SYSTEM_UNKNOWN) {
-				fatal_error("Failed to detect system type for %s\n", menu_context->next_rom);
+				fatal_error("Failed to detect system type for %s\n", next_rom);
 			}
-			//allocate new genesis context
+			//allocate new system context
 			game_context = alloc_config_system(stype, &cart, opts,force_region, &info);
 			if (!game_context) {
-				fatal_error("Failed to configure emulated machine for %s\n", menu_context->next_rom);
+				fatal_error("Failed to configure emulated machine for %s\n", next_rom);
 			}
 			menu_context->next_context = game_context;
 			game_context->next_context = menu_context;
-			setup_saves(menu_context->next_rom, &info, game_context);
+			setup_saves(next_rom, &info, game_context);
 			update_title(info.name);
-			free(menu_context->next_rom);
-			menu_context->next_rom = NULL;
+			free(next_rom);
 			menu = 0;
 			current_system = game_context;
 			current_system->debugger_type = dtype;
