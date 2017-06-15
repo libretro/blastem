@@ -1761,6 +1761,25 @@ static void advance_output_line(vdp_context *context)
 	}
 }
 
+void vdp_release_framebuffer(vdp_context *context)
+{
+	render_framebuffer_updated(context->flags2 & FLAG2_EVEN_FIELD ? FRAMEBUFFER_EVEN: FRAMEBUFFER_ODD, context->h40_lines > (context->inactive_start + context->border_top) / 2 ? LINEBUF_SIZE : (256+HORIZ_BORDER));
+	context->output = context->fb = NULL;
+}
+
+void vdp_reacquire_framebuffer(vdp_context *context)
+{
+	context->fb = render_get_framebuffer(context->flags2 & FLAG2_EVEN_FIELD ? FRAMEBUFFER_EVEN : FRAMEBUFFER_ODD, &context->output_pitch);
+	uint16_t lines_max = (context->flags2 & FLAG2_REGION_PAL) 
+			? 240 + BORDER_TOP_V30_PAL + BORDER_BOT_V30_PAL
+			: 224 + BORDER_TOP_V28 + BORDER_BOT_V28;
+	if (context->output_lines <= lines_max && context->output_lines > 0) {
+		context->output = (uint32_t *)(((char *)context->fb) + context->output_pitch * (context->output_lines - 1));
+	} else {
+		context->output = (uint32_t *)(((char *)context->fb) + context->output_pitch * INVALID_LINE);
+	}
+}
+
 static void render_border_garbage(vdp_context *context, uint32_t address, uint8_t *buf, uint8_t buf_off, uint16_t col)
 {
 	uint8_t base = col >> 9 & 0x30;

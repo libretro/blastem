@@ -896,6 +896,7 @@ static void handle_reset_requests(genesis_context *gen)
 		//Is there any sort of VDP reset?
 		m68k_reset(gen->m68k);
 	}
+	vdp_release_framebuffer(gen->vdp);
 }
 
 static void start_genesis(system_header *system, char *statefile)
@@ -931,6 +932,7 @@ static void resume_genesis(system_header *system)
 	genesis_context *gen = (genesis_context *)system;
 	map_all_bindings(&gen->io);
 	render_set_video_standard((gen->version_reg & HZ50) ? VID_PAL : VID_NTSC);
+	vdp_reacquire_framebuffer(gen->vdp);
 	resume_68k(gen->m68k);
 	handle_reset_requests(gen);
 }
