@@ -614,11 +614,14 @@ void handle_mouse_moved(int mouse, uint16_t x, uint16_t y, int16_t deltax, int16
 	case MOUSE_NONE:
 		break;
 	case MOUSE_ABSOLUTE: {
-		float scale_x = 640.0 / ((float)render_width());
-		float scale_y = 480.0 / ((float)render_height());
-		float scale = scale_x > scale_y ? scale_y : scale_x;
-		mice[mouse].motion_port->device.mouse.cur_x = x * scale_x;
-		mice[mouse].motion_port->device.mouse.cur_y = y * scale_y;
+		float scale_x = (render_emulated_width() * 2.0f) / ((float)render_width());
+		float scale_y = (render_emulated_height() * 2.0f) / ((float)render_height());
+		int32_t adj_x = x * scale_x + 2 * render_overscan_left() - 2 * BORDER_LEFT;
+		int32_t adj_y = y * scale_y + 2 * render_overscan_top() - 4;
+		if (adj_x >= 0 && adj_y >= 0) {
+			mice[mouse].motion_port->device.mouse.cur_x = adj_x;
+			mice[mouse].motion_port->device.mouse.cur_y = adj_y;
+		}
 		break;
 	}
 	case MOUSE_RELATIVE: {
