@@ -226,8 +226,16 @@ static void run_sms(system_header *system)
 			target_cycle -= adjust;
 		}
 	}
+	vdp_release_framebuffer(sms->vdp);
 	sms->should_return = 0;
 	render_enable_ym();
+}
+
+static void resume_sms(system_header *system)
+{
+	sms_context *sms = (sms_context *)system;
+	vdp_reacquire_framebuffer(sms->vdp);
+	run_sms(system);
 }
 
 static void start_sms(system_header *system, char *statefile)
@@ -361,7 +369,7 @@ sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t for
 	
 	sms->header.set_speed_percent = set_speed_percent;
 	sms->header.start_context = start_sms;
-	sms->header.resume_context = run_sms;
+	sms->header.resume_context = resume_sms;
 	sms->header.load_save = load_save;
 	sms->header.persist_save = persist_save;
 	sms->header.free_context = free_sms;

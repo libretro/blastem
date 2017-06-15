@@ -248,5 +248,7 @@ uint32_t vdp_cycles_to_frame_end(vdp_context * context);
 void write_cram(vdp_context * context, uint16_t address, uint16_t value);
 void vdp_check_update_sat_byte(vdp_context *context, uint32_t address, uint8_t value);
 void vdp_pbc_pause(vdp_context *context);
+void vdp_release_framebuffer(vdp_context *context);
+void vdp_reacquire_framebuffer(vdp_context *context);
 
 #endif //VDP_H_
