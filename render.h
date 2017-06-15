@@ -99,7 +99,10 @@ uint8_t render_direction_part(int32_t input);
 void render_errorbox(char *title, char *message);
 void render_warnbox(char *title, char *message);
 void render_infobox(char *title, char *message);
-
+uint32_t render_emulated_width();
+uint32_t render_emulated_height();
+uint32_t render_overscan_top();
+uint32_t render_overscan_left();
 
 #endif //RENDER_H_
 
