@@ -567,9 +567,11 @@ uint8_t events_processed;
 #define FPS_INTERVAL 1000
 #endif
 
+static uint32_t last_width;
 void render_framebuffer_updated(uint8_t which, int width)
 {
 	static uint8_t last;
+	last_width = width;
 	uint32_t height = which <= FRAMEBUFFER_EVEN 
 		? (video_standard == VID_NTSC ? 243 : 294) - (overscan_top[video_standard] + overscan_bot[video_standard])
 		: 240;
@@ -690,6 +692,26 @@ void render_framebuffer_updated(uint8_t which, int width)
 		process_events();
 	}
 	events_processed = 0;
+}
+
+uint32_t render_emulated_width()
+{
+	return last_width - overscan_left[video_standard] - overscan_right[video_standard];
+}
+
+uint32_t render_emulated_height()
+{
+	return (video_standard == VID_NTSC ? 243 : 294) - overscan_top[video_standard] - overscan_bot[video_standard];
+}
+
+uint32_t render_overscan_left()
+{
+	return overscan_left[video_standard];
+}
+
+uint32_t render_overscan_top()
+{
+	return overscan_top[video_standard];
 }
 
 void render_wait_quit(vdp_context * context)
