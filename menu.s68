@@ -91,7 +91,7 @@
 	dc.b "                "
 	dc.b "                "
 	dc.b "                "
-	dc.b "JUE "
+	dc.b "JU  "
 
 ;register addresses
 VDP_DATA  equ $C00000
