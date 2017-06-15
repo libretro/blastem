@@ -1111,6 +1111,8 @@ typedef struct {
 	tern_node *mousebuttons;
 } pad_button_state;
 
+
+static long map_warning_pad = -1;
 void process_pad_button(char *key, tern_val val, uint8_t valtype, void *data)
 {
 	pad_button_state *state = data;
@@ -1129,8 +1131,9 @@ void process_pad_button(char *key, tern_val val, uint8_t valtype, void *data)
 		if (hostbutton < 0) {
 			if (hostbutton == RENDER_INVALID_NAME) {
 				warning("%s is not a valid gamepad input name\n", key);
-			} else if (hostbutton == RENDER_NOT_MAPPED) {
-				warning("No mapping exists for input %s on gamepad %d\n", key, hostpadnum);
+			} else if (hostbutton == RENDER_NOT_MAPPED && hostpadnum != map_warning_pad) {
+				warning("No SDL 2 mapping exists for input %s on gamepad %d\n", key, hostpadnum);
+				map_warning_pad = hostpadnum;
 			}
 			return;
 		}
@@ -1187,8 +1190,9 @@ void process_pad_axis(char *key, tern_val val, uint8_t valtype, void *data)
 		if (axis < 0) {
 			if (axis == RENDER_INVALID_NAME) {
 				warning("%s is not a valid gamepad input name\n", key);
-			} else if (axis == RENDER_NOT_MAPPED) {
-				warning("No mapping exists for input %s on gamepad %d\n", key, hostpadnum);
+			} else if (axis == RENDER_NOT_MAPPED && hostpadnum != map_warning_pad) {
+				warning("No SDL 2 mapping exists for input %s on gamepad %d\n", key, hostpadnum);
+				map_warning_pad = hostpadnum;
 			}
 			goto done;
 		}
