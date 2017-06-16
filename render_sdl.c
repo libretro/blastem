@@ -195,12 +195,15 @@ static uint32_t texture_buf[512 * 513];
 #ifndef DISABLE_OPENGL
 static void gl_setup()
 {
+	tern_val def = {.ptrval = "linear"};
+	char *scaling = tern_find_path_default(config, "video\0scaling\0", def, TVAL_PTR).ptrval;
+	GLint filter = strcmp(scaling, "linear") ? GL_NEAREST : GL_LINEAR;
 	glGenTextures(3, textures);
 	for (int i = 0; i < 3; i++)
 	{
 		glBindTexture(GL_TEXTURE_2D, textures[i]);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		if (i < 2) {
@@ -216,7 +219,7 @@ static void gl_setup()
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_data), vertex_data, GL_STATIC_DRAW);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[1]);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(element_data), element_data, GL_STATIC_DRAW);
-	tern_val def = {.ptrval = "default.v.glsl"};
+	def.ptrval = "default.v.glsl";
 	vshader = load_shader(tern_find_path_default(config, "video\0vertex_shader\0", def, TVAL_PTR).ptrval, GL_VERTEX_SHADER);
 	def.ptrval = "default.f.glsl";
 	fshader = load_shader(tern_find_path_default(config, "video\0fragment_shader\0", def, TVAL_PTR).ptrval, GL_FRAGMENT_SHADER);
@@ -254,7 +257,9 @@ static void render_alloc_surfaces()
 		gl_setup();
 	} else {
 #endif
-		
+		tern_val def = {.ptrval = "linear"};
+		char *scaling = tern_find_path_default(config, "video\0scaling\0", def, TVAL_PTR).ptrval;
+		SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, scaling);
 		//TODO: Fixme for invalid display mode
 		sdl_textures[0] = sdl_textures[1] = SDL_CreateTexture(main_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, LINEBUF_SIZE, 588);
 #ifndef DISABLE_OPENGL
