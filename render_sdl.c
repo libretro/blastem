@@ -276,6 +276,28 @@ static void render_quit()
 	}
 }
 
+static float config_aspect()
+{
+	static float aspect = 0.0f;
+	if (aspect == 0.0f) {
+		char *config_aspect = tern_find_path_default(config, "video\0aspect\0", (tern_val){.ptrval = "4:3"}, TVAL_PTR).ptrval;
+		if (strcmp("stretch", config_aspect)) {
+			aspect = 4.0f/3.0f;
+			char *end;
+			float aspect_numerator = strtof(config_aspect, &end);
+			if (aspect_numerator > 0.0f && *end == ':') {
+				float aspect_denominator = strtof(end+1, &end);
+				if (aspect_denominator > 0.0f && !*end) {
+					aspect = aspect_numerator / aspect_denominator;
+				}
+			}
+		} else {
+			aspect = -1.0f;
+		}
+	}
+	return aspect;
+}
+
 static void update_aspect()
 {
 	//reset default values
@@ -283,20 +305,9 @@ static void update_aspect()
 	main_clip.w = main_width;
 	main_clip.h = main_height;
 	main_clip.x = main_clip.y = 0;
-	//calculate configured aspect ratio
-	char *config_aspect = tern_find_path_default(config, "video\0aspect\0", (tern_val){.ptrval = "4:3"}, TVAL_PTR).ptrval;
-	if (strcmp("stretch", config_aspect)) {
-		float src_aspect = 4.0f/3.0f;
-		char *end;
-		float aspect_numerator = strtof(config_aspect, &end);
-		if (aspect_numerator > 0.0f && *end == ':') {
-			float aspect_denominator = strtof(end+1, &end);
-			if (aspect_denominator > 0.0f && !*end) {
-				src_aspect = aspect_numerator / aspect_denominator;
-			}
-		}
+	if (config_aspect() > 0.0f) {
 		float aspect = (float)main_width / main_height;
-		if (fabs(aspect - src_aspect) < 0.01f) {
+		if (fabs(aspect - config_aspect()) < 0.01f) {
 			//close enough for government work
 			return;
 		}
@@ -304,16 +315,16 @@ static void update_aspect()
 		if (render_gl) {
 			for (int i = 0; i < 4; i++)
 			{
-				if (aspect > src_aspect) {
-					vertex_data[i*2] *= src_aspect/aspect;
+				if (aspect > config_aspect()) {
+					vertex_data[i*2] *= config_aspect()/aspect;
 				} else {
-					vertex_data[i*2+1] *= aspect/src_aspect;
+					vertex_data[i*2+1] *= aspect/config_aspect();
 				}
 			}
 		} else {
 #endif
-			main_clip.w = aspect > src_aspect ? src_aspect * (float)main_height : main_width;
-			main_clip.h = aspect > src_aspect ? main_height : main_width / src_aspect;
+			main_clip.w = aspect > config_aspect() ? config_aspect() * (float)main_height : main_width;
+			main_clip.h = aspect > config_aspect() ? main_height : main_width / config_aspect();
 			main_clip.x = (main_width  - main_clip.w) / 2;
 			main_clip.y = (main_height - main_clip.h) / 2;
 #ifndef DISABLE_OPENGL
@@ -334,6 +345,10 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 		fatal_error("Unable to init SDL: %s\n", SDL_GetError());
 	}
 	atexit(SDL_Quit);
+	if (height <= 0) {
+		float aspect = config_aspect() > 0.0f ? config_aspect() : 4.0f/3.0f;
+		height = ((float)width / aspect) + 0.5f;
+	}
 	printf("width: %d, height: %d\n", width, height);
 	windowed_width = width;
 	windowed_height = height;

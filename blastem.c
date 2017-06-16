@@ -357,7 +357,7 @@ int main(int argc, char ** argv)
 		loaded = 1;
 	}
 	
-	int def_width = 0;
+	int def_width = 0, def_height = 0;
 	char *config_width = tern_find_path(config, "video\0width\0", TVAL_PTR).ptrval;
 	if (config_width) {
 		def_width = atoi(config_width);
@@ -365,8 +365,15 @@ int main(int argc, char ** argv)
 	if (!def_width) {
 		def_width = 640;
 	}
-	width = width < 320 ? def_width : width;
-	height = height < 240 ? (width/320) * 240 : height;
+	char *config_height = tern_find_path(config, "video\0height\0", TVAL_PTR).ptrval;
+	if (config_height) {
+		def_height = atoi(config_height);
+	}
+	if (!def_height) {
+		def_height = -1;
+	}
+	width = width < 1 ? def_width : width;
+	height = height < 1 ? def_height : height;
 
 	char *config_fullscreen = tern_find_path(config, "video\0fullscreen\0", TVAL_PTR).ptrval;
 	if (config_fullscreen && !strcmp("on", config_fullscreen)) {
