@@ -907,8 +907,12 @@ BlstMenu {
 		}
 		400000 {
 			device NOR
-			last 7FFFFF
+			last 5FFFFF
 		}
+#		600000 {
+#			device Super IO
+#			last 7FFFFF
+#		}
 		E00000 {
 			device RAM
 			size 40000
