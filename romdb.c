@@ -1028,13 +1028,22 @@ void map_iter_fun(char *key, tern_val val, uint8_t valtype, void *data)
 		map->flags = MMAP_READ;
 		map->mask = calc_mask(state->rom_size - offset, start, end);
 	} else if (!strcmp(dtype, "LOCK-ON")) {
-		if (!state->lock_on) {
+		if (state->lock_on) {
+			if (state->lock_on_size > offset) {
+				map->mask = calc_mask(state->lock_on_size - offset, start, end);
+			} else {
+				map->mask = calc_mask(state->lock_on_size, start, end);
+			}
+			map->buffer = state->lock_on + (offset & (nearest_pow2(state->lock_on_size) - 1));
+		} else if (state->rom_size > start) {
+			//This is a bit of a hack to deal with pre-combined S3&K/S2&K ROMs and S&K ROM hacks
+			map->buffer = state->rom + start;
+			map->mask = calc_mask(state->rom_size - start, start, end);
+		} else {
 			//skip this entry if there is no lock on cartridge attached
 			return;
 		}
-		map->buffer = state->lock_on + offset;
 		map->flags = MMAP_READ;
-		map->mask = calc_mask(state->lock_on_size - offset, start, end);
 	} else if (!strcmp(dtype, "EEPROM")) {
 		process_eeprom_def(key, state);
 		add_eeprom_map(node, start, end, state);
