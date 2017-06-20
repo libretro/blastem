@@ -443,6 +443,7 @@ MK-1563 {
 		200000 {
 			device LOCK-ON
 			last 3FFFFF
+			offset 200000
 		}
 	}
 }
