@@ -806,7 +806,7 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 
 			info->map[1].start = ram_start;
 			info->map[1].mask = info->save_mask;
-			info->map[1].end = ram_start + info->save_size;
+			info->map[1].end = ram_start + info->save_mask + 1;
 			info->map[1].flags = MMAP_READ | MMAP_WRITE;
 
 			if (info->save_type == RAM_FLAG_ODD) {
@@ -1051,6 +1051,7 @@ void map_iter_fun(char *key, tern_val val, uint8_t valtype, void *data)
 		map->flags = MMAP_READ;
 		map->mask = calc_mask(state->rom_size - offset, start, end);
 	} else if (!strcmp(dtype, "LOCK-ON")) {
+		map->flags = MMAP_READ;
 		if (state->lock_on) {
 			if (state->lock_on_size > offset) {
 				map->mask = calc_mask(state->lock_on_size - offset, start, end);
@@ -1062,11 +1063,46 @@ void map_iter_fun(char *key, tern_val val, uint8_t valtype, void *data)
 			//This is a bit of a hack to deal with pre-combined S3&K/S2&K ROMs and S&K ROM hacks
 			map->buffer = state->rom + start;
 			map->mask = calc_mask(state->rom_size - start, start, end);
+			if (has_ram_header(map->buffer, state->rom_size - start)) {
+				uint32_t sram_start = read_ram_header(state->info, map->buffer);
+				
+				state->info->map_chunks+=1;
+				state->info->map = realloc(state->info->map, sizeof(memmap_chunk) * state->info->map_chunks);
+				memset(state->info->map + state->info->map_chunks - 1, 0, sizeof(memmap_chunk) * 1);
+				if (sram_start >= state->rom_size) {
+					map = state->info->map + ++state->index;
+					map->start = sram_start;
+					map->mask = state->info->save_mask;
+					map->end = sram_start + state->info->save_mask + 1;
+					map->flags = MMAP_READ | MMAP_WRITE;
+					if (state->info->save_type == RAM_FLAG_ODD) {
+						map->flags |= MMAP_ONLY_ODD;
+					} else if (state->info->save_type == RAM_FLAG_EVEN) {
+						map->flags |= MMAP_ONLY_EVEN;
+					}
+					map->buffer = state->info->save_buffer;
+				} else {
+					map = state->info->map + state->index++;
+					map->flags |= MMAP_CODE | MMAP_PTR_IDX | MMAP_FUNC_NULL;
+					state->info->mapper_start_index = state->ptr_index++;
+					map->ptr_index = state->info->mapper_start_index;
+					map->read_16 = (read_16_fun)read_sram_w;//these will only be called when mem_pointers[ptr_idx] == NULL
+					map->read_8 = (read_8_fun)read_sram_b;
+					map->write_16 = (write_16_fun)write_sram_area_w;//these will be called all writes to the area
+					map->write_8 = (write_8_fun)write_sram_area_b;
+					
+					map = state->info->map + state->index;
+					map->start = 0xA13000;
+					map->end = 0xA13100;
+					map->mask = 0xFF;
+					map->write_16 = (write_16_fun)write_bank_reg_w;
+					map->write_8 = (write_8_fun)write_bank_reg_b;
+				}
+			}
 		} else {
 			//skip this entry if there is no lock on cartridge attached
 			return;
 		}
-		map->flags = MMAP_READ;
 	} else if (!strcmp(dtype, "EEPROM")) {
 		process_eeprom_def(key, state);
 		add_eeprom_map(node, start, end, state);
