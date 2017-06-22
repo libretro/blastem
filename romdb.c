@@ -616,6 +616,22 @@ tern_node *load_rom_db()
 	return db;
 }
 
+void free_rom_info(rom_info *info)
+{
+	free(info->name);
+	if (info->save_type != SAVE_NONE) {
+		free(info->save_buffer);
+		if (info->save_type == SAVE_I2C) {
+			free(info->eeprom_map);
+		}
+	}
+	free(info->map);
+	free(info->port1_override);
+	free(info->port2_override);
+	free(info->ext_override);
+	free(info->mouse_mode);
+}
+
 char *get_header_name(uint8_t *rom)
 {
 	//TODO: Should probably prefer the title field that corresponds to the user's region preference
@@ -870,6 +886,7 @@ typedef struct {
 	uint8_t      *rom;
 	uint8_t      *lock_on;
 	tern_node    *root;
+	tern_node    *rom_db;
 	uint32_t     rom_size;
 	uint32_t     lock_on_size;
 	int          index;
@@ -1051,58 +1068,64 @@ void map_iter_fun(char *key, tern_val val, uint8_t valtype, void *data)
 		map->flags = MMAP_READ;
 		map->mask = calc_mask(state->rom_size - offset, start, end);
 	} else if (!strcmp(dtype, "LOCK-ON")) {
-		map->flags = MMAP_READ;
+		rom_info lock_info;
 		if (state->lock_on) {
-			if (state->lock_on_size > offset) {
-				map->mask = calc_mask(state->lock_on_size - offset, start, end);
-			} else {
-				map->mask = calc_mask(state->lock_on_size, start, end);
-			}
-			map->buffer = state->lock_on + (offset & (nearest_pow2(state->lock_on_size) - 1));
+			lock_info = configure_rom(state->rom_db, state->lock_on, state->lock_on_size, NULL, 0, NULL, 0);
 		} else if (state->rom_size > start) {
 			//This is a bit of a hack to deal with pre-combined S3&K/S2&K ROMs and S&K ROM hacks
-			map->buffer = state->rom + start;
-			map->mask = calc_mask(state->rom_size - start, start, end);
-			if (has_ram_header(map->buffer, state->rom_size - start)) {
-				uint32_t sram_start = read_ram_header(state->info, map->buffer);
-				
-				state->info->map_chunks+=1;
-				state->info->map = realloc(state->info->map, sizeof(memmap_chunk) * state->info->map_chunks);
-				memset(state->info->map + state->info->map_chunks - 1, 0, sizeof(memmap_chunk) * 1);
-				if (sram_start >= state->rom_size) {
-					map = state->info->map + ++state->index;
-					map->start = sram_start;
-					map->mask = state->info->save_mask;
-					map->end = sram_start + state->info->save_mask + 1;
-					map->flags = MMAP_READ | MMAP_WRITE;
-					if (state->info->save_type == RAM_FLAG_ODD) {
-						map->flags |= MMAP_ONLY_ODD;
-					} else if (state->info->save_type == RAM_FLAG_EVEN) {
-						map->flags |= MMAP_ONLY_EVEN;
-					}
-					map->buffer = state->info->save_buffer;
-				} else {
-					map = state->info->map + state->index++;
-					map->flags |= MMAP_CODE | MMAP_PTR_IDX | MMAP_FUNC_NULL;
-					state->info->mapper_start_index = state->ptr_index++;
-					map->ptr_index = state->info->mapper_start_index;
-					map->read_16 = (read_16_fun)read_sram_w;//these will only be called when mem_pointers[ptr_idx] == NULL
-					map->read_8 = (read_8_fun)read_sram_b;
-					map->write_16 = (write_16_fun)write_sram_area_w;//these will be called all writes to the area
-					map->write_8 = (write_8_fun)write_sram_area_b;
-					
-					map = state->info->map + state->index;
-					map->start = 0xA13000;
-					map->end = 0xA13100;
-					map->mask = 0xFF;
-					map->write_16 = (write_16_fun)write_bank_reg_w;
-					map->write_8 = (write_8_fun)write_bank_reg_b;
-				}
-			}
+			lock_info = configure_rom(state->rom_db, state->rom + start, state->rom_size - start, NULL, 0, NULL, 0);
 		} else {
 			//skip this entry if there is no lock on cartridge attached
 			return;
 		}
+		uint32_t matching_chunks = 0;
+		for (int i = 0; i < lock_info.map_chunks; i++)
+		{
+			if (lock_info.map[i].start < 0xC00000 && lock_info.map[i].end > 0x200000) {
+				matching_chunks++;
+			}
+		}
+		if (matching_chunks == 0) {
+			//Nothing mapped in the relevant range for the lock-on cart, ignore this mapping
+			return;
+		} else if (matching_chunks > 1) {
+			state->info->map_chunks += matching_chunks - 1;
+			state->info->map = realloc(state->info->map, sizeof(memmap_chunk) * state->info->map_chunks);
+			memset(state->info->map + state->info->map_chunks - (matching_chunks - 1), 0, sizeof(memmap_chunk) * (matching_chunks - 1));
+			map = state->info->map + state->index;
+		}
+		for (int i = 0; i < matching_chunks; i++)
+		{
+			if (lock_info.map[i].start >= 0xC00000 || lock_info.map[i].end <= 0x200000) {
+				continue;
+			}
+			*map = lock_info.map[i];
+			if (map->start < 0x200000) {
+				if (map->buffer) {
+					map->buffer += (0x200000 - map->start) & ((map->flags & MMAP_AUX_BUFF) ? map->aux_mask : map->mask);
+				}
+				map->start = 0x200000;
+			}
+			map++;
+			state->index++;
+		}
+		if (state->info->save_type == SAVE_NONE && lock_info.save_type != SAVE_NONE) {
+			//main cart has no save device, but lock-on cart does
+			if (state->lock_on) {
+				state->info->is_save_lock_on = 1;
+			}
+			state->info->save_buffer = lock_info.save_buffer;
+			state->info->save_size = lock_info.save_size;
+			state->info->save_mask = lock_info.save_mask;
+			state->info->save_page_size = lock_info.save_page_size;
+			state->info->save_product_id = lock_info.save_product_id;
+			state->info->save_type = lock_info.save_type;
+			state->info->save_bus = lock_info.save_bus;
+			lock_info.save_buffer = NULL;
+			lock_info.save_type = SAVE_NONE;
+		}
+		free_rom_info(&lock_info);
+		return;
 	} else if (!strcmp(dtype, "EEPROM")) {
 		process_eeprom_def(key, state);
 		add_eeprom_map(node, start, end, state);
@@ -1282,7 +1305,8 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, void *l
 				.info = &info, 
 				.rom = rom, 
 				.lock_on = lock_on,
-				.root = entry, 
+				.root = entry,
+				.rom_db = rom_db,
 				.rom_size = rom_size, 
 				.lock_on_size = lock_on_size,
 				.index = 0, 
