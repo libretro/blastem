@@ -73,6 +73,7 @@ struct rom_info {
 	uint8_t       save_type;
 	uint8_t       save_bus; //only used for NOR currently
 	uint8_t       regions;
+	uint8_t       is_save_lock_on; //Does the save buffer actually belong to a lock-on cart?
 };
 
 #define GAME_ID_OFF 0x183
@@ -85,5 +86,8 @@ uint8_t translate_region_char(uint8_t c);
 void eeprom_init(eeprom_state *state, uint8_t *buffer, uint32_t size);
 void nor_flash_init(nor_state *state, uint8_t *buffer, uint32_t size, uint32_t page_size, uint16_t product_id, uint8_t bus_flags);
 char const *save_type_name(uint8_t save_type);
+//Note: free_rom_info only frees things pointed to by a rom_info struct, not the struct itself
+//this is because rom_info structs are typically stack allocated
+void free_rom_info(rom_info *info);
 
 #endif //ROMDB_H_

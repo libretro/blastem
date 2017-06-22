@@ -300,19 +300,7 @@ rom_info xband_configure_rom(tern_node *rom_db, void *rom, uint32_t rom_size, vo
 		rom_info lock_on_info = configure_rom(rom_db, lock_on, lock_on_size, NULL, 0, base_map, base_chunks);
 		info.name = alloc_concat("XBAND - ", lock_on_info.name);
 		info.regions = lock_on_info.regions;
-		//TODO: Move this to a shared function in romdbc.h
-		free(lock_on_info.name);
-		if (lock_on_info.save_type != SAVE_NONE) {
-			free(lock_on_info.save_buffer);
-			if (lock_on_info.save_type == SAVE_I2C) {
-				free(lock_on_info.eeprom_map);
-			}
-		}
-		free(lock_on_info.map);
-		free(lock_on_info.port1_override);
-		free(lock_on_info.port2_override);
-		free(lock_on_info.ext_override);
-		free(lock_on_info.mouse_mode);
+		free_rom_info(&lock_on_info);
 	} else {
 		info.name = strdup("XBAND");
 		info.regions = REGION_J|REGION_U|REGION_E;
