@@ -137,15 +137,13 @@ void update_title(char *rom_name)
 	render_update_caption(title);
 }
 
-void setup_saves(char *fname, rom_info *info, system_header *context)
+static char *get_save_dir(system_media *media)
 {
-	static uint8_t persist_save_registered;
 	char *savedir_template = tern_find_path(config, "ui\0save_path\0", TVAL_PTR).ptrval;
 	if (!savedir_template) {
 		savedir_template = "$USERDATA/blastem/$ROMNAME";
 	}
-	char * barename = basename_no_extension(fname);
-	tern_node *vars = tern_insert_ptr(NULL, "ROMNAME", barename);
+	tern_node *vars = tern_insert_ptr(NULL, "ROMNAME", media->name);
 	vars = tern_insert_ptr(vars, "HOME", get_home_dir());
 	vars = tern_insert_ptr(vars, "EXEDIR", get_exe_dir());
 	vars = tern_insert_ptr(vars, "USERDATA", (char *)get_userdata_dir());
@@ -154,15 +152,27 @@ void setup_saves(char *fname, rom_info *info, system_header *context)
 	if (!ensure_dir_exists(save_dir)) {
 		warning("Failed to create save directory %s\n", save_dir);
 	}
+	return save_dir;
+}
+
+void setup_saves(system_media *media, rom_info *info, system_header *context)
+{
+	static uint8_t persist_save_registered;
+	char *save_dir = get_save_dir(info->is_save_lock_on ? media->chain : media);
 	char const *parts[] = {save_dir, PATH_SEP, info->save_type == SAVE_I2C ? "save.eeprom" : info->save_type == SAVE_NOR ? "save.nor" : "save.sram"};
 	free(save_filename);
 	save_filename = alloc_concat_m(3, parts);
+	if (info->is_save_lock_on) {
+		//initial save dir was calculated based on lock-on cartridge because that's where the save device is
+		//save directory used for save states should still be located in the normal place
+		free(save_dir);
+		save_dir = get_save_dir(media);
+	}
 	//TODO: make quick save filename dependent on system type
 	parts[2] = "quicksave.gst";
 	free(save_state_path);
 	save_state_path = alloc_concat_m(3, parts);
 	context->save_dir = save_dir;
-	free(barename);
 	if (info->save_type != SAVE_NONE) {
 		context->load_save(context);
 		if (!persist_save_registered) {
@@ -395,7 +405,7 @@ int main(int argc, char ** argv)
 	if (!current_system) {
 		fatal_error("Failed to configure emulated machine for %s\n", romfname);
 	}
-	setup_saves(romfname, &info, current_system);
+	setup_saves(&cart, &info, current_system);
 	update_title(info.name);
 	if (menu) {
 		menu_context = current_system;
@@ -445,7 +455,7 @@ int main(int argc, char ** argv)
 			}
 			menu_context->next_context = game_context;
 			game_context->next_context = menu_context;
-			setup_saves(next_rom, &info, game_context);
+			setup_saves(&cart, &info, game_context);
 			update_title(info.name);
 			free(next_rom);
 			menu = 0;
