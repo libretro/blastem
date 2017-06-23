@@ -32,6 +32,7 @@ struct genesis_context {
 	uint8_t         *zram;
 	void            *extra;
 	uint8_t         *save_storage;
+	void            *mapper_temp;
 	eeprom_map      *eeprom_map;
 	uint32_t        num_eeprom;
 	uint32_t        save_size;
