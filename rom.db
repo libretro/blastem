@@ -433,6 +433,26 @@ T-12053 {
 		}
 	}
 }
+MK-1079 {
+	#This entry is needed only to make this play nicely with
+	#S&K lock-on support. Normal 2MB cartridges with SRAM won't
+	#work right, but Sonic 3 has the limited SRAM-only variant
+	#of Sega's mapper commonly found on 4MB carts with SRAM
+	name Sonic the Hedgehog 3
+	map {
+		0 {
+			device ROM
+			last 1FFFFF
+		}
+		200000 {
+			device Sega mapper
+			variant save-only
+			offset 200000
+			last 3FFFFF
+		}
+	}
+	
+}
 MK-1563 {
 	name Sonic & Knuckles
 	map {
