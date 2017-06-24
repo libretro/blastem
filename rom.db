@@ -942,3 +942,23 @@ BlstMenu {
 		}
 	}
 }
+
+7313c20071de0ab1cd84ac1352cb0ed1c4a4afa8 {
+	#This appears to be an underdump, but it seems to be the only copy floating around 
+	name 12-in-1
+	map {
+		0 {
+			device multi-game
+			last 3FFFFF
+		}
+	}
+}
+6b2a6de2622735f6d56c6c9c01f74daa90e355cb {
+	name 15-in-1
+	map {
+		0 {
+			device multi-game
+			last 3FFFFF
+		}
+	}
+}

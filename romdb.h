@@ -46,6 +46,7 @@ struct rom_info {
 	char          *name;
 	memmap_chunk  *map;
 	uint8_t       *save_buffer;
+	void          *rom;
 	eeprom_map    *eeprom_map;
 	char          *port1_override;
 	char          *port2_override;
@@ -53,6 +54,7 @@ struct rom_info {
 	char          *mouse_mode;
 	uint32_t      num_eeprom;
 	uint32_t      map_chunks;
+	uint32_t      rom_size;
 	uint32_t      save_size;
 	uint32_t      save_mask;
 	uint32_t      save_page_size;

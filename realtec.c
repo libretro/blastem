@@ -102,6 +102,9 @@ rom_info realtec_configure_rom(uint8_t *rom, uint32_t rom_size, memmap_chunk con
 	info.save_buffer = NULL;
 	info.num_eeprom = 0;
 	info.eeprom_map = NULL;
+	info.rom = rom;
+	info.rom_size = rom_size;
+	info.is_save_lock_on = 0;
 	info.port1_override = info.port2_override = info.ext_override = info.mouse_mode = NULL;
 	info.map_chunks = base_chunks + 2;
 	info.map = calloc(sizeof(memmap_chunk), info.map_chunks);
