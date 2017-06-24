@@ -10,6 +10,7 @@
 #include "realtec.h"
 #include "nor.h"
 #include "sega_mapper.h"
+#include "multi_game.h"
 
 #define DOM_TITLE_START 0x120
 #define DOM_TITLE_END 0x150
@@ -301,6 +302,9 @@ rom_info configure_rom_heuristics(uint8_t *rom, uint32_t rom_size, memmap_chunk 
 	rom_info info;
 	info.name = get_header_name(rom);
 	info.regions = get_header_regions(rom);
+	info.is_save_lock_on = 0;
+	info.rom = rom;
+	info.rom_size = rom_size;
 	add_memmap_header(&info, rom, rom_size, base_map, base_chunks);
 	info.port1_override = info.port2_override = info.ext_override = info.mouse_mode = NULL;
 	return info;
@@ -681,6 +685,28 @@ void map_iter_fun(char *key, tern_val val, uint8_t valtype, void *data)
 		map->mask = 0;
 		map->flags = MMAP_READ;
 		*value = strtol(tern_find_ptr_default(node, "value", "0"), NULL, 16);
+	} else if (!strcmp(dtype, "multi-game")) {
+		state->info->mapper_start_index = state->ptr_index++;
+		//make a mirror copy of the ROM so we can efficiently support arbitrary start offsets
+		state->rom = realloc(state->rom, state->rom_size * 2);
+		memcpy(state->rom + state->rom_size, state->rom, state->rom_size);
+		state->rom_size *= 2;
+		//make room for an extra map entry
+		state->info->map_chunks+=1;
+		state->info->map = realloc(state->info->map, sizeof(memmap_chunk) * state->info->map_chunks);
+		memset(state->info->map + state->info->map_chunks - 1, 0, sizeof(memmap_chunk) * 1);
+		map = state->info->map + state->index;
+		map->buffer = state->rom;
+		map->mask = calc_mask(state->rom_size, start, end);
+		map->flags = MMAP_READ | MMAP_PTR_IDX | MMAP_CODE;
+		map->ptr_index = state->info->mapper_start_index;
+		map++;
+		state->index++;
+		map->start = 0xA13000;
+		map->end = 0xA13100;
+		map->mask = 0xFF;
+		map->write_16 = write_multi_game_w;
+		map->write_8 = write_multi_game_b;
 	} else {
 		fatal_error("Invalid device type %s for ROM DB map entry %d with address %s\n", dtype, state->index, key);
 	}
@@ -742,6 +768,9 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, void *l
 		info.regions = get_header_regions(rom);
 	}
 
+	info.is_save_lock_on = 0;
+	info.rom = vrom;
+	info.rom_size = rom_size;
 	tern_node *map = tern_find_node(entry, "map");
 	if (map) {
 		info.save_type = SAVE_NONE;
@@ -768,6 +797,8 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, void *l
 			};
 			tern_foreach(map, map_iter_fun, &state);
 			memcpy(info.map + state.index, base_map, sizeof(memmap_chunk) * base_chunks);
+			info.rom = state.rom;
+			info.rom_size = state.rom_size;
 		} else {
 			add_memmap_header(&info, rom, rom_size, base_map, base_chunks);
 		}

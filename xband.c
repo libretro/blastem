@@ -313,6 +313,9 @@ rom_info xband_configure_rom(tern_node *rom_db, void *rom, uint32_t rom_size, vo
 	info.port2_override = strdup("xband keyboard");
 	info.eeprom_map = NULL;
 	info.num_eeprom = 0;
+	info.rom = rom;
+	info.rom_size = rom_size;
+	info.is_save_lock_on = 0;
 	xband *x = calloc(sizeof(xband), 1);
 	rom_size = nearest_pow2(rom_size);
 	for (int i = 0; (i + rom_size) <= sizeof(x->cart_space) / 2; i += rom_size)
