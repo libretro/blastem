@@ -1170,6 +1170,8 @@ genesis_context *alloc_config_genesis(void *rom, uint32_t rom_size, void *lock_o
 		rom_db = load_rom_db();
 	}
 	*info_out = configure_rom(rom_db, rom, rom_size, lock_on, lock_on_size, base_map, sizeof(base_map)/sizeof(base_map[0]));
+	rom = info_out->rom;
+	rom_size = info_out->rom_size;
 #ifndef BLASTEM_BIG_ENDIAN
 	byteswap_rom(rom_size, rom);
 	if (lock_on) {
