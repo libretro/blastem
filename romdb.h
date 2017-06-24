@@ -24,18 +24,6 @@ typedef struct {
 } eeprom_map;
 
 typedef struct {
-	char        *buffer;
-	uint32_t    size;
-	uint16_t    address;
-	uint8_t     host_sda;
-	uint8_t     slave_sda;
-	uint8_t     scl;
-	uint8_t     state;
-	uint8_t     counter;
-	uint8_t     latch;
-} eeprom_state;
-
-typedef struct {
 	uint8_t     *buffer;
 	uint8_t     *page_buffer;
 	uint32_t    size;
@@ -83,8 +71,6 @@ tern_node *load_rom_db();
 rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, void *lock_on, uint32_t lock_on_size, memmap_chunk const *base_map, uint32_t base_chunks);
 rom_info configure_rom_heuristics(uint8_t *rom, uint32_t rom_size, memmap_chunk const *base_map, uint32_t base_chunks);
 uint8_t translate_region_char(uint8_t c);
-void eeprom_init(eeprom_state *state, uint8_t *buffer, uint32_t size);
-void nor_flash_init(nor_state *state, uint8_t *buffer, uint32_t size, uint32_t page_size, uint16_t product_id, uint8_t bus_flags);
 char const *save_type_name(uint8_t save_type);
 //Note: free_rom_info only frees things pointed to by a rom_info struct, not the struct itself
 //this is because rom_info structs are typically stack allocated

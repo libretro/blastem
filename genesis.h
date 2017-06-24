@@ -16,6 +16,7 @@
 #include "io.h"
 #include "romdb.h"
 #include "arena.h"
+#include "i2c.h"
 
 typedef struct genesis_context genesis_context;
 
