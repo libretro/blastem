@@ -220,7 +220,7 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 				dst = copy_dir_entry_to_guest(dst, m68k, "..", 1);
 			}
 #endif
-			char *ext_filter = strdup(tern_find_path_default(config, "ui\0extensions\0", (tern_val){.ptrval = "bin gen md sms gg"}, TVAL_PTR).ptrval);
+			char *ext_filter = strdup(tern_find_path_default(config, "ui\0extensions\0", (tern_val){.ptrval = "bin gen md smd sms gg"}, TVAL_PTR).ptrval);
 			uint32_t num_exts = 0, ext_storage = 5;
 			char **ext_list = malloc(sizeof(char *) * ext_storage);
 			char *cur_filter = ext_filter;
@@ -243,7 +243,7 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 					uint32_t extidx;
 					for (extidx = 0; extidx < num_exts; extidx++)
 					{
-						if (!strcmp(ext, ext_list[extidx])) {
+						if (!strcasecmp(ext, ext_list[extidx])) {
 							break;
 						}
 					}
