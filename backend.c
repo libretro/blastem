@@ -111,7 +111,7 @@ uint16_t read_word(uint32_t address, void **mem_pointers, cpu_options *opts, voi
 			uint16_t val;
 			if ((chunk->flags & MMAP_ONLY_ODD) || (chunk->flags & MMAP_ONLY_EVEN)) {
 				offset /= 2;
-				uint16_t val = base[offset];
+				val = base[offset];
 				if (chunk->flags & MMAP_ONLY_ODD) {
 					val |= 0xFF00;
 				} else {
