@@ -954,7 +954,16 @@ BlstMenu {
 	}
 }
 6b2a6de2622735f6d56c6c9c01f74daa90e355cb {
-	name 15-in-1
+	name Super 15-in-1
+	map {
+		0 {
+			device multi-game
+			last 3FFFFF
+		}
+	}
+}
+e1c041ba69da087c428dcda16850159f3caebd4b {
+	name Super 19-in-1
 	map {
 		0 {
 			device multi-game
