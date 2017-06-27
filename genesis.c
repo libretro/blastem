@@ -35,13 +35,13 @@ uint32_t MCLKS_PER_68K;
 uint16_t read_dma_value(uint32_t address)
 {
 	genesis_context *genesis = (genesis_context *)current_system;
-	//addresses here are word addresses (i.e. bit 0 corresponds to A1), so no need to do multiply by 2
-	uint16_t *ptr = get_native_pointer(address*2, (void **)genesis->m68k->mem_pointers, &genesis->m68k->options->gen);
-	if (ptr) {
-		return *ptr;
-	}
 	//TODO: Figure out what happens when you try to DMA from weird adresses like IO or banked Z80 area
-	return 0;
+	if ((address >= 0xA00000 && address < 0xB00000) || (address >= 0xC00000 && address <= 0xE00000)) {
+		return 0;
+	}
+	
+	//addresses here are word addresses (i.e. bit 0 corresponds to A1), so no need to do multiply by 2
+	return read_word(address * 2, (void **)genesis->m68k->mem_pointers, &genesis->m68k->options->gen, genesis->m68k);
 }
 
 static uint16_t get_open_bus_value(system_header *system)
