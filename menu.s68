@@ -838,7 +838,7 @@ start:
 	dbra d0, .regloop
 
 	vdpaccess $0, VDP_CRAM_WRITE
-	move.w #$020, (a0)
+	move.w #$400, (a0)
 	move.w #$EEE, (a0)
 	move.w #$222, (a0)
 
