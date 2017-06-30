@@ -1050,8 +1050,8 @@ static void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, 
 		vscroll_shift = 3;
 	}
 	//TODO: Further research on vscroll latch behavior and the "first column bug"
-	if (!column) {
-		if (context->regs[REG_MODE_3] & BIT_VSCROLL) {
+	if (context->regs[REG_MODE_3] & BIT_VSCROLL) {
+		if (!column) {
 			if (context->regs[REG_MODE_4] & BIT_H40) {
 				//Based on observed behavior documented by Eke-Eke, I'm guessing the VDP
 				//ends up fetching the last value on the VSRAM bus in the H40 case
@@ -1063,11 +1063,9 @@ static void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, 
 				//supposedly it's always forced to 0 in the H32 case
 				context->vscroll_latch[0] = context->vscroll_latch[1] = 0;
 			}
-		} else {
-			context->vscroll_latch[vsram_off] = context->vsram[vsram_off];
+		} else if (context->regs[REG_MODE_3] & BIT_VSCROLL) {
+			context->vscroll_latch[vsram_off] = context->vsram[column - 2 + vsram_off];
 		}
-	} else if (context->regs[REG_MODE_3] & BIT_VSCROLL) {
-		context->vscroll_latch[vsram_off] = context->vsram[column - 2 + vsram_off];
 	}
 	if (!vsram_off) {
 		uint16_t left_col, right_col;
@@ -2154,6 +2152,12 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	SPRITE_RENDER_H40(242)
 	SPRITE_RENDER_H40(243) //provides "garbage" for border when plane A selected
 	case 244:
+		if (!(context->regs[REG_MODE_3] & BIT_VSCROLL)) {
+			//TODO: Develop some tests on hardware to see when vscroll latch actually happens for full plane mode
+			//See note in vdp_h32 for why this was moved out of read_map_scroll
+			context->vscroll_latch[0] = context->vsram[0];
+			context->vscroll_latch[1] = context->vsram[1];
+		}
 		address = (context->regs[REG_HSCROLL] & 0x3F) << 10;
 		mask = 0;
 		if (context->regs[REG_MODE_3] & 0x2) {
@@ -2363,6 +2367,15 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 	SPRITE_RENDER_H32(241)
 	SPRITE_RENDER_H32(242)
 	case 243:
+		if (!(context->regs[REG_MODE_3] & BIT_VSCROLL)) {
+			//TODO: Develop some tests on hardware to see when vscroll latch actually happens for full plane mode
+			//Top Gear 2 has a very efficient HINT routine that can occassionally hit this slot with a VSRAM write
+			//Since CRAM-updatnig HINT routines seem to indicate that my HINT latency is perhaps slightly too high
+			//the most reasonable explanation is that vscroll is latched before this slot, but tests are needed
+			//to confirm that one way or another
+			context->vscroll_latch[0] = context->vsram[0];
+			context->vscroll_latch[1] = context->vsram[1];
+		}
 		external_slot(context);
 		//provides "garbage" for border when plane A selected
 		render_border_garbage(
