@@ -23,6 +23,7 @@
 #include "terminal.h"
 #include "arena.h"
 #include "config.h"
+#include "menu.h"
 
 #define BLASTEM_VERSION "0.5.1-pre"
 
@@ -116,14 +117,14 @@ char *save_state_path;
 
 char * save_filename;
 system_header *current_system;
-system_header *menu_context;
-system_header *game_context;
+system_header *menu_system;
+system_header *game_system;
 void persist_save()
 {
-	if (!game_context) {
+	if (!game_system) {
 		return;
 	}
-	game_context->persist_save(game_context);
+	game_system->persist_save(game_system);
 }
 
 char *title;
@@ -189,6 +190,17 @@ static void on_drag_drop(const char *filename)
 	}
 	current_system->next_rom = strdup(filename);
 	current_system->request_exit(current_system);
+	if (menu_system && menu_system->type == SYSTEM_GENESIS) {
+		genesis_context *gen = (genesis_context *)menu_system;
+		if (gen->extra) {
+			menu_context *menu = gen->extra;
+			menu->external_game_load = 1;
+		} else {
+			puts("No extra");
+		}
+	} else {
+		puts("no menu");
+	}
 }
 
 int main(int argc, char ** argv)
@@ -408,9 +420,9 @@ int main(int argc, char ** argv)
 	setup_saves(&cart, &info, current_system);
 	update_title(info.name);
 	if (menu) {
-		menu_context = current_system;
+		menu_system = current_system;
 	} else {
-		game_context = current_system;
+		game_system = current_system;
 	}
 
 	current_system->debugger_type = dtype;
@@ -424,14 +436,14 @@ int main(int argc, char ** argv)
 		if (current_system->next_rom) {
 			char *next_rom = current_system->next_rom;
 			current_system->next_rom = NULL;
-			if (game_context) {
-				game_context->persist_save(game_context);
+			if (game_system) {
+				game_system->persist_save(game_system);
 				//swap to game context arena and mark all allocated pages in it free
 				if (menu) {
-					current_system->arena = set_current_arena(game_context->arena);
+					current_system->arena = set_current_arena(game_system->arena);
 				}
 				mark_all_free();
-				game_context->free_context(game_context);
+				game_system->free_context(game_system);
 			} else {
 				//start a new arena and save old one in suspended genesis context
 				current_system->arena = start_new_arena();
@@ -449,28 +461,28 @@ int main(int argc, char ** argv)
 				fatal_error("Failed to detect system type for %s\n", next_rom);
 			}
 			//allocate new system context
-			game_context = alloc_config_system(stype, &cart, opts,force_region, &info);
-			if (!game_context) {
+			game_system = alloc_config_system(stype, &cart, opts,force_region, &info);
+			if (!game_system) {
 				fatal_error("Failed to configure emulated machine for %s\n", next_rom);
 			}
-			menu_context->next_context = game_context;
-			game_context->next_context = menu_context;
-			setup_saves(&cart, &info, game_context);
+			menu_system->next_context = game_system;
+			game_system->next_context = menu_system;
+			setup_saves(&cart, &info, game_system);
 			update_title(info.name);
 			free(next_rom);
 			menu = 0;
-			current_system = game_context;
+			current_system = game_system;
 			current_system->debugger_type = dtype;
 			current_system->enter_debugger = start_in_debugger && menu == debug_target;
 			current_system->start_context(current_system, statefile);
-		} else if (menu && game_context) {
-			current_system->arena = set_current_arena(game_context->arena);
-			current_system = game_context;
+		} else if (menu && game_system) {
+			current_system->arena = set_current_arena(game_system->arena);
+			current_system = game_system;
 			menu = 0;
 			current_system->resume_context(current_system);
-		} else if (!menu && menu_context) {
-			current_system->arena = set_current_arena(menu_context->arena);
-			current_system = menu_context;
+		} else if (!menu && menu_system) {
+			current_system->arena = set_current_arena(menu_system->arena);
+			current_system = menu_system;
 			menu = 1;
 			current_system->resume_context(current_system);
 		} else {

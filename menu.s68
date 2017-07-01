@@ -214,6 +214,10 @@ int_6:
 	move.b d1, d0
 	move.l d0, (a1)
 	startdma $C000, VDP_VRAM_WRITE
+	
+	move.w (menu_port+4*7), d0
+	btst #0, d0
+	bne show_pause_menu
 
 	;read gamepad/mouse in port 1
 	lea PAD1_DATA, a2
