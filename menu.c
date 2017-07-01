@@ -10,14 +10,45 @@
 #include "gst.h"
 #include "m68k_internal.h" //needed for get_native_address_trans, should be eliminated once handling of PC is cleaned up
 
-
-uint16_t menu_read_w(uint32_t address, void * context)
+static menu_context *get_menu(genesis_context *gen)
 {
-	//This should return the status of the last request with 0
-	//meaning either the request is complete or no request is pending
-	//in the current implementation, the operations happen instantly
-	//in emulated time so we can always return 0
-	return 0;
+	menu_context *menu = gen->extra;
+	if (!menu) {
+		gen->extra = menu = calloc(1, sizeof(menu_context));
+		menu->curpath = tern_find_path(config, "ui\0initial_path\0", TVAL_PTR).ptrval;
+		if (!menu->curpath){
+#ifdef __ANDROID__
+			menu->curpath = get_external_storage_path();
+#else
+			menu->curpath = "$HOME";
+#endif
+		}
+		tern_node *vars = tern_insert_ptr(NULL, "HOME", get_home_dir());
+		vars = tern_insert_ptr(vars, "EXEDIR", get_exe_dir());
+		menu->curpath = replace_vars(menu->curpath, vars, 1);
+		tern_free(vars);
+	}
+	return menu;
+}
+
+uint16_t menu_read_w(uint32_t address, void * vcontext)
+{
+	if ((address >> 1) == 14) {
+		m68k_context *context = vcontext;
+		menu_context *menu = get_menu(context->system);
+		uint16_t value = menu->external_game_load;
+		if (value) {
+			printf("Read: %X\n", value);
+		}
+		menu->external_game_load = 0;
+		return value;
+	} else {
+		//This should return the status of the last request with 0
+		//meaning either the request is complete or no request is pending
+		//in the current implementation, the operations happen instantly
+		//in emulated time so we can always return 0
+		return 0;
+	}
 }
 
 int menu_dir_sort(const void *a, const void *b)
@@ -163,23 +194,7 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 {
 	m68k_context *m68k = context;
 	genesis_context *gen = m68k->system;
-	menu_context *menu = gen->extra;
-	if (!menu) {
-		gen->extra = menu = calloc(1, sizeof(menu_context));
-		menu->curpath = tern_find_path(config, "ui\0initial_path\0", TVAL_PTR).ptrval;
-		if (!menu->curpath){
-#ifdef __ANDROID__
-			menu->curpath = get_external_storage_path();
-#else
-			menu->curpath = "$HOME";
-#endif
-		}
-		tern_node *vars = tern_insert_ptr(NULL, "HOME", get_home_dir());
-		vars = tern_insert_ptr(vars, "EXEDIR", get_exe_dir());
-		menu->curpath = replace_vars(menu->curpath, vars, 1);
-		tern_free(vars);
-		
-	}
+	menu_context *menu = get_menu(gen);
 	if (menu->state) {
 		uint32_t dst = menu->latch << 16 | value;
 		switch (address >> 2)
@@ -375,6 +390,7 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			}
 			copy_to_guest(m68k, dst, buffer, cur-buffer);
 			break;
+		}
 		case 5:
 			//save state
 			if (gen->header.next_context) {
@@ -405,7 +421,9 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			}
 			m68k->should_return = 1;
 			break;
-		}
+		case 7: 
+			//read only port
+			break;
 		default:
 			fprintf(stderr, "WARNING: write to undefined menu port %X\n", address);
 		}
