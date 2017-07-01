@@ -9,6 +9,7 @@ typedef struct {
 	char     *curpath;
 	uint16_t latch;
 	uint16_t state;
+	uint8_t  external_game_load;
 } menu_context;
 
 
