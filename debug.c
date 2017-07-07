@@ -796,10 +796,16 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 					branch_f = after;
 					branch_t = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
 					insert_breakpoint(context, branch_t, debugger);
-				} else if(inst.op == M68K_DBCC && inst.extra.cond != COND_FALSE) {
-					branch_t = after;
-					branch_f = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
-					insert_breakpoint(context, branch_f, debugger);
+				} else if(inst.op == M68K_DBCC) {
+					if (inst.extra.cond == COND_FALSE) {
+						if (context->dregs[inst.dst.params.regs.pri] & 0xFFFF) {
+							after = m68k_branch_target(&inst, context->dregs, context->aregs);
+						}
+					} else {
+						branch_t = after;
+						branch_f = m68k_branch_target(&inst, context->dregs, context->aregs);
+						insert_breakpoint(context, branch_f, debugger);
+					}
 				} else {
 					after = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
 				}
