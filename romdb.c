@@ -173,6 +173,10 @@ uint32_t read_ram_header(rom_info *info, uint8_t *rom)
 	uint32_t ram_flags = info->save_type = rom[RAM_FLAGS] & RAM_FLAG_MASK;
 	ram_start &= 0xFFFFFE;
 	ram_end |= 1;
+	if (ram_start >= 0x800000) {
+		info->save_buffer = NULL;
+		return ram_start;
+	}
 	info->save_mask = ram_end - ram_start;
 	uint32_t save_size = info->save_mask + 1;
 	if (ram_flags != RAM_FLAG_BOTH) {
@@ -228,73 +232,77 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 		info->map[8].mask = 0xFF;
 		info->map[8].write_16 = (write_16_fun)write_bank_reg_w;
 		info->map[8].write_8 = (write_8_fun)write_bank_reg_b;
+		return;
 	} else if (has_ram_header(rom, size)) {
 		uint32_t ram_start = read_ram_header(info, rom);
 
-		info->map_chunks = base_chunks + (ram_start >= rom_end ? 2 : 3);
-		info->map = malloc(sizeof(memmap_chunk) * info->map_chunks);
-		memset(info->map, 0, sizeof(memmap_chunk)*2);
-		memcpy(info->map+2, base_map, sizeof(memmap_chunk) * base_chunks);
+		if (info->save_buffer) {
+			info->map_chunks = base_chunks + (ram_start >= rom_end ? 2 : 3);
+			info->map = malloc(sizeof(memmap_chunk) * info->map_chunks);
+			memset(info->map, 0, sizeof(memmap_chunk)*2);
+			memcpy(info->map+2, base_map, sizeof(memmap_chunk) * base_chunks);
 
-		if (ram_start >= rom_end) {
-			info->map[0].end = rom_end < 0x400000 ? nearest_pow2(rom_end) - 1 : 0xFFFFFF;
-			if (info->map[0].end > ram_start) {
-				info->map[0].end = ram_start;
+			if (ram_start >= rom_end) {
+				info->map[0].end = rom_end < 0x400000 ? nearest_pow2(rom_end) - 1 : 0xFFFFFF;
+				if (info->map[0].end > ram_start) {
+					info->map[0].end = ram_start;
+				}
+				//TODO: ROM mirroring
+				info->map[0].mask = 0xFFFFFF;
+				info->map[0].flags = MMAP_READ;
+				info->map[0].buffer = rom;
+
+				info->map[1].start = ram_start;
+				info->map[1].mask = info->save_mask;
+				info->map[1].end = ram_start + info->save_mask + 1;
+				info->map[1].flags = MMAP_READ | MMAP_WRITE;
+
+				if (info->save_type == RAM_FLAG_ODD) {
+					info->map[1].flags |= MMAP_ONLY_ODD;
+				} else if (info->save_type == RAM_FLAG_EVEN) {
+					info->map[1].flags |= MMAP_ONLY_EVEN;
+				}
+				info->map[1].buffer = info->save_buffer;
+			} else {
+				//Assume the standard Sega mapper
+				info->map[0].end = 0x200000;
+				info->map[0].mask = 0xFFFFFF;
+				info->map[0].flags = MMAP_READ;
+				info->map[0].buffer = rom;
+
+				info->map[1].start = 0x200000;
+				info->map[1].end = 0x400000;
+				info->map[1].mask = 0x1FFFFF;
+				info->map[1].flags = MMAP_READ | MMAP_PTR_IDX | MMAP_FUNC_NULL;
+				info->map[1].ptr_index = info->mapper_start_index = 0;
+				info->map[1].read_16 = (read_16_fun)read_sram_w;//these will only be called when mem_pointers[2] == NULL
+				info->map[1].read_8 = (read_8_fun)read_sram_b;
+				info->map[1].write_16 = (write_16_fun)write_sram_area_w;//these will be called all writes to the area
+				info->map[1].write_8 = (write_8_fun)write_sram_area_b;
+				info->map[1].buffer = rom + 0x200000;
+
+				memmap_chunk *last = info->map + info->map_chunks - 1;
+				memset(last, 0, sizeof(memmap_chunk));
+				last->start = 0xA13000;
+				last->end = 0xA13100;
+				last->mask = 0xFF;
+				last->write_16 = (write_16_fun)write_bank_reg_w;
+				last->write_8 = (write_8_fun)write_bank_reg_b;
 			}
-			//TODO: ROM mirroring
-			info->map[0].mask = 0xFFFFFF;
-			info->map[0].flags = MMAP_READ;
-			info->map[0].buffer = rom;
-
-			info->map[1].start = ram_start;
-			info->map[1].mask = info->save_mask;
-			info->map[1].end = ram_start + info->save_mask + 1;
-			info->map[1].flags = MMAP_READ | MMAP_WRITE;
-
-			if (info->save_type == RAM_FLAG_ODD) {
-				info->map[1].flags |= MMAP_ONLY_ODD;
-			} else if (info->save_type == RAM_FLAG_EVEN) {
-				info->map[1].flags |= MMAP_ONLY_EVEN;
-			}
-			info->map[1].buffer = info->save_buffer;
-		} else {
-			//Assume the standard Sega mapper
-			info->map[0].end = 0x200000;
-			info->map[0].mask = 0xFFFFFF;
-			info->map[0].flags = MMAP_READ;
-			info->map[0].buffer = rom;
-
-			info->map[1].start = 0x200000;
-			info->map[1].end = 0x400000;
-			info->map[1].mask = 0x1FFFFF;
-			info->map[1].flags = MMAP_READ | MMAP_PTR_IDX | MMAP_FUNC_NULL;
-			info->map[1].ptr_index = info->mapper_start_index = 0;
-			info->map[1].read_16 = (read_16_fun)read_sram_w;//these will only be called when mem_pointers[2] == NULL
-			info->map[1].read_8 = (read_8_fun)read_sram_b;
-			info->map[1].write_16 = (write_16_fun)write_sram_area_w;//these will be called all writes to the area
-			info->map[1].write_8 = (write_8_fun)write_sram_area_b;
-			info->map[1].buffer = rom + 0x200000;
-
-			memmap_chunk *last = info->map + info->map_chunks - 1;
-			memset(last, 0, sizeof(memmap_chunk));
-			last->start = 0xA13000;
-			last->end = 0xA13100;
-			last->mask = 0xFF;
-			last->write_16 = (write_16_fun)write_bank_reg_w;
-			last->write_8 = (write_8_fun)write_bank_reg_b;
+			return;
 		}
-	} else {
-		info->map_chunks = base_chunks + 1;
-		info->map = malloc(sizeof(memmap_chunk) * info->map_chunks);
-		memset(info->map, 0, sizeof(memmap_chunk));
-		memcpy(info->map+1, base_map, sizeof(memmap_chunk) * base_chunks);
-
-		info->map[0].end = rom_end > 0x400000 ? rom_end : 0x400000;
-		info->map[0].mask = rom_end < 0x400000 ? nearest_pow2(rom_end) - 1 : 0xFFFFFF;
-		info->map[0].flags = MMAP_READ;
-		info->map[0].buffer = rom;
-		info->save_type = SAVE_NONE;
 	}
+	
+	info->map_chunks = base_chunks + 1;
+	info->map = malloc(sizeof(memmap_chunk) * info->map_chunks);
+	memset(info->map, 0, sizeof(memmap_chunk));
+	memcpy(info->map+1, base_map, sizeof(memmap_chunk) * base_chunks);
+
+	info->map[0].end = rom_end > 0x400000 ? rom_end : 0x400000;
+	info->map[0].mask = rom_end < 0x400000 ? nearest_pow2(rom_end) - 1 : 0xFFFFFF;
+	info->map[0].flags = MMAP_READ;
+	info->map[0].buffer = rom;
+	info->save_type = SAVE_NONE;
 }
 
 rom_info configure_rom_heuristics(uint8_t *rom, uint32_t rom_size, memmap_chunk const *base_map, uint32_t base_chunks)
