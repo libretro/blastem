@@ -346,8 +346,10 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			char *cur = buffer;
 			if (gen->header.next_context && gen->header.next_context->save_dir) {
 				char *end = buffer + SAVE_INFO_BUFFER_SIZE;
-				char slotfile[] = "slot_0.gst";
+				char slotfile[] = "slot_0.state";
+				char slotfilegst[] = "slot_0.gst";
 				char const * parts[3] = {gen->header.next_context->save_dir, PATH_SEP, slotfile};
+				char const * partsgst[3] = {gen->header.next_context->save_dir, PATH_SEP, slotfilegst};
 				struct tm ltime;
 				char *fname;
 				time_t modtime;
@@ -362,20 +364,37 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 						cur += strftime(cur, end-cur, "%c", localtime_r(&modtime, &ltime));
 						
 					} else {
-						cur += snprintf(cur, end-cur, "Slot %d - EMPTY", i);
+						slotfilegst[5] = i + '0';
+						fname = alloc_concat_m(3, partsgst);
+						modtime = get_modification_time(fname);
+						free(fname);
+						if (modtime) {
+							cur += snprintf(cur, end-cur, "Slot %d - ", i);
+							cur += strftime(cur, end-cur, "%c", localtime_r(&modtime, &ltime));
+						} else {
+							cur += snprintf(cur, end-cur, "Slot %d - EMPTY", i);
+						}
 					}
 					//advance past the null terminator for this entry
 					cur++;
 				}
 				if (cur < end) {
-					parts[2] = "quicksave.gst";
+					parts[2] = "quicksave.state";
 					fname = alloc_concat_m(3, parts);
 					modtime = get_modification_time(fname);
 					free(fname);
 					if (modtime) {
 						cur += strftime(cur, end-cur, "Quick  - %c", localtime_r(&modtime, &ltime));
-					} else if ((end-cur) > strlen("Quick  - EMPTY")){
-						cur += strlen(strcpy(cur, "Quick  - EMPTY"));
+					} else {
+						parts[2] = "quicksave.gst";
+						fname = alloc_concat_m(3, parts);
+						modtime = get_modification_time(fname);
+						free(fname);
+						if (modtime) {
+							cur += strftime(cur, end-cur, "Quick  - %c", localtime_r(&modtime, &ltime));
+						} else if ((end-cur) > strlen("Quick  - EMPTY")){
+							cur += strlen(strcpy(cur, "Quick  - EMPTY"));
+						}
 					}
 					//advance past the null terminator for this entry
 					cur++;
@@ -401,10 +420,10 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 		case 6:
 			//load state
 			if (gen->header.next_context && gen->header.next_context->save_dir) {
-				char numslotname[] = "slot_0.gst";
+				char numslotname[] = "slot_0.state";
 				char *slotname;
 				if (dst == QUICK_SAVE_SLOT) {
-					slotname = "quicksave.gst";
+					slotname = "quicksave.state";
 				} else {
 					numslotname[5] = '0' + dst;
 					slotname = numslotname;
@@ -412,6 +431,7 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 				char const *parts[] = {gen->header.next_context->save_dir, PATH_SEP, slotname};
 				char *gstpath = alloc_concat_m(3, parts);
 				genesis_context *next = (genesis_context *)gen->header.next_context;
+				
 				uint32_t pc = load_gst(next, gstpath);
 				free(gstpath);
 				if (!pc) {

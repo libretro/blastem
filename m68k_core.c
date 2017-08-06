@@ -9,6 +9,7 @@
 #include "backend.h"
 #include "gen.h"
 #include "util.h"
+#include "serialize.h"
 #include <stdio.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -1201,4 +1202,55 @@ m68k_context * init_68k_context(m68k_options * opts, m68k_reset_handler reset_ha
 	context->status = 0x27;
 	context->reset_handler = (code_ptr)reset_handler;
 	return context;
+}
+
+void m68k_serialize(m68k_context *context, uint32_t pc, serialize_buffer *buf)
+{
+	for (int i = 0; i < 8; i++)
+	{
+		save_int32(buf, context->dregs[i]);
+	}
+	for (int i = 0; i < 9; i++)
+	{
+		save_int32(buf, context->aregs[i]);
+	}
+	save_int32(buf, pc);
+	uint16_t sr = context->status << 3;
+	for (int flag = 4; flag >= 0; flag--) {
+		sr <<= 1;
+		sr |= context->flags[flag] != 0;
+	}
+	save_int16(buf, sr);
+	save_int32(buf, context->current_cycle);
+	save_int32(buf, context->int_cycle);
+	save_int8(buf, context->int_num);
+	save_int8(buf, context->int_pending);
+	save_int8(buf, context->trace_pending);
+}
+
+void m68k_deserialize(deserialize_buffer *buf, void *vcontext)
+{
+	m68k_context *context = vcontext;
+	for (int i = 0; i < 8; i++)
+	{
+		context->dregs[i] = load_int32(buf);
+	}
+	for (int i = 0; i < 9; i++)
+	{
+		context->aregs[i] = load_int32(buf);
+	}
+	//hack until both PC and IR registers are represented properly
+	context->last_prefetch_address = load_int32(buf);
+	uint16_t sr = load_int16(buf);
+	context->status = sr >> 8;
+	for (int flag = 0; flag < 5; flag++)
+	{
+		context->flags[flag] = sr & 1;
+		sr >>= 1;
+	}
+	context->current_cycle = load_int32(buf);
+	context->int_cycle = load_int32(buf);
+	context->int_num = load_int8(buf);
+	context->int_pending = load_int8(buf);
+	context->trace_pending = load_int8(buf);
 }

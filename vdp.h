@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "system.h"
+#include "serialize.h"
 
 #define VDP_REGS 24
 #define CRAM_SIZE 64
@@ -199,11 +200,9 @@ typedef struct {
 	uint8_t     max_sprites_line;
 	uint8_t     fetch_tmp[2];
 	uint8_t     v_offset;
-	uint8_t     dma_cd;
 	uint8_t     hint_counter;
 	uint8_t     flags2;
 	uint8_t     double_res;
-	uint8_t     b32;
 	uint8_t     buf_a_off;
 	uint8_t     buf_b_off;
 	uint8_t     debug;
@@ -250,5 +249,7 @@ void vdp_check_update_sat_byte(vdp_context *context, uint32_t address, uint8_t v
 void vdp_pbc_pause(vdp_context *context);
 void vdp_release_framebuffer(vdp_context *context);
 void vdp_reacquire_framebuffer(vdp_context *context);
+void vdp_serialize(vdp_context *context, serialize_buffer *buf);
+void vdp_deserialize(deserialize_buffer *buf, void *vcontext);
 
 #endif //VDP_H_
