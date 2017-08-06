@@ -127,7 +127,7 @@ Z80OBJS=z80inst.o z80_to_x86.o
 AUDIOOBJS=ym2612.o psg.o wave.o
 CONFIGOBJS=config.o tern.o util.o
 
-MAINOBJS=blastem.o system.o genesis.o debug.o gdb_remote.o vdp.o render_sdl.o ppm.o io.o romdb.o hash.o menu.o xband.o realtec.o i2c.o nor.o sega_mapper.o multi_game.o $(TERMINAL) $(CONFIGOBJS) gst.o $(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS)
+MAINOBJS=blastem.o system.o genesis.o debug.o gdb_remote.o vdp.o render_sdl.o ppm.o io.o romdb.o hash.o menu.o xband.o realtec.o i2c.o nor.o sega_mapper.o multi_game.o serialize.o $(TERMINAL) $(CONFIGOBJS) gst.o $(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS)
 
 ifeq ($(CPU),x86_64)
 CFLAGS+=-DX86_64 -m64
@@ -162,7 +162,7 @@ blastem$(EXE) : $(MAINOBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
 	$(FIXUP) ./$@
 	
-blastjag$(EXE) : jaguar.o jag_video.o render_sdl.o $(M68KOBJS) $(TRANSOBJS) $(CONFIGOBJS)
+blastjag$(EXE) : jaguar.o jag_video.o render_sdl.o serialize.o $(M68KOBJS) $(TRANSOBJS) $(CONFIGOBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 dis$(EXE) : dis.o 68kinst.o tern.o vos_program_module.o
@@ -177,27 +177,27 @@ zdis$(EXE) : zdis.o z80inst.o
 libemu68k.a : $(M68KOBJS) $(TRANSOBJS)
 	ar rcs libemu68k.a $(M68KOBJS) $(TRANSOBJS)
 
-trans : trans.o $(M68KOBJS) $(TRANSOBJS) util.o
+trans : trans.o serialize.o $(M68KOBJS) $(TRANSOBJS) util.o
 	$(CC) -o trans trans.o $(M68KOBJS) $(TRANSOBJS) util.o
 
 transz80 : transz80.o $(Z80OBJS) $(TRANSOBJS)
 	$(CC) -o transz80 transz80.o $(Z80OBJS) $(TRANSOBJS)
 
-ztestrun : ztestrun.o $(Z80OBJS) $(TRANSOBJS)
+ztestrun : ztestrun.o serialize.o $(Z80OBJS) $(TRANSOBJS)
 	$(CC) -o ztestrun ztestrun.o $(Z80OBJS) $(TRANSOBJS)
 
 ztestgen : ztestgen.o z80inst.o
 	$(CC) -ggdb -o ztestgen ztestgen.o z80inst.o
 
-stateview$(EXE) : stateview.o vdp.o render_sdl.o ppm.o $(CONFIGOBJS) gst.o
+stateview$(EXE) : stateview.o vdp.o render_sdl.o ppm.o serialize.o $(CONFIGOBJS) gst.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 	$(FIXUP) ./$@
 
-vgmplay$(EXE) : vgmplay.o render_sdl.o ppm.o $(CONFIGOBJS) $(AUDIOOBJS)
+vgmplay$(EXE) : vgmplay.o render_sdl.o ppm.o serialize.o $(CONFIGOBJS) $(AUDIOOBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
 	$(FIXUP) ./$@
 
-blastcpm : blastcpm.o util.o $(Z80OBJS) $(TRANSOBJS)
+blastcpm : blastcpm.o util.o serialize.o $(Z80OBJS) $(TRANSOBJS)
 	$(CC) -o $@ $^
 
 test : test.o vdp.o

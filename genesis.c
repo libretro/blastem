@@ -32,6 +32,98 @@ uint32_t MCLKS_PER_68K;
 
 #define MAX_SOUND_CYCLES 100000	
 
+void genesis_serialize(genesis_context *gen, serialize_buffer *buf, uint32_t m68k_pc)
+{
+	start_section(buf, SECTION_68000);
+	m68k_serialize(gen->m68k, m68k_pc, buf);
+	end_section(buf);
+	
+	start_section(buf, SECTION_Z80);
+	z80_serialize(gen->z80, buf);
+	end_section(buf);
+	
+	start_section(buf, SECTION_VDP);
+	vdp_serialize(gen->vdp, buf);
+	end_section(buf);
+	
+	start_section(buf, SECTION_YM2612);
+	ym_serialize(gen->ym, buf);
+	end_section(buf);
+	
+	start_section(buf, SECTION_PSG);
+	psg_serialize(gen->psg, buf);
+	end_section(buf);
+	
+	//TODO: bus arbiter state
+	
+	start_section(buf, SECTION_SEGA_IO_1);
+	io_serialize(gen->io.ports, buf);
+	end_section(buf);
+	
+	start_section(buf, SECTION_SEGA_IO_2);
+	io_serialize(gen->io.ports + 1, buf);
+	end_section(buf);
+	
+	start_section(buf, SECTION_SEGA_IO_EXT);
+	io_serialize(gen->io.ports + 2, buf);
+	end_section(buf);
+	
+	start_section(buf, SECTION_MAIN_RAM);
+	save_int8(buf, RAM_WORDS * 2 / 1024);
+	save_buffer16(buf, gen->work_ram, RAM_WORDS);
+	end_section(buf);
+	
+	start_section(buf, SECTION_SOUND_RAM);
+	save_int8(buf, Z80_RAM_BYTES / 1024);
+	save_buffer8(buf, gen->zram, Z80_RAM_BYTES);
+	end_section(buf);
+	
+	//TODO: mapper state
+}
+
+static void ram_deserialize(deserialize_buffer *buf, void *vgen)
+{
+	genesis_context *gen = vgen;
+	uint32_t ram_size = load_int8(buf) * 1024 / 2;
+	if (ram_size > RAM_WORDS) {
+		fatal_error("State has a RAM size of %d bytes", ram_size * 2);
+	}
+	load_buffer16(buf, gen->work_ram, ram_size);
+}
+
+static void zram_deserialize(deserialize_buffer *buf, void *vgen)
+{
+	genesis_context *gen = vgen;
+	uint32_t ram_size = load_int8(buf) * 1024;
+	if (ram_size > Z80_RAM_BYTES) {
+		fatal_error("State has a Z80 RAM size of %d bytes", ram_size);
+	}
+	load_buffer8(buf, gen->zram, ram_size);
+}
+
+void genesis_deserialize(deserialize_buffer *buf, genesis_context *gen)
+{
+	register_section_handler(buf, (section_handler){.fun = m68k_deserialize, .data = gen->m68k}, SECTION_68000);
+	register_section_handler(buf, (section_handler){.fun = z80_deserialize, .data = gen->z80}, SECTION_Z80);
+	register_section_handler(buf, (section_handler){.fun = vdp_deserialize, .data = gen->vdp}, SECTION_VDP);
+	register_section_handler(buf, (section_handler){.fun = ym_deserialize, .data = gen->ym}, SECTION_YM2612);
+	register_section_handler(buf, (section_handler){.fun = psg_deserialize, .data = gen->psg}, SECTION_PSG);
+	//TODO: bus arbiter
+	//HACK
+	gen->z80->reset = 0;
+	gen->z80->busreq = 0;
+	register_section_handler(buf, (section_handler){.fun = io_deserialize, .data = gen->io.ports}, SECTION_SEGA_IO_1);
+	register_section_handler(buf, (section_handler){.fun = io_deserialize, .data = gen->io.ports + 1}, SECTION_SEGA_IO_2);
+	register_section_handler(buf, (section_handler){.fun = io_deserialize, .data = gen->io.ports + 2}, SECTION_SEGA_IO_EXT);
+	register_section_handler(buf, (section_handler){.fun = ram_deserialize, .data = gen}, SECTION_MAIN_RAM);
+	register_section_handler(buf, (section_handler){.fun = zram_deserialize, .data = gen}, SECTION_SOUND_RAM);
+	//TODO: mapper state
+	while (buf->cur_pos < buf->size)
+	{
+		load_section(buf);
+	}
+}
+
 uint16_t read_dma_value(uint32_t address)
 {
 	genesis_context *genesis = (genesis_context *)current_system;
@@ -252,7 +344,14 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 				char const *parts[] = {gen->header.save_dir, PATH_SEP, slotname};
 				save_path = alloc_concat_m(3, parts);
 			}
-			save_gst(gen, save_path, address);
+			serialize_buffer state;
+			init_serialize(&state);
+			genesis_serialize(gen, &state, address);;
+			FILE *statefile = fopen(save_path, "wb");
+			fwrite(state.data, 1, state.size, statefile);
+			fclose(statefile);
+			free(state.data);
+			//save_gst(gen, save_path, address);
 			printf("Saved state to %s\n", save_path);
 			if (slot != QUICK_SAVE_SLOT) {
 				free(save_path);
@@ -906,9 +1005,26 @@ static void start_genesis(system_header *system, char *statefile)
 	set_keybindings(&gen->io);
 	render_set_video_standard((gen->version_reg & HZ50) ? VID_PAL : VID_NTSC);
 	if (statefile) {
+		//first try loading as a GST format savestate
 		uint32_t pc = load_gst(gen, statefile);
 		if (!pc) {
-			fatal_error("Failed to load save state %s\n", statefile);
+			//switch to native format if that fails
+			FILE *f = fopen(statefile, "rb");
+			if (!f) {
+				goto state_error;
+			}
+			long statesize = file_size(f);
+			deserialize_buffer state;
+			void *statedata = malloc(statesize);
+			if (statesize != fread(statedata, 1, statesize, f)) {
+				goto state_error;
+			}
+			fclose(f);
+			init_deserialize(&state, statedata, statesize);
+			genesis_deserialize(&state, gen);
+			free(statedata);
+			//HACK
+			pc = gen->m68k->last_prefetch_address;
 		}
 		printf("Loaded %s\n", statefile);
 		if (gen->header.enter_debugger) {
@@ -926,6 +1042,9 @@ static void start_genesis(system_header *system, char *statefile)
 		m68k_reset(gen->m68k);
 	}
 	handle_reset_requests(gen);
+	return;
+state_error:
+	fatal_error("Failed to load save state %s\n", statefile);
 }
 
 static void resume_genesis(system_header *system)

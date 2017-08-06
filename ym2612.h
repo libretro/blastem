@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include "serialize.h"
 
 #define NUM_PART_REGS (0xB7-0x30)
 #define NUM_CHANNELS 6
@@ -143,6 +144,8 @@ uint8_t ym_load_gst(ym2612_context * context, FILE * gstfile);
 uint8_t ym_save_gst(ym2612_context * context, FILE * gstfile);
 void ym_print_channel_info(ym2612_context *context, int channel);
 void ym_print_timer_info(ym2612_context *context);
+void ym_serialize(ym2612_context *context, serialize_buffer *buf);
+void ym_deserialize(deserialize_buffer *buf, void *vcontext);
 
 #endif //YM2612_H_
 

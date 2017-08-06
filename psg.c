@@ -151,3 +151,35 @@ void psg_run(psg_context * context, uint32_t cycles)
 	}
 }
 
+void psg_serialize(psg_context *context, serialize_buffer *buf)
+{
+	save_int16(buf, context->lsfr);
+	save_buffer16(buf, context->counter_load, 4);
+	save_buffer16(buf, context->counters, 4);
+	save_buffer8(buf, context->volume, 4);
+	uint8_t output_state = context->output_state[0] << 3 | context->output_state[1] << 2
+		| context->output_state[2] << 1 | context->output_state[3]
+		| context->noise_use_tone << 4;
+	save_int8(buf, output_state);
+	save_int8(buf, context->noise_type);
+	save_int8(buf, context->latch);
+	save_int32(buf, context->cycles);
+}
+
+void psg_deserialize(deserialize_buffer *buf, void *vcontext)
+{
+	psg_context *context = vcontext;
+	context->lsfr = load_int16(buf);
+	load_buffer16(buf, context->counter_load, 4);
+	load_buffer16(buf, context->counters, 4);
+	load_buffer8(buf, context->volume, 4);
+	uint8_t output_state = load_int8(buf);
+	context->output_state[0] = output_state & 8 >> 3;
+	context->output_state[1] = output_state & 4 >> 2;
+	context->output_state[2] = output_state & 2 >> 1;
+	context->output_state[3] = output_state & 1;
+	context->noise_use_tone = output_state & 0x10 >> 4;
+	context->noise_type = load_int8(buf);
+	context->latch = load_int8(buf);
+	context->cycles = load_int32(buf);
+}

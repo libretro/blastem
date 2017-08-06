@@ -15,6 +15,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "serialize.h"
 #include "io.h"
 #include "blastem.h"
 #include "genesis.h"
@@ -2130,4 +2131,74 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 	return value;
 }
 
+void io_serialize(io_port *port, serialize_buffer *buf)
+{
+	save_int8(buf, port->output);
+	save_int8(buf, port->control);
+	save_int8(buf, port->serial_out);
+	save_int8(buf, port->serial_in);
+	save_int8(buf, port->serial_ctrl);
+	save_int8(buf, port->device_type);
+	save_buffer32(buf, port->slow_rise_start, 8);
+	switch (port->device_type)
+	{
+	case IO_GAMEPAD6:
+		save_int32(buf, port->device.pad.timeout_cycle);
+		save_int16(buf, port->device.pad.th_counter);
+		break;
+	case IO_MOUSE:
+		save_int32(buf, port->device.mouse.ready_cycle);
+		save_int16(buf, port->device.mouse.last_read_x);
+		save_int16(buf, port->device.mouse.last_read_y);
+		save_int16(buf, port->device.mouse.latched_x);
+		save_int16(buf, port->device.mouse.latched_y);
+		save_int8(buf, port->device.mouse.tr_counter);
+		break;
+	case IO_SATURN_KEYBOARD:
+	case IO_XBAND_KEYBOARD:
+		save_int8(buf, port->device.keyboard.tr_counter);
+		if (port->device_type == IO_XBAND_KEYBOARD) {
+			save_int8(buf, port->device.keyboard.mode);
+			save_int8(buf, port->device.keyboard.cmd);
+		}
+		break;
+	}
+}
 
+void io_deserialize(deserialize_buffer *buf, void *vport)
+{
+	io_port *port = vport;
+	port->output = load_int8(buf);
+	port->control = load_int8(buf);
+	port->serial_out = load_int8(buf);
+	port->serial_in = load_int8(buf);
+	port->serial_ctrl = load_int8(buf);
+	uint8_t device_type = load_int8(buf);
+	if (device_type != port->device_type) {
+		warning("Loaded save state has a different device type from the current configuration");
+		return;
+	}
+	switch (port->device_type)
+	{
+	case IO_GAMEPAD6:
+		port->device.pad.timeout_cycle = load_int32(buf);
+		port->device.pad.th_counter = load_int16(buf);
+		break;
+	case IO_MOUSE:
+		port->device.mouse.ready_cycle = load_int32(buf);
+		port->device.mouse.last_read_x = load_int16(buf);
+		port->device.mouse.last_read_y = load_int16(buf);
+		port->device.mouse.latched_x = load_int16(buf);
+		port->device.mouse.latched_y = load_int16(buf);
+		port->device.mouse.tr_counter = load_int8(buf);
+		break;
+	case IO_SATURN_KEYBOARD:
+	case IO_XBAND_KEYBOARD:
+		port->device.keyboard.tr_counter = load_int8(buf);
+		if (port->device_type == IO_XBAND_KEYBOARD) {
+			port->device.keyboard.mode = load_int8(buf);
+			port->device.keyboard.cmd = load_int8(buf);
+		}
+		break;
+	}
+}

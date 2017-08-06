@@ -2996,7 +2996,6 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 			//
 			if((context->regs[REG_DMASRC_H] & 0xC0) != 0x80) {
 				//DMA copy or 68K -> VDP, transfer starts immediately
-				context->dma_cd = context->cd;
 				//printf("DMA start (length: %X) at cycle %d, frame: %d, vcounter: %d, hslot: %d\n", (context->regs[REG_DMALEN_H] << 8) | context->regs[REG_DMALEN_L], context->cycles, context->frame, context->vcounter, context->hslot);
 				if (!(context->regs[REG_DMASRC_H] & 0x80)) {
 					//printf("DMA Address: %X, New CD: %X, Source: %X, Length: %X\n", context->address, context->cd, (context->regs[REG_DMASRC_H] << 17) | (context->regs[REG_DMASRC_M] << 9) | (context->regs[REG_DMASRC_L] << 1), context->regs[REG_DMALEN_H] << 8 | context->regs[REG_DMALEN_L]);
@@ -3526,3 +3525,164 @@ void vdp_int_ack(vdp_context * context)
 	}
 }
 
+void vdp_serialize(vdp_context *context, serialize_buffer *buf)
+{
+	save_int8(buf, VRAM_SIZE / 1024);//VRAM size in KB, needed for future proofing
+	save_buffer8(buf, context->vdpmem, VRAM_SIZE);
+	save_buffer16(buf, context->cram, CRAM_SIZE);
+	save_buffer16(buf, context->vsram, VSRAM_SIZE);
+	save_buffer8(buf, context->sat_cache, SAT_CACHE_SIZE);
+	for (int i = 0; i <= REG_DMASRC_H; i++)
+	{
+		save_int8(buf, context->regs[i]);
+	}
+	save_int32(buf, context->address);
+	save_int32(buf, context->serial_address);
+	save_int8(buf, context->cd);
+	uint8_t fifo_size;
+	if (context->fifo_read < 0) {
+		fifo_size = 0;
+	} else if (context->fifo_write > context->fifo_read) {
+		fifo_size = context->fifo_write - context->fifo_read;
+	} else {
+		fifo_size = context->fifo_write + FIFO_SIZE - context->fifo_read;
+	}
+	save_int8(buf, fifo_size);
+	for (int i = 0, cur = context->fifo_read; i < fifo_size; i++)
+	{
+		fifo_entry *entry = context->fifo + cur;
+		cur = (cur + 1) & (FIFO_SIZE - 1);
+		save_int32(buf, entry->cycle);
+		save_int32(buf, entry->address);
+		save_int16(buf, entry->value);
+		save_int8(buf, entry->cd);
+		save_int8(buf, entry->partial);
+	}
+	//FIXME: Flag bits should be rearranged for maximum correspondence to status reg
+	save_int16(buf, context->flags2 << 8 | context->flags);
+	save_int32(buf, context->frame);
+	save_int16(buf, context->vcounter);
+	save_int8(buf, context->hslot);
+	save_int16(buf, context->hv_latch);
+	save_int8(buf, context->state);
+	save_int16(buf, context->hscroll_a);
+	save_int16(buf, context->hscroll_b);
+	save_int16(buf, context->vscroll_latch[0]);
+	save_int16(buf, context->vscroll_latch[1]);
+	save_int16(buf, context->col_1);
+	save_int16(buf, context->col_2);
+	save_int16(buf, context->test_port);
+	save_buffer8(buf, context->tmp_buf_a, SCROLL_BUFFER_SIZE);
+	save_buffer8(buf, context->tmp_buf_b, SCROLL_BUFFER_SIZE);
+	save_int8(buf, context->buf_a_off);
+	save_int8(buf, context->buf_b_off);
+	//FIXME: Sprite rendering state is currently a mess
+	save_int8(buf, context->sprite_index);
+	save_int8(buf, context->sprite_draws);
+	save_int8(buf, context->slot_counter);
+	save_int8(buf, context->cur_slot);
+	for (int i = 0; i < MAX_DRAWS; i++)
+	{
+		sprite_draw *draw = context->sprite_draw_list + i;
+		save_int16(buf, draw->address);
+		save_int16(buf, draw->x_pos);
+		save_int8(buf, draw->pal_priority);
+		save_int8(buf, draw->h_flip);
+	}
+	for (int i = 0; i < MAX_SPRITES_LINE; i++)
+	{
+		sprite_info *info = context->sprite_info_list + i;
+		save_int8(buf, info->size);
+		save_int8(buf, info->index);
+		save_int16(buf, info->y);
+	}
+	save_buffer8(buf, context->linebuf, LINEBUF_SIZE);
+	
+	save_int32(buf, context->cycles);
+	save_int32(buf, context->pending_vint_start);
+	save_int32(buf, context->pending_hint_start);
+}
+
+void vdp_deserialize(deserialize_buffer *buf, void *vcontext)
+{
+	vdp_context *context = vcontext;
+	uint8_t vramk = load_int8(buf);
+	load_buffer8(buf, context->vdpmem, (vramk * 1024) <= VRAM_SIZE ? vramk * 1024 : VRAM_SIZE);
+	if ((vramk * 1024) > VRAM_SIZE) {
+		buf->cur_pos += (vramk * 1024) - VRAM_SIZE;
+	}
+	load_buffer16(buf, context->cram, CRAM_SIZE);
+	load_buffer16(buf, context->vsram, VSRAM_SIZE);
+	load_buffer8(buf, context->sat_cache, SAT_CACHE_SIZE);
+	for (int i = 0; i <= REG_DMASRC_H; i++)
+	{
+		context->regs[i] = load_int8(buf);
+	}
+	context->address = load_int32(buf);
+	context->serial_address = load_int32(buf);
+	context->cd = load_int8(buf);
+	uint8_t fifo_size = load_int8(buf);
+	if (fifo_size > FIFO_SIZE) {
+		fatal_error("Invalid fifo size %d", fifo_size);
+	}
+	if (fifo_size) {
+		context->fifo_read = 0;
+		context->fifo_write = fifo_size & (FIFO_SIZE - 1);
+		for (int i = 0; i < fifo_size; i++)
+		{
+			fifo_entry *entry = context->fifo + i;
+			entry->cycle = load_int32(buf);
+			entry->address = load_int32(buf);
+			entry->value = load_int16(buf);
+			entry->cd = load_int8(buf);
+			entry->partial = load_int8(buf);
+		}
+	} else {
+		context->fifo_read = -1;
+		context->fifo_write = 0;
+	}
+	uint16_t flags = load_int16(buf);
+	context->flags2 = flags >> 8;
+	context->flags = flags;
+	context->frame = load_int32(buf);
+	context->vcounter = load_int16(buf);
+	context->hslot = load_int8(buf);
+	context->hv_latch = load_int16(buf);
+	context->state = load_int8(buf);
+	context->hscroll_a = load_int16(buf);
+	context->hscroll_b = load_int16(buf);
+	context->vscroll_latch[0] = load_int16(buf);
+	context->vscroll_latch[1] = load_int16(buf);
+	context->col_1 = load_int16(buf);
+	context->col_2 = load_int16(buf);
+	context->test_port = load_int16(buf);
+	load_buffer8(buf, context->tmp_buf_a, SCROLL_BUFFER_SIZE);
+	load_buffer8(buf, context->tmp_buf_b, SCROLL_BUFFER_SIZE);
+	context->buf_a_off = load_int8(buf) & SCROLL_BUFFER_MASK;
+	context->buf_b_off = load_int8(buf) & SCROLL_BUFFER_MASK;
+	context->sprite_index = load_int8(buf);
+	context->sprite_draws = load_int8(buf);
+	context->slot_counter = load_int8(buf);
+	context->cur_slot = load_int8(buf);
+	for (int i = 0; i < MAX_DRAWS; i++)
+	{
+		sprite_draw *draw = context->sprite_draw_list + i;
+		draw->address = load_int16(buf);
+		draw->x_pos = load_int16(buf);
+		draw->pal_priority = load_int8(buf);
+		draw->h_flip = load_int8(buf);
+	}
+	for (int i = 0; i < MAX_SPRITES_LINE; i++)
+	{
+		sprite_info *info = context->sprite_info_list + i;
+		info->size = load_int8(buf);
+		info->index = load_int8(buf);
+		info->y = load_int16(buf);
+	}
+	load_buffer8(buf, context->linebuf, LINEBUF_SIZE);
+	
+	context->cycles = load_int32(buf);
+	context->pending_vint_start = load_int32(buf);
+	context->pending_hint_start = load_int32(buf);
+	update_video_params(context);
+}

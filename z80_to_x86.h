@@ -7,6 +7,7 @@
 #define Z80_TO_X86_H_
 #include "z80inst.h"
 #include "backend.h"
+#include "serialize.h"
 
 #define ZNUM_MEM_AREAS 4
 #ifdef Z80_LOG_ADDRESS
@@ -108,6 +109,8 @@ void z80_clear_busreq(z80_context * context, uint32_t cycle);
 void z80_assert_nmi(z80_context *context, uint32_t cycle);
 uint8_t z80_get_busack(z80_context * context, uint32_t cycle);
 void z80_adjust_cycles(z80_context * context, uint32_t deduction);
+void z80_serialize(z80_context *context, serialize_buffer *buf);
+void z80_deserialize(deserialize_buffer *buf, void *vcontext);
 
 #endif //Z80_TO_X86_H_
 

@@ -7,6 +7,7 @@
 #define PSG_CONTEXT_H_
 
 #include <stdint.h>
+#include "serialize.h"
 
 typedef struct {
 	int16_t  *audio_buffer;
@@ -38,6 +39,8 @@ void psg_free(psg_context *context);
 void psg_adjust_master_clock(psg_context * context, uint32_t master_clock);
 void psg_write(psg_context * context, uint8_t value);
 void psg_run(psg_context * context, uint32_t cycles);
+void psg_serialize(psg_context *context, serialize_buffer *buf);
+void psg_deserialize(deserialize_buffer *buf, void *vcontext);
 
 #endif //PSG_CONTEXT_H_
 
