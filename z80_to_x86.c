@@ -3830,3 +3830,104 @@ void zremove_breakpoint(z80_context * context, uint16_t address)
 	}
 }
 
+void z80_serialize(z80_context *context, serialize_buffer *buf)
+{
+	for (int i = 0; i <= Z80_A; i++)
+	{
+		save_int8(buf, context->regs[i]);
+	}
+	uint8_t f = context->flags[ZF_S];
+	f <<= 1;
+	f |= context->flags[ZF_Z] ;
+	f <<= 2;
+	f |= context->flags[ZF_H];
+	f <<= 2;
+	f |= context->flags[ZF_PV];
+	f <<= 1;
+	f |= context->flags[ZF_N];
+	f <<= 1;
+	f |= context->flags[ZF_C];
+	f |= context->flags[ZF_XY] & 0x28;
+	save_int8(buf, f);
+	for (int i = 0; i <= Z80_A; i++)
+	{
+		save_int8(buf, context->alt_regs[i]);
+	}
+	f = context->alt_flags[ZF_S];
+	f <<= 1;
+	f |= context->alt_flags[ZF_Z] ;
+	f <<= 2;
+	f |= context->alt_flags[ZF_H];
+	f <<= 2;
+	f |= context->alt_flags[ZF_PV];
+	f <<= 1;
+	f |= context->alt_flags[ZF_N];
+	f <<= 1;
+	f |= context->alt_flags[ZF_C];
+	f |= context->flags[ZF_XY] & 0x28;
+	save_int8(buf, f);
+	save_int16(buf, context->pc);
+	save_int16(buf, context->sp);
+	save_int8(buf, context->im);
+	save_int8(buf, context->iff1);
+	save_int8(buf, context->iff2);
+	save_int8(buf, context->int_is_nmi);
+	save_int32(buf, context->current_cycle);
+	save_int32(buf, context->int_cycle);
+	save_int32(buf, context->int_enable_cycle);
+	save_int32(buf, context->int_pulse_start);
+	save_int32(buf, context->int_pulse_end);
+	save_int32(buf, context->nmi_start);
+}
+
+void z80_deserialize(deserialize_buffer *buf, void *vcontext)
+{
+	z80_context *context = vcontext;
+	for (int i = 0; i <= Z80_A; i++)
+	{
+		context->regs[i] = load_int8(buf);
+	}
+	uint8_t f = load_int8(buf);
+	context->flags[ZF_XY] = f & 0x28;
+	context->flags[ZF_C] = f & 1;
+	f >>= 1;
+	context->flags[ZF_N] = f & 1;
+	f >>= 1;
+	context->flags[ZF_PV] = f & 1;
+	f >>= 2;
+	context->flags[ZF_H] = f & 1;
+	f >>= 2;
+	context->flags[ZF_Z] = f & 1;
+	f >>= 1;
+	context->flags[ZF_S] = f;
+	for (int i = 0; i <= Z80_A; i++)
+	{
+		context->alt_regs[i] = load_int8(buf);
+	}
+	f = load_int8(buf);
+	context->alt_flags[ZF_XY] = f & 0x28;
+	context->alt_flags[ZF_C] = f & 1;
+	f >>= 1;
+	context->alt_flags[ZF_N] = f & 1;
+	f >>= 1;
+	context->alt_flags[ZF_PV] = f & 1;
+	f >>= 2;
+	context->alt_flags[ZF_H] = f & 1;
+	f >>= 2;
+	context->alt_flags[ZF_Z] = f & 1;
+	f >>= 1;
+	context->alt_flags[ZF_S] = f;
+	context->pc = load_int16(buf);
+	context->sp = load_int16(buf);
+	context->im = load_int8(buf);
+	context->iff1 = load_int8(buf);
+	context->iff2 = load_int8(buf);
+	context->int_is_nmi = load_int8(buf);
+	context->current_cycle = load_int32(buf);
+	context->int_cycle = load_int32(buf);
+	context->int_enable_cycle = load_int32(buf);
+	context->int_pulse_start = load_int32(buf);
+	context->int_pulse_end = load_int32(buf);
+	context->nmi_start = load_int32(buf);
+}
+

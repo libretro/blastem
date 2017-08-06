@@ -1058,3 +1058,117 @@ void ym_print_timer_info(ym2612_context *context)
 		   context->timer_control & BIT_TIMERB_ENABLE ? "yes" : "no");
 }
 
+void ym_serialize(ym2612_context *context, serialize_buffer *buf)
+{
+	save_buffer8(buf, context->part1_regs, YM_PART1_REGS);
+	save_buffer8(buf, context->part2_regs, YM_PART2_REGS);
+	for (int i = 0; i < NUM_OPERATORS; i++)
+	{
+		save_int32(buf, context->operators[i].phase_counter);
+		save_int16(buf, context->operators[i].envelope);
+		save_int16(buf, context->operators[i].output);
+		save_int8(buf, context->operators[i].env_phase);
+		save_int8(buf, context->operators[i].inverted);
+	}
+	for (int i = 0; i < NUM_CHANNELS; i++)
+	{
+		save_int16(buf, context->channels[i].output);
+		save_int16(buf, context->channels[i].op1_old);
+		//Due to the latching behavior, these need to be saved
+		//even though duplicate info is probably in the regs array
+		save_int8(buf, context->channels[i].block);
+		save_int8(buf, context->channels[i].fnum);
+	}
+	for (int i = 0; i < 3; i++)
+	{
+		//Due to the latching behavior, these need to be saved
+		//even though duplicate info is probably in the regs array
+		save_int8(buf, context->ch3_supp[i].block);
+		save_int8(buf, context->ch3_supp[i].fnum);
+	}
+	save_int16(buf, context->timer_a);
+	save_int8(buf, context->timer_b);
+	save_int8(buf, context->sub_timer_b);
+	save_int16(buf, context->env_counter);
+	save_int8(buf, context->current_op);
+	save_int8(buf, context->current_env_op);
+	save_int8(buf, context->lfo_counter);
+	save_int8(buf, context->csm_keyon);
+	save_int8(buf, context->status);
+	save_int8(buf, context->selected_reg);
+	save_int8(buf, context->selected_part);
+	save_int32(buf, context->current_cycle);
+	save_int32(buf, context->write_cycle);
+	save_int32(buf, context->busy_cycles);
+}
+
+void ym_deserialize(deserialize_buffer *buf, void *vcontext)
+{
+	ym2612_context *context = vcontext;
+	uint8_t temp_regs[YM_PART1_REGS];
+	load_buffer8(buf, temp_regs, YM_PART1_REGS);
+	context->selected_part = 0;
+	for (int i = 0; i < YM_PART1_REGS; i++)
+	{
+		uint8_t reg = YM_PART1_START + i;
+		if (reg != REG_FNUM_LOW && reg != REG_KEY_ONOFF && reg != REG_TIME_CTRL) {
+			context->selected_reg = reg;
+			ym_data_write(context, temp_regs[i]);
+		}
+	}
+	load_buffer8(buf, temp_regs, YM_PART2_REGS);
+	context->selected_part = 1;
+	for (int i = 0; i < YM_PART2_REGS; i++)
+	{
+		uint8_t reg = YM_PART2_START + i;
+		if (reg != REG_FNUM_LOW) {
+			context->selected_reg = reg;
+			ym_data_write(context, temp_regs[i]);
+		}
+	}
+	for (int i = 0; i < NUM_OPERATORS; i++)
+	{
+		context->operators[i].phase_counter = load_int32(buf);
+		context->operators[i].envelope = load_int16(buf);
+		context->operators[i].output = load_int16(buf);
+		context->operators[i].env_phase = load_int8(buf);
+		if (context->operators[i].env_phase > PHASE_RELEASE) {
+			context->operators[i].env_phase = PHASE_RELEASE;
+		}
+		context->operators[i].inverted = load_int8(buf) != 0;
+	}
+	for (int i = 0; i < NUM_CHANNELS; i++)
+	{
+		context->channels[i].output = load_int16(buf);
+		context->channels[i].op1_old = load_int16(buf);
+		context->channels[i].block = load_int8(buf);
+		context->channels[i].fnum = load_int8(buf);
+		context->channels[i].keycode = context->channels[i].block << 2 | fnum_to_keycode[context->channels[i].fnum >> 7];
+	}
+	for (int i = 0; i < 3; i++)
+	{
+		context->ch3_supp[i].block = load_int8(buf);
+		context->ch3_supp[i].fnum = load_int8(buf);
+		context->ch3_supp[i].keycode = context->ch3_supp[i].block << 2 | fnum_to_keycode[context->ch3_supp[i].fnum >> 7];
+	}
+	context->timer_a = load_int16(buf);
+	context->timer_b = load_int8(buf);
+	context->sub_timer_b = load_int8(buf);
+	context->env_counter = load_int16(buf);
+	context->current_op = load_int8(buf);
+	if (context->current_op >= NUM_OPERATORS) {
+		context->current_op = 0;
+	}
+	context->current_env_op = load_int8(buf);
+	if (context->current_env_op >= NUM_OPERATORS) {
+		context->current_env_op = 0;
+	}
+	context->lfo_counter = load_int8(buf);
+	context->csm_keyon = load_int8(buf);
+	context->status = load_int8(buf);
+	context->selected_reg = load_int8(buf);
+	context->selected_part = load_int8(buf);
+	context->current_cycle = load_int32(buf);
+	context->write_cycle = load_int32(buf);
+	context->busy_cycles = load_int32(buf);
+}

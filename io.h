@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include "tern.h"
 #include "romdb.h"
+#include "serialize.h"
 
 enum {
 	IO_GAMEPAD2,
@@ -109,6 +110,8 @@ void handle_joy_added(int joystick);
 void handle_mouse_moved(int mouse, uint16_t x, uint16_t y, int16_t deltax, int16_t deltay);
 void handle_mousedown(int mouse, int button);
 void handle_mouseup(int mouse, int button);
+void io_serialize(io_port *port, serialize_buffer *buf);
+void io_deserialize(deserialize_buffer *buf, void *vport);
 
 #endif //IO_H_
 
