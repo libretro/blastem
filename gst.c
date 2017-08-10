@@ -236,7 +236,7 @@ uint8_t vdp_load_gst(vdp_context * context, FILE * state_file)
 	}
 	for (int i = 0; i < CRAM_SIZE; i++) {
 		uint16_t value;
-		write_cram_internal(context, i*2, (tmp_buf[i*2+1] << 8) | tmp_buf[i*2]);
+		write_cram_internal(context, i, (tmp_buf[i*2+1] << 8) | tmp_buf[i*2]);
 	}
 	if (fread(tmp_buf, 2, VSRAM_SIZE, state_file) != VSRAM_SIZE) {
 		fputs("Failed to read VSRAM from savestate\n", stderr);
