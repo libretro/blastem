@@ -257,7 +257,6 @@ uint8_t load_from_file(deserialize_buffer *buf, char *path)
 		fclose(f);
 		return 0;
 	}
-	fclose(f);
 	if (memcmp(ident, sz_ident, sizeof(ident))) {
 		return 0;
 	}
@@ -267,10 +266,12 @@ uint8_t load_from_file(deserialize_buffer *buf, char *path)
 	buf->handlers = NULL;
 	buf->max_handler = 8;
 	if (fread(buf->data, 1, buf->size, f) != buf->size) {
+		fclose(f);
 		free(buf->data);
 		buf->data = NULL;
 		buf->size = 0;
 		return 0;
 	}
+	fclose(f);
 	return 1;
 }

@@ -774,7 +774,16 @@ static void read_sprite_x_mode4(vdp_context * context)
 //rough estimate of slot number at which border display starts
 #define BG_START_SLOT 6
 
-void write_cram(vdp_context * context, uint16_t address, uint16_t value)
+void write_cram_internal(vdp_context * context, uint16_t addr, uint16_t value)
+{
+	context->cram[addr] = value;
+	context->colors[addr] = color_map[value & CRAM_BITS];
+	context->colors[addr + CRAM_SIZE] = color_map[(value & CRAM_BITS) | FBUF_SHADOW];
+	context->colors[addr + CRAM_SIZE*2] = color_map[(value & CRAM_BITS) | FBUF_HILIGHT];
+	context->colors[addr + CRAM_SIZE*3] = color_map[(value & CRAM_BITS) | FBUF_MODE4];
+}
+
+static void write_cram(vdp_context * context, uint16_t address, uint16_t value)
 {
 	uint16_t addr;
 	if (context->regs[REG_MODE_2] & BIT_MODE_5) {
@@ -783,11 +792,7 @@ void write_cram(vdp_context * context, uint16_t address, uint16_t value)
 		addr = address & 0x1F;
 		value = (value << 1 & 0xE) | (value << 2 & 0xE0) | (value & 0xE00);
 	}
-	context->cram[addr] = value;
-	context->colors[addr] = color_map[value & CRAM_BITS];
-	context->colors[addr + CRAM_SIZE] = color_map[(value & CRAM_BITS) | FBUF_SHADOW];
-	context->colors[addr + CRAM_SIZE*2] = color_map[(value & CRAM_BITS) | FBUF_HILIGHT];
-	context->colors[addr + CRAM_SIZE*3] = color_map[(value & CRAM_BITS) | FBUF_MODE4];
+	write_cram_internal(context, addr, value);
 	
 	if (context->hslot >= BG_START_SLOT && (
 		context->vcounter < context->inactive_start + context->border_bot 

@@ -37,6 +37,7 @@ int headless = 0;
 int exit_after = 0;
 int z80_enabled = 1;
 int frame_limit = 0;
+uint8_t use_native_states = 1;
 
 tern_node * config;
 
@@ -169,8 +170,11 @@ void setup_saves(system_media *media, rom_info *info, system_header *context)
 		free(save_dir);
 		save_dir = get_save_dir(media);
 	}
-	//TODO: make quick save filename dependent on system type
-	parts[2] = "quicksave.gst";
+	if (use_native_states || context->type != SYSTEM_GENESIS) {
+		parts[2] = "quicksave.state";
+	} else {
+		parts[2] = "quicksave.gst";
+	}
 	free(save_state_path);
 	save_state_path = alloc_concat_m(3, parts);
 	context->save_dir = save_dir;
@@ -416,6 +420,12 @@ int main(int argc, char ** argv)
 	current_system = alloc_config_system(stype, &cart, menu ? 0 : opts, force_region, &info);
 	if (!current_system) {
 		fatal_error("Failed to configure emulated machine for %s\n", romfname);
+	}
+	char *state_format = tern_find_path(config, "ui\0state_format\0", TVAL_PTR).ptrval;
+	if (state_format && !strcmp(state_format, "gst")) {
+		use_native_states = 0;
+	} else if (state_format && strcmp(state_format, "native")) {
+		warning("%s is not a valid value for the ui.state_format setting. Valid values are gst and native\n", state_format);
 	}
 	setup_saves(&cart, &info, current_system);
 	update_title(info.name);

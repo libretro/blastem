@@ -14,6 +14,7 @@ extern system_header *current_system;
 
 extern char *save_state_path;
 extern char *save_filename;
+extern uint8_t use_native_states;
 #define QUICK_SAVE_SLOT 10
 
 #endif //BLASTEM_H_
