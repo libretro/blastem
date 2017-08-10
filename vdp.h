@@ -244,7 +244,7 @@ void vdp_print_sprite_table(vdp_context * context);
 void vdp_print_reg_explain(vdp_context * context);
 void latch_mode(vdp_context * context);
 uint32_t vdp_cycles_to_frame_end(vdp_context * context);
-void write_cram(vdp_context * context, uint16_t address, uint16_t value);
+void write_cram_internal(vdp_context * context, uint16_t addr, uint16_t value);
 void vdp_check_update_sat_byte(vdp_context *context, uint32_t address, uint8_t value);
 void vdp_pbc_pause(vdp_context *context);
 void vdp_release_framebuffer(vdp_context *context);

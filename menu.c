@@ -429,11 +429,20 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 					slotname = numslotname;
 				}
 				char const *parts[] = {gen->header.next_context->save_dir, PATH_SEP, slotname};
-				char *gstpath = alloc_concat_m(3, parts);
+				char *statepath = alloc_concat_m(3, parts);
 				genesis_context *next = (genesis_context *)gen->header.next_context;
-				
-				uint32_t pc = load_gst(next, gstpath);
-				free(gstpath);
+				deserialize_buffer state;
+				uint32_t pc = 0;
+				if (load_from_file(&state, statepath)) {
+					genesis_deserialize(&state, next);
+					free(state.data);
+					//HACK
+					pc = next->m68k->last_prefetch_address;
+				} else {
+					strcpy(statepath + strlen(statepath)-strlen("state"), "gst");
+					pc = load_gst(next, statepath);
+				}
+				free(statepath);
 				if (!pc) {
 					break;
 				}
