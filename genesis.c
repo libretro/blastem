@@ -339,19 +339,23 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			if (slot == QUICK_SAVE_SLOT) {
 				save_path = save_state_path;
 			} else {
-				char slotname[] = "slot_0.gst";
+				char slotname[] = "slot_0.state";
 				slotname[5] = '0' + slot;
+				if (!use_native_states) {
+					strcpy(slotname + 7, "gst");
+				}
 				char const *parts[] = {gen->header.save_dir, PATH_SEP, slotname};
 				save_path = alloc_concat_m(3, parts);
 			}
-			serialize_buffer state;
-			init_serialize(&state);
-			genesis_serialize(gen, &state, address);;
-			FILE *statefile = fopen(save_path, "wb");
-			fwrite(state.data, 1, state.size, statefile);
-			fclose(statefile);
-			free(state.data);
-			//save_gst(gen, save_path, address);
+			if (use_native_states) {
+				serialize_buffer state;
+				init_serialize(&state);
+				genesis_serialize(gen, &state, address);
+				save_to_file(&state, save_path);
+				free(state.data);
+			} else {
+				save_gst(gen, save_path, address);
+			}
 			printf("Saved state to %s\n", save_path);
 			if (slot != QUICK_SAVE_SLOT) {
 				free(save_path);
@@ -1005,26 +1009,19 @@ static void start_genesis(system_header *system, char *statefile)
 	set_keybindings(&gen->io);
 	render_set_video_standard((gen->version_reg & HZ50) ? VID_PAL : VID_NTSC);
 	if (statefile) {
-		//first try loading as a GST format savestate
-		uint32_t pc = load_gst(gen, statefile);
-		if (!pc) {
-			//switch to native format if that fails
-			FILE *f = fopen(statefile, "rb");
-			if (!f) {
-				goto state_error;
-			}
-			long statesize = file_size(f);
-			deserialize_buffer state;
-			void *statedata = malloc(statesize);
-			if (statesize != fread(statedata, 1, statesize, f)) {
-				goto state_error;
-			}
-			fclose(f);
-			init_deserialize(&state, statedata, statesize);
+		//first try loading as a native format savestate
+		deserialize_buffer state;
+		uint32_t pc;
+		if (load_from_file(&state, statefile)) {
 			genesis_deserialize(&state, gen);
-			free(statedata);
+			free(state.data);
 			//HACK
 			pc = gen->m68k->last_prefetch_address;
+		} else {
+			pc = load_gst(gen, statefile);
+			if (!pc) {
+				fatal_error("Failed to load save state %s\n", statefile);
+			}
 		}
 		printf("Loaded %s\n", statefile);
 		if (gen->header.enter_debugger) {
@@ -1043,8 +1040,6 @@ static void start_genesis(system_header *system, char *statefile)
 	}
 	handle_reset_requests(gen);
 	return;
-state_error:
-	fatal_error("Failed to load save state %s\n", statefile);
 }
 
 static void resume_genesis(system_header *system)
@@ -1218,7 +1213,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 		}
 		for (int i = 0; i < CRAM_SIZE; i++)
 		{
-			write_cram(gen->vdp, i, rand());
+			write_cram_internal(gen->vdp, i, rand());
 		}
 		for (int i = 0; i < VSRAM_SIZE; i++)
 		{
