@@ -774,13 +774,18 @@ static void read_sprite_x_mode4(vdp_context * context)
 //rough estimate of slot number at which border display starts
 #define BG_START_SLOT 6
 
+static void update_color_map(vdp_context *context, uint16_t index, uint16_t value)
+{
+	context->colors[index] = color_map[value & CRAM_BITS];
+	context->colors[index + CRAM_SIZE] = color_map[(value & CRAM_BITS) | FBUF_SHADOW];
+	context->colors[index + CRAM_SIZE*2] = color_map[(value & CRAM_BITS) | FBUF_HILIGHT];
+	context->colors[index + CRAM_SIZE*3] = color_map[(value & CRAM_BITS) | FBUF_MODE4];
+}
+
 void write_cram_internal(vdp_context * context, uint16_t addr, uint16_t value)
 {
 	context->cram[addr] = value;
-	context->colors[addr] = color_map[value & CRAM_BITS];
-	context->colors[addr + CRAM_SIZE] = color_map[(value & CRAM_BITS) | FBUF_SHADOW];
-	context->colors[addr + CRAM_SIZE*2] = color_map[(value & CRAM_BITS) | FBUF_HILIGHT];
-	context->colors[addr + CRAM_SIZE*3] = color_map[(value & CRAM_BITS) | FBUF_MODE4];
+	update_color_map(context, addr, value);
 }
 
 static void write_cram(vdp_context * context, uint16_t address, uint16_t value)
@@ -3617,6 +3622,10 @@ void vdp_deserialize(deserialize_buffer *buf, void *vcontext)
 		buf->cur_pos += (vramk * 1024) - VRAM_SIZE;
 	}
 	load_buffer16(buf, context->cram, CRAM_SIZE);
+	for (int i = 0; i < CRAM_SIZE; i++)
+	{
+		update_color_map(context, i, context->cram[i]);
+	}
 	load_buffer16(buf, context->vsram, VSRAM_SIZE);
 	load_buffer8(buf, context->sat_cache, SAT_CACHE_SIZE);
 	for (int i = 0; i <= REG_DMASRC_H; i++)
