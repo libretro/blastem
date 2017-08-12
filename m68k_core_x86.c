@@ -381,6 +381,11 @@ uint8_t translate_m68k_op(m68kinst * inst, host_ea * ea, m68k_options * opts, ui
 		if (!dst && inst->dst.addr_mode == MODE_AREG && inst->extra.size == OPSIZE_WORD) {
 			movsx_rr(code, reg, opts->gen.scratch1, SZ_W, SZ_D);
 			ea->base = opts->gen.scratch1;
+#ifdef X86_32
+		} else if (reg > RBX && inst->extra.size == OPSIZE_BYTE) {
+			mov_rr(code, reg, opts->gen.scratch1, SZ_D);
+			ea->base = opts->gen.scratch1;
+#endif
 		} else {
 			ea->base = reg;
 		}
