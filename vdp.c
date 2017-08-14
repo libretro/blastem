@@ -926,7 +926,7 @@ static void external_slot(vdp_context * context)
 		}
 		case VSRAM_WRITE:
 			if (((start->address/2) & 63) < VSRAM_SIZE) {
-				//printf("VSRAM Write: %X to %X @ vcounter: %d, hslot: %d, cycle: %d\n", start->value, context->address, context->vcounter, context->hslot, context->cycles);
+				//printf("VSRAM Write: %X to %X @ frame: %d, vcounter: %d, hslot: %d, cycle: %d\n", start->value, start->address, context->frame, context->vcounter, context->hslot, context->cycles);
 				if (start->partial == 3) {
 					if (start->address & 1) {
 						context->vsram[(start->address/2) & 63] &= 0xFF;
@@ -2069,6 +2069,14 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	for (;;)
 	{
 	case 165:
+		if (!(context->regs[REG_MODE_3] & BIT_VSCROLL)) {
+			//TODO: Develop some tests on hardware to see when vscroll latch actually happens for full plane mode
+			//See note in vdp_h32 for why this was originally moved out of read_map_scroll
+			//Skitchin' has a similar problem, but uses H40 mode. It seems to be able to hit the extern slot at 232
+			//pretty consistently
+			context->vscroll_latch[0] = context->vsram[0];
+			context->vscroll_latch[1] = context->vsram[1];
+		}
 		if (context->state == PREPARING) {
 			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
 			uint32_t *dst = context->output + (context->hslot - BG_START_SLOT) * 2;
@@ -2162,12 +2170,6 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	SPRITE_RENDER_H40(242)
 	SPRITE_RENDER_H40(243) //provides "garbage" for border when plane A selected
 	case 244:
-		if (!(context->regs[REG_MODE_3] & BIT_VSCROLL)) {
-			//TODO: Develop some tests on hardware to see when vscroll latch actually happens for full plane mode
-			//See note in vdp_h32 for why this was moved out of read_map_scroll
-			context->vscroll_latch[0] = context->vsram[0];
-			context->vscroll_latch[1] = context->vsram[1];
-		}
 		address = (context->regs[REG_HSCROLL] & 0x3F) << 10;
 		mask = 0;
 		if (context->regs[REG_MODE_3] & 0x2) {
