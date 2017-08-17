@@ -109,14 +109,10 @@ static uint8_t io_read(uint32_t location, void *vcontext)
 	return 0xFF;
 }
 
-static void *mapper_write(uint32_t location, void *vcontext, uint8_t value)
+static void update_mem_map(uint32_t location, sms_context *sms, uint8_t value)
 {
-	z80_context *z80 = vcontext;
-	sms_context *sms = z80->system;
+	z80_context *z80 = sms->z80;
 	void *old_value;
-	location &= 3;
-	sms->ram[0x1FFC + location] = value;
-	sms->bank_regs[location] = value;
 	if (location) {
 		uint32_t idx = location - 1;
 		old_value = z80->mem_pointers[idx];
@@ -139,6 +135,16 @@ static void *mapper_write(uint32_t location, void *vcontext, uint8_t value)
 			z80_invalidate_code_range(z80, 0x8000, 0xC000);
 		}
 	}
+}
+
+static void *mapper_write(uint32_t location, void *vcontext, uint8_t value)
+{
+	z80_context *z80 = vcontext;
+	sms_context *sms = z80->system;
+	location &= 3;
+	sms->ram[0x1FFC + location] = value;
+	sms->bank_regs[location] = value;
+	update_mem_map(location, sms, value);
 	return vcontext;
 }
 
@@ -189,6 +195,150 @@ static void set_speed_percent(system_header * system, uint32_t percent)
 	psg_adjust_master_clock(context->psg, context->master_clock);
 }
 
+void sms_serialize(sms_context *sms, serialize_buffer *buf)
+{
+	start_section(buf, SECTION_Z80);
+	z80_serialize(sms->z80, buf);
+	end_section(buf);
+	
+	start_section(buf, SECTION_VDP);
+	vdp_serialize(sms->vdp, buf);
+	end_section(buf);
+	
+	start_section(buf, SECTION_PSG);
+	psg_serialize(sms->psg, buf);
+	end_section(buf);
+	
+	start_section(buf, SECTION_SEGA_IO_1);
+	io_serialize(sms->io.ports, buf);
+	end_section(buf);
+	
+	start_section(buf, SECTION_SEGA_IO_2);
+	io_serialize(sms->io.ports + 1, buf);
+	end_section(buf);
+	
+	start_section(buf, SECTION_MAIN_RAM);
+	save_int8(buf, sizeof(sms->ram) / 1024);
+	save_buffer8(buf, sms->ram, sizeof(sms->ram));
+	end_section(buf);
+	
+	start_section(buf, SECTION_MAPPER);
+	save_int8(buf, 1);//mapper type, 1 for Sega mapper
+	save_buffer8(buf, sms->bank_regs, sizeof(sms->bank_regs));
+	end_section(buf);
+	
+	start_section(buf, SECTION_CART_RAM);
+	save_int8(buf, SMS_CART_RAM_SIZE / 1024);
+	save_buffer8(buf, sms->cart_ram, SMS_CART_RAM_SIZE);
+	end_section(buf);
+}
+
+static void ram_deserialize(deserialize_buffer *buf, void *vsms)
+{
+	sms_context *sms = vsms;
+	uint32_t ram_size = load_int8(buf) * 1024;
+	if (ram_size > sizeof(sms->ram)) {
+		fatal_error("State has a RAM size of %d bytes", ram_size);
+	}
+	load_buffer8(buf, sms->ram, ram_size);
+}
+
+static void cart_ram_deserialize(deserialize_buffer *buf, void *vsms)
+{
+	sms_context *sms = vsms;
+	uint32_t ram_size = load_int8(buf) * 1024;
+	if (ram_size > SMS_CART_RAM_SIZE) {
+		fatal_error("State has a cart RAM size of %d bytes", ram_size);
+	}
+	load_buffer8(buf, sms->cart_ram, ram_size);
+}
+
+static void mapper_deserialize(deserialize_buffer *buf, void *vsms)
+{
+	sms_context *sms = vsms;
+	uint8_t mapper_type = load_int8(buf);
+	if (mapper_type != 1) {
+		warning("State contains an unrecognized mapper type %d, it may be from a newer version of BlastEm\n", mapper_type);
+		return;
+	}
+	for (int i = 0; i < sizeof(sms->bank_regs); i++)
+	{
+		sms->bank_regs[i] = load_int8(buf);
+		update_mem_map(i, sms, sms->bank_regs[i]);
+	}
+}
+
+void sms_deserialize(deserialize_buffer *buf, sms_context *sms)
+{
+	register_section_handler(buf, (section_handler){.fun = z80_deserialize, .data = sms->z80}, SECTION_Z80);
+	register_section_handler(buf, (section_handler){.fun = vdp_deserialize, .data = sms->vdp}, SECTION_VDP);
+	register_section_handler(buf, (section_handler){.fun = psg_deserialize, .data = sms->psg}, SECTION_PSG);
+	register_section_handler(buf, (section_handler){.fun = io_deserialize, .data = sms->io.ports}, SECTION_SEGA_IO_1);
+	register_section_handler(buf, (section_handler){.fun = io_deserialize, .data = sms->io.ports + 1}, SECTION_SEGA_IO_2);
+	register_section_handler(buf, (section_handler){.fun = ram_deserialize, .data = sms}, SECTION_MAIN_RAM);
+	register_section_handler(buf, (section_handler){.fun = mapper_deserialize, .data = sms}, SECTION_MAPPER);
+	register_section_handler(buf, (section_handler){.fun = cart_ram_deserialize, .data = sms}, SECTION_CART_RAM);
+	//TODO: cart RAM
+	while (buf->cur_pos < buf->size)
+	{
+		load_section(buf);
+	}
+	z80_invalidate_code_range(sms->z80, 0xC000, 0x10000);
+	if (sms->bank_regs[0] & 8) {
+		//cart RAM is enabled, invalidate the region in case there is any code there
+		z80_invalidate_code_range(sms->z80, 0x8000, 0xC000);
+	}
+}
+
+static void save_state(sms_context *sms, uint8_t slot)
+{
+	char *save_path;
+	if (slot == QUICK_SAVE_SLOT) {
+		save_path = save_state_path;
+	} else {
+		char slotname[] = "slot_0.state";
+		slotname[5] = '0' + slot;
+		char const *parts[] = {sms->header.save_dir, PATH_SEP, slotname};
+		save_path = alloc_concat_m(3, parts);
+	}
+	serialize_buffer state;
+	init_serialize(&state);
+	sms_serialize(sms, &state);
+	save_to_file(&state, save_path);
+	printf("Saved state to %s\n", save_path);
+	free(state.data);
+}
+
+static uint8_t load_state_path(sms_context *sms, char *path)
+{
+	deserialize_buffer state;
+	uint8_t ret;
+	if ((ret = load_from_file(&state, path))) {
+		sms_deserialize(&state, sms);
+		free(state.data);
+		printf("Loaded %s\n", path);
+	}
+	return ret;
+}
+
+static uint8_t load_state(system_header *system, uint8_t slot)
+{
+	sms_context *sms = (sms_context *)system;
+	char numslotname[] = "slot_0.state";
+	char *slotname;
+	if (slot == QUICK_SAVE_SLOT) {
+		slotname = "quicksave.state";
+	} else {
+		numslotname[5] = '0' + slot;
+		slotname = numslotname;
+	}
+	char const *parts[] = {sms->header.save_dir, PATH_SEP, slotname};
+	char *statepath = alloc_concat_m(3, parts);
+	uint8_t ret = load_state_path(sms, statepath);
+	free(statepath);
+	return ret;
+}
+
 static void run_sms(system_header *system)
 {
 	render_disable_ym();
@@ -215,6 +365,16 @@ static void run_sms(system_header *system)
 		target_cycle = sms->z80->current_cycle;
 		vdp_run_context(sms->vdp, target_cycle);
 		psg_run(sms->psg, target_cycle);
+		
+		if (system->save_state) {
+			while (!sms->z80->pc) {
+				//advance Z80 to an instruction boundary
+				z80_run(sms->z80, sms->z80->current_cycle + 1);
+			}
+			save_state(sms, system->save_state - 1);
+			system->save_state = 0;
+		}
+		
 		target_cycle += 3420*16;
 		if (target_cycle > 0x10000000) {
 			uint32_t adjust = sms->z80->current_cycle - 3420*262*2;
@@ -243,13 +403,17 @@ static void start_sms(system_header *system, char *statefile)
 	sms_context *sms = (sms_context *)system;
 	set_keybindings(&sms->io);
 	
-	if (system->enter_debugger) {
-		system->enter_debugger = 0;
-		zinsert_breakpoint(sms->z80, 0, (uint8_t *)zdebugger);
-	}
-	
 	z80_assert_reset(sms->z80, 0);
 	z80_clear_reset(sms->z80, 128*15);
+	
+	if (statefile) {
+		load_state_path(sms, statefile);
+	}
+	
+	if (system->enter_debugger) {
+		system->enter_debugger = 0;
+		zinsert_breakpoint(sms->z80, sms->z80->pc, (uint8_t *)zdebugger);
+	}
 	
 	run_sms(system);
 }
@@ -372,6 +536,7 @@ sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t for
 	sms->header.resume_context = resume_sms;
 	sms->header.load_save = load_save;
 	sms->header.persist_save = persist_save;
+	sms->header.load_state = load_state;
 	sms->header.free_context = free_sms;
 	sms->header.get_open_bus_value = get_open_bus_value;
 	sms->header.request_exit = request_exit;
