@@ -1003,6 +1003,41 @@ static void handle_reset_requests(genesis_context *gen)
 	vdp_release_framebuffer(gen->vdp);
 }
 
+#include "m68k_internal.h" //needed for get_native_address_trans, should be eliminated once handling of PC is cleaned up
+static uint8_t load_state(system_header *system, uint8_t slot)
+{
+	genesis_context *gen = (genesis_context *)system;
+	char numslotname[] = "slot_0.state";
+	char *slotname;
+	if (slot == QUICK_SAVE_SLOT) {
+		slotname = "quicksave.state";
+	} else {
+		numslotname[5] = '0' + slot;
+		slotname = numslotname;
+	}
+	char const *parts[] = {gen->header.next_context->save_dir, PATH_SEP, slotname};
+	char *statepath = alloc_concat_m(3, parts);
+	deserialize_buffer state;
+	uint32_t pc = 0;
+	uint8_t ret;
+	if (load_from_file(&state, statepath)) {
+		genesis_deserialize(&state, gen);
+		free(state.data);
+		//HACK
+		pc = gen->m68k->last_prefetch_address;
+		ret = 1;
+	} else {
+		strcpy(statepath + strlen(statepath)-strlen("state"), "gst");
+		pc = load_gst(gen, statepath);
+		ret = pc != 0;
+	}
+	if (ret) {
+		gen->m68k->resume_pc = get_native_address_trans(gen->m68k, pc);
+	}
+	free(statepath);
+	return ret;
+}
+
 static void start_genesis(system_header *system, char *statefile)
 {
 	genesis_context *gen = (genesis_context *)system;
@@ -1146,6 +1181,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	gen->header.resume_context = resume_genesis;
 	gen->header.load_save = load_save;
 	gen->header.persist_save = persist_save;
+	gen->header.load_state = load_state;
 	gen->header.soft_reset = soft_reset;
 	gen->header.free_context = free_genesis;
 	gen->header.get_open_bus_value = get_open_bus_value;

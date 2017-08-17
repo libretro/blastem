@@ -420,6 +420,9 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 		case 6:
 			//load state
 			if (gen->header.next_context && gen->header.next_context->save_dir) {
+				if (!gen->header.next_context->load_state(gen->header.next_context, dst)) {
+					break;
+				}/*
 				char numslotname[] = "slot_0.state";
 				char *slotname;
 				if (dst == QUICK_SAVE_SLOT) {
@@ -430,6 +433,7 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 				}
 				char const *parts[] = {gen->header.next_context->save_dir, PATH_SEP, slotname};
 				char *statepath = alloc_concat_m(3, parts);
+				gen->header.next_context->load_state
 				genesis_context *next = (genesis_context *)gen->header.next_context;
 				deserialize_buffer state;
 				uint32_t pc = 0;
@@ -447,6 +451,7 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 					break;
 				}
 				next->m68k->resume_pc = get_native_address_trans(next->m68k, pc);
+				*/
 			}
 			m68k->should_return = 1;
 			break;
