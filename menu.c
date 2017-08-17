@@ -10,12 +10,58 @@
 #include "gst.h"
 #include "m68k_internal.h" //needed for get_native_address_trans, should be eliminated once handling of PC is cleaned up
 
+static menu_context *persist_path_menu;
+static void persist_path(void)
+{
+	char const *parts[] = {get_userdata_dir(), PATH_SEP, "sticky_path"};
+	char *pathfname = alloc_concat_m(3, parts);
+	FILE *f = fopen(pathfname, "wb");
+	if (f) {
+		if (fwrite(persist_path_menu->curpath, 1, strlen(persist_path_menu->curpath), f) != strlen(persist_path_menu->curpath)) {
+			warning("Failed to save menu path");
+		}
+		fclose(f);
+	} else {
+		warning("Failed to save menu path: Could not open %s for writing\n", pathfname);
+		
+	}
+	free(pathfname);
+}
+
 static menu_context *get_menu(genesis_context *gen)
 {
 	menu_context *menu = gen->extra;
 	if (!menu) {
 		gen->extra = menu = calloc(1, sizeof(menu_context));
-		menu->curpath = tern_find_path(config, "ui\0initial_path\0", TVAL_PTR).ptrval;
+		menu->curpath = NULL;
+		char *remember_path = tern_find_path(config, "ui\0remember_path\0", TVAL_PTR).ptrval;
+		if (!remember_path || !strcmp("on", remember_path)) {
+			char const *parts[] = {get_userdata_dir(), PATH_SEP, "sticky_path"};
+			char *pathfname = alloc_concat_m(3, parts);
+			FILE *f = fopen(pathfname, "rb");
+			if (f) {
+				long pathsize = file_size(f);
+				if (pathsize > 0) {
+					menu->curpath = malloc(pathsize + 1);
+					if (fread(menu->curpath, 1, pathsize, f) != pathsize) {
+						warning("Error restoring saved menu path");
+						free(menu->curpath);
+						menu->curpath = NULL;
+					} else {
+						menu->curpath[pathsize] = 0;
+					}
+				}
+				fclose(f);
+			}
+			free(pathfname);
+			if (!persist_path_menu) {
+				atexit(persist_path);
+			}
+			persist_path_menu = menu;
+		}
+		if (!menu->curpath) {
+			menu->curpath = tern_find_path(config, "ui\0initial_path\0", TVAL_PTR).ptrval;
+		}
 		if (!menu->curpath){
 #ifdef __ANDROID__
 			menu->curpath = get_external_storage_path();
