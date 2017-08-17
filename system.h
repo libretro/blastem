@@ -22,6 +22,7 @@ typedef uint16_t (*system_fun_r16)(system_header *);
 typedef void (*system_str_fun)(system_header *, char *);
 typedef uint8_t (*system_str_fun_r8)(system_header *, char *);
 typedef void (*speed_system_fun)(system_header *, uint32_t);
+typedef uint8_t (*system_u8_fun_r8)(system_header *, uint8_t);
 
 #include "arena.h"
 #include "romdb.h"
@@ -32,6 +33,7 @@ struct system_header {
 	system_fun        resume_context;
 	system_fun        load_save;
 	system_fun        persist_save;
+	system_u8_fun_r8  load_state;
 	system_fun        request_exit;
 	system_fun        soft_reset;
 	system_fun        free_context;
