@@ -22,6 +22,7 @@
 #include "sms.h"
 #include "render.h"
 #include "util.h"
+#include "menu.h"
 
 #define CYCLE_NEVER 0xFFFFFFFF
 #define MIN_POLL_INTERVAL 6840
@@ -528,6 +529,14 @@ void handle_binding_up(keybinding * binding)
 		}
 		case UI_EXIT:
 			current_system->request_exit(current_system);
+			if (current_system->type == SYSTEM_GENESIS) {
+				genesis_context *gen = (genesis_context *)current_system;
+				if (gen->extra) {
+					//TODO: More robust mechanism for detecting menu
+					menu_context *menu = gen->extra;
+					menu->external_game_load = 1;
+				}
+			}
 			break;
 		}
 		break;
