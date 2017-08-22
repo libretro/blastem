@@ -149,6 +149,7 @@ void init_vdp_context(vdp_context * context, uint8_t region_pal)
 		context->output = malloc(LINEBUF_SIZE * sizeof(uint32_t));
 		context->output_pitch = 0;
 	} else {
+		context->cur_buffer = FRAMEBUFFER_ODD;
 		context->fb = render_get_framebuffer(FRAMEBUFFER_ODD, &context->output_pitch);
 	}
 	context->linebuf = malloc(LINEBUF_SIZE + SCROLL_BUFFER_SIZE*2);
@@ -1729,11 +1730,9 @@ static void advance_output_line(vdp_context *context)
 			: 224 + BORDER_TOP_V28 + BORDER_BOT_V28;
 
 		if (context->output_lines == lines_max) {
-			render_framebuffer_updated(context->flags2 & FLAG2_EVEN_FIELD ? FRAMEBUFFER_EVEN: FRAMEBUFFER_ODD, context->h40_lines > (context->inactive_start + context->border_top) / 2 ? LINEBUF_SIZE : (256+HORIZ_BORDER));
-			if (context->double_res) {
-				context->flags2 ^= FLAG2_EVEN_FIELD;
-			}
-			context->fb = render_get_framebuffer(context->flags2 & FLAG2_EVEN_FIELD ? FRAMEBUFFER_EVEN : FRAMEBUFFER_ODD, &context->output_pitch);
+			render_framebuffer_updated(context->cur_buffer, context->h40_lines > (context->inactive_start + context->border_top) / 2 ? LINEBUF_SIZE : (256+HORIZ_BORDER));
+			context->cur_buffer = context->flags2 & FLAG2_EVEN_FIELD ? FRAMEBUFFER_EVEN : FRAMEBUFFER_ODD;
+			context->fb = render_get_framebuffer(context->cur_buffer, &context->output_pitch);
 			context->h40_lines = 0;
 			context->frame++;
 			context->output_lines = 0;
@@ -1771,13 +1770,13 @@ static void advance_output_line(vdp_context *context)
 
 void vdp_release_framebuffer(vdp_context *context)
 {
-	render_framebuffer_updated(context->flags2 & FLAG2_EVEN_FIELD ? FRAMEBUFFER_EVEN: FRAMEBUFFER_ODD, context->h40_lines > (context->inactive_start + context->border_top) / 2 ? LINEBUF_SIZE : (256+HORIZ_BORDER));
+	render_framebuffer_updated(context->cur_buffer, context->h40_lines > (context->inactive_start + context->border_top) / 2 ? LINEBUF_SIZE : (256+HORIZ_BORDER));
 	context->output = context->fb = NULL;
 }
 
 void vdp_reacquire_framebuffer(vdp_context *context)
 {
-	context->fb = render_get_framebuffer(context->flags2 & FLAG2_EVEN_FIELD ? FRAMEBUFFER_EVEN : FRAMEBUFFER_ODD, &context->output_pitch);
+	context->fb = render_get_framebuffer(context->cur_buffer, &context->output_pitch);
 	uint16_t lines_max = (context->flags2 & FLAG2_REGION_PAL) 
 			? 240 + BORDER_TOP_V30_PAL + BORDER_BOT_V30_PAL
 			: 224 + BORDER_TOP_V28 + BORDER_BOT_V28;
@@ -2825,6 +2824,8 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 		} else if (context->vcounter == vint_line && context->hslot == vint_slot) {
 			context->flags2 |= FLAG2_VINT_PENDING;
 			context->pending_vint_start = context->cycles;
+		} else if (context->vcounter == context->inactive_start && context->hslot == 1 && (context->regs[REG_MODE_4] & BIT_INTERLACE)) {
+			context->flags2 ^= FLAG2_EVEN_FIELD;
 		}
 		
 		if (dst) {

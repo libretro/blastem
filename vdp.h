@@ -209,6 +209,7 @@ typedef struct {
 	uint8_t     debug_pal;
 	uint8_t     pending_byte;
 	uint8_t     state;
+	uint8_t     cur_buffer;
 	uint8_t     *tmp_buf_a;
 	uint8_t     *tmp_buf_b;
 } vdp_context;
