@@ -2957,9 +2957,13 @@ void vdp_run_dma_done(vdp_context * context, uint32_t target_cycles)
 
 static uint16_t get_ext_vcounter(vdp_context *context)
 {
-	uint16_t line= context->vcounter & 0xFF;
-	if (context->double_res) {
-		line <<= 1;
+	uint16_t line= context->vcounter;
+	if (context->regs[REG_MODE_4] & BIT_INTERLACE) {
+		if (context->double_res) {
+			line <<= 1;
+		} else {
+			line &= 0x1FE;
+		}
 		if (line & 0x100) {
 			line |= 1;
 		}
