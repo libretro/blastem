@@ -50,8 +50,8 @@ void main()
 	vec2 texco = monitorcoord * vec2(width/1024.0, height/-1024.0) + vec2(width/1024.0, height/1024.0);
 
 	// mask
-	float maskx = 1.0 - pow(monitorcoord.x, 200.0);
-	float masky = 1.0 - pow(-monitorcoord.y, 200.0);
+	float maskx = 1.0 - pow(abs(monitorcoord.x), 200.0);
+	float masky = 1.0 - pow(abs(-monitorcoord.y), 200.0);
 	float mask = clamp(maskx * masky, 0.0, 1.0);
 
 	// sharp texcoord
