@@ -365,12 +365,19 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			}
 			break;
 		}
-		case 2: {
+		case 2:
+		case 8: {
 			char buf[4096];
 			copy_string_from_guest(m68k, dst, buf, sizeof(buf));
 			char const *pieces[] = {menu->curpath, PATH_SEP, buf};
-			gen->header.next_rom = alloc_concat_m(3, pieces);
-			m68k->should_return = 1;
+			char *selected = alloc_concat_m(3, pieces);
+			if ((address >> 2) == 2) {
+				gen->header.next_rom = selected;
+				m68k->should_return = 1;
+			} else {
+				lockon_media(selected);
+				free(selected);
+			}
 			break;
 		}
 		case 3: {

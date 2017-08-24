@@ -53,6 +53,7 @@ struct system_header {
 
 struct system_media {
 	void         *buffer;
+	char         *dir;
 	char         *name;
 	char         *extension;
 	system_media *chain;

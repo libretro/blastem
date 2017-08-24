@@ -169,6 +169,8 @@ dmasrc macro
 
 dir_buffer equ $100000
 menu_port  equ $180000
+load_rom_port equ (menu_port+2*4)
+lock_on_port equ (menu_port+8*4)
 
 MAX_DISPLAY equ 24
 
@@ -183,6 +185,7 @@ mouse_sprite    rs.l 1
 menu_functions  rs.l 1
 cursor_show_fun rs.l 1
 special_click   rs.l 1
+rom_load_addr   rs.l 1
 mouse_x         rs.w 1
 selection_top   rs.w 1
 selection_bot   rs.w 1
@@ -370,7 +373,7 @@ select_entry:
 	tst.b (-1, a2)
 	bne enter_dir
 	;regular file
-	lea menu_port+8, a3
+	move.l rom_load_addr.w, a3
 	move.l a2, (a3)
 	
 	addq #6, a7
@@ -905,7 +908,12 @@ show_pause_menu:
 	bsr draw_menu
 	bra gamepad_setup
 	
+lock_on:
+	move.l #lock_on_port, rom_load_addr.w
+	bra menu_common
 menu_start:
+	move.l #load_rom_port, rom_load_addr.w
+menu_common:
 	moveq #0, d0
 	;init vertical scroll RAM
 	vdpaccess $0, VDP_VSRAM_WRITE
@@ -1412,6 +1420,7 @@ about_menu_func:
 pause_menu:
 	dc.b "Resume", 0
 	dc.b "Load ROM", 0
+	dc.b "Lock On", 0
 	dc.b "Save State", 0
 	dc.b "Load State", 0
 	dc.b "Exit", 0
@@ -1421,6 +1430,7 @@ pause_menu:
 pause_menu_func
 	dc.l resume
 	dc.l menu_start
+	dc.l lock_on
 	dc.l save_state
 	dc.l load_state
 	dc.l exit

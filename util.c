@@ -270,6 +270,26 @@ char *path_extension(char *path)
 	return strdup(lastdot+1);
 }
 
+char * path_dirname(char *path)
+{
+	char *lastslash = NULL;
+	char *cur;
+	for (cur = path; *cur; cur++)
+	{
+		if (is_path_sep(*cur)) {
+			lastslash = cur;
+		}
+	}
+	if (!lastslash) {
+		return NULL;
+	}
+	char *dir = malloc(lastslash-path+1);
+	memcpy(dir, path, lastslash-path);
+	dir[lastslash-path] = 0;
+	
+	return dir;
+}
+
 uint32_t nearest_pow2(uint32_t val)
 {
 	uint32_t ret = 1;

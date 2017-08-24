@@ -77,6 +77,7 @@ typedef enum {
 	UI_TOGGLE_KEYBOARD_CAPTURE,
 	UI_TOGGLE_FULLSCREEN,
 	UI_SOFT_RESET,
+	UI_RELOAD,
 	UI_SMS_PAUSE,
 	UI_SCREENSHOT,
 	UI_EXIT
@@ -498,6 +499,9 @@ void handle_binding_up(keybinding * binding)
 		case UI_SOFT_RESET:
 			current_system->soft_reset(current_system);
 			break;
+		case UI_RELOAD:
+			reload_media();
+			break;
 		case UI_SMS_PAUSE:
 			if (current_system->type == SYSTEM_SMS) {
 				sms_context *sms = (sms_context *)current_system;
@@ -714,6 +718,8 @@ int parse_binding_target(char * target, tern_node * padbuttons, tern_node *mouse
 			*ui_out = UI_TOGGLE_FULLSCREEN;
 		} else if (!strcmp(target + 3, "soft_reset")) {
 			*ui_out = UI_SOFT_RESET;
+		} else if (!strcmp(target + 3, "reload")) {
+			*ui_out = UI_RELOAD;
 		} else if (!strcmp(target + 3, "sms_pause")) {
 			*ui_out = UI_SMS_PAUSE;
 		} else if (!strcmp(target + 3, "screenshot")) {
