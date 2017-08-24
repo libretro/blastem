@@ -207,6 +207,37 @@ static void on_drag_drop(const char *filename)
 	}
 }
 
+static system_media cart, lock_on;
+void reload_media(void)
+{
+	if (current_system->next_rom) {
+		free(current_system->next_rom);
+	}
+	char const *parts[] = {
+		cart.dir, PATH_SEP, cart.name, ".", cart.extension
+	};
+	char const **start = parts[0] ? parts : parts + 2;
+	int num_parts = parts[0] ? 5 : 3;
+	if (!parts[4]) {
+		num_parts--;
+	}
+	current_system->next_rom = alloc_concat_m(num_parts, start);
+	current_system->request_exit(current_system);
+}
+
+void lockon_media(char *lock_on_path)
+{
+	reload_media();
+	cart.chain = &lock_on;
+	free(lock_on.dir);
+	free(lock_on.name);
+	free(lock_on.extension);
+	lock_on.dir = path_dirname(lock_on_path);
+	lock_on.name = basename_no_extension(lock_on_path);
+	lock_on.extension = path_extension(lock_on_path);
+	lock_on.size = load_rom(lock_on_path, &lock_on.buffer, NULL);
+}
+
 int main(int argc, char ** argv)
 {
 	set_exe_str(argv[0]);
@@ -220,7 +251,6 @@ int main(int argc, char ** argv)
 	uint8_t force_region = 0;
 	char * romfname = NULL;
 	char * statefile = NULL;
-	system_media cart = {.chain = NULL}, lock_on;
 	debugger_type dtype = DEBUGGER_NATIVE;
 	uint8_t start_in_debugger = 0;
 	uint8_t fullscreen = FULLSCREEN_DEFAULT, use_gl = 1;
@@ -344,6 +374,7 @@ int main(int argc, char ** argv)
 			if (!(cart.size = load_rom(argv[i], &cart.buffer, stype == SYSTEM_UNKNOWN ? &stype : NULL))) {
 				fatal_error("Failed to open %s for reading\n", argv[i]);
 			}
+			cart.dir = path_dirname(argv[i]);
 			cart.name = basename_no_extension(argv[i]);
 			cart.extension = path_extension(argv[i]);
 			romfname = argv[i];
@@ -378,6 +409,7 @@ int main(int argc, char ** argv)
 		}
 		//force system detection, value on command line is only for games not the menu
 		stype = detect_system_type(&cart);
+		cart.dir = path_dirname(romfname);
 		cart.name = basename_no_extension(romfname);
 		cart.extension = path_extension(romfname);
 		loaded = 1;
@@ -461,6 +493,10 @@ int main(int argc, char ** argv)
 			if (!(cart.size = load_rom(next_rom, &cart.buffer, &stype))) {
 				fatal_error("Failed to open %s for reading\n", next_rom);
 			}
+			free(cart.dir);
+			free(cart.name);
+			free(cart.extension);
+			cart.dir = path_dirname(next_rom);
 			cart.name = basename_no_extension(next_rom);
 			cart.extension = path_extension(next_rom);
 			stype = force_stype;
@@ -475,7 +511,9 @@ int main(int argc, char ** argv)
 			if (!game_system) {
 				fatal_error("Failed to configure emulated machine for %s\n", next_rom);
 			}
-			menu_system->next_context = game_system;
+			if (menu_system) {
+				menu_system->next_context = game_system;
+			}
 			game_system->next_context = menu_system;
 			setup_saves(&cart, &info, game_system);
 			update_title(info.name);

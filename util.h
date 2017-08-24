@@ -42,6 +42,8 @@ char is_absolute_path(char *path);
 char * basename_no_extension(char *path);
 //Returns the extension from a path or NULL if there is no extension
 char *path_extension(char *path);
+//Returns the directory portion of a path or NULL if there is no directory part
+char *path_dirname(char *path);
 //Gets the smallest power of two that is >= a certain value, won't work for values > 0x80000000
 uint32_t nearest_pow2(uint32_t val);
 //Should be called by main with the value of argv[0] for use by get_exe_dir
