@@ -679,6 +679,8 @@ void render_framebuffer_updated(uint8_t which, int width)
 			.w = width,
 			.h = height
 		};
+		SDL_SetRenderDrawColor(main_renderer, 0, 0, 0, 255);
+		SDL_RenderClear(main_renderer);
 		SDL_RenderCopy(main_renderer, sdl_textures[which], &src_clip, &main_clip);
 		SDL_RenderPresent(main_renderer);
 #ifndef DISABLE_OPENGL
