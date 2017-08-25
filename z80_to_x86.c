@@ -3872,6 +3872,7 @@ void z80_serialize(z80_context *context, serialize_buffer *buf)
 	save_int8(buf, context->iff1);
 	save_int8(buf, context->iff2);
 	save_int8(buf, context->int_is_nmi);
+	save_int8(buf, context->busack);
 	save_int32(buf, context->current_cycle);
 	save_int32(buf, context->int_cycle);
 	save_int32(buf, context->int_enable_cycle);
@@ -3923,6 +3924,7 @@ void z80_deserialize(deserialize_buffer *buf, void *vcontext)
 	context->iff1 = load_int8(buf);
 	context->iff2 = load_int8(buf);
 	context->int_is_nmi = load_int8(buf);
+	context->busack = load_int8(buf);
 	context->current_cycle = load_int32(buf);
 	context->int_cycle = load_int32(buf);
 	context->int_enable_cycle = load_int32(buf);
