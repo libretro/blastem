@@ -54,7 +54,10 @@ void genesis_serialize(genesis_context *gen, serialize_buffer *buf, uint32_t m68
 	psg_serialize(gen->psg, buf);
 	end_section(buf);
 	
-	//TODO: bus arbiter state
+	start_section(buf, SECTION_GEN_BUS_ARBITER);
+	save_int8(buf, gen->z80->reset);
+	save_int8(buf, gen->z80->busreq);
+	end_section(buf);
 	
 	start_section(buf, SECTION_SEGA_IO_1);
 	io_serialize(gen->io.ports, buf);
@@ -101,6 +104,13 @@ static void zram_deserialize(deserialize_buffer *buf, void *vgen)
 	load_buffer8(buf, gen->zram, ram_size);
 }
 
+static void bus_arbiter_deserialize(deserialize_buffer *buf, void *vgen)
+{
+	genesis_context *gen = vgen;
+	gen->z80->reset = load_int8(buf);
+	gen->z80->busreq = load_int8(buf);
+}
+
 void genesis_deserialize(deserialize_buffer *buf, genesis_context *gen)
 {
 	register_section_handler(buf, (section_handler){.fun = m68k_deserialize, .data = gen->m68k}, SECTION_68000);
@@ -108,10 +118,7 @@ void genesis_deserialize(deserialize_buffer *buf, genesis_context *gen)
 	register_section_handler(buf, (section_handler){.fun = vdp_deserialize, .data = gen->vdp}, SECTION_VDP);
 	register_section_handler(buf, (section_handler){.fun = ym_deserialize, .data = gen->ym}, SECTION_YM2612);
 	register_section_handler(buf, (section_handler){.fun = psg_deserialize, .data = gen->psg}, SECTION_PSG);
-	//TODO: bus arbiter
-	//HACK
-	gen->z80->reset = 0;
-	gen->z80->busreq = 0;
+	register_section_handler(buf, (section_handler){.fun = bus_arbiter_deserialize, .data = gen}, SECTION_GEN_BUS_ARBITER);
 	register_section_handler(buf, (section_handler){.fun = io_deserialize, .data = gen->io.ports}, SECTION_SEGA_IO_1);
 	register_section_handler(buf, (section_handler){.fun = io_deserialize, .data = gen->io.ports + 1}, SECTION_SEGA_IO_2);
 	register_section_handler(buf, (section_handler){.fun = io_deserialize, .data = gen->io.ports + 2}, SECTION_SEGA_IO_EXT);
@@ -327,13 +334,15 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			gen->header.enter_debugger = 0;
 			debugger(context, address);
 		}
-		if (gen->header.save_state && (z_context->pc || (!z_context->reset && !z_context->busreq))) {
+		if (gen->header.save_state && (z_context->pc || !z_context->native_pc || z_context->reset || !z_context->busreq)) {
 			uint8_t slot = gen->header.save_state - 1;
 			gen->header.save_state = 0;
-			//advance Z80 core to the start of an instruction
-			while (!z_context->pc)
-			{
-				sync_z80(z_context, z_context->current_cycle + MCLKS_PER_Z80);
+			if (z_context->native_pc && !z_context->reset) {
+				//advance Z80 core to the start of an instruction
+				while (!z_context->pc)
+				{
+					sync_z80(z_context, z_context->current_cycle + MCLKS_PER_Z80);
+				}
 			}
 			char *save_path;
 			if (slot == QUICK_SAVE_SLOT) {
