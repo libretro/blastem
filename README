@@ -1,4 +1,4 @@
-BlastEm 0.5.0
+BlastEm 0.5.1
 -------------
 
 Installation
@@ -38,14 +38,16 @@ Lock-On Support
 ---------------
 
 This version of BlastEm has some preliminary support for Sonic & Knuckles lock
-on technology. This is only available from the command line at the moment. To
-use it specify the Sonic & Knuckles ROM as the primary ROM and specify the ROM
-to be locked on using the -o option. As an example:
+on technology. This is available via both the menu and the command line. To use
+it from the menu, first load Sonic & Knuckles normally. Enter the menu (mapped
+to the Escape key by default) and select the "Lock On" option to select a ROM
+to lock on. The system will then reload with the combined game. To use it from
+the command line, specify the Sonic & Knuckles ROM as the primary ROM and
+specify the ROM to be locked on using the -o option. As an example:
 
     ./blastem ~/romz/sonic_and_knuckles.bin -o ~/romz/sonic3.bin
     
-Please note that Sonic 2 lock-on does not work at this time. Additionally the
-save RAM added by Sonic 3 won't work either.
+Please note that Sonic 2 lock-on does not work at this time.
 
 Configuration
 -------------
@@ -165,6 +167,10 @@ ui.toggle_fullscreen         Toggles between fullscreen and windowed mode
 ui.soft_reset                Resets a portion of the emulated machine
                              Equivalent to pushing the reset button on the
                              emulated device
+ui.reload                    Reloads the current ROM from a file and performs
+                             a hard reset of the emulated device
+ui.sms_pause                 Triggers a press of the pause button when in SMS
+                             mode
 ui.toggle_keyboard_captured  Toggles the capture state of the host keyboard
                              when an emulated keyboard is present
 		
@@ -186,14 +192,15 @@ The video section contains settings that affect the visual output of BlastEm.
 "aspect" is used to control the aspect ratio of the emulated display. The
 default of 4:3 matches that of a standard definition television.
 
-"width" is used to control the window size when not in fullscreen mode. The
-height of the window is calculated from this value and "aspect". Both width
-and height can be overridden from the command line.
+"width" is used to control the window width when not in fullscreen mode.
+
+"height" is used to control the window height when not in fullscreen mode. If
+left unspecified, it will be calculated from "width" and "aspect".
 
 "vertex_shader" and "fragment_shader" define the GLSL shader program that
 produces the final image for each frame. Shaders can be used to add various
 visual effects or enhancements. Currently BlastEm only ships with the default
-shader. If you write your own shaders, place them in 
+shader and a "subtle" crt shader. If you write your own shaders, place them in 
 $HOME/.config/blastem/shaders and then specify the basename of the new shader
 files in the "vertex_shader" and "fragment_shader" config options. Note that
 shaders are not available in the SDL fallback renderer.
@@ -222,6 +229,10 @@ If it is set to off instead, the fallback renderer which uses SDL2's render API
 will be used instead. This option is mostly useful for users on hardware that
 lacks OpenGL 2 support. While BlastEm will fall back automatically even if gl
 is set to on there will be a warning. Disabling gl eliminates this warning.
+
+"scaling" controls the type of scaling used for textures in both the GL and
+SDL renderers. Valid values are "nearest" and "linear". Note that shaders also
+impact how pixels are scaled.
 
 The "ntsc" and "pal" sub-sections control overscan settings for the emulated
 video output for NTSC and PAL consoles respectively. More details are available
@@ -304,6 +315,11 @@ Relative paths will be loaded relative to the BlastEm executable.
 the following special variables: $HOME, $EXEDIR. Additionally, variables
 defined in the OS environment can be used.
 
+"remember_path" specifies whether BlastEm should remember the last path used in
+the file browser. When it is set to "on", the last path will be remembered and
+used instead of "initial_path" in subsequent runs. If it is set to "off", 
+"initial_path" will always be used.
+
 "screenshot_path" specifies the directory "internal" screenshots will be saved
 in. It accepts the same special variables as "initial_path".
 
@@ -314,6 +330,15 @@ It is specified as a format string for the C library function strftime
 be saved in for a given game. It can contain the following special variables:
 $HOME, $EXEDIR, $USERDATA, $ROMNAME. Like "initial_path" it can also reference
 variables from the environment.
+
+"extensions" specifies the file extensions that should be displayed in the file
+browser.
+
+"state_format" specifies the preferred format for saving save states. Valid
+values are "native" (the default) and "gst". "native" save states do a better
+job of preserving the state of the emulated system, but "gst" save states are
+compatible with other emulators like Kega and Gens. This setting has no effect
+for systems other than the Genesis/Mega Drive
 
 Path Variables
 --------------
