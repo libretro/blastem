@@ -46,6 +46,7 @@ struct genesis_context {
 	uint32_t        int_latency_prev2;
 	uint8_t         bank_regs[8];
 	uint16_t        mapper_start_index;
+	uint8_t         mapper_type;
 	uint8_t         save_type;
 	sega_io         io;
 	uint8_t         version_reg;

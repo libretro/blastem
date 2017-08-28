@@ -133,3 +133,16 @@ m68k_context * write_bank_reg_b(uint32_t address, m68k_context * context, uint8_
 	}
 	return context;
 }
+
+void sega_mapper_serialize(genesis_context *gen, serialize_buffer *buf)
+{
+	save_buffer8(buf, gen->bank_regs, sizeof(gen->bank_regs));
+}
+
+void sega_mapper_deserialize(deserialize_buffer *buf, genesis_context *gen)
+{
+	for (int i = 0; i < sizeof(gen->bank_regs); i++)
+	{
+		write_bank_reg_w(i * 2, gen->m68k, load_int8(buf));
+	}
+}

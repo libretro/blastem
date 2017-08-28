@@ -293,6 +293,25 @@ static uint16_t xband_reg_read_w(uint32_t address, void *context)
 	return value;
 }
 
+void xband_serialize(genesis_context *gen, serialize_buffer *buf)
+{
+	xband *x = get_xband(gen);
+	save_int8(buf, x->kill);
+	save_int8(buf, x->control);
+	save_buffer8(buf, x->regs, XBAND_REGS);
+}
+
+void xband_deserialize(deserialize_buffer *buf, genesis_context *gen)
+{
+	xband *x = get_xband(gen);
+	x->kill = load_int8(buf);
+	update_control(gen, load_int8(buf));
+	for (int i = 0; i < XBAND_REGS; i++)
+	{
+		xband_write_b(0x3BC001 + i*2, gen, load_int8(buf));
+	}
+}
+
 rom_info xband_configure_rom(tern_node *rom_db, void *rom, uint32_t rom_size, void *lock_on, uint32_t lock_on_size, memmap_chunk const *base_map, uint32_t base_chunks)
 {
 	rom_info info;
@@ -334,6 +353,7 @@ rom_info xband_configure_rom(tern_node *rom_db, void *rom, uint32_t rom_size, vo
 	
 	byteswap_rom(0x400000, x->cart_space);
 	
+	info.mapper_type = MAPPER_XBAND;
 	info.map_chunks = base_chunks + 5;
 	info.map = calloc(sizeof(memmap_chunk), info.map_chunks);
 	info.map[0].mask = 0xFFFFFF;
