@@ -58,6 +58,60 @@ void free_rom_info(rom_info *info)
 	free(info->mouse_mode);
 }
 
+void cart_serialize(system_header *sys, serialize_buffer *buf)
+{
+	if (sys->type != SYSTEM_GENESIS) {
+		return;
+	}
+	genesis_context *gen = (genesis_context *)sys;
+	if (gen->mapper_type == MAPPER_NONE) {
+		return;
+	}
+	start_section(buf, SECTION_MAPPER);
+	save_int8(buf, gen->mapper_type);
+	switch(gen->mapper_type)
+	{
+	case MAPPER_SEGA:
+		sega_mapper_serialize(gen, buf);
+		break;
+	case MAPPER_REALTEC:
+		realtec_serialize(gen, buf);
+		break;
+	case MAPPER_XBAND:
+		xband_serialize(gen, buf);
+		break;
+	case MAPPER_MULTI_GAME:
+		multi_game_serialize(gen, buf);
+		break;
+	}
+	end_section(buf);
+}
+
+void cart_deserialize(deserialize_buffer *buf, void *vcontext)
+{
+	genesis_context *gen = vcontext;
+	uint8_t mapper_type = load_int8(buf);
+	if (mapper_type != gen->mapper_type) {
+		warning("Mapper type mismatch, skipping load of mapper state");
+		return;
+	}
+	switch(gen->mapper_type)
+	{
+	case MAPPER_SEGA:
+		sega_mapper_deserialize(buf, gen);
+		break;
+	case MAPPER_REALTEC:
+		realtec_deserialize(buf, gen);
+		break;
+	case MAPPER_XBAND:
+		xband_deserialize(buf, gen);
+		break;
+	case MAPPER_MULTI_GAME:
+		multi_game_deserialize(buf, gen);
+		break;
+	}
+}
+
 char *get_header_name(uint8_t *rom)
 {
 	//TODO: Should probably prefer the title field that corresponds to the user's region preference
@@ -197,6 +251,7 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 	}
 	if (size >= 0x80000 && !memcmp("SEGA SSF", rom + 0x100, 8)) {
 		info->mapper_start_index = 0;
+		info->mapper_type = MAPPER_SEGA;
 		info->map_chunks = base_chunks + 9;
 		info->map = malloc(sizeof(memmap_chunk) * info->map_chunks);
 		memset(info->map, 0, sizeof(memmap_chunk)*9);
@@ -265,6 +320,7 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 				info->map[1].buffer = info->save_buffer;
 			} else {
 				//Assume the standard Sega mapper
+				info->mapper_type = MAPPER_SEGA;
 				info->map[0].end = 0x200000;
 				info->map[0].mask = 0xFFFFFF;
 				info->map[0].flags = MMAP_READ;
@@ -308,6 +364,7 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 rom_info configure_rom_heuristics(uint8_t *rom, uint32_t rom_size, memmap_chunk const *base_map, uint32_t base_chunks)
 {
 	rom_info info;
+	info.mapper_type = MAPPER_NONE;
 	info.name = get_header_name(rom);
 	info.regions = get_header_regions(rom);
 	info.is_save_lock_on = 0;
@@ -607,6 +664,7 @@ void map_iter_fun(char *key, tern_val val, uint8_t valtype, void *data)
 		map->read_8 = nor_flash_read_b;
 		map->mask = 0xFFFFFF;
 	} else if (!strcmp(dtype, "Sega mapper")) {
+		state->info->mapper_type = MAPPER_SEGA;
 		state->info->mapper_start_index = state->ptr_index++;
 		char *variant = tern_find_ptr_default(node, "variant", "full");
 		char *save_device = tern_find_path(node, "save\0device\0", TVAL_PTR).ptrval;
@@ -694,6 +752,7 @@ void map_iter_fun(char *key, tern_val val, uint8_t valtype, void *data)
 		map->flags = MMAP_READ;
 		*value = strtol(tern_find_ptr_default(node, "value", "0"), NULL, 16);
 	} else if (!strcmp(dtype, "multi-game")) {
+		state->info->mapper_type = MAPPER_MULTI_GAME;
 		state->info->mapper_start_index = state->ptr_index++;
 		//make a mirror copy of the ROM so we can efficiently support arbitrary start offsets
 		state->rom = realloc(state->rom, state->rom_size * 2);
@@ -756,6 +815,7 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, void *l
 		return configure_rom_heuristics(rom, rom_size, base_map, base_chunks);
 	}
 	rom_info info;
+	info.mapper_type = MAPPER_NONE;
 	info.name = tern_find_ptr(entry, "name");
 	if (info.name) {
 		printf("Found name: %s\n", info.name);

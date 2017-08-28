@@ -81,7 +81,7 @@ void genesis_serialize(genesis_context *gen, serialize_buffer *buf, uint32_t m68
 	save_buffer8(buf, gen->zram, Z80_RAM_BYTES);
 	end_section(buf);
 	
-	//TODO: mapper state
+	cart_serialize(&gen->header, buf);
 }
 
 static void ram_deserialize(deserialize_buffer *buf, void *vgen)
@@ -124,6 +124,7 @@ void genesis_deserialize(deserialize_buffer *buf, genesis_context *gen)
 	register_section_handler(buf, (section_handler){.fun = io_deserialize, .data = gen->io.ports + 2}, SECTION_SEGA_IO_EXT);
 	register_section_handler(buf, (section_handler){.fun = ram_deserialize, .data = gen}, SECTION_MAIN_RAM);
 	register_section_handler(buf, (section_handler){.fun = zram_deserialize, .data = gen}, SECTION_SOUND_RAM);
+	register_section_handler(buf, (section_handler){.fun = cart_deserialize, .data = gen}, SECTION_MAPPER);
 	//TODO: mapper state
 	while (buf->cur_pos < buf->size)
 	{
@@ -1267,7 +1268,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	}
 	setup_io_devices(config, rom, &gen->io);
 
-	gen->save_type = rom->save_type;
+	gen->mapper_type = rom->mapper_type;
 	gen->save_type = rom->save_type;
 	if (gen->save_type != SAVE_NONE) {
 		gen->save_ram_mask = rom->save_mask;
