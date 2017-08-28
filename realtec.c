@@ -20,6 +20,14 @@ uint8_t realtec_detect(uint8_t *rom, uint32_t rom_size)
 	return memcmp(rom + 0x7E100, "SEGA", 4) == 0;
 }
 
+static realtec *get_realtec(genesis_context *gen)
+{
+	if (!gen->extra) {
+		gen->extra = gen->m68k->mem_pointers[0];
+	}
+	return gen->extra;
+}
+
 static void *realtec_write_b(uint32_t address, void *context, uint8_t value)
 {
 	if (address & 1) {
@@ -27,12 +35,8 @@ static void *realtec_write_b(uint32_t address, void *context, uint8_t value)
 	}
 	m68k_context *m68k = context;
 	genesis_context *gen = m68k->system;
-	if (!gen->extra) {
-		gen->extra = m68k->mem_pointers[0];
-	}
-	realtec *r = gen->extra;
+	realtec *r = get_realtec(gen);
 	uint32_t offset = address >> 13;
-	uint8_t dirty = 0;
 	if (offset < 3 && r->regs[offset] != value) {
 		r->regs[offset] = value;
 		//other regs are only 3 bits, so assume 3 for this one too
@@ -59,6 +63,21 @@ static void *realtec_write_b(uint32_t address, void *context, uint8_t value)
 static void *realtec_write_w(uint32_t address, void *context, uint16_t value)
 {
 	return realtec_write_b(address, context, value >> 8);
+}
+
+void realtec_serialize(genesis_context *gen, serialize_buffer *buf)
+{
+	realtec *r = get_realtec(gen);
+	save_buffer8(buf, r->regs, sizeof(r->regs));
+}
+
+void realtec_deserialize(deserialize_buffer *buf, genesis_context *gen)
+{
+	realtec *r = get_realtec(gen);
+	for (int i = 0; i < sizeof(r->regs); i++)
+	{
+		realtec_write_b(i << 13, gen, load_int8(buf));
+	}
 }
 
 rom_info realtec_configure_rom(uint8_t *rom, uint32_t rom_size, memmap_chunk const *base_map, uint32_t base_chunks)
@@ -104,6 +123,7 @@ rom_info realtec_configure_rom(uint8_t *rom, uint32_t rom_size, memmap_chunk con
 	info.eeprom_map = NULL;
 	info.rom = rom;
 	info.rom_size = rom_size;
+	info.mapper_type = MAPPER_REALTEC;
 	info.is_save_lock_on = 0;
 	info.port1_override = info.port2_override = info.ext_override = info.mouse_mode = NULL;
 	info.map_chunks = base_chunks + 2;

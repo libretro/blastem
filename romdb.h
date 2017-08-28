@@ -14,6 +14,7 @@
 #define SAVE_NONE     0xFF
 
 #include "tern.h"
+#include "serialize.h"
 
 typedef struct {
 	uint32_t     start;
@@ -36,6 +37,14 @@ typedef struct {
 	uint8_t     alt_cmd;
 	uint8_t     bus_flags;
 } nor_state;
+
+enum {
+	MAPPER_NONE,
+	MAPPER_SEGA,
+	MAPPER_REALTEC,
+	MAPPER_XBAND,
+	MAPPER_MULTI_GAME
+};
 
 
 typedef struct rom_info rom_info;
@@ -62,6 +71,7 @@ struct rom_info {
 	uint16_t      mapper_start_index;
 	uint8_t       save_type;
 	uint8_t       save_bus; //only used for NOR currently
+	uint8_t       mapper_type;
 	uint8_t       regions;
 	uint8_t       is_save_lock_on; //Does the save buffer actually belong to a lock-on cart?
 };
@@ -77,5 +87,7 @@ char const *save_type_name(uint8_t save_type);
 //Note: free_rom_info only frees things pointed to by a rom_info struct, not the struct itself
 //this is because rom_info structs are typically stack allocated
 void free_rom_info(rom_info *info);
+void cart_serialize(system_header *sys, serialize_buffer *buf);
+void cart_deserialize(deserialize_buffer *buf, void *vcontext);
 
 #endif //ROMDB_H_
