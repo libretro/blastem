@@ -57,6 +57,7 @@ void genesis_serialize(genesis_context *gen, serialize_buffer *buf, uint32_t m68
 	start_section(buf, SECTION_GEN_BUS_ARBITER);
 	save_int8(buf, gen->z80->reset);
 	save_int8(buf, gen->z80->busreq);
+	save_int16(buf, gen->z80->bank_reg);
 	end_section(buf);
 	
 	start_section(buf, SECTION_SEGA_IO_1);
@@ -104,11 +105,21 @@ static void zram_deserialize(deserialize_buffer *buf, void *vgen)
 	load_buffer8(buf, gen->zram, ram_size);
 }
 
+static void update_z80_bank_pointer(genesis_context *gen)
+{
+	if (gen->z80->bank_reg < 0x100) {
+		gen->z80->mem_pointers[1] = get_native_pointer(gen->z80->bank_reg << 15, (void **)gen->m68k->mem_pointers, &gen->m68k->options->gen);
+	} else {
+		gen->z80->mem_pointers[1] = NULL;
+	}
+}
+
 static void bus_arbiter_deserialize(deserialize_buffer *buf, void *vgen)
 {
 	genesis_context *gen = vgen;
 	gen->z80->reset = load_int8(buf);
 	gen->z80->busreq = load_int8(buf);
+	gen->z80->bank_reg = load_int16(buf) & 0x1FF;
 }
 
 void genesis_deserialize(deserialize_buffer *buf, genesis_context *gen)
@@ -125,11 +136,11 @@ void genesis_deserialize(deserialize_buffer *buf, genesis_context *gen)
 	register_section_handler(buf, (section_handler){.fun = ram_deserialize, .data = gen}, SECTION_MAIN_RAM);
 	register_section_handler(buf, (section_handler){.fun = zram_deserialize, .data = gen}, SECTION_SOUND_RAM);
 	register_section_handler(buf, (section_handler){.fun = cart_deserialize, .data = gen}, SECTION_MAPPER);
-	//TODO: mapper state
 	while (buf->cur_pos < buf->size)
 	{
 		load_section(buf);
 	}
+	update_z80_bank_pointer(gen);
 }
 
 uint16_t read_dma_value(uint32_t address)
@@ -951,12 +962,7 @@ static void *z80_write_bank_reg(uint32_t location, void * vcontext, uint8_t valu
 	z80_context * context = vcontext;
 
 	context->bank_reg = (context->bank_reg >> 1 | value << 8) & 0x1FF;
-	if (context->bank_reg < 0x100) {
-		genesis_context *gen = context->system;
-		context->mem_pointers[1] = get_native_pointer(context->bank_reg << 15, (void **)gen->m68k->mem_pointers, &gen->m68k->options->gen);
-	} else {
-		context->mem_pointers[1] = NULL;
-	}
+	update_z80_bank_pointer(context->system);
 
 	return context;
 }
