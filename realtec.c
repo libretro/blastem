@@ -42,7 +42,7 @@ static void *realtec_write_b(uint32_t address, void *context, uint8_t value)
 		//other regs are only 3 bits, so assume 3 for this one too
 		uint32_t size = (r->regs[1] & 0x7) << 17;
 		uint32_t start = (r->regs[2] & 7) << 17 | (r->regs[0] & 6) << 19;
-		if (size > 512*1024) {
+		if (!size || size > 512*1024) {
 			size = 512*1024;
 		}
 		for(uint32_t cur = 0; cur < 512*1024; cur += size)
@@ -76,7 +76,7 @@ void realtec_deserialize(deserialize_buffer *buf, genesis_context *gen)
 	realtec *r = get_realtec(gen);
 	for (int i = 0; i < sizeof(r->regs); i++)
 	{
-		realtec_write_b(i << 13, gen, load_int8(buf));
+		realtec_write_b(i << 13, gen->m68k, load_int8(buf));
 	}
 }
 

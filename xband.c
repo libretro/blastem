@@ -308,7 +308,7 @@ void xband_deserialize(deserialize_buffer *buf, genesis_context *gen)
 	update_control(gen, load_int8(buf));
 	for (int i = 0; i < XBAND_REGS; i++)
 	{
-		xband_write_b(0x3BC001 + i*2, gen, load_int8(buf));
+		xband_write_b(0x3BC001 + i*2, gen->m68k, load_int8(buf));
 	}
 }
 
