@@ -3931,6 +3931,6 @@ void z80_deserialize(deserialize_buffer *buf, void *vcontext)
 	context->int_pulse_start = load_int32(buf);
 	context->int_pulse_end = load_int32(buf);
 	context->nmi_start = load_int32(buf);
-	context->native_pc = NULL;
+	context->native_pc = context->extra_pc = NULL;
 }
 
