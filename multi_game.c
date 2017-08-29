@@ -33,5 +33,5 @@ void multi_game_serialize(genesis_context *gen, serialize_buffer *buf)
 
 void multi_game_deserialize(deserialize_buffer *buf, genesis_context *gen)
 {
-	write_multi_game_b(load_int8(buf), gen, 0);
+	write_multi_game_b(load_int8(buf), gen->m68k, 0);
 }
