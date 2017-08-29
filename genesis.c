@@ -1031,7 +1031,7 @@ static uint8_t load_state(system_header *system, uint8_t slot)
 		numslotname[5] = '0' + slot;
 		slotname = numslotname;
 	}
-	char const *parts[] = {gen->header.next_context->save_dir, PATH_SEP, slotname};
+	char const *parts[] = {gen->header.save_dir, PATH_SEP, slotname};
 	char *statepath = alloc_concat_m(3, parts);
 	deserialize_buffer state;
 	uint32_t pc = 0;
