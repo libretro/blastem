@@ -1078,6 +1078,7 @@ void ym_serialize(ym2612_context *context, serialize_buffer *buf)
 		//even though duplicate info is probably in the regs array
 		save_int8(buf, context->channels[i].block);
 		save_int8(buf, context->channels[i].fnum);
+		save_int8(buf, context->channels[i].keyon);
 	}
 	for (int i = 0; i < 3; i++)
 	{
@@ -1086,6 +1087,7 @@ void ym_serialize(ym2612_context *context, serialize_buffer *buf)
 		save_int8(buf, context->ch3_supp[i].block);
 		save_int8(buf, context->ch3_supp[i].fnum);
 	}
+	save_int8(buf, context->timer_control);
 	save_int16(buf, context->timer_a);
 	save_int8(buf, context->timer_b);
 	save_int8(buf, context->sub_timer_b);
@@ -1111,7 +1113,9 @@ void ym_deserialize(deserialize_buffer *buf, void *vcontext)
 	for (int i = 0; i < YM_PART1_REGS; i++)
 	{
 		uint8_t reg = YM_PART1_START + i;
-		if (reg != REG_FNUM_LOW && reg != REG_KEY_ONOFF && reg != REG_TIME_CTRL) {
+		if (reg == REG_TIME_CTRL) {
+			context->ch3_mode = temp_regs[i] & 0xC0;
+		} else if (reg != REG_FNUM_LOW && reg != REG_KEY_ONOFF) {
 			context->selected_reg = reg;
 			ym_data_write(context, temp_regs[i]);
 		}
@@ -1144,6 +1148,7 @@ void ym_deserialize(deserialize_buffer *buf, void *vcontext)
 		context->channels[i].block = load_int8(buf);
 		context->channels[i].fnum = load_int8(buf);
 		context->channels[i].keycode = context->channels[i].block << 2 | fnum_to_keycode[context->channels[i].fnum >> 7];
+		context->channels[i].keyon = load_int8(buf);
 	}
 	for (int i = 0; i < 3; i++)
 	{
@@ -1151,6 +1156,7 @@ void ym_deserialize(deserialize_buffer *buf, void *vcontext)
 		context->ch3_supp[i].fnum = load_int8(buf);
 		context->ch3_supp[i].keycode = context->ch3_supp[i].block << 2 | fnum_to_keycode[context->ch3_supp[i].fnum >> 7];
 	}
+	context->timer_control = load_int8(buf);
 	context->timer_a = load_int16(buf);
 	context->timer_b = load_int8(buf);
 	context->sub_timer_b = load_int8(buf);
