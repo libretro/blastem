@@ -174,11 +174,11 @@ void psg_deserialize(deserialize_buffer *buf, void *vcontext)
 	load_buffer16(buf, context->counters, 4);
 	load_buffer8(buf, context->volume, 4);
 	uint8_t output_state = load_int8(buf);
-	context->output_state[0] = output_state & 8 >> 3;
-	context->output_state[1] = output_state & 4 >> 2;
-	context->output_state[2] = output_state & 2 >> 1;
+	context->output_state[0] = output_state >> 3 & 1;
+	context->output_state[1] = output_state >> 2 & 1;
+	context->output_state[2] = output_state >> 1 & 1;
 	context->output_state[3] = output_state & 1;
-	context->noise_use_tone = output_state & 0x10 >> 4;
+	context->noise_use_tone = output_state >> 4 & 1;
 	context->noise_type = load_int8(buf);
 	context->latch = load_int8(buf);
 	context->cycles = load_int32(buf);
