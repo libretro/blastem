@@ -93,6 +93,7 @@ static void ram_deserialize(deserialize_buffer *buf, void *vgen)
 		fatal_error("State has a RAM size of %d bytes", ram_size * 2);
 	}
 	load_buffer16(buf, gen->work_ram, ram_size);
+	m68k_invalidate_code_range(gen->m68k, 0xE00000, 0x1000000);
 }
 
 static void zram_deserialize(deserialize_buffer *buf, void *vgen)
@@ -103,6 +104,7 @@ static void zram_deserialize(deserialize_buffer *buf, void *vgen)
 		fatal_error("State has a Z80 RAM size of %d bytes", ram_size);
 	}
 	load_buffer8(buf, gen->zram, ram_size);
+	z80_invalidate_code_range(gen->z80, 0, 0x4000);
 }
 
 static void update_z80_bank_pointer(genesis_context *gen)
@@ -1313,6 +1315,14 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	{
 		if (rom->map[i].flags & MMAP_PTR_IDX) {
 			gen->m68k->mem_pointers[rom->map[i].ptr_index] = rom->map[i].buffer;
+		}
+	}
+	
+	if (gen->mapper_type == MAPPER_SEGA) {
+		//initialize bank registers
+		for (int i = 1; i < sizeof(gen->bank_regs); i++)
+		{
+			gen->bank_regs[i] = i;
 		}
 	}
 
