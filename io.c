@@ -2104,9 +2104,9 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 				input = 0xF;
 			}
 			input |= ((port->device.keyboard.tr_counter & 1) == 0) << 4;
-			//this is not strictly correct at all times, but good enough for now
-			device_driven = 0x1F;
 		}
+		//this is not strictly correct at all times, but good enough for now
+		device_driven = 0x1F;
 		break;
 	}
 #ifndef _WIN32
