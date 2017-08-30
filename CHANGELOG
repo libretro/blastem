@@ -1,3 +1,49 @@
+0.5.1
+-----
+*New Features*
+
+ - Drag and Drop is now supported for loading ROMs
+ - Save states are now supported for SMS games
+ - Texture scaling method (linear or nearest neighbor) can now be selected in both renderers
+ - Menu now filters files based on a configurable extension list
+ - Lock on carts (Sonic & Knuckles and XBAND) can now be loaded via the menu
+ - ROMs can be reloaded via a hotkey (defaults to F5)
+ - Last path visited in the menu is now saved between runs (can be turned off via config)
+ - Window height can now be specified in the config file
+ 
+*Bugfixes*
+
+ - Default shader doesn't look like garbage in interlaced mode anymore
+ - Framebuffer pointers are properly released and reacquired on context switch (no more LOCKRECT errors)
+ - ROMs specifying SRAM at the normal RAM address no longer cause a crash
+ - Fixed an edge case in the s(tep) debugger command
+ - Entering the option menu in Dragon's Fury no longer results in a fatal error in 32-bit builds
+ - Screen is properly cleared so garbage will not appear when the window does not match the emulated display size
+ - Fixed a regression in XBAND keyboard support
+
+*Accuracy/Completeness Improvements*
+
+ - Locking on Sonic 3 to S&K will now use Sonic 3's save RAM
+ - Locking on a 4MB cart to S&K will now behave like on hardware
+ - Support for several X-in-1 bootleg carts has been added
+ - DMA from byte-wide SRAM now yields correct results
+ - VScroll is now latched earlier in the line (fixes minor glithces in Top Gear 2 and Skitchin)
+ - Sega/SSF2 mapper support now handles homebrew that uses SRAM
+ - ODD flag timing now matches hardware
+ - V counter as read from HV port is now correct in single-resolution interlace mode
+
+*Other Changes*
+
+ - Added a "subtle" CRT shader contributed by Anaël Seghezzi
+ - Mouse is now only captured if an emulated mouse is plugged in to the emulated system
+ - Missing mapping warnings will only be displayed for the first mapping of a controller
+ - Save states now default to a format native to BlastEm
+ - Remaining I2C EEPROM games have been added to the ROM DB
+ - When not specified, height now respects the aspect setting rather than assuming 4:3
+ - Pre-combined S&K ROMs and large (>2MB) S&K hacks should now work
+ - Using ui.exit (default Escape) can now be used to cleanly cancel a load ROM or savestate action
+ - Save states are now allowed in a more extensive range of Z80 states, fixing save state saving in some games
+
 0.5.0
 -----
 *New Features*
@@ -21,7 +67,7 @@
  - Path configuration values can now contain both BlastEm-specific and environment variable references
  - Open GL based rendering can be disabled in favor of the SDL2 render API fallback
  
- *Bugfixes*
+*Bugfixes*
  
  - Fixed a bug that would cause a crash in certain games that have SRAM and ROM at the same address
  - Fixed some issues with Z80 interrupts that caused issues with sound/music in Sonic 2 and Puyo Puyo 2
@@ -34,7 +80,8 @@
  - Specifying an output audio frequency higher than the FM frequency no longer deadlocks the emulator
  - Fixed memory map generation for games with 3MB ROM and SRAM at the 3MB mark 
  
- *Accuracy/Completeness Improvements*
+*Accuracy/Completeness Improvements*
+
  - YM2612 SSG-EG and CSM modes are now implemented
  - VDP Mode 4 is now implemented in both Genesis and SMS mode
  - Basic emulation of refresh delays has been added
@@ -57,6 +104,7 @@
  - Partial emulation of serial IO registers
  
  *Other Changes*
+ 
  - Added Japanese version of Street Fighter 2: The New Challengers to ROM DB
  - Added the following EEPROM games to ROM DB:
        Ninja Burai Densetsu
