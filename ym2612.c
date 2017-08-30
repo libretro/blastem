@@ -1077,7 +1077,7 @@ void ym_serialize(ym2612_context *context, serialize_buffer *buf)
 		//Due to the latching behavior, these need to be saved
 		//even though duplicate info is probably in the regs array
 		save_int8(buf, context->channels[i].block);
-		save_int8(buf, context->channels[i].fnum);
+		save_int16(buf, context->channels[i].fnum);
 		save_int8(buf, context->channels[i].keyon);
 	}
 	for (int i = 0; i < 3; i++)
@@ -1139,14 +1139,14 @@ void ym_deserialize(deserialize_buffer *buf, void *vcontext)
 		if (context->operators[i].env_phase > PHASE_RELEASE) {
 			context->operators[i].env_phase = PHASE_RELEASE;
 		}
-		context->operators[i].inverted = load_int8(buf) != 0;
+		context->operators[i].inverted = load_int8(buf) != 0 ? SSG_INVERT : 0;
 	}
 	for (int i = 0; i < NUM_CHANNELS; i++)
 	{
 		context->channels[i].output = load_int16(buf);
 		context->channels[i].op1_old = load_int16(buf);
 		context->channels[i].block = load_int8(buf);
-		context->channels[i].fnum = load_int8(buf);
+		context->channels[i].fnum = load_int16(buf);
 		context->channels[i].keycode = context->channels[i].block << 2 | fnum_to_keycode[context->channels[i].fnum >> 7];
 		context->channels[i].keyon = load_int8(buf);
 	}
