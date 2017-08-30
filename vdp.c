@@ -2706,13 +2706,14 @@ static void check_switch_inactive(vdp_context *context, uint8_t is_h40)
 
 static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t is_h40, uint8_t mode_5)
 {
-	uint8_t buf_clear_slot, index_reset_slot, bg_end_slot, vint_slot, line_change, jump_start, jump_dest;
+	uint8_t buf_clear_slot, index_reset_slot, bg_end_slot, vint_slot, line_change, jump_start, jump_dest, latch_slot;
 	uint8_t index_reset_value, max_draws, max_sprites;
 	uint16_t vint_line, active_line;
 	uint32_t bg_color;
 	
 	if (mode_5) {
 		if (is_h40) {
+			latch_slot = 165;
 			buf_clear_slot = 163;
 			index_reset_slot = 167;
 			bg_end_slot = BG_START_SLOT + LINEBUF_SIZE/2;
@@ -2734,10 +2735,15 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 			line_change = LINE_CHANGE_H32;
 			jump_start = 147;
 			jump_dest = 233;
+			latch_slot = 243;
 		}
 		vint_line = context->inactive_start;
 		active_line = 0x1FF;
+		if (context->regs[REG_MODE_3] & BIT_VSCROLL) {
+			latch_slot = 220;
+		}
 	} else {
+		latch_slot = 220;
 		bg_end_slot = BG_START_SLOT + (256+HORIZ_BORDER)/2;
 		max_draws = MAX_DRAWS_H32_MODE4;
 		max_sprites = 8;
@@ -2821,6 +2827,14 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 		} else if (context->hslot == index_reset_slot) {
 			context->sprite_index = index_reset_value;
 			context->slot_counter = mode_5 ? 0 : max_sprites;
+		} else if (context->hslot == latch_slot) {
+			//it seems unlikely to me that vscroll actually gets latched when the display is off
+			//but it's the only straightforward way to reconcile what I'm seeing between Skitchin 
+			//(which seems to expect vscroll to be latched early) and the intro of Gunstar Heroes
+			//(which disables the display and ends up with garbage if vscroll is latched during that period)
+			//without it. Some more tests are definitely needed
+			context->vscroll_latch[0] = context->vsram[0];
+			context->vscroll_latch[1] = context->vsram[1];
 		} else if (context->vcounter == vint_line && context->hslot == vint_slot) {
 			context->flags2 |= FLAG2_VINT_PENDING;
 			context->pending_vint_start = context->cycles;
