@@ -41,10 +41,6 @@ uint8_t use_native_states = 1;
 
 tern_node * config;
 
-#ifndef MIN
-#define MIN(a,b) ((a) < (b) ? (a) : (b))
-#endif
-
 #define SMD_HEADER_SIZE 512
 #define SMD_MAGIC1 0x03
 #define SMD_MAGIC2 0xAA
