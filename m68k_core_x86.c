@@ -1504,6 +1504,10 @@ void translate_m68k_abcd_sbcd(m68k_options *opts, m68kinst *inst, host_ea *src_o
 			}
 		}
 	}
+	if (inst->dst.addr_mode != MODE_REG && inst->dst.addr_mode != MODE_AREG && inst->dst.addr_mode != MODE_AREG_PREDEC) {
+		//destination is in memory so we need to preserve scratch2 for the write at the end
+		push_r(code, opts->gen.scratch2);
+	}
 	uint8_t other_reg;
 	//WARNING: This may need adjustment if register assignments change
 	if (opts->gen.scratch2 > RBX) {
@@ -1591,6 +1595,10 @@ void translate_m68k_abcd_sbcd(m68k_options *opts, m68kinst *inst, host_ea *src_o
 		} else {
 			mov_rrdisp(code, opts->gen.scratch1, dst_op->base, dst_op->disp, SZ_B);
 		}
+	}
+	if (inst->dst.addr_mode != MODE_REG && inst->dst.addr_mode != MODE_AREG && inst->dst.addr_mode != MODE_AREG_PREDEC) {
+		//destination is in memory so we need to restore scratch2 for the write at the end
+		pop_r(code, opts->gen.scratch2);
 	}
 	m68k_save_result(inst, opts);
 }
@@ -3089,8 +3097,10 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	add_rr(code, opts->gen.scratch1, RAX, SZ_D);
 
 	//update status register
-	and_irdisp(code, 0xF8, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
+	and_irdisp(code, 0x78, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
 	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, int_num), opts->gen.scratch1, SZ_B);
+	//clear trace pending flag
+	mov_irdisp(code, 0, opts->gen.context_reg, offsetof(m68k_context, trace_pending), SZ_B);
 	//need to separate int priority and interrupt vector, but for now mask out large interrupt numbers
 	and_ir(code, 0x7, opts->gen.scratch1, SZ_B);
 	or_ir(code, 0x20, opts->gen.scratch1, SZ_B);
@@ -3158,6 +3168,9 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	call(code, opts->write_16);
 	//set supervisor bit
 	or_irdisp(code, 0x20, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
+	//clear trace bit
+	and_irdisp(code, 0x7F, opts->gen.context_reg, offsetof(m68k_context, status), SZ_B);
+	mov_irdisp(code, 0, opts->gen.context_reg, offsetof(m68k_context, trace_pending), SZ_B);
 	//calculate vector address
 	pop_r(code, opts->gen.scratch1);
 	shl_ir(code, 2, opts->gen.scratch1, SZ_D);
