@@ -94,7 +94,9 @@ void m68k_write_size(m68k_options *opts, uint8_t size, uint8_t lowfirst)
 void m68k_save_result(m68kinst * inst, m68k_options * opts)
 {
 	if (inst->dst.addr_mode != MODE_REG && inst->dst.addr_mode != MODE_AREG && inst->dst.addr_mode != MODE_UNUSED) {
-		if (inst->dst.addr_mode == MODE_AREG_PREDEC && inst->src.addr_mode == MODE_AREG_PREDEC && inst->op != M68K_MOVE) {
+		if (inst->dst.addr_mode == MODE_AREG_PREDEC && 
+			((inst->src.addr_mode == MODE_AREG_PREDEC && inst->op != M68K_MOVE) || (inst->op == M68K_NBCD))
+		) {
 			areg_to_native(opts, inst->dst.params.regs.pri, opts->gen.scratch2);
 		}
 		m68k_write_size(opts, inst->extra.size, 1);
