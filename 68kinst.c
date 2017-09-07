@@ -274,6 +274,14 @@ uint8_t m68k_valid_immed_limited_dst(m68k_op_info *dst)
 	return 1;
 }
 
+uint8_t m68k_valid_full_arith_dst(m68k_op_info *dst)
+{
+	if (dst->addr_mode < MODE_AREG_INDIRECT || dst->addr_mode > MODE_ABSOLUTE) {
+		return 0;
+	}
+	return 1;
+}
+
 uint8_t m68k_valid_movem_dst(m68k_op_info *dst)
 {
 	if (dst->addr_mode == MODE_REG || dst->addr_mode == MODE_AREG_POSTINC) {
@@ -655,7 +663,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 		opmode = (*istream >> 6) & 0x7;
 		reg = m68k_reg_quick_field(*istream);
 		istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
-		if (!istream) {
+		if (!istream || (decoded->src.addr_mode == MODE_AREG && optype == MOVE_BYTE)) {
 			decoded->op = M68K_INVALID;
 			break;
 		}
@@ -937,6 +945,10 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 							}
 						} else {
 							//it would appear bit 6 needs to be set for it to be a valid instruction here
+							if (!(*istream & 0x40)) {
+								decoded->op = M68K_INVALID;
+								break;
+							}
 							switch((*istream >> 3) & 0x7)
 							{
 							case 0:
@@ -1072,7 +1084,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				decoded->op = M68K_SCC;
 				decoded->extra.cond = (*istream >> 8) & 0xF;
 				istream = m68k_decode_op(istream, OPSIZE_BYTE, &(decoded->dst));
-				if (!istream) {
+				if (!istream || !m68k_valid_immed_limited_dst(&decoded->dst)) {
 					decoded->op = M68K_INVALID;
 					break;
 				}
@@ -1093,7 +1105,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 				decoded->op = M68K_ADD;
 			}
 			istream = m68k_decode_op(istream, size, &(decoded->dst));
-			if (!istream) {
+			if (!istream || decoded->dst.addr_mode > MODE_ABSOLUTE || (size == OPSIZE_BYTE && decoded->dst.addr_mode == MODE_AREG)) {
 				decoded->op = M68K_INVALID;
 				break;
 			}
@@ -1222,7 +1234,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 					decoded->src.addr_mode = MODE_REG;
 					decoded->src.params.regs.pri = m68k_reg_quick_field(*istream);
 					istream = m68k_decode_op(istream, size, &(decoded->dst));
-					if (!istream) {
+					if (!istream || !m68k_valid_full_arith_dst(&decoded->dst)) {
 						decoded->op = M68K_INVALID;
 						break;
 					}
@@ -1250,7 +1262,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			}
 			decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
 			istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
-			if (!istream) {
+			if (!istream || (decoded->src.addr_mode == MODE_AREG && decoded->extra.size == OPSIZE_BYTE)) {
 				decoded->op = M68K_INVALID;
 				break;
 			}
@@ -1286,6 +1298,9 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 					decoded->src.addr_mode = decoded->dst.addr_mode = MODE_AREG_POSTINC;
 					decoded->src.params.regs.pri = decoded->dst.params.regs.pri;
 					decoded->dst.params.regs.pri = reg;
+				} else if (!m68k_valid_immed_limited_dst(&decoded->dst)){
+					decoded->op = M68K_INVALID;
+					break;
 				} else {
 					//EOR
 					decoded->op = M68K_EOR;
@@ -1408,7 +1423,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 					decoded->src.addr_mode = MODE_REG;
 					decoded->src.params.regs.pri = m68k_reg_quick_field(*istream);
 					istream = m68k_decode_op(istream, size, &(decoded->dst));
-					if (!istream) {
+					if (!istream || !m68k_valid_full_arith_dst(&decoded->dst)) {
 						decoded->op = M68K_INVALID;
 						break;
 					}
@@ -1436,7 +1451,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			}
 			decoded->dst.params.regs.pri = m68k_reg_quick_field(*istream);
 			istream = m68k_decode_op(istream, decoded->extra.size, &(decoded->src));
-			if (!istream) {
+			if (!istream || (decoded->src.addr_mode == MODE_AREG && decoded->extra.size == OPSIZE_BYTE)) {
 				decoded->op = M68K_INVALID;
 				break;
 			}
@@ -1473,7 +1488,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 			}
 			decoded->extra.size = OPSIZE_WORD;
 			istream = m68k_decode_op(istream, OPSIZE_WORD, &(decoded->dst));
-			if (!istream) {
+			if (!istream || !m68k_valid_full_arith_dst(&decoded->dst)) {
 				decoded->op = M68K_INVALID;
 				break;
 			}
