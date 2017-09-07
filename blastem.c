@@ -25,7 +25,7 @@
 #include "config.h"
 #include "menu.h"
 
-#define BLASTEM_VERSION "0.5.1"
+#define BLASTEM_VERSION "0.5.2-pre"
 
 #ifdef __ANDROID__
 #define FULLSCREEN_DEFAULT 1
