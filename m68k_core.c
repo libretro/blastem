@@ -284,11 +284,15 @@ static void translate_m68k_jmp_jsr(m68k_options * opts, m68kinst * inst)
 static void translate_m68k_unlk(m68k_options * opts, m68kinst * inst)
 {
 	cycles(&opts->gen, BUS);
-	areg_to_native(opts, inst->dst.params.regs.pri, opts->aregs[7]);
+	if (inst->dst.params.regs.pri != 7) {
+		areg_to_native(opts, inst->dst.params.regs.pri, opts->aregs[7]);
+	}
 	areg_to_native(opts, 7, opts->gen.scratch1);
 	call(&opts->gen.code, opts->read_32);
 	native_to_areg(opts, opts->gen.scratch1, inst->dst.params.regs.pri);
-	addi_areg(opts, 4, 7);
+	if (inst->dst.params.regs.pri != 7) {
+		addi_areg(opts, 4, 7);
+	}
 }
 
 static void translate_m68k_link(m68k_options * opts, m68kinst * inst)
