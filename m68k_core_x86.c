@@ -2498,11 +2498,8 @@ m68k_context * m68k_handle_code_write(uint32_t address, m68k_context * context)
 	m68k_options * options = context->options;
 	uint32_t inst_start = get_instruction_start(options, address);
 	while (inst_start && (address - inst_start) < M68K_MAX_INST_SIZE) {
-		code_info *code = &options->gen.code;
 		code_ptr dst = get_native_address(context->options, inst_start);
-		code_info orig = {dst, dst + 128, 0};
-		mov_ir(&orig, inst_start, options->gen.scratch2, SZ_D);
-		jmp(&orig, options->retrans_stub);
+		patch_for_retranslate(&options->gen, dst, options->retrans_stub);
 		inst_start = get_instruction_start(options, inst_start - 2);
 	}
 	return context;
@@ -2531,12 +2528,13 @@ void m68k_invalidate_code_range(m68k_context *context, uint32_t start, uint32_t 
 			for (uint32_t offset = start_offset; offset < end_offset; offset++)
 			{
 				if (native_code_map[chunk].offsets[offset] != INVALID_OFFSET && native_code_map[chunk].offsets[offset] != EXTENSION_WORD) {
-					code_info code;
+					patch_for_retranslate(&opts->gen, native_code_map[chunk].base + native_code_map[chunk].offsets[offset], opts->retrans_stub);
+					/*code_info code;
 					code.cur = native_code_map[chunk].base + native_code_map[chunk].offsets[offset];
 					code.last = code.cur + 32;
 					code.stack_off = 0;
 					mov_ir(&code, chunk * NATIVE_CHUNK_SIZE + offset, opts->gen.scratch2, SZ_D);
-					jmp(&code, opts->retrans_stub);
+					jmp(&code, opts->retrans_stub);*/
 				}
 			}
 		}
@@ -3182,7 +3180,7 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	opts->retrans_stub = code->cur;
 	call(code, opts->gen.save_context);
 	push_r(code, opts->gen.context_reg);
-	call_args(code,(code_ptr)m68k_retranslate_inst, 2, opts->gen.scratch2, opts->gen.context_reg);
+	call_args(code,(code_ptr)m68k_retranslate_inst, 2, opts->gen.scratch1, opts->gen.context_reg);
 	pop_r(code, opts->gen.context_reg);
 	mov_rr(code, RAX, opts->gen.scratch1, SZ_PTR);
 	call(code, opts->gen.load_context);
@@ -3225,4 +3223,6 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	add_ir(code, check_int_size - patch_size, opts->gen.scratch1, SZ_PTR);
 	jmp_r(code, opts->gen.scratch1);
 	code->stack_off = tmp_stack_off;
+	
+	retranslate_calc(&opts->gen);
 }

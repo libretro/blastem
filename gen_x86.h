@@ -216,6 +216,7 @@ void call_r(code_info *code, uint8_t dst);
 void retn(code_info *code);
 void cdq(code_info *code);
 void loop(code_info *code, code_ptr dst);
+uint8_t is_mov_ir(code_ptr inst);
 
 #endif //GEN_X86_H_
 

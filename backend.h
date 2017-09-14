@@ -98,6 +98,8 @@ typedef struct {
 	uint32_t           max_address;
 	uint32_t           bus_cycles;
 	uint32_t           clock_divider;
+	uint32_t           move_pc_off;
+	uint32_t           move_pc_size;
 	int32_t            mem_ptr_off;
 	int32_t            ram_flags_off;
 	uint8_t            ram_flags_shift;
@@ -122,6 +124,9 @@ void check_cycles_int(cpu_options *opts, uint32_t address);
 void check_cycles(cpu_options * opts);
 void check_code_prologue(code_info *code);
 void log_address(cpu_options *opts, uint32_t address, char * format);
+
+void retranslate_calc(cpu_options *opts);
+void patch_for_retranslate(cpu_options *opts, code_ptr native_address, code_ptr handler);
 
 code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t num_chunks, ftype fun_type, code_ptr *after_inc);
 void * get_native_pointer(uint32_t address, void ** mem_pointers, cpu_options * opts);
