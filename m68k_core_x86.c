@@ -1908,6 +1908,7 @@ void translate_m68k_div(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 	case MODE_AREG_DISPLACE:
 	case MODE_AREG_INDEX_DISP8:
 	case MODE_ABSOLUTE_SHORT:
+	case MODE_PC_DISPLACE:
 	case MODE_PC_INDEX_DISP8:
 	case MODE_IMMEDIATE:
 		isize = 4;
