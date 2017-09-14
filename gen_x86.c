@@ -1307,6 +1307,15 @@ void mov_ir(code_info *code, int64_t val, uint8_t dst, uint8_t size)
 	code->cur = out;
 }
 
+uint8_t is_mov_ir(code_ptr inst)
+{
+	while (*inst == PRE_SIZE || *inst == PRE_REX)
+	{
+		inst++;
+	}
+	return (*inst & 0xF8) == OP_MOV_I8R || (*inst & 0xF8) == OP_MOV_IR || (*inst & 0xFE) == OP_MOV_IEA;
+}
+
 void mov_irdisp(code_info *code, int32_t val, uint8_t dst, int32_t disp, uint8_t size)
 {
 	check_alloc_code(code, 12);
