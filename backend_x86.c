@@ -1,5 +1,6 @@
 #include "backend.h"
 #include "gen_x86.h"
+#include <string.h>
 
 void cycles(cpu_options *opts, uint32_t num)
 {
@@ -26,6 +27,41 @@ void check_cycles_int(cpu_options *opts, uint32_t address)
 	mov_ir(code, address, opts->scratch1, SZ_D);
 	call(code, opts->handle_cycle_limit_int);
 	*jmp_off = code->cur - (jmp_off+1);
+}
+
+void retranslate_calc(cpu_options *opts)
+{
+	code_info *code = &opts->code;
+	code_info tmp = *code;
+	uint8_t cc;
+	if (opts->limit < 0) {
+		cmp_ir(code, 1, opts->cycles, SZ_D);
+		cc = CC_NS;
+	} else {
+		cmp_rr(code, opts->cycles, opts->limit, SZ_D);
+		cc = CC_A;
+	}
+	jcc(code, cc, code->cur+2);
+	opts->move_pc_off = code->cur - tmp.cur;
+	mov_ir(code, 0x1234, opts->scratch1, SZ_D);
+	opts->move_pc_size = code->cur - tmp.cur - opts->move_pc_off;
+	*code = tmp;
+}
+
+void patch_for_retranslate(cpu_options *opts, code_ptr native_address, code_ptr handler)
+{
+	if (!is_mov_ir(native_address)) {
+		//instruction is not already patched for either retranslation or a breakpoint
+		//copy original mov_ir instruction containing PC to beginning of native code area
+		memmove(native_address, native_address + opts->move_pc_off, opts->move_pc_size);
+	}
+	//jump to the retranslation handler
+	code_info tmp = {
+		.cur =  native_address + opts->move_pc_size,
+		.last = native_address + 256,
+		.stack_off = 0
+	};
+	jmp(&tmp, handler);
 }
 
 void check_cycles(cpu_options * opts)
