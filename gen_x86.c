@@ -170,6 +170,12 @@ char * x86_sizes[] = {
 	"b", "w", "d", "q"
 };
 
+#ifdef X86_64
+#define CHECK_DISP(disp) (disp <= 0x7FFFFFFF && disp >= -2147483648)
+#else
+#define CHECK_DISP(disp) 1
+#endif
+
 void jmp_nocheck(code_info *code, code_ptr dest)
 {
 	code_ptr out = code->cur;
@@ -179,7 +185,7 @@ void jmp_nocheck(code_info *code, code_ptr dest)
 		*(out++) = disp;
 	} else {
 		disp = dest-(out+5);
-		if (disp <= 0x7FFFFFFF && disp >= -2147483648) {
+		if (CHECK_DISP(disp)) {
 			*(out++) = OP_JMP;
 			*(out++) = disp;
 			disp >>= 8;
@@ -1917,7 +1923,7 @@ void jcc(code_info *code, uint8_t cc, code_ptr dest)
 		*(out++) = disp;
 	} else {
 		disp = dest-(out+6);
-		if (disp <= 0x7FFFFFFF && disp >= -2147483648) {
+		if (CHECK_DISP(disp)) {
 			*(out++) = PRE_2BYTE;
 			*(out++) = OP2_JCC | cc;
 			*(out++) = disp;
@@ -1944,7 +1950,7 @@ void jmp(code_info *code, code_ptr dest)
 		*(out++) = disp;
 	} else {
 		disp = dest-(out+5);
-		if (disp <= 0x7FFFFFFF && disp >= -2147483648) {
+		if (CHECK_DISP(disp)) {
 			*(out++) = OP_JMP;
 			*(out++) = disp;
 			disp >>= 8;
@@ -1991,7 +1997,7 @@ void call_noalign(code_info *code, code_ptr fun)
 	check_alloc_code(code, 5);
 	code_ptr out = code->cur;
 	ptrdiff_t disp = fun-(out+5);
-	if (disp <= 0x7FFFFFFF && disp >= -2147483648) {
+	if (CHECK_DISP(disp)) {
 		*(out++) = OP_CALL;
 		*(out++) = disp;
 		disp >>= 8;
@@ -2029,7 +2035,7 @@ void call_raxfallback(code_info *code, code_ptr fun)
 	check_alloc_code(code, 5);
 	code_ptr out = code->cur;
 	ptrdiff_t disp = fun-(out+5);
-	if (disp <= 0x7FFFFFFF && disp >= -2147483648) {
+	if (CHECK_DISP(disp)) {
 		*(out++) = OP_CALL;
 		*(out++) = disp;
 		disp >>= 8;
