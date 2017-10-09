@@ -83,6 +83,23 @@ enum {
 
 uint8_t xband_detect(uint8_t *rom, uint32_t rom_size)
 {
+	if (rom_size < 0x200) {
+		return 0;
+	} 
+	
+	//product ID is all NULL
+	for (int i = GAME_ID_OFF; i <= (GAME_ID_OFF + GAME_ID_LEN); i++)
+	{
+		if (rom[i]) {
+			return 0;
+		}
+	}
+	
+	if (!memcmp(rom+8, "DAVE", 4)) {
+		//XBAND test roms
+		return 1;
+	}
+	
 	//Internal ROM is 512KB, accept larger ones for overdumps and custom firmware
 	if (rom_size < (512*1024)) {
 		return 0;
@@ -93,13 +110,7 @@ uint8_t xband_detect(uint8_t *rom, uint32_t rom_size)
 		return 0;
 	}
 	
-	//product ID is all NULL
-	for (int i = GAME_ID_OFF; i <= (GAME_ID_OFF + GAME_ID_LEN); i++)
-	{
-		if (rom[i]) {
-			return 0;
-		}
-	}
+	
 	return 1;
 }
 
