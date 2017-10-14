@@ -559,8 +559,12 @@ void map_iter_fun(char *key, tern_val val, uint8_t valtype, void *data)
 	map->end = end + 1;
 	if (!strcmp(dtype, "ROM")) {
 		map->buffer = state->rom + offset;
-		map->flags = MMAP_READ;
 		map->mask = calc_mask(state->rom_size - offset, start, end);
+		if (strcmp(tern_find_ptr_default(node, "writeable", "no"), "yes")) {
+			map->flags = MMAP_READ;
+		} else {
+			map->flags = MMAP_READ | MMAP_WRITE | MMAP_CODE;
+		}
 	} else if (!strcmp(dtype, "LOCK-ON")) {
 		rom_info lock_info;
 		if (state->lock_on) {
