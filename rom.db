@@ -1287,3 +1287,15 @@ e1c041ba69da087c428dcda16850159f3caebd4b {
 		}
 	}
 }
+31c66bd13abf4ae8271c09ec5286a0ee0289dbbc {
+	#Designed to run on Sega Channel hardware which is RAM-based
+	#writes to the this RAM qutie a bit to select games
+	name Game no Kanzume Otokuyou
+	map {
+		0 {
+			device ROM
+			last 3FFFFF
+			writeable yes
+		}
+	}
+}
