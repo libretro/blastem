@@ -242,6 +242,7 @@ static void z80_next_int_pulse(z80_context * z_context)
 	genesis_context * gen = z_context->system;
 	z_context->int_pulse_start = vdp_next_vint_z80(gen->vdp);
 	z_context->int_pulse_end = z_context->int_pulse_start + Z80_INT_PULSE_MCLKS;
+	z_context->im2_vector = 0xFF;
 }
 
 static void sync_z80(z80_context * z_context, uint32_t mclks)

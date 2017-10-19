@@ -87,6 +87,7 @@ struct z80_context {
 	uint8_t           busreq;
 	uint8_t           busack;
 	uint8_t           int_is_nmi;
+	uint8_t           im2_vector;
 	uint8_t           ram_code_flags[];
 };
 
