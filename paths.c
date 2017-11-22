@@ -1,0 +1,103 @@
+#include <string.h>
+#include <stdlib.h>
+#include "blastem.h"
+#include "util.h"
+
+static char **current_path;
+
+static void persist_path(void)
+{
+	char const *parts[] = {get_userdata_dir(), PATH_SEP, "sticky_path"};
+	char *pathfname = alloc_concat_m(3, parts);
+	FILE *f = fopen(pathfname, "wb");
+	if (f) {
+		if (fwrite(*current_path, 1, strlen(*current_path), f) != strlen(*current_path)) {
+			warning("Failed to save menu path");
+		}
+		fclose(f);
+	} else {
+		warning("Failed to save menu path: Could not open %s for writing\n", pathfname);
+		
+	}
+	free(pathfname);
+}
+
+#ifdef __ANDROID__
+#include <SDL.h>
+#include <jni.h>
+static char *get_external_storage_path()
+{
+	static char *ret;
+	if (ret) {
+		return ret;
+	}
+	JNIEnv *env = SDL_AndroidGetJNIEnv();
+	if ((*env)->PushLocalFrame(env, 8) < 0) {
+		return NULL;
+	}
+
+	jclass Environment = (*env)->FindClass(env, "android/os/Environment");
+	jmethodID getExternalStorageDirectory =
+		(*env)->GetStaticMethodID(env, Environment, "getExternalStorageDirectory", "()Ljava/io/File;");
+	jobject file = (*env)->CallStaticObjectMethod(env, Environment, getExternalStorageDirectory);
+	if (!file) {
+		goto cleanup;
+	}
+
+	jmethodID getAbsolutePath = (*env)->GetMethodID(env, (*env)->GetObjectClass(env, file),
+		"getAbsolutePath", "()Ljava/lang/String;");
+	jstring path = (*env)->CallObjectMethod(env, file, getAbsolutePath);
+
+	char const *tmp = (*env)->GetStringUTFChars(env, path, NULL);
+	ret = strdup(tmp);
+	(*env)->ReleaseStringUTFChars(env, path, tmp);
+
+cleanup:
+	(*env)->PopLocalFrame(env, NULL);
+	return ret;
+}
+#endif
+
+void get_initial_browse_path(char **dst)
+{
+	*dst = NULL;
+	char *remember_path = tern_find_path(config, "ui\0remember_path\0", TVAL_PTR).ptrval;
+	if (!remember_path || !strcmp("on", remember_path)) {
+		char const *parts[] = {get_userdata_dir(), PATH_SEP, "sticky_path"};
+		char *pathfname = alloc_concat_m(3, parts);
+		FILE *f = fopen(pathfname, "rb");
+		if (f) {
+			long pathsize = file_size(f);
+			if (pathsize > 0) {
+				*dst = malloc(pathsize + 1);
+				if (fread(*dst, 1, pathsize, f) != pathsize) {
+					warning("Error restoring saved file browser path");
+					free(*dst);
+					*dst = NULL;
+				} else {
+					(*dst)[pathsize] = 0;
+				}
+			}
+			fclose(f);
+		}
+		free(pathfname);
+		if (!current_path) {
+			atexit(persist_path);
+			current_path = dst;
+		}
+	}
+	if (!*dst) {
+		*dst = tern_find_path(config, "ui\0initial_path\0", TVAL_PTR).ptrval;
+	}
+	if (!*dst){
+#ifdef __ANDROID__
+		*dst = get_external_storage_path();
+#else
+		*dst = "$HOME";
+#endif
+	}
+	tern_node *vars = tern_insert_ptr(NULL, "HOME", get_home_dir());
+	vars = tern_insert_ptr(vars, "EXEDIR", get_exe_dir());
+	*dst = replace_vars(*dst, vars, 1);
+	tern_free(vars);
+}
