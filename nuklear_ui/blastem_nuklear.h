@@ -12,5 +12,7 @@
 #include "nuklear_sdl_gles2.h"
 
 void blastem_nuklear_init(uint8_t file_loaded);
+void show_pause_menu(void);
+uint8_t is_nuklear_active(void);
 
 #endif //BLASTEM_NUKLEAR_H_

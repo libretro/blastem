@@ -190,6 +190,19 @@ static void context_created(void)
 	nk_style_set_font(context, &def_font->handle);
 }
 
+void show_pause_menu(void)
+{
+	context->style.window.background = nk_rgba(0, 0, 0, 128);
+	context->style.window.fixed_background = nk_style_item_color(nk_rgba(0, 0, 0, 128));
+	current_view = view_pause;
+}
+
+static uint8_t active;
+uint8_t is_nuklear_active(void)
+{
+	return active;
+}
+
 void blastem_nuklear_init(uint8_t file_loaded)
 {
 	context = nk_sdl_init(render_get_window());
@@ -207,5 +220,6 @@ void blastem_nuklear_init(uint8_t file_loaded)
 	render_set_ui_render_fun(blastem_nuklear_render);
 	render_set_event_handler(handle_event);
 	render_set_gl_context_handlers(context_destroyed, context_created);
+	active = 1;
 	idle_loop();
 }
