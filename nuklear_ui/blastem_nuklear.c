@@ -48,15 +48,16 @@ void view_load(struct nk_context *context)
 		}
 		nk_layout_row_static(context, 52, 300, 1);
 		if (nk_button_label(context, "Open")) {
+			char const *pieces[] = {current_path, PATH_SEP, entries[selected_entry].name};
 			if (entries[selected_entry].is_dir) {
 				char *old = current_path;
-				char const *pieces[] = {old, PATH_SEP, entries[selected_entry].name};
 				current_path = alloc_concat_m(3, pieces);
 				free(old);
 				free_dir_list(entries, num_entries);
 				entries = NULL;
 			} else {
-				//TODO: load ROM
+				current_system->next_rom =  alloc_concat_m(3, pieces);
+				current_system->request_exit(current_system);
 				current_view = view_play;
 			}
 		}
