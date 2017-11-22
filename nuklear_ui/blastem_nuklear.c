@@ -14,6 +14,7 @@ static struct nk_context *context;
 
 typedef void (*view_fun)(struct nk_context *);
 static view_fun current_view;
+static view_fun previous_view;
 
 void view_play(struct nk_context *context)
 {
@@ -46,7 +47,10 @@ void view_load(struct nk_context *context)
 			}
 			nk_group_end(context);
 		}
-		nk_layout_row_static(context, 52, 300, 1);
+		nk_layout_row_static(context, 52, width > 600 ? 300 : width / 2, 2);
+		if (nk_button_label(context, "Back")) {
+			current_view = previous_view;
+		}
 		if (nk_button_label(context, "Open")) {
 			char const *pieces[] = {current_path, PATH_SEP, entries[selected_entry].name};
 			if (entries[selected_entry].is_dir) {
@@ -91,6 +95,7 @@ static void menu(struct nk_context *context, uint32_t num_entries, const menu_it
 	{
 		nk_layout_space_push(context, nk_rect(left, top + i * button_height, button_width, button_height-button_space));
 		if (nk_button_label(context, items[i].title)) {
+			previous_view = current_view;
 			current_view = items[i].next_view;
 			if (!current_view) {
 				exit(0);
@@ -98,6 +103,38 @@ static void menu(struct nk_context *context, uint32_t num_entries, const menu_it
 		}
 	}
 	nk_layout_space_end(context);
+}
+
+void view_choose_state(struct nk_context *context, uint8_t is_load)
+{
+	
+}
+
+void view_save_state(struct nk_context *context)
+{
+	view_choose_state(context, 0);
+}
+
+void view_load_state(struct nk_context *context)
+{
+	view_choose_state(context, 1);
+}
+
+void view_pause(struct nk_context *context)
+{
+	static menu_item items[] = {
+		{"Resume", view_play},
+		{"Load ROM", view_load},
+		{"Save State", view_save_state},
+		{"Load State", view_load_state},
+		{"Exit", NULL}
+	};
+	
+	const uint32_t num_buttons = 3;
+	if (nk_begin(context, "Main Menu", nk_rect(0, 0, render_width(), render_height()), 0)) {
+		menu(context, sizeof(items)/sizeof(*items), items);
+		nk_end(context);
+	}
 }
 
 void view_menu(struct nk_context *context)
@@ -119,11 +156,7 @@ void blastem_nuklear_render(void)
 {
 	nk_input_end(context);
 	current_view(context);
-	glViewport(0, 0, render_width(), render_height());
-/*	glClear(GL_COLOR_BUFFER_BIT);
-	glClearColor(0, 0, 0, 0);*/
 	nk_sdl_render(NK_ANTI_ALIASING_ON, 512 * 1024, 128 * 1024);
-	//SDL_GL_SwapWindow(render_get_window());
 	nk_input_begin(context);
 }
 
@@ -137,6 +170,24 @@ void idle_loop(void)
 static void handle_event(SDL_Event *event)
 {
 	nk_sdl_handle_event(event);
+}
+
+static void context_destroyed(void)
+{
+	nk_sdl_device_destroy();
+}
+static void context_created(void)
+{
+	nk_sdl_device_create();
+	struct nk_font_atlas *atlas;
+	nk_sdl_font_stash_begin(&atlas);
+	char *font = default_font_path();
+	if (!font) {
+		fatal_error("Failed to find default font path\n");
+	}
+	struct nk_font *def_font = nk_font_atlas_add_from_file(atlas, font, 30, NULL);
+	nk_sdl_font_stash_end();
+	nk_style_set_font(context, &def_font->handle);
 }
 
 void blastem_nuklear_init(uint8_t file_loaded)
@@ -155,5 +206,6 @@ void blastem_nuklear_init(uint8_t file_loaded)
 	current_view = file_loaded ? view_play : view_menu;
 	render_set_ui_render_fun(blastem_nuklear_render);
 	render_set_event_handler(handle_event);
+	render_set_gl_context_handlers(context_destroyed, context_created);
 	idle_loop();
 }
