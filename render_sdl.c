@@ -696,7 +696,7 @@ void render_update_display()
 {
 #ifndef DISABLE_OPENGL
 	if (render_gl) {
-		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
 		glUseProgram(program);
@@ -997,6 +997,13 @@ void render_set_drag_drop_handler(drop_handler handler)
 	drag_drop_handler = handler;
 }
 
+static ui_render_fun on_context_destroyed, on_context_created;
+void render_set_gl_context_handlers(ui_render_fun destroy, ui_render_fun create)
+{
+	on_context_destroyed = destroy;
+	on_context_created = create;
+}
+
 static event_handler custom_event_handler;
 void render_set_event_handler(event_handler handler)
 {
@@ -1070,9 +1077,15 @@ static int32_t handle_event(SDL_Event *event)
 			update_aspect();
 #ifndef DISABLE_OPENGL
 			if (render_gl) {
+				if (on_context_destroyed) {
+					on_context_destroyed();
+				}
 				SDL_GL_DeleteContext(main_context);
 				main_context = SDL_GL_CreateContext(main_window);
 				gl_setup();
+				if (on_context_created) {
+					on_context_created();
+				}
 			}
 #endif
 			break;
