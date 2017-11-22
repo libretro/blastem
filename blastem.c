@@ -24,6 +24,7 @@
 #include "arena.h"
 #include "config.h"
 #include "menu.h"
+#include "nuklear_ui/blastem_nuklear.h"
 
 #define BLASTEM_VERSION "0.5.2-pre"
 
@@ -462,6 +463,8 @@ int main(int argc, char ** argv)
 	} else {
 		game_system = current_system;
 	}
+	
+	blastem_nuklear_init(game_system == current_system);
 
 	current_system->debugger_type = dtype;
 	current_system->enter_debugger = start_in_debugger && menu == debug_target;
