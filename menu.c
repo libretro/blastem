@@ -9,7 +9,7 @@
 #include "util.h"
 #include "gst.h"
 #include "paths.h"
-#include "m68k_internal.h" //needed for get_native_address_trans, should be eliminated once handling of PC is cleaned up
+#include "saves.h"
 
 static menu_context *get_menu(genesis_context *gen)
 {
@@ -93,18 +93,6 @@ void copy_to_guest(m68k_context *m68k, uint32_t guest_addr, char *src, size_t to
 }
 
 #define SAVE_INFO_BUFFER_SIZE (11*40)
-
-#ifdef _WIN32
-#define localtime_r(a,b) localtime(a)
-//windows inclues seem not to like certain single letter defines from m68k_internal.h
-//get rid of them here
-#undef X
-#undef N
-#undef Z
-#undef V
-#undef C
-#include <windows.h>
-#endif
 
 uint32_t copy_dir_entry_to_guest(uint32_t dst, m68k_context *m68k, char *name, uint8_t is_dir)
 {
@@ -307,63 +295,19 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			char *cur = buffer;
 			if (gen->header.next_context && gen->header.next_context->save_dir) {
 				char *end = buffer + SAVE_INFO_BUFFER_SIZE;
-				char slotfile[] = "slot_0.state";
-				char slotfilegst[] = "slot_0.gst";
-				char const * parts[3] = {gen->header.next_context->save_dir, PATH_SEP, slotfile};
-				char const * partsgst[3] = {gen->header.next_context->save_dir, PATH_SEP, slotfilegst};
-				struct tm ltime;
-				char *fname;
-				time_t modtime;
-				for (int i = 0; i < 10 && cur < end; i++)
+				uint32_t num_slots;
+				save_slot_info *slots = get_slot_info(gen->header.next_context, &num_slots);
+				for (uint32_t i = 0; i < num_slots; i++)
 				{
-					slotfile[5] = i + '0';
-					fname = alloc_concat_m(3, parts);
-					modtime = get_modification_time(fname);
-					free(fname);
-					if (modtime) {
-						cur += snprintf(cur, end-cur, "Slot %d - ", i);
-						cur += strftime(cur, end-cur, "%c", localtime_r(&modtime, &ltime));
-						
-					} else {
-						slotfilegst[5] = i + '0';
-						fname = alloc_concat_m(3, partsgst);
-						modtime = get_modification_time(fname);
-						free(fname);
-						if (modtime) {
-							cur += snprintf(cur, end-cur, "Slot %d - ", i);
-							cur += strftime(cur, end-cur, "%c", localtime_r(&modtime, &ltime));
-						} else {
-							cur += snprintf(cur, end-cur, "Slot %d - EMPTY", i);
-						}
+					size_t desc_len = strlen(slots[i].desc) + 1;//+1 for string terminator
+					char *after = cur + desc_len + 1;//+1 for list terminator
+					if (after > cur) {
+						desc_len -= after - cur;
 					}
-					//advance past the null terminator for this entry
-					cur++;
+					memcpy(cur, slots[i].desc, desc_len);
+					cur = after;
 				}
-				if (cur < end) {
-					parts[2] = "quicksave.state";
-					fname = alloc_concat_m(3, parts);
-					modtime = get_modification_time(fname);
-					free(fname);
-					if (modtime) {
-						cur += strftime(cur, end-cur, "Quick  - %c", localtime_r(&modtime, &ltime));
-					} else {
-						parts[2] = "quicksave.gst";
-						fname = alloc_concat_m(3, parts);
-						modtime = get_modification_time(fname);
-						free(fname);
-						if (modtime) {
-							cur += strftime(cur, end-cur, "Quick  - %c", localtime_r(&modtime, &ltime));
-						} else if ((end-cur) > strlen("Quick  - EMPTY")){
-							cur += strlen(strcpy(cur, "Quick  - EMPTY"));
-						}
-					}
-					//advance past the null terminator for this entry
-					cur++;
-					if (cur < end) {
-						//terminate the list
-						*(cur++) = 0;
-					}
-				}
+				*cur = 0;//terminate list
 			} else {
 				*(cur++) = 0;
 				*(cur++) = 0;
@@ -383,36 +327,7 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			if (gen->header.next_context && gen->header.next_context->save_dir) {
 				if (!gen->header.next_context->load_state(gen->header.next_context, dst)) {
 					break;
-				}/*
-				char numslotname[] = "slot_0.state";
-				char *slotname;
-				if (dst == QUICK_SAVE_SLOT) {
-					slotname = "quicksave.state";
-				} else {
-					numslotname[5] = '0' + dst;
-					slotname = numslotname;
 				}
-				char const *parts[] = {gen->header.next_context->save_dir, PATH_SEP, slotname};
-				char *statepath = alloc_concat_m(3, parts);
-				gen->header.next_context->load_state
-				genesis_context *next = (genesis_context *)gen->header.next_context;
-				deserialize_buffer state;
-				uint32_t pc = 0;
-				if (load_from_file(&state, statepath)) {
-					genesis_deserialize(&state, next);
-					free(state.data);
-					//HACK
-					pc = next->m68k->last_prefetch_address;
-				} else {
-					strcpy(statepath + strlen(statepath)-strlen("state"), "gst");
-					pc = load_gst(next, statepath);
-				}
-				free(statepath);
-				if (!pc) {
-					break;
-				}
-				next->m68k->resume_pc = get_native_address_trans(next->m68k, pc);
-				*/
 			}
 			m68k->should_return = 1;
 			break;

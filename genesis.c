@@ -15,6 +15,7 @@
 #include "util.h"
 #include "debug.h"
 #include "gdb_remote.h"
+#include "saves.h"
 #define MCLKS_NTSC 53693175
 #define MCLKS_PAL  53203395
 
@@ -359,18 +360,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 					sync_z80(z_context, z_context->current_cycle + MCLKS_PER_Z80);
 				}
 			}
-			char *save_path;
-			if (slot == QUICK_SAVE_SLOT) {
-				save_path = save_state_path;
-			} else {
-				char slotname[] = "slot_0.state";
-				slotname[5] = '0' + slot;
-				if (!use_native_states) {
-					strcpy(slotname + 7, "gst");
-				}
-				char const *parts[] = {gen->header.save_dir, PATH_SEP, slotname};
-				save_path = alloc_concat_m(3, parts);
-			}
+			char *save_path = get_slot_name(&gen->header, slot, use_native_states ? "state" : "gst");
 			if (use_native_states) {
 				serialize_buffer state;
 				init_serialize(&state);
@@ -381,9 +371,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 				save_gst(gen, save_path, address);
 			}
 			printf("Saved state to %s\n", save_path);
-			if (slot != QUICK_SAVE_SLOT) {
-				free(save_path);
-			}
+			free(save_path);
 		} else if(gen->header.save_state) {
 			context->sync_cycle = context->current_cycle + 1;
 		}
