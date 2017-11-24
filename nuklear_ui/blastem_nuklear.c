@@ -8,6 +8,7 @@
 #include "../render_sdl.h"
 #include "../util.h"
 #include "../paths.h"
+#include "../saves.h"
 #include "../blastem.h"
 
 static struct nk_context *context;
@@ -78,6 +79,59 @@ typedef struct {
 	view_fun   next_view;
 } menu_item;
 
+static save_slot_info *slots;
+static uint32_t num_slots, selected_slot;
+
+void view_choose_state(struct nk_context *context, uint8_t is_load)
+{
+	uint32_t width = render_width();
+	uint32_t height = render_height();
+	if (nk_begin(context, "Slot Picker", nk_rect(0, 0, width, height), 0)) {
+		nk_layout_row_static(context, height - 100, width - 60, 1);
+		if (nk_group_begin(context, "Select Save Slot", NK_WINDOW_BORDER | NK_WINDOW_TITLE)) {
+			nk_layout_row_static(context, 28, width-100, 1);
+			if (!slots) {
+				slots = get_slot_info(current_system, &num_slots);
+			}
+			for (uint32_t i = 0; i < num_slots; i++)
+			{
+				int selected = i == selected_slot;
+				nk_selectable_label(context, slots[i].desc, NK_TEXT_ALIGN_LEFT, &selected);
+				if (selected && (slots[i].modification_time || !is_load)) {
+					selected_slot = i;
+				}
+			}
+			nk_group_end(context);
+		}
+		nk_layout_row_static(context, 52, width > 600 ? 300 : width / 2, 2);
+		if (nk_button_label(context, "Back")) {
+			current_view = previous_view;
+		}
+		if (is_load) {
+			if (nk_button_label(context, "Load")) {
+				current_system->load_state(current_system, selected_slot);
+				current_view = view_play;
+			}
+		} else {
+			if (nk_button_label(context, "Save")) {
+				current_system->save_state = selected_slot + 1;
+				current_view = view_play;
+			}
+		}
+		nk_end(context);
+	}
+}
+
+void view_save_state(struct nk_context *context)
+{
+	view_choose_state(context, 0);
+}
+
+void view_load_state(struct nk_context *context)
+{
+	view_choose_state(context, 1);
+}
+
 static void menu(struct nk_context *context, uint32_t num_entries, const menu_item *items)
 {
 	const uint32_t button_height = 52;
@@ -100,24 +154,13 @@ static void menu(struct nk_context *context, uint32_t num_entries, const menu_it
 			if (!current_view) {
 				exit(0);
 			}
+			if (current_view == view_save_state || current_view == view_load_state) {
+				free_slot_info(slots);
+				slots = NULL;
+			}
 		}
 	}
 	nk_layout_space_end(context);
-}
-
-void view_choose_state(struct nk_context *context, uint8_t is_load)
-{
-	
-}
-
-void view_save_state(struct nk_context *context)
-{
-	view_choose_state(context, 0);
-}
-
-void view_load_state(struct nk_context *context)
-{
-	view_choose_state(context, 1);
 }
 
 void view_pause(struct nk_context *context)

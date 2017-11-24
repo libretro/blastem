@@ -6,6 +6,7 @@
 #include "render.h"
 #include "util.h"
 #include "debug.h"
+#include "saves.h"
 
 static void *memory_io_write(uint32_t location, void *vcontext, uint8_t value)
 {
@@ -292,20 +293,13 @@ void sms_deserialize(deserialize_buffer *buf, sms_context *sms)
 
 static void save_state(sms_context *sms, uint8_t slot)
 {
-	char *save_path;
-	if (slot == QUICK_SAVE_SLOT) {
-		save_path = save_state_path;
-	} else {
-		char slotname[] = "slot_0.state";
-		slotname[5] = '0' + slot;
-		char const *parts[] = {sms->header.save_dir, PATH_SEP, slotname};
-		save_path = alloc_concat_m(3, parts);
-	}
+	char *save_path = get_slot_name(&sms->header, slot, "state");
 	serialize_buffer state;
 	init_serialize(&state);
 	sms_serialize(sms, &state);
 	save_to_file(&state, save_path);
 	printf("Saved state to %s\n", save_path);
+	free(save_path);
 	free(state.data);
 }
 
