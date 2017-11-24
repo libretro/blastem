@@ -23,6 +23,7 @@
 #include "render.h"
 #include "util.h"
 #include "menu.h"
+#include "saves.h"
 #ifndef DISABLE_NUKLEAR
 #include "nuklear_ui/blastem_nuklear.h"
 #endif
