@@ -223,42 +223,10 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 		case 1: {
 			char buf[4096];
 			copy_string_from_guest(m68k, dst, buf, sizeof(buf));
-			if (!strcmp(buf, "..")) {
-#ifdef _WIN32
-				if (menu->curpath[1] == ':' && !menu->curpath[2]) {
-					menu->curpath[0] = PATH_SEP[0];
-					menu->curpath[1] = 0;
-					break;
-				}
-#endif
-				size_t len = strlen(menu->curpath);
-				while (len > 0) {
-					--len;
-					if (is_path_sep(menu->curpath[len])) {
-						if (!len) {
-							//special handling for /
-							menu->curpath[len+1] = 0;
-						} else {
-							menu->curpath[len] = 0;
-						}
-						break;
-					}
-				}
-			} else {
-				char *tmp = menu->curpath;
-#ifdef _WIN32
-				if (menu->curpath[0] == PATH_SEP[0] && !menu->curpath[1]) {
-					menu->curpath = strdup(buf);
-				} else
-#endif
-				if (is_path_sep(menu->curpath[strlen(menu->curpath) - 1])) {
-					menu->curpath = alloc_concat(menu->curpath, buf);
-				} else {
-					char const *pieces[] = {menu->curpath, PATH_SEP, buf};
-					menu->curpath = alloc_concat_m(3, pieces);
-				}
-				free(tmp);
-			}
+			buf[sizeof(buf)-1] = 0;
+			char *tmp = menu->curpath;
+			menu->curpath = path_append(tmp, buf);
+			free(tmp);
 			break;
 		}
 		case 2:
