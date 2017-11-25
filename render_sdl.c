@@ -1220,3 +1220,13 @@ void render_infobox(char *title, char *message)
 	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, title, message, NULL);
 }
 
+uint32_t render_elapsed_ms(void)
+{
+	return SDL_GetTicks();
+}
+
+void render_sleep_ms(uint32_t delay)
+{
+	return SDL_Delay(delay);
+}
+

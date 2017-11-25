@@ -103,6 +103,8 @@ uint32_t render_emulated_width();
 uint32_t render_emulated_height();
 uint32_t render_overscan_top();
 uint32_t render_overscan_left();
+uint32_t render_elapsed_ms(void);
+void render_sleep_ms(uint32_t delay);
 
 #endif //RENDER_H_
 
