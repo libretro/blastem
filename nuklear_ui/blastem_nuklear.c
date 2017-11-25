@@ -28,7 +28,9 @@ void view_load(struct nk_context *context)
 	static dir_entry *entries;
 	static size_t num_entries;
 	static uint32_t selected_entry;
-	get_initial_browse_path(&current_path);
+	if (!current_path) {
+		get_initial_browse_path(&current_path);
+	}
 	if (!entries) {
 		entries = get_dir_list(current_path, &num_entries);
 	}
@@ -53,15 +55,14 @@ void view_load(struct nk_context *context)
 			current_view = previous_view;
 		}
 		if (nk_button_label(context, "Open")) {
-			char const *pieces[] = {current_path, PATH_SEP, entries[selected_entry].name};
+			char *full_path = path_append(current_path, entries[selected_entry].name);
 			if (entries[selected_entry].is_dir) {
-				char *old = current_path;
-				current_path = alloc_concat_m(3, pieces);
-				free(old);
+				free(current_path);
+				current_path = full_path;
 				free_dir_list(entries, num_entries);
 				entries = NULL;
 			} else {
-				current_system->next_rom =  alloc_concat_m(3, pieces);
+				current_system->next_rom = full_path;
 				current_system->request_exit(current_system);
 				current_view = view_play;
 			}

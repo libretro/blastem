@@ -101,3 +101,43 @@ void get_initial_browse_path(char **dst)
 	*dst = replace_vars(*dst, vars, 1);
 	tern_free(vars);
 }
+
+char *path_append(char *base, char *suffix)
+{
+	if (!strcmp(suffix, "..")) {
+#ifdef _WIN32
+		//handle transition from root of a drive to virtual root
+		if (base[1] == ':' && !base[2]) {
+			return strdup(PATH_SEP)
+		}
+#endif
+		size_t len = strlen(base);
+		while (len > 0) {
+			--len;
+			if (is_path_sep(base[len])) {
+				if (!len) {
+					//special handling for /
+					len++;
+				}
+				char *ret = malloc(len+1);
+				memcpy(ret, base, len);
+				ret[len] = 0;
+				return ret;
+			}
+		}
+		return strdup(PATH_SEP);
+	} else {
+#ifdef _WIN32
+		if (base[0] == PATH_SEP[0] && !base[1]) {
+			//handle transition from virtual root to root of a drive
+			return strdup(suffix);
+		}
+#endif
+		if (is_path_sep(base[strlen(base) - 1])) {
+			return alloc_concat(base, suffix);
+		} else {
+			char const *pieces[] = {base, PATH_SEP, suffix};
+			return alloc_concat_m(3, pieces);
+		}
+	}
+}
