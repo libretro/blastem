@@ -58,7 +58,7 @@ save_slot_info *get_slot_info(system_header *system, uint32_t *num_out)
 		} else {
 			strcpy(cur, "EMPTY");
 		}
-		dst[i].modification_time;
+		dst[i].modification_time = modtime;
 	}
 	*num_out = QUICK_SAVE_SLOT + 1;
 	return dst;
