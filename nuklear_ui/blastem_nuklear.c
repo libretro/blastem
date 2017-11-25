@@ -206,8 +206,15 @@ void blastem_nuklear_render(void)
 
 void idle_loop(void)
 {
+	const uint32_t MIN_UI_DELAY = 15;
+	static uint32_t last;
 	while (current_view != view_play)
 	{
+		uint32_t current = render_elapsed_ms();
+		if ((current - last) < MIN_UI_DELAY) {
+			render_sleep_ms(MIN_UI_DELAY - (current - last) - 1);
+		}
+		last = current;
 		render_update_display();
 	}
 }
