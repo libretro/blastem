@@ -381,6 +381,9 @@ void handle_joydown(int joystick, int button)
 
 void handle_mousedown(int mouse, int button)
 {
+	if (!current_io) {
+		return;
+	}
 	if (current_io->mouse_mode == MOUSE_CAPTURE && !current_io->mouse_captured) {
 		current_io->mouse_captured = 1;
 		render_relative_mouse(1);
@@ -537,7 +540,7 @@ void handle_binding_up(keybinding * binding)
 		}
 		case UI_EXIT:
 #ifndef DISABLE_NUKLEAR
-			if (is_nuklear_active) {
+			if (is_nuklear_active()) {
 				show_pause_menu();
 			} else {
 #endif

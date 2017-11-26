@@ -86,6 +86,7 @@ LDFLAGS+= -Wl,--no-as-needed -lprofiler -Wl,--as-needed
 endif
 ifdef NOGL
 CFLAGS+= -DDISABLE_OPENGL
+NONUKLEAR:=1
 endif
 
 ifdef M68030
@@ -130,7 +131,13 @@ NUKLEAROBJS=nuklear_ui/font.o nuklear_ui/blastem_nuklear.o
 
 MAINOBJS=blastem.o system.o genesis.o debug.o gdb_remote.o vdp.o render_sdl.o ppm.o io.o romdb.o hash.o menu.o xband.o \
 	realtec.o i2c.o nor.o sega_mapper.o multi_game.o serialize.o $(TERMINAL) $(CONFIGOBJS) gst.o $(M68KOBJS) \
-	$(TRANSOBJS) $(AUDIOOBJS) $(NUKLEAROBJS) paths.o saves.o
+	$(TRANSOBJS) $(AUDIOOBJS) paths.o saves.o
+	
+ifdef NONUKLEAR
+CFLAGS+= -DDISABLE_NUKLEAR
+else
+MAINOBJS+= $(NUKLEAROBJS)
+endif
 
 ifeq ($(CPU),x86_64)
 CFLAGS+=-DX86_64 -m64

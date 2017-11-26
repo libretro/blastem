@@ -62,8 +62,13 @@ void view_load(struct nk_context *context)
 				free_dir_list(entries, num_entries);
 				entries = NULL;
 			} else {
-				current_system->next_rom = full_path;
-				current_system->request_exit(current_system);
+				if (current_system) {
+					current_system->next_rom = full_path;
+					current_system->request_exit(current_system);
+				} else {
+					init_system_with_media(full_path, SYSTEM_UNKNOWN);
+					free(full_path);
+				}
 				current_view = view_play;
 			}
 		}
@@ -252,6 +257,19 @@ static uint8_t active;
 uint8_t is_nuklear_active(void)
 {
 	return active;
+}
+
+uint8_t is_nuklear_available(void)
+{
+	if (!render_has_gl()) {
+		//currently no fallback if GL2 unavailable
+		return 0;
+	}
+	char *style = tern_find_path(config, "ui\0style\0", TVAL_PTR).ptrval;
+	if (!style) {
+		return 1;
+	}
+	return strcmp(style, "rom") != 0;
 }
 
 void blastem_nuklear_init(uint8_t file_loaded)
