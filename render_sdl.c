@@ -1230,3 +1230,7 @@ void render_sleep_ms(uint32_t delay)
 	return SDL_Delay(delay);
 }
 
+uint8_t render_has_gl(void)
+{
+	return render_gl;
+}
