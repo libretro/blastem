@@ -360,6 +360,9 @@ void store_key_event(uint16_t code)
 
 void handle_keydown(int keycode, uint8_t scancode)
 {
+	if (!current_io) {
+		return;
+	}
 	int bucket = keycode >> 15 & 0xFFFF;
 	int idx = keycode & 0x7FFF;
 	keybinding * binding = bindings[bucket] ? bindings[bucket] + idx : NULL;
@@ -564,6 +567,9 @@ void handle_binding_up(keybinding * binding)
 
 void handle_keyup(int keycode, uint8_t scancode)
 {
+	if (!current_io) {
+		return;
+	}
 	int bucket = keycode >> 15 & 0xFFFF;
 	int idx = keycode & 0x7FFF;
 	keybinding * binding = bindings[bucket] ? bindings[bucket] + idx : NULL;
