@@ -10,6 +10,7 @@
 tern_node *parse_config_file(char *config_path);
 tern_node *parse_bundled_config(char *config_name);
 tern_node *load_config();
+char **get_extension_list(tern_node *config, uint32_t *num_exts_out);
 
 #endif //CONFIG_H_
 
