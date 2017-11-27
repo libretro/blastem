@@ -155,3 +155,23 @@ tern_node *load_config()
 	//this will never get reached, but the compiler doesn't know that. Let's make it happy
 	return NULL;
 }
+
+char **get_extension_list(tern_node *config, uint32_t *num_exts_out)
+{
+	char *ext_filter = strdup(tern_find_path_default(config, "ui\0extensions\0", (tern_val){.ptrval = "bin gen md smd sms gg"}, TVAL_PTR).ptrval);
+	uint32_t num_exts = 0, ext_storage = 5;
+	char **ext_list = malloc(sizeof(char *) * ext_storage);
+	char *cur_filter = ext_filter;
+	while (*cur_filter)
+	{
+		if (num_exts == ext_storage) {
+			ext_storage *= 2;
+			ext_list = realloc(ext_list, sizeof(char *) * ext_storage);
+		}
+		ext_list[num_exts++] = cur_filter;
+		cur_filter = split_keyval(cur_filter);
+	}
+	free(ext_filter);
+	*num_exts_out = num_exts;
+	return ext_list;
+}

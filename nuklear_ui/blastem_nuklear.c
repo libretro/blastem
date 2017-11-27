@@ -10,6 +10,7 @@
 #include "../paths.h"
 #include "../saves.h"
 #include "../blastem.h"
+#include "../config.h"
 
 static struct nk_context *context;
 
@@ -28,6 +29,9 @@ void view_load(struct nk_context *context)
 	static dir_entry *entries;
 	static size_t num_entries;
 	static uint32_t selected_entry;
+	static char **ext_list;
+	static uint32_t num_exts;
+	static uint8_t got_ext_list;
 	if (!current_path) {
 		get_initial_browse_path(&current_path);
 	}
@@ -37,6 +41,10 @@ void view_load(struct nk_context *context)
 			sort_dir_list(entries, num_entries);
 		}
 	}
+	if (!got_ext_list) {
+		ext_list = get_extension_list(config, &num_exts);
+		got_ext_list = 1;
+	}
 	uint32_t width = render_width();
 	uint32_t height = render_height();
 	if (nk_begin(context, "Load ROM", nk_rect(0, 0, width, height), 0)) {
@@ -45,6 +53,12 @@ void view_load(struct nk_context *context)
 			nk_layout_row_static(context, 28, width-100, 1);
 			for (uint32_t i = 0; i < num_entries; i++)
 			{
+				if (entries[i].name[0] == '.' && entries[i].name[1] != '.') {
+					continue;
+				}
+				if (num_exts && !entries[i].is_dir && !path_matches_extensions(entries[i].name, ext_list, num_exts)) {
+					continue;
+				}
 				int selected = i == selected_entry;
 				nk_selectable_label(context, entries[i].name, NK_TEXT_ALIGN_LEFT, &selected);
 				if (selected) {

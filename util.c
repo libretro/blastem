@@ -270,6 +270,22 @@ char *path_extension(char *path)
 	return strdup(lastdot+1);
 }
 
+uint8_t path_matches_extensions(char *path, char **ext_list, uint32_t num_exts)
+{
+	char *ext = path_extension(path);
+	if (!ext) {
+		return 0;
+	}
+	uint32_t extidx;
+	for (extidx = 0; extidx < num_exts; extidx++)
+	{
+		if (!strcasecmp(ext, ext_list[extidx])) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
 char * path_dirname(char *path)
 {
 	char *lastslash = NULL;
