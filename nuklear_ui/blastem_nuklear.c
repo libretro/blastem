@@ -23,7 +23,7 @@ void view_play(struct nk_context *context)
 	
 }
 
-void view_load(struct nk_context *context)
+void view_file_browser(struct nk_context *context, uint8_t normal_open)
 {
 	static char *current_path;
 	static dir_entry *entries;
@@ -79,11 +79,16 @@ void view_load(struct nk_context *context)
 				free_dir_list(entries, num_entries);
 				entries = NULL;
 			} else {
-				if (current_system) {
-					current_system->next_rom = full_path;
-					current_system->request_exit(current_system);
+				if(normal_open) {
+					if (current_system) {
+						current_system->next_rom = full_path;
+						current_system->request_exit(current_system);
+					} else {
+						init_system_with_media(full_path, SYSTEM_UNKNOWN);
+						free(full_path);
+					}
 				} else {
-					init_system_with_media(full_path, SYSTEM_UNKNOWN);
+					lockon_media(full_path);
 					free(full_path);
 				}
 				current_view = view_play;
@@ -91,6 +96,16 @@ void view_load(struct nk_context *context)
 		}
 		nk_end(context);
 	}
+}
+
+void view_load(struct nk_context *context)
+{
+	view_file_browser(context, 1);
+}
+
+void view_lock_on(struct nk_context *context)
+{
+	view_file_browser(context, 0);
 }
 
 void view_about(struct nk_context *context)
@@ -191,6 +206,7 @@ void view_pause(struct nk_context *context)
 	static menu_item items[] = {
 		{"Resume", view_play},
 		{"Load ROM", view_load},
+		{"Lock On", view_lock_on},
 		{"Save State", view_save_state},
 		{"Load State", view_load_state},
 		{"Exit", NULL}
