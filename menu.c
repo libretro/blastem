@@ -41,17 +41,6 @@ uint16_t menu_read_w(uint32_t address, void * vcontext)
 	}
 }
 
-int menu_dir_sort(const void *a, const void *b)
-{
-	const dir_entry *da, *db;
-	da = a;
-	db = b;
-	if (da->is_dir != db->is_dir) {
-		return db->is_dir - da->is_dir;
-	}
-	return strcasecmp(((dir_entry *)a)->name, ((dir_entry *)b)->name);
-}
-
 void copy_string_from_guest(m68k_context *m68k, uint32_t guest_addr, char *buf, size_t maxchars)
 {
 	char *cur;
@@ -163,7 +152,7 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 			size_t num_entries;
 			dir_entry *entries = get_dir_list(menu->curpath, &num_entries);
 			if (entries) {
-				qsort(entries, num_entries, sizeof(dir_entry), menu_dir_sort);
+				sort_dir_list(entries, num_entries);
 			} else {
 				warning("Failed to open directory %s: %s\n", menu->curpath, strerror(errno));
 				entries = malloc(sizeof(dir_entry));

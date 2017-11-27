@@ -33,6 +33,9 @@ void view_load(struct nk_context *context)
 	}
 	if (!entries) {
 		entries = get_dir_list(current_path, &num_entries);
+		if (entries) {
+			sort_dir_list(entries, num_entries);
+		}
 	}
 	uint32_t width = render_width();
 	uint32_t height = render_height();
