@@ -562,7 +562,9 @@ int main(int argc, char ** argv)
 				current_system = menu_system;
 				menu = 1;
 			}
-			current_system->resume_context(current_system);
+			if (!current_system->next_rom) {
+				current_system->resume_context(current_system);
+			}
 		} else {
 			break;
 		}
