@@ -525,6 +525,7 @@ int main(int argc, char ** argv)
 	if (use_nuklear) {
 		blastem_nuklear_init(!menu);
 		current_system = game_system;
+		menu = 0;
 	}
 #endif
 	
@@ -551,10 +552,16 @@ int main(int argc, char ** argv)
 			current_system = game_system;
 			menu = 0;
 			current_system->resume_context(current_system);
-		} else if (!menu && menu_system) {
-			current_system->arena = set_current_arena(menu_system->arena);
-			current_system = menu_system;
-			menu = 1;
+		} else if (!menu && (menu_system || use_nuklear)) {
+			if (use_nuklear) {
+#ifndef DISABLE_NUKLEAR
+				ui_idle_loop();
+#endif
+			} else {
+				current_system->arena = set_current_arena(menu_system->arena);
+				current_system = menu_system;
+				menu = 1;
+			}
 			current_system->resume_context(current_system);
 		} else {
 			break;
