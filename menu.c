@@ -10,6 +10,7 @@
 #include "gst.h"
 #include "paths.h"
 #include "saves.h"
+#include "config.h"
 
 static menu_context *get_menu(genesis_context *gen)
 {
@@ -166,40 +167,17 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 				dst = copy_dir_entry_to_guest(dst, m68k, "..", 1);
 			}
 #endif
-			char *ext_filter = strdup(tern_find_path_default(config, "ui\0extensions\0", (tern_val){.ptrval = "bin gen md smd sms gg"}, TVAL_PTR).ptrval);
-			uint32_t num_exts = 0, ext_storage = 5;
-			char **ext_list = malloc(sizeof(char *) * ext_storage);
-			char *cur_filter = ext_filter;
-			while (*cur_filter)
-			{
-				if (num_exts == ext_storage) {
-					ext_storage *= 2;
-					ext_list = realloc(ext_list, sizeof(char *) * ext_storage);
-				}
-				ext_list[num_exts++] = cur_filter;
-				cur_filter = split_keyval(cur_filter);
-			}
+			uint32_t num_exts;
+			char **ext_list = get_extension_list(config, &num_exts);
 			for (size_t i = 0; dst && i < num_entries; i++)
 			{
 				if (num_exts && !entries[i].is_dir) {
-					char *ext = path_extension(entries[i].name);
-					if (!ext) {
-						continue;
-					}
-					uint32_t extidx;
-					for (extidx = 0; extidx < num_exts; extidx++)
-					{
-						if (!strcasecmp(ext, ext_list[extidx])) {
-							break;
-						}
-					}
-					if (extidx == num_exts) {
+					if (!path_matches_extensions(entries[i].name, ext_list, num_exts)) {
 						continue;
 					}
 				}
 				dst = copy_dir_entry_to_guest(dst,  m68k, entries[i].name, entries[i].is_dir);
 			}
-			free(ext_filter);
 			free(ext_list);
 			//terminate list
 			uint8_t *dest = get_native_pointer(dst, (void **)m68k->mem_pointers, &m68k->options->gen);

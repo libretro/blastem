@@ -42,6 +42,8 @@ char is_absolute_path(char *path);
 char * basename_no_extension(char *path);
 //Returns the extension from a path or NULL if there is no extension
 char *path_extension(char *path);
+//Returns true if the given path matches one of the extensions in the list
+uint8_t path_matches_extensions(char *path, char **ext_list, uint32_t num_exts);
 //Returns the directory portion of a path or NULL if there is no directory part
 char *path_dirname(char *path);
 //Gets the smallest power of two that is >= a certain value, won't work for values > 0x80000000
