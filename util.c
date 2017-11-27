@@ -680,6 +680,22 @@ void free_dir_list(dir_entry *list, size_t numentries)
 	free(list);
 }
 
+static int sort_dir_alpha(const void *a, const void *b)
+{
+	const dir_entry *da, *db;
+	da = a;
+	db = b;
+	if (da->is_dir != db->is_dir) {
+		return db->is_dir - da->is_dir;
+	}
+	return strcasecmp(((dir_entry *)a)->name, ((dir_entry *)b)->name);
+}
+
+void sort_dir_list(dir_entry *list, size_t num_entries)
+{
+	qsort(list, num_entries, sizeof(dir_entry), sort_dir_alpha);
+}
+
 #ifdef __ANDROID__
 
 #include <SDL.h>
