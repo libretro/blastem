@@ -201,6 +201,46 @@ static void menu(struct nk_context *context, uint32_t num_entries, const menu_it
 	nk_layout_space_end(context);
 }
 
+void view_key_bindings(struct nk_context *context)
+{
+	
+}
+void view_controllers(struct nk_context *context)
+{
+	
+}
+void view_video_settings(struct nk_context *context)
+{
+	
+}
+void view_audio_settings(struct nk_context *context)
+{
+	
+}
+void view_system_settings(struct nk_context *context)
+{
+	
+}
+
+void view_settings(struct nk_context *context)
+{
+	static menu_item items[] = {
+		{"Key Bindings", view_key_bindings},
+		{"Controllers", view_controllers},
+		{"Video", view_video_settings},
+		{"Audio", view_audio_settings},
+		{"System", view_system_settings},
+		{"Back", NULL}
+	};
+	
+	const uint32_t num_buttons = 6;
+	items[num_buttons-1].next_view = previous_view;
+	if (nk_begin(context, "Settings Menu", nk_rect(0, 0, render_width(), render_height()), 0)) {
+		menu(context, sizeof(items)/sizeof(*items), items);
+		nk_end(context);
+	}
+}
+
 void view_pause(struct nk_context *context)
 {
 	static menu_item items[] = {
@@ -209,6 +249,7 @@ void view_pause(struct nk_context *context)
 		{"Lock On", view_lock_on},
 		{"Save State", view_save_state},
 		{"Load State", view_load_state},
+		{"Settings", view_settings},
 		{"Exit", NULL}
 	};
 	
@@ -223,6 +264,7 @@ void view_menu(struct nk_context *context)
 {
 	static menu_item items[] = {
 		{"Load ROM", view_load},
+		{"Settings", view_settings},
 		{"About", view_about},
 		{"Exit", NULL}
 	};
