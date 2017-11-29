@@ -102,7 +102,7 @@ void get_initial_browse_path(char **dst)
 	tern_free(vars);
 }
 
-char *path_append(char *base, char *suffix)
+char *path_append(const char *base, const char *suffix)
 {
 	if (!strcmp(suffix, "..")) {
 #ifdef _WIN32

@@ -286,6 +286,11 @@ void init_system_with_media(char *path, system_type force_stype)
 	update_title(info.name);
 }
 
+static void save_config(void)
+{
+	persist_config(config);
+}
+
 int main(int argc, char ** argv)
 {
 	set_exe_str(argv[0]);
@@ -520,6 +525,8 @@ int main(int argc, char ** argv)
 			game_system = current_system;
 		}
 	}
+	
+	atexit(save_config);
 	
 #ifndef DISABLE_NUKLEAR
 	if (use_nuklear) {
