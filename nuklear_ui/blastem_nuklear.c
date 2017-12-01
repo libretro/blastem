@@ -16,7 +16,31 @@ static struct nk_context *context;
 
 typedef void (*view_fun)(struct nk_context *);
 static view_fun current_view;
-static view_fun previous_view;
+static view_fun *previous_views;
+static uint32_t view_storage;
+static uint32_t num_prev;
+
+static void push_view(view_fun new_view)
+{
+	if (num_prev == view_storage) {
+		view_storage = view_storage ? 2*view_storage : 2;
+		previous_views = realloc(previous_views, view_storage*sizeof(view_fun));
+	}
+	previous_views[num_prev++] = current_view;
+	current_view = new_view;
+}
+
+static void pop_view()
+{
+	if (num_prev) {
+		current_view = previous_views[--num_prev];
+	}
+}
+
+static void clear_view_stack()
+{
+	num_prev = 0;
+}
 
 void view_play(struct nk_context *context)
 {
@@ -69,7 +93,7 @@ void view_file_browser(struct nk_context *context, uint8_t normal_open)
 		}
 		nk_layout_row_static(context, 52, width > 600 ? 300 : width / 2, 2);
 		if (nk_button_label(context, "Back")) {
-			current_view = previous_view;
+			pop_view();
 		}
 		if (nk_button_label(context, "Open")) {
 			char *full_path = path_append(current_path, entries[selected_entry].name);
@@ -91,6 +115,7 @@ void view_file_browser(struct nk_context *context, uint8_t normal_open)
 					lockon_media(full_path);
 					free(full_path);
 				}
+				clear_view_stack();
 				current_view = view_play;
 			}
 		}
@@ -143,7 +168,7 @@ void view_choose_state(struct nk_context *context, uint8_t is_load)
 		}
 		nk_layout_row_static(context, 52, width > 600 ? 300 : width / 2, 2);
 		if (nk_button_label(context, "Back")) {
-			current_view = previous_view;
+			pop_view();
 		}
 		if (is_load) {
 			if (nk_button_label(context, "Load")) {
@@ -187,8 +212,7 @@ static void menu(struct nk_context *context, uint32_t num_entries, const menu_it
 	{
 		nk_layout_space_push(context, nk_rect(left, top + i * button_height, button_width, button_height-button_space));
 		if (nk_button_label(context, items[i].title)) {
-			previous_view = current_view;
-			current_view = items[i].next_view;
+			push_view(items[i].next_view);
 			if (!current_view) {
 				exit(0);
 			}
@@ -209,9 +233,72 @@ void view_controllers(struct nk_context *context)
 {
 	
 }
+
+void settings_toggle(struct nk_context *context, char *label, char *path, uint8_t def)
+{
+	uint8_t curval = !strcmp("on", tern_find_path_default(config, path, (tern_val){.ptrval = def ? "on": "off"}, TVAL_PTR).ptrval);
+	nk_label(context, label, NK_TEXT_LEFT);
+	uint8_t newval = nk_check_label(context, "", curval);
+	if (newval != curval) {
+		config = tern_insert_path(config, path, (tern_val){.ptrval = strdup(newval ? "on" : "off")}, TVAL_PTR);
+	}
+}
+
+void settings_int_input(struct nk_context *context, char *label, char *path, char *def)
+{
+	char buffer[12];
+	nk_label(context, label, NK_TEXT_LEFT);
+	uint32_t curval;
+	char *curstr = tern_find_path_default(config, path, (tern_val){.ptrval = def}, TVAL_PTR).ptrval;
+	uint32_t len = strlen(curstr);
+	if (len > 11) {
+		len = 11;
+	}
+	memcpy(buffer, curstr, len);
+	nk_edit_string(context, NK_EDIT_SIMPLE, buffer, &len, sizeof(buffer)-1, nk_filter_decimal);
+	buffer[len] = 0;
+	if (strcmp(buffer, curstr)) {
+		config = tern_insert_path(config, path, (tern_val){.ptrval = strdup(buffer)}, TVAL_PTR);
+	}
+}
+
+void settings_int_property(struct nk_context *context, char *label, char *name, char *path, int def, int min, int max)
+{
+	char *curstr = tern_find_path(config, path, TVAL_PTR).ptrval;
+	int curval = curstr ? atoi(curstr) : def;
+	nk_label(context, label, NK_TEXT_LEFT);
+	int val = curval;
+	nk_property_int(context, name, min, &val, max, 1, 1.0f);
+	if (val != curval) {
+		char buffer[12];
+		sprintf(buffer, "%d", val);
+		config = tern_insert_path(config, path, (tern_val){.ptrval = strdup(buffer)}, TVAL_PTR);
+	}
+}
+
 void view_video_settings(struct nk_context *context)
 {
-	
+	uint32_t width = render_width();
+	uint32_t height = render_height();
+	if (nk_begin(context, "Video Settings", nk_rect(0, 0, width, height), 0)) {
+		nk_layout_row_static(context, 30, width > 300 ? 300 : width, 2);
+		settings_toggle(context, "Fullscreen", "video\0fullscreen\0", 0);
+		settings_toggle(context, "Open GL", "video\0gl\0", 1);
+		settings_toggle(context, "Scanlines", "video\0scanlines\0", 0);
+		settings_int_input(context, "Windowed Width", "video\0width\0", "640");
+		settings_int_property(context, "NTSC Overscan", "Top", "video\0ntsc\0overscan\0top\0", 2, 0, 32);
+		settings_int_property(context, "", "Bottom", "video\0ntsc\0overscan\0bottom\0", 17, 0, 32);
+		settings_int_property(context, "", "Left", "video\0ntsc\0overscan\0left\0", 13, 0, 32);
+		settings_int_property(context, "", "Right", "video\0ntsc\0overscan\0right\0", 14, 0, 32);
+		settings_int_property(context, "PAL Overscan", "Top", "video\0pal\0overscan\0top\0", 2, 0, 32);
+		settings_int_property(context, "", "Bottom", "video\0pal\0overscan\0bottom\0", 17, 0, 32);
+		settings_int_property(context, "", "Left", "video\0pal\0overscan\0left\0", 13, 0, 32);
+		settings_int_property(context, "", "Right", "video\0pal\0overscan\0right\0", 14, 0, 32);
+		if (nk_button_label(context, "Back")) {
+			pop_view();
+		}
+		nk_end(context);
+	}
 }
 void view_audio_settings(struct nk_context *context)
 {
@@ -222,6 +309,13 @@ void view_system_settings(struct nk_context *context)
 	
 }
 
+void view_back(struct nk_context *context)
+{
+	pop_view();
+	pop_view();
+	current_view(context);
+}
+
 void view_settings(struct nk_context *context)
 {
 	static menu_item items[] = {
@@ -230,11 +324,10 @@ void view_settings(struct nk_context *context)
 		{"Video", view_video_settings},
 		{"Audio", view_audio_settings},
 		{"System", view_system_settings},
-		{"Back", NULL}
+		{"Back", view_back}
 	};
 	
 	const uint32_t num_buttons = 6;
-	items[num_buttons-1].next_view = previous_view;
 	if (nk_begin(context, "Settings Menu", nk_rect(0, 0, render_width(), render_height()), 0)) {
 		menu(context, sizeof(items)/sizeof(*items), items);
 		nk_end(context);

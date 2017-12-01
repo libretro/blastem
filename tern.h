@@ -47,6 +47,7 @@ tern_val tern_find_path_default(tern_node *head, char const *key, tern_val def, 
 tern_val tern_find_path(tern_node *head, char const *key, uint8_t valtype);
 tern_node * tern_insert_ptr(tern_node * head, char const * key, void * value);
 tern_node * tern_insert_node(tern_node *head, char const *key, tern_node *value);
+tern_node *tern_insert_path(tern_node *head, char const *key, tern_val val, uint8_t valtype);
 uint32_t tern_count(tern_node *head);
 void tern_foreach(tern_node *head, iter_fun fun, void *data);
 char * tern_int_key(uint32_t key, char * buf);
