@@ -45,6 +45,12 @@ tern_node * tern_insert(tern_node * head, char const * key, tern_val value, uint
 		(*cur)->left = NULL;
 		(*cur)->right = NULL;
 		(*cur)->el = 0;
+		(*cur)->valtype = TVAL_NONE;
+	}
+	if ((*cur)->valtype == TVAL_PTR) {
+		//not freeing tern nodes can also cause leaks, but handling freeing those here is problematic
+		//since updating a sub-tree may involve creating a new root node
+		free((*cur)->straight.value.ptrval);
 	}
 	(*cur)->straight.value = value;
 	(*cur)->valtype = valtype;
@@ -173,6 +179,18 @@ tern_node * tern_insert_node(tern_node *head, char const *key, tern_node *value)
 	tern_val val;
 	val.ptrval = value;
 	return tern_insert(head, key, val, TVAL_NODE);
+}
+
+tern_node *tern_insert_path(tern_node *head, char const *key, tern_val val, uint8_t valtype)
+{
+	const char *next_key = key + strlen(key) + 1;
+	if (*next_key) {
+		tern_node *child = tern_find_node(head, key);
+		child = tern_insert_path(child, next_key, val, valtype);
+		return tern_insert_node(head, key, child);
+	} else {
+		return tern_insert(head, key, val, valtype);
+	}
 }
 
 uint32_t tern_count(tern_node *head)
