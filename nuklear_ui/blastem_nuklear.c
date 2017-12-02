@@ -276,8 +276,114 @@ void settings_int_property(struct nk_context *context, char *label, char *name, 
 	}
 }
 
+typedef struct {
+	char *fragment;
+	char *vertex;
+} shader_prog;
+
+shader_prog *get_shader_progs(dir_entry *entries, size_t num_entries, shader_prog *progs, uint32_t *num_existing, uint32_t *storage)
+{
+	uint32_t num_progs = *num_existing;
+	uint32_t prog_storage = *storage;
+	uint32_t starting = num_progs;
+	
+	for (uint32_t i = 0; i < num_entries; i++) {
+		if (entries[i].is_dir) {
+			continue;
+		}
+		char *no_ext = basename_no_extension(entries[i].name);
+		uint32_t len = strlen(no_ext);
+		if (no_ext[len-1] == 'f' && no_ext[len-2] == '.') {
+			uint8_t dupe = 0;;
+			for (uint32_t j = 0; j < starting; j++) {
+				if (!strcmp(entries[i].name, progs[j].fragment)) {
+					dupe = 1;
+					break;
+				}
+			}
+			if (!dupe) {
+				if (num_progs == prog_storage) {
+					prog_storage *= 2;
+					progs = realloc(progs, sizeof(progs) * prog_storage);
+				}
+				progs[num_progs].vertex = NULL;
+				progs[num_progs++].fragment = strdup(entries[i].name); 
+			}
+		}
+		free(no_ext);
+	}
+	
+	for (uint32_t i = 0; i < num_entries; i++) {
+		if (entries[i].is_dir) {
+			continue;
+		}
+		char *no_ext = basename_no_extension(entries[i].name);
+		uint32_t len = strlen(no_ext);
+		if (no_ext[len-1] == 'v' && no_ext[len-2] == '.') {
+			for (uint32_t j = 0; j < num_progs; j++) {
+				if (!strncmp(no_ext, progs[j].fragment, len-1) && progs[j].fragment[len-1] == 'f' && progs[j].fragment[len] == '.') {
+					progs[j].vertex = strdup(entries[i].name);
+				}
+			}
+		}
+		free(no_ext);
+	}
+	free_dir_list(entries, num_entries);
+	*num_existing = num_progs;
+	*storage = prog_storage;
+	return progs;
+}
+
+shader_prog *get_shader_list(uint32_t *num_out)
+{
+	char *shader_dir = path_append(get_config_dir(), "shaders");
+	size_t num_entries;
+	dir_entry *entries = get_dir_list(shader_dir, &num_entries);
+	free(shader_dir);
+	shader_prog *progs;
+	uint32_t num_progs = 0, prog_storage;
+	if (num_entries) {
+		progs = calloc(num_entries, sizeof(shader_prog));
+		prog_storage = num_entries;
+		progs = get_shader_progs(entries, num_entries, progs, &num_progs, &prog_storage);
+	} else {
+		progs = NULL;
+		prog_storage = 0;
+	}
+	shader_dir = path_append(get_exe_dir(), "shaders");
+	entries = get_dir_list(shader_dir, &num_entries);
+	progs = get_shader_progs(entries, num_entries, progs, &num_progs, &prog_storage);
+	*num_out = num_progs;
+	return progs;
+}
+
 void view_video_settings(struct nk_context *context)
 {
+	static shader_prog *progs;
+	static char **prog_names;
+	static uint32_t num_progs;
+	static uint32_t selected_prog;
+	if(!progs) {
+		progs = get_shader_list(&num_progs);
+		prog_names = calloc(num_progs, sizeof(char*));
+		for (uint32_t i = 0; i < num_progs; i++)
+		{
+			prog_names[i] = basename_no_extension(progs[i].fragment);;
+			uint32_t len = strlen(prog_names[i]);
+			if (len > 2) {
+				prog_names[i][len-2] = 0;
+			}
+			if (!progs[i].vertex) {
+				progs[i].vertex = strdup("default.v.glsl");
+			}
+			if (!strcmp(
+				progs[i].fragment,
+				tern_find_path_default(config, "video\0fragment_shader\0", (tern_val){.ptrval = "default.f.glsl"}, TVAL_PTR).ptrval
+			)) {
+				selected_prog = i;
+			}
+		}
+	}
 	uint32_t width = render_width();
 	uint32_t height = render_height();
 	if (nk_begin(context, "Video Settings", nk_rect(0, 0, width, height), 0)) {
@@ -286,6 +392,13 @@ void view_video_settings(struct nk_context *context)
 		settings_toggle(context, "Open GL", "video\0gl\0", 1);
 		settings_toggle(context, "Scanlines", "video\0scanlines\0", 0);
 		settings_int_input(context, "Windowed Width", "video\0width\0", "640");
+		nk_label(context, "Shader", NK_TEXT_LEFT);
+		uint32_t next_selected = nk_combo(context, (const char **)prog_names, num_progs, selected_prog, 30, nk_vec2(300, 300));
+		if (next_selected != selected_prog) {
+			selected_prog = next_selected;
+			config = tern_insert_path(config, "video\0fragment_shader\0", (tern_val){.ptrval = strdup(progs[next_selected].fragment)}, TVAL_PTR);
+			config = tern_insert_path(config, "video\0vertex_shader\0", (tern_val){.ptrval = strdup(progs[next_selected].vertex)}, TVAL_PTR);
+		}
 		settings_int_property(context, "NTSC Overscan", "Top", "video\0ntsc\0overscan\0top\0", 2, 0, 32);
 		settings_int_property(context, "", "Bottom", "video\0ntsc\0overscan\0bottom\0", 17, 0, 32);
 		settings_int_property(context, "", "Left", "video\0ntsc\0overscan\0left\0", 13, 0, 32);
@@ -294,6 +407,7 @@ void view_video_settings(struct nk_context *context)
 		settings_int_property(context, "", "Bottom", "video\0pal\0overscan\0bottom\0", 17, 0, 32);
 		settings_int_property(context, "", "Left", "video\0pal\0overscan\0left\0", 13, 0, 32);
 		settings_int_property(context, "", "Right", "video\0pal\0overscan\0right\0", 14, 0, 32);
+		
 		if (nk_button_label(context, "Back")) {
 			pop_view();
 		}
