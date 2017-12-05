@@ -303,7 +303,7 @@ shader_prog *get_shader_progs(dir_entry *entries, size_t num_entries, shader_pro
 			}
 			if (!dupe) {
 				if (num_progs == prog_storage) {
-					prog_storage *= 2;
+					prog_storage = prog_storage ? prog_storage*2 : 4;
 					progs = realloc(progs, sizeof(progs) * prog_storage);
 				}
 				progs[num_progs].vertex = NULL;
