@@ -416,7 +416,72 @@ void view_video_settings(struct nk_context *context)
 }
 void view_audio_settings(struct nk_context *context)
 {
-	
+	const char *rates[] = {
+		"192000",
+		"96000",
+		"48000",
+		"44100",
+		"22050"
+	};
+	const char *sizes[] = {
+		"1024",
+		"512",
+		"256",
+		"128",
+		"64"
+	};
+	const uint32_t num_rates = sizeof(rates)/sizeof(*rates);
+	const uint32_t num_sizes = sizeof(sizes)/sizeof(*sizes);
+	static int32_t selected_rate = -1;
+	static int32_t selected_size = -1;
+	if (selected_rate < 0 || selected_size < 0) {
+		char *rate = tern_find_path_default(config, "audio\0rate\0", (tern_val){.ptrval = "48000"}, TVAL_PTR).ptrval;
+		for (uint32_t i = 0; i < num_rates; i++)
+		{
+			if (!strcmp(rate, rates[i])) {
+				selected_rate = i;
+				break;
+			}
+		}
+		if (selected_rate < 0) {
+			//better solution would be to add the custom rate to the rate list, but this is probably sufficient for now
+			selected_rate = 2;
+		}
+		char *size = tern_find_path_default(config, "audio\0buffer\0", (tern_val){.ptrval = "512"}, TVAL_PTR).ptrval;
+		for (uint32_t i = 0; i < num_sizes; i++)
+		{
+			if (!strcmp(size, sizes[i])) {
+				selected_size = i;
+				break;
+			}
+		}
+		if (selected_size < 0) {
+			//better solution would be to add the custom rate to the rate list, but this is probably sufficient for now
+			selected_size = 2;
+		}
+	}
+	uint32_t width = render_width();
+	uint32_t height = render_height();
+	if (nk_begin(context, "Audio Settings", nk_rect(0, 0, width, height), 0)) {
+		nk_layout_row_static(context, 30, width > 300 ? 300 : width, 2);
+		nk_label(context, "Rate in Hz", NK_TEXT_LEFT);
+		int32_t next_selected = nk_combo(context, rates, num_rates, selected_rate, 30, nk_vec2(300, 300));
+		if (next_selected != selected_rate) {
+			config = tern_insert_path(config, "audio\0rate\0", (tern_val){.ptrval = strdup(rates[next_selected])}, TVAL_PTR);
+			selected_rate = next_selected;
+		}
+		nk_label(context, "Buffer Samples", NK_TEXT_LEFT);
+		next_selected = nk_combo(context, sizes, num_sizes, selected_size, 30, nk_vec2(300, 300));
+		if (next_selected != selected_size) {
+			config = tern_insert_path(config, "audio\0buffer\0", (tern_val){.ptrval = strdup(sizes[next_selected])}, TVAL_PTR);
+			selected_size = next_selected;
+		}
+		settings_int_input(context, "Lowpass Cutoff Hz", "audio\0lowpass_cutoff\0", "3390");
+		if (nk_button_label(context, "Back")) {
+			pop_view();
+		}
+		nk_end(context);
+	}
 }
 void view_system_settings(struct nk_context *context)
 {
