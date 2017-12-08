@@ -15,8 +15,10 @@
 #ifndef NK_SDL_GLES2_H_
 #define NK_SDL_GLES2_H_
 
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_opengles2.h>
+#include <SDL.h>
+#ifndef DISABLE_OPENGL
+#include <GL/glew.h>
+#endif
 
 
 NK_API struct nk_context*   nk_sdl_init(SDL_Window *win);
