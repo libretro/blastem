@@ -485,7 +485,17 @@ void view_audio_settings(struct nk_context *context)
 }
 void view_system_settings(struct nk_context *context)
 {
-	
+	uint32_t width = render_width();
+	uint32_t height = render_height();
+	if (nk_begin(context, "System Settings", nk_rect(0, 0, width, height), 0)) {
+		nk_layout_row_static(context, 30, width > 300 ? 300 : width, 2);
+		settings_int_property(context, "68000 Clock Divider", "", "clocks\0m68k_divider\0", 7, 1, 53);
+		settings_toggle(context, "Remember ROM Path", "ui\0remember_path\0", 1);
+		if (nk_button_label(context, "Back")) {
+			pop_view();
+		}
+		nk_end(context);
+	}
 }
 
 void view_back(struct nk_context *context)
