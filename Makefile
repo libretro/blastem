@@ -262,4 +262,4 @@ font.tiles : font.png
 menu.bin : font_interlace_variable.tiles arrow.tiles cursor.tiles button.tiles font.tiles
 
 clean :
-	rm -rf $(ALL) trans ztestrun ztestgen *.o
+	rm -rf $(ALL) trans ztestrun ztestgen *.o nuklear_ui/*.o
