@@ -438,14 +438,19 @@ int32_t find_match(const char **options, uint32_t num_options, char *path, char 
 	return selected;
 }
 
-int32_t settings_dropdown(struct nk_context *context, char *label, const char **options, uint32_t num_options, int32_t current, char *path)
+int32_t settings_dropdown_ex(struct nk_context *context, char *label, const char **options, const char **opt_display, uint32_t num_options, int32_t current, char *path)
 {
 	nk_label(context, label, NK_TEXT_LEFT);
-	int32_t next = nk_combo(context, options, num_options, current, 30, nk_vec2(300, 300));
+	int32_t next = nk_combo(context, opt_display, num_options, current, 30, nk_vec2(300, 300));
 	if (next != current) {
 		config = tern_insert_path(config, path, (tern_val){.ptrval = strdup(options[next])}, TVAL_PTR);
 	}
 	return next;
+}
+
+int32_t settings_dropdown(struct nk_context *context, char *label, const char **options, uint32_t num_options, int32_t current, char *path)
+{
+	return settings_dropdown_ex(context, label, options, options, num_options, current, path);
 }
 
 void view_audio_settings(struct nk_context *context)
@@ -487,12 +492,34 @@ void view_audio_settings(struct nk_context *context)
 }
 void view_system_settings(struct nk_context *context)
 {
+	const char *regions[] = {
+		"J - Japan",
+		"U - Americas",
+		"E - Europe"
+	};
+	const char *region_codes[] = {"J", "U", "E"};
+	const uint32_t num_regions = sizeof(regions)/sizeof(*regions);
+	static int32_t selected_region = -1;
+	if (selected_region < 0) {
+		selected_region = find_match(region_codes, num_regions, "system\0default_region\0", "U");
+	}
+	const char *formats[] = {
+		"native",
+		"gst"
+	};
+	const uint32_t num_formats = sizeof(formats)/sizeof(*formats);
+	int32_t selected_format = -1;
+	if (selected_format < 0) {
+		selected_format = find_match(formats, num_formats, "ui\0state_format\0", "native");
+	}
 	uint32_t width = render_width();
 	uint32_t height = render_height();
 	if (nk_begin(context, "System Settings", nk_rect(0, 0, width, height), 0)) {
 		nk_layout_row_static(context, 30, width > 300 ? 300 : width, 2);
 		settings_int_property(context, "68000 Clock Divider", "", "clocks\0m68k_divider\0", 7, 1, 53);
 		settings_toggle(context, "Remember ROM Path", "ui\0remember_path\0", 1);
+		selected_region = settings_dropdown_ex(context, "Default Region", region_codes, regions, num_regions, selected_region, "system\0default_region\0");
+		selected_format = settings_dropdown(context, "Save State Format", formats, num_formats, selected_format, "ui\0state_format\0");
 		if (nk_button_label(context, "Back")) {
 			pop_view();
 		}
