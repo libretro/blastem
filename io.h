@@ -113,5 +113,7 @@ void handle_mouseup(int mouse, int button);
 void io_serialize(io_port *port, serialize_buffer *buf);
 void io_deserialize(deserialize_buffer *buf, void *vport);
 
+extern const char * device_type_names[];
+
 #endif //IO_H_
 

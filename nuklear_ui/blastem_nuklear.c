@@ -11,6 +11,7 @@
 #include "../saves.h"
 #include "../blastem.h"
 #include "../config.h"
+#include "../io.h"
 
 static struct nk_context *context;
 
@@ -512,6 +513,39 @@ void view_system_settings(struct nk_context *context)
 	if (selected_format < 0) {
 		selected_format = find_match(formats, num_formats, "ui\0state_format\0", "native");
 	}
+	const char *ram_inits[] = {
+		"zero",
+		"random"
+	};
+	const uint32_t num_inits = sizeof(ram_inits)/sizeof(*ram_inits);
+	static int32_t selected_init = -1;
+	if (selected_init < 0) {
+		selected_init = find_match(ram_inits, num_inits, "system\0ram_init\0", "zero");
+	}
+	const char *io_opts_1[] = {
+		"gamepad2.1",
+		"gamepad3.1",
+		"gamepad6.1",
+		"mouse",
+		"saturn keyboard",
+		"xband keyboard"
+	};
+	const char *io_opts_2[] = {
+		"gamepad2.2",
+		"gamepad3.2",
+		"gamepad6.2",
+		"mouse",
+		"saturn keyboard",
+		"xband keyboard"
+	};
+	static int32_t selected_io_1 = -1;
+	static int32_t selected_io_2 = -1;
+	const uint32_t num_io = sizeof(io_opts_1)/sizeof(*io_opts_1);
+	if (selected_io_1 < 0 || selected_io_2 < 0) {
+		selected_io_1 = find_match(io_opts_1, num_io, "io\0devices\0""1\0", "gamepad6.1");
+		selected_io_2 = find_match(io_opts_2, num_io, "io\0devices\0""2\0", "gamepad6.2");
+	}
+	
 	uint32_t width = render_width();
 	uint32_t height = render_height();
 	if (nk_begin(context, "System Settings", nk_rect(0, 0, width, height), 0)) {
@@ -520,6 +554,9 @@ void view_system_settings(struct nk_context *context)
 		settings_toggle(context, "Remember ROM Path", "ui\0remember_path\0", 1);
 		selected_region = settings_dropdown_ex(context, "Default Region", region_codes, regions, num_regions, selected_region, "system\0default_region\0");
 		selected_format = settings_dropdown(context, "Save State Format", formats, num_formats, selected_format, "ui\0state_format\0");
+		selected_init = settings_dropdown(context, "Initial RAM Value", ram_inits, num_inits, selected_init, "system\0ram_init\0");
+		selected_io_1 = settings_dropdown_ex(context, "IO Port 1 Device", io_opts_1, device_type_names, num_io, selected_io_1, "io\0devices\0""1\0");
+		selected_io_2 = settings_dropdown_ex(context, "IO Port 2 Device", io_opts_2, device_type_names, num_io, selected_io_2, "io\0devices\0""2\0");
 		if (nk_button_label(context, "Back")) {
 			pop_view();
 		}
