@@ -244,7 +244,7 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 						if (is_write && (memmap[chunk].flags & MMAP_CODE)) {
 							pop_r(code, opts->scratch2);
 						} else {
-							add_ir(code, sizeof(void*), RSP, SZ_D);
+							add_ir(code, sizeof(void*), RSP, SZ_PTR);
 							code->stack_off -= sizeof(void *);
 						}
 					} else {
