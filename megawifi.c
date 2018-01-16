@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "genesis.h"
+#include "net.h"
 
 enum {
 	TX_IDLE,
@@ -88,6 +89,7 @@ static void process_packet(megawifi *mw)
 			size = mw->transmit_bytes - 4;
 		}
 		mw->receive_read = mw->receive_bytes = 0;
+		printf("Received MegaWiFi command %s(%d) with length %X\n", cmd_names[command], command, size);
 		switch (command)
 		{
 		case CMD_VERSION:
@@ -142,6 +144,52 @@ static void process_packet(megawifi *mw)
 			mw_putc(mw, mw->channel_flags);
 			mw_putc(mw, 0x7E);
 			break;
+		case CMD_IP_CURRENT: {
+			//LSD header
+			mw_putc(mw, 0x7E);
+			mw_putc(mw, 0);
+			mw_putc(mw, 28);
+			//cmd
+			mw_putc(mw, 0);
+			mw_putc(mw, CMD_OK);
+			//length
+			mw_putc(mw, 0);
+			mw_putc(mw, 24);
+			
+			iface_info i;
+			get_host_address(&i);
+			//config number and reserved bytes
+			mw_putc(mw, 0);
+			mw_putc(mw, 0);
+			mw_putc(mw, 0);
+			mw_putc(mw, 0);
+			//ip
+			mw_putc(mw, i.ip[0]);
+			mw_putc(mw, i.ip[1]);
+			mw_putc(mw, i.ip[2]);
+			mw_putc(mw, i.ip[3]);
+			//net mask
+			mw_putc(mw, i.net_mask[0]);
+			mw_putc(mw, i.net_mask[1]);
+			mw_putc(mw, i.net_mask[2]);
+			mw_putc(mw, i.net_mask[3]);
+			//gateway guess
+			mw_putc(mw, i.ip[0] & i.net_mask[0]);
+			mw_putc(mw, i.ip[1] & i.net_mask[1]);
+			mw_putc(mw, i.ip[2] & i.net_mask[2]);
+			mw_putc(mw, (i.ip[3] & i.net_mask[3]) + 1);
+			//dns
+			mw_putc(mw, 127);
+			mw_putc(mw, 0);
+			mw_putc(mw, 0);
+			mw_putc(mw, 1);
+			mw_putc(mw, 127);
+			mw_putc(mw, 0);
+			mw_putc(mw, 0);
+			mw_putc(mw, 1);
+			mw_putc(mw, 0x7E);
+			break;
+		}
 		default:
 			printf("Unhandled MegaWiFi command %s(%d) with length %X\n", cmd_names[command], command, size);
 			break;
