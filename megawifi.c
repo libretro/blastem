@@ -70,6 +70,24 @@ static void mw_putc(megawifi *mw, uint8_t v)
 	mw->receive_buffer[mw->receive_bytes++] = v;
 }
 
+static void mw_set(megawifi *mw, uint8_t val, uint32_t count)
+{
+	if (count + mw->receive_bytes > sizeof(mw->receive_buffer)) {
+		count = sizeof(mw->receive_buffer) - mw->receive_bytes;
+	}
+	memset(mw->receive_buffer + mw->receive_bytes, val, count);
+	mw->receive_bytes += count;
+}
+
+static void mw_copy(megawifi *mw, const uint8_t *src, uint32_t count)
+{
+	if (count + mw->receive_bytes > sizeof(mw->receive_buffer)) {
+		count = sizeof(mw->receive_buffer) - mw->receive_bytes;
+	}
+	memcpy(mw->receive_buffer + mw->receive_bytes, src, count);
+	mw->receive_bytes += count;
+}
+
 static void mw_puts(megawifi *mw, char *s)
 {
 	uint32_t len = strlen(s);
@@ -78,6 +96,31 @@ static void mw_puts(megawifi *mw, char *s)
 	}
 	memcpy(mw->receive_buffer + mw->receive_bytes, s, len);
 	mw->receive_bytes += len;
+}
+
+static void start_reply(megawifi *mw, uint8_t cmd)
+{
+	mw_putc(mw, STX);
+	//reserve space for length
+	mw->receive_bytes += 2;
+	//cmd
+	mw_putc(mw, 0);
+	mw_putc(mw, cmd);
+	//reserve space for length
+	mw->receive_bytes += 2;
+}
+
+static void end_reply(megawifi *mw)
+{
+	uint32_t len = mw->receive_bytes - 3;
+	//LSD packet length
+	mw->receive_buffer[1] = len >> 8;
+	mw->receive_buffer[2] = len;
+	//command length
+	len -= 4;
+	mw->receive_buffer[5] = len >> 8;
+	mw->receive_buffer[6] = len;
+	mw_putc(mw, ETX);
 }
 
 static void process_packet(megawifi *mw)
@@ -89,26 +132,14 @@ static void process_packet(megawifi *mw)
 			size = mw->transmit_bytes - 4;
 		}
 		mw->receive_read = mw->receive_bytes = 0;
-		printf("Received MegaWiFi command %s(%d) with length %X\n", cmd_names[command], command, size);
 		switch (command)
 		{
 		case CMD_VERSION:
-			//LSD header
-			mw_putc(mw, 0x7E);
-			mw_putc(mw, 0);
-			mw->receive_bytes += 1; //reserve space for LSB of len
-			//cmd
-			mw_putc(mw, 0);
-			mw_putc(mw, CMD_OK);
-			//length
-			mw_putc(mw, 0);
-			mw->receive_bytes += 1; //reserve space for LSB of len
+			start_reply(mw, CMD_OK);
 			mw_putc(mw, 1);
 			mw_putc(mw, 0);
 			mw_puts(mw, "blastem");
-			mw->receive_buffer[2] = mw->receive_bytes - 3;
-			mw->receive_buffer[6] = mw->receive_bytes - 7;
-			mw_putc(mw, 0x7E);
+			end_reply(mw);
 			break;
 		case CMD_ECHO:
 			mw->receive_bytes = mw->transmit_bytes;
@@ -116,78 +147,41 @@ static void process_packet(megawifi *mw)
 			break;
 		case CMD_AP_JOIN:
 			mw->module_state = STATE_READY;
-			mw_putc(mw, 0x7E);
-			mw_putc(mw, 0);
-			mw_putc(mw, 4);
-			//cmd
-			mw_putc(mw, 0);
-			mw_putc(mw, CMD_OK);
-			//length
-			mw_putc(mw, 0);
-			mw_putc(mw, 0);
-			mw_putc(mw, 0x7E);
+			start_reply(mw, CMD_OK);
+			end_reply(mw);
 			break;
 		case CMD_SYS_STAT:
-			//LSD header
-			mw_putc(mw, 0x7E);
-			mw_putc(mw, 0);
-			mw_putc(mw, 8);
-			//cmd
-			mw_putc(mw, 0);
-			mw_putc(mw, CMD_OK);
-			//length
-			mw_putc(mw, 0);
-			mw_putc(mw, 4);
+			start_reply(mw, CMD_OK);
 			mw_putc(mw, mw->module_state);
 			mw_putc(mw, mw->flags);
 			mw_putc(mw, mw->channel_flags >> 8);
 			mw_putc(mw, mw->channel_flags);
-			mw_putc(mw, 0x7E);
+			end_reply(mw);
 			break;
 		case CMD_IP_CURRENT: {
-			//LSD header
-			mw_putc(mw, 0x7E);
-			mw_putc(mw, 0);
-			mw_putc(mw, 28);
-			//cmd
-			mw_putc(mw, 0);
-			mw_putc(mw, CMD_OK);
-			//length
-			mw_putc(mw, 0);
-			mw_putc(mw, 24);
-			
 			iface_info i;
-			get_host_address(&i);
-			//config number and reserved bytes
-			mw_putc(mw, 0);
-			mw_putc(mw, 0);
-			mw_putc(mw, 0);
-			mw_putc(mw, 0);
-			//ip
-			mw_putc(mw, i.ip[0]);
-			mw_putc(mw, i.ip[1]);
-			mw_putc(mw, i.ip[2]);
-			mw_putc(mw, i.ip[3]);
-			//net mask
-			mw_putc(mw, i.net_mask[0]);
-			mw_putc(mw, i.net_mask[1]);
-			mw_putc(mw, i.net_mask[2]);
-			mw_putc(mw, i.net_mask[3]);
-			//gateway guess
-			mw_putc(mw, i.ip[0] & i.net_mask[0]);
-			mw_putc(mw, i.ip[1] & i.net_mask[1]);
-			mw_putc(mw, i.ip[2] & i.net_mask[2]);
-			mw_putc(mw, (i.ip[3] & i.net_mask[3]) + 1);
-			//dns
-			mw_putc(mw, 127);
-			mw_putc(mw, 0);
-			mw_putc(mw, 0);
-			mw_putc(mw, 1);
-			mw_putc(mw, 127);
-			mw_putc(mw, 0);
-			mw_putc(mw, 0);
-			mw_putc(mw, 1);
-			mw_putc(mw, 0x7E);
+			if (get_host_address(&i)) {
+				start_reply(mw, CMD_OK);
+				//config number and reserved bytes
+				mw_set(mw, 0, 4);
+				//ip
+				mw_copy(mw, i.ip, sizeof(i.ip));
+				//net mask
+				mw_copy(mw, i.net_mask, sizeof(i.net_mask));
+				//gateway guess
+				mw_putc(mw, i.ip[0] & i.net_mask[0]);
+				mw_putc(mw, i.ip[1] & i.net_mask[1]);
+				mw_putc(mw, i.ip[2] & i.net_mask[2]);
+				mw_putc(mw, (i.ip[3] & i.net_mask[3]) + 1);
+				//dns
+				static const uint8_t localhost[] = {127,0,0,1};
+				mw_copy(mw, localhost, sizeof(localhost));
+				mw_copy(mw, localhost, sizeof(localhost));
+				
+			} else {
+				start_reply(mw, CMD_ERROR);
+			}
+			end_reply(mw);
 			break;
 		}
 		default:
