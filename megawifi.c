@@ -1,6 +1,12 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <netinet/in.h>
+#include <errno.h>
+#include <fcntl.h>
 #include "genesis.h"
 #include "net.h"
 
@@ -41,7 +47,9 @@ typedef struct {
 	uint32_t expected_bytes;
 	uint32_t receive_bytes;
 	uint32_t receive_read;
+	int      sock_fds[15];
 	uint16_t channel_flags;
+	uint8_t  channel_state[15];
 	uint8_t  scratchpad;
 	uint8_t  transmit_channel;
 	uint8_t  transmit_state;
@@ -57,7 +65,12 @@ static megawifi *get_megawifi(void *context)
 	genesis_context *gen = m68k->system;
 	if (!gen->extra) {
 		gen->extra = calloc(1, sizeof(megawifi));
-		((megawifi *)gen->extra)->module_state = STATE_IDLE;
+		megawifi *mw = gen->extra;
+		mw->module_state = STATE_IDLE;
+		for (int i = 0; i < 15; i++)
+		{
+			mw->sock_fds[i] = -1;
+		}
 	}
 	return gen->extra;
 }
@@ -98,6 +111,54 @@ static void mw_puts(megawifi *mw, char *s)
 	mw->receive_bytes += len;
 }
 
+static void poll_socket(megawifi *mw, uint8_t channel)
+{
+	if (mw->sock_fds[channel] < 0) {
+		return;
+	}
+	if (mw->channel_state[channel] == 1) {
+		int res = accept(mw->sock_fds[channel], NULL, NULL);
+		if (res >= 0) {
+			close(mw->sock_fds[channel]);
+			fcntl(res, F_SETFL, O_NONBLOCK);
+			mw->sock_fds[channel] = res;
+			mw->channel_state[channel] = 2;
+			mw->channel_flags |= 1 << (channel + 1);
+		} else if (errno != EAGAIN && errno != EWOULDBLOCK) {
+			close(mw->sock_fds[channel]);
+			mw->channel_state[channel] = 0;
+			mw->channel_flags |= 1 << (channel + 1);
+		}
+	} else if (mw->channel_state[channel] == 2 && mw->receive_bytes < sizeof(mw->receive_buffer) - 4) {
+		int bytes = recv(
+			mw->sock_fds[channel],
+			mw->receive_buffer + mw->receive_bytes + 3,
+			sizeof(mw->receive_buffer) - 4 - mw->receive_bytes,
+			0
+		);
+		if (bytes > 0) {
+			mw_putc(mw, STX);
+			mw_putc(mw, bytes >> 8 | (channel+1) << 4);
+			mw_putc(mw, bytes);
+			mw->receive_bytes += bytes;
+			mw_putc(mw, ETX);
+			//should this set the channel flag?
+		} else if (bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+			close(mw->sock_fds[channel]);
+			mw->channel_state[channel] = 0;
+			mw->channel_flags |= 1 << (channel + 1);
+		}
+	}
+}
+
+static void poll_all_sockets(megawifi *mw)
+{
+	for (int i = 0; i < 15; i++)
+	{
+		poll_socket(mw, i);
+	}
+}
+
 static void start_reply(megawifi *mw, uint8_t cmd)
 {
 	mw_putc(mw, STX);
@@ -131,7 +192,7 @@ static void process_packet(megawifi *mw)
 		if (size > mw->transmit_bytes - 4) {
 			size = mw->transmit_bytes - 4;
 		}
-		mw->receive_read = mw->receive_bytes = 0;
+		int orig_receive_bytes = mw->receive_bytes;
 		switch (command)
 		{
 		case CMD_VERSION:
@@ -144,19 +205,6 @@ static void process_packet(megawifi *mw)
 		case CMD_ECHO:
 			mw->receive_bytes = mw->transmit_bytes;
 			memcpy(mw->receive_buffer, mw->transmit_buffer, mw->transmit_bytes);
-			break;
-		case CMD_AP_JOIN:
-			mw->module_state = STATE_READY;
-			start_reply(mw, CMD_OK);
-			end_reply(mw);
-			break;
-		case CMD_SYS_STAT:
-			start_reply(mw, CMD_OK);
-			mw_putc(mw, mw->module_state);
-			mw_putc(mw, mw->flags);
-			mw_putc(mw, mw->channel_flags >> 8);
-			mw_putc(mw, mw->channel_flags);
-			end_reply(mw);
 			break;
 		case CMD_IP_CURRENT: {
 			iface_info i;
@@ -184,9 +232,98 @@ static void process_packet(megawifi *mw)
 			end_reply(mw);
 			break;
 		}
+		case CMD_AP_JOIN:
+			mw->module_state = STATE_READY;
+			start_reply(mw, CMD_OK);
+			end_reply(mw);
+			break;
+		case CMD_TCP_BIND:{
+			if (size < 7){
+				start_reply(mw, CMD_ERROR);
+				end_reply(mw);
+				break;
+			}
+			uint8_t channel = mw->transmit_buffer[10];
+			if (!channel || channel > 15) {
+				start_reply(mw, CMD_ERROR);
+				end_reply(mw);
+				break;
+			}
+			channel--;
+			if (mw->sock_fds[channel] >= 0) {
+				close(mw->sock_fds[channel]);
+			}
+			mw->sock_fds[channel] = socket(AF_INET, SOCK_STREAM, 0);
+			if (mw->sock_fds[channel] < 0) {
+				start_reply(mw, CMD_ERROR);
+				end_reply(mw);
+				break;
+			}
+			int value = 1;
+			setsockopt(mw->sock_fds[channel], SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value));
+			struct sockaddr_in bind_addr;
+			memset(&bind_addr, 0, sizeof(bind_addr));
+			bind_addr.sin_family = AF_INET;
+			bind_addr.sin_port = htons(mw->transmit_buffer[8] << 8 | mw->transmit_buffer[9]);
+			if (bind(mw->sock_fds[channel], (struct sockaddr *)&bind_addr, sizeof(bind_addr)) != 0) {
+				close(mw->sock_fds[channel]);
+				mw->sock_fds[channel] = -1;
+				start_reply(mw, CMD_ERROR);
+				end_reply(mw);
+				break;
+			}
+			int res = listen(mw->sock_fds[channel], 2);
+			start_reply(mw, res ? CMD_ERROR : CMD_OK);
+			if (res) {
+				close(mw->sock_fds[channel]);
+				mw->sock_fds[channel] = -1;
+			} else {
+				mw->channel_flags |= 1 << (channel + 1);
+				mw->channel_state[channel] = 1;
+				fcntl(mw->sock_fds[channel], F_SETFL, O_NONBLOCK);
+			}
+			end_reply(mw);
+			break;
+		}
+		case CMD_SOCK_STAT: {
+			uint8_t channel = mw->transmit_buffer[4];
+			if (!channel || channel > 15) {
+				start_reply(mw, CMD_ERROR);
+				end_reply(mw);
+				break;
+			}
+			mw->channel_flags &= ~(1 << channel);
+			channel--;
+			poll_socket(mw, channel);
+			start_reply(mw, CMD_OK);
+			mw_putc(mw, mw->channel_state[channel]);
+			end_reply(mw);
+			break;
+		}
+		case CMD_SYS_STAT:
+			poll_all_sockets(mw);
+			start_reply(mw, CMD_OK);
+			mw_putc(mw, mw->module_state);
+			mw_putc(mw, mw->flags);
+			mw_putc(mw, mw->channel_flags >> 8);
+			mw_putc(mw, mw->channel_flags);
+			end_reply(mw);
+			break;
 		default:
 			printf("Unhandled MegaWiFi command %s(%d) with length %X\n", cmd_names[command], command, size);
 			break;
+		}
+	} else if (mw->sock_fds[mw->transmit_channel - 1] >= 0 && mw->channel_state[mw->transmit_channel - 1] == 2) {
+		uint8_t channel = mw->transmit_channel - 1;
+		int sent = send(mw->sock_fds[channel], mw->transmit_buffer, mw->transmit_bytes, 0);
+		if (sent < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+			close(mw->sock_fds[channel]);
+			mw->sock_fds[channel] = -1;
+			mw->channel_state[channel] = 0;
+			mw->channel_flags |= 1 << mw->transmit_channel;
+		} else if (sent < mw->transmit_bytes) {
+			//TODO: save this data somewhere so it can be sent in poll_socket
+			printf("Sent %d bytes on channel %d, but %d were requested\n", sent, mw->transmit_channel, mw->transmit_bytes);
 		}
 	} else {
 		printf("Unhandled receive of MegaWiFi data on channel %d\n", mw->transmit_channel);
@@ -259,11 +396,17 @@ uint8_t megawifi_read_b(uint32_t address, void *context)
 	switch (address)
 	{
 	case 0:
+		poll_all_sockets(mw);
 		if (mw->receive_read < mw->receive_bytes) {
-			return mw->receive_buffer[mw->receive_read++];
+			uint8_t ret = mw->receive_buffer[mw->receive_read++];
+			if (mw->receive_read == mw->receive_bytes) {
+				mw->receive_read = mw->receive_bytes = 0;
+			}
+			return ret;
 		}
 		return 0xFF;
 	case 5:
+		poll_all_sockets(mw);
 		//line status
 		return 0x60 | (mw->receive_read < mw->receive_bytes);
 	case 7:
