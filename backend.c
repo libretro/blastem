@@ -75,7 +75,7 @@ void * get_native_pointer(uint32_t address, void ** mem_pointers, cpu_options * 
 	for (uint32_t chunk = 0; chunk < opts->memmap_chunks; chunk++)
 	{
 		if (address >= memmap[chunk].start && address < memmap[chunk].end) {
-			if (!(memmap[chunk].flags & MMAP_READ)) {
+			if (!(memmap[chunk].flags & (MMAP_READ|MMAP_READ_CODE))) {
 				return NULL;
 			}
 			uint8_t * base = memmap[chunk].flags & MMAP_PTR_IDX
