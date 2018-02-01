@@ -31,6 +31,8 @@ typedef struct {
 	uint32_t    page_size;
 	uint32_t    current_page;
 	uint32_t    last_write_cycle;
+	uint32_t    cmd_address1;
+	uint32_t    cmd_address2;
 	uint16_t    product_id;
 	uint8_t     mode;
 	uint8_t     cmd_state;
@@ -61,13 +63,12 @@ struct rom_info {
 	char          *port2_override;
 	char          *ext_override;
 	char          *mouse_mode;
+	nor_state     *nor;
 	uint32_t      num_eeprom;
 	uint32_t      map_chunks;
 	uint32_t      rom_size;
 	uint32_t      save_size;
 	uint32_t      save_mask;
-	uint32_t      save_page_size;
-	uint16_t      save_product_id;
 	uint16_t      mapper_start_index;
 	uint8_t       save_type;
 	uint8_t       save_bus; //only used for NOR currently
