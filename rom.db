@@ -1301,9 +1301,18 @@ e1c041ba69da087c428dcda16850159f3caebd4b {
 }
 cda73e4caf53cbc8f0750b69e5e7f394ad3735d1 {
 	name MegaWiFi Bootloader
+	NOR {
+		size 4194304
+		page_size 128
+		product_id DA45
+		bus both
+		init ROM
+		cmd_address1 AAB
+		cmd_address2 555
+	}
 	map {
 		0 {
-			device ROM
+			device NOR
 			last 3FFFFF
 		}
 		A130C0 {
