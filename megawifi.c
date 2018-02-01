@@ -19,6 +19,7 @@ enum {
 };
 #define STX 0x7E
 #define ETX 0x7E
+#define MAX_RECV_SIZE 1440
 
 #define E(N) N
 enum {
@@ -130,12 +131,11 @@ static void poll_socket(megawifi *mw, uint8_t channel)
 			mw->channel_flags |= 1 << (channel + 1);
 		}
 	} else if (mw->channel_state[channel] == 2 && mw->receive_bytes < sizeof(mw->receive_buffer) - 4) {
-		int bytes = recv(
-			mw->sock_fds[channel],
-			mw->receive_buffer + mw->receive_bytes + 3,
-			sizeof(mw->receive_buffer) - 4 - mw->receive_bytes,
-			0
-		);
+		size_t max = sizeof(mw->receive_buffer) - 4 - mw->receive_bytes;
+		if (max > MAX_RECV_SIZE) {
+			max = MAX_RECV_SIZE;
+		}
+		int bytes = recv(mw->sock_fds[channel], mw->receive_buffer + mw->receive_bytes + 3, max, 0);
 		if (bytes > 0) {
 			mw_putc(mw, STX);
 			mw_putc(mw, bytes >> 8 | (channel+1) << 4);
@@ -315,7 +315,7 @@ static void process_packet(megawifi *mw)
 		}
 	} else if (mw->sock_fds[mw->transmit_channel - 1] >= 0 && mw->channel_state[mw->transmit_channel - 1] == 2) {
 		uint8_t channel = mw->transmit_channel - 1;
-		int sent = send(mw->sock_fds[channel], mw->transmit_buffer, mw->transmit_bytes, 0);
+		int sent = send(mw->sock_fds[channel], mw->transmit_buffer, mw->transmit_bytes, MSG_NOSIGNAL);
 		if (sent < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
 			close(mw->sock_fds[channel]);
 			mw->sock_fds[channel] = -1;
