@@ -226,9 +226,76 @@ static void menu(struct nk_context *context, uint32_t num_entries, const menu_it
 	nk_layout_space_end(context);
 }
 
+void binding_loop(char *key, tern_val val, uint8_t valtype, void *data)
+{
+	if (valtype != TVAL_PTR) {
+		return;
+	}
+	tern_node **binding_lookup = data;
+	*binding_lookup = tern_insert_ptr(*binding_lookup, val.ptrval, strdup(key));
+}
+
+void binding_group(struct nk_context *context, char *name, const char **binds, uint32_t num_binds, tern_node *binding_lookup)
+{
+	nk_layout_row_static(context, 34*num_binds+30, render_width() - 80, 1);
+	if (nk_group_begin(context, name, NK_WINDOW_TITLE)) {
+		nk_layout_row_static(context, 30, render_width()/2 - 80, 2);
+		
+		for (int i = 0; i < num_binds; i++)
+		{
+			char *label_alloc = path_extension(binds[i]);
+			const char *label = label_alloc;
+			if (!label) {
+				label = binds[i];
+			}
+			nk_label(context, label, NK_TEXT_LEFT);
+			if (label_alloc) {
+				free(label_alloc);
+			}
+			nk_button_label(context, tern_find_ptr_default(binding_lookup, binds[i], "Not Set"));
+		}
+		nk_group_end(context);
+	}
+}
+
 void view_key_bindings(struct nk_context *context)
 {
-	
+	const char *controller1_binds[] = {
+		"gamepads.1.up", "gamepads.1.down", "gamepads.1.left", "gamepads.1.right"
+		"gamepads.1.a", "gamepads.1.b", "gamepads.1.c",
+		"gamepads.1.x", "gamepads.1.y", "gamepads.1.z",
+		"gamepads.1.start", "gamepads.1.mode"
+	};
+	const char *controller2_binds[] = {
+		"gamepads.2.up", "gamepads.2.down", "gamepads.2.left", "gamepads.2.right"
+		"gamepads.2.a", "gamepads.2.b", "gamepads.2.c",
+		"gamepads.2.x", "gamepads.2.y", "gamepads.2.z",
+		"gamepads.2.start", "gamepads.2.mode"
+	};
+	const char *speed_binds[] = {
+		"ui.next_speed", "ui.prev_speed",
+		"ui.set_speed.0", "ui.set_speed.1", "ui.set_speed.2" ,"ui.set_speed.3", "ui.set_speed.4",
+		"ui.set_speed.5", "ui.set_speed.6", "ui.set_speed.7" ,"ui.set_speed.8", "ui.set_speed.9",
+	};
+	const uint32_t NUM_C1_BINDS = sizeof(controller1_binds)/sizeof(*controller1_binds);
+	const uint32_t NUM_C2_BINDS = sizeof(controller2_binds)/sizeof(*controller2_binds);
+	const uint32_t NUM_SPEED_BINDS = sizeof(speed_binds)/sizeof(*speed_binds);
+	static tern_node *binding_lookup;
+	if (!binding_lookup) {
+		tern_node *bindings = tern_find_path(config, "bindings\0keys\0", TVAL_NODE).ptrval;
+		if (bindings) {
+			tern_foreach(bindings, binding_loop, &binding_lookup);
+		}
+	}
+	uint32_t width = render_width();
+	uint32_t height = render_height();
+	if (nk_begin(context, "Keyboard Bindings", nk_rect(0, 0, width, height), 0)) {
+		binding_group(context, "Controller 1", controller1_binds, NUM_C1_BINDS, binding_lookup);
+		binding_group(context, "Controller 2", controller2_binds, NUM_C2_BINDS, binding_lookup);
+		binding_group(context, "Speed Control", speed_binds, NUM_SPEED_BINDS, binding_lookup);
+		
+		nk_end(context);
+	}
 }
 void view_controllers(struct nk_context *context)
 {
