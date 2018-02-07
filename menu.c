@@ -121,7 +121,9 @@ uint32_t copy_dir_entry_to_guest(uint32_t dst, m68k_context *m68k, char *name, u
 	}
 	return dst;
 }
+#ifdef _WIN32
 #include <windows.h>
+#endif
 void * menu_write_w(uint32_t address, void * context, uint16_t value)
 {
 	m68k_context *m68k = context;
