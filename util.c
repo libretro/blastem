@@ -250,11 +250,11 @@ char * basename_no_extension(char *path)
 	return barename;
 }
 
-char *path_extension(char *path)
+char *path_extension(char const *path)
 {
-	char *lastdot = NULL;
-	char *lastslash = NULL;
-	char *cur;
+	char const *lastdot = NULL;
+	char const *lastslash = NULL;
+	char const *cur;
 	for (cur = path; *cur; cur++)
 	{
 		if (*cur == '.') {

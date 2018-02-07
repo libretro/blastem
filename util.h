@@ -41,7 +41,7 @@ char is_absolute_path(char *path);
 //Returns the basename of a path with th extension (if any) stripped
 char * basename_no_extension(char *path);
 //Returns the extension from a path or NULL if there is no extension
-char *path_extension(char *path);
+char *path_extension(char const *path);
 //Returns true if the given path matches one of the extensions in the list
 uint8_t path_matches_extensions(char *path, char **ext_list, uint32_t num_exts);
 //Returns the directory portion of a path or NULL if there is no directory part
