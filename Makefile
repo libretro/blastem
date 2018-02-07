@@ -65,8 +65,8 @@ endif #PORTABLE
 endif #Windows
 
 ifdef DEBUG
-CFLAGS:=-ggdb $(CFLAGS)
-LDFLAGS:=-ggdb $(LDFLAGS)
+CFLAGS:=-g3 $(CFLAGS)
+LDFLAGS:=-g3 $(LDFLAGS)
 else
 ifdef NOLTO
 CFLAGS:=-O2 $(CFLAGS)
