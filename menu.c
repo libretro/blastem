@@ -121,7 +121,7 @@ uint32_t copy_dir_entry_to_guest(uint32_t dst, m68k_context *m68k, char *name, u
 	}
 	return dst;
 }
-
+#include <windows.h>
 void * menu_write_w(uint32_t address, void * context, uint16_t value)
 {
 	m68k_context *m68k = context;
@@ -132,7 +132,7 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 		switch (address >> 2)
 		{
 		case 0: {
-#ifdef _WIN32
+#if _WIN32
 			//handle virtual "drives" directory
 			if (menu->curpath[0] == PATH_SEP[0]) {
 				char drivestrings[4096];
