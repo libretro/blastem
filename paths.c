@@ -108,7 +108,7 @@ char *path_append(const char *base, const char *suffix)
 #ifdef _WIN32
 		//handle transition from root of a drive to virtual root
 		if (base[1] == ':' && !base[2]) {
-			return strdup(PATH_SEP)
+			return strdup(PATH_SEP);
 		}
 #endif
 		size_t len = strlen(base);
