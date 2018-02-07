@@ -235,6 +235,7 @@ void binding_loop(char *key, tern_val val, uint8_t valtype, void *data)
 	*binding_lookup = tern_insert_ptr(*binding_lookup, val.ptrval, strdup(key));
 }
 
+static int32_t keycode;
 static const char *set_binding;
 char *set_label;
 void binding_group(struct nk_context *context, char *name, const char **binds, const char **bind_names, uint32_t num_binds, tern_node *binding_lookup)
@@ -254,6 +255,7 @@ void binding_group(struct nk_context *context, char *name, const char **binds, c
 			if (nk_button_label(context, tern_find_ptr_default(binding_lookup, binds[i], "Not Set"))) {
 				set_binding = binds[i];
 				set_label = strdup(label);
+				keycode = 0;
 			}
 			if (label_alloc) {
 				free(label_alloc);
@@ -261,6 +263,61 @@ void binding_group(struct nk_context *context, char *name, const char **binds, c
 		}
 		nk_group_end(context);
 	}
+}
+
+static char *get_key_name(int32_t keycode)
+{
+	char *name = NULL;
+	if (keycode > ' ' && keycode < 0x80) {
+		//key corresponds to a printable non-whitespace character
+		name = malloc(2);
+		name[0] = keycode;
+		name[1] = 0;
+	} else {
+		switch (keycode)
+		{
+		case RENDERKEY_UP: name = "up"; break;
+		case RENDERKEY_DOWN: name = "down"; break;
+		case RENDERKEY_LEFT: name = "left"; break;
+		case RENDERKEY_RIGHT: name = "right"; break;
+		case '\r': name = "enter"; break;
+		case ' ': name = "space"; break;
+		case '\t': name = "tab"; break;
+		case '\b': name = "backspace"; break;
+		case RENDERKEY_ESC: name = "esc"; break;
+		case RENDERKEY_DEL: name = "delete"; break;
+		case RENDERKEY_LSHIFT: name = "lshift"; break;
+		case RENDERKEY_RSHIFT: name = "rshift"; break;
+		case RENDERKEY_LCTRL: name = "lctrl"; break;
+		case RENDERKEY_RCTRL: name = "rctrl"; break;
+		case RENDERKEY_LALT: name = "lalt"; break;
+		case RENDERKEY_RALT: name = "ralt"; break;
+		case RENDERKEY_HOME: name = "home"; break;
+		case RENDERKEY_END: name = "end"; break;
+		case RENDERKEY_PAGEUP: name = "pageup"; break;
+		case RENDERKEY_PAGEDOWN: name = "pagedown"; break;
+		case RENDERKEY_F1: name = "f1"; break;
+		case RENDERKEY_F2: name = "f2"; break;
+		case RENDERKEY_F3: name = "f3"; break;
+		case RENDERKEY_F4: name = "f4"; break;
+		case RENDERKEY_F5: name = "f5"; break;
+		case RENDERKEY_F6: name = "f6"; break;
+		case RENDERKEY_F7: name = "f7"; break;
+		case RENDERKEY_F8: name = "f8"; break;
+		case RENDERKEY_F9: name = "f9"; break;
+		case RENDERKEY_F10: name = "f10"; break;
+		case RENDERKEY_F11: name = "f11"; break;
+		case RENDERKEY_F12: name = "f12"; break;
+		case RENDERKEY_SELECT: name = "select"; break;
+		case RENDERKEY_PLAY: name = "play"; break;
+		case RENDERKEY_SEARCH: name = "search"; break;
+		case RENDERKEY_BACK: name = "back"; break;
+		}
+		if (name) {
+			name = strdup(name);
+		}
+	}
+	return name;
 }
 
 void view_key_bindings(struct nk_context *context)
@@ -282,7 +339,7 @@ void view_key_bindings(struct nk_context *context)
 		"ui.screenshot", "ui.sms_pause", "ui.toggle_keyboard_cpatured", "ui.release_mouse"
 	};
 	const char *general_names[] = {
-		"Show Menu", "Quick Save", "Toggle Fullscreen", "Soft Reset", "Reload Media"
+		"Show Menu", "Quick Save", "Toggle Fullscreen", "Soft Reset", "Reload Media",
 		"Internal Screenshot", "SMS Pause", "Capture Keyboard", "Release Mouse"
 	};
 	const char *speed_binds[] = {
@@ -329,6 +386,36 @@ void view_key_bindings(struct nk_context *context)
 		nk_label(context, "Press new key for", NK_TEXT_CENTERED);
 		nk_label(context, set_label, NK_TEXT_CENTERED);
 		if (nk_button_label(context, "Cancel")) {
+			free(set_label);
+			set_binding = set_label = NULL;
+		} else if (keycode) {
+			char *name = get_key_name(keycode);
+			if (name) {
+				uint32_t prefix_len = strlen("bindings") + strlen("keys") + 2;
+				char * old = tern_find_ptr(binding_lookup, set_binding);
+				if (old) {
+					uint32_t suffix_len = strlen(old) + 1;
+					char *old_path = malloc(prefix_len + suffix_len + 1);
+					memcpy(old_path, "bindings\0keys\0", prefix_len);
+					memcpy(old_path + prefix_len, old, suffix_len);
+					old_path[prefix_len + suffix_len] = 0;
+					tern_val old_val;
+					if (tern_delete_path(&config, old_path, &old_val) == TVAL_PTR) {
+						free(old_val.ptrval);
+					}
+				}
+				uint32_t suffix_len = strlen(name) + 1;
+				char *path = malloc(prefix_len + suffix_len + 1);
+				memcpy(path, "bindings\0keys\0", prefix_len);
+				memcpy(path + prefix_len, name, suffix_len);
+				path[prefix_len + suffix_len] = 0;
+				
+				config = tern_insert_path(config, path, (tern_val){.ptrval = strdup(set_binding)}, TVAL_PTR);
+				free(path);
+				free(name);
+				tern_free(binding_lookup);
+				binding_lookup = NULL;
+			}
 			free(set_label);
 			set_binding = set_label = NULL;
 		}
@@ -753,6 +840,9 @@ void ui_idle_loop(void)
 }
 static void handle_event(SDL_Event *event)
 {
+	if (event->type == SDL_KEYDOWN) {
+		keycode = event->key.keysym.sym;
+	}
 	nk_sdl_handle_event(event);
 }
 
