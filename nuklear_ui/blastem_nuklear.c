@@ -136,6 +136,53 @@ void view_lock_on(struct nk_context *context)
 
 void view_about(struct nk_context *context)
 {
+	const char *lines[] = {
+		"BlastEm v0.6.0",
+		"Copyright 2012-2017 Michael Pavone",
+		"",
+		"BlastEm is a high performance open source",
+		"(GPLv3) Genesis/Megadrive emulator",
+	};
+	const uint32_t NUM_LINES = sizeof(lines)/sizeof(*lines);
+	const char *thanks[] = {
+		"Nemesis: Documentatino and test ROMs",
+		"Charles MacDonald: Documentation",
+		"Eke-Eke: Documentation",
+		"Bart Trzynadlowski: Documentation",
+		"KanedaFR: Hosting the best Sega forum",
+		"Titan: Awesome demos and documentation",
+		"micky: Testing",
+		"Sasha: Testing",
+		"lol-frank: Testing",
+		"Sik: Testing",
+		"Tim Lawrence : Testing",
+		"ComradeOj: Testing",
+		"Vladikcomper: Testing"
+	};
+	const uint32_t NUM_THANKS = sizeof(thanks)/sizeof(*thanks);
+	uint32_t width = render_width();
+	uint32_t height = render_height();
+	if (nk_begin(context, "About", nk_rect(0, 0, width, height), 0)) {
+		nk_layout_row_static(context, 30, width-40, 1);
+		for (uint32_t i = 0; i < NUM_LINES; i++)
+		{
+			nk_label(context, lines[i], NK_TEXT_LEFT);
+		}
+		nk_layout_row_static(context, height - 80 - 34*NUM_LINES, width-40, 1);
+		if (nk_group_begin(context, "Special Thanks", NK_WINDOW_TITLE)) {
+			nk_layout_row_static(context, 30, width - 80, 1);
+			for (uint32_t i = 0; i < NUM_THANKS; i++)
+			{
+				nk_label(context, thanks[i], NK_TEXT_LEFT);
+			}
+			nk_group_end(context);
+		}
+		nk_layout_row_static(context, 52, width/3, 1);
+		if (nk_button_label(context, "Back")) {
+			pop_view();
+		}
+		nk_end(context);
+	}
 }
 
 typedef struct {
