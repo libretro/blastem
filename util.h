@@ -34,6 +34,8 @@ char * strip_ws(char * text);
 char * split_keyval(char * text);
 //Takes a binary byte buffer and produces a lowercase hex string
 void bin_to_hex(uint8_t *output, uint8_t *input, uint64_t size);
+//Takes an (optionally) null-terminated UTF16-BE string and converts a maximum of max_size code-units to UTF-8
+char *utf16be_to_utf8(uint8_t *buf, uint32_t max_size);
 //Determines whether a character is a valid path separator for the current platform
 char is_path_sep(char c);
 //Determines whether a path is considered an absolute path on the current platform

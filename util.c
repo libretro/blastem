@@ -204,6 +204,50 @@ void bin_to_hex(uint8_t *output, uint8_t *input, uint64_t size)
 	*(output++) = 0;
 }
 
+char *utf16be_to_utf8(uint8_t *buf, uint32_t max_size)
+{
+	uint8_t *cur = buf;
+	uint32_t converted_size = 0;
+	for (uint32_t i = 0; i < max_size; i++, cur+=2)
+	{
+		uint16_t code = *cur << 16 | cur[1];
+		if (!code) {
+			break;
+		}
+		if (code < 0x80) {
+			converted_size++;
+		} else if (code < 0x800) {
+			converted_size += 2;
+		} else {
+			//TODO: Deal with surrogate pairs
+			converted_size += 3;
+		}
+	}
+	char *out = malloc(converted_size + 1);
+	char *cur_out = out;
+	cur = buf;
+	for (uint32_t i = 0; i < max_size; i++, cur+=2)
+	{
+		uint16_t code = *cur << 16 | cur[1];
+		if (!code) {
+			break;
+		}
+		if (code < 0x80) {
+			*(cur_out++) = code;
+		} else if (code < 0x800) {
+			*(cur_out++) = 0xC0 | code >> 6;
+			*(cur_out++) = 0x80 | (code & 0x3F);
+		} else {
+			//TODO: Deal with surrogate pairs
+			*(cur_out++) = 0xF0 | code >> 12;
+			*(cur_out++) = 0x80 | (code >> 6 & 0x3F);
+			*(cur_out++) = 0x80 | (code & 0x3F);
+		}
+	}
+	*cur_out = 0;
+	return out;
+}
+
 char is_path_sep(char c)
 {
 #ifdef _WIN32
