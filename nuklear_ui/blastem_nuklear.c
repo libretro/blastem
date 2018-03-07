@@ -902,11 +902,12 @@ static void context_created(void)
 	nk_sdl_device_create();
 	struct nk_font_atlas *atlas;
 	nk_sdl_font_stash_begin(&atlas);
-	char *font = default_font_path();
+	uint32_t font_size;
+	uint8_t *font = default_font(&font_size);
 	if (!font) {
 		fatal_error("Failed to find default font path\n");
 	}
-	struct nk_font *def_font = nk_font_atlas_add_from_file(atlas, font, 30, NULL);
+	struct nk_font *def_font = nk_font_atlas_add_from_memory(atlas, font, font_size, 30, NULL);
 	nk_sdl_font_stash_end();
 	nk_style_set_font(context, &def_font->handle);
 }
@@ -944,11 +945,14 @@ void blastem_nuklear_init(uint8_t file_loaded)
 	
 	struct nk_font_atlas *atlas;
 	nk_sdl_font_stash_begin(&atlas);
-	char *font = default_font_path();
+	//char *font = default_font_path();
+	uint32_t font_size;
+	uint8_t *font = default_font(&font_size);
 	if (!font) {
 		fatal_error("Failed to find default font path\n");
 	}
-	struct nk_font *def_font = nk_font_atlas_add_from_file(atlas, font, 30, NULL);
+	//struct nk_font *def_font = nk_font_atlas_add_from_file(atlas, font, 30, NULL);
+	struct nk_font *def_font = nk_font_atlas_add_from_memory(atlas, font, font_size, 30, NULL);
 	nk_sdl_font_stash_end();
 	nk_style_set_font(context, &def_font->handle);
 	current_view = file_loaded ? view_play : view_menu;
