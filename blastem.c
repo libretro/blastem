@@ -24,6 +24,7 @@
 #include "arena.h"
 #include "config.h"
 #include "menu.h"
+#include "zip.h"
 
 #define BLASTEM_VERSION "0.5.2-pre"
 
@@ -95,9 +96,48 @@ int load_smd_rom(ROMFILE f, void **buffer)
 	return readsize;
 }
 
+uint32_t load_rom_zip(char *filename, void **dst)
+{
+	static const char *valid_exts[] = {"bin", "md", "gen", "sms", "rom"};
+	const uint32_t num_exts = sizeof(valid_exts)/sizeof(*valid_exts);
+	zip_file *z = zip_open(filename);
+	if (!z) {
+		return 0;
+	}
+	
+	for (uint32_t i = 0; i < z->num_entries; i++)
+	{
+		char *ext = path_extension(z->entries[i].name);
+		if (!ext) {
+			continue;
+		}
+		for (uint32_t j = 0; j < num_exts; j++)
+		{
+			if (!strcasecmp(ext, valid_exts[j])) {
+				size_t out_size = nearest_pow2(z->entries[i].size);
+				*dst = zip_read(z, i, &out_size);
+				if (*dst) {
+					free(ext);
+					zip_close(z);
+					return out_size;
+				}
+			}
+		}
+		free(ext);
+	}
+	zip_close(z);
+	return 0;
+}
+
 uint32_t load_rom(char * filename, void **dst, system_type *stype)
 {
 	uint8_t header[10];
+	char *ext = path_extension(filename);
+	if (!strcasecmp(ext, "zip")) {
+		free(ext);
+		return load_rom_zip(filename, dst);
+	}
+	free(ext);
 	ROMFILE f = romopen(filename, "rb");
 	if (!f) {
 		return 0;
