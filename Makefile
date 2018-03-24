@@ -35,7 +35,7 @@ LIBS=sdl2 glew gl
 endif #Darwin
 
 HAS_PROC:=$(shell if [ -d /proc ]; then /bin/echo -e -DHAS_PROC; fi)
-CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -Wno-unused-value $(HAS_PROC)
+CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -Wno-unused-value $(HAS_PROC) -DHAVE_UNISTD_H
 ifeq ($(OS),Darwin)
 #This should really be based on whether or not the C compiler is clang rather than based on the OS
 CFLAGS+= -Wno-logical-op-parentheses
@@ -126,8 +126,18 @@ endif
 Z80OBJS=z80inst.o z80_to_x86.o
 AUDIOOBJS=ym2612.o psg.o wave.o
 CONFIGOBJS=config.o tern.o util.o
+LIBZOBJS=zlib/adler32.o zlib/compress.o zlib/crc32.o zlib/deflate.o zlib/gzclose.o zlib/gzlib.o zlib/gzread.o\
+	zlib/gzwrite.o zlib/infback.o zlib/inffast.o zlib/inflate.o zlib/inftrees.o zlib/trees.o zlib/uncompr.o zlib/zutil.o
 
-MAINOBJS=blastem.o system.o genesis.o debug.o gdb_remote.o vdp.o render_sdl.o ppm.o io.o romdb.o hash.o menu.o xband.o realtec.o i2c.o nor.o sega_mapper.o multi_game.o megawifi.o net.o serialize.o $(TERMINAL) $(CONFIGOBJS) gst.o $(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS)
+MAINOBJS=blastem.o system.o genesis.o debug.o gdb_remote.o vdp.o render_sdl.o ppm.o io.o romdb.o hash.o menu.o xband.o\
+	realtec.o i2c.o nor.o sega_mapper.o multi_game.o megawifi.o net.o serialize.o $(TERMINAL) $(CONFIGOBJS) gst.o\
+	$(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS)
+	
+ifdef NOZLIB
+CFLAGS+= -DDISABLE_ZLIB
+else
+MAINOBJS+= $(LIBZOBJS)
+endif
 
 ifeq ($(CPU),x86_64)
 CFLAGS+=-DX86_64 -m64
@@ -252,4 +262,4 @@ font.tiles : font.png
 menu.bin : font_interlace_variable.tiles arrow.tiles cursor.tiles button.tiles font.tiles
 
 clean :
-	rm -rf $(ALL) trans ztestrun ztestgen *.o
+	rm -rf $(ALL) trans ztestrun ztestgen *.o zlib/*.o

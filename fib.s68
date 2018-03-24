@@ -1,8 +1,8 @@
     dc.l $0, start
 start:
-	moveq #36, d0
+	moveq #42, d0
 	bsr fib
-	illegal
+	reset
 fib:
 	cmp.l #2, d0
 	blt base
