@@ -47,37 +47,65 @@ tern_node * config;
 #define SMD_MAGIC3 0xBB
 #define SMD_BLOCK_SIZE 0x4000
 
-int load_smd_rom(long filesize, FILE * f, void **buffer)
+#ifdef DISABLE_ZLIB
+#define ROMFILE FILE*
+#define romopen fopen
+#define romread fread
+#define romseek fseek
+#define romgetc fgetc
+#define romclose fclose
+#else
+#include "zlib/zlib.h"
+#define ROMFILE gzFile
+#define romopen gzopen
+#define romread gzfread
+#define romseek gzseek
+#define romgetc gzgetc
+#define romclose gzclose
+#endif
+
+int load_smd_rom(ROMFILE f, void **buffer)
 {
 	uint8_t block[SMD_BLOCK_SIZE];
-	filesize -= SMD_HEADER_SIZE;
-	fseek(f, SMD_HEADER_SIZE, SEEK_SET);
+	romseek(f, SMD_HEADER_SIZE, SEEK_SET);
 
-	uint16_t *dst = *buffer = malloc(nearest_pow2(filesize));
-	int rom_size = filesize;
-	while (filesize > 0) {
-		fread(block, 1, SMD_BLOCK_SIZE, f);
-		for (uint8_t *low = block, *high = (block+SMD_BLOCK_SIZE/2), *end = block+SMD_BLOCK_SIZE; high < end; high++, low++) {
-			*(dst++) = *low << 8 | *high;
+	size_t filesize = 512 * 1024;
+	size_t readsize = 0;
+	uint16_t *dst = malloc(filesize);
+	
+
+	size_t read;
+	do {
+		if ((readsize + SMD_BLOCK_SIZE > filesize)) {
+			filesize *= 2;
+			dst = realloc(dst, filesize);
 		}
-		filesize -= SMD_BLOCK_SIZE;
-	}
-	return rom_size;
+		read = romread(block, 1, SMD_BLOCK_SIZE, f);
+		if (read > 0) {
+			for (uint8_t *low = block, *high = (block+read/2), *end = block+read; high < end; high++, low++) {
+				*(dst++) = *low << 8 | *high;
+			}
+			readsize += read;
+		}
+	} while(read > 0);
+	romclose(f);
+	
+	*buffer = dst;
+	
+	return readsize;
 }
 
 uint32_t load_rom(char * filename, void **dst, system_type *stype)
 {
 	uint8_t header[10];
-	FILE * f = fopen(filename, "rb");
+	ROMFILE f = romopen(filename, "rb");
 	if (!f) {
 		return 0;
 	}
-	if (sizeof(header) != fread(header, 1, sizeof(header), f)) {
+	if (sizeof(header) != romread(header, 1, sizeof(header), f)) {
 		fatal_error("Error reading from %s\n", filename);
 	}
-	fseek(f, 0, SEEK_END);
-	long filesize = ftell(f);
-	fseek(f, 0, SEEK_SET);
+	
 	if (header[1] == SMD_MAGIC1 && header[8] == SMD_MAGIC2 && header[9] == SMD_MAGIC3) {
 		int i;
 		for (i = 3; i < 8; i++) {
@@ -92,15 +120,38 @@ uint32_t load_rom(char * filename, void **dst, system_type *stype)
 			if (stype) {
 				*stype = SYSTEM_GENESIS;
 			}
-			return load_smd_rom(filesize, f, dst);
+			return load_smd_rom(f, dst);
 		}
 	}
-	*dst = malloc(nearest_pow2(filesize));
-	if (filesize != fread(*dst, 1, filesize, f)) {
-		fatal_error("Error reading from %s\n", filename);
-	}
-	fclose(f);
-	return filesize;
+	
+	size_t filesize = 512 * 1024;
+	size_t readsize = sizeof(header);
+		
+	char *buf = malloc(filesize);
+	memcpy(buf, header, readsize);
+	
+	size_t read;
+	do {
+		read = romread(buf + readsize, 1, filesize - readsize, f);
+		if (read > 0) {
+			readsize += read;
+			if (readsize == filesize) {
+				int one_more = romgetc(f);
+				if (one_more >= 0) {
+					filesize *= 2;
+					buf = realloc(buf, filesize);
+					buf[readsize++] = one_more;
+				} else {
+					read = 0;
+				}
+			}
+		}
+	} while (read > 0);
+	
+	*dst = buf;
+	
+	romclose(f);
+	return readsize;
 }
 
 
