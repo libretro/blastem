@@ -131,7 +131,7 @@ LIBZOBJS=zlib/adler32.o zlib/compress.o zlib/crc32.o zlib/deflate.o zlib/gzclose
 
 MAINOBJS=blastem.o system.o genesis.o debug.o gdb_remote.o vdp.o render_sdl.o ppm.o io.o romdb.o hash.o menu.o xband.o\
 	realtec.o i2c.o nor.o sega_mapper.o multi_game.o megawifi.o net.o serialize.o $(TERMINAL) $(CONFIGOBJS) gst.o\
-	$(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS)
+	zip.o $(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS)
 	
 ifdef NOZLIB
 CFLAGS+= -DDISABLE_ZLIB
