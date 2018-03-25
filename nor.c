@@ -1,6 +1,7 @@
 #include "genesis.h"
 #include <stdlib.h>
 #include <string.h>
+#include "util.h"
 
 enum {
 	NOR_NORMAL,
@@ -31,9 +32,11 @@ void nor_flash_init(nor_state *state, uint8_t *buffer, uint32_t size, uint32_t p
 	state->cmd_state = NOR_CMD_IDLE;
 	state->alt_cmd = 0;
 	state->bus_flags = bus_flags;
+	state->cmd_address1 = 0x5555;
+	state->cmd_address2 = 0x2AAA;
 }
 
-void nor_run(nor_state *state, uint32_t cycle)
+void nor_run(nor_state *state, m68k_context *m68k, uint32_t cycle)
 {
 	if (state->last_write_cycle == 0xFFFFFFFF) {
 		return;
@@ -44,6 +47,10 @@ void nor_run(nor_state *state, uint32_t cycle)
 			state->buffer[state->current_page + i] = state->page_buffer[i];
 		}
 		memset(state->page_buffer, 0xFF, state->page_size);
+		if (state->bus_flags == RAM_FLAG_BOTH) {
+			//TODO: add base address of NOR device to start and end addresses
+			m68k_invalidate_code_range(m68k, state->current_page, state->current_page + state->page_size);
+		}
 	}
 }
 
@@ -62,10 +69,13 @@ uint8_t nor_flash_read_b(uint32_t address, void *vcontext)
 		address = address >> 1;
 	}
 	
-	nor_run(state, m68k->current_cycle);
+	nor_run(state, m68k, m68k->current_cycle);
 	switch (state->mode)
 	{
 	case NOR_NORMAL:
+		if (state->bus_flags == RAM_FLAG_BOTH) {
+			address ^= 1;
+		}
 		return state->buffer[address & (state->size-1)];
 		break;
 	case NOR_PRODUCTID:
@@ -80,7 +90,7 @@ uint8_t nor_flash_read_b(uint32_t address, void *vcontext)
 			return 0xFE;
 		default:
 			return 0xFE;
-		}
+		}			//HERE
 		break;
 	case NOR_BOOTBLOCK:
 		break;
@@ -102,6 +112,9 @@ void nor_write_byte(nor_state *state, uint32_t address, uint8_t value, uint32_t 
 	case NOR_NORMAL:
 		if (state->last_write_cycle != 0xFFFFFFFF) {
 			state->current_page = address & (state->size - 1) & ~(state->page_size - 1);
+		}
+		if (state->bus_flags == RAM_FLAG_BOTH) {
+			address ^= 1;
 		}
 		state->page_buffer[address & (state->page_size - 1)] = value;
 		break;
@@ -129,11 +142,11 @@ void *nor_flash_write_b(uint32_t address, void *vcontext, uint8_t value)
 		address = address >> 1;
 	}
 	
-	nor_run(state, m68k->current_cycle);
+	nor_run(state, m68k, m68k->current_cycle);
 	switch (state->cmd_state)
 	{
 	case NOR_CMD_IDLE:
-		if (value == 0xAA && (address & (state->size - 1)) == 0x5555) {
+		if (value == 0xAA && (address & (state->size - 1)) == state->cmd_address1) {
 			state->cmd_state = NOR_CMD_AA;
 		} else {
 			nor_write_byte(state, address, value, m68k->current_cycle);
@@ -141,16 +154,16 @@ void *nor_flash_write_b(uint32_t address, void *vcontext, uint8_t value)
 		}
 		break;
 	case NOR_CMD_AA:
-		if (value == 0x55 && (address & (state->size - 1)) == 0x2AAA) {
+		if (value == 0x55 && (address & (state->size - 1)) == state->cmd_address2) {
 			state->cmd_state = NOR_CMD_55;
 		} else {
-			nor_write_byte(state, 0x5555, 0xAA, m68k->current_cycle);
+			nor_write_byte(state, state->cmd_address1, 0xAA, m68k->current_cycle);
 			nor_write_byte(state, address, value, m68k->current_cycle);
 			state->cmd_state = NOR_CMD_IDLE;
 		}
 		break;
 	case NOR_CMD_55:
-		if ((address & (state->size - 1)) == 0x5555) {
+		if ((address & (state->size - 1)) == state->cmd_address1) {
 			if (state->alt_cmd) {
 				switch(value)
 				{
@@ -187,8 +200,8 @@ void *nor_flash_write_b(uint32_t address, void *vcontext, uint8_t value)
 				}
 			}
 		} else {
-			nor_write_byte(state, 0x5555, 0xAA, m68k->current_cycle);
-			nor_write_byte(state, 0x2AAA, 0x55, m68k->current_cycle);
+			nor_write_byte(state, state->cmd_address1, 0xAA, m68k->current_cycle);
+			nor_write_byte(state, state->cmd_address2, 0x55, m68k->current_cycle);
 			nor_write_byte(state, address, value, m68k->current_cycle);
 		}
 		state->cmd_state = NOR_CMD_IDLE;

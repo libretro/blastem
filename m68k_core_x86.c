@@ -2365,7 +2365,7 @@ void translate_m68k_stop(m68k_options *opts, m68kinst *inst)
 	}
 	code_ptr loop_top = code->cur;
 		call(code, opts->do_sync);
-		cmp_rr(code, opts->gen.limit, opts->gen.cycles, SZ_D);
+		cmp_rr(code, opts->gen.cycles, opts->gen.limit, SZ_D);
 		code_ptr normal_cycle_up = code->cur + 1;
 		jcc(code, CC_A, code->cur + 2);
 			cycles(&opts->gen, BUS);
