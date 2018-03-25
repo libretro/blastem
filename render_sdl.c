@@ -8,6 +8,7 @@
 #include <string.h>
 #include <math.h>
 #include "render.h"
+#include "render_sdl.h"
 #include "blastem.h"
 #include "genesis.h"
 #include "io.h"
@@ -523,6 +524,11 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 	atexit(render_quit);
 }
 
+SDL_Window *render_get_window(void)
+{
+	return main_window;
+}
+
 void render_set_video_standard(vid_std std)
 {
 	video_standard = std;
@@ -588,7 +594,8 @@ uint8_t events_processed;
 #define FPS_INTERVAL 1000
 #endif
 
-static uint32_t last_width;
+static uint32_t last_width, last_height;
+static uint8_t interlaced;
 void render_framebuffer_updated(uint8_t which, int width)
 {
 	static uint8_t last;
@@ -614,37 +621,12 @@ void render_framebuffer_updated(uint8_t which, int width)
 		shot_height = video_standard == VID_NTSC ? 243 : 294;
 		shot_width = width;
 	}
+	interlaced = last != which;
 	width -= overscan_left[video_standard] + overscan_right[video_standard];
 #ifndef DISABLE_OPENGL
 	if (render_gl && which <= FRAMEBUFFER_EVEN) {
 		glBindTexture(GL_TEXTURE_2D, textures[which]);
 		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, LINEBUF_SIZE, height, GL_BGRA, GL_UNSIGNED_BYTE, texture_buf + overscan_left[video_standard] + LINEBUF_SIZE * overscan_top[video_standard]);
-
-		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
-
-		glUseProgram(program);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, textures[0]);
-		glUniform1i(un_textures[0], 0);
-
-		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, textures[last != which ? 1 : scanlines ? 2 : 0]);
-		glUniform1i(un_textures[1], 1);
-
-		glUniform1f(un_width, width);
-		glUniform1f(un_height, height);
-
-		glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
-		glVertexAttribPointer(at_pos, 2, GL_FLOAT, GL_FALSE, sizeof(GLfloat[2]), (void *)0);
-		glEnableVertexAttribArray(at_pos);
-
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[1]);
-		glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_SHORT, (void *)0);
-
-		glDisableVertexAttribArray(at_pos);
-
-		SDL_GL_SwapWindow(main_window);
 		
 		if (screenshot_file) {
 			//properly supporting interlaced modes here is non-trivial, so only save the odd field for now
@@ -698,19 +680,11 @@ void render_framebuffer_updated(uint8_t which, int width)
 #endif
 		}
 		SDL_UnlockTexture(sdl_textures[which]);
-		SDL_Rect src_clip = {
-			.x = overscan_left[video_standard],
-			.y = overscan_top[video_standard],
-			.w = width,
-			.h = height
-		};
-		SDL_SetRenderDrawColor(main_renderer, 0, 0, 0, 255);
-		SDL_RenderClear(main_renderer);
-		SDL_RenderCopy(main_renderer, sdl_textures[which], &src_clip, &main_clip);
-		SDL_RenderPresent(main_renderer);
 #ifndef DISABLE_OPENGL
 	}
 #endif
+	last_height = height;
+	render_update_display();
 	if (screenshot_file) {
 		fclose(screenshot_file);
 	}
@@ -735,6 +709,65 @@ void render_framebuffer_updated(uint8_t which, int width)
 			frame_counter = 0;
 		}
 	}
+}
+
+static ui_render_fun render_ui;
+void render_set_ui_render_fun(ui_render_fun fun)
+{
+	render_ui = fun;
+}
+
+void render_update_display()
+{
+#ifndef DISABLE_OPENGL
+	if (render_gl) {
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+
+		glUseProgram(program);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, textures[0]);
+		glUniform1i(un_textures[0], 0);
+
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, textures[interlaced ? 1 : scanlines ? 2 : 0]);
+		glUniform1i(un_textures[1], 1);
+
+		glUniform1f(un_width, render_emulated_width());
+		glUniform1f(un_height, last_height);
+
+		glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
+		glVertexAttribPointer(at_pos, 2, GL_FLOAT, GL_FALSE, sizeof(GLfloat[2]), (void *)0);
+		glEnableVertexAttribArray(at_pos);
+
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[1]);
+		glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_SHORT, (void *)0);
+
+		glDisableVertexAttribArray(at_pos);
+		
+		if (render_ui) {
+			render_ui();
+		}
+
+		SDL_GL_SwapWindow(main_window);
+	} else {
+#endif
+		SDL_Rect src_clip = {
+			.x = overscan_left[video_standard],
+			.y = overscan_top[video_standard],
+			.w = render_emulated_width(),
+			.h = last_height
+		};
+		SDL_SetRenderDrawColor(main_renderer, 0, 0, 0, 255);
+		SDL_RenderClear(main_renderer);
+		SDL_RenderCopy(main_renderer, sdl_textures[FRAMEBUFFER_ODD], &src_clip, &main_clip);
+		if (render_ui) {
+			render_ui();
+		}
+		SDL_RenderPresent(main_renderer);
+#ifndef DISABLE_OPENGL
+	}
+#endif
 	if (!events_processed) {
 		process_events();
 	}
@@ -989,8 +1022,24 @@ void render_set_drag_drop_handler(drop_handler handler)
 	drag_drop_handler = handler;
 }
 
+static ui_render_fun on_context_destroyed, on_context_created;
+void render_set_gl_context_handlers(ui_render_fun destroy, ui_render_fun create)
+{
+	on_context_destroyed = destroy;
+	on_context_created = create;
+}
+
+static event_handler custom_event_handler;
+void render_set_event_handler(event_handler handler)
+{
+	custom_event_handler = handler;
+}
+
 static int32_t handle_event(SDL_Event *event)
 {
+	if (custom_event_handler) {
+		custom_event_handler(event);
+	}
 	switch (event->type) {
 	case SDL_KEYDOWN:
 		handle_keydown(event->key.keysym.sym, scancode_map[event->key.keysym.scancode]);
@@ -1053,9 +1102,15 @@ static int32_t handle_event(SDL_Event *event)
 			update_aspect();
 #ifndef DISABLE_OPENGL
 			if (render_gl) {
+				if (on_context_destroyed) {
+					on_context_destroyed();
+				}
 				SDL_GL_DeleteContext(main_context);
 				main_context = SDL_GL_CreateContext(main_window);
 				gl_setup();
+				if (on_context_created) {
+					on_context_created();
+				}
 			}
 #endif
 			break;
@@ -1190,3 +1245,17 @@ void render_infobox(char *title, char *message)
 	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, title, message, NULL);
 }
 
+uint32_t render_elapsed_ms(void)
+{
+	return SDL_GetTicks();
+}
+
+void render_sleep_ms(uint32_t delay)
+{
+	return SDL_Delay(delay);
+}
+
+uint8_t render_has_gl(void)
+{
+	return render_gl;
+}

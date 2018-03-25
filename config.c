@@ -5,6 +5,7 @@
 */
 #include "tern.h"
 #include "util.h"
+#include "paths.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,7 +37,7 @@ char * strtok_r(char * input, char * sep, char ** state)
 }
 #endif
 
-tern_node * parse_config_int(char **state, int started, int *line)
+static tern_node * parse_config_int(char **state, int started, int *line)
 {
 	char *config_data, *curline;
 	tern_node * head = NULL;
@@ -88,6 +89,80 @@ tern_node *parse_config(char * config_data)
 	return parse_config_int(&config_data, 0, &line);
 }
 
+typedef struct {
+	char     *buf;
+	uint32_t capacity;
+	uint32_t size;
+	uint32_t indent;
+} serialize_state;
+
+static void ensure_buf_capacity(uint32_t ensure, serialize_state *state)
+{
+	if (ensure + state->size > state->capacity) {
+		state->capacity = state->capacity * 2;
+		state->buf = realloc(state->buf, state->capacity);
+	}
+}
+
+static void indent(serialize_state *state)
+{
+	memset(state->buf + state->size, '\t', state->indent);
+	state->size += state->indent;
+}
+
+static void serialize_config_int(tern_node *config, serialize_state *state);
+
+static void serialize_iter(char *key, tern_val val, uint8_t valtype, void *data)
+{
+	serialize_state *state = data;
+	uint32_t keylen = strlen(key);
+	uint32_t vallen = 0;
+	if (valtype == TVAL_PTR) {
+		vallen = strlen(val.ptrval);
+	}
+	ensure_buf_capacity(state->indent + keylen + 2 + vallen, state);
+	state->buf[state->size++] = '\n';
+	indent(state);
+	memcpy(state->buf + state->size, key, keylen);
+	state->size += keylen;
+	state->buf[state->size++] = ' ';
+	if (valtype == TVAL_PTR) {
+		memcpy(state->buf + state->size, val.ptrval, vallen);
+		state->size += vallen;
+	} else {
+		serialize_config_int(val.ptrval, state);
+	}
+}
+
+static void serialize_config_int(tern_node *config, serialize_state *state)
+{
+	ensure_buf_capacity(1, state);
+	state->buf[state->size++] = '{';
+	state->indent++;
+	
+	tern_foreach(config, serialize_iter, state);
+
+	--state->indent;
+	ensure_buf_capacity(2 + state->indent, state);
+	state->buf[state->size++] = '\n';
+	indent(state);
+	state->buf[state->size++] = '}';
+}
+
+char *serialize_config(tern_node *config, uint32_t *size_out)
+{
+	serialize_state state = {
+		.size = 0,
+		.capacity = 1024,
+		.indent = 0
+	};
+	state.buf = malloc(state.capacity);
+	tern_foreach(config, serialize_iter, &state);
+	//serialize_config_int(config, &state);
+	*size_out = state.size;
+	return state.buf;
+}
+
 tern_node *parse_config_file(char *config_path)
 {
 	tern_node * ret = NULL;
@@ -114,6 +189,19 @@ open_fail:
 	return ret;
 }
 
+uint8_t serialize_config_file(tern_node *config, char *path)
+{
+	FILE *f = fopen(path, "w");
+	if (!f) {
+		return 0;
+	}
+	uint32_t buf_size;
+	char *buffer = serialize_config(config, &buf_size);
+	uint8_t ret = buf_size == fwrite(buffer, 1, buf_size, f);
+	fclose(f);
+	return ret;
+}
+
 tern_node *parse_bundled_config(char *config_name)
 {
 	uint32_t confsize;
@@ -133,7 +221,7 @@ tern_node *load_config()
 	char *confpath = NULL;
 	tern_node *ret;
 	if (confdir) {
-		confpath = alloc_concat(confdir, "/blastem.cfg");
+		confpath = path_append(confdir, "blastem.cfg");
 		ret = parse_config_file(confpath);
 		if (ret) {
 			free(confpath);
@@ -154,4 +242,38 @@ tern_node *load_config()
 	}
 	//this will never get reached, but the compiler doesn't know that. Let's make it happy
 	return NULL;
+}
+
+void persist_config(tern_node *config)
+{
+	char const *confdir = get_config_dir();
+	if (!confdir) {
+		fatal_error("Failed to locate config file directory\n");
+	}
+	ensure_dir_exists(confdir);
+	char *confpath = path_append(confdir, "blastem.cfg");
+	if (!serialize_config_file(config, confpath)) {
+		fatal_error("Failed to write config to %s\n", confpath);
+	}
+	free(confpath);
+}
+
+char **get_extension_list(tern_node *config, uint32_t *num_exts_out)
+{
+	char *ext_filter = strdup(tern_find_path_default(config, "ui\0extensions\0", (tern_val){.ptrval = "bin gen md smd sms gg"}, TVAL_PTR).ptrval);
+	uint32_t num_exts = 0, ext_storage = 5;
+	char **ext_list = malloc(sizeof(char *) * ext_storage);
+	char *cur_filter = ext_filter;
+	while (*cur_filter)
+	{
+		if (num_exts == ext_storage) {
+			ext_storage *= 2;
+			ext_list = realloc(ext_list, sizeof(char *) * ext_storage);
+		}
+		ext_list[num_exts++] = cur_filter;
+		cur_filter = split_keyval(cur_filter);
+	}
+	free(ext_filter);
+	*num_exts_out = num_exts;
+	return ext_list;
 }

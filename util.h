@@ -34,6 +34,8 @@ char * strip_ws(char * text);
 char * split_keyval(char * text);
 //Takes a binary byte buffer and produces a lowercase hex string
 void bin_to_hex(uint8_t *output, uint8_t *input, uint64_t size);
+//Takes an (optionally) null-terminated UTF16-BE string and converts a maximum of max_size code-units to UTF-8
+char *utf16be_to_utf8(uint8_t *buf, uint32_t max_size);
 //Determines whether a character is a valid path separator for the current platform
 char is_path_sep(char c);
 //Determines whether a path is considered an absolute path on the current platform
@@ -41,7 +43,9 @@ char is_absolute_path(char *path);
 //Returns the basename of a path with th extension (if any) stripped
 char * basename_no_extension(char *path);
 //Returns the extension from a path or NULL if there is no extension
-char *path_extension(char *path);
+char *path_extension(char const *path);
+//Returns true if the given path matches one of the extensions in the list
+uint8_t path_matches_extensions(char *path, char **ext_list, uint32_t num_exts);
 //Returns the directory portion of a path or NULL if there is no directory part
 char *path_dirname(char *path);
 //Gets the smallest power of two that is >= a certain value, won't work for values > 0x80000000
@@ -62,10 +66,12 @@ char *read_bundled_file(char *name, uint32_t *sizeret);
 dir_entry *get_dir_list(char *path, size_t *numret);
 //Frees a dir list returned by get_dir_list
 void free_dir_list(dir_entry *list, size_t numentries);
+//Performs a case-insensitive sort by file name on a dir list
+void sort_dir_list(dir_entry *list, size_t num_entries);
 //Gets the modification time of a file
 time_t get_modification_time(char *path);
 //Recusrively creates a directory if it does not exist
-int ensure_dir_exists(char *path);
+int ensure_dir_exists(const char *path);
 //Returns the contents of a symlink in a newly allocated string
 char * readlink_alloc(char * path);
 //Prints an error message to stderr and to a message box if not in headless mode and then exits

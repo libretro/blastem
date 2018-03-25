@@ -6,6 +6,7 @@
 #include "render.h"
 #include "util.h"
 #include "debug.h"
+#include "saves.h"
 
 static void *memory_io_write(uint32_t location, void *vcontext, uint8_t value)
 {
@@ -292,20 +293,13 @@ void sms_deserialize(deserialize_buffer *buf, sms_context *sms)
 
 static void save_state(sms_context *sms, uint8_t slot)
 {
-	char *save_path;
-	if (slot == QUICK_SAVE_SLOT) {
-		save_path = save_state_path;
-	} else {
-		char slotname[] = "slot_0.state";
-		slotname[5] = '0' + slot;
-		char const *parts[] = {sms->header.save_dir, PATH_SEP, slotname};
-		save_path = alloc_concat_m(3, parts);
-	}
+	char *save_path = get_slot_name(&sms->header, slot, "state");
 	serialize_buffer state;
 	init_serialize(&state);
 	sms_serialize(sms, &state);
 	save_to_file(&state, save_path);
 	printf("Saved state to %s\n", save_path);
+	free(save_path);
 	free(state.data);
 }
 
@@ -324,17 +318,18 @@ static uint8_t load_state_path(sms_context *sms, char *path)
 static uint8_t load_state(system_header *system, uint8_t slot)
 {
 	sms_context *sms = (sms_context *)system;
-	char numslotname[] = "slot_0.state";
-	char *slotname;
-	if (slot == QUICK_SAVE_SLOT) {
-		slotname = "quicksave.state";
-	} else {
-		numslotname[5] = '0' + slot;
-		slotname = numslotname;
+	char *statepath = get_slot_name(system, slot, "state");
+	uint8_t ret;
+	if (!sms->z80->native_pc) {
+		ret = get_modification_time(statepath) != 0;
+		if (ret) {
+			system->delayed_load_slot = slot + 1;
+		}
+		goto done;
+		
 	}
-	char const *parts[] = {sms->header.save_dir, PATH_SEP, slotname};
-	char *statepath = alloc_concat_m(3, parts);
-	uint8_t ret = load_state_path(sms, statepath);
+	ret = load_state_path(sms, statepath);
+done:
 	free(statepath);
 	return ret;
 }
@@ -348,6 +343,11 @@ static void run_sms(system_header *system)
 	render_set_video_standard(VID_NTSC);
 	while (!sms->should_return)
 	{
+		if (system->delayed_load_slot) {
+			load_state(system, system->delayed_load_slot - 1);
+			system->delayed_load_slot = 0;
+			
+		}
 		if (system->enter_debugger && sms->z80->pc) {
 			system->enter_debugger = 0;
 			zdebugger(sms->z80, sms->z80->pc);

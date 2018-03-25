@@ -16,6 +16,7 @@ endif
 
 MEM:=mem_win.o
 TERMINAL:=terminal_win.o
+FONT:=nuklear_ui/font_win.o
 EXE:=.exe
 CC:=i686-w64-mingw32-gcc-win32
 CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -I"$(SDL2_PREFIX)/include/SDL2" -I"$(GLEW_PREFIX)/include" -DGLEW_STATIC
@@ -30,8 +31,10 @@ EXE:=
 
 ifeq ($(OS),Darwin)
 LIBS=sdl2 glew
+FONT:=nuklear_ui/font_mac.o
 else
 LIBS=sdl2 glew gl
+FONT:=nuklear_ui/font.o
 endif #Darwin
 
 HAS_PROC:=$(shell if [ -d /proc ]; then /bin/echo -e -DHAS_PROC; fi)
@@ -46,7 +49,7 @@ LDFLAGS:=-lm glew/lib/libGLEW.a
 
 ifeq ($(OS),Darwin)
 CFLAGS+= -IFrameworks/SDL2.framework/Headers
-LDFLAGS+= -FFrameworks -framework SDL2 -framework OpenGL
+LDFLAGS+= -FFrameworks -framework SDL2 -framework OpenGL -framework AppKit
 FIXUP:=install_name_tool -change @rpath/SDL2.framework/Versions/A/SDL2 @executable_path/Frameworks/SDL2.framework/Versions/A/SDL2
 else
 CFLAGS+= -Isdl/include
@@ -58,14 +61,18 @@ CFLAGS:=$(shell pkg-config --cflags-only-I $(LIBS)) $(CFLAGS)
 LDFLAGS:=-lm $(shell pkg-config --libs $(LIBS))
 
 ifeq ($(OS),Darwin)
-LDFLAGS+= -framework OpenGL
+LDFLAGS+= -framework OpenGL -framework AppKit
 endif
 
 endif #PORTABLE
 endif #Windows
 
 ifdef DEBUG
-OPT:=-ggdb -Og
+ifeq ($(OS),Darwin)
+OPT:=-g3 -O0
+else
+OPT:=-g3 -Og
+endif #Darwin
 else
 ifdef NOLTO
 OPT:=-O2
@@ -86,6 +93,7 @@ LDFLAGS+= -Wl,--no-as-needed -lprofiler -Wl,--as-needed
 endif
 ifdef NOGL
 CFLAGS+= -DDISABLE_OPENGL
+NONUKLEAR:=1
 endif
 
 ifdef M68030
@@ -125,14 +133,21 @@ endif
 
 Z80OBJS=z80inst.o z80_to_x86.o
 AUDIOOBJS=ym2612.o psg.o wave.o
-CONFIGOBJS=config.o tern.o util.o
+CONFIGOBJS=config.o tern.o util.o paths.o 
+NUKLEAROBJS=$(FONT) nuklear_ui/blastem_nuklear.o nuklear_ui/sfnt.o
 LIBZOBJS=zlib/adler32.o zlib/compress.o zlib/crc32.o zlib/deflate.o zlib/gzclose.o zlib/gzlib.o zlib/gzread.o\
 	zlib/gzwrite.o zlib/infback.o zlib/inffast.o zlib/inflate.o zlib/inftrees.o zlib/trees.o zlib/uncompr.o zlib/zutil.o
 
-MAINOBJS=blastem.o system.o genesis.o debug.o gdb_remote.o vdp.o render_sdl.o ppm.o io.o romdb.o hash.o menu.o xband.o\
-	realtec.o i2c.o nor.o sega_mapper.o multi_game.o megawifi.o net.o serialize.o $(TERMINAL) $(CONFIGOBJS) gst.o\
-	zip.o $(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS)
+MAINOBJS=blastem.o system.o genesis.o debug.o gdb_remote.o vdp.o render_sdl.o ppm.o io.o romdb.o hash.o menu.o xband.o \
+	realtec.o i2c.o nor.o sega_mapper.o multi_game.o megawifi.o net.o serialize.o $(TERMINAL) $(CONFIGOBJS) gst.o \
+	$(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS) saves.o zip.o 
 	
+ifdef NONUKLEAR
+CFLAGS+= -DDISABLE_NUKLEAR
+else
+MAINOBJS+= $(NUKLEAROBJS)
+endif
+
 ifdef NOZLIB
 CFLAGS+= -DDISABLE_ZLIB
 else
@@ -239,6 +254,10 @@ vos_prog_info : vos_prog_info.o vos_program_module.o
 
 %.o : %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
+  
+%.o : %.m
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 %.png : %.xcf
 	xcf2png $< > $@
 
@@ -262,4 +281,4 @@ font.tiles : font.png
 menu.bin : font_interlace_variable.tiles arrow.tiles cursor.tiles button.tiles font.tiles
 
 clean :
-	rm -rf $(ALL) trans ztestrun ztestgen *.o zlib/*.o
+	rm -rf $(ALL) trans ztestrun ztestgen *.o nuklear_ui/*.o zlib/*.o

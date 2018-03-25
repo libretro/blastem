@@ -47,6 +47,7 @@ struct system_header {
 	uint8_t           enter_debugger;
 	uint8_t           should_exit;
 	uint8_t           save_state;
+	uint8_t           delayed_load_slot;
 	debugger_type     debugger_type;
 	system_type       type;
 };

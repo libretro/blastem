@@ -23,6 +23,10 @@
 #include "render.h"
 #include "util.h"
 #include "menu.h"
+#include "saves.h"
+#ifndef DISABLE_NUKLEAR
+#include "nuklear_ui/blastem_nuklear.h"
+#endif
 
 #define CYCLE_NEVER 0xFFFFFFFF
 #define MIN_POLL_INTERVAL 6840
@@ -356,6 +360,9 @@ void store_key_event(uint16_t code)
 
 void handle_keydown(int keycode, uint8_t scancode)
 {
+	if (!current_io) {
+		return;
+	}
 	int bucket = keycode >> 15 & 0xFFFF;
 	int idx = keycode & 0x7FFF;
 	keybinding * binding = bindings[bucket] ? bindings[bucket] + idx : NULL;
@@ -377,6 +384,9 @@ void handle_joydown(int joystick, int button)
 
 void handle_mousedown(int mouse, int button)
 {
+	if (!current_io) {
+		return;
+	}
 	if (current_io->mouse_mode == MOUSE_CAPTURE && !current_io->mouse_captured) {
 		current_io->mouse_captured = 1;
 		render_relative_mouse(1);
@@ -532,6 +542,11 @@ void handle_binding_up(keybinding * binding)
 			break;
 		}
 		case UI_EXIT:
+#ifndef DISABLE_NUKLEAR
+			if (is_nuklear_active()) {
+				show_pause_menu();
+			} else {
+#endif
 			current_system->request_exit(current_system);
 			if (current_system->type == SYSTEM_GENESIS) {
 				genesis_context *gen = (genesis_context *)current_system;
@@ -541,6 +556,9 @@ void handle_binding_up(keybinding * binding)
 					menu->external_game_load = 1;
 				}
 			}
+#ifndef DISABLE_NUKLEAR
+			}
+#endif
 			break;
 		}
 		break;
@@ -549,6 +567,9 @@ void handle_binding_up(keybinding * binding)
 
 void handle_keyup(int keycode, uint8_t scancode)
 {
+	if (!current_io) {
+		return;
+	}
 	int bucket = keycode >> 15 & 0xFFFF;
 	int idx = keycode & 0x7FFF;
 	keybinding * binding = bindings[bucket] ? bindings[bucket] + idx : NULL;
