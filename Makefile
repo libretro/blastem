@@ -27,13 +27,14 @@ else
 
 MEM:=mem.o
 TERMINAL:=terminal.o
-FONT:=nuklear_ui/font.o
 EXE:=
 
 ifeq ($(OS),Darwin)
 LIBS=sdl2 glew
+FONT:=nuklear_ui/font_mac.o
 else
 LIBS=sdl2 glew gl
+FONT:=nuklear_ui/font.o
 endif #Darwin
 
 HAS_PROC:=$(shell if [ -d /proc ]; then /bin/echo -e -DHAS_PROC; fi)
@@ -48,7 +49,7 @@ LDFLAGS:=-lm glew/lib/libGLEW.a
 
 ifeq ($(OS),Darwin)
 CFLAGS+= -IFrameworks/SDL2.framework/Headers
-LDFLAGS+= -FFrameworks -framework SDL2 -framework OpenGL
+LDFLAGS+= -FFrameworks -framework SDL2 -framework OpenGL -framework AppKit
 FIXUP:=install_name_tool -change @rpath/SDL2.framework/Versions/A/SDL2 @executable_path/Frameworks/SDL2.framework/Versions/A/SDL2
 else
 CFLAGS+= -Isdl/include
@@ -60,14 +61,18 @@ CFLAGS:=$(shell pkg-config --cflags-only-I $(LIBS)) $(CFLAGS)
 LDFLAGS:=-lm $(shell pkg-config --libs $(LIBS))
 
 ifeq ($(OS),Darwin)
-LDFLAGS+= -framework OpenGL
+LDFLAGS+= -framework OpenGL -framework AppKit
 endif
 
 endif #PORTABLE
 endif #Windows
 
 ifdef DEBUG
+ifeq ($(OS),Darwin)
+OPT:=-g3 -O0
+else
 OPT:=-g3 -Og
+endif #Darwin
 else
 ifdef NOLTO
 OPT:=-O2
@@ -249,6 +254,10 @@ vos_prog_info : vos_prog_info.o vos_program_module.o
 
 %.o : %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
+  
+%.o : %.m
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 %.png : %.xcf
 	xcf2png $< > $@
 
