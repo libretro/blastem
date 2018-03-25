@@ -1285,7 +1285,8 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 		if (gen->save_type == SAVE_I2C) {
 			eeprom_init(&gen->eeprom, gen->save_storage, gen->save_size);
 		} else if (gen->save_type == SAVE_NOR) {
-			nor_flash_init(&gen->nor, gen->save_storage, gen->save_size, rom->save_page_size, rom->save_product_id, rom->save_bus);
+			memcpy(&gen->nor, rom->nor, sizeof(gen->nor));
+			//nor_flash_init(&gen->nor, gen->save_storage, gen->save_size, rom->save_page_size, rom->save_product_id, rom->save_bus);
 		}
 	} else {
 		gen->save_storage = NULL;

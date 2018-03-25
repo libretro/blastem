@@ -37,7 +37,7 @@ LIBS=sdl2 glew gl
 endif #Darwin
 
 HAS_PROC:=$(shell if [ -d /proc ]; then /bin/echo -e -DHAS_PROC; fi)
-CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -Wno-unused-value $(HAS_PROC)
+CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -Wno-unused-value $(HAS_PROC) -DHAVE_UNISTD_H
 ifeq ($(OS),Darwin)
 #This should really be based on whether or not the C compiler is clang rather than based on the OS
 CFLAGS+= -Wno-logical-op-parentheses
@@ -67,17 +67,17 @@ endif #PORTABLE
 endif #Windows
 
 ifdef DEBUG
-CFLAGS:=-g3 $(CFLAGS)
-LDFLAGS:=-g3 $(LDFLAGS)
+OPT:=-g3 -Og
 else
 ifdef NOLTO
-CFLAGS:=-O2 $(CFLAGS)
-LDFLAGS:=-O2 $(LDFLAGS)
+OPT:=-O2
 else
-CFLAGS:=-O2 -flto $(CFLAGS)
-LDFLAGS:=-O2 -flto $(LDFLAGS)
+OPT:=-O2 -flto
 endif #NOLTO
 endif #DEBUG
+
+CFLAGS:=$(OPT) $(CFLAGS)
+LDFLAGS:=$(OPT) $(LDFLAGS)
 
 ifdef Z80_LOG_ADDRESS
 CFLAGS+= -DZ80_LOG_ADDRESS
@@ -130,15 +130,23 @@ Z80OBJS=z80inst.o z80_to_x86.o
 AUDIOOBJS=ym2612.o psg.o wave.o
 CONFIGOBJS=config.o tern.o util.o paths.o 
 NUKLEAROBJS=$(FONT) nuklear_ui/blastem_nuklear.o nuklear_ui/sfnt.o
+LIBZOBJS=zlib/adler32.o zlib/compress.o zlib/crc32.o zlib/deflate.o zlib/gzclose.o zlib/gzlib.o zlib/gzread.o\
+	zlib/gzwrite.o zlib/infback.o zlib/inffast.o zlib/inflate.o zlib/inftrees.o zlib/trees.o zlib/uncompr.o zlib/zutil.o
 
 MAINOBJS=blastem.o system.o genesis.o debug.o gdb_remote.o vdp.o render_sdl.o ppm.o io.o romdb.o hash.o menu.o xband.o \
-	realtec.o i2c.o nor.o sega_mapper.o multi_game.o serialize.o $(TERMINAL) $(CONFIGOBJS) gst.o $(M68KOBJS) \
-	$(TRANSOBJS) $(AUDIOOBJS) saves.o
+	realtec.o i2c.o nor.o sega_mapper.o multi_game.o megawifi.o net.o serialize.o $(TERMINAL) $(CONFIGOBJS) gst.o \
+	$(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS) saves.o zip.o 
 	
 ifdef NONUKLEAR
 CFLAGS+= -DDISABLE_NUKLEAR
 else
 MAINOBJS+= $(NUKLEAROBJS)
+endif
+
+ifdef NOZLIB
+CFLAGS+= -DDISABLE_ZLIB
+else
+MAINOBJS+= $(LIBZOBJS) png.o
 endif
 
 ifeq ($(CPU),x86_64)
@@ -178,7 +186,7 @@ blastjag$(EXE) : jaguar.o jag_video.o render_sdl.o serialize.o $(M68KOBJS) $(TRA
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 dis$(EXE) : dis.o 68kinst.o tern.o vos_program_module.o
-	$(CC) -o $@ $^
+	$(CC) -o $@ $^ $(OPT)
 	
 jagdis : jagdis.o jagcpu.o tern.o
 	$(CC) -o $@ $^
@@ -190,13 +198,13 @@ libemu68k.a : $(M68KOBJS) $(TRANSOBJS)
 	ar rcs libemu68k.a $(M68KOBJS) $(TRANSOBJS)
 
 trans : trans.o serialize.o $(M68KOBJS) $(TRANSOBJS) util.o
-	$(CC) -o trans trans.o $(M68KOBJS) $(TRANSOBJS) util.o
+	$(CC) -o trans trans.o $(M68KOBJS) $(TRANSOBJS) util.o $(OPT)
 
 transz80 : transz80.o $(Z80OBJS) $(TRANSOBJS)
 	$(CC) -o transz80 transz80.o $(Z80OBJS) $(TRANSOBJS)
 
 ztestrun : ztestrun.o serialize.o $(Z80OBJS) $(TRANSOBJS)
-	$(CC) -o ztestrun ztestrun.o $(Z80OBJS) $(TRANSOBJS)
+	$(CC) -o ztestrun ztestrun.o $(Z80OBJS) $(TRANSOBJS) $(OPT)
 
 ztestgen : ztestgen.o z80inst.o
 	$(CC) -ggdb -o ztestgen ztestgen.o z80inst.o
@@ -210,7 +218,7 @@ vgmplay$(EXE) : vgmplay.o render_sdl.o ppm.o serialize.o $(CONFIGOBJS) $(AUDIOOB
 	$(FIXUP) ./$@
 
 blastcpm : blastcpm.o util.o serialize.o $(Z80OBJS) $(TRANSOBJS)
-	$(CC) -o $@ $^
+	$(CC) -o $@ $^ $(OPT)
 
 test : test.o vdp.o
 	$(CC) -o test test.o vdp.o
@@ -264,4 +272,4 @@ font.tiles : font.png
 menu.bin : font_interlace_variable.tiles arrow.tiles cursor.tiles button.tiles font.tiles
 
 clean :
-	rm -rf $(ALL) trans ztestrun ztestgen *.o nuklear_ui/*.o
+	rm -rf $(ALL) trans ztestrun ztestgen *.o nuklear_ui/*.o zlib/*.o
