@@ -71,7 +71,7 @@ void sort_dir_list(dir_entry *list, size_t num_entries);
 //Gets the modification time of a file
 time_t get_modification_time(char *path);
 //Recusrively creates a directory if it does not exist
-int ensure_dir_exists(char *path);
+int ensure_dir_exists(const char *path);
 //Returns the contents of a symlink in a newly allocated string
 char * readlink_alloc(char * path);
 //Prints an error message to stderr and to a message box if not in headless mode and then exits

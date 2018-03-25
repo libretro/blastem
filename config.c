@@ -250,6 +250,7 @@ void persist_config(tern_node *config)
 	if (!confdir) {
 		fatal_error("Failed to locate config file directory\n");
 	}
+	ensure_dir_exists(confdir);
 	char *confpath = path_append(confdir, "blastem.cfg");
 	if (!serialize_config_file(config, confpath)) {
 		fatal_error("Failed to write config to %s\n", confpath);

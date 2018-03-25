@@ -549,7 +549,7 @@ time_t get_modification_time(char *path)
 	return (time_t)wintime;
 }
 
-int ensure_dir_exists(char *path)
+int ensure_dir_exists(const char *path)
 {
 	if (CreateDirectory(path, NULL)) {
 		return 1;
@@ -703,7 +703,7 @@ time_t get_modification_time(char *path)
 #endif
 }
 
-int ensure_dir_exists(char *path)
+int ensure_dir_exists(const char *path)
 {
 	struct stat st;
 	if (stat(path, &st)) {
