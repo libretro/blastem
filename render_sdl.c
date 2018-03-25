@@ -13,6 +13,7 @@
 #include "io.h"
 #include "util.h"
 #include "ppm.h"
+#include "png.h"
 
 #ifndef DISABLE_OPENGL
 #include <GL/glew.h>
@@ -597,9 +598,13 @@ void render_framebuffer_updated(uint8_t which, int width)
 		: 240;
 	FILE *screenshot_file = NULL;
 	uint32_t shot_height, shot_width;
+	char *ext;
 	if (screenshot_path && which == FRAMEBUFFER_ODD) {
 		screenshot_file = fopen(screenshot_path, "wb");
 		if (screenshot_file) {
+#ifndef DISABLE_ZLIB
+			ext = path_extension(screenshot_path);
+#endif
 			info_message("Saving screenshot to %s\n", screenshot_path);
 		} else {
 			warning("Failed to open screenshot file %s for writing\n", screenshot_path);
@@ -643,7 +648,17 @@ void render_framebuffer_updated(uint8_t which, int width)
 		
 		if (screenshot_file) {
 			//properly supporting interlaced modes here is non-trivial, so only save the odd field for now
-			save_ppm(screenshot_file, texture_buf, shot_width, shot_height, LINEBUF_SIZE*sizeof(uint32_t));
+#ifndef DISABLE_ZLIB
+			if (!strcasecmp(ext, "png")) {
+				free(ext);
+				save_png(screenshot_file, texture_buf, shot_width, shot_height, LINEBUF_SIZE*sizeof(uint32_t));
+			} else {
+				free(ext);
+#endif
+				save_ppm(screenshot_file, texture_buf, shot_width, shot_height, LINEBUF_SIZE*sizeof(uint32_t));
+#ifndef DISABLE_ZLIB
+			}
+#endif
 		}
 	} else {
 #endif
@@ -670,7 +685,17 @@ void render_framebuffer_updated(uint8_t which, int width)
 			} else {
 				shot_pitch *= 2;
 			}
-			save_ppm(screenshot_file, locked_pixels, shot_width, shot_height, shot_pitch);
+#ifndef DISABLE_ZLIB
+			if (!strcasecmp(ext, "png")) {
+				free(ext);
+				save_png(screenshot_file, locked_pixels, shot_width, shot_height, shot_pitch);
+			} else {
+				free(ext);
+#endif
+				save_ppm(screenshot_file, locked_pixels, shot_width, shot_height, shot_pitch);
+#ifndef DISABLE_ZLIB
+			}
+#endif
 		}
 		SDL_UnlockTexture(sdl_textures[which]);
 		SDL_Rect src_clip = {

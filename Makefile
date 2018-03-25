@@ -136,7 +136,7 @@ MAINOBJS=blastem.o system.o genesis.o debug.o gdb_remote.o vdp.o render_sdl.o pp
 ifdef NOZLIB
 CFLAGS+= -DDISABLE_ZLIB
 else
-MAINOBJS+= $(LIBZOBJS)
+MAINOBJS+= $(LIBZOBJS) png.o
 endif
 
 ifeq ($(CPU),x86_64)
