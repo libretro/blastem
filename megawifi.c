@@ -33,6 +33,10 @@ static const char *cmd_names[] = {
 	[255] = "CMD_ERROR"
 };
 
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL 0
+#endif
+
 enum {
 	STATE_IDLE=1,
 	STATE_AP_JOIN,
