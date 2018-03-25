@@ -15,6 +15,7 @@
 #include "util.h"
 #include "debug.h"
 #include "gdb_remote.h"
+#include "saves.h"
 #define MCLKS_NTSC 53693175
 #define MCLKS_PAL  53203395
 
@@ -359,18 +360,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 					sync_z80(z_context, z_context->current_cycle + MCLKS_PER_Z80);
 				}
 			}
-			char *save_path;
-			if (slot == QUICK_SAVE_SLOT) {
-				save_path = save_state_path;
-			} else {
-				char slotname[] = "slot_0.state";
-				slotname[5] = '0' + slot;
-				if (!use_native_states) {
-					strcpy(slotname + 7, "gst");
-				}
-				char const *parts[] = {gen->header.save_dir, PATH_SEP, slotname};
-				save_path = alloc_concat_m(3, parts);
-			}
+			char *save_path = get_slot_name(&gen->header, slot, use_native_states ? "state" : "gst");
 			if (use_native_states) {
 				serialize_buffer state;
 				init_serialize(&state);
@@ -381,9 +371,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 				save_gst(gen, save_path, address);
 			}
 			printf("Saved state to %s\n", save_path);
-			if (slot != QUICK_SAVE_SLOT) {
-				free(save_path);
-			}
+			free(save_path);
 		} else if(gen->header.save_state) {
 			context->sync_cycle = context->current_cycle + 1;
 		}
@@ -1008,37 +996,24 @@ void set_region(genesis_context *gen, rom_info *info, uint8_t region)
 	gen->master_clock = gen->normal_clock;
 }
 
-static void handle_reset_requests(genesis_context *gen)
-{
-	while (gen->reset_requested)
-	{
-		gen->reset_requested = 0;
-		z80_assert_reset(gen->z80, gen->m68k->current_cycle);
-		z80_clear_busreq(gen->z80, gen->m68k->current_cycle);
-		ym_reset(gen->ym);
-		//Is there any sort of VDP reset?
-		m68k_reset(gen->m68k);
-	}
-	vdp_release_framebuffer(gen->vdp);
-}
-
 #include "m68k_internal.h" //needed for get_native_address_trans, should be eliminated once handling of PC is cleaned up
 static uint8_t load_state(system_header *system, uint8_t slot)
 {
 	genesis_context *gen = (genesis_context *)system;
-	char numslotname[] = "slot_0.state";
-	char *slotname;
-	if (slot == QUICK_SAVE_SLOT) {
-		slotname = "quicksave.state";
-	} else {
-		numslotname[5] = '0' + slot;
-		slotname = numslotname;
-	}
-	char const *parts[] = {gen->header.save_dir, PATH_SEP, slotname};
-	char *statepath = alloc_concat_m(3, parts);
+	char *statepath = get_slot_name(system, slot, "state");
 	deserialize_buffer state;
 	uint32_t pc = 0;
 	uint8_t ret;
+	if (!gen->m68k->resume_pc) {
+		system->delayed_load_slot = slot + 1;
+		gen->m68k->should_return = 1;
+		ret = get_modification_time(statepath) != 0;
+		if (!ret) {
+			strcpy(statepath + strlen(statepath)-strlen("state"), "gst");
+			ret = get_modification_time(statepath) != 0;
+		}
+		goto done;
+	}
 	if (load_from_file(&state, statepath)) {
 		genesis_deserialize(&state, gen);
 		free(state.data);
@@ -1053,8 +1028,30 @@ static uint8_t load_state(system_header *system, uint8_t slot)
 	if (ret) {
 		gen->m68k->resume_pc = get_native_address_trans(gen->m68k, pc);
 	}
+done:
 	free(statepath);
 	return ret;
+}
+
+static void handle_reset_requests(genesis_context *gen)
+{
+	while (gen->reset_requested || gen->header.delayed_load_slot)
+	{
+		if (gen->reset_requested) {
+			gen->reset_requested = 0;
+			z80_assert_reset(gen->z80, gen->m68k->current_cycle);
+			z80_clear_busreq(gen->z80, gen->m68k->current_cycle);
+			ym_reset(gen->ym);
+			//Is there any sort of VDP reset?
+			m68k_reset(gen->m68k);
+		}
+		if (gen->header.delayed_load_slot) {
+			load_state(&gen->header, gen->header.delayed_load_slot - 1);
+			gen->header.delayed_load_slot = 0;
+			resume_68k(gen->m68k);
+		}
+	}
+	vdp_release_framebuffer(gen->vdp);
 }
 
 static void start_genesis(system_header *system, char *statefile)

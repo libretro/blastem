@@ -25,6 +25,9 @@
 #include "config.h"
 #include "menu.h"
 #include "zip.h"
+#ifndef DISABLE_NUKLEAR
+#include "nuklear_ui/blastem_nuklear.h"
+#endif
 
 #define BLASTEM_VERSION "0.5.2-pre"
 
@@ -325,6 +328,60 @@ void lockon_media(char *lock_on_path)
 	lock_on.size = load_rom(lock_on_path, &lock_on.buffer, NULL);
 }
 
+static uint32_t opts = 0;
+static uint8_t force_region = 0;
+void init_system_with_media(char *path, system_type force_stype)
+{
+	if (game_system) {
+		game_system->persist_save(game_system);
+		//swap to game context arena and mark all allocated pages in it free
+		if (current_system == menu_system) {
+			current_system->arena = set_current_arena(game_system->arena);
+		}
+		mark_all_free();
+		game_system->free_context(game_system);
+	} else if(current_system) {
+		//start a new arena and save old one in suspended system context
+		current_system->arena = start_new_arena();
+	}
+	system_type stype = SYSTEM_UNKNOWN;
+	if (!(cart.size = load_rom(path, &cart.buffer, &stype))) {
+		fatal_error("Failed to open %s for reading\n", path);
+	}
+	free(cart.dir);
+	free(cart.name);
+	free(cart.extension);
+	cart.dir = path_dirname(path);
+	cart.name = basename_no_extension(path);
+	cart.extension = path_extension(path);
+	if (force_stype != SYSTEM_UNKNOWN) {
+		stype = force_stype;
+	}
+	if (stype == SYSTEM_UNKNOWN) {
+		stype = detect_system_type(&cart);
+	}
+	if (stype == SYSTEM_UNKNOWN) {
+		fatal_error("Failed to detect system type for %s\n", path);
+	}
+	rom_info info;
+	//allocate new system context
+	game_system = alloc_config_system(stype, &cart, opts, force_region, &info);
+	if (!game_system) {
+		fatal_error("Failed to configure emulated machine for %s\n", path);
+	}
+	if (menu_system) {
+		menu_system->next_context = game_system;
+	}
+	game_system->next_context = menu_system;
+	setup_saves(&cart, &info, game_system);
+	update_title(info.name);
+}
+
+static void save_config(void)
+{
+	persist_config(config);
+}
+
 int main(int argc, char ** argv)
 {
 	set_exe_str(argv[0]);
@@ -332,10 +389,8 @@ int main(int argc, char ** argv)
 	int width = -1;
 	int height = -1;
 	int debug = 0;
-	uint32_t opts = 0;
 	int loaded = 0;
 	system_type stype = SYSTEM_UNKNOWN, force_stype = SYSTEM_UNKNOWN;
-	uint8_t force_region = 0;
 	char * romfname = NULL;
 	char * statefile = NULL;
 	debugger_type dtype = DEBUGGER_NATIVE;
@@ -472,35 +527,6 @@ int main(int argc, char ** argv)
 			height = atoi(argv[i]);
 		}
 	}
-	uint8_t menu = !loaded;
-	if (!loaded) {
-		//load menu
-		romfname = tern_find_path(config, "ui\0rom\0", TVAL_PTR).ptrval;
-		if (!romfname) {
-			romfname = "menu.bin";
-		}
-		if (is_absolute_path(romfname)) {
-			if (!(cart.size = load_rom(romfname, &cart.buffer, &stype))) {
-				fatal_error("Failed to open UI ROM %s for reading", romfname);
-			}
-		} else {
-			cart.buffer = (uint16_t *)read_bundled_file(romfname, &cart.size);
-			if (!cart.buffer) {
-				fatal_error("Failed to open UI ROM %s for reading", romfname);
-			}
-			uint32_t rom_size = nearest_pow2(cart.size);
-			if (rom_size > cart.size) {
-				cart.buffer = realloc(cart.buffer, rom_size);
-				cart.size = rom_size;
-			}
-		}
-		//force system detection, value on command line is only for games not the menu
-		stype = detect_system_type(&cart);
-		cart.dir = path_dirname(romfname);
-		cart.name = basename_no_extension(romfname);
-		cart.extension = path_extension(romfname);
-		loaded = 1;
-	}
 	
 	int def_width = 0, def_height = 0;
 	char *config_width = tern_find_path(config, "video\0width\0", TVAL_PTR).ptrval;
@@ -528,17 +554,39 @@ int main(int argc, char ** argv)
 		render_init(width, height, "BlastEm", fullscreen);
 		render_set_drag_drop_handler(on_drag_drop);
 	}
-
-	if (stype == SYSTEM_UNKNOWN) {
+	
+	uint8_t menu = !loaded;
+	uint8_t use_nuklear = 0;
+#ifndef DISABLE_NUKLEAR
+	use_nuklear = is_nuklear_available();
+#endif
+	if (!loaded && !use_nuklear) {
+		//load menu
+		romfname = tern_find_path(config, "ui\0rom\0", TVAL_PTR).ptrval;
+		if (!romfname) {
+			romfname = "menu.bin";
+		}
+		if (is_absolute_path(romfname)) {
+			if (!(cart.size = load_rom(romfname, &cart.buffer, &stype))) {
+				fatal_error("Failed to open UI ROM %s for reading", romfname);
+			}
+		} else {
+			cart.buffer = (uint16_t *)read_bundled_file(romfname, &cart.size);
+			if (!cart.buffer) {
+				fatal_error("Failed to open UI ROM %s for reading", romfname);
+			}
+			uint32_t rom_size = nearest_pow2(cart.size);
+			if (rom_size > cart.size) {
+				cart.buffer = realloc(cart.buffer, rom_size);
+				cart.size = rom_size;
+			}
+		}
+		//force system detection, value on command line is only for games not the menu
 		stype = detect_system_type(&cart);
-	}
-	if (stype == SYSTEM_UNKNOWN) {
-		fatal_error("Failed to detect system type for %s\n", romfname);
-	}
-	rom_info info;
-	current_system = alloc_config_system(stype, &cart, menu ? 0 : opts, force_region, &info);
-	if (!current_system) {
-		fatal_error("Failed to configure emulated machine for %s\n", romfname);
+		cart.dir = path_dirname(romfname);
+		cart.name = basename_no_extension(romfname);
+		cart.extension = path_extension(romfname);
+		loaded = 1;
 	}
 	char *state_format = tern_find_path(config, "ui\0state_format\0", TVAL_PTR).ptrval;
 	if (state_format && !strcmp(state_format, "gst")) {
@@ -546,14 +594,39 @@ int main(int argc, char ** argv)
 	} else if (state_format && strcmp(state_format, "native")) {
 		warning("%s is not a valid value for the ui.state_format setting. Valid values are gst and native\n", state_format);
 	}
-	setup_saves(&cart, &info, current_system);
-	update_title(info.name);
-	if (menu) {
-		menu_system = current_system;
-	} else {
-		game_system = current_system;
-	}
 
+	if (loaded) {
+		if (stype == SYSTEM_UNKNOWN) {
+			stype = detect_system_type(&cart);
+		}
+		if (stype == SYSTEM_UNKNOWN) {
+			fatal_error("Failed to detect system type for %s\n", romfname);
+		}
+		rom_info info;
+		current_system = alloc_config_system(stype, &cart, menu ? 0 : opts, force_region, &info);
+		if (!current_system) {
+			fatal_error("Failed to configure emulated machine for %s\n", romfname);
+		}
+	
+		setup_saves(&cart, &info, current_system);
+		update_title(info.name);
+		if (menu) {
+			menu_system = current_system;
+		} else {
+			game_system = current_system;
+		}
+	}
+	
+	atexit(save_config);
+	
+#ifndef DISABLE_NUKLEAR
+	if (use_nuklear) {
+		blastem_nuklear_init(!menu);
+		current_system = game_system;
+		menu = 0;
+	}
+#endif
+	
 	current_system->debugger_type = dtype;
 	current_system->enter_debugger = start_in_debugger && menu == debug_target;
 	current_system->start_context(current_system,  menu ? NULL : statefile);
@@ -565,45 +638,7 @@ int main(int argc, char ** argv)
 		if (current_system->next_rom) {
 			char *next_rom = current_system->next_rom;
 			current_system->next_rom = NULL;
-			if (game_system) {
-				game_system->persist_save(game_system);
-				//swap to game context arena and mark all allocated pages in it free
-				if (menu) {
-					current_system->arena = set_current_arena(game_system->arena);
-				}
-				mark_all_free();
-				game_system->free_context(game_system);
-			} else {
-				//start a new arena and save old one in suspended genesis context
-				current_system->arena = start_new_arena();
-			}
-			if (!(cart.size = load_rom(next_rom, &cart.buffer, &stype))) {
-				fatal_error("Failed to open %s for reading\n", next_rom);
-			}
-			free(cart.dir);
-			free(cart.name);
-			free(cart.extension);
-			cart.dir = path_dirname(next_rom);
-			cart.name = basename_no_extension(next_rom);
-			cart.extension = path_extension(next_rom);
-			stype = force_stype;
-			if (stype == SYSTEM_UNKNOWN) {
-				stype = detect_system_type(&cart);
-			}
-			if (stype == SYSTEM_UNKNOWN) {
-				fatal_error("Failed to detect system type for %s\n", next_rom);
-			}
-			//allocate new system context
-			game_system = alloc_config_system(stype, &cart, opts,force_region, &info);
-			if (!game_system) {
-				fatal_error("Failed to configure emulated machine for %s\n", next_rom);
-			}
-			if (menu_system) {
-				menu_system->next_context = game_system;
-			}
-			game_system->next_context = menu_system;
-			setup_saves(&cart, &info, game_system);
-			update_title(info.name);
+			init_system_with_media(next_rom, force_stype);
 			free(next_rom);
 			menu = 0;
 			current_system = game_system;
@@ -615,11 +650,19 @@ int main(int argc, char ** argv)
 			current_system = game_system;
 			menu = 0;
 			current_system->resume_context(current_system);
-		} else if (!menu && menu_system) {
-			current_system->arena = set_current_arena(menu_system->arena);
-			current_system = menu_system;
-			menu = 1;
-			current_system->resume_context(current_system);
+		} else if (!menu && (menu_system || use_nuklear)) {
+			if (use_nuklear) {
+#ifndef DISABLE_NUKLEAR
+				ui_idle_loop();
+#endif
+			} else {
+				current_system->arena = set_current_arena(menu_system->arena);
+				current_system = menu_system;
+				menu = 1;
+			}
+			if (!current_system->next_rom) {
+				current_system->resume_context(current_system);
+			}
 		} else {
 			break;
 		}

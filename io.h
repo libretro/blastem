@@ -91,8 +91,6 @@ enum {
 	IO_READ
 };
 
-typedef struct genesis_context genesis_context;
-
 void set_keybindings(sega_io *io);
 void map_all_bindings(sega_io *io);
 void setup_io_devices(tern_node * config, rom_info *rom, sega_io *io);
@@ -112,6 +110,8 @@ void handle_mousedown(int mouse, int button);
 void handle_mouseup(int mouse, int button);
 void io_serialize(io_port *port, serialize_buffer *buf);
 void io_deserialize(deserialize_buffer *buf, void *vport);
+
+extern const char * device_type_names[];
 
 #endif //IO_H_
 

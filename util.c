@@ -204,6 +204,50 @@ void bin_to_hex(uint8_t *output, uint8_t *input, uint64_t size)
 	*(output++) = 0;
 }
 
+char *utf16be_to_utf8(uint8_t *buf, uint32_t max_size)
+{
+	uint8_t *cur = buf;
+	uint32_t converted_size = 0;
+	for (uint32_t i = 0; i < max_size; i++, cur+=2)
+	{
+		uint16_t code = *cur << 16 | cur[1];
+		if (!code) {
+			break;
+		}
+		if (code < 0x80) {
+			converted_size++;
+		} else if (code < 0x800) {
+			converted_size += 2;
+		} else {
+			//TODO: Deal with surrogate pairs
+			converted_size += 3;
+		}
+	}
+	char *out = malloc(converted_size + 1);
+	char *cur_out = out;
+	cur = buf;
+	for (uint32_t i = 0; i < max_size; i++, cur+=2)
+	{
+		uint16_t code = *cur << 16 | cur[1];
+		if (!code) {
+			break;
+		}
+		if (code < 0x80) {
+			*(cur_out++) = code;
+		} else if (code < 0x800) {
+			*(cur_out++) = 0xC0 | code >> 6;
+			*(cur_out++) = 0x80 | (code & 0x3F);
+		} else {
+			//TODO: Deal with surrogate pairs
+			*(cur_out++) = 0xF0 | code >> 12;
+			*(cur_out++) = 0x80 | (code >> 6 & 0x3F);
+			*(cur_out++) = 0x80 | (code & 0x3F);
+		}
+	}
+	*cur_out = 0;
+	return out;
+}
+
 char is_path_sep(char c)
 {
 #ifdef _WIN32
@@ -250,11 +294,11 @@ char * basename_no_extension(char *path)
 	return barename;
 }
 
-char *path_extension(char *path)
+char *path_extension(char const *path)
 {
-	char *lastdot = NULL;
-	char *lastslash = NULL;
-	char *cur;
+	char const *lastdot = NULL;
+	char const *lastslash = NULL;
+	char const *cur;
 	for (cur = path; *cur; cur++)
 	{
 		if (*cur == '.') {
@@ -268,6 +312,22 @@ char *path_extension(char *path)
 		return NULL;
 	}
 	return strdup(lastdot+1);
+}
+
+uint8_t path_matches_extensions(char *path, char **ext_list, uint32_t num_exts)
+{
+	char *ext = path_extension(path);
+	if (!ext) {
+		return 0;
+	}
+	uint32_t extidx;
+	for (extidx = 0; extidx < num_exts; extidx++)
+	{
+		if (!strcasecmp(ext, ext_list[extidx])) {
+			return 1;
+		}
+	}
+	return 0;
 }
 
 char * path_dirname(char *path)
@@ -489,7 +549,7 @@ time_t get_modification_time(char *path)
 	return (time_t)wintime;
 }
 
-int ensure_dir_exists(char *path)
+int ensure_dir_exists(const char *path)
 {
 	if (CreateDirectory(path, NULL)) {
 		return 1;
@@ -643,7 +703,7 @@ time_t get_modification_time(char *path)
 #endif
 }
 
-int ensure_dir_exists(char *path)
+int ensure_dir_exists(const char *path)
 {
 	struct stat st;
 	if (stat(path, &st)) {
@@ -678,6 +738,22 @@ void free_dir_list(dir_entry *list, size_t numentries)
 		free(list[i].name);
 	}
 	free(list);
+}
+
+static int sort_dir_alpha(const void *a, const void *b)
+{
+	const dir_entry *da, *db;
+	da = a;
+	db = b;
+	if (da->is_dir != db->is_dir) {
+		return db->is_dir - da->is_dir;
+	}
+	return strcasecmp(((dir_entry *)a)->name, ((dir_entry *)b)->name);
+}
+
+void sort_dir_list(dir_entry *list, size_t num_entries)
+{
+	qsort(list, num_entries, sizeof(dir_entry), sort_dir_alpha);
 }
 
 #ifdef __ANDROID__
