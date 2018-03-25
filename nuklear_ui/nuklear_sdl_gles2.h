@@ -73,8 +73,13 @@ static struct nk_sdl {
     struct nk_font_atlas atlas;
 } sdl;
 
-
+#ifdef USE_GLES
 #define NK_SHADER_VERSION "#version 100\n"
+#define DECLARE_PRECISION "precision mediump float;\n"
+#else
+#define NK_SHADER_VERSION "#version 110\n"
+#define DECLARE_PRECISION
+#endif
 
 
 NK_API void
@@ -96,7 +101,7 @@ nk_sdl_device_create(void)
         "}\n";
     static const GLchar *fragment_shader =
         NK_SHADER_VERSION
-        "precision mediump float;\n"
+        DECLARE_PRECISION
         "uniform sampler2D Texture;\n"
         "varying vec2 Frag_UV;\n"
         "varying vec4 Frag_Color;\n"
