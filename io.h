@@ -91,8 +91,6 @@ enum {
 	IO_READ
 };
 
-typedef struct genesis_context genesis_context;
-
 void set_keybindings(sega_io *io);
 void map_all_bindings(sega_io *io);
 void setup_io_devices(tern_node * config, rom_info *rom, sega_io *io);
