@@ -93,6 +93,8 @@ uint8_t *default_font(uint32_t *size_out)
 					} else {
 						free(blob);
 					}
+				} else {
+					free(blob);
 				}
 				fclose(f);
 			}
