@@ -135,10 +135,17 @@ Z80OBJS=z80inst.o z80_to_x86.o
 AUDIOOBJS=ym2612.o psg.o wave.o
 CONFIGOBJS=config.o tern.o util.o paths.o 
 NUKLEAROBJS=$(FONT) nuklear_ui/blastem_nuklear.o nuklear_ui/sfnt.o
+RENDEROBJS=render_sdl.o ppm.o
 LIBZOBJS=zlib/adler32.o zlib/compress.o zlib/crc32.o zlib/deflate.o zlib/gzclose.o zlib/gzlib.o zlib/gzread.o\
 	zlib/gzwrite.o zlib/infback.o zlib/inffast.o zlib/inflate.o zlib/inftrees.o zlib/trees.o zlib/uncompr.o zlib/zutil.o
+	
+ifdef NOZLIB
+CFLAGS+= -DDISABLE_ZLIB
+else
+RENDEROBJS+= $(LIBZOBJS) png.o
+endif
 
-MAINOBJS=blastem.o system.o genesis.o debug.o gdb_remote.o vdp.o render_sdl.o ppm.o io.o romdb.o hash.o menu.o xband.o \
+MAINOBJS=blastem.o system.o genesis.o debug.o gdb_remote.o vdp.o $(RENDEROBJS) io.o romdb.o hash.o menu.o xband.o \
 	realtec.o i2c.o nor.o sega_mapper.o multi_game.o megawifi.o net.o serialize.o $(TERMINAL) $(CONFIGOBJS) gst.o \
 	$(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS) saves.o zip.o 
 	
@@ -146,12 +153,6 @@ ifdef NONUKLEAR
 CFLAGS+= -DDISABLE_NUKLEAR
 else
 MAINOBJS+= $(NUKLEAROBJS)
-endif
-
-ifdef NOZLIB
-CFLAGS+= -DDISABLE_ZLIB
-else
-MAINOBJS+= $(LIBZOBJS) png.o
 endif
 
 ifeq ($(CPU),x86_64)
@@ -187,7 +188,7 @@ blastem$(EXE) : $(MAINOBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
 	$(FIXUP) ./$@
 	
-blastjag$(EXE) : jaguar.o jag_video.o render_sdl.o serialize.o $(M68KOBJS) $(TRANSOBJS) $(CONFIGOBJS)
+blastjag$(EXE) : jaguar.o jag_video.o $(RENDEROBJS) serialize.o $(M68KOBJS) $(TRANSOBJS) $(CONFIGOBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 dis$(EXE) : dis.o 68kinst.o tern.o vos_program_module.o
@@ -214,11 +215,11 @@ ztestrun : ztestrun.o serialize.o $(Z80OBJS) $(TRANSOBJS)
 ztestgen : ztestgen.o z80inst.o
 	$(CC) -ggdb -o ztestgen ztestgen.o z80inst.o
 
-stateview$(EXE) : stateview.o vdp.o render_sdl.o ppm.o serialize.o $(CONFIGOBJS) gst.o
+stateview$(EXE) : stateview.o vdp.o $(RENDEROBJS) serialize.o $(CONFIGOBJS) gst.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 	$(FIXUP) ./$@
 
-vgmplay$(EXE) : vgmplay.o render_sdl.o ppm.o serialize.o $(CONFIGOBJS) $(AUDIOOBJS)
+vgmplay$(EXE) : vgmplay.o $(RENDEROBJS) serialize.o $(CONFIGOBJS) $(AUDIOOBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
 	$(FIXUP) ./$@
 
