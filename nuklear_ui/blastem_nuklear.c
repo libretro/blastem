@@ -425,7 +425,10 @@ void view_key_bindings(struct nk_context *context)
 		binding_group(context, "General", general_binds, general_names, NUM_GEN_BINDS, binding_lookup);
 		binding_group(context, "Speed Control", speed_binds, speed_names, NUM_SPEED_BINDS, binding_lookup);
 		binding_group(context, "Debug", debug_binds, debug_names, NUM_DBG_BINDS, binding_lookup);
-		
+		nk_layout_row_static(context, 34, (render_width() - 80) / 2, 1);
+		if (nk_button_label(context, "Back")) {
+			pop_view();
+		}
 		nk_end(context);
 	}
 	if (set_binding && nk_begin(context, "Set Binding", nk_rect(width/4, height/4, width/2/*width*3/4*/, height/2), NK_WINDOW_TITLE | NK_WINDOW_BORDER)) {
@@ -471,7 +474,13 @@ void view_key_bindings(struct nk_context *context)
 }
 void view_controllers(struct nk_context *context)
 {
-	
+	if (nk_begin(context, "Controller Bindings", nk_rect(0, 0, render_width(), render_height()), 0)) {
+		nk_layout_row_static(context, 34, (render_width() - 80) / 2, 1);
+		if (nk_button_label(context, "Back")) {
+			pop_view();
+		}
+		nk_end(context);
+	}
 }
 
 void settings_toggle(struct nk_context *context, char *label, char *path, uint8_t def)
