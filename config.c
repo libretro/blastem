@@ -273,7 +273,6 @@ char **get_extension_list(tern_node *config, uint32_t *num_exts_out)
 		ext_list[num_exts++] = cur_filter;
 		cur_filter = split_keyval(cur_filter);
 	}
-	free(ext_filter);
 	*num_exts_out = num_exts;
 	return ext_list;
 }
