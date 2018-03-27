@@ -1415,6 +1415,22 @@ void set_keybindings(sega_io *io)
 	special = tern_insert_int(special, "play", RENDERKEY_PLAY);
 	special = tern_insert_int(special, "search", RENDERKEY_SEARCH);
 	special = tern_insert_int(special, "back", RENDERKEY_BACK);
+	special = tern_insert_int(special, "np0", RENDERKEY_NP0);
+	special = tern_insert_int(special, "np1", RENDERKEY_NP1);
+	special = tern_insert_int(special, "np2", RENDERKEY_NP2);
+	special = tern_insert_int(special, "np3", RENDERKEY_NP3);
+	special = tern_insert_int(special, "np4", RENDERKEY_NP4);
+	special = tern_insert_int(special, "np5", RENDERKEY_NP5);
+	special = tern_insert_int(special, "np6", RENDERKEY_NP6);
+	special = tern_insert_int(special, "np7", RENDERKEY_NP7);
+	special = tern_insert_int(special, "np8", RENDERKEY_NP8);
+	special = tern_insert_int(special, "np9", RENDERKEY_NP9);
+	special = tern_insert_int(special, "np/", RENDERKEY_NP_DIV);
+	special = tern_insert_int(special, "np*", RENDERKEY_NP_MUL);
+	special = tern_insert_int(special, "np-", RENDERKEY_NP_MIN);
+	special = tern_insert_int(special, "np+", RENDERKEY_NP_PLUS);
+	special = tern_insert_int(special, "npenter", RENDERKEY_NP_ENTER);
+	special = tern_insert_int(special, "np.", RENDERKEY_NP_STOP);
 
 	tern_node *padbuttons = get_pad_buttons();
 
