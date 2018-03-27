@@ -359,6 +359,22 @@ static char *get_key_name(int32_t keycode)
 		case RENDERKEY_PLAY: name = "play"; break;
 		case RENDERKEY_SEARCH: name = "search"; break;
 		case RENDERKEY_BACK: name = "back"; break;
+		case RENDERKEY_NP0: name = "np0"; break;
+		case RENDERKEY_NP1: name = "np1"; break;
+		case RENDERKEY_NP2: name = "np2"; break;
+		case RENDERKEY_NP3: name = "np3"; break;
+		case RENDERKEY_NP4: name = "np4"; break;
+		case RENDERKEY_NP5: name = "np5"; break;
+		case RENDERKEY_NP6: name = "np6"; break;
+		case RENDERKEY_NP7: name = "np7"; break;
+		case RENDERKEY_NP8: name = "np8"; break;
+		case RENDERKEY_NP9: name = "np9"; break;
+		case RENDERKEY_NP_DIV: name = "np/"; break;
+		case RENDERKEY_NP_MUL: name = "np*"; break;
+		case RENDERKEY_NP_MIN: name = "np-"; break;
+		case RENDERKEY_NP_PLUS: name = "np+"; break;
+		case RENDERKEY_NP_ENTER: name = "npenter"; break;
+		case RENDERKEY_NP_STOP: name = "np."; break;
 		}
 		if (name) {
 			name = strdup(name);
