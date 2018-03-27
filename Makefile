@@ -17,6 +17,7 @@ endif
 MEM:=mem_win.o
 TERMINAL:=terminal_win.o
 FONT:=nuklear_ui/font_win.o
+NET:=net_win.o
 EXE:=.exe
 CC:=i686-w64-mingw32-gcc-win32
 CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -I"$(SDL2_PREFIX)/include/SDL2" -I"$(GLEW_PREFIX)/include" -DGLEW_STATIC
@@ -27,6 +28,7 @@ else
 
 MEM:=mem.o
 TERMINAL:=terminal.o
+NET:=net.o
 EXE:=
 
 ifeq ($(OS),Darwin)
@@ -146,7 +148,7 @@ RENDEROBJS+= $(LIBZOBJS) png.o
 endif
 
 MAINOBJS=blastem.o system.o genesis.o debug.o gdb_remote.o vdp.o $(RENDEROBJS) io.o romdb.o hash.o menu.o xband.o \
-	realtec.o i2c.o nor.o sega_mapper.o multi_game.o megawifi.o net.o serialize.o $(TERMINAL) $(CONFIGOBJS) gst.o \
+	realtec.o i2c.o nor.o sega_mapper.o multi_game.o megawifi.o $(NET) serialize.o $(TERMINAL) $(CONFIGOBJS) gst.o \
 	$(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS) saves.o zip.o 
 	
 ifdef NONUKLEAR
