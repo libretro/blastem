@@ -2,9 +2,15 @@
 #include <stdint.h>
 #include <string.h>
 #include <sys/types.h>
+#ifdef _WIN32
+#define WINVER 0x501
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <sys/socket.h>
 #include <unistd.h>
 #include <netinet/in.h>
+#endif
 #include <errno.h>
 #include <fcntl.h>
 #include "genesis.h"
@@ -125,7 +131,10 @@ static void poll_socket(megawifi *mw, uint8_t channel)
 		int res = accept(mw->sock_fds[channel], NULL, NULL);
 		if (res >= 0) {
 			close(mw->sock_fds[channel]);
+#ifndef _WIN32
+//FIXME: Set nonblocking on Windows too
 			fcntl(res, F_SETFL, O_NONBLOCK);
+#endif
 			mw->sock_fds[channel] = res;
 			mw->channel_state[channel] = 2;
 			mw->channel_flags |= 1 << (channel + 1);
@@ -284,7 +293,10 @@ static void process_packet(megawifi *mw)
 			} else {
 				mw->channel_flags |= 1 << (channel + 1);
 				mw->channel_state[channel] = 1;
+#ifndef _WIN32
+//FIXME: Set nonblocking on Windows too
 				fcntl(mw->sock_fds[channel], F_SETFL, O_NONBLOCK);
+#endif
 			}
 			end_reply(mw);
 			break;
