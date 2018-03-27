@@ -12,6 +12,7 @@
 #include "sega_mapper.h"
 #include "multi_game.h"
 #include "megawifi.h"
+#include "blastem.h"
 
 #define DOM_TITLE_START 0x120
 #define DOM_TITLE_END 0x150
@@ -803,11 +804,19 @@ void map_iter_fun(char *key, tern_val val, uint8_t valtype, void *data)
 		map->write_16 = write_multi_game_w;
 		map->write_8 = write_multi_game_b;
 	} else if (!strcmp(dtype, "megawifi")) {
-		map->write_16 = megawifi_write_w;
-		map->write_8 = megawifi_write_b;
-		map->read_16 = megawifi_read_w;
-		map->read_8 = megawifi_read_b;
-		map->mask = 0xFFFFFF;
+		if (!strcmp(
+			"on", 
+			tern_find_path_default(config, "system\0megawifi\0", (tern_val){.ptrval="off"}, TVAL_PTR).ptrval)
+		) {
+			map->write_16 = megawifi_write_w;
+			map->write_8 = megawifi_write_b;
+			map->read_16 = megawifi_read_w;
+			map->read_8 = megawifi_read_b;
+			map->mask = 0xFFFFFF;
+		} else {
+			warning("ROM uses MegaWiFi, but it is disabled\n");
+			return;
+		}
 	} else {
 		fatal_error("Invalid device type %s for ROM DB map entry %d with address %s\n", dtype, state->index, key);
 	}
