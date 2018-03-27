@@ -40,7 +40,6 @@ uint8_t *default_font(uint32_t *size_out)
 		if (weight < 1 || weight > 9) {
 			weight = 4;
 		}
-		printf("Preferred family: %s, weight: %d\n", pref_name, weight);
 		pref_sub_families = weight_to_subfamilies[weight];
 	}
 	if (pref_name) {
@@ -74,7 +73,6 @@ uint8_t *default_font(uint32_t *size_out)
 		}
 		free(ext);
 		char *base = basename_no_extension(entries[i].name);
-		printf("basename: %s\n", base);
 		if (pref_prefix && !strncasecmp(base, pref_prefix, 6)) {
 			path = path_append(fonts, entries[i].name);
 			FILE *f = fopen(path, "rb");
