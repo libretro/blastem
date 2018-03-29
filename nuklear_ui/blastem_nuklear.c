@@ -53,7 +53,7 @@ void view_file_browser(struct nk_context *context, uint8_t normal_open)
 	static char *current_path;
 	static dir_entry *entries;
 	static size_t num_entries;
-	static uint32_t selected_entry;
+	static int32_t selected_entry = -1;
 	static char **ext_list;
 	static uint32_t num_exts;
 	static uint8_t got_ext_list;
@@ -74,9 +74,10 @@ void view_file_browser(struct nk_context *context, uint8_t normal_open)
 	uint32_t height = render_height();
 	if (nk_begin(context, "Load ROM", nk_rect(0, 0, width, height), 0)) {
 		nk_layout_row_static(context, height - 100, width - 60, 1);
+		int32_t old_selected = selected_entry;
 		if (nk_group_begin(context, "Select ROM", NK_WINDOW_BORDER | NK_WINDOW_TITLE)) {
 			nk_layout_row_static(context, 28, width-100, 1);
-			for (uint32_t i = 0; i < num_entries; i++)
+			for (int32_t i = 0; i < num_entries; i++)
 			{
 				if (entries[i].name[0] == '.' && entries[i].name[1] != '.') {
 					continue;
@@ -88,6 +89,8 @@ void view_file_browser(struct nk_context *context, uint8_t normal_open)
 				nk_selectable_label(context, entries[i].name, NK_TEXT_ALIGN_LEFT, &selected);
 				if (selected) {
 					selected_entry = i;
+				} else if (i == selected_entry) {
+					selected_entry = -1;
 				}
 			}
 			nk_group_end(context);
@@ -96,7 +99,10 @@ void view_file_browser(struct nk_context *context, uint8_t normal_open)
 		if (nk_button_label(context, "Back")) {
 			pop_view();
 		}
-		if (nk_button_label(context, "Open")) {
+		if (nk_button_label(context, "Open") || (old_selected >= 0 && selected_entry < 0)) {
+			if (selected_entry < 0) {
+				selected_entry = old_selected;
+			}
 			char *full_path = path_append(current_path, entries[selected_entry].name);
 			if (entries[selected_entry].is_dir) {
 				free(current_path);
@@ -119,6 +125,7 @@ void view_file_browser(struct nk_context *context, uint8_t normal_open)
 				clear_view_stack();
 				current_view = view_play;
 			}
+			selected_entry = -1;
 		}
 		nk_end(context);
 	}
