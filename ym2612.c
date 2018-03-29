@@ -168,8 +168,8 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clo
 	static uint8_t registered_finalize;
 	dfopen(debug_file, "ym_debug.txt", "w");
 	memset(context, 0, sizeof(*context));
-	context->audio_buffer = malloc(sizeof(*context->audio_buffer) * sample_limit*2);
-	context->back_buffer = malloc(sizeof(*context->audio_buffer) * sample_limit*2);
+	context->audio = render_audio_source(2);
+	context->audio_buffer = render_audio_source_buffer(context->audio);
 	context->sample_rate = sample_rate;
 	context->clock_inc = clock_div * 6;
 	ym_adjust_master_clock(context, master_clock);
@@ -266,13 +266,10 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clo
 
 void ym_free(ym2612_context *context)
 {
+	render_free_source(context->audio);
 	if (context == log_context) {
 		ym_finalize_log();
 	}
-	free(context->audio_buffer);
-	//TODO: Figure out how to make this 100% safe
-	//audio thread could still be using this
-	free(context->back_buffer);
 	free(context);
 }
 
@@ -649,7 +646,8 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				context->buffer_pos += 2;
 				if (context->buffer_pos == context->sample_limit) {
 					if (!headless) {
-						render_wait_ym(context);
+						context->audio_buffer = render_audio_ready(context->audio);
+						context->buffer_pos = 0;
 					}
 				}
 			}

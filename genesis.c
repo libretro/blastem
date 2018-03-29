@@ -1052,6 +1052,8 @@ static void handle_reset_requests(genesis_context *gen)
 		}
 	}
 	vdp_release_framebuffer(gen->vdp);
+	render_pause_source(gen->ym->audio);
+	render_pause_source(gen->psg->audio);
 }
 
 static void start_genesis(system_header *system, char *statefile)
@@ -1099,6 +1101,8 @@ static void resume_genesis(system_header *system)
 	map_all_bindings(&gen->io);
 	render_set_video_standard((gen->version_reg & HZ50) ? VID_PAL : VID_NTSC);
 	vdp_reacquire_framebuffer(gen->vdp);
+	render_resume_source(gen->ym->audio);
+	render_resume_source(gen->psg->audio);
 	resume_68k(gen->m68k);
 	handle_reset_requests(gen);
 }
