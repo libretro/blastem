@@ -622,64 +622,6 @@ shader_prog *get_shader_list(uint32_t *num_out)
 	return progs;
 }
 
-void view_video_settings(struct nk_context *context)
-{
-	static shader_prog *progs;
-	static char **prog_names;
-	static uint32_t num_progs;
-	static uint32_t selected_prog;
-	if(!progs) {
-		progs = get_shader_list(&num_progs);
-		prog_names = calloc(num_progs, sizeof(char*));
-		for (uint32_t i = 0; i < num_progs; i++)
-		{
-			prog_names[i] = basename_no_extension(progs[i].fragment);;
-			uint32_t len = strlen(prog_names[i]);
-			if (len > 2) {
-				prog_names[i][len-2] = 0;
-			}
-			if (!progs[i].vertex) {
-				progs[i].vertex = strdup("default.v.glsl");
-			}
-			if (!strcmp(
-				progs[i].fragment,
-				tern_find_path_default(config, "video\0fragment_shader\0", (tern_val){.ptrval = "default.f.glsl"}, TVAL_PTR).ptrval
-			)) {
-				selected_prog = i;
-			}
-		}
-	}
-	uint32_t width = render_width();
-	uint32_t height = render_height();
-	if (nk_begin(context, "Video Settings", nk_rect(0, 0, width, height), 0)) {
-		nk_layout_row_static(context, 30, width > 300 ? 300 : width, 2);
-		settings_toggle(context, "Fullscreen", "video\0fullscreen\0", 0);
-		settings_toggle(context, "Open GL", "video\0gl\0", 1);
-		settings_toggle(context, "Scanlines", "video\0scanlines\0", 0);
-		settings_int_input(context, "Windowed Width", "video\0width\0", "640");
-		nk_label(context, "Shader", NK_TEXT_LEFT);
-		uint32_t next_selected = nk_combo(context, (const char **)prog_names, num_progs, selected_prog, 30, nk_vec2(300, 300));
-		if (next_selected != selected_prog) {
-			selected_prog = next_selected;
-			config = tern_insert_path(config, "video\0fragment_shader\0", (tern_val){.ptrval = strdup(progs[next_selected].fragment)}, TVAL_PTR);
-			config = tern_insert_path(config, "video\0vertex_shader\0", (tern_val){.ptrval = strdup(progs[next_selected].vertex)}, TVAL_PTR);
-		}
-		settings_int_property(context, "NTSC Overscan", "Top", "video\0ntsc\0overscan\0top\0", 2, 0, 32);
-		settings_int_property(context, "", "Bottom", "video\0ntsc\0overscan\0bottom\0", 17, 0, 32);
-		settings_int_property(context, "", "Left", "video\0ntsc\0overscan\0left\0", 13, 0, 32);
-		settings_int_property(context, "", "Right", "video\0ntsc\0overscan\0right\0", 14, 0, 32);
-		settings_int_property(context, "PAL Overscan", "Top", "video\0pal\0overscan\0top\0", 2, 0, 32);
-		settings_int_property(context, "", "Bottom", "video\0pal\0overscan\0bottom\0", 17, 0, 32);
-		settings_int_property(context, "", "Left", "video\0pal\0overscan\0left\0", 13, 0, 32);
-		settings_int_property(context, "", "Right", "video\0pal\0overscan\0right\0", 14, 0, 32);
-		
-		if (nk_button_label(context, "Back")) {
-			pop_view();
-		}
-		nk_end(context);
-	}
-}
-
 int32_t find_match(const char **options, uint32_t num_options, char *path, char *def)
 {
 	char *setting = tern_find_path_default(config, path, (tern_val){.ptrval = def}, TVAL_PTR).ptrval;
@@ -716,6 +658,76 @@ int32_t settings_dropdown_ex(struct nk_context *context, char *label, const char
 int32_t settings_dropdown(struct nk_context *context, char *label, const char **options, uint32_t num_options, int32_t current, char *path)
 {
 	return settings_dropdown_ex(context, label, options, options, num_options, current, path);
+}
+
+void view_video_settings(struct nk_context *context)
+{
+	const char *vsync_opts[] = {"on", "off", "tear"};
+	const char *vsync_opt_names[] = {
+		"On",
+		"Off",
+		"On, tear if late"
+	};
+	const uint32_t num_vsync_opts = sizeof(vsync_opts)/sizeof(*vsync_opts);
+	static shader_prog *progs;
+	static char **prog_names;
+	static uint32_t num_progs;
+	static uint32_t selected_prog;
+	static int32_t selected_vsync = -1;
+	if (selected_vsync < 0) {
+		selected_vsync = find_match(vsync_opts, num_vsync_opts, "video\0vsync\0", "off");
+	}
+	if(!progs) {
+		progs = get_shader_list(&num_progs);
+		prog_names = calloc(num_progs, sizeof(char*));
+		for (uint32_t i = 0; i < num_progs; i++)
+		{
+			prog_names[i] = basename_no_extension(progs[i].fragment);;
+			uint32_t len = strlen(prog_names[i]);
+			if (len > 2) {
+				prog_names[i][len-2] = 0;
+			}
+			if (!progs[i].vertex) {
+				progs[i].vertex = strdup("default.v.glsl");
+			}
+			if (!strcmp(
+				progs[i].fragment,
+				tern_find_path_default(config, "video\0fragment_shader\0", (tern_val){.ptrval = "default.f.glsl"}, TVAL_PTR).ptrval
+			)) {
+				selected_prog = i;
+			}
+		}
+	}
+	uint32_t width = render_width();
+	uint32_t height = render_height();
+	if (nk_begin(context, "Video Settings", nk_rect(0, 0, width, height), 0)) {
+		nk_layout_row_static(context, 30, width > 300 ? 300 : width, 2);
+		settings_toggle(context, "Fullscreen", "video\0fullscreen\0", 0);
+		settings_toggle(context, "Open GL", "video\0gl\0", 1);
+		settings_toggle(context, "Scanlines", "video\0scanlines\0", 0);
+		selected_vsync = settings_dropdown_ex(context, "VSync", vsync_opts, vsync_opt_names, num_vsync_opts, selected_vsync, "video\0vsync\0");
+		settings_int_input(context, "Windowed Width", "video\0width\0", "640");
+		nk_label(context, "Shader", NK_TEXT_LEFT);
+		uint32_t next_selected = nk_combo(context, (const char **)prog_names, num_progs, selected_prog, 30, nk_vec2(300, 300));
+		if (next_selected != selected_prog) {
+			selected_prog = next_selected;
+			config = tern_insert_path(config, "video\0fragment_shader\0", (tern_val){.ptrval = strdup(progs[next_selected].fragment)}, TVAL_PTR);
+			config = tern_insert_path(config, "video\0vertex_shader\0", (tern_val){.ptrval = strdup(progs[next_selected].vertex)}, TVAL_PTR);
+		}
+		settings_int_property(context, "NTSC Overscan", "Top", "video\0ntsc\0overscan\0top\0", 2, 0, 32);
+		settings_int_property(context, "", "Bottom", "video\0ntsc\0overscan\0bottom\0", 17, 0, 32);
+		settings_int_property(context, "", "Left", "video\0ntsc\0overscan\0left\0", 13, 0, 32);
+		settings_int_property(context, "", "Right", "video\0ntsc\0overscan\0right\0", 14, 0, 32);
+		settings_int_property(context, "PAL Overscan", "Top", "video\0pal\0overscan\0top\0", 2, 0, 32);
+		settings_int_property(context, "", "Bottom", "video\0pal\0overscan\0bottom\0", 17, 0, 32);
+		settings_int_property(context, "", "Left", "video\0pal\0overscan\0left\0", 13, 0, 32);
+		settings_int_property(context, "", "Right", "video\0pal\0overscan\0right\0", 14, 0, 32);
+		
+		if (nk_button_label(context, "Back")) {
+			pop_view();
+		}
+		nk_end(context);
+	}
 }
 
 void view_audio_settings(struct nk_context *context)
