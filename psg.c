@@ -13,8 +13,8 @@
 void psg_init(psg_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t samples_frame, uint32_t lowpass_cutoff)
 {
 	memset(context, 0, sizeof(*context));
-	context->audio_buffer = malloc(sizeof(*context->audio_buffer) * samples_frame);
-	context->back_buffer = malloc(sizeof(*context->audio_buffer) * samples_frame);
+	context->audio = render_audio_source(1);
+	context->audio_buffer = render_audio_source_buffer(context->audio);
 	context->clock_inc = clock_div;
 	context->sample_rate = sample_rate;
 	context->samples_frame = samples_frame;
@@ -30,10 +30,7 @@ void psg_init(psg_context * context, uint32_t sample_rate, uint32_t master_clock
 
 void psg_free(psg_context *context)
 {
-	free(context->audio_buffer);
-	//TODO: Figure out how to make this 100% safe
-	//audio thread could still be using this
-	free(context->back_buffer);
+	render_free_source(context->audio);
 	free(context);
 }
 
@@ -143,7 +140,8 @@ void psg_run(psg_context * context, uint32_t cycles)
 			
 			if (context->buffer_pos == context->samples_frame) {
 				if (!headless) {
-					render_wait_psg(context);
+					context->audio_buffer = render_audio_ready(context->audio);
+					context->buffer_pos = 0;
 				}
 			}
 		}

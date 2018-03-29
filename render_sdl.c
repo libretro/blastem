@@ -44,64 +44,61 @@ static uint32_t missing_count;
 
 static SDL_mutex * audio_mutex;
 static SDL_cond * audio_ready;
-static SDL_cond * psg_cond;
-static SDL_cond * ym_cond;
 static uint8_t quitting = 0;
-static uint8_t ym_enabled = 1;
+
+struct audio_source {
+	SDL_cond *cond;
+	int16_t  *front;
+	int16_t  *back;
+	uint8_t  num_channels;
+	uint8_t  front_populated;
+};
+
+static audio_source *audio_sources[8];
+static uint8_t num_audio_sources;
 
 static void audio_callback(void * userdata, uint8_t *byte_stream, int len)
 {
-	//puts("audio_callback");
 	int16_t * stream = (int16_t *)byte_stream;
 	int samples = len/(sizeof(int16_t)*2);
-	int16_t * psg_buf, * ym_buf;
-	uint8_t local_quit;
+	uint8_t num_populated;
+	memset(stream, 0, len);
 	SDL_LockMutex(audio_mutex);
-		psg_buf = NULL;
-		ym_buf = NULL;
 		do {
-			if (!psg_buf) {
-				psg_buf = current_psg;
-				current_psg = NULL;
-				SDL_CondSignal(psg_cond);
+			num_populated = 0;
+			for (uint8_t i = 0; i < num_audio_sources; i++)
+			{
+				if (audio_sources[i]->front_populated) {
+					num_populated++;
+				}
 			}
-			if (ym_enabled && !ym_buf) {
-				ym_buf = current_ym;
-				current_ym = NULL;
-				SDL_CondSignal(ym_cond);
-			}
-			if (!quitting && (!psg_buf || (ym_enabled && !ym_buf))) {
+			if (!quitting && num_populated < num_audio_sources) {
 				SDL_CondWait(audio_ready, audio_mutex);
 			}
-		} while(!quitting && (!psg_buf || (ym_enabled && !ym_buf)));
-
-		local_quit = quitting;
-	SDL_UnlockMutex(audio_mutex);
-	if (!local_quit) {
-		if (ym_enabled) {
-			for (int i = 0; i < samples; i++)
+		} while(!quitting && num_populated < num_audio_sources);
+		if (!quitting) {
+			int16_t *end = stream + 2*samples;
+			for (uint8_t i = 0; i < num_audio_sources; i++)
 			{
-				*(stream++) = psg_buf[i] + *(ym_buf++);
-				*(stream++) = psg_buf[i] + *(ym_buf++);
-			}
-		} else {
-			for (int i = 0; i < samples; i++)
-			{
-				*(stream++) = psg_buf[i];
-				*(stream++) = psg_buf[i];
+				int16_t *src = audio_sources[i]->front;
+				if (audio_sources[i]->num_channels == 1) {
+					for (int16_t *cur = stream; cur < end;)
+					{
+						*(cur++) += *src;
+						*(cur++) += *(src++);
+					}
+				} else {
+					for (int16_t *cur = stream; cur < end;)
+					{
+						*(cur++) += *(src++);
+						*(cur++) += *(src++);
+					}
+				}
+				audio_sources[i]->front_populated = 0;
+				SDL_CondSignal(audio_sources[i]->cond);
 			}
 		}
-	}
-}
-
-void render_disable_ym()
-{
-	ym_enabled = 0;
-}
-
-void render_enable_ym()
-{
-	ym_enabled = 1;
+	SDL_UnlockMutex(audio_mutex);
 }
 
 static void render_close_audio()
@@ -111,6 +108,59 @@ static void render_close_audio()
 		SDL_CondSignal(audio_ready);
 	SDL_UnlockMutex(audio_mutex);
 	SDL_CloseAudio();
+}
+
+audio_source *render_audio_source(uint8_t channels)
+{
+	audio_source *ret = NULL;
+	SDL_LockMutex(audio_mutex);
+		if (num_audio_sources < 8) {
+			ret = malloc(sizeof(audio_source));
+			ret->front = malloc(channels * buffer_samples * sizeof(int16_t));
+			ret->back = malloc(channels * buffer_samples * sizeof(int16_t));
+			ret->front_populated = 0;
+			ret->cond = SDL_CreateCond();
+			ret->num_channels = channels;
+			audio_sources[num_audio_sources++] = ret;
+		}
+	SDL_UnlockMutex(audio_mutex);
+	if (!ret) {
+		fatal_error("Too many audio sources!");
+	}
+	return ret;
+}
+
+void render_pause_source(audio_source *src)
+{
+	SDL_LockMutex(audio_mutex);
+		for (uint8_t i = 0; i < num_audio_sources; i++)
+		{
+			if (audio_sources[i] == src) {
+				audio_sources[i] = audio_sources[--num_audio_sources];
+				SDL_CondSignal(audio_ready);
+				break;
+			}
+		}
+	SDL_UnlockMutex(audio_mutex);
+}
+
+void render_resume_source(audio_source *src)
+{
+	SDL_LockMutex(audio_mutex);
+		if (num_audio_sources < 8) {
+			audio_sources[num_audio_sources++] = src;
+		}
+	SDL_UnlockMutex(audio_mutex);
+}
+
+void render_free_source(audio_source *src)
+{
+	render_pause_source(src);
+	
+	free(src->front);
+	free(src->back);
+	SDL_DestroyCond(src->cond);
+	free(src);
 }
 
 static SDL_Joystick * joysticks[MAX_JOYSTICKS];
@@ -480,8 +530,6 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 	caption = title;
 
 	audio_mutex = SDL_CreateMutex();
-	psg_cond = SDL_CreateCond();
-	ym_cond = SDL_CreateCond();
 	audio_ready = SDL_CreateCond();
 
 	SDL_AudioSpec desired, actual;
@@ -1190,34 +1238,24 @@ void render_toggle_fullscreen()
 	in_toggle = 0;
 }
 
-void render_wait_psg(psg_context * context)
+int16_t *render_audio_source_buffer(audio_source *src)
 {
-	SDL_LockMutex(audio_mutex);
-		while (current_psg != NULL) {
-			SDL_CondWait(psg_cond, audio_mutex);
-		}
-		current_psg = context->audio_buffer;
-		SDL_CondSignal(audio_ready);
-
-		context->audio_buffer = context->back_buffer;
-		context->back_buffer = current_psg;
-	SDL_UnlockMutex(audio_mutex);
-	context->buffer_pos = 0;
+	return src->back;
 }
 
-void render_wait_ym(ym2612_context * context)
+int16_t *render_audio_ready(audio_source *src)
 {
 	SDL_LockMutex(audio_mutex);
-		while (current_ym != NULL) {
-			SDL_CondWait(ym_cond, audio_mutex);
+		while (src->front_populated) {
+			SDL_CondWait(src->cond, audio_mutex);
 		}
-		current_ym = context->audio_buffer;
+		int16_t *tmp = src->front;
+		src->front = src->back;
+		src->back = tmp;
+		src->front_populated = 1;
 		SDL_CondSignal(audio_ready);
-
-		context->audio_buffer = context->back_buffer;
-		context->back_buffer = current_ym;
 	SDL_UnlockMutex(audio_mutex);
-	context->buffer_pos = 0;
+	return src->back;
 }
 
 uint32_t render_audio_buffer()

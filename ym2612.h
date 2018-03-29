@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "serialize.h"
+#include "render.h"
 
 #define NUM_PART_REGS (0xB7-0x30)
 #define NUM_CHANNELS 6
@@ -63,7 +64,7 @@ typedef struct {
 
 typedef struct {
     int16_t     *audio_buffer;
-    int16_t     *back_buffer;
+	audio_source *audio;
     uint64_t    buffer_fraction;
     uint64_t    buffer_inc;
     uint32_t    clock_inc;
