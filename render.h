@@ -70,8 +70,6 @@
 #define FRAMEBUFFER_EVEN 1
 
 #include "vdp.h"
-#include "psg.h"
-#include "ym2612.h"
 
 typedef enum {
 	VID_NTSC,
@@ -85,6 +83,7 @@ typedef enum {
 #define RENDER_NOT_MAPPED -2
 #define RENDER_NOT_PLUGGED_IN -3
 
+typedef struct audio_source audio_source;
 typedef void (*drop_handler)(const char *filename);
 
 uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b);
@@ -96,10 +95,6 @@ void render_set_video_standard(vid_std std);
 void render_toggle_fullscreen();
 void render_update_caption(char *title);
 void render_wait_quit(vdp_context * context);
-void render_wait_psg(psg_context * context);
-void render_wait_ym(ym2612_context * context);
-void render_disable_ym();
-void render_enable_ym();
 uint32_t render_audio_buffer();
 uint32_t render_sample_rate();
 void process_events();
@@ -122,6 +117,13 @@ uint32_t render_overscan_left();
 uint32_t render_elapsed_ms(void);
 void render_sleep_ms(uint32_t delay);
 uint8_t render_has_gl(void);
+audio_source *render_audio_source(uint8_t channels);
+int16_t *render_audio_source_buffer(audio_source *src);
+int16_t *render_audio_ready(audio_source *src);
+void render_reset_sources(void);
+void render_pause_source(audio_source *src);
+void render_resume_source(audio_source *src);
+void render_free_source(audio_source *src);
 
 #endif //RENDER_H_
 

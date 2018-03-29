@@ -8,10 +8,11 @@
 
 #include <stdint.h>
 #include "serialize.h"
+#include "render.h"
 
 typedef struct {
 	int16_t  *audio_buffer;
-	int16_t  *back_buffer;
+	audio_source *audio;
 	uint64_t buffer_fraction;
 	uint64_t buffer_inc;
 	uint32_t buffer_pos;
