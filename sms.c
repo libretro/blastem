@@ -513,14 +513,11 @@ sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t for
 		sms->bank_regs[3] = 0x8000 >> 14;
 	}
 	
-	char * lowpass_cutoff_str = tern_find_path(config, "audio\0lowpass_cutoff\0", TVAL_PTR).ptrval;
-	uint32_t lowpass_cutoff = lowpass_cutoff_str ? atoi(lowpass_cutoff_str) : 3390;
-	
 	//TODO: Detect region and pick master clock based off of that
 	sms->normal_clock = sms->master_clock = 53693175;
 	
 	sms->psg = malloc(sizeof(psg_context));
-	psg_init(sms->psg, render_sample_rate(), sms->master_clock, 15*16, render_audio_buffer(), lowpass_cutoff);
+	psg_init(sms->psg, sms->master_clock, 15*16);
 	
 	sms->vdp = malloc(sizeof(vdp_context));
 	init_vdp_context(sms->vdp, 0);

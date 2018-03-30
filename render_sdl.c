@@ -15,6 +15,7 @@
 #include "util.h"
 #include "ppm.h"
 #include "png.h"
+#include "config.h"
 
 #ifndef DISABLE_OPENGL
 #include <GL/glew.h>
@@ -50,6 +51,12 @@ struct audio_source {
 	SDL_cond *cond;
 	int16_t  *front;
 	int16_t  *back;
+	uint64_t buffer_fraction;
+	uint64_t buffer_inc;
+	uint32_t buffer_pos;
+	uint32_t lowpass_alpha;
+	int16_t  last_left;
+	int16_t  last_right;
 	uint8_t  num_channels;
 	uint8_t  front_populated;
 };
@@ -161,7 +168,14 @@ static void render_close_audio()
 	SDL_CloseAudio();
 }
 
-audio_source *render_audio_source(uint8_t channels)
+#define BUFFER_INC_RES 0x40000000UL
+
+void render_audio_adjust_clock(audio_source *src, uint64_t master_clock, uint64_t sample_divider)
+{
+	src->buffer_inc = ((BUFFER_INC_RES * (uint64_t)sample_rate) / master_clock) * sample_divider;
+}
+
+audio_source *render_audio_source(uint64_t master_clock, uint64_t sample_divider, uint8_t channels)
 {
 	audio_source *ret = NULL;
 	SDL_LockMutex(audio_mutex);
@@ -177,6 +191,16 @@ audio_source *render_audio_source(uint8_t channels)
 	SDL_UnlockMutex(audio_mutex);
 	if (!ret) {
 		fatal_error("Too many audio sources!");
+	} else {
+		render_audio_adjust_clock(ret, master_clock, sample_divider);
+		double lowpass_cutoff = get_lowpass_cutoff(config);
+		double rc = (1.0 / lowpass_cutoff) / (2.0 * M_PI);
+		double dt = 1.0 / ((double)master_clock / (double)(sample_divider));
+		double alpha = dt / (dt + rc);
+		ret->lowpass_alpha = (int32_t)(((double)0x10000) * alpha);
+		ret->buffer_pos = 0;
+		ret->buffer_fraction = 0;
+		ret->last_left = ret->last_right = 0;
 	}
 	return ret;
 }
@@ -212,6 +236,71 @@ void render_free_source(audio_source *src)
 	free(src->back);
 	SDL_DestroyCond(src->cond);
 	free(src);
+}
+
+static void do_audio_ready(audio_source *src)
+{
+	SDL_LockMutex(audio_mutex);
+		while (src->front_populated) {
+			SDL_CondWait(src->cond, audio_mutex);
+		}
+		int16_t *tmp = src->front;
+		src->front = src->back;
+		src->back = tmp;
+		src->front_populated = 1;
+		src->buffer_pos = 0;
+		SDL_CondSignal(audio_ready);
+	SDL_UnlockMutex(audio_mutex);
+}
+
+static int16_t lowpass_sample(audio_source *src, int16_t last, int16_t current)
+{
+	int32_t tmp = current * src->lowpass_alpha + last * (0x10000 - src->lowpass_alpha);
+	current = tmp >> 16;
+	return current;
+}
+
+static void interp_sample(audio_source *src, int16_t last, int16_t current)
+{
+	int64_t tmp = last * ((src->buffer_fraction << 16) / src->buffer_inc);
+	tmp += current * (0x10000 - ((src->buffer_fraction << 16) / src->buffer_inc));
+	src->back[src->buffer_pos++] = tmp >> 16;
+}
+
+void render_put_mono_sample(audio_source *src, int16_t value)
+{
+	value = lowpass_sample(src, src->last_left, value);
+	src->buffer_fraction += src->buffer_inc;
+	while (src->buffer_fraction > BUFFER_INC_RES)
+	{
+		src->buffer_fraction -= BUFFER_INC_RES;
+		interp_sample(src, src->last_left, value);
+		
+		if (src->buffer_pos == buffer_samples) {
+			do_audio_ready(src);
+		}
+	}
+	src->last_left = value;
+}
+
+void render_put_stereo_sample(audio_source *src, int16_t left, int16_t right)
+{
+	left = lowpass_sample(src, src->last_left, left);
+	right = lowpass_sample(src, src->last_right, right);
+	src->buffer_fraction += src->buffer_inc;
+	while (src->buffer_fraction > BUFFER_INC_RES)
+	{
+		src->buffer_fraction -= BUFFER_INC_RES;
+		
+		interp_sample(src, src->last_left, left);
+		interp_sample(src, src->last_right, right);
+		
+		if (src->buffer_pos == buffer_samples * 2) {
+			do_audio_ready(src);
+		}
+	}
+	src->last_left = left;
+	src->last_right = left;
 }
 
 static SDL_Joystick * joysticks[MAX_JOYSTICKS];
@@ -1298,26 +1387,6 @@ void render_toggle_fullscreen()
 	SDL_SetWindowSize(main_window, windowed_width, windowed_height);
 	drain_events();
 	in_toggle = 0;
-}
-
-int16_t *render_audio_source_buffer(audio_source *src)
-{
-	return src->back;
-}
-
-int16_t *render_audio_ready(audio_source *src)
-{
-	SDL_LockMutex(audio_mutex);
-		while (src->front_populated) {
-			SDL_CondWait(src->cond, audio_mutex);
-		}
-		int16_t *tmp = src->front;
-		src->front = src->back;
-		src->back = tmp;
-		src->front_populated = 1;
-		SDL_CondSignal(audio_ready);
-	SDL_UnlockMutex(audio_mutex);
-	return src->back;
 }
 
 uint32_t render_audio_buffer()

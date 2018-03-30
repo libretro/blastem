@@ -10,19 +10,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
-void psg_init(psg_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t samples_frame, uint32_t lowpass_cutoff)
+void psg_init(psg_context * context, uint32_t master_clock, uint32_t clock_div)
 {
 	memset(context, 0, sizeof(*context));
-	context->audio = render_audio_source(1);
-	context->audio_buffer = render_audio_source_buffer(context->audio);
+	context->audio = render_audio_source(master_clock, clock_div, 1);
 	context->clock_inc = clock_div;
-	context->sample_rate = sample_rate;
-	context->samples_frame = samples_frame;
-	double rc = (1.0 / (double)lowpass_cutoff) / (2.0 * M_PI);
-	double dt = 1.0 / ((double)master_clock / (double)clock_div);
-	double alpha = dt / (dt + rc);
-	context->lowpass_alpha = (int32_t)(((double)0x10000) * alpha);
-	psg_adjust_master_clock(context, master_clock);
 	for (int i = 0; i < 4; i++) {
 		context->volume[i] = 0xF;
 	}
@@ -34,12 +26,9 @@ void psg_free(psg_context *context)
 	free(context);
 }
 
-#define BUFFER_INC_RES 0x40000000UL
-
 void psg_adjust_master_clock(psg_context * context, uint32_t master_clock)
 {
-	uint64_t old_inc = context->buffer_inc;
-	context->buffer_inc = ((BUFFER_INC_RES * (uint64_t)context->sample_rate) / (uint64_t)master_clock) * (uint64_t)context->clock_inc;
+	render_audio_adjust_clock(context->audio, master_clock, context->clock_inc);
 }
 
 void psg_write(psg_context * context, uint8_t value)
@@ -117,34 +106,19 @@ void psg_run(psg_context * context, uint32_t cycles)
 			}
 		}
 
-		context->last_sample = context->accum;
-		context->accum = 0;
+		int16_t accum = 0;
 		
 		for (int i = 0; i < 3; i++) {
 			if (context->output_state[i]) {
-				context->accum += volume_table[context->volume[i]];
+				accum += volume_table[context->volume[i]];
 			}
 		}
 		if (context->noise_out) {
-			context->accum += volume_table[context->volume[3]];
+			accum += volume_table[context->volume[3]];
 		}
-		int32_t tmp = context->accum * context->lowpass_alpha + context->last_sample * (0x10000 - context->lowpass_alpha);
-		context->accum = tmp >> 16;
+		
+		render_put_mono_sample(context->audio, accum);
 
-		context->buffer_fraction += context->buffer_inc;
-		while (context->buffer_fraction >= BUFFER_INC_RES) {
-			context->buffer_fraction -= BUFFER_INC_RES;
-			int32_t tmp = context->last_sample * ((context->buffer_fraction << 16) / context->buffer_inc);
-			tmp += context->accum * (0x10000 - ((context->buffer_fraction << 16) / context->buffer_inc));
-			context->audio_buffer[context->buffer_pos++] = tmp >> 16;
-			
-			if (context->buffer_pos == context->samples_frame) {
-				if (!headless) {
-					context->audio_buffer = render_audio_ready(context->audio);
-					context->buffer_pos = 0;
-				}
-			}
-		}
 		context->cycles += context->clock_inc;
 	}
 }
