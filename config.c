@@ -276,3 +276,10 @@ char **get_extension_list(tern_node *config, uint32_t *num_exts_out)
 	*num_exts_out = num_exts;
 	return ext_list;
 }
+
+#define DEFAULT_LOWPASS_CUTOFF 3390
+uint32_t get_lowpass_cutoff(tern_node *config)
+{
+	char * lowpass_cutoff_str = tern_find_path(config, "audio\0lowpass_cutoff\0", TVAL_PTR).ptrval;
+	return lowpass_cutoff_str ? atoi(lowpass_cutoff_str) : DEFAULT_LOWPASS_CUTOFF;
+}

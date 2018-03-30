@@ -116,12 +116,10 @@ static void ym_finalize_log()
 	}
 	log_context = NULL;
 }
-#define BUFFER_INC_RES 0x40000000UL
 
 void ym_adjust_master_clock(ym2612_context * context, uint32_t master_clock)
 {
-	uint64_t old_inc = context->buffer_inc;
-	context->buffer_inc = ((BUFFER_INC_RES * (uint64_t)context->sample_rate) / (uint64_t)master_clock) * (uint64_t)context->clock_inc * NUM_OPERATORS;
+	render_audio_adjust_clock(context->audio, master_clock, context->clock_inc * NUM_OPERATORS);
 }
 
 #ifdef __ANDROID__
@@ -163,23 +161,13 @@ void ym_reset(ym2612_context *context)
 	}
 }
 
-void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clock, uint32_t clock_div, uint32_t sample_limit, uint32_t options, uint32_t lowpass_cutoff)
+void ym_init(ym2612_context * context, uint32_t master_clock, uint32_t clock_div, uint32_t options)
 {
 	static uint8_t registered_finalize;
 	dfopen(debug_file, "ym_debug.txt", "w");
 	memset(context, 0, sizeof(*context));
-	context->audio = render_audio_source(2);
-	context->audio_buffer = render_audio_source_buffer(context->audio);
-	context->sample_rate = sample_rate;
 	context->clock_inc = clock_div * 6;
-	ym_adjust_master_clock(context, master_clock);
-	
-	double rc = (1.0 / (double)lowpass_cutoff) / (2.0 * M_PI);
-	double dt = 1.0 / ((double)master_clock / (double)(context->clock_inc * NUM_OPERATORS));
-	double alpha = dt / (dt + rc);
-	context->lowpass_alpha = (int32_t)(((double)0x10000) * alpha);
-
-	context->sample_limit = sample_limit*2;
+	context->audio = render_audio_source(master_clock, context->clock_inc * NUM_OPERATORS, 2);
 	
 	//some games seem to expect that the LR flags start out as 1
 	for (int i = 0; i < NUM_CHANNELS; i++) {
@@ -191,7 +179,7 @@ void ym_init(ym2612_context * context, uint32_t sample_rate, uint32_t master_clo
 				fprintf(stderr, "Failed to open WAVE log file %s for writing\n", fname);
 				continue;
 			}
-			if (!wave_init(f, sample_rate, 16, 1)) {
+			if (!wave_init(f, master_clock / (context->clock_inc * NUM_OPERATORS), 16, 1)) {
 				fclose(f);
 				context->channels[i].logfile = NULL;
 			}
@@ -604,7 +592,6 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 		if (context->current_op == NUM_OPERATORS) {
 			context->current_op = 0;
 			
-			context->buffer_fraction += context->buffer_inc;
 			int16_t left = 0, right = 0;
 			for (int i = 0; i < NUM_CHANNELS; i++) {
 				int16_t value = context->channels[i].output;
@@ -618,7 +605,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 						value |= 0xC000;
 					}
 				}
-				if (context->channels[i].logfile && context->buffer_fraction > BUFFER_INC_RES) {
+				if (context->channels[i].logfile) {
 					fwrite(&value, sizeof(value), 1, context->channels[i].logfile);
 				}
 				if (context->channels[i].lr & 0x80) {
@@ -628,31 +615,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 					right += (value * YM_VOLUME_MULTIPLIER) / YM_VOLUME_DIVIDER;
 				}
 			}
-			int32_t tmp = left * context->lowpass_alpha + context->last_left * (0x10000 - context->lowpass_alpha);
-			left = tmp >> 16;
-			tmp = right * context->lowpass_alpha + context->last_right * (0x10000 - context->lowpass_alpha);
-			right = tmp >> 16;
-			while (context->buffer_fraction > BUFFER_INC_RES) {
-				context->buffer_fraction -= BUFFER_INC_RES;
-
-				int64_t tmp = context->last_left * ((context->buffer_fraction << 16) / context->buffer_inc);
-				tmp += left * (0x10000 - ((context->buffer_fraction << 16) / context->buffer_inc));
-				context->audio_buffer[context->buffer_pos] = tmp >> 16;
-				
-				tmp = context->last_right * ((context->buffer_fraction << 16) / context->buffer_inc);
-				tmp += right * (0x10000 - ((context->buffer_fraction << 16) / context->buffer_inc));
-				context->audio_buffer[context->buffer_pos+1] = tmp >> 16;
-				
-				context->buffer_pos += 2;
-				if (context->buffer_pos == context->sample_limit) {
-					if (!headless) {
-						context->audio_buffer = render_audio_ready(context->audio);
-						context->buffer_pos = 0;
-					}
-				}
-			}
-			context->last_left = left;
-			context->last_right = right;
+			render_put_stereo_sample(context->audio, left, right);
 		}
 		
 	}

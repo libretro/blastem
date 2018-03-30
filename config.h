@@ -14,6 +14,7 @@ char *serialize_config(tern_node *config, uint32_t *size_out);
 uint8_t serialize_config_file(tern_node *config, char *path);
 void persist_config(tern_node *config);
 char **get_extension_list(tern_node *config, uint32_t *num_exts_out);
+uint32_t get_lowpass_cutoff(tern_node *config);
 
 #endif //CONFIG_H_
 
