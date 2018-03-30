@@ -1219,15 +1219,12 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	gen->max_cycles = config_cycles ? atoi(config_cycles) : DEFAULT_SYNC_INTERVAL;
 	gen->int_latency_prev1 = MCLKS_PER_68K * 32;
 	gen->int_latency_prev2 = MCLKS_PER_68K * 16;
-
-	char * lowpass_cutoff_str = tern_find_path(config, "audio\0lowpass_cutoff\0", TVAL_PTR).ptrval;
-	uint32_t lowpass_cutoff = lowpass_cutoff_str ? atoi(lowpass_cutoff_str) : DEFAULT_LOWPASS_CUTOFF;
 	
 	gen->ym = malloc(sizeof(ym2612_context));
-	ym_init(gen->ym, render_sample_rate(), gen->master_clock, MCLKS_PER_YM, render_audio_buffer(), system_opts, lowpass_cutoff);
+	ym_init(gen->ym, gen->master_clock, MCLKS_PER_YM, system_opts);
 
 	gen->psg = malloc(sizeof(psg_context));
-	psg_init(gen->psg, render_sample_rate(), gen->master_clock, MCLKS_PER_PSG, render_audio_buffer(), lowpass_cutoff);
+	psg_init(gen->psg, gen->master_clock, MCLKS_PER_PSG);
 
 	gen->zram = calloc(1, Z80_RAM_BYTES);
 	z80_map[0].buffer = gen->zram = calloc(1, Z80_RAM_BYTES);
