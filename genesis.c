@@ -29,7 +29,7 @@ uint32_t MCLKS_PER_68K;
 
 //TODO: Figure out the exact value for this
 #define LINES_NTSC 262
-#define LINES_PAL 312
+#define LINES_PAL 313
 
 #define MAX_SOUND_CYCLES 100000	
 
@@ -308,6 +308,11 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	sync_z80(z_context, mclks);
 	sync_sound(gen, mclks);
 	vdp_run_context(v_context, mclks);
+	if (mclks >= gen->reset_cycle) {
+		gen->reset_requested = 1;
+		context->should_return = 1;
+		gen->reset_cycle = CYCLE_NEVER;
+	}
 	if (v_context->frame != last_frame_num) {
 		//printf("reached frame end %d | MCLK Cycles: %d, Target: %d, VDP cycles: %d, vcounter: %d, hslot: %d\n", last_frame_num, mclks, gen->frame_end, v_context->cycles, v_context->vcounter, v_context->hslot);
 		last_frame_num = v_context->frame;
@@ -331,6 +336,9 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			if (gen->ym->write_cycle != CYCLE_NEVER) {
 				gen->ym->write_cycle = gen->ym->write_cycle >= deduction ? gen->ym->write_cycle - deduction : 0;
 			}
+			if (gen->reset_cycle != CYCLE_NEVER) {
+				gen->reset_cycle -= deduction;
+			}
 		}
 	}
 	gen->frame_end = vdp_cycles_to_frame_end(v_context);
@@ -345,6 +353,9 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 		context->sync_cycle = context->current_cycle + 1;
 	}
 	adjust_int_cycle(context, v_context);
+	if (gen->reset_cycle < context->target_cycle) {
+		context->target_cycle = gen->reset_cycle;
+	}
 	if (address) {
 		if (gen->header.enter_debugger) {
 			gen->header.enter_debugger = 0;
@@ -1039,6 +1050,7 @@ static void handle_reset_requests(genesis_context *gen)
 	{
 		if (gen->reset_requested) {
 			gen->reset_requested = 0;
+			gen->m68k->should_return = 0;
 			z80_assert_reset(gen->z80, gen->m68k->current_cycle);
 			z80_clear_busreq(gen->z80, gen->m68k->current_cycle);
 			ym_reset(gen->ym);
@@ -1163,8 +1175,13 @@ static void load_save(system_header *system)
 static void soft_reset(system_header *system)
 {
 	genesis_context *gen = (genesis_context *)system;
-	gen->m68k->should_return = 1;
-	gen->reset_requested = 1;
+	if (gen->reset_cycle == CYCLE_NEVER) {
+		double random = (double)rand()/(double)RAND_MAX;
+		gen->reset_cycle = gen->m68k->current_cycle + random * MCLKS_LINE * (gen->version_reg & HZ50 ? LINES_PAL : LINES_NTSC);
+		if (gen->reset_cycle < gen->m68k->target_cycle) {
+			gen->m68k->target_cycle = gen->reset_cycle;
+		}
+	}
 }
 
 static void free_genesis(system_header *system)
