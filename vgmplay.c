@@ -108,10 +108,10 @@ int main(int argc, char ** argv)
 	uint32_t lowpass_cutoff = lowpass_cutoff_str ? atoi(lowpass_cutoff_str) : 3390;
 
 	ym2612_context y_context;
-	ym_init(&y_context, render_sample_rate(), MCLKS_NTSC, MCLKS_PER_YM, render_audio_buffer(), opts, lowpass_cutoff);
+	ym_init(&y_context, MCLKS_NTSC, MCLKS_PER_YM, opts);
 
 	psg_context p_context;
-	psg_init(&p_context, render_sample_rate(), MCLKS_NTSC, MCLKS_PER_PSG, render_audio_buffer(), lowpass_cutoff);
+	psg_init(&p_context, MCLKS_NTSC, MCLKS_PER_PSG);
 
 	FILE * f = fopen(argv[1], "rb");
 	vgm_header header;
