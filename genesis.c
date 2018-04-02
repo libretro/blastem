@@ -110,7 +110,7 @@ static void zram_deserialize(deserialize_buffer *buf, void *vgen)
 
 static void update_z80_bank_pointer(genesis_context *gen)
 {
-	if (gen->z80->bank_reg < 0x100) {
+	if (gen->z80->bank_reg < 0x140) {
 		gen->z80->mem_pointers[1] = get_native_pointer(gen->z80->bank_reg << 15, (void **)gen->m68k->mem_pointers, &gen->m68k->options->gen);
 	} else {
 		gen->z80->mem_pointers[1] = NULL;
