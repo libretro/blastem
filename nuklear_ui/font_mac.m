@@ -8,18 +8,19 @@ sfnt_table *find_font_in_dir(char *path, char *prefix, const char *ps_name)
 {
 	size_t num_entries;
 	dir_entry *entries = get_dir_list(path, &num_entries);
-	size_t prefix_len = strlen(prefix);
+	size_t prefix_len = prefix ? strlen(prefix) : 0;
 	sfnt_table *selected = NULL;
 	for (size_t i = 0; i < num_entries && !selected; i++)
 	{
 		char *ext = path_extension(entries[i].name);
 		if (!ext || (strcasecmp(ext, "ttf") && strcasecmp(ext, "ttc") && strcasecmp(ext, "dfont"))) {
 			//not a truetype font, ignore
+			printf("Skipping %s because of its extension\n", entries[i].name);
 			free(ext);
 			continue;
 		}
 		free(ext);
-		if (!strncasecmp(entries[i].name, prefix, prefix_len)) {
+		if (!prefix || !strncasecmp(entries[i].name, prefix, prefix_len)) {
 			char *full_path = path_append(path, entries[i].name);
 			FILE *f = fopen(full_path, "rb");
 			if (f)
@@ -30,15 +31,18 @@ sfnt_table *find_font_in_dir(char *path, char *prefix, const char *ps_name)
 				{
 					sfnt_container *sfnt = load_sfnt(blob, font_size);
 					if (sfnt) {
+						printf("Examining font file %s\n", entries[i].name);
 						for (uint8_t j = 0; j < sfnt->num_fonts && !selected; j++)
 						{
 							char *cur_ps = sfnt_name(sfnt->tables + j, SFNT_POSTSCRIPT);
+							printf("\t%s\n", cur_ps);
 							if (!strcmp(cur_ps, ps_name)) {
 								selected = sfnt->tables + j;
 							}
 							free(cur_ps);
 						}
 					} else {
+						printf("Failed to load %s as sfnt containern\n", entries[i].name);
 						free(blob);
 					}
 				} else {
@@ -83,6 +87,13 @@ uint8_t *default_font(uint32_t *size_out)
 	sfnt_table *selected = find_font_in_dir("/Library/Fonts", (char *)prefix, ps_name);
 	if (!selected) {
 		selected = find_font_in_dir("/System/Library/Fonts", (char *)prefix, ps_name);
+	}
+	if (!selected) {
+		puts("Check using prefix failed, exhaustively checking fonts");
+		selected = find_font_in_dir("/Library/Fonts", NULL, ps_name);
+	}
+	if (!selected) {
+		selected = find_font_in_dir("/System/Library/Fonts", NULL, ps_name);
 	}
 	if (!selected) {
 		fatal_error("Failed to find system font %s using prefix %s\n", ps_name, prefix);

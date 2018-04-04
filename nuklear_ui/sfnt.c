@@ -200,9 +200,9 @@ char *sfnt_name(sfnt_table *sfnt, uint16_t name_type)
 	}
 	if (entry == macroman_entry) {
 		//TODO: convert these properly to UTF-8
-		char *ret = malloc(name_size + 1);
+		char *ret = malloc(name_length + 1);
 		memcpy(ret, name_table + full_off, name_length);
-		ret[name_size] = 0;
+		ret[name_length] = 0;
 		return ret;
 	} else {
 		return utf16be_to_utf8(name_table + full_off, name_length/2);
