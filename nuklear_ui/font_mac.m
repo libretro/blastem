@@ -4,7 +4,7 @@
 #include "../util.h"
 #include "sfnt.h"
 
-sfnt_table *find_font_in_dir(char *path, char *prefix, const char *ps_name)
+static sfnt_table *find_font_in_dir(char *path, char *prefix, const char *ps_name)
 {
 	size_t num_entries;
 	dir_entry *entries = get_dir_list(path, &num_entries);
@@ -56,11 +56,8 @@ sfnt_table *find_font_in_dir(char *path, char *prefix, const char *ps_name)
 	return selected;
 }
 
-uint8_t *default_font(uint32_t *size_out)
+static sfnt_table *find_font_by_ps_name(const char*ps_name, uint8_t exhaustive)
 {
-	NSFont *sys = [NSFont systemFontOfSize:0];
-	NSString *name = [sys fontName];
-	const char *ps_name = [name UTF8String];
 	const unsigned char *prefix_start = (const unsigned char *)ps_name;
 	while(*prefix_start && (
 		*prefix_start < '0' || 
@@ -88,17 +85,34 @@ uint8_t *default_font(uint32_t *size_out)
 	if (!selected) {
 		selected = find_font_in_dir("/System/Library/Fonts", (char *)prefix, ps_name);
 	}
-	if (!selected) {
-		puts("Check using prefix failed, exhaustively checking fonts");
-		selected = find_font_in_dir("/Library/Fonts", NULL, ps_name);
-	}
-	if (!selected) {
-		selected = find_font_in_dir("/System/Library/Fonts", NULL, ps_name);
-	}
-	if (!selected) {
-		fatal_error("Failed to find system font %s using prefix %s\n", ps_name, prefix);
+	if (exhaustive) {
+		if (!selected) {
+			puts("Check using prefix failed, exhaustively checking fonts");
+			selected = find_font_in_dir("/Library/Fonts", NULL, ps_name);
+		}
+		if (!selected) {
+			selected = find_font_in_dir("/System/Library/Fonts", NULL, ps_name);
+		}
 	}
 	free(prefix);
+	return selected;
+}
+
+uint8_t *default_font(uint32_t *size_out)
+{
+	NSFont *sys = [NSFont systemFontOfSize:0];
+	NSString *name = [sys fontName];
+	sfnt_table *selected = find_font_by_ps_name([name UTF8String], 1);
+	if (!selected) {
+		selected = find_font_by_ps_name(".HelveticaNeueDeskInterface-Regular", 0);
+	}
+	if (!selected) {
+		selected = find_font_by_ps_name(".LucidaGrandeUI", 0);
+	}
+	
+	if (!selected) {
+		fatal_error("Failed to find system font %s\n", [name UTF8String]);
+	}
 	return sfnt_flatten(selected, size_out);
 }
 
