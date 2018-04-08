@@ -2075,7 +2075,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		break;
 	}
 	case Z80_JPCC: {
-		cycles(&opts->gen, num_cycles + 3);//T States: 4,3
+		cycles(&opts->gen, num_cycles + 6);//T States: 4,3,3
 		uint8_t cond = CC_Z;
 		switch (inst->reg)
 		{
@@ -2102,7 +2102,6 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		}
 		uint8_t *no_jump_off = code->cur+1;
 		jcc(code, cond, code->cur+2);
-		cycles(&opts->gen, 5);//T States: 5
 		uint16_t dest_addr = inst->immed;
 		code_ptr call_dst = z80_get_native_address(context, dest_addr);
 			if (!call_dst) {
