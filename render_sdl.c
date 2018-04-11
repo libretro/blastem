@@ -300,7 +300,7 @@ void render_put_stereo_sample(audio_source *src, int16_t left, int16_t right)
 		}
 	}
 	src->last_left = left;
-	src->last_right = left;
+	src->last_right = right;
 }
 
 static SDL_Joystick * joysticks[MAX_JOYSTICKS];
