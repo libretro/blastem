@@ -1072,7 +1072,6 @@ static void start_genesis(system_header *system, char *statefile)
 {
 	genesis_context *gen = (genesis_context *)system;
 	set_keybindings(&gen->io);
-	render_set_video_standard((gen->version_reg & HZ50) ? VID_PAL : VID_NTSC);
 	if (statefile) {
 		//first try loading as a native format savestate
 		deserialize_buffer state;
@@ -1236,6 +1235,8 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	gen->max_cycles = config_cycles ? atoi(config_cycles) : DEFAULT_SYNC_INTERVAL;
 	gen->int_latency_prev1 = MCLKS_PER_68K * 32;
 	gen->int_latency_prev2 = MCLKS_PER_68K * 16;
+	
+	render_set_video_standard((gen->version_reg & HZ50) ? VID_PAL : VID_NTSC);
 	
 	gen->ym = malloc(sizeof(ym2612_context));
 	ym_init(gen->ym, gen->master_clock, MCLKS_PER_YM, system_opts);
