@@ -59,7 +59,6 @@ struct audio_source {
 	int16_t  last_right;
 	uint8_t  num_channels;
 	uint8_t  front_populated;
-	uint8_t  adjusted;
 };
 
 static audio_source *audio_sources[8];
@@ -94,11 +93,14 @@ static int32_t mix_s16(audio_source *audio, void *vstream, int len)
 		}
 	}
 	
+	if (cur != end) {
+		printf("Underflow of %d samples, read_start: %d, read_end: %d, mask: %X\n", (int)(end-cur)/2, audio->read_start, audio->read_end, audio->mask);
+	}
 	if (!sync_to_audio) {
 		audio->read_start = i;
 	}
 	if (cur != end) {
-		printf("Underflow of %d samples\n", (int)(end-cur)/2);
+		//printf("Underflow of %d samples, read_start: %d, read_end: %d, mask: %X\n", (int)(end-cur)/2, audio->read_start, audio->read_end, audio->mask);
 		return (cur-end)/2;
 	} else {
 		return ((i_end - i) & audio->mask) / audio->num_channels;
@@ -133,7 +135,7 @@ static int32_t mix_f32(audio_source *audio, void *vstream, int len)
 		audio->read_start = i;
 	}
 	if (cur != end) {
-		printf("Underflow of %d samples\n", (int)(end-cur)/2);
+		printf("Underflow of %d samples, read_start: %d, read_end: %d, mask: %X\n", (int)(end-cur)/2, audio->read_start, audio->read_end, audio->mask);
 		return (cur-end)/2;
 	} else {
 		return ((i_end - i) & audio->mask) / audio->num_channels;
@@ -179,63 +181,27 @@ static void audio_callback(void * userdata, uint8_t *byte_stream, int len)
 
 #define NO_LAST_BUFFERED -2000000000
 static int32_t last_buffered = NO_LAST_BUFFERED;
-static uint8_t need_adjust, need_pause;
-static float adjust_ratio, average_change;
+static float average_change;
 #define BUFFER_FRAMES_THRESHOLD 6
-#define BASE_MAX_ADJUST 0.05
+#define BASE_MAX_ADJUST 0.025
 static float max_adjust;
+static int32_t cur_min_buffered;
+static uint32_t min_remaining_buffer;
 static void audio_callback_drc(void *userData, uint8_t *byte_stream, int len)
 {
 	//TODO: update progress tracking so we can adjust resample rate
 	memset(byte_stream, 0, len);
-	int32_t cur_min_buffered = 0x7FFFFFFF;
-	uint32_t min_remaining_buffer = 0xFFFFFFFF;
+	cur_min_buffered = 0x7FFFFFFF;
+	min_remaining_buffer = 0xFFFFFFFF;
 	for (uint8_t i = 0; i < num_audio_sources; i++)
 	{
 		
-		printf("buffered at start: %d, ", ((audio_sources[i]->read_end - audio_sources[i]->read_start) & audio_sources[i]->mask) / audio_sources[i]->num_channels);
 		int32_t buffered = mix(audio_sources[i], byte_stream, len);
-		printf("buffered after mix: %d\n", buffered);
 		cur_min_buffered = buffered < cur_min_buffered ? buffered : cur_min_buffered;
 		uint32_t remaining = (audio_sources[i]->mask + 1)/audio_sources[i]->num_channels - buffered;
 		min_remaining_buffer = remaining < min_remaining_buffer ? remaining : min_remaining_buffer;
 	}
-	if (last_buffered > NO_LAST_BUFFERED) {
-		average_change *= 0.8f;
-		average_change += ((int32_t)cur_min_buffered - last_buffered) * 0.2f;
-	}
-	last_buffered = cur_min_buffered;
-	float frames_to_problem;
-	if (average_change < 0) {
-		frames_to_problem = (float)cur_min_buffered / -average_change;
-	} else {
-		frames_to_problem = (float)min_remaining_buffer / average_change;
-	}
-	if (
-		frames_to_problem < BUFFER_FRAMES_THRESHOLD || cur_min_buffered < 0 
-		|| (cur_min_buffered < min_buffered/2 && average_change < 0)
-		|| (cur_min_buffered > (2*min_buffered) && average_change > 0)
-	) {
-		need_adjust = num_audio_sources;
-		if (cur_min_buffered < 0) {
-			adjust_ratio = max_adjust;
-			need_pause = 1;
-		} else {
-			adjust_ratio = -1.5 * average_change / buffer_samples;
-			if (fabsf(adjust_ratio) > max_adjust) {
-				adjust_ratio = adjust_ratio > 0 ? max_adjust : -max_adjust;
-			}
-		}
-		printf("frames_to_problem: %f, avg_change: %f, adjust_ratio: %f\n", frames_to_problem, average_change, adjust_ratio);
-		average_change = 0;
-		last_buffered = NO_LAST_BUFFERED;
-		for (uint8_t i = 0; i < num_audio_sources; i++)
-		{
-			audio_sources[i]->adjusted = 0;
-		}
-	} else {
-		printf("no adjust - frames_to_problem: %f, avg_change: %f, cur_min_buffered: %d, min_remaining_buffer: %d\n", frames_to_problem, average_change, cur_min_buffered, min_remaining_buffer);
-	}
+	printf("cur_min_buffered: %d, source 0 %d:%d\n", cur_min_buffered, audio_sources[0]->read_start, audio_sources[0]->read_end);
 }
 
 static void lock_audio()
@@ -275,7 +241,7 @@ void render_audio_adjust_clock(audio_source *src, uint64_t master_clock, uint64_
 audio_source *render_audio_source(uint64_t master_clock, uint64_t sample_divider, uint8_t channels)
 {
 	audio_source *ret = NULL;
-	uint32_t alloc_size = sync_to_audio ? channels * buffer_samples : nearest_pow2(min_buffered * 2 * channels);
+	uint32_t alloc_size = sync_to_audio ? channels * buffer_samples : nearest_pow2(min_buffered * 4 * channels);
 	lock_audio();
 		if (num_audio_sources < 8) {
 			ret = malloc(sizeof(audio_source));
@@ -284,7 +250,6 @@ audio_source *render_audio_source(uint64_t master_clock, uint64_t sample_divider
 			ret->front_populated = 0;
 			ret->cond = SDL_CreateCond();
 			ret->num_channels = channels;
-			ret->adjusted = 0;
 			audio_sources[num_audio_sources++] = ret;
 		}
 	unlock_audio();
@@ -369,21 +334,11 @@ static void do_audio_ready(audio_source *src)
 		SDL_UnlockMutex(audio_mutex);
 	} else {
 		uint32_t num_buffered;
-		uint8_t local_need_pause;
 		SDL_LockAudio();
 			src->read_end = src->buffer_pos;
 			num_buffered = ((src->read_end - src->read_start) & src->mask) / src->num_channels;
-			if (need_adjust && !src->adjusted) {
-				src->adjusted = 1;
-				need_adjust--;
-				src->buffer_inc = ((double)src->buffer_inc) + ((double)src->buffer_inc) * adjust_ratio + 0.5;
-			}
-			local_need_pause = need_pause;
-			need_pause = 0;
 		SDL_UnlockAudio();
-		if (local_need_pause) {
-			SDL_PauseAudio(1);
-		} else if (num_buffered >= min_buffered && SDL_GetAudioStatus() == SDL_AUDIO_PAUSED) {
+		if (num_buffered >= min_buffered && SDL_GetAudioStatus() == SDL_AUDIO_PAUSED) {
 			SDL_PauseAudio(0);
 		}
 	}
@@ -850,7 +805,6 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 	}
 	buffer_samples = actual.samples;
 	sample_rate = actual.freq;
-	max_adjust = BASE_MAX_ADJUST * (float)buffer_samples / (float)sample_rate;
 	printf("Initialized audio at frequency %d with a %d sample buffer, ", actual.freq, actual.samples);
 	if (actual.format == AUDIO_S16SYS) {
 		puts("signed 16-bit int format");
@@ -916,10 +870,11 @@ void render_set_video_standard(vid_std std)
 	//sync samples with audio thread approximately every 8 lines
 	sync_samples = 8 * sample_rate / (source_hz * (VID_PAL ? 313 : 262));
 	max_repeat++;
-	float mult = max_repeat > 1 ? 2.5 : 1.5;
-	min_buffered = (((float)max_repeat * mult * (float)sample_rate/(float)source_hz) / (float)buffer_samples) + 0.9999;
-	min_buffered *= buffer_samples;
+	float mult = max_repeat > 1 ? 1 : 1.35;
+	min_buffered = (((float)max_repeat * mult * (float)sample_rate/(float)source_hz)/* / (float)buffer_samples*/);// + 0.9999;
+	//min_buffered *= buffer_samples;
 	printf("Min samples buffered before audio start: %d\n", min_buffered);
+	max_adjust = BASE_MAX_ADJUST / source_hz;
 }
 
 void render_update_caption(char *title)
@@ -1107,16 +1062,59 @@ void render_framebuffer_updated(uint8_t which, int width)
 			frame_counter = 0;
 		}
 	}
-	while (source_frame_count > 0)
-	{
-		render_update_display();
-		source_frame_count--;
+	if (!sync_to_audio) {
+		int32_t local_cur_min, local_min_remaining;
+		SDL_LockAudio();
+			if (last_buffered > NO_LAST_BUFFERED) {
+				average_change *= 0.9f;
+				average_change += (cur_min_buffered - last_buffered) * 0.1f;
+			}
+			local_cur_min = cur_min_buffered;
+			local_min_remaining = min_remaining_buffer;
+			last_buffered = cur_min_buffered;
+		SDL_UnlockAudio();
+		float frames_to_problem;
+		if (average_change < 0) {
+			frames_to_problem = (float)local_cur_min / -average_change;
+		} else {
+			frames_to_problem = (float)local_min_remaining / average_change;
+		}
+		if (
+			frames_to_problem < BUFFER_FRAMES_THRESHOLD
+			|| (average_change < 0 && local_cur_min < min_buffered / 2)
+			|| (average_change >0 && local_cur_min > min_buffered * 2)
+		) {
+			float adjust_ratio;
+			if (cur_min_buffered < 0) {
+				adjust_ratio = max_adjust;
+				SDL_PauseAudio(1);
+				last_buffered = NO_LAST_BUFFERED;
+			} else {
+				adjust_ratio = -1.5 * average_change / ((float)sample_rate / (float)source_hz);
+				if (fabsf(adjust_ratio) > max_adjust) {
+					adjust_ratio = adjust_ratio > 0 ? max_adjust : -max_adjust;
+				}
+			}
+			printf("frames_to_problem: %f, avg_change: %f, adjust_ratio: %f\n", frames_to_problem, average_change, adjust_ratio);
+			average_change = 0;
+			for (uint8_t i = 0; i < num_audio_sources; i++)
+			{
+				audio_sources[i]->buffer_inc = ((double)audio_sources[i]->buffer_inc) + ((double)audio_sources[i]->buffer_inc) * adjust_ratio + 0.5;
+			}
+		} else {
+			printf("no adjust - frames_to_problem: %f, avg_change: %f, cur_min_buffered: %d, min_remaining_buffer: %d\n", frames_to_problem, average_change, local_cur_min, local_min_remaining);
+		}
+		while (source_frame_count > 0)
+		{
+			render_update_display();
+			source_frame_count--;
+		}
+		source_frame++;
+		if (source_frame >= source_hz) {
+			source_frame = 0;
+		}
+		source_frame_count = frame_repeat[source_frame];
 	}
-	source_frame++;
-	if (source_frame >= source_hz) {
-		source_frame = 0;
-	}
-	source_frame_count = frame_repeat[source_frame];
 }
 
 static ui_render_fun render_ui;
