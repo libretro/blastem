@@ -776,6 +776,15 @@ void view_audio_settings(struct nk_context *context)
 }
 void view_system_settings(struct nk_context *context)
 {
+	const char *sync_opts[] = {
+		"video",
+		"audio"
+	};
+	const uint32_t num_sync_opts = sizeof(sync_opts)/sizeof(*sync_opts);
+	static int32_t selected_sync = -1;
+	if (selected_sync < 0) {
+		selected_sync = find_match(sync_opts, num_sync_opts, "system\0sync_source\0", "video");
+	}
 	const char *regions[] = {
 		"J - Japan",
 		"U - Americas",
@@ -833,6 +842,7 @@ void view_system_settings(struct nk_context *context)
 	uint32_t height = render_height();
 	if (nk_begin(context, "System Settings", nk_rect(0, 0, width, height), 0)) {
 		nk_layout_row_static(context, 30, width > 300 ? 300 : width, 2);
+		selected_sync = settings_dropdown(context, "Sync Source", sync_opts, num_sync_opts, selected_sync, "system\0sync_source\0");
 		settings_int_property(context, "68000 Clock Divider", "", "clocks\0m68k_divider\0", 7, 1, 53);
 		settings_toggle(context, "Remember ROM Path", "ui\0remember_path\0", 1);
 		selected_region = settings_dropdown_ex(context, "Default Region", region_codes, regions, num_regions, selected_region, "system\0default_region\0");
