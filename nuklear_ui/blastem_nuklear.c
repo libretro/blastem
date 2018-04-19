@@ -496,12 +496,13 @@ void view_key_bindings(struct nk_context *context)
 		nk_end(context);
 	}
 }
-static struct nk_image controller_image;
+static struct nk_image controller_360_image;
+static uint32_t controller_360_width, controller_360_height;
 void view_controllers(struct nk_context *context)
 {
 	if (nk_begin(context, "Controller Bindings", nk_rect(0, 0, render_width(), render_height()), 0)) {
 		nk_layout_row_static(context, render_height() - 50, render_width() - 80, 1);
-		nk_image(context, controller_image);
+		nk_image(context, controller_360_image);
 		nk_layout_row_static(context, 34, (render_width() - 80) / 2, 1);
 		if (nk_button_label(context, "Back")) {
 			pop_view();
@@ -955,9 +956,11 @@ static void context_destroyed(void)
 {
 	nk_sdl_device_destroy();
 }
-static void context_created(void)
+
+static uint32_t *controller_360_buf;
+
+static void texture_init(void)
 {
-	nk_sdl_device_create();
 	struct nk_font_atlas *atlas;
 	nk_sdl_font_stash_begin(&atlas);
 	uint32_t font_size;
@@ -968,6 +971,23 @@ static void context_created(void)
 	struct nk_font *def_font = nk_font_atlas_add_from_memory(atlas, font, font_size, 30, NULL);
 	nk_sdl_font_stash_end();
 	nk_style_set_font(context, &def_font->handle);
+	if (controller_360_buf) {
+		GLuint tex;
+		glGenTextures(1, &tex);
+		glBindTexture(GL_TEXTURE_2D, tex);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, controller_360_width, controller_360_height, 0, GL_BGRA, GL_UNSIGNED_BYTE, controller_360_buf);
+		controller_360_image = nk_image_id((int)tex);
+	}
+}
+
+static void context_created(void)
+{
+	nk_sdl_device_create();
+	texture_init();
 }
 
 void show_pause_menu(void)
@@ -1001,43 +1021,20 @@ void blastem_nuklear_init(uint8_t file_loaded)
 {
 	context = nk_sdl_init(render_get_window());
 	
-	struct nk_font_atlas *atlas;
-	nk_sdl_font_stash_begin(&atlas);
-	//char *font = default_font_path();
-	uint32_t font_size;
-	uint8_t *font = default_font(&font_size);
-	if (!font) {
-		fatal_error("Failed to find default font path\n");
-	}
-	//struct nk_font *def_font = nk_font_atlas_add_from_file(atlas, font, 30, NULL);
-	struct nk_font *def_font = nk_font_atlas_add_from_memory(atlas, font, font_size, 30, NULL);
-	nk_sdl_font_stash_end();
-	nk_style_set_font(context, &def_font->handle);
+	uint32_t buf_size;
+	uint8_t *buf = (uint8_t *)read_bundled_file("images/360.png", &buf_size);
+	if (buf) {
+		controller_360_buf = load_png(buf, buf_size, &controller_360_width, &controller_360_height);
+		free(buf);
+	}	
+	texture_init();
+	
 	current_view = file_loaded ? view_play : view_menu;
 	render_set_ui_render_fun(blastem_nuklear_render);
 	render_set_event_handler(handle_event);
 	render_set_gl_context_handlers(context_destroyed, context_created);
 	
-	FILE *f = fopen("images/360.png", "rb");
-	long buf_size = file_size(f);
-	uint8_t *buf = malloc(buf_size);
-	if (buf_size == fread(buf, 1, buf_size, f)) {
-		uint32_t width, height;
-		uint32_t *pixels = load_png(buf, buf_size, &width, &height);
-		if (pixels) {
-			GLuint tex;
-			glGenTextures(1, &tex);
-			glBindTexture(GL_TEXTURE_2D, tex);
-			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, pixels);
-			free(pixels);
-			controller_image = nk_image_id((int)tex);
-		}
-	}
-	free(buf);
+
 	
 	active = 1;
 	ui_idle_loop();
