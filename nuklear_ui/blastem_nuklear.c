@@ -12,6 +12,7 @@
 #include "../blastem.h"
 #include "../config.h"
 #include "../io.h"
+#include "../png.h"
 
 static struct nk_context *context;
 
@@ -495,9 +496,12 @@ void view_key_bindings(struct nk_context *context)
 		nk_end(context);
 	}
 }
+static struct nk_image controller_image;
 void view_controllers(struct nk_context *context)
 {
 	if (nk_begin(context, "Controller Bindings", nk_rect(0, 0, render_width(), render_height()), 0)) {
+		nk_layout_row_static(context, render_height() - 50, render_width() - 80, 1);
+		nk_image(context, controller_image);
 		nk_layout_row_static(context, 34, (render_width() - 80) / 2, 1);
 		if (nk_button_label(context, "Back")) {
 			pop_view();
@@ -1013,6 +1017,28 @@ void blastem_nuklear_init(uint8_t file_loaded)
 	render_set_ui_render_fun(blastem_nuklear_render);
 	render_set_event_handler(handle_event);
 	render_set_gl_context_handlers(context_destroyed, context_created);
+	
+	FILE *f = fopen("images/360.png", "rb");
+	long buf_size = file_size(f);
+	uint8_t *buf = malloc(buf_size);
+	if (buf_size == fread(buf, 1, buf_size, f)) {
+		uint32_t width, height;
+		uint32_t *pixels = load_png(buf, buf_size, &width, &height);
+		if (pixels) {
+			GLuint tex;
+			glGenTextures(1, &tex);
+			glBindTexture(GL_TEXTURE_2D, tex);
+			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, pixels);
+			free(pixels);
+			controller_image = nk_image_id((int)tex);
+		}
+	}
+	free(buf);
+	
 	active = 1;
 	ui_idle_loop();
 }
