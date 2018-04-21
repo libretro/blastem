@@ -2,6 +2,7 @@
 #define NK_SDL_GLES2_IMPLEMENTATION
 
 #include <stdlib.h>
+#include <limits.h>
 #include "blastem_nuklear.h"
 #include "font.h"
 #include "../render.h"
@@ -498,11 +499,81 @@ void view_key_bindings(struct nk_context *context)
 }
 static struct nk_image controller_360_image;
 static uint32_t controller_360_width, controller_360_height;
+#define MIN_BIND_BOX_WIDTH 140
+#define MAX_BIND_BOX_WIDTH 350
 void view_controllers(struct nk_context *context)
 {
-	if (nk_begin(context, "Controller Bindings", nk_rect(0, 0, render_width(), render_height()), 0)) {
-		nk_layout_row_static(context, render_height() - 50, render_width() - 80, 1);
+	if (nk_begin(context, "Controller Bindings", nk_rect(0, 0, render_width(), render_height()), NK_WINDOW_NO_SCROLLBAR)) {
+		uint32_t avail_height = render_height() - 60;
+		float desired_width = render_width() * 0.5f, desired_height = avail_height * 0.5f;
+		float controller_ratio = (float)controller_360_width / (float)controller_360_height;
+		if (render_width() - desired_width < 2.5f*MIN_BIND_BOX_WIDTH) {
+			desired_width = render_width() - 2.5f*MIN_BIND_BOX_WIDTH;
+		}
+		
+		if (desired_width / desired_height > controller_ratio) {
+			desired_width = desired_height * controller_ratio;
+		} else {
+			desired_height = desired_width / controller_ratio;
+		}
+		float img_left = render_width() / 2.0f - desired_width / 2.0f;
+		float img_top = avail_height / 2.0f - desired_height / 2.0f;
+		float img_right = img_left + desired_width;
+		nk_layout_space_begin(context, NK_STATIC, avail_height, INT_MAX);
+		nk_layout_space_push(context, nk_rect(img_left, img_top, desired_width, desired_height));
 		nk_image(context, controller_360_image);
+		
+		float bind_box_width = (render_width() - img_right) * 0.8f;
+		if (bind_box_width < MIN_BIND_BOX_WIDTH) {
+			bind_box_width = render_width() - img_right;
+			if (bind_box_width > MIN_BIND_BOX_WIDTH) {
+				bind_box_width = MIN_BIND_BOX_WIDTH;
+			}
+		} else if (bind_box_width > MAX_BIND_BOX_WIDTH) {
+			bind_box_width = MAX_BIND_BOX_WIDTH;
+		}
+		float bind_box_left;
+		if (bind_box_width >= (render_width() - img_right)) {
+			bind_box_left = img_right;
+		} else {
+			bind_box_left = img_right + (render_width() - img_right) / 2.0f - bind_box_width / 2.0f;
+		}
+		
+		nk_layout_space_push(context, nk_rect(bind_box_left, img_top, bind_box_width, 165));
+		nk_group_begin(context, "Action Buttons", NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR);
+		float widths[] = {34, bind_box_width - 60};
+		nk_layout_row(context, NK_STATIC, 34, 2, widths);
+		nk_label(context, "A", NK_TEXT_LEFT);
+		nk_button_label(context, "A");
+		nk_label(context, "B", NK_TEXT_LEFT);
+		nk_button_label(context, "B");
+		nk_label(context, "X", NK_TEXT_LEFT);
+		nk_button_label(context, "X");
+		nk_label(context, "Y", NK_TEXT_LEFT);
+		nk_button_label(context, "Internal Screenshot");
+		nk_group_end(context);
+		
+		bind_box_left -= img_right;
+		widths[0] += 44;
+		widths[1] -= 44;
+		nk_layout_space_push(context, nk_rect(bind_box_left, img_top, bind_box_width, 205));
+		nk_group_begin(context, "Left Stick", NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR);
+		nk_layout_row(context, NK_STATIC, 34, 2, widths);
+		nk_label(context, "Up", NK_TEXT_LEFT);
+		nk_button_label(context, "Up");
+		nk_label(context, "Down", NK_TEXT_LEFT);
+		nk_button_label(context, "Down");
+		nk_label(context, "Left", NK_TEXT_LEFT);
+		nk_button_label(context, "Left");
+		nk_label(context, "Right", NK_TEXT_LEFT);
+		nk_button_label(context, "Right");
+		nk_label(context, "Click", NK_TEXT_LEFT);
+		nk_button_label(context, "None");
+		
+		nk_group_end(context);
+		
+		nk_layout_space_end(context);
+		
 		nk_layout_row_static(context, 34, (render_width() - 80) / 2, 1);
 		if (nk_button_label(context, "Back")) {
 			pop_view();
