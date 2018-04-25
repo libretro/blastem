@@ -248,6 +248,41 @@ char *utf16be_to_utf8(uint8_t *buf, uint32_t max_size)
 	return out;
 }
 
+int utf8_codepoint(const char **text)
+{
+	uint8_t initial = **text;
+	(*text)++;
+	if (initial < 0x80) {
+		return initial;
+	}
+	int base;
+	uint8_t extended_bytes;
+	if ((initial & 0xE0) == 0xC0) {
+		base = 0x80;
+		initial &= 0x1F;
+		extended_bytes = 1;
+	} else if ((initial & 0xF0) == 0xE0) {
+		base = 0x800;
+		initial &= 0xF;
+		extended_bytes = 2;
+	} else if ((initial & 0xF8) == 0xF0) {
+		base = 0x10000;
+		initial &= 0x7;
+		extended_bytes = 3;
+	}
+	int value = initial;
+	for (uint8_t i = 0; i < extended_bytes; i++)
+	{
+		if ((**text & 0xC0) != 0x80) {
+			return -1;
+		}
+		value = value << 6;
+		value |= (**text) & 0x3F;
+		(*text)++;
+	}
+	return value + base;
+}
+
 char is_path_sep(char c)
 {
 #ifdef _WIN32
