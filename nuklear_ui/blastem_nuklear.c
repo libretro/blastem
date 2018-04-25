@@ -22,6 +22,7 @@ static view_fun current_view;
 static view_fun *previous_views;
 static uint32_t view_storage;
 static uint32_t num_prev;
+static struct nk_font *def_font;
 
 static void push_view(view_fun new_view)
 {
@@ -254,8 +255,8 @@ void view_load_state(struct nk_context *context)
 
 static void menu(struct nk_context *context, uint32_t num_entries, const menu_item *items)
 {
-	const uint32_t button_height = 52;
-	const uint32_t ideal_button_width = 300;
+	const uint32_t button_height = context->style.font->height * 1.75;
+	const uint32_t ideal_button_width = context->style.font->height * 10;
 	const uint32_t button_space = 6;
 	
 	uint32_t width = render_width();
@@ -499,14 +500,22 @@ void view_key_bindings(struct nk_context *context)
 }
 static struct nk_image controller_360_image;
 static uint32_t controller_360_width, controller_360_height;
-#define MIN_BIND_BOX_WIDTH 140
+//#define MIN_BIND_BOX_WIDTH 140
 #define MAX_BIND_BOX_WIDTH 350
 void view_controllers(struct nk_context *context)
 {
 	if (nk_begin(context, "Controller Bindings", nk_rect(0, 0, render_width(), render_height()), NK_WINDOW_NO_SCROLLBAR)) {
-		uint32_t avail_height = render_height() - 60;
+		float orig_height = def_font->handle.height;
+		def_font->handle.height *= 0.5f;
+		
+		uint32_t avail_height = render_height() - 2 * orig_height;
 		float desired_width = render_width() * 0.5f, desired_height = avail_height * 0.5f;
 		float controller_ratio = (float)controller_360_width / (float)controller_360_height;
+		
+		const struct nk_user_font *font = context->style.font;
+		int MIN_BIND_BOX_WIDTH = font->width(font->userdata, font->height, "Right", strlen("Right"))
+			+ def_font->handle.width(font->userdata, font->height, "Internal Screenshot", strlen("Internal Screenshot"));
+		
 		if (render_width() - desired_width < 2.5f*MIN_BIND_BOX_WIDTH) {
 			desired_width = render_width() - 2.5f*MIN_BIND_BOX_WIDTH;
 		}
@@ -574,7 +583,8 @@ void view_controllers(struct nk_context *context)
 		
 		nk_layout_space_end(context);
 		
-		nk_layout_row_static(context, 34, (render_width() - 80) / 2, 1);
+		def_font->handle.height = orig_height;
+		nk_layout_row_static(context, orig_height + 4, (render_width() - 80) / 2, 1);
 		if (nk_button_label(context, "Back")) {
 			pop_view();
 		}
@@ -1039,7 +1049,7 @@ static void texture_init(void)
 	if (!font) {
 		fatal_error("Failed to find default font path\n");
 	}
-	struct nk_font *def_font = nk_font_atlas_add_from_memory(atlas, font, font_size, 30, NULL);
+	def_font = nk_font_atlas_add_from_memory(atlas, font, font_size, render_height() / 16, NULL);
 	nk_sdl_font_stash_end();
 	nk_style_set_font(context, &def_font->handle);
 	if (controller_360_buf) {
