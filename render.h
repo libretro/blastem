@@ -124,6 +124,7 @@ void render_put_stereo_sample(audio_source *src, int16_t left, int16_t right);
 void render_pause_source(audio_source *src);
 void render_resume_source(audio_source *src);
 void render_free_source(audio_source *src);
+void render_config_updated(void);
 
 #endif //RENDER_H_
 
