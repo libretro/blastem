@@ -277,6 +277,11 @@ void setup_saves(system_media *media, rom_info *info, system_header *context)
 	}
 }
 
+void apply_updated_config(void)
+{
+	render_config_updated();
+}
+
 static void on_drag_drop(const char *filename)
 {
 	if (current_system->next_rom) {
@@ -375,11 +380,6 @@ void init_system_with_media(char *path, system_type force_stype)
 	game_system->next_context = menu_system;
 	setup_saves(&cart, &info, game_system);
 	update_title(info.name);
-}
-
-static void save_config(void)
-{
-	persist_config(config);
 }
 
 int main(int argc, char ** argv)
@@ -616,8 +616,6 @@ int main(int argc, char ** argv)
 			game_system = current_system;
 		}
 	}
-	
-	atexit(save_config);
 	
 #ifndef DISABLE_NUKLEAR
 	if (use_nuklear) {
