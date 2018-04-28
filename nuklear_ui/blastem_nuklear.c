@@ -23,6 +23,7 @@ static view_fun *previous_views;
 static uint32_t view_storage;
 static uint32_t num_prev;
 static struct nk_font *def_font;
+static uint8_t config_dirty;
 
 static void push_view(view_fun new_view)
 {
@@ -486,6 +487,7 @@ void view_key_bindings(struct nk_context *context)
 				memcpy(path + prefix_len, name, suffix_len);
 				path[prefix_len + suffix_len] = 0;
 				
+				config_dirty = 1;
 				config = tern_insert_path(config, path, (tern_val){.ptrval = strdup(set_binding)}, TVAL_PTR);
 				free(path);
 				free(name);
@@ -598,6 +600,7 @@ void settings_toggle(struct nk_context *context, char *label, char *path, uint8_
 	nk_label(context, label, NK_TEXT_LEFT);
 	uint8_t newval = nk_check_label(context, "", curval);
 	if (newval != curval) {
+		config_dirty = 1;
 		config = tern_insert_path(config, path, (tern_val){.ptrval = strdup(newval ? "on" : "off")}, TVAL_PTR);
 	}
 }
@@ -616,6 +619,7 @@ void settings_int_input(struct nk_context *context, char *label, char *path, cha
 	nk_edit_string(context, NK_EDIT_SIMPLE, buffer, &len, sizeof(buffer)-1, nk_filter_decimal);
 	buffer[len] = 0;
 	if (strcmp(buffer, curstr)) {
+		config_dirty = 1;
 		config = tern_insert_path(config, path, (tern_val){.ptrval = strdup(buffer)}, TVAL_PTR);
 	}
 }
@@ -630,6 +634,7 @@ void settings_int_property(struct nk_context *context, char *label, char *name, 
 	if (val != curval) {
 		char buffer[12];
 		sprintf(buffer, "%d", val);
+		config_dirty = 1;
 		config = tern_insert_path(config, path, (tern_val){.ptrval = strdup(buffer)}, TVAL_PTR);
 	}
 }
@@ -743,6 +748,7 @@ int32_t settings_dropdown_ex(struct nk_context *context, char *label, const char
 	nk_label(context, label, NK_TEXT_LEFT);
 	int32_t next = nk_combo(context, opt_display, num_options, current, 30, nk_vec2(300, 300));
 	if (next != current) {
+		config_dirty = 1;
 		config = tern_insert_path(config, path, (tern_val){.ptrval = strdup(options[next])}, TVAL_PTR);
 	}
 	return next;
@@ -804,6 +810,7 @@ void view_video_settings(struct nk_context *context)
 		uint32_t next_selected = nk_combo(context, (const char **)prog_names, num_progs, selected_prog, 30, nk_vec2(300, 300));
 		if (next_selected != selected_prog) {
 			selected_prog = next_selected;
+			config_dirty = 1;
 			config = tern_insert_path(config, "video\0fragment_shader\0", (tern_val){.ptrval = strdup(progs[next_selected].fragment)}, TVAL_PTR);
 			config = tern_insert_path(config, "video\0vertex_shader\0", (tern_val){.ptrval = strdup(progs[next_selected].vertex)}, TVAL_PTR);
 		}
@@ -1024,6 +1031,11 @@ void ui_idle_loop(void)
 		last = current;
 		render_update_display();
 	}
+	if (config_dirty) {
+		apply_updated_config();
+		persist_config(config);
+		config_dirty = 0;
+	}
 }
 static void handle_event(SDL_Event *event)
 {
@@ -1035,7 +1047,7 @@ static void handle_event(SDL_Event *event)
 
 static void context_destroyed(void)
 {
-	nk_sdl_device_destroy();
+	nk_sdl_shutdown();
 }
 
 static uint32_t *controller_360_buf;
@@ -1067,7 +1079,7 @@ static void texture_init(void)
 
 static void context_created(void)
 {
-	nk_sdl_device_create();
+	context = nk_sdl_init(render_get_window());
 	texture_init();
 }
 
