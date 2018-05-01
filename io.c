@@ -674,6 +674,21 @@ void handle_mouse_moved(int mouse, uint16_t x, uint16_t y, int16_t deltax, int16
 	}
 }
 
+void io_release_capture(sega_io *io)
+{
+	if (io->mouse_mode == MOUSE_RELATIVE || (io->mouse_mode == MOUSE_CAPTURE && io->mouse_captured)) {
+		render_relative_mouse(0);
+	}
+	current_io->keyboard_captured = 0;
+}
+
+void io_reacquire_capture(sega_io *io)
+{
+	if (io->mouse_mode == MOUSE_RELATIVE || (io->mouse_mode == MOUSE_CAPTURE && io->mouse_captured)) {
+		render_relative_mouse(1);
+	}
+}
+
 int parse_binding_target(char * target, tern_node * padbuttons, tern_node *mousebuttons, int * ui_out, int * padnum_out, int * padbutton_out)
 {
 	const int gpadslen = strlen("gamepads.");

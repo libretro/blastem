@@ -1063,6 +1063,7 @@ static void handle_reset_requests(genesis_context *gen)
 			resume_68k(gen->m68k);
 		}
 	}
+	io_release_capture(&gen->io);
 	vdp_release_framebuffer(gen->vdp);
 	render_pause_source(gen->ym->audio);
 	render_pause_source(gen->psg->audio);
@@ -1111,6 +1112,7 @@ static void resume_genesis(system_header *system)
 	genesis_context *gen = (genesis_context *)system;
 	map_all_bindings(&gen->io);
 	render_set_video_standard((gen->version_reg & HZ50) ? VID_PAL : VID_NTSC);
+	io_reacquire_capture(&gen->io);
 	vdp_reacquire_framebuffer(gen->vdp);
 	render_resume_source(gen->ym->audio);
 	render_resume_source(gen->psg->audio);
