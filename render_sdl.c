@@ -152,8 +152,6 @@ static mix_func mix;
 
 static void audio_callback(void * userdata, uint8_t *byte_stream, int len)
 {
-	//int16_t * stream = (int16_t *)byte_stream;
-	//int samples = len/(sizeof(int16_t)*2);
 	uint8_t num_populated;
 	memset(byte_stream, 0, len);
 	SDL_LockMutex(audio_mutex);
@@ -166,6 +164,7 @@ static void audio_callback(void * userdata, uint8_t *byte_stream, int len)
 				}
 			}
 			if (!quitting && num_populated < num_audio_sources) {
+				fflush(stdout);
 				SDL_CondWait(audio_ready, audio_mutex);
 			}
 		} while(!quitting && num_populated < num_audio_sources);
@@ -264,8 +263,12 @@ audio_source *render_audio_source(uint64_t master_clock, uint64_t sample_divider
 		ret->buffer_pos = 0;
 		ret->buffer_fraction = 0;
 		ret->last_left = ret->last_right = 0;
-		ret->read_start = ret->read_end = 0;
-		ret->mask = alloc_size-1;
+		ret->read_start = 0;
+		ret->read_end = sync_to_audio ? buffer_samples * channels : 0;
+		ret->mask = sync_to_audio ? 0xFFFFFFFF : alloc_size-1;
+	}
+	if (sync_to_audio && SDL_GetAudioStatus() == SDL_AUDIO_PAUSED) {
+		SDL_PauseAudio(0);
 	}
 	return ret;
 }
@@ -361,12 +364,13 @@ void render_put_mono_sample(audio_source *src, int16_t value)
 {
 	value = lowpass_sample(src, src->last_left, value);
 	src->buffer_fraction += src->buffer_inc;
+	uint32_t base = sync_to_audio ? 0 : src->read_end;
 	while (src->buffer_fraction > BUFFER_INC_RES)
 	{
 		src->buffer_fraction -= BUFFER_INC_RES;
 		interp_sample(src, src->last_left, value);
 		
-		if (((src->buffer_pos - src->read_end) & src->mask) >= sync_samples) {
+		if (((src->buffer_pos - base) & src->mask) >= sync_samples) {
 			do_audio_ready(src);
 		}
 		src->buffer_pos &= src->mask;
@@ -379,6 +383,7 @@ void render_put_stereo_sample(audio_source *src, int16_t left, int16_t right)
 	left = lowpass_sample(src, src->last_left, left);
 	right = lowpass_sample(src, src->last_right, right);
 	src->buffer_fraction += src->buffer_inc;
+	uint32_t base = sync_to_audio ? 0 : src->read_end;
 	while (src->buffer_fraction > BUFFER_INC_RES)
 	{
 		src->buffer_fraction -= BUFFER_INC_RES;
@@ -386,7 +391,7 @@ void render_put_stereo_sample(audio_source *src, int16_t left, int16_t right)
 		interp_sample(src, src->last_left, left);
 		interp_sample(src, src->last_right, right);
 		
-		if (((src->buffer_pos - src->read_end) & src->mask)/2 >= sync_samples) {
+		if (((src->buffer_pos - base) & src->mask)/2 >= sync_samples) {
 			do_audio_ready(src);
 		}
 		src->buffer_pos &= src->mask;
@@ -1205,7 +1210,7 @@ void render_set_video_standard(vid_std std)
 	source_frame = 0;
 	source_frame_count = frame_repeat[0];
 	//sync samples with audio thread approximately every 8 lines
-	sync_samples = 8 * sample_rate / (source_hz * (VID_PAL ? 313 : 262));
+	sync_samples = sync_to_audio ? buffer_samples : 8 * sample_rate / (source_hz * (VID_PAL ? 313 : 262));
 	max_repeat++;
 	min_buffered = (((float)max_repeat * (float)sample_rate/(float)source_hz)/* / (float)buffer_samples*/);// + 0.9999;
 	//min_buffered *= buffer_samples;
