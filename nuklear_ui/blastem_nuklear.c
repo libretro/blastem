@@ -911,7 +911,7 @@ void view_system_settings(struct nk_context *context)
 		"gamepad2.1",
 		"gamepad3.1",
 		"gamepad6.1",
-		"mouse",
+		"mouse.1",
 		"saturn keyboard",
 		"xband keyboard"
 	};
@@ -919,7 +919,7 @@ void view_system_settings(struct nk_context *context)
 		"gamepad2.2",
 		"gamepad3.2",
 		"gamepad6.2",
-		"mouse",
+		"mouse.1",
 		"saturn keyboard",
 		"xband keyboard"
 	};
