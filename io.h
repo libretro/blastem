@@ -110,6 +110,8 @@ void handle_mousedown(int mouse, int button);
 void handle_mouseup(int mouse, int button);
 void io_serialize(io_port *port, serialize_buffer *buf);
 void io_deserialize(deserialize_buffer *buf, void *vport);
+void io_release_capture(sega_io *io);
+void io_reacquire_capture(sega_io *io);
 
 extern const char * device_type_names[];
 
