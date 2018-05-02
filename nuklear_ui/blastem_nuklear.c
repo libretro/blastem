@@ -799,15 +799,19 @@ void view_video_settings(struct nk_context *context)
 	}
 	uint32_t width = render_width();
 	uint32_t height = render_height();
+	uint32_t desired_width = context->style.font->height * 10;
+	if (desired_width > width) {
+		desired_width = width;
+	}
 	if (nk_begin(context, "Video Settings", nk_rect(0, 0, width, height), 0)) {
-		nk_layout_row_static(context, 30, width > 300 ? 300 : width, 2);
+		nk_layout_row_static(context, context->style.font->height, desired_width, 2);
 		settings_toggle(context, "Fullscreen", "video\0fullscreen\0", 0);
 		settings_toggle(context, "Open GL", "video\0gl\0", 1);
 		settings_toggle(context, "Scanlines", "video\0scanlines\0", 0);
 		selected_vsync = settings_dropdown_ex(context, "VSync", vsync_opts, vsync_opt_names, num_vsync_opts, selected_vsync, "video\0vsync\0");
 		settings_int_input(context, "Windowed Width", "video\0width\0", "640");
 		nk_label(context, "Shader", NK_TEXT_LEFT);
-		uint32_t next_selected = nk_combo(context, (const char **)prog_names, num_progs, selected_prog, 30, nk_vec2(300, 300));
+		uint32_t next_selected = nk_combo(context, (const char **)prog_names, num_progs, selected_prog, context->style.font->height, nk_vec2(desired_width, desired_width));
 		if (next_selected != selected_prog) {
 			selected_prog = next_selected;
 			config_dirty = 1;
@@ -1110,6 +1114,13 @@ uint8_t is_nuklear_available(void)
 	return strcmp(style, "rom") != 0;
 }
 
+static void persist_config_exit(void)
+{
+	if (config_dirty) {
+		persist_config(config);
+	}
+}
+
 void blastem_nuklear_init(uint8_t file_loaded)
 {
 	context = nk_sdl_init(render_get_window());
@@ -1127,7 +1138,7 @@ void blastem_nuklear_init(uint8_t file_loaded)
 	render_set_event_handler(handle_event);
 	render_set_gl_context_handlers(context_destroyed, context_created);
 	
-
+	atexit(persist_config_exit);
 	
 	active = 1;
 	ui_idle_loop();
