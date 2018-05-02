@@ -77,10 +77,10 @@ void view_file_browser(struct nk_context *context, uint8_t normal_open)
 	uint32_t width = render_width();
 	uint32_t height = render_height();
 	if (nk_begin(context, "Load ROM", nk_rect(0, 0, width, height), 0)) {
-		nk_layout_row_static(context, height - 100, width - 60, 1);
+		nk_layout_row_static(context, height - context->style.font->height * 3, width - 60, 1);
 		int32_t old_selected = selected_entry;
 		if (nk_group_begin(context, "Select ROM", NK_WINDOW_BORDER | NK_WINDOW_TITLE)) {
-			nk_layout_row_static(context, 28, width-100, 1);
+			nk_layout_row_static(context, context->style.font->height - 2, width-100, 1);
 			for (int32_t i = 0; i < num_entries; i++)
 			{
 				if (entries[i].name[0] == '.' && entries[i].name[1] != '.') {
@@ -99,7 +99,7 @@ void view_file_browser(struct nk_context *context, uint8_t normal_open)
 			}
 			nk_group_end(context);
 		}
-		nk_layout_row_static(context, 52, width > 600 ? 300 : width / 2, 2);
+		nk_layout_row_static(context, context->style.font->height * 1.75, width > 600 ? 300 : width / 2, 2);
 		if (nk_button_label(context, "Back")) {
 			pop_view();
 		}
@@ -174,21 +174,21 @@ void view_about(struct nk_context *context)
 	uint32_t width = render_width();
 	uint32_t height = render_height();
 	if (nk_begin(context, "About", nk_rect(0, 0, width, height), 0)) {
-		nk_layout_row_static(context, 30, width-40, 1);
+		nk_layout_row_static(context, context->style.font->height, width-40, 1);
 		for (uint32_t i = 0; i < NUM_LINES; i++)
 		{
 			nk_label(context, lines[i], NK_TEXT_LEFT);
 		}
-		nk_layout_row_static(context, height - 80 - 34*NUM_LINES, width-40, 1);
+		nk_layout_row_static(context, height - (context->style.font->height * 2 + 20) - (context->style.font->height +4)*NUM_LINES, width-40, 1);
 		if (nk_group_begin(context, "Special Thanks", NK_WINDOW_TITLE)) {
-			nk_layout_row_static(context, 30, width - 80, 1);
+			nk_layout_row_static(context, context->style.font->height, width - 80, 1);
 			for (uint32_t i = 0; i < NUM_THANKS; i++)
 			{
 				nk_label(context, thanks[i], NK_TEXT_LEFT);
 			}
 			nk_group_end(context);
 		}
-		nk_layout_row_static(context, 52, width/3, 1);
+		nk_layout_row_static(context, context->style.font->height * 1.75, width/3, 1);
 		if (nk_button_label(context, "Back")) {
 			pop_view();
 		}
@@ -209,9 +209,9 @@ void view_choose_state(struct nk_context *context, uint8_t is_load)
 	uint32_t width = render_width();
 	uint32_t height = render_height();
 	if (nk_begin(context, "Slot Picker", nk_rect(0, 0, width, height), 0)) {
-		nk_layout_row_static(context, height - 100, width - 60, 1);
+		nk_layout_row_static(context, height - context->style.font->height * 3, width - 60, 1);
 		if (nk_group_begin(context, "Select Save Slot", NK_WINDOW_BORDER | NK_WINDOW_TITLE)) {
-			nk_layout_row_static(context, 28, width-100, 1);
+			nk_layout_row_static(context, context->style.font->height - 2, width-100, 1);
 			if (!slots) {
 				slots = get_slot_info(current_system, &num_slots);
 			}
@@ -225,7 +225,7 @@ void view_choose_state(struct nk_context *context, uint8_t is_load)
 			}
 			nk_group_end(context);
 		}
-		nk_layout_row_static(context, 52, width > 600 ? 300 : width / 2, 2);
+		nk_layout_row_static(context, context->style.font->height * 1.75, width > 600 ? 300 : width / 2, 2);
 		if (nk_button_label(context, "Back")) {
 			pop_view();
 		}
