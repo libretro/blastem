@@ -310,6 +310,9 @@ static void on_drag_drop(const char *filename)
 static system_media cart, lock_on;
 void reload_media(void)
 {
+	if (!current_system) {
+		return;
+	}
 	if (current_system->next_rom) {
 		free(current_system->next_rom);
 	}
