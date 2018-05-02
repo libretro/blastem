@@ -303,11 +303,11 @@ char is_absolute_path(char *path)
 	return is_path_sep(path[0]);
 }
 
-char * basename_no_extension(char *path)
+char * basename_no_extension(const char *path)
 {
-	char *lastdot = NULL;
-	char *lastslash = NULL;
-	char *cur;
+	const char *lastdot = NULL;
+	const char *lastslash = NULL;
+	const char *cur;
 	for (cur = path; *cur; cur++)
 	{
 		if (*cur == '.') {
@@ -365,10 +365,10 @@ uint8_t path_matches_extensions(char *path, char **ext_list, uint32_t num_exts)
 	return 0;
 }
 
-char * path_dirname(char *path)
+char * path_dirname(const char *path)
 {
-	char *lastslash = NULL;
-	char *cur;
+	const char *lastslash = NULL;
+	const char *cur;
 	for (cur = path; *cur; cur++)
 	{
 		if (is_path_sep(*cur)) {

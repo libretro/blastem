@@ -17,7 +17,7 @@ extern char *save_filename;
 extern uint8_t use_native_states;
 void reload_media(void);
 void lockon_media(char *lock_on_path);
-void init_system_with_media(char *path, system_type force_stype);
+void init_system_with_media(const char *path, system_type force_stype);
 void apply_updated_config(void);
 
 #endif //BLASTEM_H_
