@@ -298,9 +298,9 @@ static const char *set_binding;
 char *set_label;
 void binding_group(struct nk_context *context, char *name, const char **binds, const char **bind_names, uint32_t num_binds, tern_node *binding_lookup)
 {
-	nk_layout_row_static(context, 34*num_binds+60, render_width() - 80, 1);
+	nk_layout_row_static(context, (context->style.font->height + 4)*num_binds+context->style.font->height+30, render_width() - 80, 1);
 	if (nk_group_begin(context, name, NK_WINDOW_TITLE)) {
-		nk_layout_row_static(context, 30, render_width()/2 - 80, 2);
+		nk_layout_row_static(context, context->style.font->height, render_width()/2 - 80, 2);
 		
 		for (int i = 0; i < num_binds; i++)
 		{
@@ -452,7 +452,7 @@ void view_key_bindings(struct nk_context *context)
 		binding_group(context, "General", general_binds, general_names, NUM_GEN_BINDS, binding_lookup);
 		binding_group(context, "Speed Control", speed_binds, speed_names, NUM_SPEED_BINDS, binding_lookup);
 		binding_group(context, "Debug", debug_binds, debug_names, NUM_DBG_BINDS, binding_lookup);
-		nk_layout_row_static(context, 34, (render_width() - 80) / 2, 1);
+		nk_layout_row_static(context, context->style.font->height * 1.1333, (render_width() - 80) / 2, 1);
 		if (nk_button_label(context, "Back")) {
 			pop_view();
 		}
@@ -860,8 +860,12 @@ void view_audio_settings(struct nk_context *context)
 	}
 	uint32_t width = render_width();
 	uint32_t height = render_height();
+	uint32_t desired_width = context->style.font->height * 10;
+	if (desired_width > width) {
+		desired_width = width;
+	}
 	if (nk_begin(context, "Audio Settings", nk_rect(0, 0, width, height), 0)) {
-		nk_layout_row_static(context, 30, width > 300 ? 300 : width, 2);
+		nk_layout_row_static(context, context->style.font->height , desired_width, 2);
 		selected_rate = settings_dropdown(context, "Rate in Hz", rates, num_rates, selected_rate, "audio\0rate\0");
 		selected_size = settings_dropdown(context, "Buffer Samples", sizes, num_sizes, selected_size, "audio\0buffer\0");
 		settings_int_input(context, "Lowpass Cutoff Hz", "audio\0lowpass_cutoff\0", "3390");
@@ -937,8 +941,9 @@ void view_system_settings(struct nk_context *context)
 	
 	uint32_t width = render_width();
 	uint32_t height = render_height();
+	uint32_t desired_width = context->style.font->height * 10;
 	if (nk_begin(context, "System Settings", nk_rect(0, 0, width, height), 0)) {
-		nk_layout_row_static(context, 30, width > 300 ? 300 : width, 2);
+		nk_layout_row_static(context, context->style.font->height, desired_width, 2);
 		selected_sync = settings_dropdown(context, "Sync Source", sync_opts, num_sync_opts, selected_sync, "system\0sync_source\0");
 		settings_int_property(context, "68000 Clock Divider", "", "clocks\0m68k_divider\0", 7, 1, 53);
 		settings_toggle(context, "Remember ROM Path", "ui\0remember_path\0", 1);
@@ -972,7 +977,6 @@ void view_settings(struct nk_context *context)
 		{"Back", view_back}
 	};
 	
-	const uint32_t num_buttons = 6;
 	if (nk_begin(context, "Settings Menu", nk_rect(0, 0, render_width(), render_height()), 0)) {
 		menu(context, sizeof(items)/sizeof(*items), items);
 		nk_end(context);
@@ -991,7 +995,6 @@ void view_pause(struct nk_context *context)
 		{"Exit", NULL}
 	};
 	
-	const uint32_t num_buttons = 3;
 	if (nk_begin(context, "Main Menu", nk_rect(0, 0, render_width(), render_height()), 0)) {
 		menu(context, sizeof(items)/sizeof(*items), items);
 		nk_end(context);
@@ -1007,7 +1010,6 @@ void view_menu(struct nk_context *context)
 		{"Exit", NULL}
 	};
 	
-	const uint32_t num_buttons = 3;
 	if (nk_begin(context, "Main Menu", nk_rect(0, 0, render_width(), render_height()), 0)) {
 		menu(context, sizeof(items)/sizeof(*items), items);
 		nk_end(context);
