@@ -1158,8 +1158,13 @@ void render_config_updated(void)
 	}
 #endif
 
-	SDL_CloseAudio();
+	uint8_t was_paused = SDL_GetAudioStatus() == SDL_AUDIO_PAUSED;
+	render_close_audio();
+	quitting = 0;
 	init_audio();
+	if (!was_paused) {
+		SDL_PauseAudio(0);
+	}
 	
 	double lowpass_cutoff = get_lowpass_cutoff(config);
 	double rc = (1.0 / lowpass_cutoff) / (2.0 * M_PI);
