@@ -1097,6 +1097,11 @@ void show_pause_menu(void)
 	current_system->request_exit(current_system);
 }
 
+void show_play_view(void)
+{
+	current_view = view_play;
+}
+
 static uint8_t active;
 uint8_t is_nuklear_active(void)
 {

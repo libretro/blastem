@@ -18,7 +18,7 @@ typedef struct {
 	uint32_t  num_entries;
 } zip_file;
 
-zip_file *zip_open(char *filename);
+zip_file *zip_open(const char *filename);
 uint8_t *zip_read(zip_file *f, uint32_t index, size_t *out_size);
 void zip_close(zip_file *f);
 

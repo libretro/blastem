@@ -99,7 +99,7 @@ int load_smd_rom(ROMFILE f, void **buffer)
 	return readsize;
 }
 
-uint32_t load_rom_zip(char *filename, void **dst)
+uint32_t load_rom_zip(const char *filename, void **dst)
 {
 	static const char *valid_exts[] = {"bin", "md", "gen", "sms", "rom"};
 	const uint32_t num_exts = sizeof(valid_exts)/sizeof(*valid_exts);
@@ -132,7 +132,7 @@ uint32_t load_rom_zip(char *filename, void **dst)
 	return 0;
 }
 
-uint32_t load_rom(char * filename, void **dst, system_type *stype)
+uint32_t load_rom(const char * filename, void **dst, system_type *stype)
 {
 	uint8_t header[10];
 	char *ext = path_extension(filename);
@@ -284,22 +284,27 @@ void apply_updated_config(void)
 
 static void on_drag_drop(const char *filename)
 {
-	if (current_system->next_rom) {
-		free(current_system->next_rom);
-	}
-	current_system->next_rom = strdup(filename);
-	current_system->request_exit(current_system);
-	if (menu_system && menu_system->type == SYSTEM_GENESIS) {
-		genesis_context *gen = (genesis_context *)menu_system;
-		if (gen->extra) {
-			menu_context *menu = gen->extra;
-			menu->external_game_load = 1;
-		} else {
-			puts("No extra");
+	if (current_system) {
+		if (current_system->next_rom) {
+			free(current_system->next_rom);
+		}
+		current_system->next_rom = strdup(filename);
+		current_system->request_exit(current_system);
+		if (menu_system && menu_system->type == SYSTEM_GENESIS) {
+			genesis_context *gen = (genesis_context *)menu_system;
+			if (gen->extra) {
+				menu_context *menu = gen->extra;
+				menu->external_game_load = 1;
+			}
 		}
 	} else {
-		puts("no menu");
+		init_system_with_media(filename, SYSTEM_UNKNOWN);
 	}
+#ifndef DISABLE_NUKLEAR
+	if (is_nuklear_active()) {
+		show_play_view();
+	}
+#endif
 }
 
 static system_media cart, lock_on;
@@ -335,7 +340,7 @@ void lockon_media(char *lock_on_path)
 
 static uint32_t opts = 0;
 static uint8_t force_region = 0;
-void init_system_with_media(char *path, system_type force_stype)
+void init_system_with_media(const char *path, system_type force_stype)
 {
 	if (game_system) {
 		game_system->persist_save(game_system);

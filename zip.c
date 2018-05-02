@@ -19,7 +19,7 @@ enum {
 	ZIP_DEFLATE = 8
 };
 
-zip_file *zip_open(char *filename)
+zip_file *zip_open(const char *filename)
 {
 	FILE *f = fopen(filename, "rb");
 	if (!f) {

@@ -12,6 +12,7 @@
 
 void blastem_nuklear_init(uint8_t file_loaded);
 void show_pause_menu(void);
+void show_play_view(void);
 uint8_t is_nuklear_active(void);
 uint8_t is_nuklear_available(void);
 void ui_idle_loop(void);
