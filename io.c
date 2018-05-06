@@ -18,15 +18,9 @@
 #include "serialize.h"
 #include "io.h"
 #include "blastem.h"
-#include "genesis.h"
-#include "sms.h"
 #include "render.h"
 #include "util.h"
-#include "menu.h"
-#include "saves.h"
-#ifndef DISABLE_NUKLEAR
-#include "nuklear_ui/blastem_nuklear.h"
-#endif
+#include "bindings.h"
 
 #define CYCLE_NEVER 0xFFFFFFFF
 #define MIN_POLL_INTERVAL 6840
@@ -48,304 +42,137 @@ const char * device_type_names[] = {
 	"None"
 };
 
+#define GAMEPAD_TH0 0
+#define GAMEPAD_TH1 1
+#define GAMEPAD_EXTRA 2
+#define GAMEPAD_NONE 0xF
+
+#define IO_TH0 0
+#define IO_TH1 1
+#define IO_STATE 2
+
 enum {
-	BIND_NONE,
-	BIND_UI,
-	BIND_GAMEPAD1,
-	BIND_GAMEPAD2,
-	BIND_GAMEPAD3,
-	BIND_GAMEPAD4,
-	BIND_GAMEPAD5,
-	BIND_GAMEPAD6,
-	BIND_GAMEPAD7,
-	BIND_GAMEPAD8,
-	BIND_MOUSE1,
-	BIND_MOUSE2,
-	BIND_MOUSE3,
-	BIND_MOUSE4,
-	BIND_MOUSE5,
-	BIND_MOUSE6,
-	BIND_MOUSE7,
-	BIND_MOUSE8
+	IO_WRITE_PENDING,
+	IO_WRITTEN,
+	IO_READ_PENDING,
+	IO_READ
 };
 
-typedef enum {
-	UI_DEBUG_MODE_INC,
-	UI_DEBUG_PAL_INC,
-	UI_ENTER_DEBUGGER,
-	UI_SAVE_STATE,
-	UI_SET_SPEED,
-	UI_NEXT_SPEED,
-	UI_PREV_SPEED,
-	UI_RELEASE_MOUSE,
-	UI_TOGGLE_KEYBOARD_CAPTURE,
-	UI_TOGGLE_FULLSCREEN,
-	UI_SOFT_RESET,
-	UI_RELOAD,
-	UI_SMS_PAUSE,
-	UI_SCREENSHOT,
-	UI_EXIT
-} ui_action;
-
-typedef enum {
-	MOUSE_NONE,     //mouse is ignored
-	MOUSE_ABSOLUTE, //really only useful for menu ROM
-	MOUSE_RELATIVE, //for full screen
-	MOUSE_CAPTURE   //for windowed mode
-} mouse_modes;
-
-
 typedef struct {
-	io_port *port;
-	uint8_t bind_type;
-	uint8_t subtype_a;
-	uint8_t subtype_b;
-	uint8_t value;
-} keybinding;
+	uint8_t states[2], value;
+} gp_button_def;
 
-typedef struct {
-	keybinding bindings[4];
-	uint8_t    state;
-} joydpad;
 
-typedef struct {
-	keybinding positive;
-	keybinding negative;
-	int16_t    value;
-} joyaxis;
+static gp_button_def button_defs[NUM_GAMEPAD_BUTTONS] = {
+	[DPAD_UP] = {.states = {GAMEPAD_TH0, GAMEPAD_TH1}, .value = 0x1},
+	[DPAD_DOWN] = {.states = {GAMEPAD_TH0, GAMEPAD_TH1}, .value = 0x2},
+	[DPAD_LEFT] = {.states = {GAMEPAD_TH1, GAMEPAD_NONE}, .value = 0x4},
+	[DPAD_RIGHT] = {.states = {GAMEPAD_TH1, GAMEPAD_NONE}, .value = 0x8},
+	[BUTTON_A] = {.states = {GAMEPAD_TH0, GAMEPAD_NONE}, .value = 0x10},
+	[BUTTON_B] = {.states = {GAMEPAD_TH1, GAMEPAD_NONE}, .value = 0x10},
+	[BUTTON_C] = {.states = {GAMEPAD_TH1, GAMEPAD_NONE}, .value = 0x20},
+	[BUTTON_START] = {.states = {GAMEPAD_TH0, GAMEPAD_NONE}, .value = 0x20},
+	[BUTTON_X] = {.states = {GAMEPAD_EXTRA, GAMEPAD_NONE}, .value = 0x4},
+	[BUTTON_Y] = {.states = {GAMEPAD_EXTRA, GAMEPAD_NONE}, .value = 0x2},
+	[BUTTON_Z] = {.states = {GAMEPAD_EXTRA, GAMEPAD_NONE}, .value = 0x1},
+	[BUTTON_MODE] = {.states = {GAMEPAD_EXTRA, GAMEPAD_NONE}, .value = 0x8},
+};
 
-typedef struct {
-	keybinding *buttons;
-	joydpad    *dpads;
-	joyaxis    *axes;
-	uint32_t   num_buttons; //number of entries in the buttons array, not necessarily the number of buttons on the device
-	uint32_t   num_dpads;   //number of entries in the dpads array, not necessarily the number of dpads on the device
-	uint32_t   num_axes;    //number of entries in the axes array, not necessarily the number of dpads on the device
-} joystick;
-
-typedef struct {
-	io_port    *motion_port;
-	keybinding buttons[MAX_MOUSE_BUTTONS];
-	uint8_t    bind_type;
-} mousebinding;
-
-#define DEFAULT_JOYBUTTON_ALLOC 12
-
-static sega_io *current_io;
-static keybinding *bindings[0x10000];
-static joystick joysticks[MAX_JOYSTICKS];
-static mousebinding mice[MAX_MICE];
-static io_port *keyboard_port;
-const uint8_t dpadbits[] = {RENDER_DPAD_UP, RENDER_DPAD_DOWN, RENDER_DPAD_LEFT, RENDER_DPAD_RIGHT};
-
-static void do_bind(keybinding *binding, uint8_t bind_type, uint8_t subtype_a, uint8_t subtype_b, uint8_t value)
+static io_port *find_gamepad(sega_io *io, uint8_t gamepad_num)
 {
-	binding->bind_type = bind_type;
-	binding->subtype_a = subtype_a;
-	binding->subtype_b = subtype_b;
-	binding->value = value;
-}
-
-void bind_key(int keycode, uint8_t bind_type, uint8_t subtype_a, uint8_t subtype_b, uint8_t value)
-{
-	int bucket = keycode >> 15 & 0xFFFF;
-	if (!bindings[bucket]) {
-		bindings[bucket] = malloc(sizeof(keybinding) * 0x8000);
-		memset(bindings[bucket], 0, sizeof(keybinding) * 0x8000);
-	}
-	int idx = keycode & 0x7FFF;
-	do_bind(bindings[bucket] + idx, bind_type, subtype_a, subtype_b, value);
-}
-
-void bind_button(int joystick, int button, uint8_t bind_type, uint8_t subtype_a, uint8_t subtype_b, uint8_t value)
-{
-	if (joystick >= MAX_JOYSTICKS) {
-		return;
-	}
-	if (!joysticks[joystick].buttons) {
-		joysticks[joystick].num_buttons = button < DEFAULT_JOYBUTTON_ALLOC ? DEFAULT_JOYBUTTON_ALLOC : button + 1;
-		joysticks[joystick].buttons = calloc(joysticks[joystick].num_buttons, sizeof(keybinding));
-	} else if (joysticks[joystick].num_buttons <= button) {
-		uint32_t old_capacity = joysticks[joystick].num_buttons;
-		joysticks[joystick].num_buttons *= 2;
-		joysticks[joystick].buttons = realloc(joysticks[joystick].buttons, sizeof(keybinding) * joysticks[joystick].num_buttons);
-		memset(joysticks[joystick].buttons + old_capacity, 0, joysticks[joystick].num_buttons - old_capacity);
-	}
-	do_bind(joysticks[joystick].buttons + button, bind_type, subtype_a, subtype_b, value);
-}
-
-void bind_dpad(int joystick, int dpad, int direction, uint8_t bind_type, uint8_t subtype_a, uint8_t subtype_b, uint8_t value)
-{
-	if (joystick >= MAX_JOYSTICKS) {
-		return;
-	}
-	if (!joysticks[joystick].dpads) {
-		//multiple D-pads/hats are not common, so don't allocate any extra space
-		joysticks[joystick].dpads = calloc(dpad+1, sizeof(joydpad));
-		joysticks[joystick].num_dpads = dpad+1;
-	} else if (joysticks[joystick].num_dpads <= dpad) {
-		uint32_t old_capacity = joysticks[joystick].num_dpads;
-		joysticks[joystick].num_dpads *= 2;
-		joysticks[joystick].dpads = realloc(joysticks[joystick].dpads, sizeof(joydpad) * joysticks[joystick].num_dpads);
-		memset(joysticks[joystick].dpads + old_capacity, 0, (joysticks[joystick].num_dpads - old_capacity) * sizeof(joydpad));
-	}
-	for (int i = 0; i < 4; i ++) {
-		if (dpadbits[i] & direction) {
-			do_bind(joysticks[joystick].dpads[dpad].bindings + i, bind_type, subtype_a, subtype_b, value);
-			break;
-		}
-	}
-}
-
-void bind_axis(int joystick, int axis, int positive, uint8_t bind_type, uint8_t subtype_a, uint8_t subtype_b, uint8_t value)
-{
-	if (joystick >= MAX_JOYSTICKS) {
-		return;
-	}
-	if (!joysticks[joystick].axes) {
-		//typical gamepad has 4 axes
-		joysticks[joystick].num_axes = axis+1 > 4 ? axis+1 : 4;
-		joysticks[joystick].axes = calloc(joysticks[joystick].num_axes, sizeof(joyaxis));
-	} else if (joysticks[joystick].num_axes <= axis) {
-		uint32_t old_capacity = joysticks[joystick].num_axes;
-		joysticks[joystick].num_axes *= 2;
-		joysticks[joystick].axes = realloc(joysticks[joystick].axes, sizeof(joyaxis) * joysticks[joystick].num_axes);
-		memset(joysticks[joystick].axes + old_capacity, 0, (joysticks[joystick].num_axes - old_capacity) * sizeof(joyaxis));
-	}
-	if (positive) {
-		do_bind(&joysticks[joystick].axes[axis].positive, bind_type, subtype_a, subtype_b, value);
-	} else {
-		do_bind(&joysticks[joystick].axes[axis].negative, bind_type, subtype_a, subtype_b, value);
-	}
-}
-
-void reset_joystick_bindings(int joystick)
-{
-	if (joystick >= MAX_JOYSTICKS) {
-		return;
-	}
-	if (joysticks[joystick].buttons) {
-		for (int i = 0; i < joysticks[joystick].num_buttons; i++)
-		{
-			joysticks[joystick].buttons[i].bind_type = BIND_NONE;
-		}
-	}
-	if (joysticks[joystick].dpads) {
-		for (int i = 0; i < joysticks[joystick].num_dpads; i++)
-		{
-			for (int dir = 0; dir < 4; dir++)
-			{
-				joysticks[joystick].dpads[i].bindings[dir].bind_type = BIND_NONE;
-			}
-		}
-	}
-	if (joysticks[joystick].axes) {
-		for (int i = 0; i < joysticks[joystick].num_axes; i++)
-		{
-			joysticks[joystick].axes[i].positive.bind_type = BIND_NONE;
-			joysticks[joystick].axes[i].negative.bind_type = BIND_NONE;
-		}
-	}
-}
-
-#define GAMEPAD_BUTTON(PRI_SLOT, SEC_SLOT, VALUE)  (PRI_SLOT << 12 | SEC_SLOT << 8 | VALUE)
-
-#define DPAD_UP      GAMEPAD_BUTTON(GAMEPAD_TH0, GAMEPAD_TH1, 0x01)
-#define BUTTON_Z     GAMEPAD_BUTTON(GAMEPAD_EXTRA, GAMEPAD_NONE, 0x01)
-#define DPAD_DOWN    GAMEPAD_BUTTON(GAMEPAD_TH0, GAMEPAD_TH1, 0x02)
-#define BUTTON_Y     GAMEPAD_BUTTON(GAMEPAD_EXTRA, GAMEPAD_NONE, 0x02)
-#define DPAD_LEFT    GAMEPAD_BUTTON(GAMEPAD_TH1, GAMEPAD_NONE, 0x04)
-#define BUTTON_X     GAMEPAD_BUTTON(GAMEPAD_EXTRA, GAMEPAD_NONE, 0x04)
-#define DPAD_RIGHT   GAMEPAD_BUTTON(GAMEPAD_TH1, GAMEPAD_NONE, 0x08)
-#define BUTTON_MODE  GAMEPAD_BUTTON(GAMEPAD_EXTRA, GAMEPAD_NONE, 0x08)
-#define BUTTON_A     GAMEPAD_BUTTON(GAMEPAD_TH0, GAMEPAD_NONE, 0x10)
-#define BUTTON_B     GAMEPAD_BUTTON(GAMEPAD_TH1, GAMEPAD_NONE, 0x10)
-#define BUTTON_START GAMEPAD_BUTTON(GAMEPAD_TH0, GAMEPAD_NONE, 0x20)
-#define BUTTON_C     GAMEPAD_BUTTON(GAMEPAD_TH1, GAMEPAD_NONE, 0x20)
-
-#define PSEUDO_BUTTON_MOTION 0xFFFF
-#define MOUSE_LEFT           1
-#define MOUSE_RIGHT          2
-#define MOUSE_MIDDLE         4
-#define MOUSE_START          8
-
-void bind_gamepad(int keycode, int gamepadnum, int button)
-{
-
-	if (gamepadnum < 1 || gamepadnum > 8) {
-		return;
-	}
-	uint8_t bind_type = gamepadnum - 1 + BIND_GAMEPAD1;
-	bind_key(keycode, bind_type, button >> 12, button >> 8 & 0xF, button & 0xFF);
-}
-
-void bind_button_gamepad(int joystick, int joybutton, int gamepadnum, int padbutton)
-{
-	if (gamepadnum < 1 || gamepadnum > 8) {
-		return;
-	}
-	uint8_t bind_type = gamepadnum - 1 + BIND_GAMEPAD1;
-	bind_button(joystick, joybutton, bind_type, padbutton >> 12, padbutton >> 8 & 0xF, padbutton & 0xFF);
-}
-
-void bind_dpad_gamepad(int joystick, int dpad, uint8_t direction, int gamepadnum, int button)
-{
-	if (gamepadnum < 1 || gamepadnum > 8) {
-		return;
-	}
-	uint8_t bind_type = gamepadnum - 1 + BIND_GAMEPAD1;
-	bind_dpad(joystick, dpad, direction, bind_type, button >> 12, button >> 8 & 0xF, button & 0xFF);
-}
-
-void bind_axis_gamepad(int joystick, int axis, uint8_t positive, int gamepadnum, int button)
-{
-	if (gamepadnum < 1 || gamepadnum > 8) {
-		return;
-	}
-	uint8_t bind_type = gamepadnum - 1 + BIND_GAMEPAD1;
-	bind_axis(joystick, axis, positive, bind_type, button >> 12, button >> 8 & 0xF, button & 0xFF);
-}
-
-void bind_ui(int keycode, ui_action action, uint8_t param)
-{
-	bind_key(keycode, BIND_UI, action, 0, param);
-}
-
-void bind_button_ui(int joystick, int joybutton, ui_action action, uint8_t param)
-{
-	bind_button(joystick, joybutton, BIND_UI, action, 0, param);
-}
-
-void bind_dpad_ui(int joystick, int dpad, uint8_t direction, ui_action action, uint8_t param)
-{
-	bind_dpad(joystick, dpad, direction, BIND_UI, action, 0, param);
-}
-
-void bind_axis_ui(int joystick, int axis, uint8_t positive, ui_action action, uint8_t param)
-{
-	bind_axis(joystick, axis, positive, BIND_UI, action, 0, param);
-}
-
-void handle_binding_down(keybinding * binding)
-{
-	if (binding->bind_type >= BIND_GAMEPAD1 && binding->bind_type <= BIND_GAMEPAD8)
+	for (int i = 0; i < 3; i++)
 	{
-		if (binding->subtype_a <= GAMEPAD_EXTRA && binding->port) {
-			binding->port->input[binding->subtype_a] |= binding->value;
-		}
-		if (binding->subtype_b <= GAMEPAD_EXTRA && binding->port) {
-			binding->port->input[binding->subtype_b] |= binding->value;
+		io_port *port = io->ports + i;
+		if (port->device_type < IO_MOUSE && port->device.pad.gamepad_num == gamepad_num) {
+			return port;
 		}
 	}
-	else if (binding->bind_type >= BIND_MOUSE1 && binding->bind_type <= BIND_MOUSE8)
+	return NULL;
+}
+
+static io_port *find_mouse(sega_io *io, uint8_t mouse_num)
+{
+	for (int i = 0; i < 3; i++)
 	{
-		if (binding->port) {
-			binding->port->input[0] |= binding->value;
+		io_port *port = io->ports + i;
+		if (port->device_type == IO_MOUSE && port->device.mouse.mouse_num == mouse_num) {
+			return port;
+		}
+	}
+	return NULL;
+}
+
+static io_port *find_keyboard(sega_io *io)
+{
+	for (int i = 0; i < 3; i++)
+	{
+		io_port *port = io->ports + i;
+		if (port->device_type == IO_SATURN_KEYBOARD || port->device_type == IO_XBAND_KEYBOARD) {
+			return port;
+		}
+	}
+	return NULL;
+}
+
+void io_gamepad_down(sega_io *io, uint8_t gamepad_num, uint8_t button)
+{
+	io_port *port = find_gamepad(io, gamepad_num);
+	if (port) {
+		gp_button_def *def = button_defs + button;
+		port->input[def->states[0]] |= def->value;
+		if (def->states[1] != GAMEPAD_NONE) {
+			port->input[def->states[1]] |= def->value;
 		}
 	}
 }
 
-void store_key_event(uint16_t code)
+void io_gamepad_up(sega_io *io, uint8_t gamepad_num, uint8_t button)
+{
+	io_port *port = find_gamepad(io, gamepad_num);
+	if (port) {
+		gp_button_def *def = button_defs + button;
+		port->input[def->states[0]] &= ~def->value;
+		if (def->states[1] != GAMEPAD_NONE) {
+			port->input[def->states[1]] &= ~def->value;
+		}
+	}
+}
+
+void io_mouse_down(sega_io *io, uint8_t mouse_num, uint8_t button)
+{
+	io_port *port = find_mouse(io, mouse_num);
+	if (port) {
+		port->input[0] |= button;
+	}
+}
+
+void io_mouse_up(sega_io *io, uint8_t mouse_num, uint8_t button)
+{
+	io_port *port = find_mouse(io, mouse_num);
+	if (port) {
+		port->input[0] &= ~button;
+	}
+}
+
+void io_mouse_motion_absolute(sega_io *io, uint8_t mouse_num, uint16_t x, uint16_t y)
+{
+	io_port *port = find_mouse(io, mouse_num);
+	if (port) {
+		port->device.mouse.cur_x = x;
+		port->device.mouse.cur_y = y;
+	}
+}
+
+void io_mouse_motion_relative(sega_io *io, uint8_t mouse_num, int32_t x, int32_t y)
+{
+	io_port *port = find_mouse(io, mouse_num);
+	if (port) {
+		port->device.mouse.cur_x += x;
+		port->device.mouse.cur_y += y;
+	}
+}
+
+void store_key_event(io_port *keyboard_port, uint16_t code)
 {
 	if (keyboard_port && keyboard_port->device.keyboard.write_pos != keyboard_port->device.keyboard.read_pos) {
 		//there's room in the buffer, record this event
@@ -358,509 +185,19 @@ void store_key_event(uint16_t code)
 	}
 }
 
-void handle_keydown(int keycode, uint8_t scancode)
+void io_keyboard_down(sega_io *io, uint8_t scancode)
 {
-	if (!current_io) {
-		return;
-	}
-	int bucket = keycode >> 15 & 0xFFFF;
-	int idx = keycode & 0x7FFF;
-	keybinding * binding = bindings[bucket] ? bindings[bucket] + idx : NULL;
-	if (binding && (!current_io->keyboard_captured || (binding->bind_type == BIND_UI && binding->subtype_a == UI_TOGGLE_KEYBOARD_CAPTURE))) {
-		handle_binding_down(binding);
-	} else if (current_io->keyboard_captured) {
-		store_key_event(scancode);
-	}
+	store_key_event(find_keyboard(io), scancode);
 }
 
-void handle_joydown(int joystick, int button)
+void io_keyboard_up(sega_io *io, uint8_t scancode)
 {
-	if (joystick >= MAX_JOYSTICKS || button >= joysticks[joystick].num_buttons) {
-		return;
-	}
-	keybinding * binding = joysticks[joystick].buttons + button;
-	handle_binding_down(binding);
+	store_key_event(find_keyboard(io), 0xF000 | scancode);
 }
 
-void handle_mousedown(int mouse, int button)
+uint8_t io_has_keyboard(sega_io *io)
 {
-	if (!current_io) {
-		return;
-	}
-	if (current_io->mouse_mode == MOUSE_CAPTURE && !current_io->mouse_captured) {
-		current_io->mouse_captured = 1;
-		render_relative_mouse(1);
-		return;
-	}
-	if (mouse >= MAX_MICE || button > MAX_MOUSE_BUTTONS || button <= 0) {
-		return;
-	}
-	keybinding * binding = mice[mouse].buttons + button - 1;
-	handle_binding_down(binding);
-}
-
-uint8_t ui_debug_mode = 0;
-uint8_t ui_debug_pal = 0;
-
-int current_speed = 0;
-int num_speeds = 1;
-uint32_t * speeds = NULL;
-
-uint8_t is_keyboard(io_port *port)
-{
-	return port->device_type == IO_SATURN_KEYBOARD || port->device_type == IO_XBAND_KEYBOARD;
-}
-
-uint8_t keyboard_connected(sega_io *io)
-{
-	return is_keyboard(io->ports) || is_keyboard(io->ports+1) || is_keyboard(io->ports+2);
-}
-
-#ifdef _WIN32
-#define localtime_r(a,b) localtime(a)
-#endif
-
-void handle_binding_up(keybinding * binding)
-{
-	switch(binding->bind_type)
-	{
-	case BIND_GAMEPAD1:
-	case BIND_GAMEPAD2:
-	case BIND_GAMEPAD3:
-	case BIND_GAMEPAD4:
-	case BIND_GAMEPAD5:
-	case BIND_GAMEPAD6:
-	case BIND_GAMEPAD7:
-	case BIND_GAMEPAD8:
-		if (binding->subtype_a <= GAMEPAD_EXTRA && binding->port) {
-			binding->port->input[binding->subtype_a] &= ~binding->value;
-		}
-		if (binding->subtype_b <= GAMEPAD_EXTRA && binding->port) {
-			binding->port->input[binding->subtype_b] &= ~binding->value;
-		}
-		break;
-	case BIND_MOUSE1:
-	case BIND_MOUSE2:
-	case BIND_MOUSE3:
-	case BIND_MOUSE4:
-	case BIND_MOUSE5:
-	case BIND_MOUSE6:
-	case BIND_MOUSE7:
-	case BIND_MOUSE8:
-		if (binding->port) {
-			binding->port->input[0] &= ~binding->value;
-		}
-		break;
-	case BIND_UI:
-		switch (binding->subtype_a)
-		{
-		case UI_DEBUG_MODE_INC:
-			current_system->inc_debug_mode(current_system);
-			break;
-		case UI_DEBUG_PAL_INC:
-			current_system->inc_debug_pal(current_system);
-			break;
-		case UI_ENTER_DEBUGGER:
-			current_system->enter_debugger = 1;
-			break;
-		case UI_SAVE_STATE:
-			current_system->save_state = QUICK_SAVE_SLOT+1;
-			break;
-		case UI_NEXT_SPEED:
-			current_speed++;
-			if (current_speed >= num_speeds) {
-				current_speed = 0;
-			}
-			printf("Setting speed to %d: %d\n", current_speed, speeds[current_speed]);
-			current_system->set_speed_percent(current_system, speeds[current_speed]);
-			break;
-		case UI_PREV_SPEED:
-			current_speed--;
-			if (current_speed < 0) {
-				current_speed = num_speeds - 1;
-			}
-			printf("Setting speed to %d: %d\n", current_speed, speeds[current_speed]);
-			current_system->set_speed_percent(current_system, speeds[current_speed]);
-			break;
-		case UI_SET_SPEED:
-			if (binding->value < num_speeds) {
-				current_speed = binding->value;
-				printf("Setting speed to %d: %d\n", current_speed, speeds[current_speed]);
-				current_system->set_speed_percent(current_system, speeds[current_speed]);
-			} else {
-				printf("Setting speed to %d\n", speeds[current_speed]);
-				current_system->set_speed_percent(current_system, speeds[current_speed]);
-			}
-			break;
-		case UI_RELEASE_MOUSE:
-			if (current_io->mouse_captured) {
-				current_io->mouse_captured = 0;
-				render_relative_mouse(0);
-			}
-			break;
-		case UI_TOGGLE_KEYBOARD_CAPTURE:
-			if (keyboard_connected(current_io)) {
-				current_io->keyboard_captured = !current_io->keyboard_captured;
-			}
-			break;
-		case UI_TOGGLE_FULLSCREEN:
-			render_toggle_fullscreen();
-			break;
-		case UI_SOFT_RESET:
-			current_system->soft_reset(current_system);
-			break;
-		case UI_RELOAD:
-			reload_media();
-			break;
-		case UI_SMS_PAUSE:
-			if (current_system->type == SYSTEM_SMS) {
-				sms_context *sms = (sms_context *)current_system;
-				vdp_pbc_pause(sms->vdp);
-			}
-			break;
-		case UI_SCREENSHOT: {
-			char *screenshot_base = tern_find_path(config, "ui\0screenshot_path\0", TVAL_PTR).ptrval;
-			if (!screenshot_base) {
-				screenshot_base = "$HOME";
-			}
-			tern_node *vars = tern_insert_ptr(NULL, "HOME", get_home_dir());
-			vars = tern_insert_ptr(vars, "EXEDIR", get_exe_dir());
-			screenshot_base = replace_vars(screenshot_base, vars, 1);
-			tern_free(vars);
-			time_t now = time(NULL);
-			struct tm local_store;
-			char fname_part[256];
-			char *template = tern_find_path(config, "ui\0screenshot_template\0", TVAL_PTR).ptrval;
-			if (!template) {
-				template = "blastem_%c.ppm";
-			}
-			strftime(fname_part, sizeof(fname_part), template, localtime_r(&now, &local_store));
-			char const *parts[] = {screenshot_base, PATH_SEP, fname_part};
-			char *path = alloc_concat_m(3, parts);
-			free(screenshot_base);
-			render_save_screenshot(path);
-			break;
-		}
-		case UI_EXIT:
-#ifndef DISABLE_NUKLEAR
-			if (is_nuklear_active()) {
-				show_pause_menu();
-			} else {
-#endif
-			current_system->request_exit(current_system);
-			if (current_system->type == SYSTEM_GENESIS) {
-				genesis_context *gen = (genesis_context *)current_system;
-				if (gen->extra) {
-					//TODO: More robust mechanism for detecting menu
-					menu_context *menu = gen->extra;
-					menu->external_game_load = 1;
-				}
-			}
-#ifndef DISABLE_NUKLEAR
-			}
-#endif
-			break;
-		}
-		break;
-	}
-}
-
-void handle_keyup(int keycode, uint8_t scancode)
-{
-	if (!current_io) {
-		return;
-	}
-	int bucket = keycode >> 15 & 0xFFFF;
-	int idx = keycode & 0x7FFF;
-	keybinding * binding = bindings[bucket] ? bindings[bucket] + idx : NULL;
-	if (binding && (!current_io->keyboard_captured || (binding->bind_type == BIND_UI && binding->subtype_a == UI_TOGGLE_KEYBOARD_CAPTURE))) {
-		handle_binding_up(binding);
-	} else if (current_io->keyboard_captured) {
-		store_key_event(0xF000 | scancode);
-	}
-}
-
-void handle_joyup(int joystick, int button)
-{
-	if (joystick >= MAX_JOYSTICKS  || button >= joysticks[joystick].num_buttons) {
-		return;
-	}
-	keybinding * binding = joysticks[joystick].buttons + button;
-	handle_binding_up(binding);
-}
-
-void handle_joy_dpad(int joystick, int dpadnum, uint8_t value)
-{
-	if (joystick >= MAX_JOYSTICKS  || dpadnum >= joysticks[joystick].num_dpads) {
-		return;
-	}
-	joydpad * dpad = joysticks[joystick].dpads + dpadnum;
-	uint8_t newdown = (value ^ dpad->state) & value;
-	uint8_t newup = ((~value) ^ (~dpad->state)) & (~value);
-	dpad->state = value;
-	for (int i = 0; i < 4; i++) {
-		if (newdown & dpadbits[i]) {
-			handle_binding_down(dpad->bindings + i);
-		} else if(newup & dpadbits[i]) {
-			handle_binding_up(dpad->bindings + i);
-		}
-	}
-}
-
-#define JOY_AXIS_THRESHOLD 2000
-
-void handle_joy_axis(int joystick, int axis, int16_t value)
-{
-	if (joystick >= MAX_JOYSTICKS  || axis >= joysticks[joystick].num_axes) {
-		return;
-	}
-	joyaxis *jaxis = joysticks[joystick].axes + axis;
-	int old_active = abs(jaxis->value) > JOY_AXIS_THRESHOLD;
-	int new_active = abs(value) > JOY_AXIS_THRESHOLD;
-	int old_pos = jaxis->value > 0;
-	int new_pos = value > 0;
-	jaxis->value = value;
-	if (old_active && (!new_active || old_pos != new_pos)) {
-		//previously activated direction is no longer active
-		handle_binding_up(old_pos ? &jaxis->positive : &jaxis->negative);
-	}
-	if (new_active && (!old_active || old_pos != new_pos)) {
-		//previously unactivated direction is now active
-		handle_binding_down(new_pos ? &jaxis->positive : &jaxis->negative);
-	}
-}
-
-void handle_mouseup(int mouse, int button)
-{
-	if (mouse >= MAX_MICE || button > MAX_MOUSE_BUTTONS || button <= 0) {
-		return;
-	}
-	keybinding * binding = mice[mouse].buttons + button - 1;
-	handle_binding_up(binding);
-}
-
-void handle_mouse_moved(int mouse, uint16_t x, uint16_t y, int16_t deltax, int16_t deltay)
-{
-	if (mouse >= MAX_MICE || !mice[mouse].motion_port) {
-		return;
-	}
-	switch(current_io->mouse_mode)
-	{
-	case MOUSE_NONE:
-		break;
-	case MOUSE_ABSOLUTE: {
-		float scale_x = (render_emulated_width() * 2.0f) / ((float)render_width());
-		float scale_y = (render_emulated_height() * 2.0f) / ((float)render_height());
-		int32_t adj_x = x * scale_x + 2 * render_overscan_left() - 2 * BORDER_LEFT;
-		int32_t adj_y = y * scale_y + 2 * render_overscan_top() - 4;
-		if (adj_x >= 0 && adj_y >= 0) {
-			mice[mouse].motion_port->device.mouse.cur_x = adj_x;
-			mice[mouse].motion_port->device.mouse.cur_y = adj_y;
-		}
-		break;
-	}
-	case MOUSE_RELATIVE: {
-		mice[mouse].motion_port->device.mouse.cur_x += deltax;
-		mice[mouse].motion_port->device.mouse.cur_y += deltay;
-		break;
-	}
-	case MOUSE_CAPTURE: {
-		if (current_io->mouse_captured) {
-			mice[mouse].motion_port->device.mouse.cur_x += deltax;
-			mice[mouse].motion_port->device.mouse.cur_y += deltay;
-		}
-		break;
-	}
-	}
-}
-
-void io_release_capture(sega_io *io)
-{
-	if (io->mouse_mode == MOUSE_RELATIVE || (io->mouse_mode == MOUSE_CAPTURE && io->mouse_captured)) {
-		render_relative_mouse(0);
-	}
-	current_io->keyboard_captured = 0;
-}
-
-void io_reacquire_capture(sega_io *io)
-{
-	if (io->mouse_mode == MOUSE_RELATIVE || (io->mouse_mode == MOUSE_CAPTURE && io->mouse_captured)) {
-		render_relative_mouse(1);
-	}
-}
-
-int parse_binding_target(char * target, tern_node * padbuttons, tern_node *mousebuttons, int * ui_out, int * padnum_out, int * padbutton_out)
-{
-	const int gpadslen = strlen("gamepads.");
-	const int mouselen = strlen("mouse.");
-	if (!strncmp(target, "gamepads.", gpadslen)) {
-		if (target[gpadslen] >= '1' && target[gpadslen] <= '8') {
-			int padnum = target[gpadslen] - '0';
-			int button = tern_find_int(padbuttons, target + gpadslen + 1, 0);
-			if (button) {
-				*padnum_out = padnum;
-				*padbutton_out = button;
-				return BIND_GAMEPAD1;
-			} else {
-				if (target[gpadslen+1]) {
-					warning("Gamepad mapping string '%s' refers to an invalid button '%s'\n", target, target + gpadslen + 1);
-				} else {
-					warning("Gamepad mapping string '%s' has no button component\n", target);
-				}
-			}
-		} else {
-			warning("Gamepad mapping string '%s' refers to an invalid gamepad number %c\n", target, target[gpadslen]);
-		}
-	} else if(!strncmp(target, "mouse.", mouselen)) {
-		if (target[mouselen] >= '1' && target[mouselen] <= '8') {
-			int mousenum = target[mouselen] - '0';
-			int button = tern_find_int(mousebuttons, target + mouselen + 1, 0);
-			if (button) {
-				*padnum_out = mousenum;
-				*padbutton_out = button;
-				return BIND_MOUSE1;
-			} else {
-				if (target[mouselen+1]) {
-					warning("Mouse mapping string '%s' refers to an invalid button '%s'\n", target, target + mouselen + 1);
-				} else {
-					warning("Mouse mapping string '%s' has no button component\n", target);
-				}
-			}
-		} else {
-			warning("Gamepad mapping string '%s' refers to an invalid mouse number %c\n", target, target[mouselen]);
-		}
-	} else if(!strncmp(target, "ui.", strlen("ui."))) {
-		*padbutton_out = 0;
-		if (!strcmp(target + 3, "vdp_debug_mode")) {
-			*ui_out = UI_DEBUG_MODE_INC;
-		} else if(!strcmp(target + 3, "vdp_debug_pal")) {
-			*ui_out = UI_DEBUG_PAL_INC;
-		} else if(!strcmp(target + 3, "enter_debugger")) {
-			*ui_out = UI_ENTER_DEBUGGER;
-		} else if(!strcmp(target + 3, "save_state")) {
-			*ui_out = UI_SAVE_STATE;
-		} else if(!strncmp(target + 3, "set_speed.", strlen("set_speed."))) {
-			*ui_out = UI_SET_SPEED;
-			*padbutton_out = atoi(target + 3 + strlen("set_speed."));
-		} else if(!strcmp(target + 3, "next_speed")) {
-			*ui_out = UI_NEXT_SPEED;
-		} else if(!strcmp(target + 3, "prev_speed")) {
-			*ui_out = UI_PREV_SPEED;
-		} else if(!strcmp(target + 3, "release_mouse")) {
-			*ui_out = UI_RELEASE_MOUSE;
-		} else if(!strcmp(target + 3, "toggle_keyboard_captured")) {
-			*ui_out = UI_TOGGLE_KEYBOARD_CAPTURE;
-		} else if (!strcmp(target + 3, "toggle_fullscreen")) {
-			*ui_out = UI_TOGGLE_FULLSCREEN;
-		} else if (!strcmp(target + 3, "soft_reset")) {
-			*ui_out = UI_SOFT_RESET;
-		} else if (!strcmp(target + 3, "reload")) {
-			*ui_out = UI_RELOAD;
-		} else if (!strcmp(target + 3, "sms_pause")) {
-			*ui_out = UI_SMS_PAUSE;
-		} else if (!strcmp(target + 3, "screenshot")) {
-			*ui_out = UI_SCREENSHOT;
-		} else if(!strcmp(target + 3, "exit")) {
-			*ui_out = UI_EXIT;
-		} else {
-			warning("Unreconized UI binding type %s\n", target);
-			return 0;
-		}
-		return BIND_UI;
-	} else {
-		warning("Unrecognized binding type %s\n", target);
-	}
-	return 0;
-}
-
-void process_keys(tern_node * cur, tern_node * special, tern_node * padbuttons, tern_node *mousebuttons, char * prefix)
-{
-	char * curstr = NULL;
-	int len;
-	if (!cur) {
-		return;
-	}
-	char onec[2];
-	if (prefix) {
-		len = strlen(prefix);
-		curstr = malloc(len + 2);
-		memcpy(curstr, prefix, len);
-	} else {
-		curstr = onec;
-		len = 0;
-	}
-	curstr[len] = cur->el;
-	curstr[len+1] = 0;
-	if (cur->el) {
-		process_keys(cur->straight.next, special, padbuttons, mousebuttons, curstr);
-	} else {
-		int keycode = tern_find_int(special, curstr, 0);
-		if (!keycode) {
-			keycode = curstr[0];
-			if (curstr[1] != 0) {
-				warning("%s is not recognized as a key identifier, truncating to %c\n", curstr, curstr[0]);
-			}
-		}
-		char * target = cur->straight.value.ptrval;
-		int ui_func, padnum, button;
-		int bindtype = parse_binding_target(target, padbuttons, mousebuttons, &ui_func, &padnum, &button);
-		if (bindtype == BIND_GAMEPAD1) {
-			bind_gamepad(keycode, padnum, button);
-		} else if(bindtype == BIND_UI) {
-			bind_ui(keycode, ui_func, button);
-		}
-	}
-	process_keys(cur->left, special, padbuttons, mousebuttons, prefix);
-	process_keys(cur->right, special, padbuttons, mousebuttons, prefix);
-	if (curstr && len) {
-		free(curstr);
-	}
-}
-
-void process_speeds(tern_node * cur, char * prefix)
-{
-	char * curstr = NULL;
-	int len;
-	if (!cur) {
-		return;
-	}
-	char onec[2];
-	if (prefix) {
-		len = strlen(prefix);
-		curstr = malloc(len + 2);
-		memcpy(curstr, prefix, len);
-	} else {
-		curstr = onec;
-		len = 0;
-	}
-	curstr[len] = cur->el;
-	curstr[len+1] = 0;
-	if (cur->el) {
-		process_speeds(cur->straight.next, curstr);
-	} else {
-		char *end;
-		long speed_index = strtol(curstr, &end, 10);
-		if (speed_index < 0 || end == curstr || *end) {
-			warning("%s is not a valid speed index", curstr);
-		} else {
-			if (speed_index >= num_speeds) {
-				speeds = realloc(speeds, sizeof(uint32_t) * (speed_index+1));
-				for(; num_speeds < speed_index + 1; num_speeds++) {
-					speeds[num_speeds] = 0;
-				}
-			}
-			speeds[speed_index] = atoi(cur->straight.value.ptrval);
-			if (speeds[speed_index] < 1) {
-				warning("%s is not a valid speed percentage, setting speed %d to 100", cur->straight.value.ptrval, speed_index);
-				speeds[speed_index] = 100;
-			}
-		}
-	}
-	process_speeds(cur->left, prefix);
-	process_speeds(cur->right, prefix);
-	if (curstr && len) {
-		free(curstr);
-	}
+	return find_keyboard(io) != NULL;
 }
 
 void process_device(char * device_type, io_port * port)
@@ -888,10 +225,10 @@ void process_device(char * device_type, io_port * port)
 		} else {
 			port->device_type = IO_GAMEPAD6;
 		}
-		port->device.pad.gamepad_num = device_type[gamepad_len+2] - '1';
+		port->device.pad.gamepad_num = device_type[gamepad_len+2] - '0';
 	} else if(!strncmp(device_type, "mouse", mouse_len)) {
 		port->device_type = IO_MOUSE;
-		port->device.mouse.mouse_num = device_type[mouse_len+1] - '1';
+		port->device.mouse.mouse_num = device_type[mouse_len+1] - '0';
 		port->device.mouse.last_read_x = 0;
 		port->device.mouse.last_read_y = 0;
 		port->device.mouse.cur_x = 0;
@@ -942,8 +279,7 @@ static void cleanup_sockfile()
 
 void setup_io_devices(tern_node * config, rom_info *rom, sega_io *io)
 {
-	current_io = io;
-	io_port * ports = current_io->ports;
+	io_port * ports = io->ports;
 	tern_node *io_nodes = tern_find_path(config, "io\0devices\0", TVAL_NODE).ptrval;
 	char * io_1 = rom->port1_override ? rom->port1_override : io_nodes ? tern_find_ptr(io_nodes, "1") : NULL;
 	char * io_2 = rom->port2_override ? rom->port2_override : io_nodes ? tern_find_ptr(io_nodes, "2") : NULL;
@@ -953,20 +289,21 @@ void setup_io_devices(tern_node * config, rom_info *rom, sega_io *io)
 	process_device(io_2, ports+1);
 	process_device(io_ext, ports+2);
 
+	uint8_t mouse_mode;
 	if (ports[0].device_type == IO_MOUSE || ports[1].device_type == IO_MOUSE || ports[2].device_type == IO_MOUSE) {
 		if (render_fullscreen()) {
-				current_io->mouse_mode = MOUSE_RELATIVE;
-				render_relative_mouse(1);
+				mouse_mode = MOUSE_RELATIVE;
 		} else {
 			if (rom->mouse_mode && !strcmp(rom->mouse_mode, "absolute")) {
-				current_io->mouse_mode = MOUSE_ABSOLUTE;
+				mouse_mode = MOUSE_ABSOLUTE;
 			} else {
-				current_io->mouse_mode = MOUSE_CAPTURE;
+				mouse_mode = MOUSE_CAPTURE;
 			}
 		}
 	} else {
-		current_io->mouse_mode = MOUSE_NONE;
+		mouse_mode = MOUSE_NONE;
 	}
+	bindings_set_mouse_mode(mouse_mode);
 
 	for (int i = 0; i < 3; i++)
 	{
@@ -1042,512 +379,6 @@ cleanup_sock:
 	}
 }
 
-void map_bindings(io_port *ports, keybinding *bindings, int numbindings)
-{
-	for (int i = 0; i < numbindings; i++)
-	{
-		if (bindings[i].bind_type >= BIND_GAMEPAD1 && bindings[i].bind_type <= BIND_GAMEPAD8)
-		{
-			int num = bindings[i].bind_type - BIND_GAMEPAD1;
-			for (int j = 0; j < 3; j++)
-			{
-				if ((ports[j].device_type == IO_GAMEPAD3
-					 || ports[j].device_type == IO_GAMEPAD6
-					 || ports[j].device_type == IO_GAMEPAD2)
-					 && ports[j].device.pad.gamepad_num == num
-				)
-				{
-					memset(ports[j].input, 0, sizeof(ports[j].input));
-					bindings[i].port = ports + j;
-					break;
-				}
-			}
-		}
-		else if (bindings[i].bind_type >= BIND_MOUSE1 && bindings[i].bind_type <= BIND_MOUSE8)
-		{
-			int num = bindings[i].bind_type - BIND_MOUSE1;
-			for (int j = 0; j < 3; j++)
-			{
-				if (ports[j].device_type == IO_MOUSE && ports[j].device.mouse.mouse_num == num)
-				{
-					memset(ports[j].input, 0, sizeof(ports[j].input));
-					bindings[i].port = ports + j;
-					break;
-				}
-			}
-		}
-	}
-}
-
-typedef struct {
-	tern_node *padbuttons;
-	tern_node *mousebuttons;
-	int       mouseidx;
-} pmb_state;
-
-void process_mouse_button(char *buttonstr, tern_val value, uint8_t valtype, void *data)
-{
-	pmb_state *state = data;
-	int buttonnum = atoi(buttonstr);
-	if (buttonnum < 1 || buttonnum > MAX_MOUSE_BUTTONS) {
-		warning("Mouse button %s is out of the supported range of 1-8\n", buttonstr);
-		return;
-	}
-	if (valtype != TVAL_PTR) {
-		warning("Mouse button %s is not a scalar value!\n", buttonstr);
-		return;
-	}
-	buttonnum--;
-	int ui_func, devicenum, button;
-	int bindtype = parse_binding_target(value.ptrval, state->padbuttons, state->mousebuttons, &ui_func, &devicenum, &button);
-	switch (bindtype)
-	{
-	case BIND_UI:
-		mice[state->mouseidx].buttons[buttonnum].subtype_a = ui_func;
-		break;
-	case BIND_GAMEPAD1:
-		mice[state->mouseidx].buttons[buttonnum].subtype_a = button >> 12;
-		mice[state->mouseidx].buttons[buttonnum].subtype_b = button >> 8 & 0xF;
-		mice[state->mouseidx].buttons[buttonnum].value = button & 0xFF;
-		break;
-	case BIND_MOUSE1:
-		mice[state->mouseidx].buttons[buttonnum].value = button & 0xFF;
-		break;
-	}
-	if (bindtype != BIND_UI) {
-		bindtype += devicenum-1;
-	}
-	mice[state->mouseidx].buttons[buttonnum].bind_type = bindtype;
-
-}
-
-void process_mouse(char *mousenum, tern_val value, uint8_t valtype, void *data)
-{
-	tern_node **buttonmaps = data;
-	if (valtype != TVAL_NODE) {
-		warning("Binding for mouse %s is a scalar!\n", mousenum);
-		return;
-	}
-	tern_node *mousedef = value.ptrval;
-	tern_node *padbuttons = buttonmaps[0];
-	tern_node *mousebuttons = buttonmaps[1];
-
-	int mouseidx = atoi(mousenum);
-	if (mouseidx < 0 || mouseidx >= MAX_MICE) {
-		warning("Mouse numbers must be between 0 and %d, but %d is not\n", MAX_MICE, mouseidx);
-		return;
-	}
-	char *motion = tern_find_ptr(mousedef, "motion");
-	if (motion) {
-		int ui_func,devicenum,button;
-		int bindtype = parse_binding_target(motion, padbuttons, mousebuttons, &ui_func, &devicenum, &button);
-		if (bindtype != BIND_UI) {
-			bindtype += devicenum-1;
-		}
-		if (button == PSEUDO_BUTTON_MOTION) {
-			mice[mouseidx].bind_type = bindtype;
-		} else {
-			warning("Mouse motion can't be bound to target %s\n", motion);
-		}
-	}
-	tern_node *buttons = tern_find_path(mousedef, "buttons\0\0", TVAL_NODE).ptrval;
-	if (buttons) {
-		pmb_state state = {padbuttons, mousebuttons, mouseidx};
-		tern_foreach(buttons, process_mouse_button, &state);
-	}
-}
-
-typedef struct {
-	int       padnum;
-	tern_node *padbuttons;
-	tern_node *mousebuttons;
-} pad_button_state;
-
-
-static long map_warning_pad = -1;
-void process_pad_button(char *key, tern_val val, uint8_t valtype, void *data)
-{
-	pad_button_state *state = data;
-	int hostpadnum = state->padnum;
-	int ui_func, padnum, button;
-	if (valtype != TVAL_PTR) {
-		warning("Pad button %s has a non-scalar value\n", key);
-		return;
-	}
-	int bindtype = parse_binding_target(val.ptrval, state->padbuttons, state->mousebuttons, &ui_func, &padnum, &button);
-	char *end;
-	long hostbutton = strtol(key, &end, 10);
-	if (*end) {
-		//key is not a valid base 10 integer
-		hostbutton = render_translate_input_name(hostpadnum, key, 0);
-		if (hostbutton < 0) {
-			if (hostbutton == RENDER_INVALID_NAME) {
-				warning("%s is not a valid gamepad input name\n", key);
-			} else if (hostbutton == RENDER_NOT_MAPPED && hostpadnum != map_warning_pad) {
-				warning("No SDL 2 mapping exists for input %s on gamepad %d\n", key, hostpadnum);
-				map_warning_pad = hostpadnum;
-			}
-			return;
-		}
-		if (hostbutton & RENDER_DPAD_BIT) {
-			if (bindtype == BIND_GAMEPAD1) {
-				bind_dpad_gamepad(hostpadnum, render_dpad_part(hostbutton), render_direction_part(hostbutton), padnum, button);
-			} else {
-				bind_dpad_ui(hostpadnum, render_dpad_part(hostbutton), render_direction_part(hostbutton), ui_func, button);
-			}
-			return;
-		} else if (hostbutton & RENDER_AXIS_BIT) {
-			if (bindtype == BIND_GAMEPAD1) {
-				bind_axis_gamepad(hostpadnum, render_axis_part(hostbutton), 1, padnum, button);
-			} else {
-				bind_axis_ui(hostpadnum, render_axis_part(hostbutton), 1, padnum, button);
-			}
-			return;
-		}
-	}
-	if (bindtype == BIND_GAMEPAD1) {
-		bind_button_gamepad(hostpadnum, hostbutton, padnum, button);
-	} else if (bindtype == BIND_UI) {
-		bind_button_ui(hostpadnum, hostbutton, ui_func, button);
-	}
-}
-
-void process_pad_axis(char *key, tern_val val, uint8_t valtype, void *data)
-{
-	key = strdup(key);
-	pad_button_state *state = data;
-	int hostpadnum = state->padnum;
-	int ui_func, padnum, button;
-	if (valtype != TVAL_PTR) {
-		warning("Mapping for axis %s has a non-scalar value", key);
-		return;
-	}
-	int bindtype = parse_binding_target(val.ptrval, state->padbuttons, state->mousebuttons, &ui_func, &padnum, &button);
-	char *modifier = strchr(key, '.');
-	int positive = 1;
-	if (modifier) {
-		*modifier = 0;
-		modifier++;
-		if (!strcmp("negative", modifier)) {
-			positive = 0;
-		} else if(strcmp("positive", modifier)) {
-			warning("Invalid axis modifier %s for axis %s on pad %d\n", modifier, key, hostpadnum);
-		}
-	}
-	char *end;
-	long axis = strtol(key, &end, 10);
-	if (*end) {
-		//key is not a valid base 10 integer
-		axis = render_translate_input_name(hostpadnum, key, 1);
-		if (axis < 0) {
-			if (axis == RENDER_INVALID_NAME) {
-				warning("%s is not a valid gamepad input name\n", key);
-			} else if (axis == RENDER_NOT_MAPPED && hostpadnum != map_warning_pad) {
-				warning("No SDL 2 mapping exists for input %s on gamepad %d\n", key, hostpadnum);
-				map_warning_pad = hostpadnum;
-			}
-			goto done;
-		}
-		if (axis & RENDER_DPAD_BIT) {
-			if (bindtype == BIND_GAMEPAD1) {
-				bind_dpad_gamepad(hostpadnum, render_dpad_part(axis), render_direction_part(axis), padnum, button);
-			} else {
-				bind_dpad_ui(hostpadnum, render_dpad_part(axis), render_direction_part(axis), ui_func, button);
-			}
-			goto done;
-		} else if (axis & RENDER_AXIS_BIT) {
-			axis = render_axis_part(axis);
-		} else {
-			if (bindtype == BIND_GAMEPAD1) {
-				bind_button_gamepad(hostpadnum, axis, padnum, button);
-			} else if (bindtype == BIND_UI) {
-				bind_button_ui(hostpadnum, axis, ui_func, button);
-			}
-			goto done;
-		}
-	}
-	if (bindtype == BIND_GAMEPAD1) {
-		bind_axis_gamepad(hostpadnum, axis, positive, padnum, button);
-	} else {
-		bind_axis_ui(hostpadnum, axis, positive, ui_func, button);
-	}
-done:
-	free(key);
-	return;
-}
-
-static tern_node *get_pad_buttons()
-{
-	static tern_node *padbuttons;
-	if (!padbuttons) {
-		padbuttons = tern_insert_int(NULL, ".up", DPAD_UP);
-		padbuttons = tern_insert_int(padbuttons, ".down", DPAD_DOWN);
-		padbuttons = tern_insert_int(padbuttons, ".left", DPAD_LEFT);
-		padbuttons = tern_insert_int(padbuttons, ".right", DPAD_RIGHT);
-		padbuttons = tern_insert_int(padbuttons, ".a", BUTTON_A);
-		padbuttons = tern_insert_int(padbuttons, ".b", BUTTON_B);
-		padbuttons = tern_insert_int(padbuttons, ".c", BUTTON_C);
-		padbuttons = tern_insert_int(padbuttons, ".x", BUTTON_X);
-		padbuttons = tern_insert_int(padbuttons, ".y", BUTTON_Y);
-		padbuttons = tern_insert_int(padbuttons, ".z", BUTTON_Z);
-		padbuttons = tern_insert_int(padbuttons, ".start", BUTTON_START);
-		padbuttons = tern_insert_int(padbuttons, ".mode", BUTTON_MODE);
-	}
-	return padbuttons;
-}
-
-static tern_node *get_mouse_buttons()
-{
-	static tern_node *mousebuttons;
-	if (!mousebuttons) {
-		mousebuttons = tern_insert_int(NULL, ".left", MOUSE_LEFT);
-		mousebuttons = tern_insert_int(mousebuttons, ".middle", MOUSE_MIDDLE);
-		mousebuttons = tern_insert_int(mousebuttons, ".right", MOUSE_RIGHT);
-		mousebuttons = tern_insert_int(mousebuttons, ".start", MOUSE_START);
-		mousebuttons = tern_insert_int(mousebuttons, ".motion", PSEUDO_BUTTON_MOTION);
-	}
-	return mousebuttons;
-}
-
-void handle_joy_added(int joystick)
-{
-	if (joystick > MAX_JOYSTICKS) {
-		return;
-	}
-	tern_node * pads = tern_find_path(config, "bindings\0pads\0", TVAL_NODE).ptrval;
-	if (pads) {
-		char numstr[11];
-		sprintf(numstr, "%d", joystick);
-		tern_node * pad = tern_find_node(pads, numstr);
-		if (pad) {
-			tern_node * dpad_node = tern_find_node(pad, "dpads");
-			if (dpad_node) {
-				for (int dpad = 0; dpad < 10; dpad++)
-				{
-					numstr[0] = dpad + '0';
-					numstr[1] = 0;
-					tern_node * pad_dpad = tern_find_node(dpad_node, numstr);
-					char * dirs[] = {"up", "down", "left", "right"};
-					int dirnums[] = {RENDER_DPAD_UP, RENDER_DPAD_DOWN, RENDER_DPAD_LEFT, RENDER_DPAD_RIGHT};
-					for (int dir = 0; dir < sizeof(dirs)/sizeof(dirs[0]); dir++) {
-						char * target = tern_find_ptr(pad_dpad, dirs[dir]);
-						if (target) {
-							int ui_func, padnum, button;
-							int bindtype = parse_binding_target(target, get_pad_buttons(), get_mouse_buttons(), &ui_func, &padnum, &button);
-							if (bindtype == BIND_GAMEPAD1) {
-								bind_dpad_gamepad(joystick, dpad, dirnums[dir], padnum, button);
-							} else if (bindtype == BIND_UI) {
-								bind_dpad_ui(joystick, dpad, dirnums[dir], ui_func, button);
-							}
-						}
-					}
-				}
-			}
-			tern_node *button_node = tern_find_node(pad, "buttons");
-			if (button_node) {
-				pad_button_state state = {
-					.padnum = joystick,
-					.padbuttons = get_pad_buttons(),
-					.mousebuttons = get_mouse_buttons()
-				};
-				tern_foreach(button_node, process_pad_button, &state);
-			}
-			tern_node *axes_node = tern_find_node(pad, "axes");
-			if (axes_node) {
-				pad_button_state state = {
-					.padnum = joystick,
-					.padbuttons = get_pad_buttons(),
-					.mousebuttons = get_mouse_buttons()
-				};
-				tern_foreach(axes_node, process_pad_axis, &state);
-			}
-			if (current_io) {
-				if (joysticks[joystick].buttons) {
-					map_bindings(current_io->ports, joysticks[joystick].buttons, joysticks[joystick].num_buttons);
-				}
-				if (joysticks[joystick].dpads)
-				{
-					for (uint32_t i = 0; i < joysticks[joystick].num_dpads; i++)
-					{
-						map_bindings(current_io->ports, joysticks[joystick].dpads[i].bindings, 4);
-					}
-				}
-				if (joysticks[joystick].axes) {
-					for (uint32_t i = 0; i < joysticks[joystick].num_axes; i++)
-					{
-						map_bindings(current_io->ports, &joysticks[joystick].axes[i].positive, 1);
-						map_bindings(current_io->ports, &joysticks[joystick].axes[i].negative, 1);
-					}
-				}
-			}
-		}
-	}
-	
-}
-
-void set_keybindings(sega_io *io)
-{
-	static uint8_t already_done;
-	if (already_done) {
-		map_all_bindings(io);
-		return;
-	}
-	already_done = 1;
-	io_port *ports = io->ports;
-	tern_node * special = tern_insert_int(NULL, "up", RENDERKEY_UP);
-	special = tern_insert_int(special, "down", RENDERKEY_DOWN);
-	special = tern_insert_int(special, "left", RENDERKEY_LEFT);
-	special = tern_insert_int(special, "right", RENDERKEY_RIGHT);
-	special = tern_insert_int(special, "enter", '\r');
-	special = tern_insert_int(special, "space", ' ');
-	special = tern_insert_int(special, "tab", '\t');
-	special = tern_insert_int(special, "backspace", '\b');
-	special = tern_insert_int(special, "esc", RENDERKEY_ESC);
-	special = tern_insert_int(special, "delete", RENDERKEY_DEL);
-	special = tern_insert_int(special, "lshift", RENDERKEY_LSHIFT);
-	special = tern_insert_int(special, "rshift", RENDERKEY_RSHIFT);
-	special = tern_insert_int(special, "lctrl", RENDERKEY_LCTRL);
-	special = tern_insert_int(special, "rctrl", RENDERKEY_RCTRL);
-	special = tern_insert_int(special, "lalt", RENDERKEY_LALT);
-	special = tern_insert_int(special, "ralt", RENDERKEY_RALT);
-	special = tern_insert_int(special, "home", RENDERKEY_HOME);
-	special = tern_insert_int(special, "end", RENDERKEY_END);
-	special = tern_insert_int(special, "pageup", RENDERKEY_PAGEUP);
-	special = tern_insert_int(special, "pagedown", RENDERKEY_PAGEDOWN);
-	special = tern_insert_int(special, "f1", RENDERKEY_F1);
-	special = tern_insert_int(special, "f2", RENDERKEY_F2);
-	special = tern_insert_int(special, "f3", RENDERKEY_F3);
-	special = tern_insert_int(special, "f4", RENDERKEY_F4);
-	special = tern_insert_int(special, "f5", RENDERKEY_F5);
-	special = tern_insert_int(special, "f6", RENDERKEY_F6);
-	special = tern_insert_int(special, "f7", RENDERKEY_F7);
-	special = tern_insert_int(special, "f8", RENDERKEY_F8);
-	special = tern_insert_int(special, "f9", RENDERKEY_F9);
-	special = tern_insert_int(special, "f10", RENDERKEY_F10);
-	special = tern_insert_int(special, "f11", RENDERKEY_F11);
-	special = tern_insert_int(special, "f12", RENDERKEY_F12);
-	special = tern_insert_int(special, "select", RENDERKEY_SELECT);
-	special = tern_insert_int(special, "play", RENDERKEY_PLAY);
-	special = tern_insert_int(special, "search", RENDERKEY_SEARCH);
-	special = tern_insert_int(special, "back", RENDERKEY_BACK);
-	special = tern_insert_int(special, "np0", RENDERKEY_NP0);
-	special = tern_insert_int(special, "np1", RENDERKEY_NP1);
-	special = tern_insert_int(special, "np2", RENDERKEY_NP2);
-	special = tern_insert_int(special, "np3", RENDERKEY_NP3);
-	special = tern_insert_int(special, "np4", RENDERKEY_NP4);
-	special = tern_insert_int(special, "np5", RENDERKEY_NP5);
-	special = tern_insert_int(special, "np6", RENDERKEY_NP6);
-	special = tern_insert_int(special, "np7", RENDERKEY_NP7);
-	special = tern_insert_int(special, "np8", RENDERKEY_NP8);
-	special = tern_insert_int(special, "np9", RENDERKEY_NP9);
-	special = tern_insert_int(special, "np/", RENDERKEY_NP_DIV);
-	special = tern_insert_int(special, "np*", RENDERKEY_NP_MUL);
-	special = tern_insert_int(special, "np-", RENDERKEY_NP_MIN);
-	special = tern_insert_int(special, "np+", RENDERKEY_NP_PLUS);
-	special = tern_insert_int(special, "npenter", RENDERKEY_NP_ENTER);
-	special = tern_insert_int(special, "np.", RENDERKEY_NP_STOP);
-
-	tern_node *padbuttons = get_pad_buttons();
-
-	tern_node *mousebuttons = get_mouse_buttons();
-	
-	tern_node * keys = tern_find_path(config, "bindings\0keys\0", TVAL_NODE).ptrval;
-	process_keys(keys, special, padbuttons, mousebuttons, NULL);
-	char numstr[] = "00";
-	tern_node * pads = tern_find_path(config, "bindings\0pads\0", TVAL_NODE).ptrval;
-	if (pads) {
-		for (int i = 0; i < MAX_JOYSTICKS; i++)
-		{
-
-			if (i < 10) {
-				numstr[0] = i + '0';
-				numstr[1] = 0;
-			} else {
-				numstr[0] = i/10 + '0';
-				numstr[1] = i%10 + '0';
-			}
-			
-		}
-	}
-	memset(mice, 0, sizeof(mice));
-	tern_node * mice = tern_find_path(config, "bindings\0mice\0", TVAL_NODE).ptrval;
-	if (mice) {
-		tern_node *buttonmaps[2] = {padbuttons, mousebuttons};
-		tern_foreach(mice, process_mouse, buttonmaps);
-	}
-	tern_node * speed_nodes = tern_find_path(config, "clocks\0speeds\0", TVAL_NODE).ptrval;
-	speeds = malloc(sizeof(uint32_t));
-	speeds[0] = 100;
-	process_speeds(speed_nodes, NULL);
-	for (int i = 0; i < num_speeds; i++)
-	{
-		if (!speeds[i]) {
-			warning("Speed index %d was not set to a valid percentage!", i);
-			speeds[i] = 100;
-		}
-	}
-	map_all_bindings(io);
-}
-
-void map_all_bindings(sega_io *io)
-{
-	current_io = io;
-	io_port *ports = io->ports;
-	
-	for (int bucket = 0; bucket < 0x10000; bucket++)
-	{
-		if (bindings[bucket])
-		{
-			map_bindings(ports, bindings[bucket], 0x8000);
-		}
-	}
-	for (int stick = 0; stick < MAX_JOYSTICKS; stick++)
-	{
-		if (joysticks[stick].buttons) {
-			map_bindings(ports, joysticks[stick].buttons, joysticks[stick].num_buttons);
-		}
-		if (joysticks[stick].dpads)
-		{
-			for (uint32_t i = 0; i < joysticks[stick].num_dpads; i++)
-			{
-				map_bindings(ports, joysticks[stick].dpads[i].bindings, 4);
-			}
-		}
-		for (uint32_t i = 0; i < joysticks[stick].num_axes; i++)
-		{
-			map_bindings(current_io->ports, &joysticks[stick].axes[i].positive, 1);
-			map_bindings(current_io->ports, &joysticks[stick].axes[i].negative, 1);
-		}
-	}
-	for (int mouse = 0; mouse < MAX_MICE; mouse++)
-	{
-		if (mice[mouse].bind_type >= BIND_MOUSE1 && mice[mouse].bind_type <= BIND_MOUSE8) {
-			int num = mice[mouse].bind_type - BIND_MOUSE1;
-			for (int j = 0; j < 3; j++)
-			{
-				if (ports[j].device_type == IO_MOUSE && ports[j].device.mouse.mouse_num == num)
-				{
-					memset(ports[j].input, 0, sizeof(ports[j].input));
-					mice[mouse].motion_port = ports + j;
-					break;
-				}
-			}
-		}
-		map_bindings(ports, mice[mouse].buttons, MAX_MOUSE_BUTTONS);
-	}
-	keyboard_port = NULL;
-	for (int i = 0; i < 3; i++)
-	{
-		if (ports[i].device_type == IO_SATURN_KEYBOARD || ports[i].device_type == IO_XBAND_KEYBOARD) {
-			keyboard_port = ports + i;
-			break;
-		}
-	}
-	//not really related to the intention of this function, but the best place to do this currently
-	if (speeds[0] != 100) {
-		current_system->set_speed_percent(current_system, speeds[0]);
-	}
-}
 
 #define TH 0x40
 #define TR 0x20
@@ -1561,6 +392,7 @@ void mouse_check_ready(io_port *port, uint32_t current_cycle)
 		if (port->device.mouse.tr_counter == 3) {
 			port->device.mouse.latched_x = port->device.mouse.cur_x;
 			port->device.mouse.latched_y = port->device.mouse.cur_y;
+			/* FIXME mouse mode owned by bindings now
 			if (current_io->mouse_mode == MOUSE_ABSOLUTE) {
 				//avoid overflow in absolute mode
 				int deltax = port->device.mouse.latched_x - port->device.mouse.last_read_x;
@@ -1571,7 +403,7 @@ void mouse_check_ready(io_port *port, uint32_t current_cycle)
 				if (abs(deltay) > 255) {
 					port->device.mouse.latched_y = port->device.mouse.last_read_y + (deltay > 0 ? 255 : -255);
 				}
-			}
+			}*/
 		}
 	}
 }
