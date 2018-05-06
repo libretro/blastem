@@ -16,6 +16,7 @@
 #include "debug.h"
 #include "gdb_remote.h"
 #include "saves.h"
+#include "bindings.h"
 #define MCLKS_NTSC 53693175
 #define MCLKS_PAL  53203395
 
@@ -1063,7 +1064,7 @@ static void handle_reset_requests(genesis_context *gen)
 			resume_68k(gen->m68k);
 		}
 	}
-	io_release_capture(&gen->io);
+	bindings_release_capture();
 	vdp_release_framebuffer(gen->vdp);
 	render_pause_source(gen->ym->audio);
 	render_pause_source(gen->psg->audio);
@@ -1072,7 +1073,6 @@ static void handle_reset_requests(genesis_context *gen)
 static void start_genesis(system_header *system, char *statefile)
 {
 	genesis_context *gen = (genesis_context *)system;
-	set_keybindings(&gen->io);
 	if (statefile) {
 		//first try loading as a native format savestate
 		deserialize_buffer state;
@@ -1110,9 +1110,8 @@ static void start_genesis(system_header *system, char *statefile)
 static void resume_genesis(system_header *system)
 {
 	genesis_context *gen = (genesis_context *)system;
-	map_all_bindings(&gen->io);
 	render_set_video_standard((gen->version_reg & HZ50) ? VID_PAL : VID_NTSC);
-	io_reacquire_capture(&gen->io);
+	bindings_reacquire_capture();
 	vdp_reacquire_framebuffer(gen->vdp);
 	render_resume_source(gen->ym->audio);
 	render_resume_source(gen->psg->audio);
@@ -1204,6 +1203,54 @@ static void free_genesis(system_header *system)
 	free(gen);
 }
 
+static void gamepad_down(system_header *system, uint8_t gamepad_num, uint8_t button)
+{
+	genesis_context *gen = (genesis_context *)system;
+	io_gamepad_down(&gen->io, gamepad_num, button);
+}
+
+static void gamepad_up(system_header *system, uint8_t gamepad_num, uint8_t button)
+{
+	genesis_context *gen = (genesis_context *)system;
+	io_gamepad_up(&gen->io, gamepad_num, button);
+}
+
+static void mouse_down(system_header *system, uint8_t mouse_num, uint8_t button)
+{
+	genesis_context *gen = (genesis_context *)system;
+	io_mouse_down(&gen->io, mouse_num, button);
+}
+
+static void mouse_up(system_header *system, uint8_t mouse_num, uint8_t button)
+{
+	genesis_context *gen = (genesis_context *)system;
+	io_mouse_up(&gen->io, mouse_num, button);
+}
+
+static void mouse_motion_absolute(system_header *system, uint8_t mouse_num, uint16_t x, uint16_t y)
+{
+	genesis_context *gen = (genesis_context *)system;
+	io_mouse_motion_absolute(&gen->io, mouse_num, x, y);
+}
+
+static void mouse_motion_relative(system_header *system, uint8_t mouse_num, int32_t x, int32_t y)
+{
+	genesis_context *gen = (genesis_context *)system;
+	io_mouse_motion_relative(&gen->io, mouse_num, x, y);
+}
+
+static void keyboard_down(system_header *system, uint8_t scancode)
+{
+	genesis_context *gen = (genesis_context *)system;
+	io_keyboard_down(&gen->io, scancode);
+}
+
+static void keyboard_up(system_header *system, uint8_t scancode)
+{
+	genesis_context *gen = (genesis_context *)system;
+	io_keyboard_up(&gen->io, scancode);
+}
+
 genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on, uint32_t system_opts, uint8_t force_region)
 {
 	static memmap_chunk z80_map[] = {
@@ -1226,6 +1273,14 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	gen->header.request_exit = request_exit;
 	gen->header.inc_debug_mode = inc_debug_mode;
 	gen->header.inc_debug_pal = inc_debug_pal;
+	gen->header.gamepad_down = gamepad_down;
+	gen->header.gamepad_up = gamepad_up;
+	gen->header.mouse_down = mouse_down;
+	gen->header.mouse_up = mouse_up;
+	gen->header.mouse_motion_absolute = mouse_motion_absolute;
+	gen->header.mouse_motion_relative = mouse_motion_relative;
+	gen->header.keyboard_down = keyboard_down;
+	gen->header.keyboard_up = keyboard_up;
 	gen->header.type = SYSTEM_GENESIS;
 	set_region(gen, rom, force_region);
 
@@ -1294,6 +1349,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 		}
 	}
 	setup_io_devices(config, rom, &gen->io);
+	gen->header.has_keyboard = io_has_keyboard(&gen->io);
 
 	gen->mapper_type = rom->mapper_type;
 	gen->save_type = rom->save_type;

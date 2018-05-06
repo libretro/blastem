@@ -23,6 +23,7 @@
 #include "terminal.h"
 #include "arena.h"
 #include "config.h"
+#include "bindings.h"
 #include "menu.h"
 #include "zip.h"
 #ifndef DISABLE_NUKLEAR
@@ -562,6 +563,7 @@ int main(int argc, char ** argv)
 		render_init(width, height, "BlastEm", fullscreen);
 		render_set_drag_drop_handler(on_drag_drop);
 	}
+	set_bindings();
 	
 	uint8_t menu = !loaded;
 	uint8_t use_nuklear = 0;
