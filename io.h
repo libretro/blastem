@@ -70,48 +70,57 @@ typedef struct {
 
 typedef struct {
 	io_port	ports[3];
-	uint8_t mouse_mode;
-	uint8_t mouse_captured;
-	uint8_t keyboard_captured;
 } sega_io;
 
-#define GAMEPAD_TH0 0
-#define GAMEPAD_TH1 1
-#define GAMEPAD_EXTRA 2
-#define GAMEPAD_NONE 0xF
-
-#define IO_TH0 0
-#define IO_TH1 1
-#define IO_STATE 2
+//pseudo gamepad for buttons on main console unit
+#define GAMEPAD_MAIN_UNIT 255
 
 enum {
-	IO_WRITE_PENDING,
-	IO_WRITTEN,
-	IO_READ_PENDING,
-	IO_READ
+	BUTTON_INVALID,
+	DPAD_UP,
+	DPAD_DOWN,
+	DPAD_LEFT,
+	DPAD_RIGHT,
+	BUTTON_A,
+	BUTTON_B,
+	BUTTON_C,
+	BUTTON_START,
+	BUTTON_X,
+	BUTTON_Y,
+	BUTTON_Z,
+	BUTTON_MODE,
+	NUM_GAMEPAD_BUTTONS
 };
 
-void set_keybindings(sega_io *io);
-void map_all_bindings(sega_io *io);
+enum {
+	MAIN_UNIT_PAUSE
+};
+
+enum {
+	MOUSE_LEFT = 1,
+	MOUSE_RIGHT = 2,
+	MOUSE_MIDDLE = 4,
+	MOUSE_START = 8,
+	PSEUDO_BUTTON_MOTION=0xFF
+};
+
 void setup_io_devices(tern_node * config, rom_info *rom, sega_io *io);
 void io_adjust_cycles(io_port * pad, uint32_t current_cycle, uint32_t deduction);
 void io_control_write(io_port *port, uint8_t value, uint32_t current_cycle);
 void io_data_write(io_port * pad, uint8_t value, uint32_t current_cycle);
 uint8_t io_data_read(io_port * pad, uint32_t current_cycle);
-void handle_keydown(int keycode, uint8_t scancode);
-void handle_keyup(int keycode, uint8_t scancode);
-void handle_joydown(int joystick, int button);
-void handle_joyup(int joystick, int button);
-void handle_joy_dpad(int joystick, int dpad, uint8_t state);
-void handle_joy_axis(int joystick, int axis, int16_t value);
-void handle_joy_added(int joystick);
-void handle_mouse_moved(int mouse, uint16_t x, uint16_t y, int16_t deltax, int16_t deltay);
-void handle_mousedown(int mouse, int button);
-void handle_mouseup(int mouse, int button);
 void io_serialize(io_port *port, serialize_buffer *buf);
 void io_deserialize(deserialize_buffer *buf, void *vport);
-void io_release_capture(sega_io *io);
-void io_reacquire_capture(sega_io *io);
+
+void io_gamepad_down(sega_io *io, uint8_t gamepad_num, uint8_t button);
+void io_gamepad_up(sega_io *io, uint8_t gamepad_num, uint8_t button);
+void io_mouse_down(sega_io *io, uint8_t mouse_num, uint8_t button);
+void io_mouse_up(sega_io *io, uint8_t mouse_num, uint8_t button);
+void io_mouse_motion_absolute(sega_io *io, uint8_t mouse_num, uint16_t x, uint16_t y);
+void io_mouse_motion_relative(sega_io *io, uint8_t mouse_num, int32_t x, int32_t y);
+void io_keyboard_down(sega_io *io, uint8_t scancode);
+void io_keyboard_up(sega_io *io, uint8_t scancode);
+uint8_t io_has_keyboard(sega_io *io);
 
 extern const char * device_type_names[];
 

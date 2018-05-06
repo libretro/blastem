@@ -11,7 +11,7 @@
 #include "render_sdl.h"
 #include "blastem.h"
 #include "genesis.h"
-#include "io.h"
+#include "bindings.h"
 #include "util.h"
 #include "ppm.h"
 #include "png.h"

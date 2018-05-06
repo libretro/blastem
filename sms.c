@@ -7,6 +7,7 @@
 #include "util.h"
 #include "debug.h"
 #include "saves.h"
+#include "bindings.h"
 
 static void *memory_io_write(uint32_t location, void *vcontext, uint8_t value)
 {
@@ -385,6 +386,7 @@ static void run_sms(system_header *system)
 			target_cycle -= adjust;
 		}
 	}
+	bindings_release_capture();
 	vdp_release_framebuffer(sms->vdp);
 	render_pause_source(sms->psg->audio);
 	sms->should_return = 0;
@@ -393,6 +395,7 @@ static void run_sms(system_header *system)
 static void resume_sms(system_header *system)
 {
 	sms_context *sms = (sms_context *)system;
+	bindings_reacquire_capture();
 	vdp_reacquire_framebuffer(sms->vdp);
 	render_resume_source(sms->psg->audio);
 	run_sms(system);
@@ -401,7 +404,6 @@ static void resume_sms(system_header *system)
 static void start_sms(system_header *system, char *statefile)
 {
 	sms_context *sms = (sms_context *)system;
-	set_keybindings(&sms->io);
 	
 	z80_assert_reset(sms->z80, 0);
 	z80_clear_reset(sms->z80, 128*15);
@@ -474,6 +476,60 @@ static void persist_save(system_header *system)
 	//TODO: Implement me
 }
 
+static void gamepad_down(system_header *system, uint8_t gamepad_num, uint8_t button)
+{
+	sms_context *sms = (sms_context *)system;
+	if (gamepad_num == GAMEPAD_MAIN_UNIT) {
+		if (button == MAIN_UNIT_PAUSE) {
+			vdp_pbc_pause(sms->vdp);
+		}
+	} else {
+		io_gamepad_down(&sms->io, gamepad_num, button);
+	}
+}
+
+static void gamepad_up(system_header *system, uint8_t gamepad_num, uint8_t button)
+{
+	sms_context *sms = (sms_context *)system;
+	io_gamepad_up(&sms->io, gamepad_num, button);
+}
+
+static void mouse_down(system_header *system, uint8_t mouse_num, uint8_t button)
+{
+	sms_context *sms = (sms_context *)system;
+	io_mouse_down(&sms->io, mouse_num, button);
+}
+
+static void mouse_up(system_header *system, uint8_t mouse_num, uint8_t button)
+{
+	sms_context *sms = (sms_context *)system;
+	io_mouse_up(&sms->io, mouse_num, button);
+}
+
+static void mouse_motion_absolute(system_header *system, uint8_t mouse_num, uint16_t x, uint16_t y)
+{
+	sms_context *sms = (sms_context *)system;
+	io_mouse_motion_absolute(&sms->io, mouse_num, x, y);
+}
+
+static void mouse_motion_relative(system_header *system, uint8_t mouse_num, int32_t x, int32_t y)
+{
+	sms_context *sms = (sms_context *)system;
+	io_mouse_motion_relative(&sms->io, mouse_num, x, y);
+}
+
+static void keyboard_down(system_header *system, uint8_t scancode)
+{
+	sms_context *sms = (sms_context *)system;
+	io_keyboard_down(&sms->io, scancode);
+}
+
+static void keyboard_up(system_header *system, uint8_t scancode)
+{
+	sms_context *sms = (sms_context *)system;
+	io_keyboard_up(&sms->io, scancode);
+}
+
 sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t force_region, rom_info *info_out)
 {
 	memset(info_out, 0, sizeof(*info_out));
@@ -527,6 +583,7 @@ sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t for
 	info_out->name = strdup(media->name);
 	
 	setup_io_devices(config, info_out, &sms->io);
+	sms->header.has_keyboard = io_has_keyboard(&sms->io);
 	
 	sms->header.set_speed_percent = set_speed_percent;
 	sms->header.start_context = start_sms;
@@ -540,6 +597,14 @@ sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t for
 	sms->header.soft_reset = soft_reset;
 	sms->header.inc_debug_mode = inc_debug_mode;
 	sms->header.inc_debug_pal = inc_debug_pal;
+	sms->header.gamepad_down = gamepad_down;
+	sms->header.gamepad_up = gamepad_up;
+	sms->header.mouse_down = mouse_down;
+	sms->header.mouse_up = mouse_up;
+	sms->header.mouse_motion_absolute = mouse_motion_absolute;
+	sms->header.mouse_motion_relative = mouse_motion_relative;
+	sms->header.keyboard_down = keyboard_down;
+	sms->header.keyboard_up = keyboard_up;
 	sms->header.type = SYSTEM_SMS;
 	
 	return sms;

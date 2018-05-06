@@ -21,8 +21,12 @@ typedef void (*system_fun)(system_header *);
 typedef uint16_t (*system_fun_r16)(system_header *);
 typedef void (*system_str_fun)(system_header *, char *);
 typedef uint8_t (*system_str_fun_r8)(system_header *, char *);
-typedef void (*speed_system_fun)(system_header *, uint32_t);
+typedef void (*system_u32_fun)(system_header *, uint32_t);
+typedef void (*system_u8_fun)(system_header *, uint8_t);
 typedef uint8_t (*system_u8_fun_r8)(system_header *, uint8_t);
+typedef void (*system_u8_u8_fun)(system_header *, uint8_t, uint8_t);
+typedef void (*system_mabs_fun)(system_header *, uint8_t, uint16_t, uint16_t);
+typedef void (*system_mrel_fun)(system_header *, uint8_t, int32_t, int32_t);
 
 #include "arena.h"
 #include "romdb.h"
@@ -38,9 +42,17 @@ struct system_header {
 	system_fun        soft_reset;
 	system_fun        free_context;
 	system_fun_r16    get_open_bus_value;
-	speed_system_fun  set_speed_percent;
+	system_u32_fun    set_speed_percent;
 	system_fun        inc_debug_mode;
 	system_fun        inc_debug_pal;
+	system_u8_u8_fun  gamepad_down;
+	system_u8_u8_fun  gamepad_up;
+	system_u8_u8_fun  mouse_down;
+	system_u8_u8_fun  mouse_up;
+	system_mabs_fun   mouse_motion_absolute;
+	system_mrel_fun   mouse_motion_relative;
+	system_u8_fun     keyboard_down;
+	system_u8_fun     keyboard_up;
 	arena             *arena;
 	char              *next_rom;
 	char              *save_dir;
@@ -48,6 +60,7 @@ struct system_header {
 	uint8_t           should_exit;
 	uint8_t           save_state;
 	uint8_t           delayed_load_slot;
+	uint8_t           has_keyboard;
 	debugger_type     debugger_type;
 	system_type       type;
 };
