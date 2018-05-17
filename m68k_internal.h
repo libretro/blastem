@@ -66,7 +66,6 @@ void translate_m68k_arith(m68k_options *opts, m68kinst * inst, uint32_t flag_mas
 void translate_m68k_unary(m68k_options *opts, m68kinst *inst, uint32_t flag_mask, host_ea *dst_op);
 void translate_m68k_cmp(m68k_options * opts, m68kinst * inst);
 void translate_m68k_tas(m68k_options * opts, m68kinst * inst);
-void translate_m68k_clr(m68k_options * opts, m68kinst * inst);
 void translate_m68k_ext(m68k_options * opts, m68kinst * inst);
 void translate_m68k_abcd_sbcd(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op);
 void translate_m68k_sl(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op);
