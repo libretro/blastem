@@ -742,27 +742,6 @@ void translate_m68k_move(m68k_options * opts, m68kinst * inst)
 	cycles(&opts->gen, BUS);
 }
 
-void translate_m68k_clr(m68k_options * opts, m68kinst * inst)
-{
-	code_info *code = &opts->gen.code;
-	update_flags(opts, N0|V0|C0|Z1);
-	int8_t reg = native_reg(&(inst->dst), opts);
-	if (reg >= 0) {
-		cycles(&opts->gen, (inst->extra.size == OPSIZE_LONG ? 6 : 4));
-		xor_rr(code, reg, reg, inst->extra.size);
-		return;
-	}
-	host_ea dst_op;
-	//TODO: fix timing
-	translate_m68k_op(inst, &dst_op, opts, 1);
-	if (dst_op.mode == MODE_REG_DIRECT) {
-		xor_rr(code, dst_op.base, dst_op.base, inst->extra.size);
-	} else {
-		mov_irdisp(code, 0, dst_op.base, dst_op.disp, inst->extra.size);
-	}
-	m68k_save_result(inst, opts);
-}
-
 void translate_m68k_ext(m68k_options * opts, m68kinst * inst)
 {
 	code_info *code = &opts->gen.code;
@@ -780,6 +759,7 @@ void translate_m68k_ext(m68k_options * opts, m68kinst * inst)
 	}
 	inst->extra.size = dst_size;
 	update_flags(opts, N|V0|C0|Z);
+	cycles(&opts->gen, BUS);
 	//M68K EXT only operates on registers so no need for a call to save result here
 }
 
@@ -1437,6 +1417,7 @@ void op_r(code_info *code, m68kinst *inst, uint8_t dst, uint8_t size)
 {
 	switch(inst->op)
 	{
+	case M68K_CLR:   xor_rr(code, dst, dst, size); break;
 	case M68K_NEG:   neg_r(code, dst, size); break;
 	case M68K_NOT:   not_r(code, dst, size); cmp_ir(code, 0, dst, size); break;
 	case M68K_ROL:   rol_clr(code, dst, size); break;
@@ -1452,6 +1433,7 @@ void op_rdisp(code_info *code, m68kinst *inst, uint8_t dst, int32_t disp, uint8_
 {
 	switch(inst->op)
 	{
+	case M68K_CLR:   mov_irdisp(code, 0, dst, disp, size); break;
 	case M68K_NEG:   neg_rdisp(code, dst, disp, size); break;
 	case M68K_NOT:   not_rdisp(code, dst, disp, size); cmp_irdisp(code, 0, dst, disp, size); break;
 	case M68K_ROL:   rol_clrdisp(code, dst, disp, size); break;
@@ -1466,7 +1448,11 @@ void op_rdisp(code_info *code, m68kinst *inst, uint8_t dst, int32_t disp, uint8_
 void translate_m68k_unary(m68k_options *opts, m68kinst *inst, uint32_t flag_mask, host_ea *dst_op)
 {
 	code_info *code = &opts->gen.code;
-	cycles(&opts->gen, BUS);
+	uint32_t num_cycles = BUS;
+	if (inst->extra.size == OPSIZE_LONG && (inst->dst.addr_mode == MODE_REG || inst->dst.addr_mode == MODE_AREG)) {
+		num_cycles += 2;
+	}
+	cycles(&opts->gen, num_cycles);
 	if (dst_op->mode == MODE_REG_DIRECT) {
 		op_r(code, inst, dst_op->base, inst->extra.size);
 	} else {

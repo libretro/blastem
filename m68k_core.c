@@ -902,7 +902,7 @@ static impl_info m68k_impls[] = {
 	RAW_IMPL(M68K_MOVE_USP, translate_m68k_move_usp),
 	RAW_IMPL(M68K_LEA, translate_m68k_lea_pea),
 	RAW_IMPL(M68K_PEA, translate_m68k_lea_pea),
-	RAW_IMPL(M68K_CLR, translate_m68k_clr),
+	UNARY_IMPL(M68K_CLR, N0|V0|C0|Z1),
 	OP_IMPL(M68K_EXG, translate_m68k_exg),
 	RAW_IMPL(M68K_SCC, translate_m68k_scc),
 
