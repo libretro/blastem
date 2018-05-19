@@ -1190,7 +1190,8 @@ void translate_shift(m68k_options * opts, m68kinst * inst, host_ea *src_op, host
 void translate_m68k_reset(m68k_options *opts, m68kinst *inst)
 {
 	code_info *code = &opts->gen.code;
-	cycles(&opts->gen, BUS);
+	//RESET instructions take a long time to give peripherals time to reset themselves
+	cycles(&opts->gen, 132);
 	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, reset_handler), opts->gen.scratch1, SZ_PTR);
 	cmp_ir(code, 0, opts->gen.scratch1, SZ_PTR);
 	code_ptr no_reset_handler = code->cur + 1;
@@ -1494,6 +1495,8 @@ void translate_m68k_abcd_sbcd(m68k_options *opts, m68kinst *inst, host_ea *src_o
 		//destination is in memory so we need to preserve scratch2 for the write at the end
 		push_r(code, opts->gen.scratch2);
 	}
+	//MC68000 User's Manual suggests NBCD hides the 2 cycle penalty during the write cycle somehow
+	cycles(&opts->gen, inst->op == M68K_NBCD && inst->dst.addr_mode != MODE_REG_DIRECT ? BUS : BUS + 2);
 	uint8_t other_reg;
 	//WARNING: This may need adjustment if register assignments change
 	if (opts->gen.scratch2 > RBX) {
@@ -2440,6 +2443,7 @@ void translate_m68k_odd(m68k_options *opts, m68kinst *inst)
 void translate_m68k_move_from_sr(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op)
 {
 	code_info *code = &opts->gen.code;
+	cycles(&opts->gen, inst->dst.addr_mode == MODE_REG_DIRECT ? BUS+2 : BUS);
 	call(code, opts->get_sr);
 	if (dst_op->mode == MODE_REG_DIRECT) {
 		mov_rr(code, opts->gen.scratch1, dst_op->base, SZ_W);
