@@ -2152,6 +2152,7 @@ uint32_t prep_args(code_info *code, uint32_t num_args, va_list args)
 	{
 		push_r(code, arg_arr[i]);
 	}
+	free(arg_arr);
 	
 	return stack_args * sizeof(void *) + adjust;
 }
