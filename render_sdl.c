@@ -313,8 +313,8 @@ void render_free_source(audio_source *src)
 	render_pause_source(src);
 	
 	free(src->front);
-	free(src->back);
 	if (sync_to_audio) {
+		free(src->back);
 		SDL_DestroyCond(src->cond);
 	}
 	free(src);
