@@ -1,3 +1,4 @@
+#include <string.h>
 #include "render.h"
 #include "system.h"
 #include "io.h"
@@ -971,6 +972,7 @@ void set_bindings(void)
 	
 	tern_node * keys = tern_find_path(config, "bindings\0keys\0", TVAL_NODE).ptrval;
 	process_keys(keys, special, padbuttons, mousebuttons, NULL);
+	tern_free(special);
 	
 	memset(mice, 0, sizeof(mice));
 	tern_node * mice = tern_find_path(config, "bindings\0mice\0", TVAL_NODE).ptrval;
