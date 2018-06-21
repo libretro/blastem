@@ -190,6 +190,10 @@ static uint32_t min_remaining_buffer;
 static void audio_callback_drc(void *userData, uint8_t *byte_stream, int len)
 {
 	memset(byte_stream, 0, len);
+	if (cur_min_buffered < 0) {
+		//underflow last frame, but main thread hasn't gotten a chance to call SDL_PauseAudio yet
+		return;
+	}
 	cur_min_buffered = 0x7FFFFFFF;
 	min_remaining_buffer = 0xFFFFFFFF;
 	for (uint8_t i = 0; i < num_audio_sources; i++)
@@ -1436,6 +1440,7 @@ void render_framebuffer_updated(uint8_t which, int width)
 				adjust_ratio = max_adjust;
 				SDL_PauseAudio(1);
 				last_buffered = NO_LAST_BUFFERED;
+				cur_min_buffered = 0;
 			} else {
 				adjust_ratio = -1.0 * average_change / ((float)sample_rate / (float)source_hz);
 				adjust_ratio /= 2.5 * source_hz;
