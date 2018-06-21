@@ -63,7 +63,9 @@ struct audio_source {
 };
 
 static audio_source *audio_sources[8];
+static audio_source *inactive_audio_sources[8];
 static uint8_t num_audio_sources;
+static uint8_t num_inactive_audio_sources;
 static uint8_t sync_to_audio;
 static uint32_t min_buffered;
 
@@ -298,6 +300,7 @@ void render_pause_source(audio_source *src)
 	if (need_pause) {
 		SDL_PauseAudio(1);
 	}
+	inactive_audio_sources[num_inactive_audio_sources++] = src;
 }
 
 void render_resume_source(audio_source *src)
@@ -307,6 +310,12 @@ void render_resume_source(audio_source *src)
 			audio_sources[num_audio_sources++] = src;
 		}
 	unlock_audio();
+	for (uint8_t i = 0; i < num_inactive_audio_sources; i++)
+	{
+		if (inactive_audio_sources[i] == src) {
+			inactive_audio_sources[i] = inactive_audio_sources[--num_inactive_audio_sources];
+		}
+	}
 	if (sync_to_audio) {
 		SDL_PauseAudio(0);
 	}
@@ -1108,6 +1117,27 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 }
 #include<unistd.h>
 static int in_toggle;
+static void update_source(audio_source *src, double rc, uint8_t sync_changed)
+{
+	double alpha = src->dt / (src->dt + rc);
+	int32_t lowpass_alpha = (int32_t)(((double)0x10000) * alpha);
+	src->lowpass_alpha = lowpass_alpha;
+	if (sync_changed) {
+		uint32_t alloc_size = sync_to_audio ? src->num_channels * buffer_samples : nearest_pow2(min_buffered * 4 * src->num_channels);
+		src->back = realloc(src->back, alloc_size);
+		if (sync_to_audio) {
+			src->front = malloc(alloc_size * sizeof(int16_t));
+		} else {
+			free(src->front);
+			src->front = src->back;
+		}
+		src->mask = sync_to_audio ? 0xFFFFFFFF : alloc_size-1;
+		src->read_start = 0;
+		src->read_end = sync_to_audio ? buffer_samples * src->num_channels : 0;
+		src->buffer_pos = 0;
+	}
+}
+
 void render_config_updated(void)
 {
 	uint8_t old_sync_to_audio = sync_to_audio;
@@ -1166,22 +1196,25 @@ void render_config_updated(void)
 	render_close_audio();
 	quitting = 0;
 	init_audio();
-	if (!was_paused) {
-		SDL_PauseAudio(0);
-	}
+	render_set_video_standard(video_standard);
 	
 	double lowpass_cutoff = get_lowpass_cutoff(config);
 	double rc = (1.0 / lowpass_cutoff) / (2.0 * M_PI);
 	lock_audio();
 		for (uint8_t i = 0; i < num_audio_sources; i++)
 		{
-			double alpha = audio_sources[i]->dt / (audio_sources[i]->dt + rc);
-			int32_t lowpass_alpha = (int32_t)(((double)0x10000) * alpha);
-			audio_sources[i]->lowpass_alpha = lowpass_alpha;
+			update_source(audio_sources[i], rc, old_sync_to_audio != sync_to_audio);
 		}
 	unlock_audio();
+	for (uint8_t i = 0; i < num_inactive_audio_sources; i++)
+	{
+		update_source(inactive_audio_sources[i], rc, old_sync_to_audio != sync_to_audio);
+	}
 	drain_events();
 	in_toggle = 0;
+	if (!was_paused) {
+		SDL_PauseAudio(0);
+	}
 }
 
 SDL_Window *render_get_window(void)
