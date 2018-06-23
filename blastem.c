@@ -259,7 +259,7 @@ void setup_saves(system_media *media, rom_info *info, system_header *context)
 		//initial save dir was calculated based on lock-on cartridge because that's where the save device is
 		//save directory used for save states should still be located in the normal place
 		free(save_dir);
-		save_dir = get_save_dir(media);
+		parts[0] = save_dir = get_save_dir(media);
 	}
 	if (use_native_states || context->type != SYSTEM_GENESIS) {
 		parts[2] = "quicksave.state";
