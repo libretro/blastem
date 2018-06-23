@@ -51,6 +51,8 @@ void free_rom_info(rom_info *info)
 		free(info->save_buffer);
 		if (info->save_type == SAVE_I2C) {
 			free(info->eeprom_map);
+		} else if (info->save_type == SAVE_NOR) {
+			free(info->nor);
 		}
 	}
 	free(info->map);
@@ -58,7 +60,6 @@ void free_rom_info(rom_info *info)
 	free(info->port2_override);
 	free(info->ext_override);
 	free(info->mouse_mode);
-	free(info->nor);
 }
 
 void cart_serialize(system_header *sys, serialize_buffer *buf)
