@@ -1124,7 +1124,7 @@ static void update_source(audio_source *src, double rc, uint8_t sync_changed)
 	src->lowpass_alpha = lowpass_alpha;
 	if (sync_changed) {
 		uint32_t alloc_size = sync_to_audio ? src->num_channels * buffer_samples : nearest_pow2(min_buffered * 4 * src->num_channels);
-		src->back = realloc(src->back, alloc_size);
+		src->back = realloc(src->back, alloc_size * sizeof(int16_t));
 		if (sync_to_audio) {
 			src->front = malloc(alloc_size * sizeof(int16_t));
 		} else {
