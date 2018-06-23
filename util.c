@@ -359,9 +359,11 @@ uint8_t path_matches_extensions(char *path, char **ext_list, uint32_t num_exts)
 	for (extidx = 0; extidx < num_exts; extidx++)
 	{
 		if (!strcasecmp(ext, ext_list[extidx])) {
+			free(ext);
 			return 1;
 		}
 	}
+	free(ext);
 	return 0;
 }
 
@@ -721,6 +723,7 @@ dir_entry *get_dir_list(char *path, size_t *numret)
 	if (numret) {
 		*numret = pos;
 	}
+	closedir(d);
 	return ret;
 }
 

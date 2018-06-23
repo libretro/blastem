@@ -430,6 +430,7 @@ uint32_t *load_png(uint8_t *buffer, uint32_t buf_size, uint32_t *width, uint32_t
 					}
 					last_line = line_start;
 				}
+				free(decomp_buffer);
 			} else {
 				//skip uncrecognized chunks
 				cur += 4 + chunk_size;
