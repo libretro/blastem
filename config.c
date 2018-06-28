@@ -198,6 +198,7 @@ uint8_t serialize_config_file(tern_node *config, char *path)
 	uint32_t buf_size;
 	char *buffer = serialize_config(config, &buf_size);
 	uint8_t ret = buf_size == fwrite(buffer, 1, buf_size, f);
+	free(buffer);
 	fclose(f);
 	return ret;
 }

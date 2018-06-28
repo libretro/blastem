@@ -468,7 +468,11 @@ static code_ptr get_movem_impl(m68k_options *opts, m68kinst *inst)
 		}
 	}
 	if (opts->num_movem == opts->movem_storage) {
-		opts->movem_storage *= 2;
+		if (!opts->movem_storage) {
+			opts->movem_storage = 4;
+		} else {
+			opts->movem_storage *= 2;
+		}
 		opts->big_movem = realloc(opts->big_movem, sizeof(movem_fun) * opts->movem_storage);
 	}
 	if (!opts->extra_code.cur) {
@@ -1205,6 +1209,7 @@ void m68k_options_free(m68k_options *opts)
 		free(opts->gen.ram_inst_sizes[i]);
 	}
 	free(opts->gen.ram_inst_sizes);
+	free(opts->big_movem);
 	free(opts);
 }
 

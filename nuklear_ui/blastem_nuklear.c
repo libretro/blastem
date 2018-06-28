@@ -616,6 +616,7 @@ void settings_int_input(struct nk_context *context, char *label, char *path, cha
 		len = 11;
 	}
 	memcpy(buffer, curstr, len);
+	memset(buffer+len, 0, sizeof(buffer)-len);
 	nk_edit_string(context, NK_EDIT_SIMPLE, buffer, &len, sizeof(buffer)-1, nk_filter_decimal);
 	buffer[len] = 0;
 	if (strcmp(buffer, curstr)) {
@@ -1068,6 +1069,7 @@ static void texture_init(void)
 		fatal_error("Failed to find default font path\n");
 	}
 	def_font = nk_font_atlas_add_from_memory(atlas, font, font_size, render_height() / 16, NULL);
+	free(font);
 	nk_sdl_font_stash_end();
 	nk_style_set_font(context, &def_font->handle);
 	if (controller_360_buf) {

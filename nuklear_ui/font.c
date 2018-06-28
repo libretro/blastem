@@ -35,6 +35,7 @@ uint8_t *default_font(uint32_t *size_out)
 		goto error;
 	}
 	FILE *f = fopen(path, "rb");
+	free(path);
 	if (!f) {
 		goto error;
 	}
