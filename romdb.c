@@ -608,6 +608,7 @@ void map_iter_fun(char *key, tern_val val, uint8_t valtype, void *data)
 		}
 		if (matching_chunks == 0) {
 			//Nothing mapped in the relevant range for the lock-on cart, ignore this mapping
+			free_rom_info(&lock_info);
 			return;
 		} else if (matching_chunks > 1) {
 			state->info->map_chunks += matching_chunks - 1;
