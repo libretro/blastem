@@ -389,6 +389,7 @@ void init_system_with_media(const char *path, system_type force_stype)
 	game_system->next_context = menu_system;
 	setup_saves(&cart, &info, game_system);
 	update_title(info.name);
+	free(info.name);
 }
 
 int main(int argc, char ** argv)
@@ -620,6 +621,7 @@ int main(int argc, char ** argv)
 	
 		setup_saves(&cart, &info, current_system);
 		update_title(info.name);
+		free(info.name);
 		if (menu) {
 			menu_system = current_system;
 		} else {

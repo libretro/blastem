@@ -1188,7 +1188,9 @@ static void free_genesis(system_header *system)
 {
 	genesis_context *gen = (genesis_context *)system;
 	vdp_free(gen->vdp);
+	memmap_chunk *map = (memmap_chunk *)gen->m68k->options->gen.memmap;
 	m68k_options_free(gen->m68k->options);
+	free(map);//needs to happen after m68k_options_free as that function uses the memory map
 	free(gen->cart);
 	free(gen->m68k);
 	free(gen->work_ram);

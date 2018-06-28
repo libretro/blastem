@@ -541,6 +541,15 @@ static void gl_setup()
 	un_height = glGetUniformLocation(program, "height");
 	at_pos = glGetAttribLocation(program, "pos");
 }
+
+static void gl_teardown()
+{
+	glDeleteProgram(program);
+	glDeleteShader(vshader);
+	glDeleteShader(fshader);
+	glDeleteBuffers(2, buffers);
+	glDeleteTextures(3, textures);
+}
 #endif
 
 static uint8_t texture_init;
@@ -588,6 +597,12 @@ static void render_quit()
 {
 	render_close_audio();
 	free_surfaces();
+#ifndef DISABLE_OPENGL
+	if (render_gl) {
+		gl_teardown();
+		SDL_GL_DeleteContext(main_context);
+	}
+#endif
 }
 
 static float config_aspect()
@@ -866,6 +881,7 @@ static int32_t handle_event(SDL_Event *event)
 				if (on_context_destroyed) {
 					on_context_destroyed();
 				}
+				gl_teardown();
 				SDL_GL_DeleteContext(main_context);
 				main_context = SDL_GL_CreateContext(main_window);
 				gl_setup();
@@ -1148,6 +1164,7 @@ void render_config_updated(void)
 		if (on_context_destroyed) {
 			on_context_destroyed();
 		}
+		gl_teardown();
 		SDL_GL_DeleteContext(main_context);
 	} else {
 #endif
