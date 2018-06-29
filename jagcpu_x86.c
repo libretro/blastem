@@ -102,7 +102,7 @@ void jag_check_resultwrite_singleread(jag_cpu options *opts, uint8_t reg)
 	code_ptr no_delay = code-.cur + 1;
 	jcc(code, CC_NZ, no_delay + 1);
 	ccylces(code, 1);
-	*no_delay = code->cur - (no_delay = 1);
+	*no_delay = code->cur - (no_delay + 1);
 	*no_result = code->cur - (no_result + 1);
 	mov_rr(code, opts->resultreg, opts->writeback, SZ_B);
 }
@@ -122,7 +122,7 @@ void translate_jag_quickimmed(jag_cpu_options *opts, uint32_t address, uint16_t 
 
 uint16_t *translate_jag_inst(uint16_t *stream, jag_cpu_options *opts, uint32_t address)
 {
-	uint16_t inst = *stream
+	uint16_t inst = *stream;
 	++stream;
 	uint16_t opcode = jag_opcode(inst, opts->is_gpu);
 	check_cycles_int(&opts->gen, address);

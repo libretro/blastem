@@ -206,6 +206,7 @@ int main(int argc, char ** argv)
 						}
 					}
 				}
+				fclose(address_log);
 			}
 		} else {
 			char *end;
