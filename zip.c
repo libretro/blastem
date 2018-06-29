@@ -176,8 +176,8 @@ uint8_t *zip_read(zip_file *f, uint32_t index, size_t *out_size)
 			}
 		}
 		break;
-#endif
 	}
+#endif
 	default:
 		free(buf);
 		return NULL;
