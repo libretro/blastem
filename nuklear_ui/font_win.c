@@ -136,6 +136,7 @@ uint8_t *default_font(uint32_t *size_out)
 			free(path);
 		}
 	}
+	free(pref_prefix);
 	free(fonts);
 	free_dir_list(entries, num_entries);
 	if (selected) {

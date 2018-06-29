@@ -255,8 +255,8 @@ int utf8_codepoint(const char **text)
 	if (initial < 0x80) {
 		return initial;
 	}
-	int base;
-	uint8_t extended_bytes;
+	int base = 0;
+	uint8_t extended_bytes = 0;
 	if ((initial & 0xE0) == 0xC0) {
 		base = 0x80;
 		initial &= 0x1F;
@@ -873,6 +873,7 @@ char *read_bundled_file(char *name, uint32_t *sizeret)
 	} else {
 		ret = NULL;
 	}
+	fclose(f);
 	return ret;
 }
 
