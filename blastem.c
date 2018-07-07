@@ -248,9 +248,10 @@ static char *get_save_dir(system_media *media)
 	return save_dir;
 }
 
-void setup_saves(system_media *media, rom_info *info, system_header *context)
+void setup_saves(system_media *media, system_header *context)
 {
 	static uint8_t persist_save_registered;
+	rom_info *info = &context->info;
 	char *save_dir = get_save_dir(info->is_save_lock_on ? media->chain : media);
 	char const *parts[] = {save_dir, PATH_SEP, info->save_type == SAVE_I2C ? "save.eeprom" : info->save_type == SAVE_NOR ? "save.nor" : "save.sram"};
 	free(save_filename);
@@ -281,6 +282,9 @@ void setup_saves(system_media *media, rom_info *info, system_header *context)
 void apply_updated_config(void)
 {
 	render_config_updated();
+	if (current_system && current_system->config_updated) {
+		current_system->config_updated(current_system);
+	}
 }
 
 static void on_drag_drop(const char *filename)
@@ -377,9 +381,8 @@ void init_system_with_media(const char *path, system_type force_stype)
 	if (stype == SYSTEM_UNKNOWN) {
 		fatal_error("Failed to detect system type for %s\n", path);
 	}
-	rom_info info;
 	//allocate new system context
-	game_system = alloc_config_system(stype, &cart, opts, force_region, &info);
+	game_system = alloc_config_system(stype, &cart, opts, force_region);
 	if (!game_system) {
 		fatal_error("Failed to configure emulated machine for %s\n", path);
 	}
@@ -387,9 +390,8 @@ void init_system_with_media(const char *path, system_type force_stype)
 		menu_system->next_context = game_system;
 	}
 	game_system->next_context = menu_system;
-	setup_saves(&cart, &info, game_system);
-	update_title(info.name);
-	free(info.name);
+	setup_saves(&cart, game_system);
+	update_title(game_system->info.name);
 }
 
 int main(int argc, char ** argv)
@@ -613,15 +615,13 @@ int main(int argc, char ** argv)
 		if (stype == SYSTEM_UNKNOWN) {
 			fatal_error("Failed to detect system type for %s\n", romfname);
 		}
-		rom_info info;
-		current_system = alloc_config_system(stype, &cart, menu ? 0 : opts, force_region, &info);
+		current_system = alloc_config_system(stype, &cart, menu ? 0 : opts, force_region);
 		if (!current_system) {
 			fatal_error("Failed to configure emulated machine for %s\n", romfname);
 		}
 	
-		setup_saves(&cart, &info, current_system);
-		update_title(info.name);
-		free(info.name);
+		setup_saves(&cart, current_system);
+		update_title(current_system->info.name);
 		if (menu) {
 			menu_system = current_system;
 		} else {

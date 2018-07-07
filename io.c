@@ -202,7 +202,7 @@ uint8_t io_has_keyboard(sega_io *io)
 
 void process_device(char * device_type, io_port * port)
 {
-	port->device_type = IO_NONE;
+	//assuming that the io_port struct has been zeroed if this is the first time this has been called
 	if (!device_type)
 	{
 		return;
@@ -227,32 +227,42 @@ void process_device(char * device_type, io_port * port)
 		}
 		port->device.pad.gamepad_num = device_type[gamepad_len+2] - '0';
 	} else if(!strncmp(device_type, "mouse", mouse_len)) {
-		port->device_type = IO_MOUSE;
-		port->device.mouse.mouse_num = device_type[mouse_len+1] - '0';
-		port->device.mouse.last_read_x = 0;
-		port->device.mouse.last_read_y = 0;
-		port->device.mouse.cur_x = 0;
-		port->device.mouse.cur_y = 0;
-		port->device.mouse.latched_x = 0;
-		port->device.mouse.latched_y = 0;
-		port->device.mouse.ready_cycle = CYCLE_NEVER;
-		port->device.mouse.tr_counter = 0;
+		if (port->device_type != IO_MOUSE) {
+			port->device_type = IO_MOUSE;
+			port->device.mouse.mouse_num = device_type[mouse_len+1] - '0';
+			port->device.mouse.last_read_x = 0;
+			port->device.mouse.last_read_y = 0;
+			port->device.mouse.cur_x = 0;
+			port->device.mouse.cur_y = 0;
+			port->device.mouse.latched_x = 0;
+			port->device.mouse.latched_y = 0;
+			port->device.mouse.ready_cycle = CYCLE_NEVER;
+			port->device.mouse.tr_counter = 0;
+		}
 	} else if(!strcmp(device_type, "saturn keyboard")) {
-		port->device_type = IO_SATURN_KEYBOARD;
-		port->device.keyboard.read_pos = 0xFF;
-		port->device.keyboard.write_pos = 0;
+		if (port->device_type != IO_SATURN_KEYBOARD) {
+			port->device_type = IO_SATURN_KEYBOARD;
+			port->device.keyboard.read_pos = 0xFF;
+			port->device.keyboard.write_pos = 0;
+		}
 	} else if(!strcmp(device_type, "xband keyboard")) {
-		port->device_type = IO_XBAND_KEYBOARD;
-		port->device.keyboard.read_pos = 0xFF;
-		port->device.keyboard.write_pos = 0;
+		if (port->device_type != IO_XBAND_KEYBOARD) {
+			port->device_type = IO_XBAND_KEYBOARD;
+			port->device.keyboard.read_pos = 0xFF;
+			port->device.keyboard.write_pos = 0;
+		}
 	} else if(!strcmp(device_type, "sega_parallel")) {
-		port->device_type = IO_SEGA_PARALLEL;
-		port->device.stream.data_fd = -1;
-		port->device.stream.listen_fd = -1;
+		if (port->device_type != IO_SEGA_PARALLEL) {
+			port->device_type = IO_SEGA_PARALLEL;
+			port->device.stream.data_fd = -1;
+			port->device.stream.listen_fd = -1;
+		}
 	} else if(!strcmp(device_type, "generic")) {
-		port->device_type = IO_GENERIC;
-		port->device.stream.data_fd = -1;
-		port->device.stream.listen_fd = -1;
+		if (port->device_type != IO_GENERIC) {
+			port->device_type = IO_GENERIC;
+			port->device.stream.data_fd = -1;
+			port->device.stream.listen_fd = -1;
+		}
 	}
 }
 
@@ -308,7 +318,7 @@ void setup_io_devices(tern_node * config, rom_info *rom, sega_io *io)
 	for (int i = 0; i < 3; i++)
 	{
 #ifndef _WIN32
-		if (ports[i].device_type == IO_SEGA_PARALLEL)
+		if (ports[i].device_type == IO_SEGA_PARALLEL && ports[i].device.stream.data_fd == -1)
 		{
 			char *pipe_name = tern_find_path(config, "io\0parallel_pipe\0", TVAL_PTR).ptrval;
 			if (!pipe_name)
@@ -335,7 +345,7 @@ void setup_io_devices(tern_node * config, rom_info *rom, sega_io *io)
 					}
 				}
 			}
-		} else if (ports[i].device_type == IO_GENERIC) {
+		} else if (ports[i].device_type == IO_GENERIC && ports[i].device.stream.data_fd == -1) {
 			char *sock_name = tern_find_path(config, "io\0socket\0", TVAL_PTR).ptrval;
 			if (!sock_name)
 			{
