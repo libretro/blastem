@@ -53,6 +53,8 @@ struct system_header {
 	system_mrel_fun   mouse_motion_relative;
 	system_u8_fun     keyboard_down;
 	system_u8_fun     keyboard_up;
+	system_fun        config_updated;
+	rom_info          info;
 	arena             *arena;
 	char              *next_rom;
 	char              *save_dir;
@@ -77,6 +79,6 @@ struct system_media {
 #define OPT_ADDRESS_LOG (1U << 31U)
 
 system_type detect_system_type(system_media *media);
-system_header *alloc_config_system(system_type stype, system_media *media, uint32_t opts, uint8_t force_region, rom_info *info_out);
+system_header *alloc_config_system(system_type stype, system_media *media, uint32_t opts, uint8_t force_region);
 
 #endif //SYSTEM_H_

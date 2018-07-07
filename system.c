@@ -48,7 +48,7 @@ system_type detect_system_type(system_media *media)
 	return SYSTEM_UNKNOWN;
 }
 
-system_header *alloc_config_system(system_type stype, system_media *media, uint32_t opts, uint8_t force_region, rom_info *info_out)
+system_header *alloc_config_system(system_type stype, system_media *media, uint32_t opts, uint8_t force_region)
 {
 	void *lock_on = NULL;
 	uint32_t lock_on_size = 0;
@@ -59,10 +59,10 @@ system_header *alloc_config_system(system_type stype, system_media *media, uint3
 	switch (stype)
 	{
 	case SYSTEM_GENESIS:
-		return &(alloc_config_genesis(media->buffer, media->size, lock_on, lock_on_size, opts, force_region, info_out))->header;
+		return &(alloc_config_genesis(media->buffer, media->size, lock_on, lock_on_size, opts, force_region))->header;
 #ifndef NO_Z80
 	case SYSTEM_SMS:
-		return &(alloc_configure_sms(media, opts, force_region, info_out))->header;
+		return &(alloc_configure_sms(media, opts, force_region))->header;
 #endif
 	default:
 		return NULL;
