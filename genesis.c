@@ -1190,7 +1190,6 @@ static void free_genesis(system_header *system)
 	vdp_free(gen->vdp);
 	memmap_chunk *map = (memmap_chunk *)gen->m68k->options->gen.memmap;
 	m68k_options_free(gen->m68k->options);
-	free(map);//needs to happen after m68k_options_free as that function uses the memory map
 	free(gen->cart);
 	free(gen->m68k);
 	free(gen->work_ram);
@@ -1199,8 +1198,8 @@ static void free_genesis(system_header *system)
 	free(gen->zram);
 	ym_free(gen->ym);
 	psg_free(gen->psg);
-	free(gen->save_storage);
 	free(gen->header.save_dir);
+	free_rom_info(&gen->header.info);
 	free(gen->lock_on);
 	free(gen);
 }
@@ -1253,6 +1252,12 @@ static void keyboard_up(system_header *system, uint8_t scancode)
 	io_keyboard_up(&gen->io, scancode);
 }
 
+static void config_updated(system_header *system)
+{
+	genesis_context *gen = (genesis_context *)system;
+	setup_io_devices(config, &system->info, &gen->io);
+}
+
 genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on, uint32_t system_opts, uint8_t force_region)
 {
 	static memmap_chunk z80_map[] = {
@@ -1283,7 +1288,9 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	gen->header.mouse_motion_relative = mouse_motion_relative;
 	gen->header.keyboard_down = keyboard_down;
 	gen->header.keyboard_up = keyboard_up;
+	gen->header.config_updated = config_updated;
 	gen->header.type = SYSTEM_GENESIS;
+	gen->header.info = *rom;
 	set_region(gen, rom, force_region);
 
 	gen->vdp = malloc(sizeof(vdp_context));
@@ -1406,7 +1413,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	return gen;
 }
 
-genesis_context *alloc_config_genesis(void *rom, uint32_t rom_size, void *lock_on, uint32_t lock_on_size, uint32_t ym_opts, uint8_t force_region, rom_info *info_out)
+genesis_context *alloc_config_genesis(void *rom, uint32_t rom_size, void *lock_on, uint32_t lock_on_size, uint32_t ym_opts, uint8_t force_region)
 {
 	static memmap_chunk base_map[] = {
 		{0xE00000, 0x1000000, 0xFFFF,   0, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE, NULL,
@@ -1422,9 +1429,9 @@ genesis_context *alloc_config_genesis(void *rom, uint32_t rom_size, void *lock_o
 	if (!rom_db) {
 		rom_db = load_rom_db();
 	}
-	*info_out = configure_rom(rom_db, rom, rom_size, lock_on, lock_on_size, base_map, sizeof(base_map)/sizeof(base_map[0]));
-	rom = info_out->rom;
-	rom_size = info_out->rom_size;
+	rom_info info = configure_rom(rom_db, rom, rom_size, lock_on, lock_on_size, base_map, sizeof(base_map)/sizeof(base_map[0]));
+	rom = info.rom;
+	rom_size = info.rom_size;
 #ifndef BLASTEM_BIG_ENDIAN
 	byteswap_rom(rom_size, rom);
 	if (lock_on) {
@@ -1439,5 +1446,5 @@ genesis_context *alloc_config_genesis(void *rom, uint32_t rom_size, void *lock_o
 	if (!MCLKS_PER_68K) {
 		MCLKS_PER_68K = 7;
 	}
-	return alloc_init_genesis(info_out, rom, lock_on, ym_opts, force_region);
+	return alloc_init_genesis(&info, rom, lock_on, ym_opts, force_region);
 }

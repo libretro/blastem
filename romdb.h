@@ -51,7 +51,7 @@ enum {
 
 typedef struct rom_info rom_info;
 
-#include "backend.h"
+#include "memmap.h"
 
 struct rom_info {
 	char          *name;
@@ -88,6 +88,7 @@ char const *save_type_name(uint8_t save_type);
 //Note: free_rom_info only frees things pointed to by a rom_info struct, not the struct itself
 //this is because rom_info structs are typically stack allocated
 void free_rom_info(rom_info *info);
+typedef struct system_header system_header;
 void cart_serialize(system_header *sys, serialize_buffer *buf);
 void cart_deserialize(deserialize_buffer *buf, void *vcontext);
 

@@ -530,14 +530,20 @@ static void keyboard_up(system_header *system, uint8_t scancode)
 	io_keyboard_up(&sms->io, scancode);
 }
 
-sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t force_region, rom_info *info_out)
+static void config_updated(system_header *system)
 {
-	memset(info_out, 0, sizeof(*info_out));
+	sms_context *sms = (sms_context *)system;
+	setup_io_devices(config, &system->info, &sms->io);
+}
+
+
+sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t force_region)
+{
 	sms_context *sms = calloc(1, sizeof(sms_context));
 	uint32_t rom_size = nearest_pow2(media->size);
 	memmap_chunk memory_map[6];
 	if (media->size > 0xC000)  {
-		info_out->map_chunks = 6;
+		sms->header.info.map_chunks = 6;
 		uint8_t *ram_reg_overlap = sms->ram + sizeof(sms->ram) - 4;
 		memory_map[0] = (memmap_chunk){0x0000, 0x0400,  0xFFFF,             0, 0, MMAP_READ,                        media->buffer, NULL, NULL, NULL, NULL};
 		memory_map[1] = (memmap_chunk){0x0400, 0x4000,  0xFFFF,             0, 0, MMAP_READ|MMAP_PTR_IDX|MMAP_CODE, NULL,     NULL, NULL, NULL, NULL};
@@ -546,21 +552,21 @@ sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t for
 		memory_map[4] = (memmap_chunk){0xC000, 0xFFFC,  sizeof(sms->ram)-1, 0, 0, MMAP_READ|MMAP_WRITE|MMAP_CODE,   sms->ram, NULL, NULL, NULL, NULL};
 		memory_map[5] = (memmap_chunk){0xFFFC, 0x10000, 0x0003,             0, 0, MMAP_READ,                        ram_reg_overlap, NULL, NULL, NULL, mapper_write};
 	} else {
-		info_out->map_chunks = 2;
+		sms->header.info.map_chunks = 2;
 		memory_map[0] = (memmap_chunk){0x0000, 0xC000,  rom_size-1,         0, 0, MMAP_READ,                      media->buffer,  NULL, NULL, NULL, NULL};
 		memory_map[1] = (memmap_chunk){0xC000, 0x10000, sizeof(sms->ram)-1, 0, 0, MMAP_READ|MMAP_WRITE|MMAP_CODE, sms->ram, NULL, NULL, NULL, NULL};
 	};
-	info_out->map = malloc(sizeof(memmap_chunk) * info_out->map_chunks);
-	memcpy(info_out->map, memory_map, sizeof(memmap_chunk) * info_out->map_chunks);
+	sms->header.info.map = malloc(sizeof(memmap_chunk) * sms->header.info.map_chunks);
+	memcpy(sms->header.info.map, memory_map, sizeof(memmap_chunk) * sms->header.info.map_chunks);
 	z80_options *zopts = malloc(sizeof(z80_options));
-	init_z80_opts(zopts, info_out->map, info_out->map_chunks, io_map, 4, 15, 0xFF);
+	init_z80_opts(zopts, sms->header.info.map, sms->header.info.map_chunks, io_map, 4, 15, 0xFF);
 	sms->z80 = init_z80_context(zopts);
 	sms->z80->system = sms;
 	sms->z80->options->gen.debug_cmd_handler = debug_commands;
 	
 	sms->rom = media->buffer;
 	sms->rom_size = rom_size;
-	if (info_out->map_chunks > 2) {
+	if (sms->header.info.map_chunks > 2) {
 		sms->z80->mem_pointers[0] = sms->rom;
 		sms->z80->mem_pointers[1] = sms->rom + 0x4000;
 		sms->z80->mem_pointers[2] = sms->rom + 0x8000;
@@ -579,10 +585,10 @@ sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t for
 	init_vdp_context(sms->vdp, 0);
 	sms->vdp->system = &sms->header;
 	
-	info_out->save_type = SAVE_NONE;
-	info_out->name = strdup(media->name);
+	sms->header.info.save_type = SAVE_NONE;
+	sms->header.info.name = strdup(media->name);
 	
-	setup_io_devices(config, info_out, &sms->io);
+	setup_io_devices(config, &sms->header.info, &sms->io);
 	sms->header.has_keyboard = io_has_keyboard(&sms->io);
 	
 	sms->header.set_speed_percent = set_speed_percent;
@@ -605,6 +611,7 @@ sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t for
 	sms->header.mouse_motion_relative = mouse_motion_relative;
 	sms->header.keyboard_down = keyboard_down;
 	sms->header.keyboard_up = keyboard_up;
+	sms->header.config_updated = config_updated;
 	sms->header.type = SYSTEM_SMS;
 	
 	return sms;
