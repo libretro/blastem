@@ -10,5 +10,8 @@ void render_update_display(void);
 void render_set_ui_render_fun(ui_render_fun);
 void render_set_event_handler(event_handler handler);
 void render_set_gl_context_handlers(ui_render_fun destroy, ui_render_fun create);
+SDL_Joystick *render_get_joystick(int index);
+SDL_GameController *render_get_controller(int index);
+
 
 #endif //RENDER_SDL_H_

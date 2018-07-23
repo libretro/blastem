@@ -805,6 +805,22 @@ static int lowest_unused_joystick_index()
 	return -1;
 }
 
+SDL_Joystick *render_get_joystick(int index)
+{
+	if (index >= MAX_JOYSTICKS) {
+		return NULL;
+	}
+	return joysticks[index];
+}
+
+SDL_GameController *render_get_controller(int index)
+{
+	if (index >= MAX_JOYSTICKS) {
+		return NULL;
+	}
+	return SDL_GameControllerOpen(joystick_sdl_index[index]);
+}
+
 static uint32_t overscan_top[NUM_VID_STD] = {2, 21};
 static uint32_t overscan_bot[NUM_VID_STD] = {1, 17};
 static uint32_t overscan_left[NUM_VID_STD] = {13, 13};
