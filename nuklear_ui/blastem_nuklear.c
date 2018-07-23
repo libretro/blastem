@@ -14,6 +14,7 @@
 #include "../config.h"
 #include "../io.h"
 #include "../png.h"
+#include "../controller_info.h"
 
 static struct nk_context *context;
 
@@ -500,11 +501,14 @@ void view_key_bindings(struct nk_context *context)
 		nk_end(context);
 	}
 }
+
+static int selected_controller;
+static controller_info selected_controller_info;
 static struct nk_image controller_360_image;
 static uint32_t controller_360_width, controller_360_height;
 //#define MIN_BIND_BOX_WIDTH 140
 #define MAX_BIND_BOX_WIDTH 350
-void view_controllers(struct nk_context *context)
+void view_controller_bindings(struct nk_context *context)
 {
 	if (nk_begin(context, "Controller Bindings", nk_rect(0, 0, render_width(), render_height()), NK_WINDOW_NO_SCROLLBAR)) {
 		float orig_height = def_font->handle.height;
@@ -554,13 +558,13 @@ void view_controllers(struct nk_context *context)
 		nk_group_begin(context, "Action Buttons", NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR);
 		float widths[] = {34, bind_box_width - 60};
 		nk_layout_row(context, NK_STATIC, 34, 2, widths);
-		nk_label(context, "A", NK_TEXT_LEFT);
+		nk_label(context, get_button_label(&selected_controller_info, SDL_CONTROLLER_BUTTON_A), NK_TEXT_LEFT);
 		nk_button_label(context, "A");
-		nk_label(context, "B", NK_TEXT_LEFT);
+		nk_label(context, get_button_label(&selected_controller_info, SDL_CONTROLLER_BUTTON_B), NK_TEXT_LEFT);
 		nk_button_label(context, "B");
-		nk_label(context, "X", NK_TEXT_LEFT);
+		nk_label(context, get_button_label(&selected_controller_info, SDL_CONTROLLER_BUTTON_X), NK_TEXT_LEFT);
 		nk_button_label(context, "X");
-		nk_label(context, "Y", NK_TEXT_LEFT);
+		nk_label(context, get_button_label(&selected_controller_info, SDL_CONTROLLER_BUTTON_Y), NK_TEXT_LEFT);
 		nk_button_label(context, "Internal Screenshot");
 		nk_group_end(context);
 		
@@ -578,7 +582,7 @@ void view_controllers(struct nk_context *context)
 		nk_button_label(context, "Left");
 		nk_label(context, "Right", NK_TEXT_LEFT);
 		nk_button_label(context, "Right");
-		nk_label(context, "Click", NK_TEXT_LEFT);
+		nk_label(context, get_button_label(&selected_controller_info, SDL_CONTROLLER_BUTTON_LEFTSTICK), NK_TEXT_LEFT);
 		nk_button_label(context, "None");
 		
 		nk_group_end(context);
@@ -587,6 +591,37 @@ void view_controllers(struct nk_context *context)
 		
 		def_font->handle.height = orig_height;
 		nk_layout_row_static(context, orig_height + 4, (render_width() - 80) / 2, 1);
+		if (nk_button_label(context, "Back")) {
+			pop_view();
+		}
+		nk_end(context);
+	}
+}
+
+void view_controllers(struct nk_context *context)
+{
+	if (nk_begin(context, "Controllers", nk_rect(0, 0, render_width(), render_height()), NK_WINDOW_NO_SCROLLBAR)) {
+		int height = (render_width() - 2*context->style.font->height) / MAX_JOYSTICKS;
+		int image_width = height * controller_360_width / controller_360_height;
+		for (int i = 0; i < MAX_JOYSTICKS; i++)
+		{
+			SDL_Joystick *joy = render_get_joystick(i);
+			if (joy) {
+				controller_info info = get_controller_info(i);
+				nk_layout_row_begin(context, NK_STATIC, height, 2);
+				nk_layout_row_push(context, image_width);
+				nk_image(context, controller_360_image);
+				nk_layout_row_push(context, render_width() - image_width - 2 * context->style.font->height);
+				if (nk_button_label(context, info.name)) {
+					selected_controller = i;
+					selected_controller_info = info;
+					push_view(view_controller_bindings);
+				}
+				nk_layout_row_end(context);
+			}
+		}
+		nk_layout_row_static(context, context->style.font->height, (render_width() - 2 * context->style.font->height) / 2, 2);
+		nk_label(context, "", NK_TEXT_LEFT);
 		if (nk_button_label(context, "Back")) {
 			pop_view();
 		}
