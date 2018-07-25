@@ -58,16 +58,16 @@ char const *labels_xbox[] = {
 	"A", "B", "X", "Y", "Back", NULL, "Start", "Click", "Click", "White", "Black", "LT", "RT"
 };
 char const *labels_360[] = {
-	"A", "B", "X", "Y", "Back", "Guide", "Start", "Click", "Click", "LB", "RB", "LT", "RT"
+	"A", "B", "X", "Y", "Back", "Xbox", "Start", "Click", "Click", "LB", "RB", "LT", "RT"
 };
 static char const *labels_xbone[] = {
-	"A", "B", "X", "Y", "View", "Guide", "Menu", "Click", "Click", "LB", "RB", "LT", "RT"
+	"A", "B", "X", "Y", "View", "Xbox", "Menu", "Click", "Click", "LB", "RB", "LT", "RT"
 };
 static char const *labels_ps3[] = {
-	"cross", "circle", "square", "triangle", "Select", "Guide", "Start", "L3", "R3", "L1", "R1", "L2", "R2"
+	"cross", "circle", "square", "triangle", "Select", "PS", "Start", "L3", "R3", "L1", "R1", "L2", "R2"
 };
 static char const *labels_ps4[] = {
-	"cross", "circle", "square", "triangle", "Share", "Guide", "Options", "L3", "R3", "L1", "R1", "L2", "R2"
+	"cross", "circle", "square", "triangle", "Share", "PS", "Options", "L3", "R3", "L1", "R1", "L2", "R2"
 };
 static char const *labels_nintendo[] = {
 	"B", "A", "Y", "X", "-", "Home", "+", "Click", "Click", "L", "R", "ZL", "ZR"
@@ -108,6 +108,10 @@ static const char** label_source(controller_info *info)
 
 const char *get_button_label(controller_info *info, int button)
 {
+	if (button >= SDL_CONTROLLER_BUTTON_DPAD_UP) {
+		static char const * dirs[] = {"Up", "Down", "Left", "Right"};
+		return dirs[button - SDL_CONTROLLER_BUTTON_DPAD_UP];
+	}
 	return label_source(info)[button];
 }
 
