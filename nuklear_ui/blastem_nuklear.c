@@ -508,6 +508,47 @@ static struct nk_image controller_360_image;
 static uint32_t controller_360_width, controller_360_height;
 //#define MIN_BIND_BOX_WIDTH 140
 #define MAX_BIND_BOX_WIDTH 350
+
+#define AXIS       0x40000000
+#define STICKDIR   0x30000000
+#define LEFTSTICK  0x10000000
+#define RIGHTSTICK 0x20000000
+enum {
+	UP,DOWN,LEFT,RIGHT
+};
+void binding_box(struct nk_context *context, char *name, float x, float y, float width, int num_binds, int *binds)
+{
+	const struct nk_user_font *font = context->style.font;
+	float row_height = font->height * 2;
+	
+	nk_layout_space_push(context, nk_rect(x, y, width, num_binds * (row_height + 4) + 4));
+	nk_group_begin(context, name, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR);
+	
+	char const **labels = calloc(sizeof(char *), num_binds);
+	float max_width = 0.0f;
+	for (int i = 0; i < num_binds; i++)
+	{
+		if (binds[i] & AXIS) {
+			labels[i] = get_axis_label(&selected_controller_info, binds[i] & ~AXIS);
+		} else if (binds[i] & STICKDIR) {
+			static char const * dirs[] = {"Up", "Down", "Left", "Right"};
+			labels[i] = dirs[binds[i] & 3];
+		} else {
+			labels[i] = get_button_label(&selected_controller_info, binds[i]);
+		}
+		float lb_width = font->width(font->userdata, font->height, labels[i], strlen(labels[i]));
+		max_width = max_width < lb_width ? lb_width : max_width;
+	}
+	float widths[] = {max_width + 3, width - (max_width + 6)};
+	nk_layout_row(context, NK_STATIC, row_height, 2, widths);
+	for (int i = 0; i < num_binds; i++)
+	{
+		nk_label(context, labels[i], NK_TEXT_LEFT);
+		nk_button_label(context, i & 1 ? "Internal Screenshot" : "A");
+	}
+	nk_group_end(context);
+}
+
 void view_controller_bindings(struct nk_context *context)
 {
 	if (nk_begin(context, "Controller Bindings", nk_rect(0, 0, render_width(), render_height()), NK_WINDOW_NO_SCROLLBAR)) {
@@ -534,6 +575,7 @@ void view_controller_bindings(struct nk_context *context)
 		float img_left = render_width() / 2.0f - desired_width / 2.0f;
 		float img_top = avail_height / 2.0f - desired_height / 2.0f;
 		float img_right = img_left + desired_width;
+		float img_bot = img_top + desired_height;
 		nk_layout_space_begin(context, NK_STATIC, avail_height, INT_MAX);
 		nk_layout_space_push(context, nk_rect(img_left, img_top, desired_width, desired_height));
 		nk_image(context, controller_360_image);
@@ -554,43 +596,58 @@ void view_controller_bindings(struct nk_context *context)
 			bind_box_left = img_right + (render_width() - img_right) / 2.0f - bind_box_width / 2.0f;
 		}
 		
-		nk_layout_space_push(context, nk_rect(bind_box_left, img_top, bind_box_width, 165));
-		nk_group_begin(context, "Action Buttons", NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR);
-		float widths[] = {34, bind_box_width - 60};
-		nk_layout_row(context, NK_STATIC, 34, 2, widths);
-		nk_label(context, get_button_label(&selected_controller_info, SDL_CONTROLLER_BUTTON_A), NK_TEXT_LEFT);
-		nk_button_label(context, "A");
-		nk_label(context, get_button_label(&selected_controller_info, SDL_CONTROLLER_BUTTON_B), NK_TEXT_LEFT);
-		nk_button_label(context, "B");
-		nk_label(context, get_button_label(&selected_controller_info, SDL_CONTROLLER_BUTTON_X), NK_TEXT_LEFT);
-		nk_button_label(context, "X");
-		nk_label(context, get_button_label(&selected_controller_info, SDL_CONTROLLER_BUTTON_Y), NK_TEXT_LEFT);
-		nk_button_label(context, "Internal Screenshot");
-		nk_group_end(context);
+		binding_box(context, "Action Buttons", bind_box_left, img_top, bind_box_width, 4, (int[]){
+			SDL_CONTROLLER_BUTTON_A,
+			SDL_CONTROLLER_BUTTON_B,
+			SDL_CONTROLLER_BUTTON_X,
+			SDL_CONTROLLER_BUTTON_Y
+		});
+		
+		binding_box(context, "Right Shoulder", bind_box_left, font->height/2, bind_box_width, 2, (int[]){
+			SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
+			AXIS | SDL_CONTROLLER_AXIS_TRIGGERRIGHT
+		});
+		
+		binding_box(context, "Misc Buttons", (render_width() - bind_box_width) / 2, font->height/2, bind_box_width, 3, (int[]){
+			SDL_CONTROLLER_BUTTON_BACK,
+			SDL_CONTROLLER_BUTTON_GUIDE,
+			SDL_CONTROLLER_BUTTON_START
+		});
+		
+		binding_box(context, "Right Stick", img_right - desired_width/3, img_bot, bind_box_width, 5, (int[]){
+			RIGHTSTICK | UP,
+			RIGHTSTICK | DOWN,
+			RIGHTSTICK | LEFT,
+			RIGHTSTICK | RIGHT,
+			SDL_CONTROLLER_BUTTON_RIGHTSTICK
+		});
+		
 		
 		bind_box_left -= img_right;
-		widths[0] += 44;
-		widths[1] -= 44;
-		nk_layout_space_push(context, nk_rect(bind_box_left, img_top, bind_box_width, 205));
-		nk_group_begin(context, "Left Stick", NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR);
-		nk_layout_row(context, NK_STATIC, 34, 2, widths);
-		nk_label(context, "Up", NK_TEXT_LEFT);
-		nk_button_label(context, "Up");
-		nk_label(context, "Down", NK_TEXT_LEFT);
-		nk_button_label(context, "Down");
-		nk_label(context, "Left", NK_TEXT_LEFT);
-		nk_button_label(context, "Left");
-		nk_label(context, "Right", NK_TEXT_LEFT);
-		nk_button_label(context, "Right");
-		nk_label(context, get_button_label(&selected_controller_info, SDL_CONTROLLER_BUTTON_LEFTSTICK), NK_TEXT_LEFT);
-		nk_button_label(context, "None");
+		binding_box(context, "Left Stick", bind_box_left, img_top, bind_box_width, 5, (int[]){
+			LEFTSTICK | UP,
+			LEFTSTICK | DOWN,
+			LEFTSTICK | LEFT,
+			LEFTSTICK | RIGHT,
+			SDL_CONTROLLER_BUTTON_LEFTSTICK
+		});
 		
-		nk_group_end(context);
+		binding_box(context, "Left Shoulder", bind_box_left, font->height/2, bind_box_width, 2, (int[]){
+			SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
+			AXIS | SDL_CONTROLLER_AXIS_TRIGGERLEFT
+		});
+		
+		binding_box(context, "D-pad", img_left - desired_width/6, img_bot + font->height * 1.5, bind_box_width, 4, (int[]){
+			SDL_CONTROLLER_BUTTON_DPAD_UP,
+			SDL_CONTROLLER_BUTTON_DPAD_DOWN,
+			SDL_CONTROLLER_BUTTON_DPAD_LEFT,
+			SDL_CONTROLLER_BUTTON_DPAD_RIGHT
+		});
 		
 		nk_layout_space_end(context);
 		
 		def_font->handle.height = orig_height;
-		nk_layout_row_static(context, orig_height + 4, (render_width() - 80) / 2, 1);
+		nk_layout_row_static(context, orig_height + 4, (render_width() - 2*orig_height) / 4, 1);
 		if (nk_button_label(context, "Back")) {
 			pop_view();
 		}
