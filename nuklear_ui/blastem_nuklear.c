@@ -516,16 +516,33 @@ static uint32_t controller_360_width, controller_360_height;
 enum {
 	UP,DOWN,LEFT,RIGHT
 };
-void binding_box(struct nk_context *context, char *name, float x, float y, float width, int num_binds, int *binds)
+
+static char * config_ps_names[] = {
+	[SDL_CONTROLLER_BUTTON_A] = "cross",
+	[SDL_CONTROLLER_BUTTON_B] = "circle",
+	[SDL_CONTROLLER_BUTTON_X] = "square",
+	[SDL_CONTROLLER_BUTTON_Y] = "triangle",
+	[SDL_CONTROLLER_BUTTON_BACK] = "share",
+	[SDL_CONTROLLER_BUTTON_START] = "options",
+	[SDL_CONTROLLER_BUTTON_LEFTSHOULDER] = "l1",
+	[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = "r1",
+	[SDL_CONTROLLER_BUTTON_LEFTSTICK] = "l3",
+	[SDL_CONTROLLER_BUTTON_RIGHTSTICK] = "r3",
+};
+
+static void binding_box(struct nk_context *context, char *name, float x, float y, float width, int num_binds, int *binds)
 {
 	const struct nk_user_font *font = context->style.font;
 	float row_height = font->height * 2;
 	
-	nk_layout_space_push(context, nk_rect(x, y, width, num_binds * (row_height + 4) + 4));
-	nk_group_begin(context, name, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR);
-	
 	char const **labels = calloc(sizeof(char *), num_binds);
+	char **conf_keys = calloc(sizeof(char *), num_binds);
 	float max_width = 0.0f;
+	
+	static const char base_path[] = "bindings\0pads";
+	static const char buttons[] = "buttons";
+	char padkey[] = {'0' + selected_controller, 0};
+	int skipped = 0;
 	for (int i = 0; i < num_binds; i++)
 	{
 		if (binds[i] & AXIS) {
@@ -535,16 +552,37 @@ void binding_box(struct nk_context *context, char *name, float x, float y, float
 			labels[i] = dirs[binds[i] & 3];
 		} else {
 			labels[i] = get_button_label(&selected_controller_info, binds[i]);
+			char template[] = "bindings\0pads\00\0buttons\0";
+			const char *but_name = SDL_GameControllerGetStringForButton(binds[i]);
+			size_t namelen = strlen(but_name);
+			conf_keys[i] = malloc(sizeof(base_path) + sizeof(padkey) + sizeof(buttons) + namelen + 2);
+			memcpy(conf_keys[i], base_path, sizeof(base_path));
+			memcpy(conf_keys[i] + sizeof(base_path), padkey, sizeof(padkey));
+			memcpy(conf_keys[i] + sizeof(base_path) + sizeof(padkey), buttons, sizeof(buttons));
+			
+			memcpy(conf_keys[i] + sizeof(base_path) + sizeof(padkey) + sizeof(buttons), but_name, namelen+1);
+			conf_keys[i][sizeof(base_path) + sizeof(padkey) + sizeof(buttons) + namelen + 1] = 0;
+		}
+		if (!labels[i]) {
+			skipped++;
+			continue;
 		}
 		float lb_width = font->width(font->userdata, font->height, labels[i], strlen(labels[i]));
 		max_width = max_width < lb_width ? lb_width : max_width;
 	}
+	nk_layout_space_push(context, nk_rect(x, y, width, (num_binds - skipped) * (row_height + 4) + 4));
+	nk_group_begin(context, name, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR);
+	
 	float widths[] = {max_width + 3, width - (max_width + 6)};
 	nk_layout_row(context, NK_STATIC, row_height, 2, widths);
 	for (int i = 0; i < num_binds; i++)
 	{
+		if (!labels[i]) {
+			continue;
+		}
 		nk_label(context, labels[i], NK_TEXT_LEFT);
 		nk_button_label(context, i & 1 ? "Internal Screenshot" : "A");
+		free(conf_keys[i]);
 	}
 	nk_group_end(context);
 }
@@ -655,6 +693,43 @@ void view_controller_bindings(struct nk_context *context)
 	}
 }
 
+void controller_type_group(struct nk_context *context, char *name, int type_id, int first_subtype_id, const char **types, uint32_t num_types)
+{
+	nk_layout_row_static(context, (context->style.font->height + 3) * num_types + context->style.font->height, render_width() - 80, 1);
+	if (nk_group_begin(context, name, NK_WINDOW_TITLE)) {
+		nk_layout_row_static(context, context->style.font->height, render_width()/2 - 80, 2);
+		for (int i = 0; i < num_types; i++)
+		{
+			if (nk_button_label(context, types[i])) {
+				selected_controller_info.subtype = first_subtype_id + i;
+				save_controller_info(selected_controller, &selected_controller_info);
+				pop_view();
+				push_view(view_controller_bindings);
+			}
+		}
+		nk_group_end(context);
+	}
+}
+
+void view_controller_type(struct nk_context *context)
+{
+	if (nk_begin(context, "Controller Type", nk_rect(0, 0, render_width(), render_height()), 0)) {
+		controller_type_group(context, "Xbox", TYPE_XBOX, SUBTYPE_XBOX, (const char *[]){
+			"Original", "Xbox 360", "Xbox One"
+		}, 3);
+		controller_type_group(context, "Playstation", TYPE_PSX, SUBTYPE_PS3, (const char *[]){
+			"PS3", "PS4"
+		}, 2);
+		controller_type_group(context, "Sega", TYPE_SEGA, SUBTYPE_GENESIS, (const char *[]){
+			"Genesis", "Saturn"
+		}, 2);
+		controller_type_group(context, "Nintendo", TYPE_NINTENDO, SUBTYPE_WIIU, (const char *[]){
+			"WiiU", "Switch"
+		}, 2);
+		nk_end(context);
+	}
+}
+
 void view_controllers(struct nk_context *context)
 {
 	if (nk_begin(context, "Controllers", nk_rect(0, 0, render_width(), render_height()), NK_WINDOW_NO_SCROLLBAR)) {
@@ -667,12 +742,21 @@ void view_controllers(struct nk_context *context)
 				controller_info info = get_controller_info(i);
 				nk_layout_row_begin(context, NK_STATIC, height, 2);
 				nk_layout_row_push(context, image_width);
-				nk_image(context, controller_360_image);
+				if (info.type == TYPE_UNKNOWN || info.type == TYPE_GENERIC_MAPPING) {
+					nk_label(context, "?", NK_TEXT_CENTERED);
+				} else {
+					nk_image(context, controller_360_image);
+				}
 				nk_layout_row_push(context, render_width() - image_width - 2 * context->style.font->height);
 				if (nk_button_label(context, info.name)) {
 					selected_controller = i;
 					selected_controller_info = info;
-					push_view(view_controller_bindings);
+					if (info.type == TYPE_UNKNOWN || info.type == TYPE_GENERIC_MAPPING) {
+						push_view(view_controller_type);
+					} else {
+						push_view(view_controller_bindings);
+					}
+					
 				}
 				nk_layout_row_end(context);
 			}
