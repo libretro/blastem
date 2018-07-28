@@ -22,13 +22,15 @@ enum {
 	SUBTYPE_WIIU,
 	SUBTYPE_SWITCH,
 	SUBTYPE_GENESIS,
-	SUBTYPE_SATURN
+	SUBTYPE_SATURN,
+	SUBTYPE_NUM
 };
 
 enum {
 	VARIANT_NORMAL,
 	VARIANT_6B_BUMPERS, //C and Z positions are RB and LB respectively
-	VARIANT_6B_RIGHT //C and Z positions are RT and RB respectively
+	VARIANT_6B_RIGHT, //C and Z positions are RT and RB respectively
+	VARIANT_NUM
 };
 
 typedef struct {
@@ -41,5 +43,6 @@ typedef struct {
 controller_info get_controller_info(int index);
 const char *get_button_label(controller_info *info, int button);
 const char *get_axis_label(controller_info *info, int axis);
+void save_controller_info(int joystick, controller_info *info);
 
 #endif //CONTROLLER_INFO_H_

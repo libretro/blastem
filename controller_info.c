@@ -1,13 +1,14 @@
 #include <string.h>
 #include "render_sdl.h"
 #include "controller_info.h"
+#include "config.h"
 
 typedef struct {
 	char const      *name;
 	controller_info info;
 } heuristic;
 
-heuristic heuristics[] = {
+static heuristic heuristics[] = {
 	//TODO: Add more heuristic rules
 	{"DualShock 4", {.type = TYPE_PSX, .subtype = SUBTYPE_PS4}},
 	{"PS4", {.type = TYPE_PSX, .subtype = SUBTYPE_PS4}},
@@ -24,15 +25,97 @@ heuristic heuristics[] = {
 };
 const uint32_t num_heuristics = sizeof(heuristics)/sizeof(*heuristics);
 
+static tern_node *info_config;
+static uint8_t loaded;
+static const char *subtype_names[] = {
+	"unknown",
+	"xbox",
+	"xbox 360",
+	"xbone",
+	"ps2",
+	"ps3",
+	"ps4",
+	"wiiu",
+	"switch",
+	"genesis",
+	"saturn"
+};
+static const char *variant_names[] = {
+	"normal",
+	"6b bumpers",
+	"6b right"
+};
 controller_info get_controller_info(int joystick)
 {
+	if (!loaded) {
+		info_config = load_overrideable_config("controller_types.cfg", "controller_types.cfg");
+		loaded = 1;
+	}
+	char guid_string[33];
+	SDL_Joystick *stick = render_get_joystick(joystick);
 	SDL_GameController *control = render_get_controller(joystick);
+	SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(stick), guid_string, sizeof(guid_string));
+	tern_node *info = tern_find_node(info_config, guid_string);
+	if (info) {
+		controller_info res;
+		char *subtype = tern_find_ptr(info, "subtype");
+		res.subtype = SUBTYPE_UNKNOWN;
+		if (subtype) {
+			for (int i = 0; i < SUBTYPE_NUM; i++)
+			{
+				if (!strcmp(subtype_names[i], subtype)) {
+					res.subtype = i;
+					break;
+				}
+			}
+		}
+		switch (res.subtype)
+		{
+		case SUBTYPE_XBOX:
+		case SUBTYPE_X360:
+		case SUBTYPE_XBONE:
+			res.type = TYPE_XBOX;
+			break;
+		case SUBTYPE_PS2:
+		case SUBTYPE_PS3:
+		case SUBTYPE_PS4:
+			res.type = TYPE_PSX;
+			break;
+		case SUBTYPE_WIIU:
+		case SUBTYPE_SWITCH:
+			res.type = TYPE_NINTENDO;
+			break;
+		case SUBTYPE_GENESIS:
+		case SUBTYPE_SATURN:
+			res.type = TYPE_SEGA;
+			break;
+		default:
+			res.type = TYPE_UNKNOWN;
+			break;
+		}
+		char *variant = tern_find_ptr(info, "variant");
+		res.variant = VARIANT_NORMAL;
+		if (variant) {
+			for (int i = 0; i < VARIANT_NUM; i++)
+			{
+				if (!strcmp(variant_names[i], variant)) {
+					res.variant = i;
+					break;
+				}
+			}
+		}
+		res.name = control ? SDL_GameControllerName(control) : SDL_JoystickName(stick);
+		if (control) {
+			SDL_GameControllerClose(control);
+		}
+		return res;
+	}
 	if (!control) {
 		return (controller_info) {
 			.type = TYPE_UNKNOWN,
 			.subtype = SUBTYPE_UNKNOWN,
 			.variant = VARIANT_NORMAL,
-			.name = SDL_JoystickName(render_get_joystick(joystick))
+			.name = SDL_JoystickName(stick)
 		};
 	}
 	const char *name = SDL_GameControllerName(control);
@@ -52,6 +135,18 @@ controller_info get_controller_info(int joystick)
 		.variant = VARIANT_NORMAL,
 		.name = name
 	};
+}
+
+void save_controller_info(int joystick, controller_info *info)
+{
+	char guid_string[33];
+	SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(render_get_joystick(joystick)), guid_string, sizeof(guid_string));
+	tern_node *existing = tern_find_node(info_config, guid_string);
+	existing = tern_insert_ptr(existing, "subtype", (void *)subtype_names[info->subtype]);
+	existing = tern_insert_ptr(existing, "variant",  (void *)variant_names[info->variant]);
+	info_config = tern_insert_node(info_config, guid_string, existing);
+	persist_config_at(info_config, "controller_types.cfg");
+	
 }
 
 char const *labels_xbox[] = {

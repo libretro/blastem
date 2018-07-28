@@ -70,11 +70,7 @@ endif #PORTABLE
 endif #Windows
 
 ifdef DEBUG
-ifeq ($(OS),Darwin)
 OPT:=-g3 -O0
-else
-OPT:=-g3 -Og
-endif #Darwin
 else
 ifdef NOLTO
 OPT:=-O2
