@@ -216,11 +216,33 @@ tern_node *parse_bundled_config(char *config_name)
 	return ret;
 }
 
-tern_node *load_config()
+tern_node *load_overrideable_config(char *name, char *bundled_name)
 {
 	char const *confdir = get_config_dir();
 	char *confpath = NULL;
 	tern_node *ret;
+	if (confdir) {
+		confpath = path_append(confdir, name);
+		ret = parse_config_file(confpath);
+		if (ret) {
+			free(confpath);
+			return ret;
+		}
+	}
+
+	ret = parse_bundled_config(bundled_name);
+	if (ret) {
+		free(confpath);
+		return ret;
+	}
+	return NULL;
+}
+
+tern_node *load_config()
+{
+	char const *confdir = get_config_dir();
+	char *confpath = NULL;
+	tern_node *ret = load_overrideable_config("blastem.cfg", "default.cfg");
 	if (confdir) {
 		confpath = path_append(confdir, "blastem.cfg");
 		ret = parse_config_file(confpath);
@@ -236,8 +258,8 @@ tern_node *load_config()
 		return ret;
 	}
 
-	if (confpath) {
-		fatal_error("Failed to find a config file at %s or in the blastem executable directory\n", confpath);
+	if (get_config_dir()) {
+		fatal_error("Failed to find a config file at %s or in the blastem executable directory\n", get_config_dir());
 	} else {
 		fatal_error("Failed to find a config file in the BlastEm executable directory and the config directory path could not be determined\n");
 	}
@@ -245,18 +267,23 @@ tern_node *load_config()
 	return NULL;
 }
 
-void persist_config(tern_node *config)
+void persist_config_at(tern_node *config, char *fname)
 {
 	char const *confdir = get_config_dir();
 	if (!confdir) {
 		fatal_error("Failed to locate config file directory\n");
 	}
 	ensure_dir_exists(confdir);
-	char *confpath = path_append(confdir, "blastem.cfg");
+	char *confpath = path_append(confdir, fname);
 	if (!serialize_config_file(config, confpath)) {
 		fatal_error("Failed to write config to %s\n", confpath);
 	}
 	free(confpath);
+}
+
+void persist_config(tern_node *config)
+{
+	persist_config_at(config, "blastem.cfg");
 }
 
 char **get_extension_list(tern_node *config, uint32_t *num_exts_out)
