@@ -44,5 +44,6 @@ controller_info get_controller_info(int index);
 const char *get_button_label(controller_info *info, int button);
 const char *get_axis_label(controller_info *info, int axis);
 void save_controller_info(int joystick, controller_info *info);
+void save_controller_mapping(int joystick, char *mapping_string);
 
 #endif //CONTROLLER_INFO_H_

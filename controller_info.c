@@ -149,6 +149,16 @@ void save_controller_info(int joystick, controller_info *info)
 	
 }
 
+void save_controller_mapping(int joystick, char *mapping_string)
+{
+	char guid_string[33];
+	SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(render_get_joystick(joystick)), guid_string, sizeof(guid_string));
+	tern_node *existing = tern_find_node(info_config, guid_string);
+	existing = tern_insert_ptr(existing, "mapping", mapping_string);
+	info_config = tern_insert_node(info_config, guid_string, existing);
+	persist_config_at(info_config, "controller_types.cfg");
+}
+
 char const *labels_xbox[] = {
 	"A", "B", "X", "Y", "Back", NULL, "Start", "Click", "Click", "White", "Black", "LT", "RT"
 };

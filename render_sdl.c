@@ -846,7 +846,7 @@ static int32_t handle_event(SDL_Event *event)
 		handle_joyup(find_joystick_index(event->jbutton.which), event->jbutton.button);
 		break;
 	case SDL_JOYHATMOTION:
-		handle_joy_dpad(find_joystick_index(event->jbutton.which), event->jhat.hat, event->jhat.value);
+		handle_joy_dpad(find_joystick_index(event->jhat.which), event->jhat.hat, event->jhat.value);
 		break;
 	case SDL_JOYAXISMOTION:
 		handle_joy_axis(find_joystick_index(event->jaxis.which), event->jaxis.axis, event->jaxis.value);
