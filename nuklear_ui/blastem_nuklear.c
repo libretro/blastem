@@ -693,6 +693,67 @@ void view_controller_bindings(struct nk_context *context)
 	}
 }
 
+static int current_button;
+static int button_pressed, last_button;
+static int hat_moved, hat_value, last_hat, last_hat_value;
+static char *mapping_string;
+static size_t mapping_pos;
+void view_controller_mappings(struct nk_context *context)
+{
+	char buffer[512];
+	uint8_t added_mapping = 0;
+	if (nk_begin(context, "Controllers", nk_rect(0, 0, render_width(), render_height()), NK_WINDOW_NO_SCROLLBAR)) {
+		nk_layout_row_static(context, render_height() - context->style.font->height, render_width() - context->style.font->height, 1);
+		snprintf(buffer, sizeof(buffer), "Press Button %s", get_button_label(&selected_controller_info, current_button));
+		nk_label(context, buffer, NK_TEXT_CENTERED);
+		if (button_pressed >= 0 && button_pressed != last_button) {
+			mapping_string[mapping_pos++] = ',';
+			const char *name = SDL_GameControllerGetStringForButton(current_button);
+			size_t namesz = strlen(name);
+			memcpy(mapping_string + mapping_pos, name, namesz);
+			mapping_pos += namesz;
+			mapping_string[mapping_pos++] = ':';
+			mapping_string[mapping_pos++] = 'b';
+			if (button_pressed > 9) {
+				mapping_string[mapping_pos++] = '0' + button_pressed / 10;
+			}
+			mapping_string[mapping_pos++] = '0' + button_pressed % 10;
+			added_mapping = 1;
+			last_button = button_pressed;
+		}
+		else if (hat_moved >= 0 && hat_value && (hat_moved != last_hat || hat_value != last_hat_value)) {
+			mapping_string[mapping_pos++] = ',';
+			const char *name = SDL_GameControllerGetStringForButton(current_button);
+			size_t namesz = strlen(name);
+			memcpy(mapping_string + mapping_pos, name, namesz);
+			mapping_pos += namesz;
+			mapping_string[mapping_pos++] = ':';
+			mapping_string[mapping_pos++] = 'h';
+			mapping_string[mapping_pos++] = '0' + hat_moved;
+			mapping_string[mapping_pos++] = '.';
+			mapping_string[mapping_pos++] = '0' + hat_value;
+			added_mapping = 1;
+			
+			last_hat = hat_moved;
+			last_hat_value = hat_value;
+		}
+		if (added_mapping) {
+			current_button++;
+			if (current_button == SDL_CONTROLLER_BUTTON_MAX) {
+				mapping_string[mapping_pos] = 0;
+				save_controller_mapping(selected_controller, mapping_string);
+				free(mapping_string);
+				pop_view();
+				push_view(view_controller_bindings);
+				
+			}
+		}
+		button_pressed = -1;
+		hat_moved = -1;
+		nk_end(context);
+	}
+}
+
 void controller_type_group(struct nk_context *context, char *name, int type_id, int first_subtype_id, const char **types, uint32_t num_types)
 {
 	nk_layout_row_static(context, (context->style.font->height + 3) * num_types + context->style.font->height, render_width() - 80, 1);
@@ -703,8 +764,27 @@ void controller_type_group(struct nk_context *context, char *name, int type_id, 
 			if (nk_button_label(context, types[i])) {
 				selected_controller_info.subtype = first_subtype_id + i;
 				save_controller_info(selected_controller, &selected_controller_info);
+				selected_controller_info = get_controller_info(selected_controller);
 				pop_view();
-				push_view(view_controller_bindings);
+				SDL_GameController *controller = render_get_controller(selected_controller);
+				if (controller) {
+					push_view(view_controller_bindings);
+					SDL_GameControllerClose(controller);
+				} else {
+					current_button = SDL_CONTROLLER_BUTTON_A;
+					button_pressed = -1;
+					last_button = -1;
+					SDL_Joystick *joy = render_get_joystick(selected_controller);
+					const char *name = SDL_JoystickName(joy);
+					size_t namesz = strlen(name);
+					mapping_string = malloc(512 + namesz);
+					SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(joy), mapping_string, 33);
+					mapping_string[32] = ',';
+					memcpy(mapping_string + 33, name, namesz);
+					mapping_pos = 33+namesz;
+					
+					push_view(view_controller_mappings);
+				}
 			}
 		}
 		nk_group_end(context);
@@ -1224,6 +1304,13 @@ static void handle_event(SDL_Event *event)
 {
 	if (event->type == SDL_KEYDOWN) {
 		keycode = event->key.keysym.sym;
+	}
+	else if (event->type == SDL_JOYBUTTONDOWN) {
+		button_pressed = event->jbutton.button;
+	}
+	else if (event->type == SDL_JOYHATMOTION) {
+		hat_moved = event->jhat.which;
+		hat_value = event->jhat.value;
 	}
 	nk_sdl_handle_event(event);
 }
