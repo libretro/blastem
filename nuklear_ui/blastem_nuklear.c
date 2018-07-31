@@ -694,25 +694,42 @@ void view_controller_bindings(struct nk_context *context)
 }
 
 static int current_button;
+static int current_axis;
 static int button_pressed, last_button;
 static int hat_moved, hat_value, last_hat, last_hat_value;
+static int axis_moved, axis_value, last_axis;
 static char *mapping_string;
 static size_t mapping_pos;
-void view_controller_mappings(struct nk_context *context)
+
+static void start_mapping(void)
+{
+	const char *name;
+	mapping_string[mapping_pos++] = ',';
+	if (current_button != SDL_CONTROLLER_BUTTON_MAX) {
+		name = SDL_GameControllerGetStringForButton(current_button);
+	} else {
+		name = SDL_GameControllerGetStringForAxis(current_axis);
+	}
+	size_t namesz = strlen(name);
+	memcpy(mapping_string + mapping_pos, name, namesz);
+	mapping_pos += namesz;
+	mapping_string[mapping_pos++] = ':';
+}
+
+static void view_controller_mappings(struct nk_context *context)
 {
 	char buffer[512];
 	uint8_t added_mapping = 0;
 	if (nk_begin(context, "Controllers", nk_rect(0, 0, render_width(), render_height()), NK_WINDOW_NO_SCROLLBAR)) {
 		nk_layout_row_static(context, render_height() - context->style.font->height, render_width() - context->style.font->height, 1);
-		snprintf(buffer, sizeof(buffer), "Press Button %s", get_button_label(&selected_controller_info, current_button));
+		if (current_button < SDL_CONTROLLER_BUTTON_MAX) {
+			snprintf(buffer, sizeof(buffer), "Press Button %s", get_button_label(&selected_controller_info, current_button));
+		} else {
+			snprintf(buffer, sizeof(buffer), "Move Axis %s", get_axis_label(&selected_controller_info, current_axis));
+		}
 		nk_label(context, buffer, NK_TEXT_CENTERED);
 		if (button_pressed >= 0 && button_pressed != last_button) {
-			mapping_string[mapping_pos++] = ',';
-			const char *name = SDL_GameControllerGetStringForButton(current_button);
-			size_t namesz = strlen(name);
-			memcpy(mapping_string + mapping_pos, name, namesz);
-			mapping_pos += namesz;
-			mapping_string[mapping_pos++] = ':';
+			start_mapping();
 			mapping_string[mapping_pos++] = 'b';
 			if (button_pressed > 9) {
 				mapping_string[mapping_pos++] = '0' + button_pressed / 10;
@@ -720,14 +737,8 @@ void view_controller_mappings(struct nk_context *context)
 			mapping_string[mapping_pos++] = '0' + button_pressed % 10;
 			added_mapping = 1;
 			last_button = button_pressed;
-		}
-		else if (hat_moved >= 0 && hat_value && (hat_moved != last_hat || hat_value != last_hat_value)) {
-			mapping_string[mapping_pos++] = ',';
-			const char *name = SDL_GameControllerGetStringForButton(current_button);
-			size_t namesz = strlen(name);
-			memcpy(mapping_string + mapping_pos, name, namesz);
-			mapping_pos += namesz;
-			mapping_string[mapping_pos++] = ':';
+		} else if (hat_moved >= 0 && hat_value && (hat_moved != last_hat || hat_value != last_hat_value)) {
+			start_mapping();
 			mapping_string[mapping_pos++] = 'h';
 			mapping_string[mapping_pos++] = '0' + hat_moved;
 			mapping_string[mapping_pos++] = '.';
@@ -736,20 +747,36 @@ void view_controller_mappings(struct nk_context *context)
 			
 			last_hat = hat_moved;
 			last_hat_value = hat_value;
+		} else if (axis_moved >= 0 && abs(axis_value) > 1000 && axis_moved != last_axis) {
+			start_mapping();
+			mapping_string[mapping_pos++] = 'a';
+			if (axis_moved > 9) {
+				mapping_string[mapping_pos++] = '0' + axis_moved / 10;
+			}
+			mapping_string[mapping_pos++] = '0' + axis_moved % 10;
+			added_mapping = 1;
+			last_axis = axis_moved;
 		}
 		if (added_mapping) {
-			current_button++;
-			if (current_button == SDL_CONTROLLER_BUTTON_MAX) {
-				mapping_string[mapping_pos] = 0;
-				save_controller_mapping(selected_controller, mapping_string);
-				free(mapping_string);
-				pop_view();
-				push_view(view_controller_bindings);
-				
+			if (current_button < SDL_CONTROLLER_BUTTON_MAX) {
+				current_button++;
+				if (current_button == SDL_CONTROLLER_BUTTON_MAX) {
+					current_axis = 0;
+				}
+			} else {
+				current_axis++;
+				if (current_axis == SDL_CONTROLLER_AXIS_MAX) {
+					mapping_string[mapping_pos] = 0;
+					save_controller_mapping(selected_controller, mapping_string);
+					free(mapping_string);
+					pop_view();
+					push_view(view_controller_bindings);
+				}
 			}
 		}
 		button_pressed = -1;
 		hat_moved = -1;
+		axis_moved = -1;
 		nk_end(context);
 	}
 }
@@ -774,6 +801,9 @@ void controller_type_group(struct nk_context *context, char *name, int type_id, 
 					current_button = SDL_CONTROLLER_BUTTON_A;
 					button_pressed = -1;
 					last_button = -1;
+					last_hat = -1;
+					axis_moved = -1;
+					last_axis = -1;
 					SDL_Joystick *joy = render_get_joystick(selected_controller);
 					const char *name = SDL_JoystickName(joy);
 					size_t namesz = strlen(name);
@@ -1309,8 +1339,14 @@ static void handle_event(SDL_Event *event)
 		button_pressed = event->jbutton.button;
 	}
 	else if (event->type == SDL_JOYHATMOTION) {
-		hat_moved = event->jhat.which;
+		hat_moved = event->jhat.hat;
 		hat_value = event->jhat.value;
+	}
+	else if (event->type == SDL_JOYAXISMOTION) {
+		if (event->jaxis.axis == axis_moved || abs(event->jaxis.value) > abs(axis_value) || abs(event->jaxis.value) > 1000) {
+			axis_moved = event->jaxis.axis;
+			axis_value = event->jaxis.value;
+		}
 	}
 	nk_sdl_handle_event(event);
 }
