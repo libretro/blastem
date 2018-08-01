@@ -716,7 +716,7 @@ static void start_mapping(void)
 	mapping_string[mapping_pos++] = ':';
 }
 
-#define QUIET_FRAMES 5
+#define QUIET_FRAMES 9
 static void view_controller_mappings(struct nk_context *context)
 {
 	char buffer[512];
