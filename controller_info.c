@@ -2,6 +2,7 @@
 #include "render_sdl.h"
 #include "controller_info.h"
 #include "config.h"
+#include "util.h"
 
 typedef struct {
 	char const      *name;
@@ -150,14 +151,19 @@ static void mappings_iter(char *key, tern_val val, uint8_t valtype, void *data)
 	}
 	char *mapping = tern_find_ptr(val.ptrval, "mapping");
 	if (mapping) {
-		SDL_GameControllerAddMapping(mapping);
+		const char *parts[] = {key, ",", mapping};
+		char * full = alloc_concat_m(3, parts);
+		SDL_GameControllerAddMapping(full);
+		free(full);
 	}
 }
 
 void controller_add_mappings(void)
 {
 	load_ctype_config();
-	tern_foreach(info_config, mappings_iter, NULL);
+	if (info_config) {
+		tern_foreach(info_config, mappings_iter, NULL);
+	}
 }
 
 void save_controller_info(int joystick, controller_info *info)
