@@ -839,10 +839,14 @@ static void view_controller_variant(struct nk_context *context)
 			const char *name = SDL_JoystickName(joy);
 			size_t namesz = strlen(name);
 			mapping_string = malloc(512 + namesz);
-			SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(joy), mapping_string, 33);
-			mapping_string[32] = ',';
-			memcpy(mapping_string + 33, name, namesz);
-			mapping_pos = 33+namesz;
+			for (mapping_pos = 0; mapping_pos < namesz; mapping_pos++)
+			{
+				char c = name[mapping_pos];
+				if (c == ',' || c == '\n' || c == '\r') {
+					c = ' ';
+				}
+				mapping_string[mapping_pos] = c;
+			}
 			
 			push_view(view_controller_mappings);
 		}
