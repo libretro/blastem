@@ -45,12 +45,18 @@ static const char *variant_names[] = {
 	"6b bumpers",
 	"6b right"
 };
-controller_info get_controller_info(int joystick)
+
+static void load_ctype_config(void)
 {
 	if (!loaded) {
 		info_config = load_overrideable_config("controller_types.cfg", "controller_types.cfg");
 		loaded = 1;
 	}
+}
+
+controller_info get_controller_info(int joystick)
+{
+	load_ctype_config();
 	char guid_string[33];
 	SDL_Joystick *stick = render_get_joystick(joystick);
 	SDL_GameController *control = render_get_controller(joystick);
@@ -135,6 +141,23 @@ controller_info get_controller_info(int joystick)
 		.variant = VARIANT_NORMAL,
 		.name = name
 	};
+}
+
+static void mappings_iter(char *key, tern_val val, uint8_t valtype, void *data)
+{
+	if (valtype != TVAL_NODE) {
+		return;
+	}
+	char *mapping = tern_find_ptr(val.ptrval, "mapping");
+	if (mapping) {
+		SDL_GameControllerAddMapping(mapping);
+	}
+}
+
+void controller_add_mappings(void)
+{
+	load_ctype_config();
+	tern_foreach(info_config, mappings_iter, NULL);
 }
 
 void save_controller_info(int joystick, controller_info *info)
