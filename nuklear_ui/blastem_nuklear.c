@@ -716,9 +716,11 @@ static void start_mapping(void)
 	mapping_string[mapping_pos++] = ':';
 }
 
+#define QUIET_FRAMES 5
 static void view_controller_mappings(struct nk_context *context)
 {
 	char buffer[512];
+	static int quiet;
 	uint8_t added_mapping = 0;
 	if (nk_begin(context, "Controllers", nk_rect(0, 0, render_width(), render_height()), NK_WINDOW_NO_SCROLLBAR)) {
 		nk_layout_row_static(context, render_height() - context->style.font->height, render_width() - context->style.font->height, 1);
@@ -728,36 +730,42 @@ static void view_controller_mappings(struct nk_context *context)
 			snprintf(buffer, sizeof(buffer), "Move Axis %s", get_axis_label(&selected_controller_info, current_axis));
 		}
 		nk_label(context, buffer, NK_TEXT_CENTERED);
-		if (button_pressed >= 0 && button_pressed != last_button) {
-			start_mapping();
-			mapping_string[mapping_pos++] = 'b';
-			if (button_pressed > 9) {
-				mapping_string[mapping_pos++] = '0' + button_pressed / 10;
+		if (quiet) {
+			--quiet;
+		} else {
+			if (button_pressed >= 0 && button_pressed != last_button) {
+				start_mapping();
+				mapping_string[mapping_pos++] = 'b';
+				if (button_pressed > 9) {
+					mapping_string[mapping_pos++] = '0' + button_pressed / 10;
+				}
+				mapping_string[mapping_pos++] = '0' + button_pressed % 10;
+				added_mapping = 1;
+				last_button = button_pressed;
+			} else if (hat_moved >= 0 && hat_value && (hat_moved != last_hat || hat_value != last_hat_value)) {
+				start_mapping();
+				mapping_string[mapping_pos++] = 'h';
+				mapping_string[mapping_pos++] = '0' + hat_moved;
+				mapping_string[mapping_pos++] = '.';
+				mapping_string[mapping_pos++] = '0' + hat_value;
+				added_mapping = 1;
+				
+				last_hat = hat_moved;
+				last_hat_value = hat_value;
+			} else if (axis_moved >= 0 && abs(axis_value) > 1000 && axis_moved != last_axis) {
+				start_mapping();
+				mapping_string[mapping_pos++] = 'a';
+				if (axis_moved > 9) {
+					mapping_string[mapping_pos++] = '0' + axis_moved / 10;
+				}
+				mapping_string[mapping_pos++] = '0' + axis_moved % 10;
+				added_mapping = 1;
+				last_axis = axis_moved;
 			}
-			mapping_string[mapping_pos++] = '0' + button_pressed % 10;
-			added_mapping = 1;
-			last_button = button_pressed;
-		} else if (hat_moved >= 0 && hat_value && (hat_moved != last_hat || hat_value != last_hat_value)) {
-			start_mapping();
-			mapping_string[mapping_pos++] = 'h';
-			mapping_string[mapping_pos++] = '0' + hat_moved;
-			mapping_string[mapping_pos++] = '.';
-			mapping_string[mapping_pos++] = '0' + hat_value;
-			added_mapping = 1;
-			
-			last_hat = hat_moved;
-			last_hat_value = hat_value;
-		} else if (axis_moved >= 0 && abs(axis_value) > 1000 && axis_moved != last_axis) {
-			start_mapping();
-			mapping_string[mapping_pos++] = 'a';
-			if (axis_moved > 9) {
-				mapping_string[mapping_pos++] = '0' + axis_moved / 10;
-			}
-			mapping_string[mapping_pos++] = '0' + axis_moved % 10;
-			added_mapping = 1;
-			last_axis = axis_moved;
 		}
+			
 		if (added_mapping) {
+			quiet = QUIET_FRAMES;
 			if (current_button < SDL_CONTROLLER_BUTTON_MAX) {
 				current_button++;
 				if (current_button == SDL_CONTROLLER_BUTTON_MAX) {
@@ -781,7 +789,67 @@ static void view_controller_mappings(struct nk_context *context)
 	}
 }
 
-void controller_type_group(struct nk_context *context, char *name, int type_id, int first_subtype_id, const char **types, uint32_t num_types)
+static void view_controller_variant(struct nk_context *context)
+{
+	uint8_t selected = 0;
+	if (nk_begin(context, "Controller Type", nk_rect(0, 0, render_width(), render_height()), 0)) {
+		nk_layout_row_static(context, context->style.font->height*1.25, render_width() - context->style.font->height * 2, 1);
+		nk_label(context, "", NK_TEXT_CENTERED);
+		nk_label(context, "Select the layout that", NK_TEXT_CENTERED);
+		nk_label(context, "best matches your controller", NK_TEXT_CENTERED);
+		nk_label(context, "", NK_TEXT_CENTERED);
+		if (nk_button_label(context, "4 face buttons")) {
+			selected_controller_info.variant = VARIANT_NORMAL;
+			selected = 1;
+		}
+		char buffer[512];
+		snprintf(buffer, sizeof(buffer), "6 face buttons including %s and %s", 
+			get_button_label(&selected_controller_info, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER), 
+			get_axis_label(&selected_controller_info, SDL_CONTROLLER_AXIS_TRIGGERRIGHT)
+		);
+		if (nk_button_label(context, buffer)) {
+			selected_controller_info.variant = VARIANT_6B_RIGHT;
+			selected = 1;
+		}
+		snprintf(buffer, sizeof(buffer), "6 face buttons including %s and %s", 
+			get_button_label(&selected_controller_info, SDL_CONTROLLER_BUTTON_LEFTSHOULDER), 
+			get_button_label(&selected_controller_info, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
+		);
+		if (nk_button_label(context, buffer)) {
+			selected_controller_info.variant = VARIANT_6B_BUMPERS;
+			selected = 1;
+		}
+		nk_end(context);
+	}
+	if (selected) {
+		save_controller_info(selected_controller, &selected_controller_info);
+		pop_view();
+		SDL_GameController *controller = render_get_controller(selected_controller);
+		if (controller) {
+			push_view(view_controller_bindings);
+			SDL_GameControllerClose(controller);
+		} else {
+			current_button = SDL_CONTROLLER_BUTTON_A;
+			button_pressed = -1;
+			last_button = -1;
+			last_hat = -1;
+			axis_moved = -1;
+			last_axis = -1;
+			SDL_Joystick *joy = render_get_joystick(selected_controller);
+			const char *name = SDL_JoystickName(joy);
+			size_t namesz = strlen(name);
+			mapping_string = malloc(512 + namesz);
+			SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(joy), mapping_string, 33);
+			mapping_string[32] = ',';
+			memcpy(mapping_string + 33, name, namesz);
+			mapping_pos = 33+namesz;
+			
+			push_view(view_controller_mappings);
+		}
+	}
+}
+
+static void controller_type_group(struct nk_context *context, char *name, int type_id, int first_subtype_id, const char **types, uint32_t num_types)
 {
 	nk_layout_row_static(context, (context->style.font->height + 3) * num_types + context->style.font->height, render_width() - 80, 1);
 	if (nk_group_begin(context, name, NK_WINDOW_TITLE)) {
@@ -789,32 +857,10 @@ void controller_type_group(struct nk_context *context, char *name, int type_id, 
 		for (int i = 0; i < num_types; i++)
 		{
 			if (nk_button_label(context, types[i])) {
+				selected_controller_info.type = type_id;
 				selected_controller_info.subtype = first_subtype_id + i;
-				save_controller_info(selected_controller, &selected_controller_info);
-				selected_controller_info = get_controller_info(selected_controller);
 				pop_view();
-				SDL_GameController *controller = render_get_controller(selected_controller);
-				if (controller) {
-					push_view(view_controller_bindings);
-					SDL_GameControllerClose(controller);
-				} else {
-					current_button = SDL_CONTROLLER_BUTTON_A;
-					button_pressed = -1;
-					last_button = -1;
-					last_hat = -1;
-					axis_moved = -1;
-					last_axis = -1;
-					SDL_Joystick *joy = render_get_joystick(selected_controller);
-					const char *name = SDL_JoystickName(joy);
-					size_t namesz = strlen(name);
-					mapping_string = malloc(512 + namesz);
-					SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(joy), mapping_string, 33);
-					mapping_string[32] = ',';
-					memcpy(mapping_string + 33, name, namesz);
-					mapping_pos = 33+namesz;
-					
-					push_view(view_controller_mappings);
-				}
+				push_view(view_controller_variant);
 			}
 		}
 		nk_group_end(context);
