@@ -16,6 +16,7 @@
 #include "ppm.h"
 #include "png.h"
 #include "config.h"
+#include "controller_info.h"
 
 #ifndef DISABLE_OPENGL
 #include <GL/glew.h>
@@ -1140,6 +1141,8 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 		free(db_data);
 		printf("Added %d game controller mappings from gamecontrollerdb.txt\n", added);
 	}
+	
+	controller_add_mappings();
 	
 	SDL_JoystickEventState(SDL_ENABLE);
 	
