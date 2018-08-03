@@ -79,6 +79,10 @@ void handle_mouse_moved(int mouse, uint16_t x, uint16_t y, int16_t deltax, int16
 {
 }
 
+void controller_add_mappings()
+{
+}
+
 tern_node * config;
 int headless = 0;
 
