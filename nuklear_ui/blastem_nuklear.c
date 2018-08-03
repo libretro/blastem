@@ -541,26 +541,59 @@ static void binding_box(struct nk_context *context, char *name, float x, float y
 	
 	static const char base_path[] = "bindings\0pads";
 	static const char buttons[] = "buttons";
+	static const char dpads[] = "dpads\00";
+	static const char axes[] = "axes";
+	static const char positive[] = ".positive";
+	static const char negative[] = ".negative";
 	char padkey[] = {'0' + selected_controller, 0};
 	int skipped = 0;
 	for (int i = 0; i < num_binds; i++)
 	{
 		if (binds[i] & AXIS) {
 			labels[i] = get_axis_label(&selected_controller_info, binds[i] & ~AXIS);
+			const char *axname = SDL_GameControllerGetStringForAxis(binds[i] & ~AXIS);
+			size_t namelen = strlen(axname);
+			conf_keys[i] = malloc(sizeof(base_path) + sizeof(padkey) + sizeof(axes) + namelen + 2);
+			memcpy(conf_keys[i], base_path, sizeof(base_path));
+			memcpy(conf_keys[i] + sizeof(base_path), padkey, sizeof(padkey));
+			memcpy(conf_keys[i] + sizeof(base_path) + sizeof(padkey), axes, sizeof(axes));
+			memcpy(conf_keys[i] + sizeof(base_path) + sizeof(padkey) + sizeof(axes), axname, namelen+1);
+			conf_keys[i][sizeof(base_path) + sizeof(padkey) + sizeof(axes) + namelen + 1] = 0;
 		} else if (binds[i] & STICKDIR) {
 			static char const * dirs[] = {"Up", "Down", "Left", "Right"};
 			labels[i] = dirs[binds[i] & 3];
-		} else {
-			labels[i] = get_button_label(&selected_controller_info, binds[i]);
-			char template[] = "bindings\0pads\00\0buttons\0";
-			const char *but_name = SDL_GameControllerGetStringForButton(binds[i]);
-			size_t namelen = strlen(but_name);
-			conf_keys[i] = malloc(sizeof(base_path) + sizeof(padkey) + sizeof(buttons) + namelen + 2);
+			uint8_t is_pos = (binds[i] & 3) == 3 || !(binds[i] & 3);
+			int sdl_axis = (binds[i] & LEFTSTICK ? SDL_CONTROLLER_AXIS_LEFTX : SDL_CONTROLLER_AXIS_RIGHTX) + !(binds[i] & 2);
+			const char *axname = SDL_GameControllerGetStringForAxis(sdl_axis);
+			size_t namelen = strlen(axname);
+			conf_keys[i] = malloc(sizeof(base_path) + sizeof(padkey) + sizeof(axes) + namelen + sizeof(positive) + 1);
 			memcpy(conf_keys[i], base_path, sizeof(base_path));
 			memcpy(conf_keys[i] + sizeof(base_path), padkey, sizeof(padkey));
-			memcpy(conf_keys[i] + sizeof(base_path) + sizeof(padkey), buttons, sizeof(buttons));
+			memcpy(conf_keys[i] + sizeof(base_path) + sizeof(padkey), axes, sizeof(axes));
+			memcpy(conf_keys[i] + sizeof(base_path) + sizeof(padkey) + sizeof(axes), axname, namelen);
+			memcpy(conf_keys[i] + sizeof(base_path) + sizeof(padkey) + sizeof(axes) + namelen, is_pos ? positive : negative, sizeof(positive));
+			conf_keys[i][sizeof(base_path) + sizeof(padkey) + sizeof(axes) + namelen + sizeof(positive)] = 0;
+		} else {
+			labels[i] = get_button_label(&selected_controller_info, binds[i]);
+			static const char* dpdirs[] = {"up", "down", "left", "right"};
+			const char *but_name, *mid;
+			size_t midsz;
+			if (binds[i] < SDL_CONTROLLER_BUTTON_DPAD_UP) {
+				but_name = SDL_GameControllerGetStringForButton(binds[i]);
+				mid = buttons;
+				midsz = sizeof(buttons);
+			} else {
+				but_name = dpdirs[binds[i] - SDL_CONTROLLER_BUTTON_DPAD_UP];
+				mid = dpads;
+				midsz = sizeof(dpads);
+			}
+			size_t namelen = strlen(but_name);
+			conf_keys[i] = malloc(sizeof(base_path) + sizeof(padkey) + midsz + namelen + 2);
+			memcpy(conf_keys[i], base_path, sizeof(base_path));
+			memcpy(conf_keys[i] + sizeof(base_path), padkey, sizeof(padkey));
+			memcpy(conf_keys[i] + sizeof(base_path) + sizeof(padkey), mid, midsz);
 			
-			memcpy(conf_keys[i] + sizeof(base_path) + sizeof(padkey) + sizeof(buttons), but_name, namelen+1);
+			memcpy(conf_keys[i] + sizeof(base_path) + sizeof(padkey) + midsz, but_name, namelen+1);
 			conf_keys[i][sizeof(base_path) + sizeof(padkey) + sizeof(buttons) + namelen + 1] = 0;
 		}
 		if (!labels[i]) {
@@ -581,7 +614,17 @@ static void binding_box(struct nk_context *context, char *name, float x, float y
 			continue;
 		}
 		nk_label(context, labels[i], NK_TEXT_LEFT);
-		nk_button_label(context, i & 1 ? "Internal Screenshot" : "A");
+		if (conf_keys[i]) {
+			char *assigned = tern_find_path(config, conf_keys[i], TVAL_PTR).ptrval;
+			if (!assigned) {
+				assigned = "None";
+			} else if (!memcmp("gamepads.", assigned, strlen("gamepads."))) {
+				assigned += strlen("gamepads.0.");
+			}
+			nk_button_label(context, assigned);
+		} else {
+			nk_button_label(context, i & 1 ? "Internal Screenshot" : "A");
+		}
 		free(conf_keys[i]);
 	}
 	nk_group_end(context);
