@@ -62,6 +62,10 @@ void handle_mouseup(int mouse, int button)
 {
 }
 
+void controller_add_mappings()
+{
+}
+
 int headless = 0;
 
 #define CYCLE_LIMIT MCLKS_NTSC/60
