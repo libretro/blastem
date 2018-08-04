@@ -46,5 +46,6 @@ const char *get_axis_label(controller_info *info, int axis);
 void save_controller_info(int joystick, controller_info *info);
 void save_controller_mapping(int joystick, char *mapping_string);
 void controller_add_mappings(void);
+char *make_controller_type_key(controller_info *info);
 
 #endif //CONTROLLER_INFO_H_
