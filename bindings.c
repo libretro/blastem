@@ -8,6 +8,7 @@
 #include "genesis.h"
 #include "menu.h"
 #include "bindings.h"
+#include "controller_info.h"
 #ifndef DISABLE_NUKLEAR
 #include "nuklear_ui/blastem_nuklear.h"
 #endif
@@ -502,13 +503,13 @@ void bindings_reacquire_capture(void)
 	}
 }
 
-int parse_binding_target(char * target, tern_node * padbuttons, tern_node *mousebuttons, uint8_t * subtype_a, uint8_t * subtype_b)
+int parse_binding_target(int device_num, char * target, tern_node * padbuttons, tern_node *mousebuttons, uint8_t * subtype_a, uint8_t * subtype_b)
 {
 	const int gpadslen = strlen("gamepads.");
 	const int mouselen = strlen("mouse.");
 	if (!strncmp(target, "gamepads.", gpadslen)) {
-		if (target[gpadslen] >= '1' && target[gpadslen] <= '8') {
-			int padnum = target[gpadslen] - '0';
+		int padnum = target[gpadslen] == 'n' ? device_num + 1 : target[gpadslen] - '0';
+		if (padnum >= 1 && padnum <= 8) {
 			int button = tern_find_int(padbuttons, target + gpadslen + 1, 0);
 			if (button) {
 				*subtype_a = padnum;
@@ -525,8 +526,8 @@ int parse_binding_target(char * target, tern_node * padbuttons, tern_node *mouse
 			warning("Gamepad mapping string '%s' refers to an invalid gamepad number %c\n", target, target[gpadslen]);
 		}
 	} else if(!strncmp(target, "mouse.", mouselen)) {
-		if (target[mouselen] >= '1' && target[mouselen] <= '8') {
-			int mousenum = target[mouselen] - '0';
+		int mousenum = target[mouselen] == 'n' ? device_num + 1 : target[mouselen] - '0';
+		if (mousenum >= 1 && mousenum <= 8) {
 			int button = tern_find_int(mousebuttons, target + mouselen + 1, 0);
 			if (button) {
 				*subtype_a = mousenum;
@@ -615,7 +616,7 @@ void process_keys(tern_node * cur, tern_node * special, tern_node * padbuttons, 
 		}
 		char * target = cur->straight.value.ptrval;
 		uint8_t subtype_a = 0, subtype_b = 0;
-		int bindtype = parse_binding_target(target, padbuttons, mousebuttons, &subtype_a, &subtype_b);
+		int bindtype = parse_binding_target(0, target, padbuttons, mousebuttons, &subtype_a, &subtype_b);
 		bind_key(keycode, bindtype, subtype_a, subtype_b);
 	}
 	process_keys(cur->left, special, padbuttons, mousebuttons, prefix);
@@ -691,7 +692,7 @@ void process_mouse_button(char *buttonstr, tern_val value, uint8_t valtype, void
 	}
 	buttonnum--;
 	uint8_t subtype_a = 0, subtype_b = 0;
-	int bindtype = parse_binding_target(value.ptrval, state->padbuttons, state->mousebuttons, &subtype_a, &subtype_b);
+	int bindtype = parse_binding_target(state->mouseidx, value.ptrval, state->padbuttons, state->mousebuttons, &subtype_a, &subtype_b);
 	mice[state->mouseidx].buttons[buttonnum].bind_type = bindtype;
 	mice[state->mouseidx].buttons[buttonnum].subtype_a = subtype_a;
 	mice[state->mouseidx].buttons[buttonnum].subtype_b = subtype_b;
@@ -716,7 +717,7 @@ void process_mouse(char *mousenum, tern_val value, uint8_t valtype, void *data)
 	char *motion = tern_find_ptr(mousedef, "motion");
 	if (motion) {
 		uint8_t subtype_a = 0, subtype_b = 0;
-		int bindtype = parse_binding_target(motion, padbuttons, mousebuttons, &subtype_a, &subtype_b);
+		int bindtype = parse_binding_target(mouseidx, motion, padbuttons, mousebuttons, &subtype_a, &subtype_b);
 		mice[mouseidx].motion.bind_type = bindtype;
 		mice[mouseidx].motion.subtype_a = subtype_a;
 		mice[mouseidx].motion.subtype_b = subtype_b;
@@ -745,7 +746,7 @@ void process_pad_button(char *key, tern_val val, uint8_t valtype, void *data)
 		return;
 	}
 	uint8_t subtype_a = 0, subtype_b = 0;
-	int bindtype = parse_binding_target(val.ptrval, state->padbuttons, state->mousebuttons, &subtype_a, &subtype_b);
+	int bindtype = parse_binding_target(hostpadnum, val.ptrval, state->padbuttons, state->mousebuttons, &subtype_a, &subtype_b);
 	char *end;
 	long hostbutton = strtol(key, &end, 10);
 	if (*end) {
@@ -781,7 +782,7 @@ void process_pad_axis(char *key, tern_val val, uint8_t valtype, void *data)
 		return;
 	}
 	uint8_t subtype_a = 0, subtype_b = 0;
-	int bindtype = parse_binding_target(val.ptrval, state->padbuttons, state->mousebuttons, &subtype_a, &subtype_b);
+	int bindtype = parse_binding_target(hostpadnum, val.ptrval, state->padbuttons, state->mousebuttons, &subtype_a, &subtype_b);
 	char *modifier = strchr(key, '.');
 	int positive = 1;
 	if (modifier) {
@@ -866,6 +867,20 @@ void handle_joy_added(int joystick)
 		char numstr[11];
 		sprintf(numstr, "%d", joystick);
 		tern_node * pad = tern_find_node(pads, numstr);
+		if (!pad) {
+			char *type_id = render_joystick_type_id(joystick);
+			pad = tern_find_node(pads, type_id);
+			free(type_id);
+		}
+		if (!pad) {
+			controller_info info = get_controller_info(joystick);
+			char *key = make_controller_type_key(&info);
+			pad = tern_find_node(pads, key);
+			free(key);
+		}
+		if (!pad) {
+			pad = tern_find_node(pads, "default");
+		}
 		if (pad) {
 			tern_node * dpad_node = tern_find_node(pad, "dpads");
 			if (dpad_node) {
@@ -881,7 +896,7 @@ void handle_joy_added(int joystick)
 						char * target = tern_find_ptr(pad_dpad, dirs[dir]);
 						if (target) {
 							uint8_t subtype_a = 0, subtype_b = 0;
-							int bindtype = parse_binding_target(target, get_pad_buttons(), get_mouse_buttons(), &subtype_a, &subtype_b);
+							int bindtype = parse_binding_target(joystick, target, get_pad_buttons(), get_mouse_buttons(), &subtype_a, &subtype_b);
 							bind_dpad(joystick, dpad, dirnums[dir], bindtype, subtype_a, subtype_b);
 						}
 					}

@@ -107,6 +107,7 @@ int32_t render_translate_input_name(int32_t controller, char *name, uint8_t is_a
 int32_t render_dpad_part(int32_t input);
 int32_t render_axis_part(int32_t input);
 uint8_t render_direction_part(int32_t input);
+char* render_joystick_type_id(int index);
 void render_errorbox(char *title, char *message);
 void render_warnbox(char *title, char *message);
 void render_infobox(char *title, char *message);

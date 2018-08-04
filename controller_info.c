@@ -261,3 +261,37 @@ const char *get_axis_label(controller_info *info, int axis)
 	}
 }
 
+char *make_controller_type_key(controller_info *info)
+{
+	const char *subtype;
+	if (info->subtype == SUBTYPE_UNKNOWN) {
+		switch(info->type)
+		{
+		case TYPE_XBOX:
+			subtype = subtype_names[SUBTYPE_X360];
+			break;
+		case TYPE_PSX:
+			subtype = subtype_names[SUBTYPE_PS4];
+			break;
+		case TYPE_NINTENDO:
+			subtype = subtype_names[SUBTYPE_SWITCH];
+			break;
+		default:
+			subtype = "unknown";
+		}
+	} else {
+		subtype = subtype_names[info->subtype];
+	}
+	const char *variant = variant_names[info->variant];
+	const char *parts[] = {subtype, "_", variant};
+	char *ret = alloc_concat_m(3, parts);
+	for (char *cur = ret; *cur; cur++)
+	{
+		if (*cur == ' ')
+		{
+			*cur = '_';
+		}
+	}
+	return ret;
+}
+
