@@ -814,6 +814,17 @@ SDL_Joystick *render_get_joystick(int index)
 	return joysticks[index];
 }
 
+char* render_joystick_type_id(int index)
+{
+	SDL_Joystick *stick = render_get_joystick(index);
+	if (!stick) {
+		return NULL;
+	}
+	char *guid_string = malloc(33);
+	SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(stick), guid_string, 33);
+	return guid_string;
+}
+
 SDL_GameController *render_get_controller(int index)
 {
 	if (index >= MAX_JOYSTICKS) {
