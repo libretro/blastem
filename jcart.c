@@ -41,7 +41,7 @@ uint16_t jcart_read_w(uint32_t address, void *context)
 	io_port *ports = get_ports(m68k);
 	//according to Eke, bit 14 is forced low, at least on the Micro Machines 2 cart
 	//TODO: Test behavior of actual cart
-	uint16_t value = io_data_read(ports, m68k->current_cycle) << 8/;
+	uint16_t value = io_data_read(ports, m68k->current_cycle) << 8;
 	value |= io_data_read(ports + 1, m68k->current_cycle);
 	return value;
 }
