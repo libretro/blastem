@@ -12,6 +12,7 @@
 #include "sega_mapper.h"
 #include "multi_game.h"
 #include "megawifi.h"
+#include "jcart.h"
 #include "blastem.h"
 
 #define DOM_TITLE_START 0x120
@@ -819,6 +820,13 @@ void map_iter_fun(char *key, tern_val val, uint8_t valtype, void *data)
 			warning("ROM uses MegaWiFi, but it is disabled\n");
 			return;
 		}
+	} else if (!strcmp(dtype, "jcart")) {
+		state->info->mapper_type = MAPPER_JCART;
+		map->write_16 = jcart_write_w;
+		map->write_8 = jcart_write_b;
+		map->read_16 = jcart_read_w;
+		map->read_8 = jcart_read_b;
+		map->mask = 0xFFFFFF;
 	} else {
 		fatal_error("Invalid device type %s for ROM DB map entry %d with address %s\n", dtype, state->index, key);
 	}

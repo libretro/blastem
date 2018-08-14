@@ -17,6 +17,7 @@
 #include "gdb_remote.h"
 #include "saves.h"
 #include "bindings.h"
+#include "jcart.h"
 #define MCLKS_NTSC 53693175
 #define MCLKS_PAL  53203395
 
@@ -330,6 +331,9 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			io_adjust_cycles(gen->io.ports, context->current_cycle, deduction);
 			io_adjust_cycles(gen->io.ports+1, context->current_cycle, deduction);
 			io_adjust_cycles(gen->io.ports+2, context->current_cycle, deduction);
+			if (gen->mapper_type == MAPPER_JCART) {
+				jcart_adjust_cycles(gen, deduction);
+			}
 			context->current_cycle -= deduction;
 			z80_adjust_cycles(z_context, deduction);
 			gen->ym->current_cycle -= deduction;
@@ -1208,12 +1212,18 @@ static void gamepad_down(system_header *system, uint8_t gamepad_num, uint8_t but
 {
 	genesis_context *gen = (genesis_context *)system;
 	io_gamepad_down(&gen->io, gamepad_num, button);
+	if (gen->mapper_type == MAPPER_JCART) {
+		jcart_gamepad_down(gen, gamepad_num, button);
+	}
 }
 
 static void gamepad_up(system_header *system, uint8_t gamepad_num, uint8_t button)
 {
 	genesis_context *gen = (genesis_context *)system;
 	io_gamepad_up(&gen->io, gamepad_num, button);
+	if (gen->mapper_type == MAPPER_JCART) {
+		jcart_gamepad_up(gen, gamepad_num, button);
+	}
 }
 
 static void mouse_down(system_header *system, uint8_t mouse_num, uint8_t button)
