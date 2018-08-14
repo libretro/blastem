@@ -1215,6 +1215,21 @@ df7a2527875317406b466175f0614d343dd32117 {
 		}
 	}
 }
+2a561b6e47c93272fe5947084837d9f6f514ed38 {
+	name Squirrel King
+	map {
+		0 {
+			device ROM
+			last 3FFFFF
+		}
+		400000 {
+			device RAM
+			size 2
+			bus both
+			last 7FFFFF
+		}
+	}
+}
 
 #This entry is used by the GUI ROM
 BlstMenu {
