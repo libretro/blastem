@@ -114,15 +114,29 @@ static io_port *find_keyboard(sega_io *io)
 	return NULL;
 }
 
+void io_port_gamepad_down(io_port *port, uint8_t button)
+{
+	gp_button_def *def = button_defs + button;
+	port->input[def->states[0]] |= def->value;
+	if (def->states[1] != GAMEPAD_NONE) {
+		port->input[def->states[1]] |= def->value;
+	}
+}
+
+void io_port_gamepad_up(io_port *port, uint8_t button)
+{
+	gp_button_def *def = button_defs + button;
+	port->input[def->states[0]] &= ~def->value;
+	if (def->states[1] != GAMEPAD_NONE) {
+		port->input[def->states[1]] &= ~def->value;
+	}
+}
+
 void io_gamepad_down(sega_io *io, uint8_t gamepad_num, uint8_t button)
 {
 	io_port *port = find_gamepad(io, gamepad_num);
 	if (port) {
-		gp_button_def *def = button_defs + button;
-		port->input[def->states[0]] |= def->value;
-		if (def->states[1] != GAMEPAD_NONE) {
-			port->input[def->states[1]] |= def->value;
-		}
+		io_port_gamepad_down(port, button);
 	}
 }
 
@@ -130,11 +144,7 @@ void io_gamepad_up(sega_io *io, uint8_t gamepad_num, uint8_t button)
 {
 	io_port *port = find_gamepad(io, gamepad_num);
 	if (port) {
-		gp_button_def *def = button_defs + button;
-		port->input[def->states[0]] &= ~def->value;
-		if (def->states[1] != GAMEPAD_NONE) {
-			port->input[def->states[1]] &= ~def->value;
-		}
+		io_port_gamepad_up(port, button);
 	}
 }
 
