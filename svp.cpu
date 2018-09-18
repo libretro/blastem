@@ -1,0 +1,545 @@
+info
+	prefix svp_
+	opcode_size 16
+	body svp_run_op
+	
+regs
+	internal 16 scratch1 x y scratch2 st pad pc
+	a 32
+	stack 16 stack0 stack1 stack2 stack3 stack4 stack5
+	stackidx 8
+	p 32
+	external 16 pm0 pm1 pm2 xst pm4 ext5 pmc
+	pointers0 8 r0 r1 r2 r3 
+	pointers1 8 r4 r5 r6 r7
+	iram 16 1024
+	ram0 16 256
+	ram1 16 256
+	zflag 8
+	nflag 8
+	rpl 16
+	
+flags
+	register st
+	Z 13 zero zflag
+	N 15 sign nflag
+	R 0-2 none rpl
+	
+svp_pop
+	mov stack.stackidx dst
+	add 1 stackidx stackidx
+	switch stackidx
+	case 6
+	mov 0 stackidx
+	end
+	
+svp_push
+	arg src 16
+	add -1 stackidx stackidx
+	switch stackidx
+	case -1
+	mov 5 stackidx
+	end
+	mov src stack.stackidx
+	
+svp_ram_read
+	arg mode 16
+	arg banki 16
+	arg regi 16
+	local idx 16
+	
+	switch banki
+	case 0
+	meta bank ram0
+	meta reg pointers0.regi
+	
+	default
+	meta bank ram1
+	meta reg pointers1.regi
+	end
+	
+	mov reg idx
+	switch mode
+	case 0
+	meta modestr ""
+	
+	case 1
+	meta modestr +!
+	add 1 reg reg
+	
+	case 2
+	#loop decremenet
+	meta modestr -
+	mov reg tmp
+	switch rpl
+		case 0
+		sub 1 reg reg
+		
+		default
+		lsl 1 rpl rpl
+		sub 1 rpl rpl
+		local mask 16
+		not rpl mask
+		and reg mask reg
+		sub 1 tmp tmp
+		and rpl tmp tmp
+		or rpl reg reg
+		
+		end
+	
+	case 3
+	#loop increment
+	meta modestr +
+	
+	and 7 st rpl
+	switch rpl
+		case 0
+		sub 1 reg reg
+		
+		default
+		mov reg tmp
+		lsl 1 rpl rpl
+		sub 1 rpl rpl
+		local mask 16
+		not rpl mask
+		and reg mask reg
+		add 1 tmp tmp
+		and rpl tmp tmp
+		or rpl reg reg
+		
+		end
+	end
+	
+	and 255 idx idx
+	meta val bank.idx
+	
+svp_read_ext
+	arg regidxr 16
+	switch regidxr
+	case 7
+	meta val a
+	
+	default
+	#TODO: PMAR stuff
+	meta val external.regidxr
+	end
+	
+svp_write_ext
+	arg regidxw 16
+	switch regidxw
+	case 7
+	and 0xFFFF0000 a a
+	or src a a
+	
+	default
+	#TODO: PMAR stuff
+	mov src external.regidxw
+	end
+	
+svp_alu_op
+	arg P 16
+	arg param 32
+	
+	switch P
+	case 1
+	dis "sub %s" name
+	sub param a a
+	
+	case 3
+	dis "cmp %s" name
+	cmp param a
+	
+	case 4
+	dis "add %s" name
+	add param a a
+	
+	case 5
+	dis "and %s" name
+	and param a a
+	
+	case 6
+	dis "or %s" name
+	or param a a
+	
+	case 7
+	dis "eor %s" name
+	xor param a a
+	end
+	update_flags ZN
+	
+svp_check_cond
+	arg fval 16
+	arg cond 16
+	local invert 8
+	switch cond
+	case 0
+	meta flag 1
+	
+	case 5
+	meta flag zflag
+	
+	case 7
+	meta flag nflag
+	
+	default
+	meta flag 0
+	end
+	switch fval
+	case 0
+	lnot flag invert
+	meta istrue invert 
+	
+	default
+	meta istrue flag
+	end
+	
+PPP0000000000000 alu_n1
+	invalid P 0
+	invalid P 2
+	meta name "-"
+	svp_alu_op P 0xFFFF0000
+	
+PPP0000000000RRR alu_r
+	invalid P 0
+	invalid P 2
+	local tmp 32 
+	lsl internal.R 16 tmp
+	meta name internal.R
+	svp_alu_op P tmp
+	
+PPP0000000000011 alu_a
+	invalid P 0
+	invalid P 2
+	svp_alu_op P a
+	
+PPP0000000000101 alu_stack
+	invalid P 0
+	invalid P 2
+	local tmp 32
+	meta dst tmp
+	svp_pop
+	meta name "st"
+	svp_alu_op P tmp
+	
+PPP0000000000111 alu_p
+	invalid P 0
+	invalid P 2
+	meta name p
+	svp_alu_op P p
+	
+PPP0000000001RRR alu_ext
+	invalid P 0
+	invalid P 2
+	local tmp 32
+	svp_read_ext R
+	lsl val 16 tmp
+	meta name val
+	svp_alu_op P tmp
+	
+PPP0001B000MMRR alu_ram
+	invalid P 0
+	invalid P 2
+	svp_ram_read M B R
+	local tmp 32
+	lsl val 16 tmp
+	
+	switch P
+	case 1
+	dis "sub (%s%s)" reg modestr
+	sub tmp a a
+	
+	case 3
+	dis "cmp (%s%s)" reg modestr
+	cmp tmp a
+	
+	case 4
+	dis "add (%s%s)" reg modestr
+	add tmp a a
+	
+	case 5
+	dis "and (%s%s)" reg modestr
+	and tmp a a
+	
+	case 6
+	dis "or (%s%s)" reg modestr
+	or tmp a a
+	
+	case 7
+	dis "eor (%s%s)" reg modestr
+	xor tmp a a
+	end
+	
+	update_flags ZN
+	
+PPP0000000001111 alu_al
+	invalid P 0
+	invalid P 2
+	local tmp 32
+	lsl a 16 tmp
+	
+	meta name al
+	svp_alu_op P tmp
+	
+1001000FCCCC0OOO cond_mod
+	svp_check_cond F C
+	switch istrue
+	case 0
+	
+	default
+	switch O
+	case 2
+	asr a 1 a
+	update_flags ZN
+	
+	case 3
+	lsl a 1 a
+	update_flags ZN
+	
+	case 6
+	neg a a
+	update_flags ZN
+	
+	case 7
+	abs a a
+	update_flags N
+	end
+
+000000000DDD0SSS ld_int_int
+	dis "ld %s, %s" internal.D internal.S
+	mov internal.S internal.D
+	
+000000000DDD0101 ld_int_st
+	dis "ld %s, st" internal.D 
+	meta dst internal.D
+	svp_pop
+	
+0000000000110101 ld_a_st
+	dis "ld a, st"
+	local tmp 32
+	meta dst tmp
+	svp_pop
+	lsl tmp 16 tmp
+	and 0xFFFF a a
+	or tmp a a
+	
+0000000001110101 ld_p_st
+	dis "ld p, st"
+	local tmp 32
+	meta dst tmp
+	svp_pop
+	lsl tmp 16 tmp
+	and 0xFFFF p p
+	or tmp p p
+	
+0000000001010SSS ld_st_int
+	dis "ld st, %s" internal.S
+	svp_push internal.S
+	
+0000000001010011 ld_st_a
+	dis "ld st, a"
+	local tmp 32
+	lsr a 16 tmp
+	svp_push tmp
+	
+0000000001010111 ld_st_p
+	dis "ld st, p"
+	local tmp 32
+	lsr p 16 tmp
+	svp_push tmp
+	
+0000000000000000 ld_n1_n1
+	#nop?
+	dis "ld -, -"
+	
+0000000000000SSS ld_n1_int
+	#nop?
+	dis "nop??"
+	
+0000000000110111 ld_a_p
+	dis "ld a, p"
+	mov p a
+	
+0000000001110011 ld_p_a
+	dis "ld p, a"
+	mov a p
+	
+0000000000110011 ld_a_a
+	dis "ld a, a"
+	mov a a
+	
+0000000001110111 ld_p_p
+	dis "ld p, p"
+	mov p p
+
+000000000DDD0111 ld_int_p
+	local tmp 32
+	lsr p 16 tmp
+	mov tmp internal.D
+	dis "ld %s, p" internal.D
+	
+000000000DDD0111 ld_int_a
+	local tmp 32
+	lsr a 16 tmp
+	mov tmp internal.D
+	dis "ld %s, a" internal.D
+	
+0000000001110SSS ld_p_int
+	local tmp 32
+	lsl internal.S 16 tmp
+	mov tmp p
+	dis "ld p, %s" internal.S
+	
+0000000000110SSS ld_a_int
+	local tmp 32
+	lsl internal.S 16 tmp
+	mov tmp a
+	dis "ld a, %s" internal.S
+	
+000000000DDD0000 ld_int_n1
+	dis "ld %s, -" internal.D
+	mov 0xFFFF internal.D
+	
+0000000000110000 ld_a_n1
+	dis "ld a, -"
+	and 0xFFFF a a
+	or 0xFFFF0000 a a
+	
+0000000001110000 ld_p_n1
+	dis "ld p, -"
+	and 0xFFFF p p
+	or 0xFFFF0000 p p
+
+000000000DDD1SSS ld_int_ext
+	svp_read_ext S
+	dis "ld %s, %s" internal.D val
+	mov val internal.D
+	
+0000000000111SSS ld_a_ext
+	svp_read_ext S
+	dis "ld a, %s" val
+	local tmp 32
+	lsl val 16 tmp
+	and 0xFFFF a a
+	or tmp a a
+	
+0000000001111SSS ld_p_ext
+	svp_read_ext S
+	dis "ld p, %s" val
+	local tmp 32
+	lsl val 16 tmp
+	and 0xFFFF p p
+	or tmp p p
+	
+000000001DDD0SSS ld_ext_int
+	meta src internal.S
+	svp_write_ext D
+	switch D
+	case 7
+	dis "ld al, %s" src
+	
+	default
+	dis "ld %s, %s" external.D src
+	end
+	
+000000001DDD0011 ld_ext_a
+	local tmp 32
+	lsr a 16 tmp
+	meta src tmp
+	svp_write_ext D
+	switch D
+	case 7
+	dis "ld al, a"
+	
+	default
+	dis "ld %s, a" external.D
+	end
+	
+000000001DDD0111 ld_ext_p
+	local tmp 32
+	lsr p 16 tmp
+	meta src tmp
+	svp_write_ext D
+	switch D
+	case 7
+	dis "ld al, p"
+	
+	default
+	dis "ld %s, p" external.D
+	end
+	
+	
+000000001DDD1SSS ld_ext_ext
+	svp_read_ext S
+	meta src val
+	svp_write_ext D
+	switch D
+	case 7
+	dis "ld al, %s" src
+	default
+	dis "ld %s, %s" external.D src
+	end
+	
+0000001B0DDDMMPP ld_int_ram
+	svp_ram_read M B P
+	dis "ld %s, (%s%s)" internal.D reg modestr
+	mov val internal.D
+	
+0000001B0011MMPP ld_a_ram
+	svp_ram_read M B P
+	dis "ld a, (%s%s)" reg modestr
+	local tmp 32
+	lsl val 16 tmp
+	and 0xFFFF a a
+	or tmp a a
+	
+0000001B0111MMPP ld_p_ram
+	svp_ram_read M B P
+	dis "ld p, (%s%s)" reg modestr
+	local tmp 32
+	lsl val 16 tmp
+	and 0xFFFF p p
+	or tmp p p
+	
+0000001B0101MMPP ld_st_ram
+	svp_ram_read M B P
+	dis "ld st, (%s%s)" reg modestr
+	svp_push val
+	
+0100100FCCCC0000 call_cond
+	svp_check_cond F C
+	svp_op_fetch
+	switch istrue
+	case 0
+	
+	default
+	svp_push pc
+	mov scratch1 pc
+	end
+	
+0100110FCCCC0000 bra_cond
+	svp_check_cond F C
+	svp_op_fetch
+	switch istrue
+	case 0
+	
+	default
+	mov scratch1 pc
+	end
+
+svp_op_fetch
+	cycles 1
+	cmp 1024 pc
+	
+	if >=U
+	mov pc scratch1
+	add scratch1 scratch1 scratch1
+	ocall read_16
+	
+	else
+	mov iram.pc scratch1
+	end
+	add 1 pc pc
+	
+svp_run_op
+	svp_op_fetch
+	dispatch scratch1
