@@ -71,11 +71,8 @@ svp_ram_read
 	#loop decremenet
 	meta modestr -
 	mov reg tmp
-	switch rpl
-		case 0
-		sub 1 reg reg
-		
-		default
+	
+	if rpl
 		lsl 1 rpl rpl
 		sub 1 rpl rpl
 		local mask 16
@@ -84,19 +81,16 @@ svp_ram_read
 		sub 1 tmp tmp
 		and rpl tmp tmp
 		or rpl reg reg
-		
-		end
+	else
+		sub 1 reg reg
+	end
 	
 	case 3
 	#loop increment
 	meta modestr +
 	
 	and 7 st rpl
-	switch rpl
-		case 0
-		sub 1 reg reg
-		
-		default
+	if rpl
 		mov reg tmp
 		lsl 1 rpl rpl
 		sub 1 rpl rpl
@@ -106,8 +100,8 @@ svp_ram_read
 		add 1 tmp tmp
 		and rpl tmp tmp
 		or rpl reg reg
-		
-		end
+	else
+		sub 1 reg reg
 	end
 	
 	and 255 idx idx
@@ -184,13 +178,14 @@ svp_check_cond
 	default
 	meta flag 0
 	end
-	switch fval
-	case 0
-	lnot flag invert
-	meta istrue invert 
 	
-	default
+	if fval
 	meta istrue flag
+	
+	else
+	lnot flag invert
+	meta istrue invert
+	
 	end
 	
 PPP0000000000000 alu_n1
@@ -282,10 +277,8 @@ PPP0000000001111 alu_al
 	
 1001000FCCCC0OOO cond_mod
 	svp_check_cond F C
-	switch istrue
-	case 0
-	
-	default
+	if istrue
+
 	switch O
 	case 2
 	asr a 1 a
@@ -302,6 +295,7 @@ PPP0000000001111 alu_al
 	case 7
 	abs a a
 	update_flags N
+	end
 	end
 
 000000000DDD0SSS ld_int_int
@@ -508,10 +502,8 @@ PPP0000000001111 alu_al
 0100100FCCCC0000 call_cond
 	svp_check_cond F C
 	svp_op_fetch
-	switch istrue
-	case 0
 	
-	default
+	if istrue
 	svp_push pc
 	mov scratch1 pc
 	end
@@ -519,10 +511,7 @@ PPP0000000001111 alu_al
 0100110FCCCC0000 bra_cond
 	svp_check_cond F C
 	svp_op_fetch
-	switch istrue
-	case 0
-	
-	default
+	if istrue
 	mov scratch1 pc
 	end
 
