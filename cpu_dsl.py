@@ -114,6 +114,7 @@ class Instruction(Block):
 		output = []
 		prog.meta = {}
 		prog.currentScope = self
+		self.regValues = {}
 		for var in self.locals:
 			output.append('\n\tuint{sz}_t {name};'.format(sz=self.locals[var], name=var))
 		fieldVals,_ = self.getFieldVals(value)
@@ -510,9 +511,9 @@ class Switch(ChildBlock):
 	def generate(self, prog, parent, fieldVals, output, otype):
 		oldScope = prog.currentScope
 		prog.currentScope = self
-		self.regValues = self.parent.regValues
 		param = prog.resolveParam(self.param, parent, fieldVals)
 		if type(param) is int:
+			self.regValues = self.parent.regValues
 			if param in self.cases:
 				if self.case_locals[param]:
 					output.append('\n\t{')
@@ -533,6 +534,7 @@ class Switch(ChildBlock):
 			output.append('\n\tswitch(' + param + ')')
 			output.append('\n\t{')
 			for case in self.cases:
+				self.regValues = dict(self.parent.regValues)
 				output.append('\n\tcase {0}: '.format(case) + '{')
 				for local in self.case_locals[case]:
 					output.append('\n\tuint{0}_t {1};'.format(self.case_locals[case][local], local))
@@ -541,6 +543,7 @@ class Switch(ChildBlock):
 				output.append('\n\tbreak;')
 				output.append('\n\t}')
 			if self.default:
+				self.regValues = dict(self.parent.regValues)
 				output.append('\n\tdefault: {')
 				for local in self.default_locals:
 					output.append('\n\tuint{0}_t {1};'.format(self.default_locals[local], local))
@@ -585,7 +588,9 @@ class If(ChildBlock):
 		self.elseBody = []
 		self.curBody = self.body
 		self.locals = {}
-		self.regValues = parent.regValues
+		self.elseLocals = {}
+		self.curLocals = self.locals
+		self.regValues = None
 		
 	def addOp(self, op):
 		if op.op in ('case', 'arg'):
@@ -595,18 +600,39 @@ class If(ChildBlock):
 			size = op.params[1]
 			self.locals[name] = size
 		elif op.op == 'else':
+			self.curLocals = self.elseLocals
 			self.curBody = self.elseBody
 		else:
 			self.curBody.append(op)
 			
+	def localSize(self, name):
+		return self.curLocals.get(name)
+		
+	def resolveLocal(self, name):
+		if name in self.locals:
+			return name
+		return None
+		
+	def _genTrueBody(self):
+		self.curLocals = self.locals
+		for op in self.body:
+			op.generate(prog, self, fieldVals, output, otype)
+			
+	def _genFalseBody(self):
+		self.curLocals = self.elseLocals
+		for op in self.body:
+			op.generate(prog, self, fieldVals, output, otype)
+	
+	def _genConstParam(self, param):
+		if param:
+			self._genTrueBody()
+		else:
+			self._genFalseBody()
+			
 	def generate(self, prog, parent, fieldVals, output, otype):
+		self.regValues = parent.regValues
 		try:
-			if prog.checkBool(self.cond):
-				for op in self.body:
-					op.generate(prog, self, fieldVals, output, otype)
-			else:
-				for op in self.elseBody:
-					op.generate(prog, self, fieldVals, output, otype)
+			self._genConstParam(prog.checkBool(self.cond))
 		except Exception:
 			if self.cond in _ifCmpImpl[otype]:
 				output.append(_ifCmpImpl[otype][self.cond](prog, parent, fieldVals, output))
@@ -627,7 +653,7 @@ class If(ChildBlock):
 						for op in self.elseBody:
 							op.generate(prog, self, fieldVals, output, otype)
 				else:
-					output.append('\n\tif ({cond}) {'.format(cond=cond))
+					output.append('\n\tif ({cond}) '.format(cond=cond) + '{')
 					for op in self.body:
 						op.generate(prog, self, fieldVals, output, otype)
 					if self.elseBody:
