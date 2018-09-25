@@ -213,7 +213,7 @@ PPP0000000000101 alu_stack
 	local tmp 32
 	meta dst tmp
 	svp_pop
-	meta name "st"
+	meta name "stack"
 	svp_alu_op P tmp
 	
 PPP0000000000111 alu_p
@@ -231,7 +231,7 @@ PPP0000000001RRR alu_ext
 	meta name val
 	svp_alu_op P tmp
 	
-PPP0001B000MMRR alu_ram
+PPP0001B0000MMRR alu_ram
 	invalid P 0
 	invalid P 2
 	svp_ram_read M B R
@@ -266,6 +266,42 @@ PPP0001B000MMRR alu_ram
 	
 	update_flags ZN
 	
+PPP0101B0000MMRR alu_ram_indirect
+	invalid P 0
+	invalid P 2
+	svp_ram_read M B R
+	svp_prog_ram_read scratch1
+	local tmp 32
+	lsl val 16 tmp
+	
+	switch P
+	case 1
+	dis "sub ((%s%s))" reg modestr
+	sub tmp a a
+	
+	case 3
+	dis "cmp ((%s%s))" reg modestr
+	cmp tmp a
+	
+	case 4
+	dis "add ((%s%s))" reg modestr
+	add tmp a a
+	
+	case 5
+	dis "and ((%s%s))" reg modestr
+	and tmp a a
+	
+	case 6
+	dis "or ((%s%s))" reg modestr
+	or tmp a a
+	
+	case 7
+	dis "eor ((%s%s))" reg modestr
+	xor tmp a a
+	end
+	
+	update_flags ZN
+	
 PPP0000000001111 alu_al
 	invalid P 0
 	invalid P 2
@@ -274,6 +310,22 @@ PPP0000000001111 alu_al
 	
 	meta name al
 	svp_alu_op P tmp
+	
+PPP0011JAAAAAAAA alu_ram_direct
+	invalid P 0
+	invalid P 2
+	if J
+	meta src ram1.A
+	else
+	meta src ram0.A
+	end
+	svp_alu_op P src
+	
+PPP0010000000000 alu_immed
+	invalid P 0
+	invalid P 2
+	svp_op_fetch
+	svp_alu_op P scratch1
 	
 1001000FCCCC0OOO cond_mod
 	svp_check_cond F C
@@ -302,13 +354,13 @@ PPP0000000001111 alu_al
 	dis "ld %s, %s" internal.D internal.S
 	mov internal.S internal.D
 	
-000000000DDD0101 ld_int_st
-	dis "ld %s, st" internal.D 
+000000000DDD0101 ld_int_stack
+	dis "ld %s, stack" internal.D 
 	meta dst internal.D
 	svp_pop
 	
-0000000000110101 ld_a_st
-	dis "ld a, st"
+0000000000110101 ld_a_stack
+	dis "ld a, stack"
 	local tmp 32
 	meta dst tmp
 	svp_pop
@@ -316,8 +368,8 @@ PPP0000000001111 alu_al
 	and 0xFFFF a a
 	or tmp a a
 	
-0000000001110101 ld_p_st
-	dis "ld p, st"
+0000000001110101 ld_p_stack
+	dis "ld p, stack"
 	local tmp 32
 	meta dst tmp
 	svp_pop
@@ -325,18 +377,18 @@ PPP0000000001111 alu_al
 	and 0xFFFF p p
 	or tmp p p
 	
-0000000001010SSS ld_st_int
-	dis "ld st, %s" internal.S
+0000000001010SSS ld_stack_int
+	dis "ld stack, %s" internal.S
 	svp_push internal.S
 	
-0000000001010011 ld_st_a
-	dis "ld st, a"
+0000000001010011 ld_stack_a
+	dis "ld stack, a"
 	local tmp 32
 	lsr a 16 tmp
 	svp_push tmp
 	
-0000000001010111 ld_st_p
-	dis "ld st, p"
+0000000001010111 ld_stack_p
+	dis "ld stack, p"
 	local tmp 32
 	lsr p 16 tmp
 	svp_push tmp
@@ -494,10 +546,53 @@ PPP0000000001111 alu_al
 	and 0xFFFF p p
 	or tmp p p
 	
-0000001B0101MMPP ld_st_ram
+0000001B0101MMPP ld_stack_ram
 	svp_ram_read M B P
-	dis "ld st, (%s%s)" reg modestr
+	dis "ld stack, (%s%s)" reg modestr
 	svp_push val
+	
+000010000DDD0000 ld_int_immed
+	svp_op_fetch
+	dis "ld %s, %X" internal.D scratch1
+	mov scratch1 internal.D
+	
+0000100000000000 ld_n1_immed
+	svp_op_fetch
+	dis "ld -, %X" scratch1
+
+0000100000110000 ld_a_immed
+	local tmp 32
+	svp_op_fetch
+	dis "ld a, %X" scratch1
+	lsl 16 scratch1 tmp
+	and 0xFFFF a a
+	or tmp a a
+	
+0000100001010000 ld_stack_immed
+	svp_op_fetch
+	dis "ld stack, %X" scratch1
+	svp_push scratch1
+
+0000100001110000 ld_p_immed
+	local tmp 32
+	svp_op_fetch
+	dis "ld p, %X" scratch1
+	lsl 16 scratch1 tmp
+	and 0xFFFF p p
+	or tmp p p
+	
+000010001DDD0000 ld_ext_immed
+	svp_op_fetch
+	dis "ld %s, %X", external.D, scratch1
+	meta src scratch1
+	svp_write_ext D
+	switch D
+	case 7
+	dis "ld al, %X" scratch1
+	
+	default
+	dis "ld %s, %X" external.D scratch1
+	end
 	
 0100100FCCCC0000 call_cond
 	svp_check_cond F C
@@ -514,19 +609,22 @@ PPP0000000001111 alu_al
 	if istrue
 	mov scratch1 pc
 	end
-
-svp_op_fetch
+	
+svp_prog_ram_read
+	arg src 16
 	cycles 1
-	cmp 1024 pc
+	cmp 1024 src
 	
 	if >=U
-	mov pc scratch1
-	add scratch1 scratch1 scratch1
+	add src src scratch1
 	ocall read_16
 	
 	else
-	mov iram.pc scratch1
+	mov iram.src scratch1
 	end
+
+svp_op_fetch
+	svp_prog_ram_read pc
 	add 1 pc pc
 	
 svp_run_op
