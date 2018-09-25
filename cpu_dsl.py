@@ -682,10 +682,11 @@ class Registers:
 	def addRegArray(self, name, size, regs):
 		self.regArrays[name] = (size, regs)
 		idx = 0
-		for reg in regs:
-			self.regs[reg] = size
-			self.regToArray[reg] = (name, idx)
-			idx += 1
+		if not type(regs) is int:
+			for reg in regs:
+				self.regs[reg] = size
+				self.regToArray[reg] = (name, idx)
+				idx += 1
 	
 	def isReg(self, name):
 		return name in self.regs
@@ -703,13 +704,18 @@ class Registers:
 		return self.regToArray[name][1]
 	
 	def arrayMemberName(self, array, index):
-		if type(index) is int:
+		if type(index) is int and not type(self.regArrays[array][1]) is int:
 			return self.regArrays[array][1][index]
 		else:
 			return None
+			
+	def isNamedArray(self, array):
+		return array in self.regArrays and type(self.regArrays[array][1]) is int
 	
 	def processLine(self, parts):
-		if len(parts) > 2:
+		if len(parts) == 3:
+			self.addRegArray(parts[0], int(parts[1]), int(parts[2]))
+		elif len(parts) > 2:
 			self.addRegArray(parts[0], int(parts[1]), parts[2:])
 		else:
 			self.addReg(parts[0], int(parts[1]))
@@ -983,7 +989,10 @@ class Program:
 				end = self.regs.arrayMemberIndex(end)
 				if arrayName != begin:
 					end = 'context->{0}[{1}]'.format(arrayName, end)
-			regName = self.regs.arrayMemberName(begin, end)
+			if self.regs.isNamedArray(begin):
+				regName = self.regs.arrayMemberName(begin, end)
+			else:
+				regName = '{0}.{1}'.format(begin, end)
 			ret = 'context->{0}[{1}]'.format(begin, end)
 		else:
 			regName = name
