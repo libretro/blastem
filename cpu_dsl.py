@@ -566,10 +566,8 @@ class Switch(ChildBlock):
 def _geuCImpl(prog, parent, fieldVals, output):
 	if prog.lastOp.op == 'cmp':
 		output.pop()
-		params = prog.lastOp.params
-		for i in range(0, len(params)):
-			params[i] = prog.resolveParam(params[i], parent, fieldVals)
-		return '\n\tif ({a} >= {b}) '.format(a=params[0], b = params[1]) + '{'
+		params = [prog.resolveParam(p, parent, fieldVals) for p in prog.lastOp.params]
+		return '\n\tif ({a} >= {b}) '.format(a=params[1], b = params[0]) + '{'
 	else:
 		raise ion(">=U not implemented in the general case yet")
 	
