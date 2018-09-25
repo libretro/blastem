@@ -103,6 +103,7 @@ svp_ram_read
 	else
 		sub 1 reg reg
 	end
+	end
 	
 	and 255 idx idx
 	meta val bank.idx
@@ -270,9 +271,9 @@ PPP0101B0000MMRR alu_ram_indirect
 	invalid P 0
 	invalid P 2
 	svp_ram_read M B R
-	svp_prog_ram_read scratch1
+	svp_prog_ram_read val
 	local tmp 32
-	lsl val 16 tmp
+	lsl scratch1 16 tmp
 	
 	switch P
 	case 1
