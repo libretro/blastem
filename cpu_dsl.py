@@ -40,6 +40,7 @@ class Instruction(Block):
 		self.regValues = {}
 		self.varyingBits = 0
 		self.invalidFieldValues = {}
+		self.newLocals = []
 		for field in fields:
 			self.varyingBits += fields[field][1]
 	
@@ -62,6 +63,7 @@ class Instruction(Block):
 	
 	def addLocal(self, name, size):
 		self.locals[name] = size
+		self.newLocals.append(name)
 		
 	def localSize(self, name):
 		return self.locals.get(name)
@@ -113,10 +115,11 @@ class Instruction(Block):
 	def generateBody(self, value, prog, otype):
 		output = []
 		prog.meta = {}
-		prog.currentScope = self
+		prog.pushScope(self)
 		self.regValues = {}
 		for var in self.locals:
 			output.append('\n\tuint{sz}_t {name};'.format(sz=self.locals[var], name=var))
+		self.newLocals = []
 		fieldVals,_ = self.getFieldVals(value)
 		for op in self.implementation:
 			op.generate(prog, self, fieldVals, output, otype)
@@ -125,6 +128,9 @@ class Instruction(Block):
 			begin += prog.flags.coalesceFlags(prog, otype)
 		if prog.needFlagDisperse:
 			output.append(prog.flags.disperseFlags(prog, otype))
+		for var in self.newLocals:
+			begin += '\n\tuint{sz}_t {name};'.format(sz=self.locals[var], name=var)
+		prog.popScope()
 		return begin + ''.join(output) + '\n}'
 		
 	def __str__(self):
@@ -175,8 +181,7 @@ class SubRoutine(Block):
 		argValues = {}
 		if parent:
 			self.regValues = parent.regValues
-		oldScope = prog.currentScope
-		prog.currentScope = self
+		prog.pushScope(self)
 		i = 0
 		for name,size in self.args:
 			argValues[name] = params[i]
@@ -186,7 +191,7 @@ class SubRoutine(Block):
 			output.append('\n\tuint{size}_t {sub}_{local};'.format(size=size, sub=self.name, local=name))
 		for op in self.implementation:
 			op.generate(prog, self, argValues, output, otype)
-		prog.currentScope = oldScope
+		prog.popScope()
 		
 	def __str__(self):
 		pieces = [self.name]
@@ -284,7 +289,7 @@ def _updateFlagsCImpl(prog, params, rawParams):
 	for flag in autoUpdate:
 		calc = prog.flags.flagCalc[flag]
 		calc,_,resultBit = calc.partition('-')
-		lastDst = prog.resolveReg(prog.lastDst, None, {})
+		lastDst = prog.resolveParam(prog.lastDst, None, {})
 		storage = prog.flags.getStorage(flag)
 		if calc == 'bit' or calc == 'sign':
 			if calc == 'sign':
@@ -293,10 +298,10 @@ def _updateFlagsCImpl(prog, params, rawParams):
 				resultBit = int(resultBit)
 			if type(storage) is tuple:
 				reg,storageBit = storage
-				reg = prog.resolveReg(reg, None, {})
+				reg = prog.resolveParam(reg, None, {})
 				if storageBit == resultBit:
 					#TODO: optimize this case
-					output.append('\n\t{reg} = ({reg} & ~{mask}) | ({res} & {mask});'.format(
+					output.append('\n\t{reg} = ({reg} & ~{mask}U) | ({res} & {mask}U);'.format(
 						reg = reg, mask = 1 << resultBit, res = lastDst
 					))
 				else:
@@ -306,26 +311,26 @@ def _updateFlagsCImpl(prog, params, rawParams):
 					else:
 						op = '<<'
 						shift = storageBit - resultBit
-					output.append('\n\t{reg} = ({reg} & ~{mask}) | ({res} {op} {shift} & {mask});'.format(
+					output.append('\n\t{reg} = ({reg} & ~{mask}U) | ({res} {op} {shift}U & {mask}U);'.format(
 						reg = reg, mask = 1 << storageBit, res = lastDst, op = op, shift = shift
 					))
 			else:
-				reg = prog.resolveReg(storage, None, {})
-				output.append('\n\t{reg} = {res} & {mask};'.format(reg=reg, res=lastDst, mask = 1 << resultBit))
+				reg = prog.resolveParam(storage, None, {})
+				output.append('\n\t{reg} = {res} & {mask}U;'.format(reg=reg, res=lastDst, mask = 1 << resultBit))
 		elif calc == 'zero':
 			if type(storage) is tuple:
 				reg,storageBit = storage
-				reg = prog.resolveReg(reg, None, {})
-				output.append('\n\t{reg} = {res} ? ({reg} & {mask}) : ({reg} | {bit});'.format(
+				reg = prog.resolveParam(reg, None, {})
+				output.append('\n\t{reg} = {res} ? ({reg} & {mask}U) : ({reg} | {bit}U);'.format(
 					reg = reg, mask = ~(1 << storageBit), res = lastDst, bit = 1 << storageBit
 				))
 			elif prog.paramSize(prog.lastDst) > prog.paramSize(storage):
-				reg = prog.resolveReg(storage, None, {})
+				reg = prog.resolveParam(storage, None, {})
 				output.append('\n\t{reg} = {res} != 0;'.format(
 					reg = reg, res = lastDst
 				))
 			else:
-				reg = prog.resolveReg(storage, None, {})
+				reg = prog.resolveParam(storage, None, {})
 				output.append('\n\t{reg} = {res};'.format(reg = reg, res = lastDst))
 		elif calc == 'half-carry':
 			pass
@@ -357,16 +362,16 @@ def _cmpCImpl(prog, params):
 	size = prog.paramSize(params[1])
 	tmpvar = 'cmp_tmp{sz}__'.format(sz=size)
 	typename = ''
-	if not prog.currentScope.resolveLocal(tmpvar):
-		prog.currentScope.addLocal(tmpvar, size)
-		typename = 'uint{sz}_t '.format(sz=size)
+	scope = prog.getRootScope()
+	if not scope.resolveLocal(tmpvar):
+		scope.addLocal(tmpvar, size)
 	prog.lastDst = tmpvar
-	return '\n\t{tp}{var} = {b} - {a};'.format(tp = typename, var = tmpvar, a = params[0], b = params[1])
+	return '\n\t{var} = {b} - {a};'.format(var = tmpvar, a = params[0], b = params[1])
 
 def _asrCImpl(prog, params, rawParams):
 	shiftSize = prog.paramSize(rawParams[0])
 	mask = 1 << (shiftSize - 1)
-	return '\n\t{dst} = ({a} >> {b}) | ({a} & {mask}'.format(a = params[0], b = params[1], dst = params[2], mask = mask)
+	return '\n\t{dst} = ({a} >> {b}) | ({a} & {mask});'.format(a = params[0], b = params[1], dst = params[2], mask = mask)
 		
 _opMap = {
 	'mov': Op(lambda val: val).cUnaryOperator(''),
@@ -381,19 +386,22 @@ _opMap = {
 	'and': Op(lambda a, b: a & b).cBinaryOperator('&'),
 	'or':  Op(lambda a, b: a | b).cBinaryOperator('|'),
 	'xor': Op(lambda a, b: a ^ b).cBinaryOperator('^'),
+	'abs': Op(lambda val: abs(val)).addImplementation(
+		'c', 1, lambda prog, params: '\n\t{dst} = abs({src});'.format(dst=params[1], src=params[0])
+	),
 	'cmp': Op().addImplementation('c', None, _cmpCImpl),
 	'ocall': Op().addImplementation('c', None, lambda prog, params: '\n\t{pre}{fun}({args});'.format(
 		pre = prog.prefix, fun = params[0], args = ', '.join(['context'] + [str(p) for p in params[1:]])
 	)),
 	'cycles': Op().addImplementation('c', None,
-		lambda prog, params: '\n\tcontext->current_cycle += context->opts->gen.clock_divider * {0};'.format(
+		lambda prog, params: '\n\tcontext->cycles += context->opts->gen.clock_divider * {0};'.format(
 			params[0]
 		)
 	),
 	'addsize': Op(
 		lambda a, b: b + (2 * a if a else 1)
 	).addImplementation('c', 2, lambda prog, params: '\n\t{dst} = {val} + {sz} ? {sz} * 2 : 1;'.format(
-		dst = params[1], sz = params[0], val = params[1]
+		dst = params[2], sz = params[0], val = params[1]
 	)),
 	'decsize': Op(
 		lambda a, b: b - (2 * a if a else 1)
@@ -509,31 +517,31 @@ class Switch(ChildBlock):
 		return self.parent.localSize(name)
 			
 	def generate(self, prog, parent, fieldVals, output, otype):
-		oldScope = prog.currentScope
-		prog.currentScope = self
+		prog.pushScope(self)
 		param = prog.resolveParam(self.param, parent, fieldVals)
 		if type(param) is int:
 			self.regValues = self.parent.regValues
 			if param in self.cases:
-				if self.case_locals[param]:
-					output.append('\n\t{')
-					for local in self.case_locals[param]:
-						output.append('\n\tuint{0}_t {1};'.format(self.case_locals[param][local], local))
+				self.current_locals = self.case_locals[param]
+				output.append('\n\t{')
+				for local in self.case_locals[param]:
+					output.append('\n\tuint{0}_t {1};'.format(self.case_locals[param][local], local))
 				for op in self.cases[param]:
 					op.generate(prog, self, fieldVals, output, otype)
-				if self.case_locals[param]:
-					output.append('\n\t}')
+				output.append('\n\t}')
 			elif self.default:
-				if self.default_locals:
-					output.append('\n\t{')
-					for local in self.default:
-						output.append('\n\tuint{0}_t {1};'.format(self.default[local], local))
+				self.current_locals = self.default_locals
+				output.append('\n\t{')
+				for local in self.default_locals:
+					output.append('\n\tuint{0}_t {1};'.format(self.default[local], local))
 				for op in self.default:
 					op.generate(prog, self, fieldVals, output, otype)
+				output.append('\n\t}')
 		else:
 			output.append('\n\tswitch(' + param + ')')
 			output.append('\n\t{')
 			for case in self.cases:
+				self.current_locals = self.case_locals[case]
 				self.regValues = dict(self.parent.regValues)
 				output.append('\n\tcase {0}: '.format(case) + '{')
 				for local in self.case_locals[case]:
@@ -543,6 +551,7 @@ class Switch(ChildBlock):
 				output.append('\n\tbreak;')
 				output.append('\n\t}')
 			if self.default:
+				self.current_locals = self.default_locals
 				self.regValues = dict(self.parent.regValues)
 				output.append('\n\tdefault: {')
 				for local in self.default_locals:
@@ -550,7 +559,7 @@ class Switch(ChildBlock):
 				for op in self.default:
 					op.generate(prog, self, fieldVals, output, otype)
 			output.append('\n\t}')
-		prog.currentScope = oldScope
+		prog.popScope()
 	
 	def __str__(self):
 		keys = self.cases.keys()
@@ -609,55 +618,50 @@ class If(ChildBlock):
 	def resolveLocal(self, name):
 		if name in self.locals:
 			return name
-		return None
+		return self.parent.resolveLocal(name)
 		
-	def _genTrueBody(self):
+	def _genTrueBody(self, prog, fieldVals, output, otype):
 		self.curLocals = self.locals
+		for local in self.locals:
+			output.append('\n\tuint{sz}_t {nm};'.format(sz=self.locals[local], nm=local))
 		for op in self.body:
 			op.generate(prog, self, fieldVals, output, otype)
 			
-	def _genFalseBody(self):
+	def _genFalseBody(self, prog, fieldVals, output, otype):
 		self.curLocals = self.elseLocals
-		for op in self.body:
+		for local in self.elseLocals:
+			output.append('\n\tuint{sz}_t {nm};'.format(sz=self.elseLocals[local], nm=local))
+		for op in self.elseBody:
 			op.generate(prog, self, fieldVals, output, otype)
 	
-	def _genConstParam(self, param):
+	def _genConstParam(self, param, prog, fieldVals, output, otype):
 		if param:
-			self._genTrueBody()
+			self._genTrueBody(prog, fieldVals, output, otype)
 		else:
-			self._genFalseBody()
+			self._genFalseBody(prog, fieldVals, output, otype)
 			
 	def generate(self, prog, parent, fieldVals, output, otype):
 		self.regValues = parent.regValues
 		try:
-			self._genConstParam(prog.checkBool(self.cond))
+			self._genConstParam(prog.checkBool(self.cond), prog, fieldVals, output, otype)
 		except Exception:
 			if self.cond in _ifCmpImpl[otype]:
 				output.append(_ifCmpImpl[otype][self.cond](prog, parent, fieldVals, output))
-				for op in self.body:
-					op.generate(prog, self, fieldVals, output, otype)
+				self._genTrueBody(prog, fieldVals, output, otype)
 				if self.elseBody:
 					output.append('\n\t} else {')
-					for op in self.elseBody:
-						op.generate(prog, self, fieldVals, output, otype)
+					self._genFalseBody(prog, fieldVals, output, otype)
 				output.append('\n\t}')
 			else:
 				cond = prog.resolveParam(self.cond, parent, fieldVals)
 				if type(cond) is int:
-					if cond:
-						for op in self.body:
-							op.generate(prog, self, fieldVals, output, otype)
-					else:
-						for op in self.elseBody:
-							op.generate(prog, self, fieldVals, output, otype)
+					self._genConstParam(cond, prog, fieldVals, output, otype)
 				else:
 					output.append('\n\tif ({cond}) '.format(cond=cond) + '{')
-					for op in self.body:
-						op.generate(prog, self, fieldVals, output, otype)
+					self._genTrueBody(prog, fieldVals, output, otype)
 					if self.elseBody:
 						output.append('\n\t} else {')
-						for op in self.elseBody:
-							op.generate(prog, self, fieldVals, output, otype)
+						self._genFalseBody(prog, fieldVals, output, otype)
 					output.append('\n\t}')
 						
 	
@@ -718,6 +722,24 @@ class Registers:
 		else:
 			self.addReg(parts[0], int(parts[1]))
 		return self
+
+	def writeHeader(self, otype, hFile):
+		fieldList = []
+		for reg in self.regs:
+			if not self.isRegArrayMember(reg):
+				fieldList.append((self.regs[reg], 1, reg))
+		for arr in self.regArrays:
+			size,regs = self.regArrays[arr]
+			if not type(regs) is int:
+				regs = len(regs)
+			fieldList.append((size, regs, arr))
+		fieldList.sort()
+		fieldList.reverse()
+		for size, count, name in fieldList:
+			if count > 1:
+				hFile.write('\n\tuint{sz}_t {nm}[{ct}];'.format(sz=size, nm=name, ct=count))
+			else:
+				hFile.write('\n\tuint{sz}_t {nm};'.format(sz=size, nm=name))
 	
 class Flags:
 	def __init__(self):
@@ -754,7 +776,7 @@ class Flags:
 		if bit:
 			return (loc, int(bit))
 		else:
-			return loc
+			return loc 
 	
 	def disperseFlags(self, prog, otype):
 		bitToFlag = [None] * (self.maxBit+1)
@@ -872,6 +894,7 @@ class Program:
 		self.body = info.get('body', [None])[0]
 		self.flags = flags
 		self.lastDst = None
+		self.scopes = []
 		self.currentScope = None
 		self.lastOp = None
 		
@@ -885,6 +908,24 @@ class Program:
 			pieces.append('\n'+str(instruction))
 		return ''.join(pieces)
 		
+	def writeHeader(self, otype, header):
+		hFile = open(header, 'w')
+		macro = header.upper().replace('.', '_')
+		hFile.write('#ifndef {0}_'.format(macro))
+		hFile.write('\n#define {0}_'.format(macro))
+		hFile.write('\n#include "backend.h"')
+		hFile.write('\n\ntypedef struct {')
+		hFile.write('\n\tcpu_options gen;')
+		hFile.write('\n}} {0}options;'.format(self.prefix))
+		hFile.write('\n\ntypedef struct {')
+		hFile.write('\n\t{0}options *opts;'.format(self.prefix))
+		hFile.write('\n\tuint32_t cycles;')
+		self.regs.writeHeader(otype, hFile)
+		hFile.write('\n}} {0}context;'.format(self.prefix))
+		hFile.write('\n')
+		hFile.write('\n#endif //{0}_'.format(macro))
+		hFile.write('\n')
+		hFile.close()
 	def build(self, otype):
 		body = []
 		pieces = []
@@ -904,7 +945,8 @@ class Program:
 						opmap[val] = inst.generateName(val)
 						bodymap[val] = inst.generateBody(val, self, otype)
 			
-			pieces.append('\nstatic void *impl_{name}[{sz}] = {{'.format(name = table, sz=len(opmap)))
+			pieces.append('\ntypedef void (*impl_fun)({pre}context *context);'.format(pre=self.prefix))
+			pieces.append('\nstatic impl_fun impl_{name}[{sz}] = {{'.format(name = table, sz=len(opmap)))
 			for inst in range(0, len(opmap)):
 				op = opmap[inst]
 				if op is None:
@@ -916,13 +958,17 @@ class Program:
 		if self.body in self.subroutines:
 			pieces.append('\nvoid {pre}execute({type} *context, uint32_t target_cycle)'.format(pre = self.prefix, type = self.context_type))
 			pieces.append('\n{')
-			pieces.append('\n\twhile (context->current_cycle < target_cycle)')
+			pieces.append('\n\twhile (context->cycles < target_cycle)')
 			pieces.append('\n\t{')
 			self.meta = {}
 			self.temp = {}
 			self.subroutines[self.body].inline(self, [], pieces, otype, None)
 			pieces.append('\n\t}')
 			pieces.append('\n}')
+		body.append('\nstatic void unimplemented({pre}context *context)'.format(pre = self.prefix))
+		body.append('\n{')
+		body.append('\n\tfatal_error("Unimplemented instruction");')
+		body.append('\n}\n')
 		return ''.join(body) +  ''.join(pieces)
 		
 	def checkBool(self, name):
@@ -1020,6 +1066,18 @@ class Program:
 		if self.regs.isReg(name):
 			return self.regs.regs[name]
 		return 32
+	
+	def pushScope(self, scope):
+		self.scopes.append(scope)
+		self.currentScope = scope
+		
+	def popScope(self):
+		ret = self.scopes.pop()
+		self.currentScope = self.scopes[-1] if self.scopes else None
+		return ret
+		
+	def getRootScope(self):
+		return self.scopes[0]
 
 def parse(f):
 	instructions = {}
@@ -1107,7 +1165,11 @@ def parse(f):
 		p.booleans['dynarec'] = False
 		p.booleans['interp'] = True
 		
-		print('#include "m68k_prefix.c"')
+		if 'header' in info:
+			print('#include "{0}"'.format(info['header'][0]))
+			p.writeHeader('c', info['header'][0])
+		print('#include "util.h"')
+		print('#include <stdlib.h>')
 		print(p.build('c'))
 
 def main(argv):
