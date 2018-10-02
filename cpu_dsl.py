@@ -489,8 +489,9 @@ class Switch(ChildBlock):
 	
 	def addOp(self, op):
 		if op.op == 'case':
-			self.cases[int(op.params[0])] = self.current_case = []
-			self.case_locals[int(op.params[0])] = self.current_locals = {}
+			val = int(op.params[0], 16) if op.params[0].startswith('0x') else int(op.params[0])
+			self.cases[val] = self.current_case = []
+			self.case_locals[val] = self.current_locals = {}
 		elif op.op == 'default':
 			self.default = self.current_case = []
 			self.default_locals = self.current_locals = {}
@@ -543,7 +544,7 @@ class Switch(ChildBlock):
 			for case in self.cases:
 				self.current_locals = self.case_locals[case]
 				self.regValues = dict(self.parent.regValues)
-				output.append('\n\tcase {0}: '.format(case) + '{')
+				output.append('\n\tcase {0}U: '.format(case) + '{')
 				for local in self.case_locals[case]:
 					output.append('\n\tuint{0}_t {1};'.format(self.case_locals[case][local], local))
 				for op in self.cases[case]:
