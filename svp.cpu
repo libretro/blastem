@@ -2,6 +2,7 @@ info
 	prefix svp_
 	opcode_size 16
 	body svp_run_op
+	header svp.h
 	
 regs
 	internal 16 scratch1 x y scratch2 st pad pc
@@ -70,9 +71,10 @@ svp_ram_read
 	case 2
 	#loop decremenet
 	meta modestr -
-	mov reg tmp
 	
 	if rpl
+		local tmp 16
+		mov reg tmp
 		lsl 1 rpl rpl
 		sub 1 rpl rpl
 		local mask 16
@@ -80,7 +82,7 @@ svp_ram_read
 		and reg mask reg
 		sub 1 tmp tmp
 		and rpl tmp tmp
-		or rpl reg reg
+		or tmp reg reg
 	else
 		sub 1 reg reg
 	end
@@ -91,6 +93,7 @@ svp_ram_read
 	
 	and 7 st rpl
 	if rpl
+		local tmp 16
 		mov reg tmp
 		lsl 1 rpl rpl
 		sub 1 rpl rpl
@@ -99,7 +102,7 @@ svp_ram_read
 		and reg mask reg
 		add 1 tmp tmp
 		and rpl tmp tmp
-		or rpl reg reg
+		or tmp reg reg
 	else
 		sub 1 reg reg
 	end
