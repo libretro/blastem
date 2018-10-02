@@ -36,9 +36,9 @@ svp_pop
 	
 svp_push
 	arg src 16
-	add -1 stackidx stackidx
+	sub 1 stackidx stackidx
 	switch stackidx
-	case -1
+	case 0xFF
 	mov 5 stackidx
 	end
 	mov src stack.stackidx
