@@ -3,6 +3,7 @@ info
 	opcode_size 16
 	body svp_run_op
 	header svp.h
+	include svp_util.c
 	
 regs
 	internal 16 scratch1 x y scratch2 st pad pc
