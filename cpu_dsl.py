@@ -893,6 +893,7 @@ class Program:
 		self.extra_tables = info.get('extra_tables', [])
 		self.context_type = self.prefix + 'context'
 		self.body = info.get('body', [None])[0]
+		self.includes = info.get('include', [])
 		self.flags = flags
 		self.lastDst = None
 		self.scopes = []
@@ -930,6 +931,8 @@ class Program:
 	def build(self, otype):
 		body = []
 		pieces = []
+		for include in self.includes:
+			body.append('#include "{0}"\n'.format(include))
 		for table in self.instructions:
 			opmap = [None] * (1 << self.opsize)
 			bodymap = {}
