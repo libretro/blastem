@@ -676,11 +676,15 @@ class If(ChildBlock):
 class Registers:
 	def __init__(self):
 		self.regs = {}
+		self.pointers = {}
 		self.regArrays = {}
 		self.regToArray = {}
 	
 	def addReg(self, name, size):
 		self.regs[name] = size
+		
+	def addPointer(self, name, size):
+		self.pointers[name] = size
 	
 	def addRegArray(self, name, size, regs):
 		self.regArrays[name] = (size, regs)
@@ -721,11 +725,16 @@ class Registers:
 		elif len(parts) > 2:
 			self.addRegArray(parts[0], int(parts[1]), parts[2:])
 		else:
-			self.addReg(parts[0], int(parts[1]))
+			if parts[1].startswith('ptr'):
+				self.addPointer(parts[0], int(parts[1][3:]))
+			else:
+				self.addReg(parts[0], int(parts[1]))
 		return self
 
 	def writeHeader(self, otype, hFile):
 		fieldList = []
+		for pointer in self.pointers:
+			hFile.write('\n\tuint{sz}_t *{nm};'.format(nm=pointer, sz=self.pointers[pointer]))
 		for reg in self.regs:
 			if not self.isRegArrayMember(reg):
 				fieldList.append((self.regs[reg], 1, reg))
