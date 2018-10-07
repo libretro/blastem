@@ -6,8 +6,10 @@ info
 	include svp_util.c
 	
 regs
-	internal 16 scratch1 x y scratch2 st pad pc
+	internal 16 scratch2 x y pad0 st pad1 pc
 	a 32
+	scratch1 32
+	rom ptr16
 	stack 16 stack0 stack1 stack2 stack3 stack4 stack5
 	stackidx 8
 	p 32
@@ -622,7 +624,7 @@ svp_prog_ram_read
 	
 	if >=U
 	add src src scratch1
-	ocall read_16
+	ocall prog_read_16
 	
 	else
 	mov iram.src scratch1
