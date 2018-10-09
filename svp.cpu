@@ -16,6 +16,9 @@ regs
 	external 16 pm0 pm1 pm2 xst pm4 ext5 pmc
 	pointers0 8 r0 r1 r2 r3 
 	pointers1 8 r4 r5 r6 r7
+	pm_address 32 5
+	pm_mode 8 5
+	
 	iram 16 1024
 	ram0 16 256
 	ram1 16 256
