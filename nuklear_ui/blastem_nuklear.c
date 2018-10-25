@@ -15,6 +15,7 @@
 #include "../io.h"
 #include "../png.h"
 #include "../controller_info.h"
+#include "../bindings.h"
 
 static struct nk_context *context;
 
@@ -514,7 +515,7 @@ static uint32_t controller_360_width, controller_360_height, controller_ps4_widt
 #define LEFTSTICK  0x10000000
 #define RIGHTSTICK 0x20000000
 enum {
-	UP,DOWN,LEFT,RIGHT
+	UP,DOWN,RIGHT,LEFT,NUM_AXIS_DIRS
 };
 
 static char * config_ps_names[] = {
@@ -530,71 +531,35 @@ static char * config_ps_names[] = {
 	[SDL_CONTROLLER_BUTTON_RIGHTSTICK] = "r3",
 };
 
-static void binding_box(struct nk_context *context, char *name, float x, float y, float width, int num_binds, int *binds)
+typedef struct {	
+	const char *button_binds[SDL_CONTROLLER_BUTTON_MAX];
+	const char *left_stick[NUM_AXIS_DIRS];
+	const char *right_stick[NUM_AXIS_DIRS];
+	const char *triggers[2];
+} pad_bind_config;
+
+static void binding_box(struct nk_context *context, pad_bind_config *bindings, char *name, float x, float y, float width, int num_binds, int *binds)
 {
 	const struct nk_user_font *font = context->style.font;
 	float row_height = font->height * 2;
 	
 	char const **labels = calloc(sizeof(char *), num_binds);
-	char **conf_keys = calloc(sizeof(char *), num_binds);
+	char const **conf_vals = calloc(sizeof(char *), num_binds);
 	float max_width = 0.0f;
 	
-	static const char base_path[] = "bindings\0pads";
-	static const char buttons[] = "buttons";
-	static const char dpads[] = "dpads\00";
-	static const char axes[] = "axes";
-	static const char positive[] = ".positive";
-	static const char negative[] = ".negative";
-	char padkey[] = {'0' + selected_controller, 0};
 	int skipped = 0;
 	for (int i = 0; i < num_binds; i++)
 	{
 		if (binds[i] & AXIS) {
 			labels[i] = get_axis_label(&selected_controller_info, binds[i] & ~AXIS);
-			const char *axname = SDL_GameControllerGetStringForAxis(binds[i] & ~AXIS);
-			size_t namelen = strlen(axname);
-			conf_keys[i] = malloc(sizeof(base_path) + sizeof(padkey) + sizeof(axes) + namelen + 2);
-			memcpy(conf_keys[i], base_path, sizeof(base_path));
-			memcpy(conf_keys[i] + sizeof(base_path), padkey, sizeof(padkey));
-			memcpy(conf_keys[i] + sizeof(base_path) + sizeof(padkey), axes, sizeof(axes));
-			memcpy(conf_keys[i] + sizeof(base_path) + sizeof(padkey) + sizeof(axes), axname, namelen+1);
-			conf_keys[i][sizeof(base_path) + sizeof(padkey) + sizeof(axes) + namelen + 1] = 0;
+			conf_vals[i] = bindings->triggers[(binds[i] & ~AXIS) - SDL_CONTROLLER_AXIS_TRIGGERLEFT];
 		} else if (binds[i] & STICKDIR) {
-			static char const * dirs[] = {"Up", "Down", "Left", "Right"};
+			static char const * dirs[] = {"Up", "Down", "Right", "Left"};
 			labels[i] = dirs[binds[i] & 3];
-			uint8_t is_pos = (binds[i] & 3) == 3 || !(binds[i] & 3);
-			int sdl_axis = (binds[i] & LEFTSTICK ? SDL_CONTROLLER_AXIS_LEFTX : SDL_CONTROLLER_AXIS_RIGHTX) + !(binds[i] & 2);
-			const char *axname = SDL_GameControllerGetStringForAxis(sdl_axis);
-			size_t namelen = strlen(axname);
-			conf_keys[i] = malloc(sizeof(base_path) + sizeof(padkey) + sizeof(axes) + namelen + sizeof(positive) + 1);
-			memcpy(conf_keys[i], base_path, sizeof(base_path));
-			memcpy(conf_keys[i] + sizeof(base_path), padkey, sizeof(padkey));
-			memcpy(conf_keys[i] + sizeof(base_path) + sizeof(padkey), axes, sizeof(axes));
-			memcpy(conf_keys[i] + sizeof(base_path) + sizeof(padkey) + sizeof(axes), axname, namelen);
-			memcpy(conf_keys[i] + sizeof(base_path) + sizeof(padkey) + sizeof(axes) + namelen, is_pos ? positive : negative, sizeof(positive));
-			conf_keys[i][sizeof(base_path) + sizeof(padkey) + sizeof(axes) + namelen + sizeof(positive)] = 0;
+			conf_vals[i] = (binds[i] & LEFTSTICK ? bindings->left_stick : bindings->right_stick)[binds[i] & 3];
 		} else {
 			labels[i] = get_button_label(&selected_controller_info, binds[i]);
-			static const char* dpdirs[] = {"up", "down", "left", "right"};
-			const char *but_name, *mid;
-			size_t midsz;
-			if (binds[i] < SDL_CONTROLLER_BUTTON_DPAD_UP) {
-				but_name = SDL_GameControllerGetStringForButton(binds[i]);
-				mid = buttons;
-				midsz = sizeof(buttons);
-			} else {
-				but_name = dpdirs[binds[i] - SDL_CONTROLLER_BUTTON_DPAD_UP];
-				mid = dpads;
-				midsz = sizeof(dpads);
-			}
-			size_t namelen = strlen(but_name);
-			conf_keys[i] = malloc(sizeof(base_path) + sizeof(padkey) + midsz + namelen + 2);
-			memcpy(conf_keys[i], base_path, sizeof(base_path));
-			memcpy(conf_keys[i] + sizeof(base_path), padkey, sizeof(padkey));
-			memcpy(conf_keys[i] + sizeof(base_path) + sizeof(padkey), mid, midsz);
-			
-			memcpy(conf_keys[i] + sizeof(base_path) + sizeof(padkey) + midsz, but_name, namelen+1);
-			conf_keys[i][sizeof(base_path) + sizeof(padkey) + sizeof(buttons) + namelen + 1] = 0;
+			conf_vals[i] = bindings->button_binds[binds[i]];
 		}
 		if (!labels[i]) {
 			skipped++;
@@ -614,25 +579,74 @@ static void binding_box(struct nk_context *context, char *name, float x, float y
 			continue;
 		}
 		nk_label(context, labels[i], NK_TEXT_LEFT);
-		if (conf_keys[i]) {
-			char *assigned = tern_find_path(config, conf_keys[i], TVAL_PTR).ptrval;
-			if (!assigned) {
-				assigned = "None";
-			} else if (!memcmp("gamepads.", assigned, strlen("gamepads."))) {
-				assigned += strlen("gamepads.0.");
-			}
-			nk_button_label(context, assigned);
-		} else {
-			nk_button_label(context, i & 1 ? "Internal Screenshot" : "A");
-		}
-		free(conf_keys[i]);
+		nk_button_label(context, conf_vals[i] ? conf_vals[i] : "None");
 	}
+	free(labels);
+	free(conf_vals);
 	nk_group_end(context);
+}
+
+static void button_iter(char *key, tern_val val, uint8_t valtype, void *data)
+{
+	pad_bind_config *bindings = data;
+	if (valtype != TVAL_PTR) {
+		return;
+	}
+	int button = render_lookup_button(key);
+	if (button != SDL_CONTROLLER_BUTTON_INVALID) {
+		bindings->button_binds[button] = val.ptrval;
+	}
+}
+
+static void axis_iter(char *key, tern_val val, uint8_t valtype, void *data)
+{
+	pad_bind_config *bindings = data;
+	if (valtype != TVAL_PTR) {
+		return;
+	}
+	int axis;
+	uint8_t is_negative = 0;
+	char *period = strchr(key, '.');
+	if (period) {
+		char *tmp = malloc(period-key + 1);
+		memcpy(tmp, key, period-key);
+		tmp[period-key] = 0;
+		axis = render_lookup_axis(key);
+		free(tmp);
+		is_negative = strcmp(period+1, "negative") == 0;
+	} else {
+		axis = render_lookup_axis(key);
+	}
+	switch (axis)
+	{
+	case SDL_CONTROLLER_AXIS_LEFTX:
+	case SDL_CONTROLLER_AXIS_LEFTY:
+		bindings->left_stick[(axis - SDL_CONTROLLER_AXIS_LEFTX) * 2 + is_negative] = val.ptrval;
+		break;
+	case SDL_CONTROLLER_AXIS_RIGHTX:
+	case SDL_CONTROLLER_AXIS_RIGHTY:
+		bindings->right_stick[(axis - SDL_CONTROLLER_AXIS_RIGHTX) * 2 + is_negative] = val.ptrval;
+		break;
+	case SDL_CONTROLLER_AXIS_TRIGGERLEFT:
+	case SDL_CONTROLLER_AXIS_TRIGGERRIGHT:
+		bindings->triggers[axis-SDL_CONTROLLER_AXIS_TRIGGERLEFT] = val.ptrval;
+		break;
+	}
 }
 
 void view_controller_bindings(struct nk_context *context)
 {
+	static pad_bind_config *bindings;
 	if (nk_begin(context, "Controller Bindings", nk_rect(0, 0, render_width(), render_height()), NK_WINDOW_NO_SCROLLBAR)) {
+		if (!bindings) {
+			bindings = calloc(1, sizeof(*bindings));
+			tern_node *pad = get_binding_node_for_pad(selected_controller);
+			if (pad) {
+				tern_foreach(tern_find_node(pad, "buttons"), button_iter, bindings);
+				tern_foreach(tern_find_node(pad, "axes"), axis_iter, bindings);
+			}
+		}
+	
 		float orig_height = def_font->handle.height;
 		def_font->handle.height *= 0.5f;
 		
@@ -686,25 +700,25 @@ void view_controller_bindings(struct nk_context *context)
 			bind_box_left = img_right + (render_width() - img_right) / 2.0f - bind_box_width / 2.0f;
 		}
 		
-		binding_box(context, "Action Buttons", bind_box_left, img_top, bind_box_width, 4, (int[]){
+		binding_box(context, bindings, "Action Buttons", bind_box_left, img_top, bind_box_width, 4, (int[]){
 			SDL_CONTROLLER_BUTTON_A,
 			SDL_CONTROLLER_BUTTON_B,
 			SDL_CONTROLLER_BUTTON_X,
 			SDL_CONTROLLER_BUTTON_Y
 		});
 		
-		binding_box(context, "Right Shoulder", bind_box_left, font->height/2, bind_box_width, 2, (int[]){
+		binding_box(context, bindings, "Right Shoulder", bind_box_left, font->height/2, bind_box_width, 2, (int[]){
 			SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
 			AXIS | SDL_CONTROLLER_AXIS_TRIGGERRIGHT
 		});
 		
-		binding_box(context, "Misc Buttons", (render_width() - bind_box_width) / 2, font->height/2, bind_box_width, 3, (int[]){
+		binding_box(context, bindings, "Misc Buttons", (render_width() - bind_box_width) / 2, font->height/2, bind_box_width, 3, (int[]){
 			SDL_CONTROLLER_BUTTON_BACK,
 			SDL_CONTROLLER_BUTTON_GUIDE,
 			SDL_CONTROLLER_BUTTON_START
 		});
 		
-		binding_box(context, "Right Stick", img_right - desired_width/3, img_bot, bind_box_width, 5, (int[]){
+		binding_box(context, bindings, "Right Stick", img_right - desired_width/3, img_bot, bind_box_width, 5, (int[]){
 			RIGHTSTICK | UP,
 			RIGHTSTICK | DOWN,
 			RIGHTSTICK | LEFT,
@@ -714,7 +728,7 @@ void view_controller_bindings(struct nk_context *context)
 		
 		
 		bind_box_left -= img_right;
-		binding_box(context, "Left Stick", bind_box_left, img_top, bind_box_width, 5, (int[]){
+		binding_box(context, bindings, "Left Stick", bind_box_left, img_top, bind_box_width, 5, (int[]){
 			LEFTSTICK | UP,
 			LEFTSTICK | DOWN,
 			LEFTSTICK | LEFT,
@@ -722,12 +736,12 @@ void view_controller_bindings(struct nk_context *context)
 			SDL_CONTROLLER_BUTTON_LEFTSTICK
 		});
 		
-		binding_box(context, "Left Shoulder", bind_box_left, font->height/2, bind_box_width, 2, (int[]){
+		binding_box(context, bindings, "Left Shoulder", bind_box_left, font->height/2, bind_box_width, 2, (int[]){
 			SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
 			AXIS | SDL_CONTROLLER_AXIS_TRIGGERLEFT
 		});
 		
-		binding_box(context, "D-pad", img_left - desired_width/6, img_bot + font->height * 1.5, bind_box_width, 4, (int[]){
+		binding_box(context, bindings, "D-pad", img_left - desired_width/6, img_bot + font->height * 1.5, bind_box_width, 4, (int[]){
 			SDL_CONTROLLER_BUTTON_DPAD_UP,
 			SDL_CONTROLLER_BUTTON_DPAD_DOWN,
 			SDL_CONTROLLER_BUTTON_DPAD_LEFT,

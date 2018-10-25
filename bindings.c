@@ -857,72 +857,78 @@ static tern_node *get_mouse_buttons()
 	return mousebuttons;
 }
 
-void handle_joy_added(int joystick)
+tern_node *get_binding_node_for_pad(int padnum)
 {
-	if (joystick > MAX_JOYSTICKS) {
-		return;
+	if (padnum > MAX_JOYSTICKS) {
+		return NULL;
 	}
 	tern_node * pads = tern_find_path(config, "bindings\0pads\0", TVAL_NODE).ptrval;
-	if (pads) {
-		char numstr[11];
-		sprintf(numstr, "%d", joystick);
-		tern_node * pad = tern_find_node(pads, numstr);
-		if (!pad) {
-			char *type_id = render_joystick_type_id(joystick);
-			pad = tern_find_node(pads, type_id);
-			free(type_id);
-		}
-		if (!pad) {
-			controller_info info = get_controller_info(joystick);
-			char *key = make_controller_type_key(&info);
-			pad = tern_find_node(pads, key);
-			free(key);
-		}
-		if (!pad) {
-			pad = tern_find_node(pads, "default");
-		}
-		if (pad) {
-			tern_node * dpad_node = tern_find_node(pad, "dpads");
-			if (dpad_node) {
-				for (int dpad = 0; dpad < 10; dpad++)
-				{
-					numstr[0] = dpad + '0';
-					numstr[1] = 0;
-					tern_node * pad_dpad = tern_find_node(dpad_node, numstr);
-					char * dirs[] = {"up", "down", "left", "right"};
-					//TODO: Support controllers that have d-pads implemented as analog axes or buttons
-					int dirnums[] = {RENDER_DPAD_UP, RENDER_DPAD_DOWN, RENDER_DPAD_LEFT, RENDER_DPAD_RIGHT};
-					for (int dir = 0; dir < sizeof(dirs)/sizeof(dirs[0]); dir++) {
-						char * target = tern_find_ptr(pad_dpad, dirs[dir]);
-						if (target) {
-							uint8_t subtype_a = 0, subtype_b = 0;
-							int bindtype = parse_binding_target(joystick, target, get_pad_buttons(), get_mouse_buttons(), &subtype_a, &subtype_b);
-							bind_dpad(joystick, dpad, dirnums[dir], bindtype, subtype_a, subtype_b);
-						}
-					}
+	if (!pads) {
+		return NULL;
+	}
+	char numstr[11];
+	sprintf(numstr, "%d", padnum);
+	tern_node * pad = tern_find_node(pads, numstr);
+	if (!pad) {
+		char *type_id = render_joystick_type_id(padnum);
+		pad = tern_find_node(pads, type_id);
+		free(type_id);
+	}
+	if (!pad) {
+		controller_info info = get_controller_info(padnum);
+		char *key = make_controller_type_key(&info);
+		pad = tern_find_node(pads, key);
+		free(key);
+	}
+	if (!pad) {
+		pad = tern_find_node(pads, "default");
+	}
+	return pad;
+}
+
+void handle_joy_added(int joystick)
+{
+	tern_node *pad = get_binding_node_for_pad(joystick);
+	if (!pad) {
+		return;
+	}
+	tern_node * dpad_node = tern_find_node(pad, "dpads");
+	if (dpad_node) {
+		for (int dpad = 0; dpad < 10; dpad++)
+		{
+			char numstr[2] = {dpad + '0', 0};
+			tern_node * pad_dpad = tern_find_node(dpad_node, numstr);
+			char * dirs[] = {"up", "down", "left", "right"};
+			//TODO: Support controllers that have d-pads implemented as analog axes or buttons
+			int dirnums[] = {RENDER_DPAD_UP, RENDER_DPAD_DOWN, RENDER_DPAD_LEFT, RENDER_DPAD_RIGHT};
+			for (int dir = 0; dir < sizeof(dirs)/sizeof(dirs[0]); dir++) {
+				char * target = tern_find_ptr(pad_dpad, dirs[dir]);
+				if (target) {
+					uint8_t subtype_a = 0, subtype_b = 0;
+					int bindtype = parse_binding_target(joystick, target, get_pad_buttons(), get_mouse_buttons(), &subtype_a, &subtype_b);
+					bind_dpad(joystick, dpad, dirnums[dir], bindtype, subtype_a, subtype_b);
 				}
-			}
-			tern_node *button_node = tern_find_node(pad, "buttons");
-			if (button_node) {
-				pad_button_state state = {
-					.padnum = joystick,
-					.padbuttons = get_pad_buttons(),
-					.mousebuttons = get_mouse_buttons()
-				};
-				tern_foreach(button_node, process_pad_button, &state);
-			}
-			tern_node *axes_node = tern_find_node(pad, "axes");
-			if (axes_node) {
-				pad_button_state state = {
-					.padnum = joystick,
-					.padbuttons = get_pad_buttons(),
-					.mousebuttons = get_mouse_buttons()
-				};
-				tern_foreach(axes_node, process_pad_axis, &state);
 			}
 		}
 	}
-	
+	tern_node *button_node = tern_find_node(pad, "buttons");
+	if (button_node) {
+		pad_button_state state = {
+			.padnum = joystick,
+			.padbuttons = get_pad_buttons(),
+			.mousebuttons = get_mouse_buttons()
+		};
+		tern_foreach(button_node, process_pad_button, &state);
+	}
+	tern_node *axes_node = tern_find_node(pad, "axes");
+	if (axes_node) {
+		pad_button_state state = {
+			.padnum = joystick,
+			.padbuttons = get_pad_buttons(),
+			.mousebuttons = get_mouse_buttons()
+		};
+		tern_foreach(axes_node, process_pad_axis, &state);
+	}
 }
 
 //only handles keyboards and mice as gamepads are handled on hotplug events
