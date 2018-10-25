@@ -11,6 +11,7 @@ typedef enum {
 
 void set_bindings(void);
 void bindings_set_mouse_mode(uint8_t mode);
+tern_node *get_binding_node_for_pad(int padnum);
 void handle_keydown(int keycode, uint8_t scancode);
 void handle_keyup(int keycode, uint8_t scancode);
 void handle_joydown(int joystick, int button);
