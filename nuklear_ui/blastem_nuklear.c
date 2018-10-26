@@ -540,6 +540,7 @@ typedef struct {
 
 static void binding_box(struct nk_context *context, pad_bind_config *bindings, char *name, float x, float y, float width, int num_binds, int *binds)
 {
+	static tern_node *conf_names;
 	const struct nk_user_font *font = context->style.font;
 	float row_height = font->height * 2;
 	
@@ -571,6 +572,45 @@ static void binding_box(struct nk_context *context, pad_bind_config *bindings, c
 	nk_layout_space_push(context, nk_rect(x, y, width, (num_binds - skipped) * (row_height + 4) + 4));
 	nk_group_begin(context, name, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR);
 	
+	if (!conf_names) {
+		conf_names = tern_insert_ptr(conf_names, "gamepads.n.up", "Pad Up");
+		conf_names = tern_insert_ptr(conf_names, "gamepads.n.down", "Pad Down");
+		conf_names = tern_insert_ptr(conf_names, "gamepads.n.left", "Pad Left");
+		conf_names = tern_insert_ptr(conf_names, "gamepads.n.right", "Pad Right");
+		conf_names = tern_insert_ptr(conf_names, "gamepads.n.a", "Pad A");
+		conf_names = tern_insert_ptr(conf_names, "gamepads.n.b", "Pad B");
+		conf_names = tern_insert_ptr(conf_names, "gamepads.n.c", "Pad C");
+		conf_names = tern_insert_ptr(conf_names, "gamepads.n.x", "Pad X");
+		conf_names = tern_insert_ptr(conf_names, "gamepads.n.y", "Pad Y");
+		conf_names = tern_insert_ptr(conf_names, "gamepads.n.z", "Pad Z");
+		conf_names = tern_insert_ptr(conf_names, "gamepads.n.start", "Pad Start");
+		conf_names = tern_insert_ptr(conf_names, "gamepads.n.mode", "Pad Mode");
+		conf_names = tern_insert_ptr(conf_names, "ui.release_mouse", "Release Mouse");
+		conf_names = tern_insert_ptr(conf_names, "ui.vdp_debug_mode", "VDP Debug Mode");
+		conf_names = tern_insert_ptr(conf_names, "ui.vdp_debug_pal", "VDP Debug Palette");
+		conf_names = tern_insert_ptr(conf_names, "ui.enter_debugger", "Enter CPU Debugger");
+		conf_names = tern_insert_ptr(conf_names, "ui.screenshot", "Take Screenshot");
+		conf_names = tern_insert_ptr(conf_names, "ui.exit", "Show Menu");
+		conf_names = tern_insert_ptr(conf_names, "ui.save_state", "Quick Save");
+		conf_names = tern_insert_ptr(conf_names, "ui.set_speed.0", "Set Speed 0");
+		conf_names = tern_insert_ptr(conf_names, "ui.set_speed.1", "Set Speed 1");
+		conf_names = tern_insert_ptr(conf_names, "ui.set_speed.2", "Set Speed 2");
+		conf_names = tern_insert_ptr(conf_names, "ui.set_speed.3", "Set Speed 3");
+		conf_names = tern_insert_ptr(conf_names, "ui.set_speed.4", "Set Speed 4");
+		conf_names = tern_insert_ptr(conf_names, "ui.set_speed.5", "Set Speed 5");
+		conf_names = tern_insert_ptr(conf_names, "ui.set_speed.6", "Set Speed 6");
+		conf_names = tern_insert_ptr(conf_names, "ui.set_speed.7", "Set Speed 7");
+		conf_names = tern_insert_ptr(conf_names, "ui.set_speed.8", "Set Speed 8");
+		conf_names = tern_insert_ptr(conf_names, "ui.set_speed.9", "Set Speed 9");
+		conf_names = tern_insert_ptr(conf_names, "ui.next_speed", "Next Speed");
+		conf_names = tern_insert_ptr(conf_names, "ui.prev_speed", "Prev. Speed");
+		conf_names = tern_insert_ptr(conf_names, "ui.toggle_fullscreen", "Toggle Fullscreen");
+		conf_names = tern_insert_ptr(conf_names, "ui.soft_reset", "Soft Reset");
+		conf_names = tern_insert_ptr(conf_names, "ui.reload", "Reload ROM");
+		conf_names = tern_insert_ptr(conf_names, "ui.sms_pause", "SMS Pause");
+		conf_names = tern_insert_ptr(conf_names, "ui.toggle_keyboard_captured", "Toggle Keyboard Capture");
+	}
+	
 	float widths[] = {max_width + 3, width - (max_width + 6)};
 	nk_layout_row(context, NK_STATIC, row_height, 2, widths);
 	for (int i = 0; i < num_binds; i++)
@@ -579,7 +619,8 @@ static void binding_box(struct nk_context *context, pad_bind_config *bindings, c
 			continue;
 		}
 		nk_label(context, labels[i], NK_TEXT_LEFT);
-		nk_button_label(context, conf_vals[i] ? conf_vals[i] : "None");
+		char *name = conf_vals[i] ? tern_find_ptr(conf_names, conf_vals[i]) : NULL;
+		nk_button_label(context, name ? name : conf_vals[i] ? conf_vals[i] : "None");
 	}
 	free(labels);
 	free(conf_vals);
