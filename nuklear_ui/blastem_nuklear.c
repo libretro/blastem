@@ -611,7 +611,7 @@ static void axis_iter(char *key, tern_val val, uint8_t valtype, void *data)
 		char *tmp = malloc(period-key + 1);
 		memcpy(tmp, key, period-key);
 		tmp[period-key] = 0;
-		axis = render_lookup_axis(key);
+		axis = render_lookup_axis(tmp);
 		free(tmp);
 		is_negative = strcmp(period+1, "negative") == 0;
 	} else {
@@ -644,6 +644,13 @@ void view_controller_bindings(struct nk_context *context)
 			if (pad) {
 				tern_foreach(tern_find_node(pad, "buttons"), button_iter, bindings);
 				tern_foreach(tern_find_node(pad, "axes"), axis_iter, bindings);
+				tern_node *dpad = tern_find_path(pad, "dpads\0" "0\0", TVAL_NODE).ptrval;
+				const char *dir_keys[] = {"up", "down", "right", "left"};
+				const int button_idx[] = {SDL_CONTROLLER_BUTTON_DPAD_UP, SDL_CONTROLLER_BUTTON_DPAD_DOWN, SDL_CONTROLLER_BUTTON_DPAD_RIGHT, SDL_CONTROLLER_BUTTON_DPAD_LEFT};
+				for (int i = 0; i < NUM_AXIS_DIRS; i++)
+				{
+					bindings->button_binds[button_idx[i]] = tern_find_ptr(dpad, dir_keys[i]);
+				}
 			}
 		}
 	
