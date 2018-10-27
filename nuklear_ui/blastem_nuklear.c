@@ -538,40 +538,11 @@ typedef struct {
 	const char *triggers[2];
 } pad_bind_config;
 
-static void binding_box(struct nk_context *context, pad_bind_config *bindings, char *name, float x, float y, float width, int num_binds, int *binds)
+static const char **current_bind_dest;
+
+const char *translate_binding_option(const char *option)
 {
 	static tern_node *conf_names;
-	const struct nk_user_font *font = context->style.font;
-	float row_height = font->height * 2;
-	
-	char const **labels = calloc(sizeof(char *), num_binds);
-	char const **conf_vals = calloc(sizeof(char *), num_binds);
-	float max_width = 0.0f;
-	
-	int skipped = 0;
-	for (int i = 0; i < num_binds; i++)
-	{
-		if (binds[i] & AXIS) {
-			labels[i] = get_axis_label(&selected_controller_info, binds[i] & ~AXIS);
-			conf_vals[i] = bindings->triggers[(binds[i] & ~AXIS) - SDL_CONTROLLER_AXIS_TRIGGERLEFT];
-		} else if (binds[i] & STICKDIR) {
-			static char const * dirs[] = {"Up", "Down", "Right", "Left"};
-			labels[i] = dirs[binds[i] & 3];
-			conf_vals[i] = (binds[i] & LEFTSTICK ? bindings->left_stick : bindings->right_stick)[binds[i] & 3];
-		} else {
-			labels[i] = get_button_label(&selected_controller_info, binds[i]);
-			conf_vals[i] = bindings->button_binds[binds[i]];
-		}
-		if (!labels[i]) {
-			skipped++;
-			continue;
-		}
-		float lb_width = font->width(font->userdata, font->height, labels[i], strlen(labels[i]));
-		max_width = max_width < lb_width ? lb_width : max_width;
-	}
-	nk_layout_space_push(context, nk_rect(x, y, width, (num_binds - skipped) * (row_height + 4) + 4));
-	nk_group_begin(context, name, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR);
-	
 	if (!conf_names) {
 		conf_names = tern_insert_ptr(conf_names, "gamepads.n.up", "Pad Up");
 		conf_names = tern_insert_ptr(conf_names, "gamepads.n.down", "Pad Down");
@@ -610,6 +581,122 @@ static void binding_box(struct nk_context *context, pad_bind_config *bindings, c
 		conf_names = tern_insert_ptr(conf_names, "ui.sms_pause", "SMS Pause");
 		conf_names = tern_insert_ptr(conf_names, "ui.toggle_keyboard_captured", "Toggle Keyboard Capture");
 	}
+	return tern_find_ptr_default(conf_names, option, (void *)option);
+}
+
+static void bind_option_group(struct nk_context *context, char *name, const char **options, uint32_t num_options)
+{
+	float margin = context->style.font->height * 2;
+	nk_layout_row_static(context, (context->style.font->height + 3) * ((num_options + 2) / 3) + context->style.font->height*2.1, render_width() - margin, 1);
+	if (nk_group_begin(context, name, NK_WINDOW_TITLE|NK_WINDOW_NO_SCROLLBAR)) {
+		nk_layout_row_static(context, context->style.font->height, (render_width() - margin - context->style.font->height) / 3, 3);
+		for (int i = 0; i < num_options; i++)
+		{
+			if (nk_button_label(context, translate_binding_option(options[i]))) {
+				*current_bind_dest = options[i];
+				pop_view();
+			}
+		}
+		nk_group_end(context);
+	}
+}
+
+static void view_button_binding(struct nk_context *context)
+{
+	static const char *pad_opts[] = {
+		"gamepads.n.up",
+		"gamepads.n.down",
+		"gamepads.n.left",
+		"gamepads.n.right",
+		"gamepads.n.a",
+		"gamepads.n.b",
+		"gamepads.n.c",
+		"gamepads.n.x",
+		"gamepads.n.y",
+		"gamepads.n.z",
+		"gamepads.n.start",
+		"gamepads.n.mode"
+	};
+	static const char *system_buttons[] = {
+		"ui.soft_reset",
+		"ui.reload",
+		"ui.sms_pause"
+	};
+	static const char *emu_control[] = {
+		"ui.save_state",
+		"ui.exit",
+		"ui.toggle_fullscreen",
+		"ui.screenshot",
+		"ui.release_mouse",
+		"ui.toggle_keyboard_captured"
+	};
+	static const char *debugger[] = {
+		"ui.vdp_debug_mode",
+		"ui.vdp_debug_pal",
+		"ui.enter_debugger"
+	};
+	static const char *speeds[] = {
+		"ui.next_speed",
+		"ui.prev_speed",
+		"ui.set_speed.0",
+		"ui.set_speed.1",
+		"ui.set_speed.2",
+		"ui.set_speed.3",
+		"ui.set_speed.4",
+		"ui.set_speed.5",
+		"ui.set_speed.6",
+		"ui.set_speed.7",
+		"ui.set_speed.8",
+		"ui.set_speed.9"
+	};
+		
+	if (nk_begin(context, "Button Binding", nk_rect(0, 0, render_width(), render_height()), 0)) {
+		bind_option_group(context, "Controller Buttons", pad_opts, sizeof(pad_opts)/sizeof(*pad_opts));
+		bind_option_group(context, "System Buttons", system_buttons, sizeof(system_buttons)/sizeof(*system_buttons));
+		bind_option_group(context, "Emulator Control", emu_control, sizeof(emu_control)/sizeof(*emu_control));
+		bind_option_group(context, "Debugging", debugger, sizeof(debugger)/sizeof(*debugger));
+		bind_option_group(context, "Speed Control", speeds, sizeof(speeds)/sizeof(*speeds));
+		
+		nk_layout_row_static(context, context->style.font->height, (render_width() - 80)/4, 1);
+		if (nk_button_label(context, "Back")) {
+			pop_view();
+		}
+		nk_end(context);
+	}
+}
+
+static void binding_box(struct nk_context *context, pad_bind_config *bindings, char *name, float x, float y, float width, int num_binds, int *binds)
+{
+	const struct nk_user_font *font = context->style.font;
+	float row_height = font->height * 2;
+	
+	char const **labels = calloc(sizeof(char *), num_binds);
+	char const ***conf_vals = calloc(sizeof(char *), num_binds);
+	float max_width = 0.0f;
+	
+	int skipped = 0;
+	for (int i = 0; i < num_binds; i++)
+	{
+		if (binds[i] & AXIS) {
+			labels[i] = get_axis_label(&selected_controller_info, binds[i] & ~AXIS);
+			conf_vals[i] = &bindings->triggers[(binds[i] & ~AXIS) - SDL_CONTROLLER_AXIS_TRIGGERLEFT];
+		} else if (binds[i] & STICKDIR) {
+			static char const * dirs[] = {"Up", "Down", "Right", "Left"};
+			labels[i] = dirs[binds[i] & 3];
+			conf_vals[i] = &(binds[i] & LEFTSTICK ? bindings->left_stick : bindings->right_stick)[binds[i] & 3];
+		} else {
+			labels[i] = get_button_label(&selected_controller_info, binds[i]);
+			conf_vals[i] = &bindings->button_binds[binds[i]];
+		}
+		if (!labels[i]) {
+			skipped++;
+			continue;
+		}
+		float lb_width = font->width(font->userdata, font->height, labels[i], strlen(labels[i]));
+		max_width = max_width < lb_width ? lb_width : max_width;
+	}
+	nk_layout_space_push(context, nk_rect(x, y, width, (num_binds - skipped) * (row_height + 4) + 4));
+	nk_group_begin(context, name, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR);
 	
 	float widths[] = {max_width + 3, width - (max_width + 6)};
 	nk_layout_row(context, NK_STATIC, row_height, 2, widths);
@@ -619,8 +706,11 @@ static void binding_box(struct nk_context *context, pad_bind_config *bindings, c
 			continue;
 		}
 		nk_label(context, labels[i], NK_TEXT_LEFT);
-		char *name = conf_vals[i] ? tern_find_ptr(conf_names, conf_vals[i]) : NULL;
-		nk_button_label(context, name ? name : conf_vals[i] ? conf_vals[i] : "None");
+		const char *name = *conf_vals[i] ? translate_binding_option(*conf_vals[i]) : "None";
+		if (nk_button_label(context, name)) {
+			current_bind_dest = conf_vals[i];
+			push_view(view_button_binding);
+		}
 	}
 	free(labels);
 	free(conf_vals);
