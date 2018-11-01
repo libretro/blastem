@@ -1537,6 +1537,7 @@ uint16_t * m68k_decode(uint16_t * istream, m68kinst * decoded, uint32_t address)
 					immed = 8;
 				}
 				decoded->src.params.immed = immed;
+				decoded->variant = VAR_QUICK;
 			}
 			decoded->dst.addr_mode = MODE_REG;
 			decoded->dst.params.regs.pri = *istream & 0x7;
@@ -2608,9 +2609,12 @@ int m68k_disasm_ex(m68kinst * decoded, char * dst, uint8_t labels, format_label_
 #endif
 	default:
 		size = decoded->extra.size;
+		uint8_t is_quick = decoded->variant == VAR_QUICK && decoded->op != M68K_ASL && decoded->op != M68K_ASR 
+			&& decoded->op != M68K_LSL && decoded->op != M68K_LSR && decoded->op != M68K_ROXR && decoded->op != M68K_ROXL
+			&& decoded->op != M68K_ROR && decoded->op != M68K_ROL;
 		ret = sprintf(dst, "%s%s%s",
 				mnemonics[decoded->op],
-				decoded->variant == VAR_QUICK ? "q" : (decoded->variant == VAR_IMMEDIATE ? "i" : ""),
+				is_quick ? "q" : (decoded->variant == VAR_IMMEDIATE ? "i" : ""),
 				size == OPSIZE_BYTE ? ".b" : (size == OPSIZE_WORD ? ".w" : (size == OPSIZE_LONG ? ".l" : "")));
 	}
 	if (decoded->op == M68K_MOVEM) {
