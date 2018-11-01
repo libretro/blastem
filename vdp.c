@@ -528,6 +528,8 @@ void vdp_print_reg_explain(vdp_context * context)
 		   context->regs[REG_DMASRC_H],
 		       context->regs[REG_DMASRC_H] << 17 | context->regs[REG_DMASRC_M] << 9 | context->regs[REG_DMASRC_L] << 1,
 			   src_types[context->regs[REG_DMASRC_H] >> 6 & 3]);
+	uint8_t old_flags = context->flags;
+	uint8_t old_flags2 = context->flags2;
 	printf("\n**Internal Group**\n"
 	       "Address: %X\n"
 	       "CD:      %X - %s\n"
@@ -541,8 +543,9 @@ void vdp_print_reg_explain(vdp_context * context)
 		   (context->flags & FLAG_PENDING) ? "word" : (context->flags2 & FLAG2_BYTE_PENDING) ? "byte" : "none",
 		   context->vcounter, context->hslot*2, (context->flags2 & FLAG2_VINT_PENDING) ? "true" : "false",
 		   (context->flags2 & FLAG2_HINT_PENDING) ? "true" : "false", vdp_control_port_read(context));
-
-	//TODO: Window Group, DMA Group
+	//restore flags as calling vdp_control_port_read can change them
+	context->flags = old_flags;
+	context->flags2 = old_flags2;
 }
 
 static uint8_t is_active(vdp_context *context)
