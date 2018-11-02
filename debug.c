@@ -900,6 +900,8 @@ void debugger(m68k_context * context, uint32_t address)
 	init_terminal();
 
 	sync_components(context, 0);
+	genesis_context *gen = context->system;
+	vdp_force_update_framebuffer(gen->vdp);
 	//probably not necessary, but let's play it safe
 	address &= 0xFFFFFF;
 	if (address == branch_t) {

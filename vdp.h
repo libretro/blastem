@@ -252,5 +252,6 @@ void vdp_release_framebuffer(vdp_context *context);
 void vdp_reacquire_framebuffer(vdp_context *context);
 void vdp_serialize(vdp_context *context, serialize_buffer *buf);
 void vdp_deserialize(deserialize_buffer *buf, void *vcontext);
+void vdp_force_update_framebuffer(vdp_context *context);
 
 #endif //VDP_H_
