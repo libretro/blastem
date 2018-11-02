@@ -1720,6 +1720,22 @@ static void vdp_advance_line(vdp_context *context)
 	}
 }
 
+void vdp_force_update_framebuffer(vdp_context *context)
+{
+	uint16_t lines_max = (context->flags2 & FLAG2_REGION_PAL) 
+			? 240 + BORDER_TOP_V30_PAL + BORDER_BOT_V30_PAL 
+			: 224 + BORDER_TOP_V28 + BORDER_BOT_V28;
+			
+	uint16_t to_fill = lines_max - context->output_lines;
+	memset(
+		((char *)context->fb) + context->output_pitch * context->output_lines,
+		0,
+		to_fill * context->output_pitch
+	);
+	render_framebuffer_updated(context->cur_buffer, context->h40_lines > context->output_lines / 2 ? LINEBUF_SIZE : (256+HORIZ_BORDER));
+	context->fb = render_get_framebuffer(context->cur_buffer, &context->output_pitch);
+}
+
 static void advance_output_line(vdp_context *context)
 {
 	if (headless) {
