@@ -787,31 +787,81 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 			insert_breakpoint(context, after, debugger);
 			return 0;
 		case 's':
-			if (inst.op == M68K_RTS) {
-				after = m68k_read_long(context->aregs[7], context);
-			} else if (inst.op == M68K_RTE || inst.op == M68K_RTR) {
-				after = m68k_read_long(context->aregs[7] + 2, context);
-			} else if(m68k_is_branch(&inst)) {
-				if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
-					branch_f = after;
-					branch_t = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
-					insert_breakpoint(context, branch_t, debugger);
-				} else if(inst.op == M68K_DBCC) {
-					if (inst.extra.cond == COND_FALSE) {
-						if (context->dregs[inst.dst.params.regs.pri] & 0xFFFF) {
-							after = m68k_branch_target(&inst, context->dregs, context->aregs);
+			if (input_buf[1] == 'e') {
+				param = find_param(input_buf);
+				if (!param) {
+					fputs("Missing destination parameter for set\n", stderr);
+				}
+				char *val = find_param(param);
+				if (!val) {
+					fputs("Missing value parameter for set\n", stderr);
+				}
+				long int_val;
+				int reg_num;
+				switch (val[0])
+				{
+				case 'd':
+				case 'a':
+					reg_num = val[1] - '0';
+					if (reg_num < 0 || reg_num > 8) {
+						fprintf(stderr, "Invalid register %s\n", val);
+						return 1;
+					}
+					int_val = (val[0] == 'd' ? context->dregs : context->aregs)[reg_num];
+					break;
+				case '$':
+					int_val = strtol(val+1, NULL, 16);
+					break;
+				case '0':
+					if (val[1] == 'x') {
+						int_val = strtol(val+2, NULL, 16);
+						break;
+					}
+				default:
+					int_val = strtol(val, NULL, 10);
+				}
+				switch(param[0])
+				{
+				case 'd':
+				case 'a':
+					reg_num = param[1] - '0';
+					if (reg_num < 0 || reg_num > 8) {
+						fprintf(stderr, "Invalid register %s\n", param);
+						return 1;
+					}
+					(param[0] == 'd' ? context->dregs : context->aregs)[reg_num] = int_val;
+					break;
+				default:
+					fprintf(stderr, "Invalid destinatino %s\n", param);
+				}
+				break;
+			} else {
+				if (inst.op == M68K_RTS) {
+					after = m68k_read_long(context->aregs[7], context);
+				} else if (inst.op == M68K_RTE || inst.op == M68K_RTR) {
+					after = m68k_read_long(context->aregs[7] + 2, context);
+				} else if(m68k_is_branch(&inst)) {
+					if (inst.op == M68K_BCC && inst.extra.cond != COND_TRUE) {
+						branch_f = after;
+						branch_t = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
+						insert_breakpoint(context, branch_t, debugger);
+					} else if(inst.op == M68K_DBCC) {
+						if (inst.extra.cond == COND_FALSE) {
+							if (context->dregs[inst.dst.params.regs.pri] & 0xFFFF) {
+								after = m68k_branch_target(&inst, context->dregs, context->aregs);
+							}
+						} else {
+							branch_t = after;
+							branch_f = m68k_branch_target(&inst, context->dregs, context->aregs);
+							insert_breakpoint(context, branch_f, debugger);
 						}
 					} else {
-						branch_t = after;
-						branch_f = m68k_branch_target(&inst, context->dregs, context->aregs);
-						insert_breakpoint(context, branch_f, debugger);
+						after = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
 					}
-				} else {
-					after = m68k_branch_target(&inst, context->dregs, context->aregs) & 0xFFFFFF;
 				}
+				insert_breakpoint(context, after, debugger);
+				return 0;
 			}
-			insert_breakpoint(context, after, debugger);
-			return 0;
 		case 'v': {
 			genesis_context * gen = context->system;
 			//VDP debug commands
