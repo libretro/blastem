@@ -6,6 +6,7 @@
 #include "saves.h"
 #include "util.h"
 #include "genesis.h"
+#include "sms.h"
 #include "menu.h"
 #include "bindings.h"
 #include "controller_info.h"
@@ -35,7 +36,8 @@ typedef enum {
 	UI_RELOAD,
 	UI_SMS_PAUSE,
 	UI_SCREENSHOT,
-	UI_EXIT
+	UI_EXIT,
+	UI_PLANE_DEBUG
 } ui_action;
 
 typedef struct {
@@ -372,6 +374,20 @@ void handle_binding_up(keybinding * binding)
 			}
 #endif
 			break;
+		case UI_PLANE_DEBUG: {
+			vdp_context *vdp = NULL;
+			if (current_system->type == SYSTEM_GENESIS) {
+				genesis_context *gen = (genesis_context *)current_system;
+				vdp = gen->vdp;
+			} else if (current_system->type == SYSTEM_SMS) {
+				sms_context *sms = (sms_context *)current_system;
+				vdp = sms->vdp;
+			}
+			if (vdp) {
+				vdp_toggle_debug_view(vdp, VDP_DEBUG_PLANE);
+			}
+			break;
+		}
 		}
 		break;
 	}
@@ -575,6 +591,8 @@ int parse_binding_target(int device_num, char * target, tern_node * padbuttons, 
 			*subtype_a = UI_SCREENSHOT;
 		} else if(!strcmp(target + 3, "exit")) {
 			*subtype_a = UI_EXIT;
+		} else if (!strcmp(target + 3, "plane_debug")) {
+			*subtype_a = UI_PLANE_DEBUG;
 		} else {
 			warning("Unreconized UI binding type %s\n", target);
 			return 0;

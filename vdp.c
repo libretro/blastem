@@ -1720,6 +1720,109 @@ static void vdp_advance_line(vdp_context *context)
 	}
 }
 
+static void vdp_update_per_frame_debug(vdp_context *context)
+{
+	if (context->enabled_debuggers & (1 << VDP_DEBUG_PLANE)) {
+		uint32_t pitch;
+		uint32_t *fb = render_get_framebuffer(context->debug_fb_indices[VDP_DEBUG_PLANE], &pitch);
+		uint16_t hscroll_mask;
+		uint16_t v_mul;
+		uint16_t vscroll_mask = 0x1F | (context->regs[REG_SCROLL] & 0x30) << 1;
+		switch(context->regs[REG_SCROLL] & 0x3)
+		{
+		case 0:
+			hscroll_mask = 0x1F;
+			v_mul = 64;
+			break;
+		case 0x1:
+			hscroll_mask = 0x3F;
+			v_mul = 128;
+			break;
+		case 0x2:
+			//TODO: Verify this behavior
+			hscroll_mask = 0x1F;
+			v_mul = 0;
+			break;
+		case 0x3:
+			hscroll_mask = 0x7F;
+			v_mul = 256;
+			break;
+		}
+		uint16_t table_address;
+		switch(context->debug_modes[VDP_DEBUG_PLANE] % 3)
+		{
+		case 0:
+			table_address = context->regs[REG_SCROLL_A] << 10 & 0xE000;
+			break;
+		case 1:
+			table_address = context->regs[REG_SCROLL_B] << 13 & 0xE000;
+			break;
+		case 2:
+			table_address = context->regs[REG_WINDOW] << 10;
+			if (context->regs[REG_MODE_4] & BIT_H40) {
+				table_address &= 0xF000;
+				v_mul = 128;
+				hscroll_mask = 0x3F;
+			} else {
+				table_address &= 0xF800;
+				v_mul = 64;
+				hscroll_mask = 0x1F;
+			}
+			vscroll_mask = 0x1F;
+			break;
+		}
+		uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR & 0x3F]];
+		for (uint16_t row = 0; row < 128; row++)
+		{
+			uint16_t row_address = table_address + (row & vscroll_mask) * v_mul;
+			for (uint16_t col = 0; col < 128; col++)
+			{
+				uint16_t address = row_address + (col & hscroll_mask) * 2;
+				//pccv hnnn nnnn nnnn
+				//
+				uint16_t entry = context->vdpmem[address] << 8 | context->vdpmem[address + 1];
+				uint8_t pal = entry >> 9 & 0x30;
+				
+				uint32_t *dst = fb + (row * pitch * 8 / sizeof(uint32_t)) + col * 8;
+				address = (entry & 0x7FF) * 32;
+				int y_diff = 4;
+				if (entry & 0x1000) {
+					y_diff = -4;
+					address += 7 * 4;
+				}
+				int x_diff = 1;
+				if (entry & 0x800) {
+					x_diff = -1;
+					address += 3;
+				}
+				for (int y = 0; y < 8; y++)
+				{
+					uint16_t trow_address = address;
+					uint32_t *row_dst = dst;
+					for (int x = 0; x < 4; x++)
+					{
+						uint8_t byte = context->vdpmem[trow_address];
+						trow_address += x_diff;
+						uint8_t left, right;
+						if (x_diff > 0) {
+							left = byte >> 4;
+							right = byte & 0xF;
+						} else {
+							left = byte & 0xF;
+							right = byte >> 4;
+						}
+						*(row_dst++) = left ? context->colors[left|pal] : bg_color;
+						*(row_dst++) = right ? context->colors[right|pal] : bg_color;
+					}
+					address += y_diff;
+					dst += pitch / sizeof(uint32_t);
+				}
+			}
+		}
+		render_framebuffer_updated(context->debug_fb_indices[VDP_DEBUG_PLANE], 1024);
+	}
+}
+
 void vdp_force_update_framebuffer(vdp_context *context)
 {
 	uint16_t lines_max = (context->flags2 & FLAG2_REGION_PAL) 
@@ -1734,6 +1837,7 @@ void vdp_force_update_framebuffer(vdp_context *context)
 	);
 	render_framebuffer_updated(context->cur_buffer, context->h40_lines > context->output_lines / 2 ? LINEBUF_SIZE : (256+HORIZ_BORDER));
 	context->fb = render_get_framebuffer(context->cur_buffer, &context->output_pitch);
+	vdp_update_per_frame_debug(context);
 }
 
 static void advance_output_line(vdp_context *context)
@@ -1752,6 +1856,7 @@ static void advance_output_line(vdp_context *context)
 			render_framebuffer_updated(context->cur_buffer, context->h40_lines > (context->inactive_start + context->border_top) / 2 ? LINEBUF_SIZE : (256+HORIZ_BORDER));
 			context->cur_buffer = context->flags2 & FLAG2_EVEN_FIELD ? FRAMEBUFFER_EVEN : FRAMEBUFFER_ODD;
 			context->fb = render_get_framebuffer(context->cur_buffer, &context->output_pitch);
+			vdp_update_per_frame_debug(context);
 			context->h40_lines = 0;
 			context->frame++;
 			context->output_lines = 0;
@@ -3739,4 +3844,44 @@ void vdp_deserialize(deserialize_buffer *buf, void *vcontext)
 	context->pending_vint_start = load_int32(buf);
 	context->pending_hint_start = load_int32(buf);
 	update_video_params(context);
+}
+
+void vdp_toggle_debug_view(vdp_context *context, uint8_t debug_type)
+{
+	if (context->enabled_debuggers & 1 << debug_type) {
+		//TODO: implement me
+	} else {
+		char *caption;
+		switch(debug_type)
+		{
+		case VDP_DEBUG_PLANE:
+			caption = "BlastEm - VDP Plane Debugger";
+			break;
+		default:
+			return;
+		}
+		context->debug_fb_indices[debug_type] = render_create_window(caption, 1024, 1024);
+		if (context->debug_fb_indices[debug_type]) {
+			context->enabled_debuggers |= 1 << debug_type;
+		}
+	}
+}
+
+void vdp_inc_debug_mode(vdp_context *context)
+{
+	uint8_t active = render_get_active_framebuffer();
+	if (active < FRAMEBUFFER_USER_START) {
+		context->debug++;
+		if (context->debug == 7) {
+			context->debug = 0;
+		}
+		return;
+	}
+	for (int i = 0; i < VDP_NUM_DEBUG_TYPES; i++)
+	{
+		if (context->enabled_debuggers & (1 << i) && context->debug_fb_indices[i] == active) {
+			context->debug_modes[i]++;
+			return;
+		}
+	}
 }
