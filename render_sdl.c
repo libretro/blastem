@@ -25,7 +25,9 @@
 #define MAX_EVENT_POLL_PER_FRAME 2
 
 static SDL_Window *main_window;
+static SDL_Window **extra_windows;
 static SDL_Renderer *main_renderer;
+static SDL_Renderer **extra_renderers;
 static SDL_Texture  **sdl_textures;
 static uint8_t num_textures;
 static SDL_Rect      main_clip;
@@ -1035,6 +1037,7 @@ void window_setup(void)
 			}
 		}
 	}
+	render_gl = 0;
 	
 #ifndef DISABLE_OPENGL
 	char *gl_enabled_str = tern_find_path_default(config, "video\0gl\0", def, TVAL_PTR).ptrval;
@@ -1323,6 +1326,37 @@ void render_save_screenshot(char *path)
 	screenshot_path = path;
 }
 
+uint8_t render_create_window(char *caption, uint32_t width, uint32_t height)
+{
+	num_textures++;
+	sdl_textures = realloc(sdl_textures, num_textures * sizeof(*sdl_textures));
+	extra_windows = realloc(extra_windows, (num_textures - FRAMEBUFFER_USER_START) * sizeof(*extra_windows));
+	extra_renderers = realloc(extra_renderers, (num_textures - FRAMEBUFFER_USER_START) * sizeof(*extra_renderers));
+	uint8_t win_idx = num_textures - FRAMEBUFFER_USER_START - 1;
+	extra_windows[win_idx] = SDL_CreateWindow(caption, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, 0);
+	if (!extra_windows[win_idx]) {
+		goto fail_window;
+	}
+	extra_renderers[win_idx] = SDL_CreateRenderer(extra_windows[win_idx], -1, SDL_RENDERER_ACCELERATED);
+	if (!extra_renderers[win_idx]) {
+		goto fail_renderer;
+	}
+	uint8_t texture_idx = num_textures-1;
+	sdl_textures[texture_idx] = SDL_CreateTexture(extra_renderers[win_idx], SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
+	if (!sdl_textures[texture_idx]) {
+		goto fail_texture;
+	}
+	return texture_idx;
+	
+fail_texture:
+	SDL_DestroyRenderer(extra_renderers[win_idx]);
+fail_renderer:
+	SDL_DestroyWindow(extra_windows[win_idx]);
+fail_window:
+	num_textures--;
+	return 0;
+}
+
 uint32_t *locked_pixels;
 uint32_t locked_pitch;
 uint32_t *render_get_framebuffer(uint8_t which, int *pitch)
@@ -1467,7 +1501,12 @@ void render_framebuffer_updated(uint8_t which, int width)
 	}
 #endif
 	last_height = height;
-	render_update_display();
+	if (which <= FRAMEBUFFER_EVEN) {
+		render_update_display();
+	} else {
+		SDL_RenderCopy(extra_renderers[which - FRAMEBUFFER_USER_START], sdl_textures[which], NULL, NULL);
+		SDL_RenderPresent(extra_renderers[which - FRAMEBUFFER_USER_START]);
+	}
 	if (screenshot_file) {
 		fclose(screenshot_file);
 	}
@@ -1834,4 +1873,18 @@ void render_sleep_ms(uint32_t delay)
 uint8_t render_has_gl(void)
 {
 	return render_gl;
+}
+
+uint8_t render_get_active_framebuffer(void)
+{
+	if (SDL_GetWindowFlags(main_window) & SDL_WINDOW_INPUT_FOCUS) {
+		return FRAMEBUFFER_ODD;
+	}
+	for (int i = 0; i < num_textures - 2; i++)
+	{
+		if (extra_windows[i] && (SDL_GetWindowFlags(extra_windows[i]) & SDL_WINDOW_INPUT_FOCUS)) {
+			return FRAMEBUFFER_USER_START + i; 
+		}
+	}
+	return 0xFF;
 }

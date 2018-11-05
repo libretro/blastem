@@ -1126,10 +1126,7 @@ static void resume_genesis(system_header *system)
 static void inc_debug_mode(system_header *system)
 {
 	genesis_context *gen = (genesis_context *)system;
-	gen->vdp->debug++;
-	if (gen->vdp->debug == 7) {
-		gen->vdp->debug = 0;
-	}
+	vdp_inc_debug_mode(gen->vdp);
 }
 
 static void inc_debug_pal(system_header *system)
