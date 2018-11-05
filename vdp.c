@@ -896,17 +896,20 @@ static void external_slot(vdp_context * context)
 			if ((context->regs[REG_MODE_2] & (BIT_128K_VRAM|BIT_MODE_5)) == (BIT_128K_VRAM|BIT_MODE_5)) {
 				vdp_check_update_sat(context, start->address, start->value);
 				write_vram_word(context, start->address, start->value);
+			} else if (start->partial == 3) {
+				vdp_check_update_sat_byte(context, start->address ^ 1, start->value);
+				write_vram_byte(context, start->address ^ 1, start->value);
 			} else if (start->partial) {
 				//printf("VRAM Write: %X to %X at %d (line %d, slot %d)\n", start->value, start->address ^ 1, context->cycles, context->cycles/MCLKS_LINE, (context->cycles%MCLKS_LINE)/16);
-				uint8_t byte = start->partial == 2 ? start->value >> 8 : start->value;
+				uint8_t byte = start->value >> 8;
 				if (start->partial > 1) {
-					vdp_check_update_sat_byte(context, start->address ^ 1, byte);
+					vdp_check_update_sat_byte(context, start->address, byte);
 				}
-				write_vram_byte(context, start->address ^ 1, byte);
+				write_vram_byte(context, start->address, byte);
 			} else {
 				//printf("VRAM Write High: %X to %X at %d (line %d, slot %d)\n", start->value >> 8, start->address, context->cycles, context->cycles/MCLKS_LINE, (context->cycles%MCLKS_LINE)/16);
 				vdp_check_update_sat(context, start->address, start->value);
-				write_vram_byte(context, start->address, start->value >> 8);
+				write_vram_byte(context, start->address ^ 1, start->value);
 				start->partial = 1;
 				//skip auto-increment and removal of entry from fifo
 				return;
