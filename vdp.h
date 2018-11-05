@@ -147,6 +147,14 @@ typedef struct {
 	uint8_t  partial;
 } fifo_entry;
 
+enum {
+	VDP_DEBUG_PLANE,
+	VDP_DEBUG_VRAM,
+	VDP_DEBUG_CRAM,
+	VDP_DEBUG_COMPOSITE,
+	VDP_NUM_DEBUG_TYPES
+};
+
 typedef struct {
 	fifo_entry  fifo[FIFO_SIZE];
 	int32_t     fifo_write;
@@ -212,7 +220,12 @@ typedef struct {
 	uint8_t     cur_buffer;
 	uint8_t     *tmp_buf_a;
 	uint8_t     *tmp_buf_b;
+	uint8_t     enabled_debuggers;
+	uint8_t     debug_fb_indices[VDP_NUM_DEBUG_TYPES];
+	uint8_t     debug_modes[VDP_NUM_DEBUG_TYPES];
 } vdp_context;
+
+
 
 void init_vdp_context(vdp_context * context, uint8_t region_pal);
 void vdp_free(vdp_context *context);
@@ -253,5 +266,7 @@ void vdp_reacquire_framebuffer(vdp_context *context);
 void vdp_serialize(vdp_context *context, serialize_buffer *buf);
 void vdp_deserialize(deserialize_buffer *buf, void *vcontext);
 void vdp_force_update_framebuffer(vdp_context *context);
+void vdp_toggle_debug_view(vdp_context *context, uint8_t debug_type);
+void vdp_inc_debug_mode(vdp_context *context);
 
 #endif //VDP_H_
