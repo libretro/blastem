@@ -1554,6 +1554,7 @@ void render_framebuffer_updated(uint8_t which, int width)
 			frames_to_problem < BUFFER_FRAMES_THRESHOLD
 			|| (average_change < 0 && local_cur_min < 3*min_buffered / 4)
 			|| (average_change >0 && local_cur_min > 5 * min_buffered / 4)
+			|| cur_min_buffered < 0
 		) {
 			
 			if (cur_min_buffered < 0) {
