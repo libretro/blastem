@@ -1824,6 +1824,35 @@ static void vdp_update_per_frame_debug(vdp_context *context)
 		}
 		render_framebuffer_updated(context->debug_fb_indices[VDP_DEBUG_PLANE], 1024);
 	}
+	
+	if (context->enabled_debuggers & (1 << VDP_DEBUG_VRAM)) {
+		uint32_t pitch;
+		uint32_t *fb = render_get_framebuffer(context->debug_fb_indices[VDP_DEBUG_VRAM], &pitch);
+		
+		uint8_t pal = (context->debug_modes[VDP_DEBUG_VRAM] % 4) << 4;
+		for (int y = 0; y < 512; y++)
+		{
+			uint32_t *line = fb + y * pitch / sizeof(uint32_t);
+			int row = y >> 4;
+			int yoff = y >> 1 & 7;
+			for (int col = 0; col < 64; col++)
+			{
+				uint16_t address = (row * 64 + col) * 32 + yoff * 4;
+				for (int x = 0; x < 4; x++)
+				{
+					uint8_t byte = context->vdpmem[address++];
+					uint8_t left = byte >> 4 | pal;
+					uint8_t right = byte & 0xF | pal;
+					*(line++) = context->colors[left];
+					*(line++) = context->colors[left];
+					*(line++) = context->colors[right];
+					*(line++) = context->colors[right];
+				}
+			}
+		}
+		
+		render_framebuffer_updated(context->debug_fb_indices[VDP_DEBUG_VRAM], 1024);
+	}
 }
 
 void vdp_force_update_framebuffer(vdp_context *context)
@@ -3854,16 +3883,23 @@ void vdp_toggle_debug_view(vdp_context *context, uint8_t debug_type)
 	if (context->enabled_debuggers & 1 << debug_type) {
 		//TODO: implement me
 	} else {
+		uint32_t width,height;
 		char *caption;
 		switch(debug_type)
 		{
 		case VDP_DEBUG_PLANE:
 			caption = "BlastEm - VDP Plane Debugger";
+			width = height = 1024;
+			break;
+		case VDP_DEBUG_VRAM:
+			caption = "BlastEm - VDP VRAM Debugger";
+			width = 1024;
+			height = 512;
 			break;
 		default:
 			return;
 		}
-		context->debug_fb_indices[debug_type] = render_create_window(caption, 1024, 1024);
+		context->debug_fb_indices[debug_type] = render_create_window(caption, width, height);
 		if (context->debug_fb_indices[debug_type]) {
 			context->enabled_debuggers |= 1 << debug_type;
 		}
