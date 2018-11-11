@@ -127,6 +127,7 @@ static void bus_arbiter_deserialize(deserialize_buffer *buf, void *vgen)
 	gen->z80->bank_reg = load_int16(buf) & 0x1FF;
 }
 
+static void adjust_int_cycle(m68k_context * context, vdp_context * v_context);
 void genesis_deserialize(deserialize_buffer *buf, genesis_context *gen)
 {
 	register_section_handler(buf, (section_handler){.fun = m68k_deserialize, .data = gen->m68k}, SECTION_68000);
@@ -146,6 +147,7 @@ void genesis_deserialize(deserialize_buffer *buf, genesis_context *gen)
 		load_section(buf);
 	}
 	update_z80_bank_pointer(gen);
+	adjust_int_cycle(gen->m68k, gen->vdp);
 }
 
 uint16_t read_dma_value(uint32_t address)
