@@ -878,14 +878,17 @@ static void write_vram_byte(vdp_context *context, uint32_t address, uint8_t valu
 	context->vdpmem[address] = value;
 }
 
+#define DMA_FILL 0x80
+#define DMA_COPY 0xC0
+#define DMA_TYPE_MASK 0xC0
 static void external_slot(vdp_context * context)
 {
-	if ((context->flags & FLAG_DMA_RUN) && (context->regs[REG_DMASRC_H] & 0xC0) == 0x80 && context->fifo_read < 0) {
+	if ((context->flags & FLAG_DMA_RUN) && (context->regs[REG_DMASRC_H] & DMA_TYPE_MASK) == DMA_FILL && context->fifo_read < 0) {
 		context->fifo_read = (context->fifo_write-1) & (FIFO_SIZE-1);
 		fifo_entry * cur = context->fifo + context->fifo_read;
 		cur->cycle = context->cycles;
 		cur->address = context->address;
-		cur->partial = 2;
+		cur->partial = 1;
 		vdp_advance_dma(context);
 	}
 	fifo_entry * start = context->fifo + context->fifo_read;
@@ -896,23 +899,16 @@ static void external_slot(vdp_context * context)
 			if ((context->regs[REG_MODE_2] & (BIT_128K_VRAM|BIT_MODE_5)) == (BIT_128K_VRAM|BIT_MODE_5)) {
 				vdp_check_update_sat(context, start->address, start->value);
 				write_vram_word(context, start->address, start->value);
-			} else if (start->partial == 3) {
-				vdp_check_update_sat_byte(context, start->address ^ 1, start->value);
-				write_vram_byte(context, start->address ^ 1, start->value);
-			} else if (start->partial) {
-				//printf("VRAM Write: %X to %X at %d (line %d, slot %d)\n", start->value, start->address ^ 1, context->cycles, context->cycles/MCLKS_LINE, (context->cycles%MCLKS_LINE)/16);
-				uint8_t byte = start->value >> 8;
-				if (start->partial > 1) {
-					vdp_check_update_sat_byte(context, start->address, byte);
-				}
-				write_vram_byte(context, start->address, byte);
 			} else {
-				//printf("VRAM Write High: %X to %X at %d (line %d, slot %d)\n", start->value >> 8, start->address, context->cycles, context->cycles/MCLKS_LINE, (context->cycles%MCLKS_LINE)/16);
-				vdp_check_update_sat(context, start->address, start->value);
-				write_vram_byte(context, start->address ^ 1, start->value);
-				start->partial = 1;
-				//skip auto-increment and removal of entry from fifo
-				return;
+				uint8_t byte = start->partial == 1 ? start->value >> 8 : start->value;
+				vdp_check_update_sat_byte(context, start->address ^ 1, byte);
+				write_vram_byte(context, start->address ^ 1, byte);
+				if (!start->partial) {
+					start->address = start->address ^ 1;
+					start->partial = 1;
+					//skip auto-increment and removal of entry from fifo
+					return;
+				}
 			}
 			break;
 		case CRAM_WRITE: {
@@ -927,7 +923,7 @@ static void external_slot(vdp_context * context)
 				}
 				write_cram(context, start->address, val);
 			} else {
-				write_cram(context, start->address, start->partial == 2 ? context->fifo[context->fifo_write].value : start->value);
+				write_cram(context, start->address, start->partial ? context->fifo[context->fifo_write].value : start->value);
 			}
 			break;
 		}
@@ -943,7 +939,7 @@ static void external_slot(vdp_context * context)
 						context->vsram[(start->address/2) & 63] |= start->value;
 					}
 				} else {
-					context->vsram[(start->address/2) & 63] = start->partial == 2 ? context->fifo[context->fifo_write].value : start->value;
+					context->vsram[(start->address/2) & 63] = start->partial ? context->fifo[context->fifo_write].value : start->value;
 				}
 			}
 
@@ -951,12 +947,12 @@ static void external_slot(vdp_context * context)
 		}
 		context->fifo_read = (context->fifo_read+1) & (FIFO_SIZE-1);
 		if (context->fifo_read == context->fifo_write) {
-			if ((context->cd & 0x20) && (context->regs[REG_DMASRC_H] & 0xC0) == 0x80) {
+			if ((context->cd & 0x20) && (context->regs[REG_DMASRC_H] & DMA_TYPE_MASK) == DMA_FILL) {
 				context->flags |= FLAG_DMA_RUN;
 			}
 			context->fifo_read = -1;
 		}
-	} else if ((context->flags & FLAG_DMA_RUN) && (context->regs[REG_DMASRC_H] & 0xC0) == 0xC0) {
+	} else if ((context->flags & FLAG_DMA_RUN) && (context->regs[REG_DMASRC_H] & DMA_TYPE_MASK) == DMA_COPY) {
 		if (context->flags & FLAG_READ_FETCHED) {
 			write_vram_byte(context, context->address ^ 1, context->prefetch);
 			
@@ -3105,7 +3101,7 @@ void vdp_run_dma_done(vdp_context * context, uint32_t target_cycles)
 		}
 		uint32_t min_dma_complete = dmalen * (context->regs[REG_MODE_4] & BIT_H40 ? 16 : 20);
 		if (
-			(context->regs[REG_DMASRC_H] & 0xC0) == 0xC0 
+			(context->regs[REG_DMASRC_H] & DMA_TYPE_MASK) == DMA_COPY 
 			|| (((context->cd & 0xF) == VRAM_WRITE) && !(context->regs[REG_MODE_2] & BIT_128K_VRAM))) {
 			//DMA copies take twice as long to complete since they require a read and a write
 			//DMA Fills and transfers to VRAM also take twice as long as it requires 2 writes for a single word
@@ -3181,7 +3177,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 		//printf("New Address: %X, New CD: %X\n", context->address, context->cd);
 		if (context->cd & 0x20) {
 			//
-			if((context->regs[REG_DMASRC_H] & 0xC0) != 0x80) {
+			if((context->regs[REG_DMASRC_H] & DMA_TYPE_MASK) != DMA_FILL) {
 				//DMA copy or 68K -> VDP, transfer starts immediately
 				//printf("DMA start (length: %X) at cycle %d, frame: %d, vcounter: %d, hslot: %d\n", (context->regs[REG_DMALEN_H] << 8) | context->regs[REG_DMALEN_L], context->cycles, context->frame, context->vcounter, context->hslot);
 				if (!(context->regs[REG_DMASRC_H] & 0x80)) {
@@ -3262,7 +3258,7 @@ void vdp_control_port_write_pbc(vdp_context *context, uint8_t value)
 int vdp_data_port_write(vdp_context * context, uint16_t value)
 {
 	//printf("data port write: %X at %d\n", value, context->cycles);
-	if (context->flags & FLAG_DMA_RUN && (context->regs[REG_DMASRC_H] & 0xC0) != 0x80) {
+	if (context->flags & FLAG_DMA_RUN && (context->regs[REG_DMASRC_H] & DMA_TYPE_MASK) != DMA_FILL) {
 		return -1;
 	}
 	if (context->flags & FLAG_PENDING) {
@@ -3274,7 +3270,7 @@ int vdp_data_port_write(vdp_context * context, uint16_t value)
 	/*if (context->fifo_cur == context->fifo_end) {
 		printf("FIFO full, waiting for space before next write at cycle %X\n", context->cycles);
 	}*/
-	if (context->cd & 0x20 && (context->regs[REG_DMASRC_H] & 0xC0) == 0x80) {
+	if (context->cd & 0x20 && (context->regs[REG_DMASRC_H] & DMA_TYPE_MASK) == DMA_FILL) {
 		context->flags &= ~FLAG_DMA_RUN;
 	}
 	while (context->fifo_write == context->fifo_read) {
@@ -3310,7 +3306,7 @@ void vdp_data_port_write_pbc(vdp_context * context, uint8_t value)
 	/*if (context->fifo_cur == context->fifo_end) {
 		printf("FIFO full, waiting for space before next write at cycle %X\n", context->cycles);
 	}*/
-	if (context->cd & 0x20 && (context->regs[REG_DMASRC_H] & 0xC0) == 0x80) {
+	if (context->cd & 0x20 && (context->regs[REG_DMASRC_H] & DMA_TYPE_MASK) == DMA_FILL) {
 		context->flags &= ~FLAG_DMA_RUN;
 	}
 	while (context->fifo_write == context->fifo_read) {
