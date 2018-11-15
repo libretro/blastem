@@ -1676,31 +1676,56 @@ static void vdp_advance_line(vdp_context *context)
 	}
 	last_line = context->cycles;
 #endif
-	context->vcounter++;
-	
+	uint16_t jump_start, jump_end;
 	uint8_t is_mode_5 = context->regs[REG_MODE_2] & BIT_MODE_5;
 	if (is_mode_5) {
 		if (context->flags2 & FLAG2_REGION_PAL) {
 			if (context->regs[REG_MODE_2] & BIT_PAL) {
-				if (context->vcounter == 0x10B) {
-					context->vcounter = 0x1D2;
-				}
-			} else if (context->vcounter == 0x103){
-				context->vcounter = 0x1CA;
+				jump_start = 0x10B;
+				jump_end = 0x1D2;
+			} else {
+				jump_start = 0x103;
+				jump_end = 0x1CA;
 			}
+		} else if (context->regs[REG_MODE_2] & BIT_PAL) {
+			jump_start = 0x100;
+			jump_end = 0x1FA;
 		} else {
-			if (context->regs[REG_MODE_2] & BIT_PAL) {
-				if (context->vcounter == 0x100) {
-					context->vcounter = 0x1FA;
-				}
-			} else if (context->vcounter == 0xEB) {
-				context->vcounter = 0x1E5;
+			jump_start = 0xEB;
+			jump_end = 0x1E5;
+		}
+	} else {
+		jump_start = 0xDB;
+		jump_end = 0x1D5;
+	}
+
+	if (context->enabled_debuggers & (1 << VDP_DEBUG_CRAM)) {
+		uint32_t line = context->vcounter;
+		if (line >= jump_end) {
+			line -= jump_end - jump_start;
+		}
+		uint32_t total_lines = (context->flags2 & FLAG2_REGION_PAL) ? 313 : 262;
+		
+		if (total_lines - line <= context->border_top) {
+			line -= total_lines - context->border_top;
+		} else {
+			line += context->border_top;
+		}
+		uint32_t *fb = context->debug_fbs[VDP_DEBUG_CRAM] + context->debug_fb_pitch[VDP_DEBUG_CRAM] * line / sizeof(uint32_t);
+		for (int i = 0; i < 64; i++)
+		{
+			for (int x = 0; x < 8; x++)
+			{
+				*(fb++) = context->colors[i];
 			}
 		}
-	} else if (context->vcounter == 0xDB) {
-		context->vcounter = 0x1D5;
 	}
-	context->vcounter &= 0x1FF;
+	context->vcounter++;
+	if (context->vcounter == jump_start) {
+		context->vcounter = jump_end;
+	} else {
+		context->vcounter &= 0x1FF;
+	}
 	if (context->state == PREPARING) {
 		context->state = ACTIVE;
 	}
@@ -1848,6 +1873,37 @@ static void vdp_update_per_frame_debug(vdp_context *context)
 		}
 		
 		render_framebuffer_updated(context->debug_fb_indices[VDP_DEBUG_VRAM], 1024);
+	}
+	
+	if (context->enabled_debuggers & (1 << VDP_DEBUG_CRAM)) {
+		uint32_t starting_line = 512 - 32*4;
+		uint32_t *line = context->debug_fbs[VDP_DEBUG_CRAM] 
+			+ context->debug_fb_pitch[VDP_DEBUG_CRAM]  * starting_line / sizeof(uint32_t);
+		for (int pal = 0; pal < 4; pal ++)
+		{
+			uint32_t *cur;
+			for (int y = 0; y < 31; y++)
+			{
+				cur = line;
+				for (int offset = 0; offset < 16; offset++)
+				{
+					for (int x = 0; x < 31; x++)
+					{
+						*(cur++) = context->colors[pal * 16 + offset];
+					}
+					*(cur++) = 0xFF000000;
+				}
+				line += context->debug_fb_pitch[VDP_DEBUG_CRAM] / sizeof(uint32_t);
+			}
+			cur = line;
+			for (int x = 0; x < 512; x++)
+			{
+				*(cur++) = 0xFF000000;
+			}
+			line += context->debug_fb_pitch[VDP_DEBUG_CRAM] / sizeof(uint32_t);
+		}
+		render_framebuffer_updated(context->debug_fb_indices[VDP_DEBUG_CRAM], 512);
+		context->debug_fbs[VDP_DEBUG_CRAM] = render_get_framebuffer(context->debug_fb_indices[VDP_DEBUG_CRAM], &context->debug_fb_pitch[VDP_DEBUG_CRAM]);
 	}
 }
 
@@ -3880,6 +3936,7 @@ void vdp_toggle_debug_view(vdp_context *context, uint8_t debug_type)
 		//TODO: implement me
 	} else {
 		uint32_t width,height;
+		uint8_t fetch_immediately = 0;
 		char *caption;
 		switch(debug_type)
 		{
@@ -3892,12 +3949,21 @@ void vdp_toggle_debug_view(vdp_context *context, uint8_t debug_type)
 			width = 1024;
 			height = 512;
 			break;
+		case VDP_DEBUG_CRAM:
+			caption = "BlastEm - VDP CRAM Debugger";
+			width = 512;
+			height = 512;
+			fetch_immediately = 1;
+			break;
 		default:
 			return;
 		}
 		context->debug_fb_indices[debug_type] = render_create_window(caption, width, height);
 		if (context->debug_fb_indices[debug_type]) {
 			context->enabled_debuggers |= 1 << debug_type;
+		}
+		if (fetch_immediately) {
+			context->debug_fbs[debug_type] = render_get_framebuffer(context->debug_fb_indices[debug_type], &context->debug_fb_pitch[debug_type]);
 		}
 	}
 }
