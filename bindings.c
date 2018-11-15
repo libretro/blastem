@@ -38,7 +38,8 @@ typedef enum {
 	UI_SCREENSHOT,
 	UI_EXIT,
 	UI_PLANE_DEBUG,
-	UI_VRAM_DEBUG
+	UI_VRAM_DEBUG,
+	UI_CRAM_DEBUG,
 } ui_action;
 
 typedef struct {
@@ -375,7 +376,9 @@ void handle_binding_up(keybinding * binding)
 			}
 #endif
 			break;
-		case UI_PLANE_DEBUG: {
+		case UI_PLANE_DEBUG: 
+		case UI_VRAM_DEBUG: 
+		case UI_CRAM_DEBUG: {
 			vdp_context *vdp = NULL;
 			if (current_system->type == SYSTEM_GENESIS) {
 				genesis_context *gen = (genesis_context *)current_system;
@@ -385,21 +388,15 @@ void handle_binding_up(keybinding * binding)
 				vdp = sms->vdp;
 			}
 			if (vdp) {
-				vdp_toggle_debug_view(vdp, VDP_DEBUG_PLANE);
-			}
-			break;
-		}
-		case UI_VRAM_DEBUG: {
-			vdp_context *vdp = NULL;
-			if (current_system->type == SYSTEM_GENESIS) {
-				genesis_context *gen = (genesis_context *)current_system;
-				vdp = gen->vdp;
-			} else if (current_system->type == SYSTEM_SMS) {
-				sms_context *sms = (sms_context *)current_system;
-				vdp = sms->vdp;
-			}
-			if (vdp) {
-				vdp_toggle_debug_view(vdp, VDP_DEBUG_VRAM);
+				uint8_t debug_type;
+				switch(binding->subtype_a)
+				{
+				case UI_PLANE_DEBUG: debug_type = VDP_DEBUG_PLANE; break;
+				case UI_VRAM_DEBUG: debug_type = VDP_DEBUG_VRAM; break;
+				case UI_CRAM_DEBUG: debug_type = VDP_DEBUG_CRAM; break;
+				default: return;
+				}
+				vdp_toggle_debug_view(vdp, debug_type);
 			}
 			break;
 		}
@@ -610,7 +607,9 @@ int parse_binding_target(int device_num, char * target, tern_node * padbuttons, 
 			*subtype_a = UI_PLANE_DEBUG;
 		} else if (!strcmp(target + 3, "vram_debug")) {
 			*subtype_a = UI_VRAM_DEBUG;
-		}  else {
+		} else if (!strcmp(target + 3, "cram_debug")) {
+			*subtype_a = UI_CRAM_DEBUG;
+		} else {
 			warning("Unreconized UI binding type %s\n", target);
 			return 0;
 		}

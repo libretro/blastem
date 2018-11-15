@@ -175,6 +175,8 @@ typedef struct {
 	uint32_t    *output;
 	uint32_t    *done_output;
 	uint32_t    *fb;
+	uint32_t    *debug_fbs[VDP_NUM_DEBUG_TYPES];
+	uint32_t    debug_fb_pitch[VDP_NUM_DEBUG_TYPES];
 	system_header  *system;
 	uint16_t    cram[CRAM_SIZE];
 	uint32_t    colors[CRAM_SIZE*4];
