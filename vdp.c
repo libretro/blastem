@@ -1329,28 +1329,31 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 					uint8_t pixel = context->regs[REG_BG_COLOR];
 					uint32_t *colors = context->colors;
 					src = DBG_SRC_BG;
-					if (*plane_b & 0xF) {
-						pixel = *plane_b;
-						src = DBG_SRC_B;
-					}
-					uint8_t intensity = *plane_b & BUF_BIT_PRIORITY;
-					if (*plane_a & 0xF && (*plane_a & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
-						pixel = *plane_a;
-						src = a_src;
-					}
-					intensity |= *plane_a & BUF_BIT_PRIORITY;
-					if (*sprite_buf & 0xF && (*sprite_buf & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
-						if ((*sprite_buf & 0x3F) == 0x3E) {
-							intensity += BUF_BIT_PRIORITY;
-						} else if ((*sprite_buf & 0x3F) == 0x3F) {
-							intensity = 0;
-						} else {
-							pixel = *sprite_buf;
-							src = DBG_SRC_S;
-							if ((pixel & 0xF) == 0xE) {
-								intensity = BUF_BIT_PRIORITY;
+					uint8_t intensity = 0;
+					if (col || !(context->regs[REG_MODE_1] & BIT_COL0_MASK) || i >= 8) {
+						if (*plane_b & 0xF) {
+							pixel = *plane_b;
+							src = DBG_SRC_B;
+						}
+						intensity = *plane_b & BUF_BIT_PRIORITY;
+						if (*plane_a & 0xF && (*plane_a & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
+							pixel = *plane_a;
+							src = a_src;
+						}
+						intensity |= *plane_a & BUF_BIT_PRIORITY;
+						if (*sprite_buf & 0xF && (*sprite_buf & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
+							if ((*sprite_buf & 0x3F) == 0x3E) {
+								intensity += BUF_BIT_PRIORITY;
+							} else if ((*sprite_buf & 0x3F) == 0x3F) {
+								intensity = 0;
 							} else {
-								intensity |= pixel & BUF_BIT_PRIORITY;
+								pixel = *sprite_buf;
+								src = DBG_SRC_S;
+								if ((pixel & 0xF) == 0xE) {
+									intensity = BUF_BIT_PRIORITY;
+								} else {
+									intensity |= pixel & BUF_BIT_PRIORITY;
+								}
 							}
 						}
 					}
@@ -1405,17 +1408,19 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 					if (output_disabled) {
 						pixel = 0x3F;
 					} else {
-						if (*plane_b & 0xF) {
-							pixel = *plane_b;
-							src = DBG_SRC_B;
-						}
-						if (*plane_a & 0xF && (*plane_a & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
-							pixel = *plane_a;
-							src = a_src;
-						}
-						if (*sprite_buf & 0xF && (*sprite_buf & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
-							pixel = *sprite_buf;
-							src = DBG_SRC_S;
+						if (col || !(context->regs[REG_MODE_1] & BIT_COL0_MASK) || i >= 8) {
+							if (*plane_b & 0xF) {
+								pixel = *plane_b;
+								src = DBG_SRC_B;
+							}
+							if (*plane_a & 0xF && (*plane_a & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
+								pixel = *plane_a;
+								src = a_src;
+							}
+							if (*sprite_buf & 0xF && (*sprite_buf & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
+								pixel = *sprite_buf;
+								src = DBG_SRC_S;
+							}
 						}
 					}
 					//TODO: Simulate CRAM corruption from bus fight
