@@ -116,17 +116,16 @@ int main(int argc, char ** argv)
 	width = width < 320 ? def_width : width;
 	height = height < 240 ? (width/320) * 240 : height;
 
-	vdp_context context;
 	render_init(width, height, "GST State Viewer", 0);
-	init_vdp_context(&context, 0);
-	vdp_load_gst(&context, state_file);
-	vdp_run_to_vblank(&context);
-	vdp_print_sprite_table(&context);
-	printf("Display %s\n", (context.regs[REG_MODE_2] & DISPLAY_ENABLE) ? "enabled" : "disabled");
-	if (!(context.regs[REG_MODE_2] & DISPLAY_ENABLE)) {
+	vdp_context *context = init_vdp_context(0);
+	vdp_load_gst(context, state_file);
+	vdp_run_to_vblank(context);
+	vdp_print_sprite_table(context);
+	printf("Display %s\n", (context->regs[REG_MODE_2] & DISPLAY_ENABLE) ? "enabled" : "disabled");
+	if (!(context->regs[REG_MODE_2] & DISPLAY_ENABLE)) {
 		puts("Forcing display on");
-		vdp_control_port_write(&context, 0x8000 | REG_MODE_2 << 8 | context.regs[REG_MODE_2] | DISPLAY_ENABLE);
+		vdp_control_port_write(context, 0x8000 | REG_MODE_2 << 8 | context->regs[REG_MODE_2] | DISPLAY_ENABLE);
 	}
-    render_wait_quit(&context);
+    render_wait_quit(context);
     return 0;
 }

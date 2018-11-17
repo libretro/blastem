@@ -19,6 +19,7 @@
 #define BORDER_RIGHT 14
 #define HORIZ_BORDER (BORDER_LEFT+BORDER_RIGHT)
 #define LINEBUF_SIZE (320+HORIZ_BORDER) //H40 + full border
+#define SCROLL_BUFFER_SIZE 32
 #define BORDER_BOTTOM 13 //TODO: Replace with actual value
 #define MAX_DRAWS 40
 #define MAX_DRAWS_H32 32
@@ -156,80 +157,81 @@ enum {
 };
 
 typedef struct {
-	fifo_entry  fifo[FIFO_SIZE];
-	int32_t     fifo_write;
-	int32_t     fifo_read;
-	uint32_t    address;
-	uint32_t    serial_address;
-	uint8_t     cd;
-	uint8_t	    flags;
-	uint8_t     regs[VDP_REGS];
-	//cycle count in MCLKs
-	uint32_t    cycles;
-	uint32_t    pending_vint_start;
-	uint32_t    pending_hint_start;
-	uint8_t     *vdpmem;
-	//stores 2-bit palette + 4-bit palette index + priority for current sprite line
-	uint8_t     *linebuf;
-	//pointer to current line in framebuffer
-	uint32_t    *output;
-	uint32_t    *done_output;
-	uint32_t    *fb;
-	uint32_t    *debug_fbs[VDP_NUM_DEBUG_TYPES];
-	uint32_t    debug_fb_pitch[VDP_NUM_DEBUG_TYPES];
 	system_header  *system;
-	uint16_t    cram[CRAM_SIZE];
-	uint32_t    colors[CRAM_SIZE*4];
-	uint32_t    debugcolors[1 << (3 + 1 + 1 + 1)];//3 bits for source, 1 bit for priority, 1 bit for shadow, 1 bit for hilight
-	uint16_t    vsram[VSRAM_SIZE];
-	uint16_t    vscroll_latch[2];
-	uint32_t    output_pitch;
-	uint32_t    frame;
-	uint16_t    vcounter;
-	uint16_t    inactive_start;
-	uint16_t    border_top;
-	uint16_t    border_bot;
-	uint16_t    hscroll_a;
-	uint16_t    hscroll_b;
-	uint16_t    h40_lines;
-	uint16_t    output_lines;
-	sprite_draw sprite_draw_list[MAX_DRAWS];
-	sprite_info sprite_info_list[MAX_SPRITES_LINE];
-	uint8_t     sat_cache[SAT_CACHE_SIZE];
-	uint16_t    col_1;
-	uint16_t    col_2;
-	uint16_t    hv_latch;
-	uint16_t    prefetch;
-	uint16_t    test_port;
-	uint8_t     hslot; //hcounter/2
-	uint8_t	    sprite_index;
-	uint8_t     sprite_draws;
-	int8_t      slot_counter;
-	int8_t      cur_slot;
-	uint8_t     max_sprites_frame;
-	uint8_t     max_sprites_line;
-	uint8_t     fetch_tmp[2];
-	uint8_t     v_offset;
-	uint8_t     hint_counter;
-	uint8_t     flags2;
-	uint8_t     double_res;
-	uint8_t     buf_a_off;
-	uint8_t     buf_b_off;
-	uint8_t     debug;
-	uint8_t     debug_pal;
-	uint8_t     pending_byte;
-	uint8_t     state;
-	uint8_t     cur_buffer;
-	uint8_t     *tmp_buf_a;
-	uint8_t     *tmp_buf_b;
-	uint8_t     enabled_debuggers;
-	uint8_t     debug_fb_indices[VDP_NUM_DEBUG_TYPES];
-	uint8_t     debug_modes[VDP_NUM_DEBUG_TYPES];
+	//pointer to current line in framebuffer
+	uint32_t       *output;
+	uint32_t       *done_output;
+	//pointer to current framebuffer
+	uint32_t       *fb;
+	uint32_t       *debug_fbs[VDP_NUM_DEBUG_TYPES];
+	uint32_t       output_pitch;
+	uint32_t       debug_fb_pitch[VDP_NUM_DEBUG_TYPES];
+	fifo_entry     fifo[FIFO_SIZE];
+	int32_t        fifo_write;
+	int32_t        fifo_read;
+	uint32_t       address;
+	uint32_t       serial_address;
+	uint32_t       colors[CRAM_SIZE*4];
+	uint32_t       debugcolors[1 << (3 + 1 + 1 + 1)];//3 bits for source, 1 bit for priority, 1 bit for shadow, 1 bit for hilight
+	uint16_t       cram[CRAM_SIZE];
+	uint32_t       frame;
+	uint8_t        cd;
+	uint8_t	       flags;
+	uint8_t        regs[VDP_REGS];
+	//cycle count in MCLKs
+	uint32_t       cycles;
+	uint32_t       pending_vint_start;
+	uint32_t       pending_hint_start;
+	uint16_t       vsram[VSRAM_SIZE];
+	uint16_t       vscroll_latch[2];
+	uint16_t       vcounter;
+	uint16_t       inactive_start;
+	uint16_t       border_top;
+	uint16_t       border_bot;
+	uint16_t       hscroll_a;
+	uint16_t       hscroll_b;
+	uint16_t       h40_lines;
+	uint16_t       output_lines;
+	sprite_draw    sprite_draw_list[MAX_DRAWS];
+	sprite_info    sprite_info_list[MAX_SPRITES_LINE];
+	uint8_t        sat_cache[SAT_CACHE_SIZE];
+	uint16_t       col_1;
+	uint16_t       col_2;
+	uint16_t       hv_latch;
+	uint16_t       prefetch;
+	uint16_t       test_port;
+	//stores 2-bit palette + 4-bit palette index + priority for current sprite line
+	uint8_t        linebuf[LINEBUF_SIZE];
+	uint8_t        hslot; //hcounter/2
+	uint8_t	       sprite_index;
+	uint8_t        sprite_draws;
+	int8_t         slot_counter;
+	int8_t         cur_slot;
+	uint8_t        max_sprites_frame;
+	uint8_t        max_sprites_line;
+	uint8_t        fetch_tmp[2];
+	uint8_t        v_offset;
+	uint8_t        hint_counter;
+	uint8_t        flags2;
+	uint8_t        double_res;
+	uint8_t        buf_a_off;
+	uint8_t        buf_b_off;
+	uint8_t        debug;
+	uint8_t        debug_pal;
+	uint8_t        pending_byte;
+	uint8_t        state;
+	uint8_t        cur_buffer;
+	uint8_t        tmp_buf_a[SCROLL_BUFFER_SIZE];
+	uint8_t        tmp_buf_b[SCROLL_BUFFER_SIZE];
+	uint8_t        enabled_debuggers;
+	uint8_t        debug_fb_indices[VDP_NUM_DEBUG_TYPES];
+	uint8_t        debug_modes[VDP_NUM_DEBUG_TYPES];
+	uint8_t        vdpmem[];
 } vdp_context;
 
 
 
-void init_vdp_context(vdp_context * context, uint8_t region_pal);
+vdp_context *init_vdp_context(uint8_t region_pal);
 void vdp_free(vdp_context *context);
 void vdp_run_context_full(vdp_context * context, uint32_t target_cycles);
 void vdp_run_context(vdp_context * context, uint32_t target_cycles);
