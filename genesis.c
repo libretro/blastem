@@ -1302,8 +1302,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	gen->header.info = *rom;
 	set_region(gen, rom, force_region);
 
-	gen->vdp = malloc(sizeof(vdp_context));
-	init_vdp_context(gen->vdp, gen->version_reg & 0x40);
+	gen->vdp = init_vdp_context(gen->version_reg & 0x40);
 	gen->vdp->system = &gen->header;
 	gen->frame_end = vdp_cycles_to_frame_end(gen->vdp);
 	char * config_cycles = tern_find_path(config, "clocks\0max_cycles\0", TVAL_PTR).ptrval;

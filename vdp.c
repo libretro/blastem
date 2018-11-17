@@ -19,7 +19,6 @@
 #define MAP_BIT_H_FLIP 0x800
 #define MAP_BIT_V_FLIP 0x1000
 
-#define SCROLL_BUFFER_SIZE 32
 #define SCROLL_BUFFER_MASK (SCROLL_BUFFER_SIZE-1)
 #define SCROLL_BUFFER_DRAW (SCROLL_BUFFER_SIZE/2)
 
@@ -138,13 +137,9 @@ static void update_video_params(vdp_context *context)
 
 static uint8_t color_map_init_done;
 
-void init_vdp_context(vdp_context * context, uint8_t region_pal)
+vdp_context *init_vdp_context(uint8_t region_pal)
 {
-	memset(context, 0, sizeof(*context));
-	context->vdpmem = malloc(VRAM_SIZE);
-	memset(context->vdpmem, 0, VRAM_SIZE);
-	/*
-	*/
+	vdp_context *context = calloc(1, sizeof(vdp_context) + VRAM_SIZE);
 	if (headless) {
 		context->output = malloc(LINEBUF_SIZE * sizeof(uint32_t));
 		context->output_pitch = 0;
@@ -152,10 +147,6 @@ void init_vdp_context(vdp_context * context, uint8_t region_pal)
 		context->cur_buffer = FRAMEBUFFER_ODD;
 		context->fb = render_get_framebuffer(FRAMEBUFFER_ODD, &context->output_pitch);
 	}
-	context->linebuf = malloc(LINEBUF_SIZE + SCROLL_BUFFER_SIZE*2);
-	memset(context->linebuf, 0, LINEBUF_SIZE + SCROLL_BUFFER_SIZE*2);
-	context->tmp_buf_a = context->linebuf + LINEBUF_SIZE;
-	context->tmp_buf_b = context->tmp_buf_a + SCROLL_BUFFER_SIZE;
 	context->sprite_draws = MAX_DRAWS;
 	context->fifo_write = 0;
 	context->fifo_read = -1;
@@ -250,12 +241,11 @@ void init_vdp_context(vdp_context * context, uint8_t region_pal)
 	if (!headless) {
 		context->output = (uint32_t *)(((char *)context->fb) + context->output_pitch * context->border_top);
 	}
+	return context;
 }
 
 void vdp_free(vdp_context *context)
 {
-	free(context->vdpmem);
-	free(context->linebuf);
 	free(context);
 }
 
