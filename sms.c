@@ -581,8 +581,7 @@ sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t for
 	sms->psg = malloc(sizeof(psg_context));
 	psg_init(sms->psg, sms->master_clock, 15*16);
 	
-	sms->vdp = malloc(sizeof(vdp_context));
-	init_vdp_context(sms->vdp, 0);
+	sms->vdp = init_vdp_context(0);
 	sms->vdp->system = &sms->header;
 	
 	sms->header.info.save_type = SAVE_NONE;
