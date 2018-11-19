@@ -202,6 +202,7 @@ typedef struct {
 	uint16_t       test_port;
 	//stores 2-bit palette + 4-bit palette index + priority for current sprite line
 	uint8_t        linebuf[LINEBUF_SIZE];
+	uint8_t        layer_debug_buf[LINEBUF_SIZE];
 	uint8_t        hslot; //hcounter/2
 	uint8_t	       sprite_index;
 	uint8_t        sprite_draws;

@@ -1267,6 +1267,7 @@ static void fetch_map_mode4(uint16_t col, uint32_t line, vdp_context *context)
 static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 {
 	uint32_t *dst;
+	uint8_t *debug_dst;
 	uint8_t output_disabled = (context->test_port & TEST_BIT_DISABLE) != 0;
 	uint8_t test_layer = context->test_port >> 7 & 3;
 	if (context->state == PREPARING && !test_layer) {
@@ -1299,6 +1300,8 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 	{
 		col-=2;
 		dst = context->output + BORDER_LEFT + col * 8;
+		debug_dst = context->layer_debug_buf + BORDER_LEFT + col * 8;
+		
 		if (context->debug < 2) {
 			sprite_buf = context->linebuf + col * 8;
 			uint8_t a_src, src;
@@ -1380,14 +1383,8 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 						}
 						break;
 					}
-
-					uint32_t outpixel;
-					if (context->debug) {
-						outpixel = context->debugcolors[src];
-					} else {
-						outpixel = colors[pixel & 0x3F];
-					}
-					*(dst++) = outpixel;
+					*(debug_dst++) = src;
+					*(dst++) = colors[pixel & 0x3F];
 				}
 			} else {
 				for (int i = 0; i < 16; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i) {
@@ -1435,13 +1432,8 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 						}
 						break;
 					}
-					uint32_t outpixel;
-					if (context->debug) {
-						outpixel = context->debugcolors[src];
-					} else {
-						outpixel = context->colors[pixel & 0x3F];
-					}
-					*(dst++) = outpixel;
+					*(dst++) = context->colors[pixel & 0x3F];
+					*(debug_dst++) = src;
 				}
 			}
 		} else if (context->debug == 2) {
@@ -1490,6 +1482,7 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		}
 	} else {
 		dst = context->output;
+		debug_dst = context->layer_debug_buf;
 		uint8_t pixel = context->regs[REG_BG_COLOR] & 0x3F;
 		if (output_disabled) {
 			pixel = 0x3F;
@@ -1500,9 +1493,11 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 			{
 			case 1:
 				bg_color = context->colors[0];
-				for (int i = 0; i < BORDER_LEFT; i++, dst++)
+				for (int i = 0; i < BORDER_LEFT; i++, dst++, debug_dst++)
 				{
 					*dst = bg_color;
+					*debug_dst = DBG_SRC_BG;
+					
 				}
 				break;
 			case 2: {
@@ -1512,9 +1507,10 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 				i = 0;
 				uint8_t buf_off = context->buf_a_off - (context->hscroll_a & 0xF) + (16 - BORDER_LEFT);
 				//uint8_t *src = context->tmp_buf_a + ((context->buf_a_off + (i ? 0 : (16 - BORDER_LEFT) - (context->hscroll_a & 0xF))) & SCROLL_BUFFER_MASK); 
-				for (; i < BORDER_LEFT; buf_off++, i++, dst++)
+				for (; i < BORDER_LEFT; buf_off++, i++, dst++, debug_dst++)
 				{
 					*dst = context->colors[context->tmp_buf_a[buf_off & SCROLL_BUFFER_MASK]];
+					*debug_dst = DBG_SRC_A;
 				}
 				break;
 			}
@@ -1524,17 +1520,19 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 				i = 0;
 				uint8_t buf_off = context->buf_b_off - (context->hscroll_b & 0xF) + (16 - BORDER_LEFT);
 				//uint8_t *src = context->tmp_buf_b + ((context->buf_b_off + (i ? 0 : (16 - BORDER_LEFT) - (context->hscroll_b & 0xF))) & SCROLL_BUFFER_MASK); 
-				for (; i < BORDER_LEFT; buf_off++, i++, dst++)
+				for (; i < BORDER_LEFT; buf_off++, i++, dst++, debug_dst++)
 				{
 					*dst = context->colors[context->tmp_buf_b[buf_off & SCROLL_BUFFER_MASK]];
+					*debug_dst = DBG_SRC_B;
 				}
 				break;
 			}
 			}
 		} else {
-			for (int i = 0; i < BORDER_LEFT; i++, dst++)
+			for (int i = 0; i < BORDER_LEFT; i++, dst++, debug_dst++)
 			{
 				*dst = bg_color;
+				*debug_dst = DBG_SRC_BG;
 			}
 		}
 	}
@@ -1694,7 +1692,7 @@ static void vdp_advance_line(vdp_context *context)
 		jump_end = 0x1D5;
 	}
 
-	if (context->enabled_debuggers & (1 << VDP_DEBUG_CRAM)) {
+	if (context->enabled_debuggers & (1 << VDP_DEBUG_CRAM | 1 << VDP_DEBUG_COMPOSITE)) {
 		uint32_t line = context->vcounter;
 		if (line >= jump_end) {
 			line -= jump_end - jump_start;
@@ -1706,15 +1704,28 @@ static void vdp_advance_line(vdp_context *context)
 		} else {
 			line += context->border_top;
 		}
-		uint32_t *fb = context->debug_fbs[VDP_DEBUG_CRAM] + context->debug_fb_pitch[VDP_DEBUG_CRAM] * line / sizeof(uint32_t);
-		for (int i = 0; i < 64; i++)
-		{
-			for (int x = 0; x < 8; x++)
+		if (context->enabled_debuggers & (1 << VDP_DEBUG_CRAM)) {
+			uint32_t *fb = context->debug_fbs[VDP_DEBUG_CRAM] + context->debug_fb_pitch[VDP_DEBUG_CRAM] * line / sizeof(uint32_t);
+			for (int i = 0; i < 64; i++)
 			{
-				*(fb++) = context->colors[i];
+				for (int x = 0; x < 8; x++)
+				{
+					*(fb++) = context->colors[i];
+				}
+			}
+		}
+		if (
+			context->enabled_debuggers & (1 << VDP_DEBUG_COMPOSITE)
+			&& line < (context->inactive_start + context->border_bot + context->border_top)
+		) {
+			uint32_t *fb = context->debug_fbs[VDP_DEBUG_COMPOSITE] + context->debug_fb_pitch[VDP_DEBUG_COMPOSITE] * line / sizeof(uint32_t);
+			for (int i = 0; i < LINEBUF_SIZE; i++)
+			{
+				*(fb++) = context->debugcolors[context->layer_debug_buf[i]];
 			}
 		}
 	}
+	
 	context->vcounter++;
 	if (context->vcounter == jump_start) {
 		context->vcounter = jump_end;
@@ -1900,6 +1911,10 @@ static void vdp_update_per_frame_debug(vdp_context *context)
 		render_framebuffer_updated(context->debug_fb_indices[VDP_DEBUG_CRAM], 512);
 		context->debug_fbs[VDP_DEBUG_CRAM] = render_get_framebuffer(context->debug_fb_indices[VDP_DEBUG_CRAM], &context->debug_fb_pitch[VDP_DEBUG_CRAM]);
 	}
+	if (context->enabled_debuggers & (1 << VDP_DEBUG_COMPOSITE)) {
+		render_framebuffer_updated(context->debug_fb_indices[VDP_DEBUG_COMPOSITE], LINEBUF_SIZE);
+		context->debug_fbs[VDP_DEBUG_COMPOSITE] = render_get_framebuffer(context->debug_fb_indices[VDP_DEBUG_COMPOSITE], &context->debug_fb_pitch[VDP_DEBUG_COMPOSITE]);
+	}		
 }
 
 void vdp_force_update_framebuffer(vdp_context *context)
@@ -3948,6 +3963,12 @@ void vdp_toggle_debug_view(vdp_context *context, uint8_t debug_type)
 			caption = "BlastEm - VDP CRAM Debugger";
 			width = 512;
 			height = 512;
+			fetch_immediately = 1;
+			break;
+		case VDP_DEBUG_COMPOSITE:
+			caption = "BlastEm - VDP Plane Composition Debugger";
+			width = LINEBUF_SIZE;
+			height = context->inactive_start + context->border_top + context->border_bot;
 			fetch_immediately = 1;
 			break;
 		default:
