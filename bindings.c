@@ -40,6 +40,7 @@ typedef enum {
 	UI_PLANE_DEBUG,
 	UI_VRAM_DEBUG,
 	UI_CRAM_DEBUG,
+	UI_COMPOSITE_DEBUG
 } ui_action;
 
 typedef struct {
@@ -378,7 +379,8 @@ void handle_binding_up(keybinding * binding)
 			break;
 		case UI_PLANE_DEBUG: 
 		case UI_VRAM_DEBUG: 
-		case UI_CRAM_DEBUG: {
+		case UI_CRAM_DEBUG:
+		case UI_COMPOSITE_DEBUG: {
 			vdp_context *vdp = NULL;
 			if (current_system->type == SYSTEM_GENESIS) {
 				genesis_context *gen = (genesis_context *)current_system;
@@ -394,6 +396,7 @@ void handle_binding_up(keybinding * binding)
 				case UI_PLANE_DEBUG: debug_type = VDP_DEBUG_PLANE; break;
 				case UI_VRAM_DEBUG: debug_type = VDP_DEBUG_VRAM; break;
 				case UI_CRAM_DEBUG: debug_type = VDP_DEBUG_CRAM; break;
+				case UI_COMPOSITE_DEBUG: debug_type = VDP_DEBUG_COMPOSITE; break;
 				default: return;
 				}
 				vdp_toggle_debug_view(vdp, debug_type);
@@ -609,6 +612,8 @@ int parse_binding_target(int device_num, char * target, tern_node * padbuttons, 
 			*subtype_a = UI_VRAM_DEBUG;
 		} else if (!strcmp(target + 3, "cram_debug")) {
 			*subtype_a = UI_CRAM_DEBUG;
+		} else if (!strcmp(target + 3, "compositing_debug")) {
+			*subtype_a = UI_COMPOSITE_DEBUG;
 		} else {
 			warning("Unreconized UI binding type %s\n", target);
 			return 0;
