@@ -1328,11 +1328,22 @@ void render_save_screenshot(char *path)
 
 uint8_t render_create_window(char *caption, uint32_t width, uint32_t height)
 {
-	num_textures++;
-	sdl_textures = realloc(sdl_textures, num_textures * sizeof(*sdl_textures));
-	extra_windows = realloc(extra_windows, (num_textures - FRAMEBUFFER_USER_START) * sizeof(*extra_windows));
-	extra_renderers = realloc(extra_renderers, (num_textures - FRAMEBUFFER_USER_START) * sizeof(*extra_renderers));
-	uint8_t win_idx = num_textures - FRAMEBUFFER_USER_START - 1;
+	uint8_t win_idx = 0xFF;
+	for (int i = 0; i < num_textures - FRAMEBUFFER_USER_START; i++)
+	{
+		if (!extra_windows[i]) {
+			win_idx = i;
+			break;
+		}
+	}
+	
+	if (win_idx == 0xFF) {
+		num_textures++;
+		sdl_textures = realloc(sdl_textures, num_textures * sizeof(*sdl_textures));
+		extra_windows = realloc(extra_windows, (num_textures - FRAMEBUFFER_USER_START) * sizeof(*extra_windows));
+		extra_renderers = realloc(extra_renderers, (num_textures - FRAMEBUFFER_USER_START) * sizeof(*extra_renderers));
+		win_idx = num_textures - FRAMEBUFFER_USER_START - 1;
+	}
 	extra_windows[win_idx] = SDL_CreateWindow(caption, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, 0);
 	if (!extra_windows[win_idx]) {
 		goto fail_window;
@@ -1341,7 +1352,7 @@ uint8_t render_create_window(char *caption, uint32_t width, uint32_t height)
 	if (!extra_renderers[win_idx]) {
 		goto fail_renderer;
 	}
-	uint8_t texture_idx = num_textures-1;
+	uint8_t texture_idx = win_idx + FRAMEBUFFER_USER_START;
 	sdl_textures[texture_idx] = SDL_CreateTexture(extra_renderers[win_idx], SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
 	if (!sdl_textures[texture_idx]) {
 		goto fail_texture;
@@ -1355,6 +1366,17 @@ fail_renderer:
 fail_window:
 	num_textures--;
 	return 0;
+}
+
+void render_destroy_window(uint8_t which)
+{
+	uint8_t win_idx = which - FRAMEBUFFER_USER_START;
+	//Destroying the renderers also frees the textures
+	SDL_DestroyRenderer(extra_renderers[win_idx]);
+	SDL_DestroyWindow(extra_windows[win_idx]);
+	
+	extra_renderers[win_idx] = NULL;
+	extra_windows[win_idx] = NULL;
 }
 
 uint32_t *locked_pixels;

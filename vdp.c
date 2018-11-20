@@ -3943,7 +3943,8 @@ void vdp_deserialize(deserialize_buffer *buf, void *vcontext)
 void vdp_toggle_debug_view(vdp_context *context, uint8_t debug_type)
 {
 	if (context->enabled_debuggers & 1 << debug_type) {
-		//TODO: implement me
+		render_destroy_window(context->debug_fb_indices[debug_type]);
+		context->enabled_debuggers &= ~(1 << debug_type);
 	} else {
 		uint32_t width,height;
 		uint8_t fetch_immediately = 0;

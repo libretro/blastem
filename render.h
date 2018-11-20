@@ -90,6 +90,7 @@ typedef void (*drop_handler)(const char *filename);
 uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b);
 void render_save_screenshot(char *path);
 uint8_t render_create_window(char *caption, uint32_t width, uint32_t height);
+void render_destroy_window(uint8_t which);
 uint32_t *render_get_framebuffer(uint8_t which, int *pitch);
 void render_framebuffer_updated(uint8_t which, int width);
 //returns the framebuffer index associated with the Window that has focus
