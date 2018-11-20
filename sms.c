@@ -451,19 +451,7 @@ static void request_exit(system_header *system)
 static void inc_debug_mode(system_header *system)
 {
 	sms_context *sms = (sms_context *)system;
-	sms->vdp->debug++;
-	if (sms->vdp->debug == 7) {
-		sms->vdp->debug = 0;
-	}
-}
-
-static void inc_debug_pal(system_header *system)
-{
-	sms_context *sms = (sms_context *)system;
-	sms->vdp->debug_pal++;
-	if (sms->vdp->debug_pal == 4) {
-		sms->vdp->debug_pal = 0;
-	}
+	vdp_inc_debug_mode(sms->vdp);
 }
 
 static void load_save(system_header *system)
@@ -601,7 +589,6 @@ sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t for
 	sms->header.request_exit = request_exit;
 	sms->header.soft_reset = soft_reset;
 	sms->header.inc_debug_mode = inc_debug_mode;
-	sms->header.inc_debug_pal = inc_debug_pal;
 	sms->header.gamepad_down = gamepad_down;
 	sms->header.gamepad_up = gamepad_up;
 	sms->header.mouse_down = mouse_down;

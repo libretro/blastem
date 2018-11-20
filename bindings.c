@@ -23,7 +23,6 @@ enum {
 
 typedef enum {
 	UI_DEBUG_MODE_INC,
-	UI_DEBUG_PAL_INC,
 	UI_ENTER_DEBUGGER,
 	UI_SAVE_STATE,
 	UI_SET_SPEED,
@@ -242,9 +241,6 @@ void handle_mousedown(int mouse, int button)
 	handle_binding_down(binding);
 }
 
-static uint8_t ui_debug_mode = 0;
-static uint8_t ui_debug_pal = 0;
-
 static int current_speed = 0;
 static int num_speeds = 1;
 static uint32_t * speeds = NULL;
@@ -274,9 +270,6 @@ void handle_binding_up(keybinding * binding)
 		{
 		case UI_DEBUG_MODE_INC:
 			current_system->inc_debug_mode(current_system);
-			break;
-		case UI_DEBUG_PAL_INC:
-			current_system->inc_debug_pal(current_system);
 			break;
 		case UI_ENTER_DEBUGGER:
 			current_system->enter_debugger = 1;
@@ -578,7 +571,8 @@ int parse_binding_target(int device_num, char * target, tern_node * padbuttons, 
 		if (!strcmp(target + 3, "vdp_debug_mode")) {
 			*subtype_a = UI_DEBUG_MODE_INC;
 		} else if(!strcmp(target + 3, "vdp_debug_pal")) {
-			*subtype_a = UI_DEBUG_PAL_INC;
+			//legacy binding, ignore
+			return 0;
 		} else if(!strcmp(target + 3, "enter_debugger")) {
 			*subtype_a = UI_ENTER_DEBUGGER;
 		} else if(!strcmp(target + 3, "save_state")) {

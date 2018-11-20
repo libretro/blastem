@@ -1131,15 +1131,6 @@ static void inc_debug_mode(system_header *system)
 	vdp_inc_debug_mode(gen->vdp);
 }
 
-static void inc_debug_pal(system_header *system)
-{
-	genesis_context *gen = (genesis_context *)system;
-	gen->vdp->debug_pal++;
-	if (gen->vdp->debug_pal == 4) {
-		gen->vdp->debug_pal = 0;
-	}
-}
-
 static void request_exit(system_header *system)
 {
 	genesis_context *gen = (genesis_context *)system;
@@ -1288,7 +1279,6 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	gen->header.get_open_bus_value = get_open_bus_value;
 	gen->header.request_exit = request_exit;
 	gen->header.inc_debug_mode = inc_debug_mode;
-	gen->header.inc_debug_pal = inc_debug_pal;
 	gen->header.gamepad_down = gamepad_down;
 	gen->header.gamepad_up = gamepad_up;
 	gen->header.mouse_down = mouse_down;

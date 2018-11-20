@@ -44,7 +44,6 @@ struct system_header {
 	system_fun_r16    get_open_bus_value;
 	system_u32_fun    set_speed_percent;
 	system_fun        inc_debug_mode;
-	system_fun        inc_debug_pal;
 	system_u8_u8_fun  gamepad_down;
 	system_u8_u8_fun  gamepad_up;
 	system_u8_u8_fun  mouse_down;
