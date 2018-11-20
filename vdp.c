@@ -2902,18 +2902,26 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 			active_line = 0x200;
 		}
 	}
-	uint32_t *dst = (
-		context->vcounter < context->inactive_start + context->border_bot 
-		|| context->vcounter >= 0x200 - context->border_top
-	) && context->hslot >= BG_START_SLOT && context->hslot < bg_end_slot
-		? context->output + 2 * (context->hslot - BG_START_SLOT)
-		: NULL;
+	uint32_t *dst;
+	uint8_t *debug_dst;
+	if (
+		(
+			context->vcounter < context->inactive_start + context->border_bot 
+			|| context->vcounter >= 0x200 - context->border_top
+		) && context->hslot >= BG_START_SLOT && context->hslot < bg_end_slot
+	) {
+		dst = context->output + 2 * (context->hslot - BG_START_SLOT);
+		debug_dst = context->layer_debug_buf + 2 * (context->hslot - BG_START_SLOT);
+	} else {
+		dst = NULL;
+	}
 		
 	if (
 		!dst && context->vcounter == context->inactive_start + context->border_bot
 		&& context->hslot >= line_change  && context->hslot < bg_end_slot
 	) {
 		dst = context->output + 2 * (context->hslot - BG_START_SLOT);
+		debug_dst = context->layer_debug_buf + 2 * (context->hslot - BG_START_SLOT);
 	}
 		
 	uint8_t test_layer = context->test_port >> 7 & 3;
@@ -2929,6 +2937,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 			|| context->vcounter >= 0x200 - context->border_top
 		)) {
 			dst = context->output + (context->hslot - BG_START_SLOT) * 2;
+			debug_dst = context->layer_debug_buf + 2 * (context->hslot - BG_START_SLOT);
 		} else if (context->hslot == bg_end_slot) {
 			advance_output_line(context);
 			dst = NULL;
@@ -2989,17 +2998,22 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 			}
 			if (dst >= context->done_output) {
 				*(dst++) = bg_color;
+				*(debug_dst++) = DBG_SRC_BG;
 			} else {
 				dst++;
+				debug_dst++;
 			}
 			if (dst >= context->done_output) {
 				*(dst++) = bg_color;
+				*(debug_dst++) = DBG_SRC_BG;
 				context->done_output = dst;
 			} else {
 				dst++;
+				debug_dst++;
 			}
 			if (context->hslot == (bg_end_slot-1)) {
 				*(dst++) = bg_color;
+				*(debug_dst++) = DBG_SRC_BG;
 				context->done_output = dst;
 			}
 		}
