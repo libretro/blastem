@@ -41,6 +41,19 @@ static const char *subtype_names[] = {
 	"genesis",
 	"saturn"
 };
+static const char *subtype_human_names[] = {
+	"unknown",
+	"Xbos",
+	"Xbox 360",
+	"Xbox One",
+	"PS2",
+	"PS3",
+	"PS4",
+	"Wii-U",
+	"Switch",
+	"Genesis",
+	"Saturn"
+};
 static const char *variant_names[] = {
 	"normal",
 	"6b bumpers",
@@ -291,6 +304,30 @@ char *make_controller_type_key(controller_info *info)
 		{
 			*cur = '_';
 		}
+	}
+	return ret;
+}
+
+char *make_human_readable_type_name(controller_info *info)
+{
+	const char *base = subtype_human_names[info->subtype];
+	char *prefix;
+	if (info->variant == VARIANT_NORMAL) {
+		prefix = "Normal ";
+	} else {
+		static const char *parts[] = {"6 button (", NULL, "/", NULL, ") "};
+		if (info->variant == VARIANT_6B_BUMPERS) {
+			parts[1] = get_button_label(info, SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
+			parts[3] = get_button_label(info, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
+		} else {
+			parts[1] = get_button_label(info, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
+			parts[3] = get_axis_label(info, SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
+		}
+		prefix = alloc_concat_m(5, parts);
+	}
+	char *ret = alloc_concat(prefix, base);
+	if (info->variant != VARIANT_NORMAL) {
+		free(prefix);
 	}
 	return ret;
 }

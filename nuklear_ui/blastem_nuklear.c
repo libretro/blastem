@@ -256,7 +256,9 @@ void view_load_state(struct nk_context *context)
 	view_choose_state(context, 1);
 }
 
-static void menu(struct nk_context *context, uint32_t num_entries, const menu_item *items)
+typedef void (*menu_handler)(uint32_t index);
+
+static void menu(struct nk_context *context, uint32_t num_entries, const menu_item *items, menu_handler handler)
 {
 	const uint32_t button_height = context->style.font->height * 1.75;
 	const uint32_t ideal_button_width = context->style.font->height * 10;
@@ -273,13 +275,14 @@ static void menu(struct nk_context *context, uint32_t num_entries, const menu_it
 	{
 		nk_layout_space_push(context, nk_rect(left, top + i * button_height, button_width, button_height-button_space));
 		if (nk_button_label(context, items[i].title)) {
-			push_view(items[i].next_view);
-			if (!current_view) {
-				exit(0);
-			}
-			if (current_view == view_save_state || current_view == view_load_state) {
-				free_slot_info(slots);
-				slots = NULL;
+			if (items[i].next_view) {
+				push_view(items[i].next_view);
+				if (current_view == view_save_state || current_view == view_load_state) {
+					free_slot_info(slots);
+					slots = NULL;
+				}
+			} else {
+				handler(i);
 			}
 		}
 	}
@@ -584,6 +587,7 @@ const char *translate_binding_option(const char *option)
 	return tern_find_ptr_default(conf_names, option, (void *)option);
 }
 
+static uint8_t controller_binding_changed;
 static void bind_option_group(struct nk_context *context, char *name, const char **options, uint32_t num_options)
 {
 	float margin = context->style.font->height * 2;
@@ -594,6 +598,7 @@ static void bind_option_group(struct nk_context *context, char *name, const char
 		{
 			if (nk_button_label(context, translate_binding_option(options[i]))) {
 				*current_bind_dest = options[i];
+				controller_binding_changed = 1;
 				pop_view();
 			}
 		}
@@ -765,9 +770,184 @@ static void axis_iter(char *key, tern_val val, uint8_t valtype, void *data)
 	}
 }
 
+enum {
+	SIMILAR_CONTROLLERS,
+	IDENTICAL_CONTROLLERS,
+	BY_INDEX,
+	DEFAULT,
+	NUM_DEST_TYPES
+};
+
+//it would be cleaner to generate this algorithmically for 4th and up,
+//but BlastEm only supports 8 controllers currently so it's not worth the effort
+static const char *by_index_names[] = {
+	"Use for 1st controller",
+	"Use for 2nd controller",
+	"Use for 3rd controller",
+	"Use for 4th controller",
+	"Use for 5th controller",
+	"Use for 6th controller",
+	"Use for 7th controller",
+	"Use for 8th controller",
+};
+
+static void save_stick_binds(char *axes_key, size_t axes_key_size, const char **bindings, char *prefix)
+{
+	for (int i = 0; i < NUM_AXIS_DIRS; i++)
+	{
+		char axis = (i / 2) ? 'x' : 'y';
+		char *suffix = (i % 2) ? ".negative" : ".positive";
+		size_t prefix_len = strlen(prefix), suffix_len = strlen(suffix);
+		size_t full_key_size = axes_key_size + prefix_len + 1 + suffix_len + 2;
+		char *full_key = malloc(full_key_size);
+		memcpy(full_key, axes_key, axes_key_size);
+		memcpy(full_key + axes_key_size, prefix, prefix_len);
+		full_key[axes_key_size+prefix_len] = axis;
+		memcpy(full_key + axes_key_size + prefix_len + 1, suffix, suffix_len  +1);
+		full_key[axes_key_size + prefix_len + 1 + suffix_len + 1] = 0;
+		
+		if (bindings[i]) {
+			tern_insert_path(config, full_key, (tern_val){.ptrval = strdup(bindings[i])}, TVAL_PTR);
+		} else {
+			tern_val prev_val;
+			uint8_t prev_type = tern_delete_path(&config, full_key, &prev_val);
+			if (prev_type == TVAL_PTR) {
+				free(prev_val.ptrval);
+			}
+		}
+		
+		free(full_key);
+	}
+}
+
+static pad_bind_config *bindings;
+static void handle_dest_clicked(uint32_t dest)
+{
+	char key_buf[12];
+	char *key;
+	switch (dest)
+	{
+	case SIMILAR_CONTROLLERS:
+		key = make_controller_type_key(&selected_controller_info);
+		break;
+	case IDENTICAL_CONTROLLERS:
+		key = render_joystick_type_id(selected_controller);
+		break;
+	case BY_INDEX:
+		snprintf(key_buf, sizeof(key_buf), "%d", selected_controller);
+		key = key_buf;
+		break;
+	default:
+		key = "default";
+		break;
+	}
+	static const char base_path[] = "bindings\0pads";
+	size_t pad_key_size = sizeof(base_path) + strlen(key) + 1;
+	char *pad_key = malloc(pad_key_size);
+	memcpy(pad_key, base_path, sizeof(base_path));
+	strcpy(pad_key + sizeof(base_path), key);
+	static const char dpad_base[] = "dpads\0""0";
+	size_t dpad_key_size = pad_key_size + sizeof(dpad_base);
+	char *dpad_key = malloc(dpad_key_size);
+	memcpy(dpad_key, pad_key, pad_key_size);
+	memcpy(dpad_key + pad_key_size, dpad_base, sizeof(dpad_base));
+	static const char button_base[] = "buttons";
+	size_t button_key_size = pad_key_size + sizeof(button_base);
+	char *button_key = malloc(button_key_size);
+	memcpy(button_key, pad_key, pad_key_size);
+	memcpy(button_key + pad_key_size, button_base, sizeof(button_base));
+	
+	char *final_key;
+	for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX; i++)
+	{
+		char *base;
+		const char *suffix;
+		size_t base_key_len;
+		if ( i < SDL_CONTROLLER_BUTTON_DPAD_UP) {
+			suffix = SDL_GameControllerGetStringForButton(i);
+			base_key_len = button_key_size;
+			base = button_key;
+			
+			
+		} else {
+			static const char *dir_keys[] = {"up", "down", "left", "right"};
+			suffix = dir_keys[i - SDL_CONTROLLER_BUTTON_DPAD_UP];
+			base = dpad_key;
+			base_key_len = dpad_key_size;
+		}
+		size_t suffix_len = strlen(suffix);
+		final_key = malloc(base_key_len + suffix_len + 2);
+		memcpy(final_key, base, base_key_len);
+		memcpy(final_key + base_key_len, suffix, suffix_len + 1);
+		final_key[base_key_len + suffix_len + 1] = 0;
+		if (bindings->button_binds[i]) {
+			tern_insert_path(config, final_key, (tern_val){.ptrval = strdup(bindings->button_binds[i])}, TVAL_PTR);
+		} else {
+			tern_val prev_val;
+			uint8_t prev_type = tern_delete_path(&config, final_key, &prev_val);
+			if (prev_type == TVAL_PTR) {
+				free(prev_val.ptrval);
+			}
+		}
+		free(final_key);
+	}
+	free(button_key);
+	free(dpad_key);
+	
+	static const char axes_base[] = "axes";
+	size_t axes_key_size = pad_key_size + sizeof(axes_base);
+	char *axes_key = malloc(axes_key_size);
+	memcpy(axes_key, pad_key, pad_key_size);
+	memcpy(axes_key + pad_key_size, axes_base, sizeof(axes_base));
+	
+	save_stick_binds(axes_key, axes_key_size,bindings->left_stick, "left");
+	save_stick_binds(axes_key, axes_key_size,bindings->right_stick, "right");
+	for (int i = SDL_CONTROLLER_AXIS_TRIGGERLEFT; i < SDL_CONTROLLER_AXIS_MAX; i++)
+	{
+		const char *suffix = SDL_GameControllerGetStringForAxis(i);
+		size_t suffix_len = strlen(suffix);
+		final_key = malloc(axes_key_size + suffix_len + 2);
+		memcpy(final_key, axes_key, axes_key_size);
+		memcpy(final_key + axes_key_size, suffix, suffix_len + 1);
+		final_key[axes_key_size + suffix_len + 1] = 0;
+		if (bindings->triggers[i - SDL_CONTROLLER_AXIS_TRIGGERLEFT]) {
+			tern_insert_path(config, final_key, (tern_val){.ptrval = strdup(bindings->triggers[i - SDL_CONTROLLER_AXIS_TRIGGERLEFT])}, TVAL_PTR);
+		} else {
+			tern_val prev_val;
+			uint8_t prev_type = tern_delete_path(&config, final_key, &prev_val);
+			if (prev_type == TVAL_PTR) {
+				free(prev_val.ptrval);
+			}
+		}
+		free(final_key);
+	}
+	free(axes_key);
+	
+	free(pad_key);
+	if (dest == SIMILAR_CONTROLLERS) {
+		free(key);
+	}
+	pop_view();
+	config_dirty = 1;
+}
+
+void view_select_binding_dest(struct nk_context *context)
+{
+	static menu_item options[NUM_DEST_TYPES];
+	options[IDENTICAL_CONTROLLERS].title = "Use for identical controllers";
+	options[DEFAULT].title = "Use as default";
+	options[BY_INDEX].title = by_index_names[selected_controller];
+	options[SIMILAR_CONTROLLERS].title = make_human_readable_type_name(&selected_controller_info);
+	
+	if (nk_begin(context, "Select Binding Dest", nk_rect(0, 0, render_width(), render_height()), NK_WINDOW_NO_SCROLLBAR)) {
+		menu(context, NUM_DEST_TYPES, options, handle_dest_clicked);
+		nk_end(context);
+	}
+	free((char *)options[SIMILAR_CONTROLLERS].title);
+}
+
 void view_controller_bindings(struct nk_context *context)
 {
-	static pad_bind_config *bindings;
 	if (nk_begin(context, "Controller Bindings", nk_rect(0, 0, render_width(), render_height()), NK_WINDOW_NO_SCROLLBAR)) {
 		if (!bindings) {
 			bindings = calloc(1, sizeof(*bindings));
@@ -892,6 +1072,9 @@ void view_controller_bindings(struct nk_context *context)
 		nk_layout_row_static(context, orig_height + 4, (render_width() - 2*orig_height) / 4, 1);
 		if (nk_button_label(context, "Back")) {
 			pop_view();
+			if (controller_binding_changed) {
+				push_view(view_select_binding_dest);
+			}
 		}
 		nk_end(context);
 	}
@@ -983,6 +1166,7 @@ static void view_controller_mappings(struct nk_context *context)
 					free(mapping_string);
 					pop_view();
 					push_view(view_controller_bindings);
+					controller_binding_changed = 0;
 				}
 			}
 		}
@@ -1031,6 +1215,7 @@ static void view_controller_variant(struct nk_context *context)
 		SDL_GameController *controller = render_get_controller(selected_controller);
 		if (controller) {
 			push_view(view_controller_bindings);
+			controller_binding_changed = 0;
 			SDL_GameControllerClose(controller);
 		} else {
 			current_button = SDL_CONTROLLER_BUTTON_A;
@@ -1127,6 +1312,7 @@ void view_controllers(struct nk_context *context)
 						push_view(view_controller_type);
 					} else {
 						push_view(view_controller_bindings);
+						controller_binding_changed = 0;
 					}
 					
 				}
@@ -1527,9 +1713,14 @@ void view_settings(struct nk_context *context)
 	};
 	
 	if (nk_begin(context, "Settings Menu", nk_rect(0, 0, render_width(), render_height()), 0)) {
-		menu(context, sizeof(items)/sizeof(*items), items);
+		menu(context, sizeof(items)/sizeof(*items), items, NULL);
 		nk_end(context);
 	}
+}
+
+void exit_handler(uint32_t index)
+{
+	exit(0);
 }
 
 void view_pause(struct nk_context *context)
@@ -1545,7 +1736,7 @@ void view_pause(struct nk_context *context)
 	};
 	
 	if (nk_begin(context, "Main Menu", nk_rect(0, 0, render_width(), render_height()), 0)) {
-		menu(context, sizeof(items)/sizeof(*items), items);
+		menu(context, sizeof(items)/sizeof(*items), items, exit_handler);
 		nk_end(context);
 	}
 }
@@ -1560,7 +1751,7 @@ void view_menu(struct nk_context *context)
 	};
 	
 	if (nk_begin(context, "Main Menu", nk_rect(0, 0, render_width(), render_height()), 0)) {
-		menu(context, sizeof(items)/sizeof(*items), items);
+		menu(context, sizeof(items)/sizeof(*items), items, exit_handler);
 		nk_end(context);
 	}
 }
