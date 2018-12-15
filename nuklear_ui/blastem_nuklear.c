@@ -1030,16 +1030,29 @@ void view_controller_bindings(struct nk_context *context)
 			bind_box_left = img_right + (render_width() - img_right) / 2.0f - bind_box_width / 2.0f;
 		}
 		
-		binding_box(context, bindings, "Action Buttons", bind_box_left, img_top, bind_box_width, 4, (int[]){
-			SDL_CONTROLLER_BUTTON_A,
-			SDL_CONTROLLER_BUTTON_B,
-			SDL_CONTROLLER_BUTTON_X,
-			SDL_CONTROLLER_BUTTON_Y
-		});
+		if (selected_controller_info.variant == VARIANT_NORMAL) {
+			binding_box(context, bindings, "Action Buttons", bind_box_left, img_top, bind_box_width, 4, (int[]){
+				SDL_CONTROLLER_BUTTON_A,
+				SDL_CONTROLLER_BUTTON_B,
+				SDL_CONTROLLER_BUTTON_X,
+				SDL_CONTROLLER_BUTTON_Y
+			});
+		} else {
+			binding_box(context, bindings, "Action Buttons", bind_box_left, img_top, bind_box_width, 6, (int[]){
+				SDL_CONTROLLER_BUTTON_A,
+				SDL_CONTROLLER_BUTTON_B,
+				selected_controller_info.variant == VARIANT_6B_RIGHT ? AXIS | SDL_CONTROLLER_AXIS_TRIGGERRIGHT : SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
+				SDL_CONTROLLER_BUTTON_X,
+				SDL_CONTROLLER_BUTTON_Y,
+				selected_controller_info.variant == VARIANT_6B_RIGHT ? SDL_CONTROLLER_BUTTON_RIGHTSHOULDER : SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
+			});
+		}
 		
-		binding_box(context, bindings, "Right Shoulder", bind_box_left, font->height/2, bind_box_width, 2, (int[]){
-			SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
-			AXIS | SDL_CONTROLLER_AXIS_TRIGGERRIGHT
+		binding_box(context, bindings, "Right Shoulder", bind_box_left, font->height/2, bind_box_width,
+			selected_controller_info.variant == VARIANT_6B_BUMPERS ? 1 : 2, 
+			(int[]){
+			selected_controller_info.variant == VARIANT_6B_RIGHT ? SDL_CONTROLLER_BUTTON_LEFTSHOULDER : SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
+			selected_controller_info.variant == VARIANT_6B_RIGHT ? SDL_CONTROLLER_BUTTON_RIGHTSHOULDER : AXIS | SDL_CONTROLLER_AXIS_TRIGGERRIGHT
 		});
 		
 		binding_box(context, bindings, "Misc Buttons", (render_width() - bind_box_width) / 2, font->height/2, bind_box_width, 3, (int[]){
@@ -1048,30 +1061,43 @@ void view_controller_bindings(struct nk_context *context)
 			SDL_CONTROLLER_BUTTON_START
 		});
 		
-		binding_box(context, bindings, "Right Stick", img_right - desired_width/3, img_bot, bind_box_width, 5, (int[]){
-			RIGHTSTICK | UP,
-			RIGHTSTICK | DOWN,
-			RIGHTSTICK | LEFT,
-			RIGHTSTICK | RIGHT,
-			SDL_CONTROLLER_BUTTON_RIGHTSTICK
-		});
-		
+		if (selected_controller_info.variant == VARIANT_NORMAL)
+		{
+			binding_box(context, bindings, "Right Stick", img_right - desired_width/3, img_bot, bind_box_width, 5, (int[]){
+				RIGHTSTICK | UP,
+				RIGHTSTICK | DOWN,
+				RIGHTSTICK | LEFT,
+				RIGHTSTICK | RIGHT,
+				SDL_CONTROLLER_BUTTON_RIGHTSTICK
+			});
+		}
 		
 		bind_box_left -= img_right;
-		binding_box(context, bindings, "Left Stick", bind_box_left, img_top, bind_box_width, 5, (int[]){
-			LEFTSTICK | UP,
-			LEFTSTICK | DOWN,
-			LEFTSTICK | LEFT,
-			LEFTSTICK | RIGHT,
-			SDL_CONTROLLER_BUTTON_LEFTSTICK
+		float dpad_left, dpad_top;
+		if (selected_controller_info.variant == VARIANT_NORMAL)
+		{
+			binding_box(context, bindings, "Left Stick", bind_box_left, img_top, bind_box_width, 5, (int[]){
+				LEFTSTICK | UP,
+				LEFTSTICK | DOWN,
+				LEFTSTICK | LEFT,
+				LEFTSTICK | RIGHT,
+				SDL_CONTROLLER_BUTTON_LEFTSTICK
+			});
+			dpad_left = img_left - desired_width/6;
+			dpad_top = img_bot + font->height * 1.5;
+		} else {
+			dpad_left = bind_box_left;
+			dpad_top = img_top;
+		}
+		
+		binding_box(context, bindings, "Left Shoulder", bind_box_left, font->height/2, bind_box_width, 
+			selected_controller_info.variant == VARIANT_6B_BUMPERS ? 1 : 2, 
+			(int[]){
+			selected_controller_info.variant == VARIANT_6B_RIGHT ? SDL_CONTROLLER_BUTTON_LEFTSTICK : SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
+			selected_controller_info.variant == VARIANT_6B_RIGHT ? SDL_CONTROLLER_BUTTON_RIGHTSTICK : AXIS | SDL_CONTROLLER_AXIS_TRIGGERLEFT
 		});
 		
-		binding_box(context, bindings, "Left Shoulder", bind_box_left, font->height/2, bind_box_width, 2, (int[]){
-			SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
-			AXIS | SDL_CONTROLLER_AXIS_TRIGGERLEFT
-		});
-		
-		binding_box(context, bindings, "D-pad", img_left - desired_width/6, img_bot + font->height * 1.5, bind_box_width, 4, (int[]){
+		binding_box(context, bindings, "D-pad", dpad_left, dpad_top, bind_box_width, 4, (int[]){
 			SDL_CONTROLLER_BUTTON_DPAD_UP,
 			SDL_CONTROLLER_BUTTON_DPAD_DOWN,
 			SDL_CONTROLLER_BUTTON_DPAD_LEFT,
