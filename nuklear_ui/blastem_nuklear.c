@@ -19,6 +19,16 @@
 
 static struct nk_context *context;
 
+typedef struct
+{
+	uint32_t         *image_data;
+	uint32_t         width, height;
+	struct nk_image  ui;
+} ui_image;
+
+static ui_image **ui_images, *controller_360, *controller_ps4, *controller_ps4_6b;
+static uint32_t num_ui_images, ui_image_storage;
+
 typedef void (*view_fun)(struct nk_context *);
 static view_fun current_view;
 static view_fun *previous_views;
@@ -508,8 +518,6 @@ void view_key_bindings(struct nk_context *context)
 
 static int selected_controller;
 static controller_info selected_controller_info;
-static struct nk_image controller_360_image, controller_ps4_image;
-static uint32_t controller_360_width, controller_360_height, controller_ps4_width, controller_ps4_height;
 //#define MIN_BIND_BOX_WIDTH 140
 #define MAX_BIND_BOX_WIDTH 350
 
@@ -946,6 +954,17 @@ void view_select_binding_dest(struct nk_context *context)
 	free((char *)options[SIMILAR_CONTROLLERS].title);
 }
 
+static ui_image *select_best_image(controller_info *info)
+{
+	if (info->variant != VARIANT_NORMAL) {
+		return controller_ps4_6b;
+	} else if (info->type == TYPE_PSX) {
+		return controller_ps4;
+	} else {
+		return controller_360;
+	}
+}
+
 void view_controller_bindings(struct nk_context *context)
 {
 	if (nk_begin(context, "Controller Bindings", nk_rect(0, 0, render_width(), render_height()), NK_WINDOW_NO_SCROLLBAR)) {
@@ -970,16 +989,9 @@ void view_controller_bindings(struct nk_context *context)
 		
 		uint32_t avail_height = render_height() - 2 * orig_height;
 		float desired_width = render_width() * 0.5f, desired_height = avail_height * 0.5f;
-		uint32_t controller_width, controller_height;
-		if (selected_controller_info.type == TYPE_PSX) {
-			controller_width = controller_ps4_width;
-			controller_height = controller_ps4_height;
-		} else {
-			controller_width = controller_360_width;
-			controller_height = controller_360_height;
-		}
+		ui_image *controller_image = select_best_image(&selected_controller_info);
 		
-		float controller_ratio = (float)controller_width / (float)controller_height;
+		float controller_ratio = (float)controller_image->width / (float)controller_image->height;
 		
 		const struct nk_user_font *font = context->style.font;
 		int MIN_BIND_BOX_WIDTH = font->width(font->userdata, font->height, "Right", strlen("Right"))
@@ -1000,7 +1012,7 @@ void view_controller_bindings(struct nk_context *context)
 		float img_bot = img_top + desired_height;
 		nk_layout_space_begin(context, NK_STATIC, avail_height, INT_MAX);
 		nk_layout_space_push(context, nk_rect(img_left, img_top, desired_width, desired_height));
-		nk_image(context, selected_controller_info.type == TYPE_PSX ? controller_ps4_image : controller_360_image);
+		nk_image(context, controller_image->ui);
 		
 		float bind_box_width = (render_width() - img_right) * 0.8f;
 		if (bind_box_width < MIN_BIND_BOX_WIDTH) {
@@ -1288,21 +1300,14 @@ void view_controllers(struct nk_context *context)
 			SDL_Joystick *joy = render_get_joystick(i);
 			if (joy) {
 				controller_info info = get_controller_info(i);
-				uint32_t controller_width, controller_height;
-				if (info.type == TYPE_PSX) {
-					controller_width = controller_ps4_width;
-					controller_height = controller_ps4_height;
-				} else {
-					controller_width = controller_360_width;
-					controller_height = controller_360_height;
-				}
-				int image_width = height * controller_width / controller_height;
+				ui_image *controller_image = select_best_image(&info);
+				int image_width = height * controller_image->width / controller_image->height;
 				nk_layout_row_begin(context, NK_STATIC, height, 2);
 				nk_layout_row_push(context, image_width);
 				if (info.type == TYPE_UNKNOWN || info.type == TYPE_GENERIC_MAPPING) {
 					nk_label(context, "?", NK_TEXT_CENTERED);
 				} else {
-					nk_image(context, info.type == TYPE_PSX ? controller_ps4_image : controller_360_image);
+					nk_image(context, controller_image->ui);
 				}
 				nk_layout_row_push(context, render_width() - image_width - 2 * context->style.font->height);
 				if (nk_button_label(context, info.name)) {
@@ -1809,8 +1814,6 @@ static void context_destroyed(void)
 	nk_sdl_shutdown();
 }
 
-static uint32_t *controller_360_buf, *controller_ps4_buf;
-
 static struct nk_image load_image_texture(uint32_t *buf, uint32_t width, uint32_t height)
 {
 	GLuint tex;
@@ -1837,11 +1840,9 @@ static void texture_init(void)
 	free(font);
 	nk_sdl_font_stash_end();
 	nk_style_set_font(context, &def_font->handle);
-	if (controller_360_buf) {
-		controller_360_image = load_image_texture(controller_360_buf, controller_360_width, controller_360_height);
-	}
-	if (controller_ps4_buf) {
-		controller_ps4_image = load_image_texture(controller_ps4_buf, controller_ps4_width, controller_ps4_height);
+	for (uint32_t i = 0; i < num_ui_images; i++)
+	{
+		ui_images[i]->ui = load_image_texture(ui_images[i]->image_data, ui_images[i]->width, ui_images[i]->height);
 	}
 }
 
@@ -1890,21 +1891,38 @@ static void persist_config_exit(void)
 	}
 }
 
+ui_image *load_ui_image(char *name)
+{
+	uint32_t buf_size;
+	uint8_t *buf = (uint8_t *)read_bundled_file(name, &buf_size);
+	if (buf) {
+		num_ui_images++;
+		if (num_ui_images > ui_image_storage) {
+			ui_image_storage = (ui_image_storage + 1) * 2;
+			ui_images = realloc(ui_images, ui_image_storage * sizeof(*ui_images));
+		}
+		ui_image *this_image = ui_images[num_ui_images-1] = calloc(1, sizeof(ui_image));
+		this_image->image_data = load_png(buf, buf_size, &this_image->width, &this_image->height);
+		free(buf);
+		if (!this_image->image_data) {
+			num_ui_images--;
+			free(this_image);
+			return NULL;
+		}
+		return this_image;
+	} else {
+		return NULL;
+	}
+}
+
 void blastem_nuklear_init(uint8_t file_loaded)
 {
 	context = nk_sdl_init(render_get_window());
 	
-	uint32_t buf_size;
-	uint8_t *buf = (uint8_t *)read_bundled_file("images/360.png", &buf_size);
-	if (buf) {
-		controller_360_buf = load_png(buf, buf_size, &controller_360_width, &controller_360_height);
-		free(buf);
-	}
-	buf = (uint8_t *)read_bundled_file("images/ps4.png", &buf_size);
-	if (buf) {
-		controller_ps4_buf = load_png(buf, buf_size, &controller_ps4_width, &controller_ps4_height);
-		free(buf);
-	}
+	controller_360 = load_ui_image("images/360.png");
+	controller_ps4 = load_ui_image("images/ps4.png");
+	controller_ps4_6b = load_ui_image("images/ps4_6b.png");
+	
 	texture_init();
 	
 	current_view = file_loaded ? view_play : view_menu;
