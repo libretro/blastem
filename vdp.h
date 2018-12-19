@@ -271,5 +271,7 @@ void vdp_deserialize(deserialize_buffer *buf, void *vcontext);
 void vdp_force_update_framebuffer(vdp_context *context);
 void vdp_toggle_debug_view(vdp_context *context, uint8_t debug_type);
 void vdp_inc_debug_mode(vdp_context *context);
+//to be implemented by the host system
+uint16_t read_dma_value(uint32_t address);
 
 #endif //VDP_H_

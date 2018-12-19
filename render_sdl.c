@@ -29,6 +29,7 @@ static SDL_Window **extra_windows;
 static SDL_Renderer *main_renderer;
 static SDL_Renderer **extra_renderers;
 static SDL_Texture  **sdl_textures;
+static window_close_handler *close_handlers;
 static uint8_t num_textures;
 static SDL_Rect      main_clip;
 static SDL_GLContext *main_context;
@@ -921,6 +922,21 @@ static int32_t handle_event(SDL_Event *event)
 			}
 #endif
 			break;
+		case SDL_WINDOWEVENT_CLOSE:
+			if (SDL_GetWindowID(main_window) == event->window.windowID) {
+				exit(0);
+			} else {
+				for (int i = 0; i < num_textures - FRAMEBUFFER_USER_START; i++)
+				{
+					if (SDL_GetWindowID(extra_windows[i]) == event->window.windowID) {
+						if (close_handlers[i]) {
+							close_handlers[i](i + FRAMEBUFFER_USER_START);
+						}
+						break;
+					}
+				}
+			}
+			break;
 		}
 		break;
 	case SDL_DROPFILE:
@@ -1326,7 +1342,7 @@ void render_save_screenshot(char *path)
 	screenshot_path = path;
 }
 
-uint8_t render_create_window(char *caption, uint32_t width, uint32_t height)
+uint8_t render_create_window(char *caption, uint32_t width, uint32_t height, window_close_handler close_handler)
 {
 	uint8_t win_idx = 0xFF;
 	for (int i = 0; i < num_textures - FRAMEBUFFER_USER_START; i++)
@@ -1342,6 +1358,7 @@ uint8_t render_create_window(char *caption, uint32_t width, uint32_t height)
 		sdl_textures = realloc(sdl_textures, num_textures * sizeof(*sdl_textures));
 		extra_windows = realloc(extra_windows, (num_textures - FRAMEBUFFER_USER_START) * sizeof(*extra_windows));
 		extra_renderers = realloc(extra_renderers, (num_textures - FRAMEBUFFER_USER_START) * sizeof(*extra_renderers));
+		close_handlers = realloc(close_handlers, (num_textures - FRAMEBUFFER_USER_START) * sizeof(*close_handlers));
 		win_idx = num_textures - FRAMEBUFFER_USER_START - 1;
 	}
 	extra_windows[win_idx] = SDL_CreateWindow(caption, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, 0);
@@ -1357,6 +1374,7 @@ uint8_t render_create_window(char *caption, uint32_t width, uint32_t height)
 	if (!sdl_textures[texture_idx]) {
 		goto fail_texture;
 	}
+	close_handlers[win_idx] = close_handler;
 	return texture_idx;
 	
 fail_texture:
