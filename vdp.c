@@ -5,7 +5,6 @@
 */
 #include "vdp.h"
 #include "blastem.h"
-#include "genesis.h"
 #include <stdlib.h>
 #include <string.h>
 #include "render.h"
@@ -3875,6 +3874,19 @@ void vdp_deserialize(deserialize_buffer *buf, void *vcontext)
 	update_video_params(context);
 }
 
+static vdp_context *current_vdp;
+static void vdp_debug_window_close(uint8_t which)
+{
+	//TODO: remove need for current_vdp global, and find the VDP via current_system instead
+	for (int i = 0; i < VDP_NUM_DEBUG_TYPES; i++)
+	{
+		if (current_vdp->enabled_debuggers & (1 << i) && which == current_vdp->debug_fb_indices[i]) {
+			vdp_toggle_debug_view(current_vdp, i);
+			break;
+		}
+	}
+}
+
 void vdp_toggle_debug_view(vdp_context *context, uint8_t debug_type)
 {
 	if (context->enabled_debuggers & 1 << debug_type) {
@@ -3910,7 +3922,8 @@ void vdp_toggle_debug_view(vdp_context *context, uint8_t debug_type)
 		default:
 			return;
 		}
-		context->debug_fb_indices[debug_type] = render_create_window(caption, width, height);
+		current_vdp = context;
+		context->debug_fb_indices[debug_type] = render_create_window(caption, width, height, vdp_debug_window_close);
 		if (context->debug_fb_indices[debug_type]) {
 			context->enabled_debuggers |= 1 << debug_type;
 		}

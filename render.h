@@ -86,10 +86,11 @@ typedef enum {
 
 typedef struct audio_source audio_source;
 typedef void (*drop_handler)(const char *filename);
+typedef void (*window_close_handler)(uint8_t which);
 
 uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b);
 void render_save_screenshot(char *path);
-uint8_t render_create_window(char *caption, uint32_t width, uint32_t height);
+uint8_t render_create_window(char *caption, uint32_t width, uint32_t height, window_close_handler close_handler);
 void render_destroy_window(uint8_t which);
 uint32_t *render_get_framebuffer(uint8_t which, int *pitch);
 void render_framebuffer_updated(uint8_t which, int width);
