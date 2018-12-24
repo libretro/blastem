@@ -26,6 +26,7 @@
 #define MIN_POLL_INTERVAL 6840
 
 const char * device_type_names[] = {
+	"None",
 	"SMS gamepad",
 	"3-button gamepad",
 	"6-button gamepad",
@@ -38,8 +39,7 @@ const char * device_type_names[] = {
 	"EA 4-way Play cable A",
 	"EA 4-way Play cable B",
 	"Sega Parallel Transfer Board",
-	"Generic Device",
-	"None"
+	"Generic Device"
 };
 
 #define GAMEPAD_TH0 0
