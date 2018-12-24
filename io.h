@@ -11,6 +11,7 @@
 #include "serialize.h"
 
 enum {
+	IO_NONE,
 	IO_GAMEPAD2,
 	IO_GAMEPAD3,
 	IO_GAMEPAD6,
@@ -23,8 +24,7 @@ enum {
 	IO_EA_MULTI_A,
 	IO_EA_MULTI_B,
 	IO_SEGA_PARALLEL,
-	IO_GENERIC,
-	IO_NONE
+	IO_GENERIC
 };
 
 typedef struct {
