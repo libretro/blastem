@@ -571,7 +571,7 @@ int main(int argc, char ** argv)
 	uint8_t menu = !loaded;
 	uint8_t use_nuklear = 0;
 #ifndef DISABLE_NUKLEAR
-	use_nuklear = is_nuklear_available();
+	use_nuklear = !headless && is_nuklear_available();
 #endif
 	if (!loaded && !use_nuklear) {
 		//load menu
