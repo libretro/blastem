@@ -1208,23 +1208,27 @@ static void render_map(uint16_t col, uint8_t * tmp_buf, uint8_t offset, vdp_cont
 	} else {
 		address += 4 * context->v_offset;
 	}
-	uint16_t pal_priority = (col >> 9) & 0x70;
-	int32_t dir;
+	uint8_t pal_priority = (col >> 9) & 0x70;
+	uint32_t bits = *((uint32_t *)(&context->vdpmem[address]));
 	if (col & MAP_BIT_H_FLIP) {
-		offset += 7;
-		offset &= SCROLL_BUFFER_MASK;
-		dir = -1;
+		uint32_t shift = 28;
+		for (int i = 0; i < 8; i++)
+		{
+			tmp_buf[offset++] = pal_priority | ((bits >> shift) & 0xF);
+			shift -= 4;
+			offset &= SCROLL_BUFFER_MASK;
+		}
 	} else {
-		dir = 1;
-	}
-	for (uint32_t i=0; i < 4; i++, address++)
-	{
-		tmp_buf[offset] = pal_priority | (context->vdpmem[address] >> 4);
-		offset += dir;
-		offset &= SCROLL_BUFFER_MASK;
-		tmp_buf[offset] = pal_priority | (context->vdpmem[address] & 0xF);
-		offset += dir;
-		offset &= SCROLL_BUFFER_MASK;
+		for (int i = 0; i < 4; i++)
+		{
+			uint8_t right = pal_priority | (bits & 0xF);
+			bits >>= 4;
+			tmp_buf[offset++] = pal_priority | (bits & 0xF);
+			offset &= SCROLL_BUFFER_MASK;
+			bits >>= 4;
+			tmp_buf[offset++] = right;
+			offset &= SCROLL_BUFFER_MASK;
+		}
 	}
 }
 
