@@ -770,9 +770,9 @@ static void read_sprite_x_mode4(vdp_context * context)
 static void update_color_map(vdp_context *context, uint16_t index, uint16_t value)
 {
 	context->colors[index] = color_map[value & CRAM_BITS];
-	context->colors[index + CRAM_SIZE] = color_map[(value & CRAM_BITS) | FBUF_SHADOW];
-	context->colors[index + CRAM_SIZE*2] = color_map[(value & CRAM_BITS) | FBUF_HILIGHT];
-	context->colors[index + CRAM_SIZE*3] = color_map[(value & CRAM_BITS) | FBUF_MODE4];
+	context->colors[index + SHADOW_OFFSET] = color_map[(value & CRAM_BITS) | FBUF_SHADOW];
+	context->colors[index + HIGHLIGHT_OFFSET] = color_map[(value & CRAM_BITS) | FBUF_HILIGHT];
+	context->colors[index + MODE4_OFFSET] = color_map[(value & CRAM_BITS) | FBUF_MODE4];
 }
 
 void write_cram_internal(vdp_context * context, uint16_t addr, uint16_t value)
@@ -798,7 +798,7 @@ static void write_cram(vdp_context * context, uint16_t address, uint16_t value)
 	)) {
 		uint8_t bg_end_slot = BG_START_SLOT + (context->regs[REG_MODE_4] & BIT_H40) ? LINEBUF_SIZE/2 : (256+HORIZ_BORDER)/2;
 		if (context->hslot < bg_end_slot) {
-			uint32_t color = (context->regs[REG_MODE_2] & BIT_MODE_5) ? context->colors[addr] : context->colors[addr + CRAM_SIZE*3];
+			uint32_t color = (context->regs[REG_MODE_2] & BIT_MODE_5) ? context->colors[addr] : context->colors[addr + MODE4_OFFSET];
 			context->output[(context->hslot - BG_START_SLOT)*2 + 1] = color;
 		}
 	}
@@ -1263,6 +1263,348 @@ static void fetch_map_mode4(uint16_t col, uint32_t line, vdp_context *context)
 	context->fetch_tmp[1] = context->vdpmem[address+1];
 }
 
+static uint8_t composite_normal(vdp_context *context, uint8_t *debug_dst, uint8_t sprite, uint8_t plane_a, uint8_t plane_b, uint8_t bg_index)
+{
+	uint8_t pixel = bg_index;
+	uint8_t src = DBG_SRC_BG;
+	if (plane_b & 0xF) {
+		pixel = plane_b;
+		src = DBG_SRC_B;
+	}
+	if (plane_a & 0xF && (plane_a & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
+		pixel = plane_a;
+		src = DBG_SRC_A;
+	}
+	if (sprite & 0xF && (sprite & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
+		pixel = sprite;
+		src = DBG_SRC_S;
+	}
+	*debug_dst = src;
+	return pixel;
+}
+typedef struct {
+	uint8_t index, intensity;
+} sh_pixel;
+
+static sh_pixel composite_highlight(vdp_context *context, uint8_t *debug_dst, uint8_t sprite, uint8_t plane_a, uint8_t plane_b, uint8_t bg_index)
+{
+	uint8_t pixel = bg_index;
+	uint8_t src = DBG_SRC_BG;
+	uint8_t intensity = 0;
+	if (plane_b & 0xF) {
+		pixel = plane_b;
+		src = DBG_SRC_B;
+	}
+	intensity = plane_b & BUF_BIT_PRIORITY;
+	if (plane_a & 0xF && (plane_a & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
+		pixel = plane_a;
+		src = DBG_SRC_A;
+	}
+	intensity |= plane_a & BUF_BIT_PRIORITY;
+	if (sprite & 0xF && (sprite & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
+		if ((sprite & 0x3F) == 0x3E) {
+			intensity += BUF_BIT_PRIORITY;
+		} else if ((sprite & 0x3F) == 0x3F) {
+			intensity = 0;
+		} else {
+			pixel = sprite;
+			src = DBG_SRC_S;
+			if ((pixel & 0xF) == 0xE) {
+				intensity = BUF_BIT_PRIORITY;
+			} else {
+				intensity |= pixel & BUF_BIT_PRIORITY;
+			}
+		}
+	}
+	*debug_dst = src;
+	return (sh_pixel){.index = pixel, .intensity = intensity};
+}
+
+static void render_normal(vdp_context *context, int32_t col, uint32_t *dst, uint8_t *debug_dst, int plane_a_off, int plane_b_off)
+{
+	int start = 0;
+	if (!col && (context->regs[REG_MODE_1] & BIT_COL0_MASK)) {
+		uint32_t bgcolor = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
+		for (int i = 0; i < 8; ++i)
+		{
+			*(dst++) = bgcolor;
+			*(debug_dst++) = DBG_SRC_BG;
+		}
+		start = 8;
+	}
+	uint8_t *sprite_buf = context->linebuf + col * 8 + start;
+	for (int i = start; i < 16; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i)
+	{
+		uint8_t sprite, plane_a, plane_b;
+		plane_a = context->tmp_buf_a[plane_a_off & SCROLL_BUFFER_MASK];
+		plane_b = context->tmp_buf_b[plane_b_off & SCROLL_BUFFER_MASK];
+		sprite = *sprite_buf;
+		uint8_t pixel = composite_normal(context, debug_dst, sprite, plane_a, plane_b, context->regs[REG_BG_COLOR]);
+		debug_dst++;
+		*(dst++) = context->colors[pixel & 0x3F];
+	}
+}
+
+static void render_highlight(vdp_context *context, int32_t col, uint32_t *dst, uint8_t *debug_dst, int plane_a_off, int plane_b_off)
+{
+	int start = 0;
+	if (!col && (context->regs[REG_MODE_1] & BIT_COL0_MASK)) {
+		uint32_t bgcolor = context->colors[SHADOW_OFFSET + (context->regs[REG_BG_COLOR] & 0x3F)];
+		for (int i = 0; i < 8; ++i)
+		{
+			*(dst++) = bgcolor;
+			*(debug_dst++) = DBG_SRC_BG | DBG_SHADOW;
+		}
+		start = 8;
+	}
+	uint8_t *sprite_buf = context->linebuf + col * 8 + start;
+	for (int i = start; i < 16; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i)
+	{
+		uint8_t sprite, plane_a, plane_b;
+		plane_a = context->tmp_buf_a[plane_a_off & SCROLL_BUFFER_MASK];
+		plane_b = context->tmp_buf_b[plane_b_off & SCROLL_BUFFER_MASK];
+		sprite = *sprite_buf;
+		sh_pixel pixel = composite_highlight(context, debug_dst, sprite, plane_a, plane_b, context->regs[REG_BG_COLOR]);
+		uint32_t *colors;
+		if (pixel.intensity == BUF_BIT_PRIORITY << 1) {
+			colors = context->colors + HIGHLIGHT_OFFSET;
+		} else if (pixel.intensity) {
+			colors = context->colors;
+		} else {
+			colors = context->colors + SHADOW_OFFSET;
+		}
+		debug_dst++;
+		*(dst++) = colors[pixel.index & 0x3F];
+	}
+}
+
+static void render_testreg(vdp_context *context, int32_t col, uint32_t *dst, uint8_t *debug_dst, int plane_a_off, int plane_b_off, uint8_t output_disabled, uint8_t test_layer)
+{
+	if (output_disabled) {
+		switch (test_layer)
+		{
+		case 0:
+			for (int i = 0; i < 16; i++)
+			{
+				*(dst++) = 0x3F; //TODO: confirm this on hardware
+				*(debug_dst++) = DBG_SRC_BG;
+			}
+			break;
+		case 1: {
+			uint8_t *sprite_buf = context->linebuf + col * 8;
+			for (int i = 0; i < 16; i++)
+			{
+				*(dst++) = *(sprite_buf++);
+				*(debug_dst++) = DBG_SRC_S;
+			}
+			break;
+		}
+		case 2:
+			for (int i = 0; i < 16; i++)
+			{
+				*(dst++) = context->tmp_buf_a[(plane_a_off++) & SCROLL_BUFFER_MASK];
+				*(debug_dst++) = DBG_SRC_A;
+			}
+			break;
+		case 3:
+			for (int i = 0; i < 16; i++)
+			{
+				*(dst++) = context->tmp_buf_a[(plane_a_off++) & SCROLL_BUFFER_MASK];
+				*(debug_dst++) = DBG_SRC_B;
+			}
+			break;
+		}
+	} else {
+		int start = 0;
+		uint8_t *sprite_buf = context->linebuf + col * 8;
+		if (!col && (context->regs[REG_MODE_1] & BIT_COL0_MASK)) {
+			//TODO: Confirm how test register interacts with column 0 blanking
+			uint8_t pixel = context->regs[REG_BG_COLOR] & 0x3F;
+			uint8_t src = DBG_SRC_BG;
+			for (int i = 0; i < 8; ++i)
+			{
+				switch (test_layer)
+				{
+				case 1:
+					pixel &= sprite_buf[i];
+					if (pixel) {
+						src = DBG_SRC_S;
+					}
+					break;
+				case 2:
+					pixel &= context->tmp_buf_a[(plane_a_off + i) & SCROLL_BUFFER_MASK];
+					if (pixel) {
+						src = DBG_SRC_A;
+					}
+					break;
+				case 3:
+					pixel &= context->tmp_buf_b[(plane_b_off + i) & SCROLL_BUFFER_MASK];
+					if (pixel) {
+						src = DBG_SRC_B;
+					}
+					break;
+				}
+				
+				*(dst++) = context->colors[pixel & 0x3F];
+				*(debug_dst++) = src;
+			}
+			plane_a_off += 8;
+			plane_b_off += 8;
+			sprite_buf += 8;
+			start = 8;
+		}
+		for (int i = start; i < 16; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i)
+		{
+			uint8_t sprite, plane_a, plane_b;
+			plane_a = context->tmp_buf_a[plane_a_off & SCROLL_BUFFER_MASK];
+			plane_b = context->tmp_buf_b[plane_b_off & SCROLL_BUFFER_MASK];
+			sprite = *sprite_buf;
+			uint8_t pixel = composite_normal(context, debug_dst, sprite, plane_a, plane_b, 0x3F);
+			switch (test_layer)
+			{
+			case 1:
+				pixel &= sprite;
+				if (pixel) {
+					*debug_dst = DBG_SRC_S;
+				}
+				break;
+			case 2:
+				pixel &= plane_a;
+				if (pixel) {
+					*debug_dst = DBG_SRC_A;
+				}
+				break;
+			case 3:
+				pixel &= plane_b;
+				if (pixel) {
+					*debug_dst = DBG_SRC_B;
+				}
+				break;
+			}
+			debug_dst++;
+			*(dst++) = context->colors[pixel & 0x3F];
+		}
+	}
+}
+
+static void render_testreg_highlight(vdp_context *context, int32_t col, uint32_t *dst, uint8_t *debug_dst, int plane_a_off, int plane_b_off, uint8_t output_disabled, uint8_t test_layer)
+{
+	if (output_disabled) {
+		//TODO: confirm how this behaves when shadow/highlight is enabled
+		switch (test_layer)
+		{
+		case 0:
+			for (int i = 0; i < 16; i++)
+			{
+				*(dst++) = 0x3F; //TODO: confirm this on hardware
+				*(debug_dst++) = DBG_SRC_BG;
+			}
+			break;
+		case 1: {
+			uint8_t *sprite_buf = context->linebuf + col * 8;
+			for (int i = 0; i < 16; i++)
+			{
+				*(dst++) = *(sprite_buf++);
+				*(debug_dst++) = DBG_SRC_S;
+			}
+			break;
+		}
+		case 2:
+			for (int i = 0; i < 16; i++)
+			{
+				*(dst++) = context->tmp_buf_a[(plane_a_off++) & SCROLL_BUFFER_MASK];
+				*(debug_dst++) = DBG_SRC_A;
+			}
+			break;
+		case 3:
+			for (int i = 0; i < 16; i++)
+			{
+				*(dst++) = context->tmp_buf_a[(plane_a_off++) & SCROLL_BUFFER_MASK];
+				*(debug_dst++) = DBG_SRC_B;
+			}
+			break;
+		}
+	} else {
+		int start = 0;
+		uint8_t *sprite_buf = context->linebuf + col * 8;
+		if (!col && (context->regs[REG_MODE_1] & BIT_COL0_MASK)) {
+			//TODO: Confirm how test register interacts with column 0 blanking
+			uint8_t pixel = context->regs[REG_BG_COLOR] & 0x3F;
+			uint8_t src = DBG_SRC_BG | DBG_SHADOW;
+			for (int i = 0; i < 8; ++i)
+			{
+				switch (test_layer)
+				{
+				case 1:
+					pixel &= sprite_buf[i];
+					if (pixel) {
+						src = DBG_SRC_S | DBG_SHADOW;
+					}
+					break;
+				case 2:
+					pixel &= context->tmp_buf_a[(plane_a_off + i) & SCROLL_BUFFER_MASK];
+					if (pixel) {
+						src = DBG_SRC_A | DBG_SHADOW;
+					}
+					break;
+				case 3:
+					pixel &= context->tmp_buf_b[(plane_b_off + i) & SCROLL_BUFFER_MASK];
+					if (pixel) {
+						src = DBG_SRC_B | DBG_SHADOW;
+					}
+					break;
+				}
+				
+				*(dst++) = context->colors[SHADOW_OFFSET + (pixel & 0x3F)];
+				*(debug_dst++) = src;
+			}
+			plane_a_off += 8;
+			plane_b_off += 8;
+			sprite_buf += 8;
+			start = 8;
+		}
+		for (int i = start; i < 16; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i)
+		{
+			uint8_t sprite, plane_a, plane_b;
+			plane_a = context->tmp_buf_a[plane_a_off & SCROLL_BUFFER_MASK];
+			plane_b = context->tmp_buf_b[plane_b_off & SCROLL_BUFFER_MASK];
+			sprite = *sprite_buf;
+			sh_pixel pixel = composite_highlight(context, debug_dst, sprite, plane_a, plane_b, 0x3F);
+			uint32_t *colors;
+			if (pixel.intensity == BUF_BIT_PRIORITY << 1) {
+				colors = context->colors + HIGHLIGHT_OFFSET;
+			} else if (pixel.intensity) {
+				colors = context->colors;
+			} else {
+				colors = context->colors + SHADOW_OFFSET;
+			}
+			switch (test_layer)
+			{
+			case 1:
+				pixel.index &= sprite;
+				if (pixel.index) {
+					*debug_dst = DBG_SRC_S;
+				}
+				break;
+			case 2:
+				pixel.index &= plane_a;
+				if (pixel.index) {
+					*debug_dst = DBG_SRC_A;
+				}
+				break;
+			case 3:
+				pixel.index &= plane_b;
+				if (pixel.index) {
+					*debug_dst = DBG_SRC_B;
+				}
+				break;
+			}
+			debug_dst++;
+			*(dst++) = colors[pixel.index & 0x3F];
+		}
+	}
+}
+
 static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 {
 	uint32_t *dst;
@@ -1293,7 +1635,8 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 	}
 	line &= 0xFF;
 	render_map(context->col_2, context->tmp_buf_b, context->buf_b_off+8, context);
-	uint8_t *sprite_buf,  *plane_a, *plane_b;
+	uint8_t *sprite_buf;
+	uint8_t sprite, plane_a, plane_b;
 	int plane_a_off, plane_b_off;
 	if (col)
 	{
@@ -1301,7 +1644,7 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		dst = context->output + BORDER_LEFT + col * 8;
 		debug_dst = context->layer_debug_buf + BORDER_LEFT + col * 8;
 		
-		sprite_buf = context->linebuf + col * 8;
+		
 		uint8_t a_src, src;
 		if (context->flags & FLAG_WINDOW) {
 			plane_a_off = context->buf_a_off;
@@ -1314,124 +1657,16 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		//printf("A | tmp_buf offset: %d\n", 8 - (context->hscroll_a & 0x7));
 
 		if (context->regs[REG_MODE_4] & BIT_HILIGHT) {
-			for (int i = 0; i < 16; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i) {
-				plane_a = context->tmp_buf_a + (plane_a_off & SCROLL_BUFFER_MASK);
-				plane_b = context->tmp_buf_b + (plane_b_off & SCROLL_BUFFER_MASK);
-				uint8_t pixel = context->regs[REG_BG_COLOR];
-				uint32_t *colors = context->colors;
-				src = DBG_SRC_BG;
-				uint8_t intensity = 0;
-				if (col || !(context->regs[REG_MODE_1] & BIT_COL0_MASK) || i >= 8) {
-					if (*plane_b & 0xF) {
-						pixel = *plane_b;
-						src = DBG_SRC_B;
-					}
-					intensity = *plane_b & BUF_BIT_PRIORITY;
-					if (*plane_a & 0xF && (*plane_a & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
-						pixel = *plane_a;
-						src = a_src;
-					}
-					intensity |= *plane_a & BUF_BIT_PRIORITY;
-					if (*sprite_buf & 0xF && (*sprite_buf & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
-						if ((*sprite_buf & 0x3F) == 0x3E) {
-							intensity += BUF_BIT_PRIORITY;
-						} else if ((*sprite_buf & 0x3F) == 0x3F) {
-							intensity = 0;
-						} else {
-							pixel = *sprite_buf;
-							src = DBG_SRC_S;
-							if ((pixel & 0xF) == 0xE) {
-								intensity = BUF_BIT_PRIORITY;
-							} else {
-								intensity |= pixel & BUF_BIT_PRIORITY;
-							}
-						}
-					}
-				}
-				if (output_disabled) {
-					pixel = 0x3F;
-				}
-				if (!intensity) {
-					src |= DBG_SHADOW;
-					colors += CRAM_SIZE;
-				} else if (intensity ==  BUF_BIT_PRIORITY*2) {
-					src |= DBG_HILIGHT;
-					colors += CRAM_SIZE*2;
-				}
-				//TODO: Verify how test register stuff interacts with shadow/highlight
-				//TODO: Simulate CRAM corruption from bus fight
-				switch (test_layer)
-				{
-				case 1:
-					pixel &= *sprite_buf;
-					if (output_disabled && pixel) {
-						src = DBG_SRC_S;
-					}
-					break;
-				case 2:
-					pixel &= *plane_a;
-					if (output_disabled && pixel) {
-						src = DBG_SRC_A;
-					}
-					break;
-				case 3:
-					pixel &= *plane_b;
-					if (output_disabled && pixel) {
-						src = DBG_SRC_B;
-					}
-					break;
-				}
-				*(debug_dst++) = src;
-				*(dst++) = colors[pixel & 0x3F];
+			if (output_disabled || test_layer) {
+				render_testreg_highlight(context, col, dst, debug_dst, plane_a_off, plane_b_off, output_disabled, test_layer);
+			} else {
+				render_highlight(context, col, dst, debug_dst, plane_a_off, plane_b_off);
 			}
 		} else {
-			for (int i = 0; i < 16; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i) {
-				plane_a = context->tmp_buf_a + (plane_a_off & SCROLL_BUFFER_MASK);
-				plane_b = context->tmp_buf_b + (plane_b_off & SCROLL_BUFFER_MASK);
-				uint8_t pixel = context->regs[REG_BG_COLOR];
-				src = DBG_SRC_BG;
-				if (output_disabled) {
-					pixel = 0x3F;
-				} else {
-					if (col || !(context->regs[REG_MODE_1] & BIT_COL0_MASK) || i >= 8) {
-						if (*plane_b & 0xF) {
-							pixel = *plane_b;
-							src = DBG_SRC_B;
-						}
-						if (*plane_a & 0xF && (*plane_a & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
-							pixel = *plane_a;
-							src = a_src;
-						}
-						if (*sprite_buf & 0xF && (*sprite_buf & BUF_BIT_PRIORITY) >= (pixel & BUF_BIT_PRIORITY)) {
-							pixel = *sprite_buf;
-							src = DBG_SRC_S;
-						}
-					}
-				}
-				//TODO: Simulate CRAM corruption from bus fight
-				switch (test_layer)
-				{
-				case 1:
-					pixel &= *sprite_buf;
-					if (output_disabled && pixel) {
-						src = DBG_SRC_S;
-					}
-					break;
-				case 2:
-					pixel &= *plane_a;
-					if (output_disabled && pixel) {
-						src = DBG_SRC_A;
-					}
-					break;
-				case 3:
-					pixel &= *plane_b;
-					if (output_disabled && pixel) {
-						src = DBG_SRC_B;
-					}
-					break;
-				}
-				*(dst++) = context->colors[pixel & 0x3F];
-				*(debug_dst++) = src;
+			if (output_disabled || test_layer) {
+				render_testreg(context, col, dst, debug_dst, plane_a_off, plane_b_off, output_disabled, test_layer);
+			} else {
+				render_normal(context, col, dst, debug_dst, plane_a_off, plane_b_off);
 			}
 		}
 	} else {
@@ -1490,7 +1725,7 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 			}
 		}
 	}
-	context->done_output = dst;
+	context->done_output = dst + 16;
 	context->buf_a_off = (context->buf_a_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
 	context->buf_b_off = (context->buf_b_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
 }
@@ -1535,7 +1770,7 @@ static void render_map_mode4(uint32_t line, int32_t col, vdp_context * context)
 	}
 	context->buf_a_off = (context->buf_a_off + 8) & 15;
 	
-	uint8_t bgcolor = 0x10 | (context->regs[REG_BG_COLOR] & 0xF) + CRAM_SIZE*3;
+	uint8_t bgcolor = 0x10 | (context->regs[REG_BG_COLOR] & 0xF) + MODE4_OFFSET;
 	uint32_t *dst = context->output + col * 8 + BORDER_LEFT;
 	uint8_t *debug_dst = context->layer_debug_buf + col * 8 + BORDER_LEFT;
 	if (context->state == PREPARING) {
@@ -1557,11 +1792,11 @@ static void render_map_mode4(uint32_t line, int32_t col, vdp_context * context)
 			uint8_t *bg_src = context->tmp_buf_a + ((8 + i + col * 8 - (context->hscroll_a & 0x7)) & 15);
 			if ((*bg_src & 0x4F) > 0x40 || !*sprite_src) {
 				//background plane has priority and is opaque or sprite layer is transparent
-				*(dst++) = context->colors[(*bg_src & 0x1F) + CRAM_SIZE*3];
+				*(dst++) = context->colors[(*bg_src & 0x1F) + MODE4_OFFSET];
 				*(debug_dst++) = DBG_SRC_A;
 			} else {
 				//sprite layer is opaque and not covered by high priority BG pixels
-				*(dst++) = context->colors[*sprite_src | 0x10 + CRAM_SIZE*3];
+				*(dst++) = context->colors[*sprite_src | 0x10 + MODE4_OFFSET];
 				*(debug_dst++) = DBG_SRC_S;
 			}
 		}
@@ -2180,7 +2415,7 @@ static void draw_right_border(vdp_context *context)
 	case CALC_SLOT(slot, 3):\
 		if ((slot + 3) == 140) {\
 			uint32_t *dst = context->output + BORDER_LEFT + 256 + 8;\
-			uint32_t bgcolor = context->colors[0x10 | (context->regs[REG_BG_COLOR] & 0xF) + CRAM_SIZE*3];\
+			uint32_t bgcolor = context->colors[0x10 | (context->regs[REG_BG_COLOR] & 0xF) + MODE4_OFFSET];\
 			for (int i = 0; i < BORDER_RIGHT-8; i++, dst++)\
 			{\
 				*dst = bgcolor;\
@@ -2700,7 +2935,7 @@ static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
 	case 0: {
 		scan_sprite_table_mode4(context);
 		uint32_t *dst = context->output;;
-		uint32_t bgcolor = context->colors[0x10 | (context->regs[REG_BG_COLOR] & 0xF) + CRAM_SIZE*3];
+		uint32_t bgcolor = context->colors[0x10 | (context->regs[REG_BG_COLOR] & 0xF) + MODE4_OFFSET];
 		for (int i = 0; i < BORDER_LEFT-8; i++, dst++)
 		{
 			*dst = bgcolor;
@@ -2722,7 +2957,7 @@ static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
 		context->buf_a_off = 8;
 		memset(context->tmp_buf_a, 0, 8);
 		uint32_t *dst = context->output + BORDER_LEFT - 8;
-		uint32_t bgcolor = context->colors[0x10 | (context->regs[REG_BG_COLOR] & 0xF) + CRAM_SIZE*3];
+		uint32_t bgcolor = context->colors[0x10 | (context->regs[REG_BG_COLOR] & 0xF) + MODE4_OFFSET];
 		for (int i = 0; i < 8; i++, dst++)
 		{
 			*dst = bgcolor;
@@ -2778,7 +3013,7 @@ static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
 		context->cur_slot = context->sprite_index = MAX_DRAWS_H32_MODE4-1;
 		context->sprite_draws = MAX_DRAWS_H32_MODE4;
 		uint32_t *dst = context->output + BORDER_LEFT + 256;
-		uint32_t bgcolor = context->colors[0x10 | (context->regs[REG_BG_COLOR] & 0xF) + CRAM_SIZE*3];
+		uint32_t bgcolor = context->colors[0x10 | (context->regs[REG_BG_COLOR] & 0xF) + MODE4_OFFSET];
 		for (int i = 0; i < 8; i++, dst++)
 		{
 			*dst = bgcolor;
@@ -2993,7 +3228,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 			if (mode_5) {
 				bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
 			} else if (context->regs[REG_MODE_1] & BIT_MODE_4) {
-				bg_color = context->colors[CRAM_SIZE * 3 + 0x10 + (context->regs[REG_BG_COLOR] & 0xF)];
+				bg_color = context->colors[MODE4_OFFSET + 0x10 + (context->regs[REG_BG_COLOR] & 0xF)];
 			}
 			if (dst >= context->done_output) {
 				*(dst++) = bg_color;
