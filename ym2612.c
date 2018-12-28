@@ -135,6 +135,11 @@ void ym_reset(ym2612_context *context)
 	memset(context->part1_regs, 0, sizeof(context->part1_regs));
 	memset(context->part2_regs, 0, sizeof(context->part2_regs));
 	memset(context->operators, 0, sizeof(context->operators));
+	FILE* savedlogs[NUM_CHANNELS];
+	for (int i = 0; i < NUM_CHANNELS; i++)
+	{
+		savedlogs[i] = context->channels[i].logfile;
+	}
 	memset(context->channels, 0, sizeof(context->channels));
 	memset(context->ch3_supp, 0, sizeof(context->ch3_supp));
 	context->selected_reg = 0;
@@ -153,6 +158,7 @@ void ym_reset(ym2612_context *context)
 	//some games seem to expect that the LR flags start out as 1
 	for (int i = 0; i < NUM_CHANNELS; i++) {
 		context->channels[i].lr = 0xC0;
+		context->channels[i].logfile = savedlogs[i];
 	}
 	context->write_cycle = CYCLE_NEVER;
 	for (int i = 0; i < NUM_OPERATORS; i++) {
