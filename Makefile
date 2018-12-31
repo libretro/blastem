@@ -69,6 +69,7 @@ endif
 endif #PORTABLE
 endif #Windows
 
+ifndef OPT
 ifdef DEBUG
 OPT:=-g3 -O0
 else
@@ -78,6 +79,7 @@ else
 OPT:=-O2 -flto
 endif #NOLTO
 endif #DEBUG
+endif #OPT
 
 CFLAGS:=$(OPT) $(CFLAGS)
 LDFLAGS:=$(OPT) $(LDFLAGS)
