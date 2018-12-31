@@ -18,6 +18,7 @@
 #define YM_OPT_WAVE_LOG 1
 
 typedef struct {
+	int16_t  *mod_src[2];
 	uint32_t phase_counter;
 	uint16_t envelope;
 	int16_t  output;
