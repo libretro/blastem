@@ -31,23 +31,36 @@ TERMINAL:=terminal.o
 NET:=net.o
 EXE:=
 
+HAS_PROC:=$(shell if [ -d /proc ]; then /bin/echo -e -DHAS_PROC; fi)
+CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -Wno-unused-value $(HAS_PROC) -DHAVE_UNISTD_H
+
 ifeq ($(OS),Darwin)
 LIBS=sdl2 glew
 FONT:=nuklear_ui/font_mac.o
 else
+ifdef USE_GLES
+LIBS=sdl2 glesv2
+CFLAGS+= -DUSE_GLES
+else
 LIBS=sdl2 glew gl
+endif #USE_GLES
 FONT:=nuklear_ui/font.o
 endif #Darwin
 
-HAS_PROC:=$(shell if [ -d /proc ]; then /bin/echo -e -DHAS_PROC; fi)
-CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -Wno-unused-value $(HAS_PROC) -DHAVE_UNISTD_H
 ifeq ($(OS),Darwin)
 #This should really be based on whether or not the C compiler is clang rather than based on the OS
 CFLAGS+= -Wno-logical-op-parentheses
 endif
 ifdef PORTABLE
+ifdef USE_GLES
+ifndef GLES_LIB
+GLES_LIB:=$(shell pkg-config --libs glesv2)
+endif
+LDFLAGS:=-lm $(GLES_LIB)
+else
 CFLAGS+= -DGLEW_STATIC -Iglew/include
 LDFLAGS:=-lm glew/lib/libGLEW.a
+endif
 
 ifeq ($(OS),Darwin)
 CFLAGS+= -IFrameworks/SDL2.framework/Headers
@@ -55,7 +68,10 @@ LDFLAGS+= -FFrameworks -framework SDL2 -framework OpenGL -framework AppKit
 FIXUP:=install_name_tool -change @rpath/SDL2.framework/Versions/A/SDL2 @executable_path/Frameworks/SDL2.framework/Versions/A/SDL2
 else
 CFLAGS+= -Isdl/include
-LDFLAGS+= -Wl,-rpath='$$ORIGIN/lib' -Llib -lSDL2 $(shell pkg-config --libs gl)
+LDFLAGS+= -Wl,-rpath='$$ORIGIN/lib' -Llib -lSDL2
+ifndef USE_GLES
+LDFLAGS+= $(shell pkg-config --libs gl)
+endif
 endif #Darwin
 
 else
