@@ -1,14 +1,10 @@
-BlastEm 0.5.1
+BlastEm 0.6.0
 -------------
 
 Installation
 ------------
 
-Extract this archive to a directory of your choosing. If you wish to change the
-configuration settings, copy default.cfg to $HOME/.config/blastem/blastem.cfg 
-and modify the copy. If you are on Windows, the config file should be placed in
-%localappdata%\blastem. You may also whish to add the blastem directory to your
-PATH environment variable.
+Extract this archive to a directory of your choosing.
 
 NOTE: Prior to version 0.4.1, BlastEm was still using Unixy locations for config
 and save files. If you're upgrading from a previous version on Windows, you will
@@ -19,11 +15,15 @@ previous paragraph. For save files, move all the directories found in
 Usage
 -----
 
-This version of BlastEm has an experimental GUI that is implemented as a Genesis
-ROM running inside the emulator. This UI can be operated with either a mouse or
-the first emulated gamepad. By default, both the keyboard and the first game
-controller are mapped to said gamepad. For more information on bindings see the
-Bindings section.
+This version of BlastEm has a GUI that allows access to most configuration options.
+Simply start BlastEm without passing a ROM filename on the command line to access
+the main menu. You can also access the menu by hitting the button mapped to the ui.exit
+action (default Esc).
+
+If Open GL is disabled or unavaible, or you explicitly request it, the old ROM-based UI
+will be used instead. This UI does not support configuration so you will need to modify
+the configuration file manually if you use it. See the rest of this README for instructions
+on modifying the configuration file.
 
 Some operations are currently only supported through the command line. To get a
 list of supported command line options on Linux or OSX type:
@@ -149,9 +149,12 @@ This section lists the various "UI" actions that can be triggered by a key or
 gamepad binding.
 
 ui.release_mouse             Releases the mouse if it is currently captured
-ui.vdp_debug_mode            Cycles through the various VDP debug views
-ui.vdp_debug_pal             Cycles through the selected palette when viewing
-                             the VDP memory viewer
+ui.plane_debug               Toggles the VDP plane debug view
+ui.vram_debug                Toggles the VDP VRAM debug view
+ui.cram_debug                Toggles the VDP CRAM debug view
+ui.compositing_debug         Toggles the VDP compositing debug view
+ui.vdp_debug_mode            Cycles the mode/palette of the VDP debug view
+                             that currently has focus
 ui.enter_debugger            Enters the debugger for the main CPU of the
 							 currently emulated system
 ui.screenshot                Takes an internal screenshot
@@ -213,11 +216,9 @@ emulation is very basic at the moment so this option is off by default.
 refresh rate. Valid values for this setting are "off", "on" and "tear". The
 latter will attempt to use the "late tear" option if it's available and normal
 vsync otherwise. Currently it's recommended to leave this at the default of
-"off" as BlastEm synchronizes to audio and does not yet have the necessary code
-to fully handle conflicts between the audio rate and monitor refresh rate.
-Additionally, the "turbo" feature does not function properly with vsync
-enabled. These issues will be addressed in a future release. If you wish to use
-vsync, please see the VSync section at the bottom of the README.
+"off" as it may not work well with the default "audio" sync method and the
+"video" sync method will automatically enable "vsync". See "Sync Source and
+VSync" for more details.
 
 "fullscreen" controls whether BlastEm starts in fullscreen or windowed mode.
 This can be overridden on the command line with the -f flag. If fullscreen
@@ -366,7 +367,19 @@ developers that want to debug initialization issues in their code.
 
 "default_region" determines the console region that will be used when region
 detection fails and when there are multiple valid regions. The default of 'U'
-specifies a 60Hz "foreign" console. 
+specifies a 60Hz "foreign" console.
+
+"sync_source" controls whether BlastEm uses audio or video output to control
+execution speed. "video" can provide a smoother experience when your display
+has a similar refresh rate to the emulated system, but has some limitations
+in the current version. The default value is "audio".
+
+"megawifi" enables or disables support for MegaWiFi cart emulation. MegaWiFi
+is a cartridge that contains WiFi hardware for network functionality. Enabling
+this means that ROMs potentially have access to your network (and the internet)
+which obviously has security implications. For this reason, it is disabled by
+default. If you wish to try out MegaWiFi emulation, set this to "on". Note that
+the support for MegaWiFi hardware is preliminary in this release.
 
 Debugger
 --------
@@ -445,32 +458,26 @@ code.
     vgmplay   - Very basic VGM player
     stateview - GST save state viewer
     
-VSync
+Sync Source and VSync
 -----
 
-This section includes information about using VSync with BlastEm. As mentioned
-above, the code is currently designed to only sync to audio and has some issues
-with VSync as a result. That said, if your computer is fast enough and you
-don't care about turbo mode, it can generally made to work.
+This section includes information about using VSync with BlastEm. Currently,
+the best way to use VSync is to set the sync source to "video". This will force
+VSync on and use video output for controlling the speed of emulation. In this
+mode, audio will have it's rate automatically adjusted to keep pace with video.
+The code for this is still a bit immature, so you may experience dropouts or
+pitch changes in this mode.
 
-The native refresh rate of an NTSC Genesis is approximately 59.92 Hz which is
-probably not the native refresh rate of your monitor. Fortunately, it is
-most likely lower than your refresh rate. As long as this is true, VSync will
-generally work as long as your computer is fast enough to cope with the time
-lost waiting for VSync and the audio buffer is large enough to not run out of
-samples during that delay. Latency will suffer a bit and you'll get a doubled
-frame every once and a while, but generally things will be fine.
+If you experience problems, please switch back to the "audio" sync source,
+which is the default. You can also enable vsync when using the "audio" sync
+source by changing the "vsync" setting. This will generally work okay as long
+as the emulated refresh rate is below your monitor refresh rate (even if only
+slightly), but you will occassionally get a doubled frame (or frequently if
+the refresh rates are very different).
 
-If you enable VSync and you're getting audio dropouts, first try doubling the
-audio buffer setting. If you still experience dropouts, it's possible your
-computer is not fast enough or that your monitor's actual refresh rate is in
-fact lower than that of the emualted console. Not much can be done about the
-former (apart from disabling VSync), but the latter can be dealt with by
-lowering the default speed slightly in the "clocks" section.
+Turbo mode will currently not work when vsync is on, regardless of which sync
+source is used. Slow mode will work with "audio" sync, but not "video" sync.
 
-A future release will support VSync in a less hacky fashion.
-
-Special Thanks
 --------------
 
 My work has been made much easier by the contributions of those in the Genesis
