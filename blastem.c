@@ -137,7 +137,7 @@ uint32_t load_rom(const char * filename, void **dst, system_type *stype)
 {
 	uint8_t header[10];
 	char *ext = path_extension(filename);
-	if (!strcasecmp(ext, "zip")) {
+	if (ext && !strcasecmp(ext, "zip")) {
 		free(ext);
 		return load_rom_zip(filename, dst);
 	}
