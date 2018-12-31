@@ -466,59 +466,19 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			uint16_t phase = operator->phase_counter >> 10 & 0x3FF;
 			operator->phase_counter += ym_calc_phase_inc(context, operator, context->current_op);
 			int16_t mod = 0;
-			switch (op % 4)
-			{
-			case 0://Operator 1
+			if (op & 3) {
+				if (operator->mod_src[0]) {
+					mod = *operator->mod_src[0];
+					if (operator->mod_src[1]) {
+						mod += *
+						operator->mod_src[1];
+					}
+					mod >>= YM_MOD_SHIFT;
+				}
+			} else {
 				if (chan->feedback) {
 					mod = (chan->op1_old + operator->output) >> (10-chan->feedback);
 				}
-				break;
-			case 1://Operator 3
-				switch(chan->algorithm)
-				{
-				case 0:
-				case 2:
-					//modulate by operator 2
-					mod = context->operators[op+1].output >> YM_MOD_SHIFT;
-					break;
-				case 1:
-					//modulate by operator 1+2
-					mod = (context->operators[op-1].output + context->operators[op+1].output) >> YM_MOD_SHIFT;
-					break;
-				case 5:
-					//modulate by operator 1
-					mod = context->operators[op-1].output >> YM_MOD_SHIFT;
-				}
-				break;
-			case 2://Operator 2
-				if (chan->algorithm != 1 && chan->algorithm != 2 && chan->algorithm != 7) {
-					//modulate by Operator 1
-					mod = context->operators[op-2].output >> YM_MOD_SHIFT;
-				}
-				break;
-			case 3://Operator 4
-				switch(chan->algorithm)
-				{
-				case 0:
-				case 1:
-				case 4:
-					//modulate by operator 3
-					mod = context->operators[op-2].output >> YM_MOD_SHIFT;
-					break;
-				case 2:
-					//modulate by operator 1+3
-					mod = (context->operators[op-3].output + context->operators[op-2].output) >> YM_MOD_SHIFT;
-					break;
-				case 3:
-					//modulate by operator 2+3
-					mod = (context->operators[op-1].output + context->operators[op-2].output) >> YM_MOD_SHIFT;
-					break;
-				case 5:
-					//modulate by operator 1
-					mod = context->operators[op-3].output >> YM_MOD_SHIFT;
-					break;
-				}
-				break;
 			}
 			uint16_t env = operator->envelope;
 			if (operator->ssg) {
@@ -936,6 +896,103 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 				break;
 			case REG_ALG_FEEDBACK:
 				context->channels[channel].algorithm = value & 0x7;
+				switch (context->channels[channel].algorithm)
+				{
+				case 0:
+					//operator 3 modulated by operator 2
+					context->operators[channel*4+1].mod_src[0] = &context->operators[channel*4+2].output;
+					context->operators[channel*4+1].mod_src[1] = NULL;
+					
+					//operator 2 modulated by operator 1
+					context->operators[channel*4+2].mod_src[0] = &context->operators[channel*4+0].output;
+					
+					//operator 4 modulated by operator 3
+					context->operators[channel*4+3].mod_src[0] = &context->operators[channel*4+1].output;
+					context->operators[channel*4+3].mod_src[1] = NULL;
+					break;
+				case 1:
+					//operator 3 modulated by operator 1+2
+					context->operators[channel*4+1].mod_src[0] = &context->operators[channel*4+0].output;
+					context->operators[channel*4+1].mod_src[1] = &context->operators[channel*4+2].output;
+					
+					//operator 2 unmodulated
+					context->operators[channel*4+2].mod_src[0] = NULL;
+					
+					//operator 4 modulated by operator 3
+					context->operators[channel*4+3].mod_src[0] = &context->operators[channel*4+1].output;
+					context->operators[channel*4+3].mod_src[1] = NULL;
+					break;
+				case 2:
+					//operator 3 modulated by operator 2
+					context->operators[channel*4+1].mod_src[0] = &context->operators[channel*4+2].output;
+					context->operators[channel*4+1].mod_src[1] = NULL;
+					
+					//operator 2 unmodulated
+					context->operators[channel*4+2].mod_src[0] = NULL;
+					
+					//operator 4 modulated by operator 1+3
+					context->operators[channel*4+3].mod_src[0] = &context->operators[channel*4+0].output;
+					context->operators[channel*4+3].mod_src[1] = &context->operators[channel*4+1].output;
+					break;
+				case 3:
+					//operator 3 unmodulated
+					context->operators[channel*4+1].mod_src[0] = NULL;
+					context->operators[channel*4+1].mod_src[1] = NULL;
+					
+					//operator 2 modulated by operator 1
+					context->operators[channel*4+2].mod_src[0] = &context->operators[channel*4+0].output;
+					
+					//operator 4 modulated by operator 2+3
+					context->operators[channel*4+3].mod_src[0] = &context->operators[channel*4+2].output;
+					context->operators[channel*4+3].mod_src[1] = &context->operators[channel*4+1].output;
+					break;
+				case 4:
+					//operator 3 unmodulated
+					context->operators[channel*4+1].mod_src[0] = NULL;
+					context->operators[channel*4+1].mod_src[1] = NULL;
+					
+					//operator 2 modulated by operator 1
+					context->operators[channel*4+2].mod_src[0] = &context->operators[channel*4+0].output;
+					
+					//operator 4 modulated by operator 3
+					context->operators[channel*4+3].mod_src[0] = &context->operators[channel*4+1].output;
+					context->operators[channel*4+3].mod_src[1] = NULL;
+					break;
+				case 5:
+					//operator 3 modulated by operator 1
+					context->operators[channel*4+1].mod_src[0] = &context->operators[channel*4+0].output;
+					context->operators[channel*4+1].mod_src[1] = NULL;
+					
+					//operator 2 modulated by operator 1
+					context->operators[channel*4+2].mod_src[0] = &context->operators[channel*4+0].output;
+					
+					//operator 4 modulated by operator 1
+					context->operators[channel*4+3].mod_src[0] = &context->operators[channel*4+0].output;
+					context->operators[channel*4+3].mod_src[1] = NULL;
+					break;
+				case 6:
+					//operator 3 unmodulated
+					context->operators[channel*4+1].mod_src[0] = NULL;
+					context->operators[channel*4+1].mod_src[1] = NULL;
+					
+					//operator 2 modulated by operator 1
+					context->operators[channel*4+2].mod_src[0] = &context->operators[channel*4+0].output;
+					
+					//operator 4 unmodulated
+					context->operators[channel*4+3].mod_src[0] = NULL;
+					context->operators[channel*4+3].mod_src[1] = NULL;
+					break;
+				case 7:
+					//everything is an output so no modulation (except for op 1 feedback)
+					context->operators[channel*4+1].mod_src[0] = NULL;
+					context->operators[channel*4+1].mod_src[1] = NULL;
+					
+					context->operators[channel*4+2].mod_src[0] = NULL;
+					
+					context->operators[channel*4+3].mod_src[0] = NULL;
+					context->operators[channel*4+3].mod_src[1] = NULL;
+					break;
+				}
 				context->channels[channel].feedback = value >> 3 & 0x7;
 				//printf("Algorithm %d, feedback %d for channel %d\n", value & 0x7, value >> 3 & 0x7, channel);
 				break;
