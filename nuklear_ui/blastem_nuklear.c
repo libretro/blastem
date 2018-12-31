@@ -442,10 +442,12 @@ void view_key_bindings(struct nk_context *context)
 		"Set Speed 5", "Set Speed 6", "Set Speed 7", "Set Speed 8", "Set Speed 9"
 	};
 	const char *debug_binds[] = {
-		"ui.enter_debugger", "ui.vdp_debug_mode", "ui.vdp_debug_pal"
+		"ui.enter_debugger", "ui.plane_debug", "ui.vram_debug", "ui.cram_debug",
+		"ui.compositing_debug", "ui.vdp_debug_mode"
 	};
 	const char *debug_names[] = {
-		"Enter Debugger", "VDP Debug Mode", "Debug Palette"
+		"CPU Debugger", "Plane Debugger", "VRAM Debugger", "CRAM Debugger", 
+		"Layer Debugger", "Cycle Mode/Pal"
 	};
 	const uint32_t NUM_C1_BINDS = sizeof(controller1_binds)/sizeof(*controller1_binds);
 	const uint32_t NUM_C2_BINDS = sizeof(controller2_binds)/sizeof(*controller2_binds);
