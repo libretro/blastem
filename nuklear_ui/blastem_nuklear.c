@@ -1789,10 +1789,12 @@ void view_menu(struct nk_context *context)
 
 void blastem_nuklear_render(void)
 {
-	nk_input_end(context);
-	current_view(context);
-	nk_sdl_render(NK_ANTI_ALIASING_ON, 512 * 1024, 128 * 1024);
-	nk_input_begin(context);
+	if (current_view != view_play) {
+		nk_input_end(context);
+		current_view(context);
+		nk_sdl_render(NK_ANTI_ALIASING_ON, 512 * 1024, 128 * 1024);
+		nk_input_begin(context);
+	}
 }
 
 void ui_idle_loop(void)
@@ -1849,7 +1851,11 @@ static struct nk_image load_image_texture(uint32_t *buf, uint32_t width, uint32_
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+#ifdef USE_GLES
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, buf);
+#else
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, buf);
+#endif
 	return nk_image_id((int)tex);
 }
 
@@ -1929,6 +1935,14 @@ ui_image *load_ui_image(char *name)
 		}
 		ui_image *this_image = ui_images[num_ui_images-1] = calloc(1, sizeof(ui_image));
 		this_image->image_data = load_png(buf, buf_size, &this_image->width, &this_image->height);
+#ifdef USE_GLES
+		uint32_t *cur = this_image->image_data;
+		for (int i = 0; i < this_image->width*this_image->height; i++, cur++)
+		{
+			uint32_t pixel = *cur;
+			*cur = (pixel & 0xFF00FF00) | (pixel << 16 & 0xFF0000) | (pixel >> 16 & 0xFF);
+		}
+#endif
 		free(buf);
 		if (!this_image->image_data) {
 			num_ui_images--;

@@ -19,7 +19,11 @@
 #include "controller_info.h"
 
 #ifndef DISABLE_OPENGL
+#ifdef USE_GLES
+#include <SDL_opengles2.h>
+#else
 #include <GL/glew.h>
+#endif
 #endif
 
 #define MAX_EVENT_POLL_PER_FRAME 2
@@ -437,7 +441,11 @@ int render_fullscreen()
 
 uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b)
 {
+#ifdef USE_GLES
+	return 255 << 24 | b << 16 | g << 8 | r;
+#else
 	return 255 << 24 | r << 16 | g << 8 | b;
+#endif
 }
 
 #ifndef DISABLE_OPENGL
@@ -453,6 +461,16 @@ static GLfloat vertex_data_default[] = {
 static GLfloat vertex_data[8];
 
 static const GLushort element_data[] = {0, 1, 2, 3};
+
+static const GLchar shader_prefix[] =
+#ifdef USE_GLES
+	"#version 100\n";
+#else
+	"#version 110\n"
+	"#define lowp\n"
+	"#define mediump\n"
+	"#define highp\n";
+#endif
 
 static GLuint load_shader(char * fname, GLenum shader_type)
 {
@@ -478,6 +496,12 @@ static GLuint load_shader(char * fname, GLenum shader_type)
 		free(text);
 		return 0;
 	}
+	if (strncmp(text, "#version", strlen("#version"))) {
+		GLchar *tmp = text;
+		text = alloc_concat(shader_prefix, tmp);
+		free(tmp);
+		fsize += strlen(shader_prefix);
+	}
 	GLuint ret = glCreateShader(shader_type);
 	glShaderSource(ret, 1, (const GLchar **)&text, (const GLint *)&fsize);
 	free(text);
@@ -499,6 +523,15 @@ static GLuint load_shader(char * fname, GLenum shader_type)
 
 static uint32_t texture_buf[512 * 513];
 #ifndef DISABLE_OPENGL
+#ifdef USE_GLES
+#define INTERNAL_FORMAT GL_RGBA
+#define SRC_FORMAT GL_RGBA
+#define RENDER_FORMAT SDL_PIXELFORMAT_ABGR8888
+#else
+#define INTERNAL_FORMAT GL_RGBA8
+#define SRC_FORMAT GL_BGRA
+#define RENDER_FORMAT SDL_PIXELFORMAT_ARGB8888
+#endif
 static void gl_setup()
 {
 	tern_val def = {.ptrval = "linear"};
@@ -514,10 +547,10 @@ static void gl_setup()
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		if (i < 2) {
 			//TODO: Fixme for PAL + invalid display mode
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 512, 512, 0, GL_BGRA, GL_UNSIGNED_BYTE, texture_buf);
+			glTexImage2D(GL_TEXTURE_2D, 0, INTERNAL_FORMAT, 512, 512, 0, SRC_FORMAT, GL_UNSIGNED_BYTE, texture_buf);
 		} else {
 			uint32_t blank = 255 << 24;
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_BGRA, GL_UNSIGNED_BYTE, &blank);
+			glTexImage2D(GL_TEXTURE_2D, 0, INTERNAL_FORMAT, 1, 1, 0, SRC_FORMAT, GL_UNSIGNED_BYTE, &blank);
 		}
 	}
 	glGenBuffers(2, buffers);
@@ -575,7 +608,7 @@ static void render_alloc_surfaces()
 		char *scaling = tern_find_path_default(config, "video\0scaling\0", def, TVAL_PTR).ptrval;
 		SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, scaling);
 		//TODO: Fixme for invalid display mode
-		sdl_textures[0] = sdl_textures[1] = SDL_CreateTexture(main_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, LINEBUF_SIZE, 588);
+		sdl_textures[0] = sdl_textures[1] = SDL_CreateTexture(main_renderer, RENDER_FORMAT, SDL_TEXTUREACCESS_STREAMING, LINEBUF_SIZE, 588);
 #ifndef DISABLE_OPENGL
 	}
 #endif
@@ -1066,6 +1099,11 @@ void window_setup(void)
 		SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 5);
 		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
 		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+#ifdef USE_GLES
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#endif
 	}
 #endif
 	main_window = SDL_CreateWindow(caption, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, main_width, main_height, flags);
@@ -1076,13 +1114,19 @@ void window_setup(void)
 	if (gl_enabled)
 	{
 		main_context = SDL_GL_CreateContext(main_window);
+#ifdef USE_GLES
+		int major_version;
+		if (SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &major_version) == 0 && major_version >= 2) {
+#else
 		GLenum res = glewInit();
 		if (res != GLEW_OK) {
 			warning("Initialization of GLEW failed with code %d\n", res);
 		}
 
 		if (res == GLEW_OK && GLEW_VERSION_2_0) {
+#endif
 			render_gl = 1;
+			SDL_GL_MakeCurrent(main_window, main_context);
 			if (!strcmp("tear", vsync)) {
 				if (SDL_GL_SetSwapInterval(-1) < 0) {
 					warning("late tear is not available (%s), using normal vsync\n", SDL_GetError());
@@ -1111,6 +1155,9 @@ void window_setup(void)
 		if (!main_renderer) {
 			fatal_error("unable to create SDL renderer: %s\n", SDL_GetError());
 		}
+		SDL_RendererInfo rinfo;
+		SDL_GetRendererInfo(main_renderer, &rinfo);
+		printf("SDL2 Render Driver: %s\n", rinfo.name);
 		main_clip.x = main_clip.y = 0;
 		main_clip.w = main_width;
 		main_clip.h = main_height;
@@ -1484,7 +1531,7 @@ void render_framebuffer_updated(uint8_t which, int width)
 	if (render_gl && which <= FRAMEBUFFER_EVEN) {
 		SDL_GL_MakeCurrent(main_window, main_context);
 		glBindTexture(GL_TEXTURE_2D, textures[which]);
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, LINEBUF_SIZE, height, GL_BGRA, GL_UNSIGNED_BYTE, texture_buf + overscan_left[video_standard] + LINEBUF_SIZE * overscan_top[video_standard]);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, LINEBUF_SIZE, height, SRC_FORMAT, GL_UNSIGNED_BYTE, texture_buf + overscan_left[video_standard] + LINEBUF_SIZE * overscan_top[video_standard]);
 		
 		if (screenshot_file) {
 			//properly supporting interlaced modes here is non-trivial, so only save the odd field for now

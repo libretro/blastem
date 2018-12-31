@@ -17,7 +17,11 @@
 
 #include <SDL.h>
 #ifndef DISABLE_OPENGL
+#ifdef USE_GLES
+#include <SDL_opengles2.h>
+#else
 #include <GL/glew.h>
+#endif
 #endif
 
 
