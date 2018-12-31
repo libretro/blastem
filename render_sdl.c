@@ -1048,7 +1048,7 @@ void window_setup(void)
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 	}
 	
-	tern_val def = {.ptrval = "video"};
+	tern_val def = {.ptrval = "audio"};
 	char *sync_src = tern_find_path_default(config, "system\0sync_source\0", def, TVAL_PTR).ptrval;
 	sync_to_audio = !strcmp(sync_src, "audio");
 	
