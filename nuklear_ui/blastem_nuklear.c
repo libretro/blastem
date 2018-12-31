@@ -168,12 +168,14 @@ void view_about(struct nk_context *context)
 	};
 	const uint32_t NUM_LINES = sizeof(lines)/sizeof(*lines);
 	const char *thanks[] = {
-		"Nemesis: Documentatino and test ROMs",
+		"Nemesis: Documentation and test ROMs",
 		"Charles MacDonald: Documentation",
 		"Eke-Eke: Documentation",
 		"Bart Trzynadlowski: Documentation",
 		"KanedaFR: Hosting the best Sega forum",
 		"Titan: Awesome demos and documentation",
+		"flamewing: BCD info and test ROM",
+		"r57shell: Opcode size test ROM",
 		"micky: Testing",
 		"Sasha: Testing",
 		"lol-frank: Testing",
