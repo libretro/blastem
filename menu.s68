@@ -1269,6 +1269,8 @@ about_text:
 	dc.b "Bart Trzynadlowski: Documentation", 0
 	dc.b "KanedaFR: Hosting the best Sega forum", 0
 	dc.b "Titan: Awesome demos and documentation", 0
+	dc.b "flamewing: BCD info and test ROM", 0
+	dc.b "r57shell: Opcode size test ROM", 0
 	dc.b "micky: Testing", 0
 	dc.b "Sasha: Testing", 0
 	dc.b "lol-frank: Testing", 0

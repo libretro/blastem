@@ -500,7 +500,15 @@ Titan              - Titan has created what are without a doubt the most
                      impressive demos on the Megadrive. Additionally, I am very
                      grateful for the documentation provided by Kabuto and the
                      assistance of Kabuto, Sik and Jorge in getting Overdrive 2
-                     to run properly in BlastEm.					 
+                     to run properly in BlastEm.
+					 
+flamewing          - flamewing created a very handy exhaustive test ROM for 68K
+                     BCD instructions and documented the proper behavior for
+                     certain BCD edge cases
+
+r57shell           - r57shell created a test ROM for 68K instruction sizes that
+                     was invaluable in fixing the remaining bugs in my 68K instruction
+                     decoder
 
 I'd also like to thank the following people who have performed compatibility
 testing or submitted helpful bug reports
