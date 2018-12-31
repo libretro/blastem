@@ -1056,7 +1056,7 @@ void view_controller_bindings(struct nk_context *context)
 			selected_controller_info.variant == VARIANT_6B_BUMPERS ? 1 : 2, 
 			(int[]){
 			selected_controller_info.variant == VARIANT_6B_RIGHT ? SDL_CONTROLLER_BUTTON_LEFTSHOULDER : SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
-			selected_controller_info.variant == VARIANT_6B_RIGHT ? SDL_CONTROLLER_BUTTON_RIGHTSHOULDER : AXIS | SDL_CONTROLLER_AXIS_TRIGGERRIGHT
+			AXIS | SDL_CONTROLLER_AXIS_TRIGGERLEFT
 		});
 		
 		binding_box(context, bindings, "Misc Buttons", (render_width() - bind_box_width) / 2, font->height/2, bind_box_width, 3, (int[]){
@@ -1098,7 +1098,7 @@ void view_controller_bindings(struct nk_context *context)
 			selected_controller_info.variant == VARIANT_6B_BUMPERS ? 1 : 2, 
 			(int[]){
 			selected_controller_info.variant == VARIANT_6B_RIGHT ? SDL_CONTROLLER_BUTTON_LEFTSTICK : SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
-			selected_controller_info.variant == VARIANT_6B_RIGHT ? SDL_CONTROLLER_BUTTON_RIGHTSTICK : AXIS | SDL_CONTROLLER_AXIS_TRIGGERLEFT
+			SDL_CONTROLLER_BUTTON_RIGHTSTICK
 		});
 		
 		binding_box(context, bindings, "D-pad", dpad_left, dpad_top, bind_box_width, 4, (int[]){
