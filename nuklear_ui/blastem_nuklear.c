@@ -1149,28 +1149,51 @@ static void start_mapping(void)
 static void view_controller_mappings(struct nk_context *context)
 {
 	char buffer[512];
-	static int quiet;
+	static int quiet, button_a = -1, button_a_axis = -1;
 	uint8_t added_mapping = 0;
 	if (nk_begin(context, "Controllers", nk_rect(0, 0, render_width(), render_height()), NK_WINDOW_NO_SCROLLBAR)) {
-		nk_layout_row_static(context, render_height() - context->style.font->height, render_width() - context->style.font->height, 1);
+		
+		nk_layout_space_begin(context, NK_STATIC, render_height() - context->style.font->height, 3);
+		
 		if (current_button < SDL_CONTROLLER_BUTTON_MAX) {
 			snprintf(buffer, sizeof(buffer), "Press Button %s", get_button_label(&selected_controller_info, current_button));
 		} else {
 			snprintf(buffer, sizeof(buffer), "Move Axis %s", get_axis_label(&selected_controller_info, current_axis));
 		}
+		
+		float height = context->style.font->height * 1.25;
+		float top = render_height()/2 - 1.5 * height;
+		float width = render_width() - context->style.font->height;
+		
+		nk_layout_space_push(context, nk_rect(0, top, width, height));
 		nk_label(context, buffer, NK_TEXT_CENTERED);
+		if (current_button > SDL_CONTROLLER_BUTTON_B) {
+			nk_layout_space_push(context, nk_rect(0, top + height, width, height));
+			nk_label(context, "OR", NK_TEXT_CENTERED);
+		
+			nk_layout_space_push(context, nk_rect(0, top + 2.0 * height, width, height));
+			snprintf(buffer, sizeof(buffer), "Press Button %s to skip", get_button_label(&selected_controller_info, SDL_CONTROLLER_BUTTON_A));
+			nk_label(context, buffer, NK_TEXT_CENTERED);
+		}
+		
+		nk_layout_space_end(context);
 		if (quiet) {
 			--quiet;
 		} else {
 			if (button_pressed >= 0 && button_pressed != last_button) {
-				start_mapping();
-				mapping_string[mapping_pos++] = 'b';
-				if (button_pressed > 9) {
-					mapping_string[mapping_pos++] = '0' + button_pressed / 10;
+				if (current_button <= SDL_CONTROLLER_BUTTON_B || button_pressed != button_a) {
+					start_mapping();
+					mapping_string[mapping_pos++] = 'b';
+					if (button_pressed > 9) {
+						mapping_string[mapping_pos++] = '0' + button_pressed / 10;
+					}
+					mapping_string[mapping_pos++] = '0' + button_pressed % 10;
+					last_button = button_pressed;
+					if (current_button == SDL_CONTROLLER_BUTTON_A) {
+						button_a = button_pressed;
+					}
 				}
-				mapping_string[mapping_pos++] = '0' + button_pressed % 10;
 				added_mapping = 1;
-				last_button = button_pressed;
 			} else if (hat_moved >= 0 && hat_value && (hat_moved != last_hat || hat_value != last_hat_value)) {
 				start_mapping();
 				mapping_string[mapping_pos++] = 'h';
@@ -1182,14 +1205,16 @@ static void view_controller_mappings(struct nk_context *context)
 				last_hat = hat_moved;
 				last_hat_value = hat_value;
 			} else if (axis_moved >= 0 && abs(axis_value) > 1000 && axis_moved != last_axis) {
-				start_mapping();
-				mapping_string[mapping_pos++] = 'a';
-				if (axis_moved > 9) {
-					mapping_string[mapping_pos++] = '0' + axis_moved / 10;
+				if (current_button <= SDL_CONTROLLER_BUTTON_B || axis_moved != button_a_axis) {
+					start_mapping();
+					mapping_string[mapping_pos++] = 'a';
+					if (axis_moved > 9) {
+						mapping_string[mapping_pos++] = '0' + axis_moved / 10;
+					}
+					mapping_string[mapping_pos++] = '0' + axis_moved % 10;
+					last_axis = axis_moved;
 				}
-				mapping_string[mapping_pos++] = '0' + axis_moved % 10;
 				added_mapping = 1;
-				last_axis = axis_moved;
 			}
 		}
 			
@@ -1203,6 +1228,8 @@ static void view_controller_mappings(struct nk_context *context)
 			} else {
 				current_axis++;
 				if (current_axis == SDL_CONTROLLER_AXIS_MAX) {
+					button_a = -1;
+					button_a_axis = -1;
 					mapping_string[mapping_pos] = 0;
 					save_controller_mapping(selected_controller, mapping_string);
 					free(mapping_string);
