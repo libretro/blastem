@@ -1,3 +1,29 @@
+0.6.0
+-----
+*New Features*
+
+ - New Nuklear UI with almost complete access to configuration options
+ - Added support for creating SDL2 mappings from inside the emulator
+ - Loading ROMs from ZIP archives is now supported
+ - Loading gzip compressed ROMs is now supported
+ - Internal screenshots can now be in PNG format
+ - New VDP plane debug view
+ - VDP debug views are now in separate windows
+ - Experimental support for sync to video (not enabled by default)
+ - Preliminary support for MegaWifi cart emulation
+ 
+*Bugfixes*
+
+ - Fixed a number of 68K decoder bugs (mostly illegal instruction decoding)
+ - Fixed a number of memory leaks
+ 
+ *Accuracy/Completeness Improvements*
+ 
+ - Added support for J-Cart emulation
+ - Implemented Z80 interrupt mode 2
+ - Fixed the timing of a number of 68K instructions
+ - Fixed the timing of the Z80 JP cc, nn instruction
+ 
 0.5.1
 -----
 *New Features*
