@@ -25,5 +25,6 @@ void handle_mouseup(int mouse, int button);
 
 void bindings_release_capture(void);
 void bindings_reacquire_capture(void);
+void set_content_binding_state(uint8_t enabled);
 
 #endif //BINDINGS_H_
