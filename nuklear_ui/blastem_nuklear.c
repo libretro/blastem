@@ -139,7 +139,7 @@ void view_file_browser(struct nk_context *context, uint8_t normal_open)
 					free(full_path);
 				}
 				clear_view_stack();
-				current_view = view_play;
+				show_play_view();
 			}
 			selected_entry = -1;
 		}
@@ -246,12 +246,12 @@ void view_choose_state(struct nk_context *context, uint8_t is_load)
 		if (is_load) {
 			if (nk_button_label(context, "Load")) {
 				current_system->load_state(current_system, selected_slot);
-				current_view = view_play;
+				show_play_view();
 			}
 		} else {
 			if (nk_button_label(context, "Save")) {
 				current_system->save_state = selected_slot + 1;
-				current_view = view_play;
+				show_play_view();
 			}
 		}
 		nk_end(context);
@@ -292,6 +292,8 @@ static void menu(struct nk_context *context, uint32_t num_entries, const menu_it
 				if (current_view == view_save_state || current_view == view_load_state) {
 					free_slot_info(slots);
 					slots = NULL;
+				} else if (current_view == view_play) {
+					set_content_binding_state(1);
 				}
 			} else {
 				handler(i);
@@ -1917,6 +1919,7 @@ static void context_created(void)
 
 void show_pause_menu(void)
 {
+	set_content_binding_state(0);
 	context->style.window.background = nk_rgba(0, 0, 0, 128);
 	context->style.window.fixed_background = nk_style_item_color(nk_rgba(0, 0, 0, 128));
 	current_view = view_pause;
@@ -1925,6 +1928,7 @@ void show_pause_menu(void)
 
 void show_play_view(void)
 {
+	set_content_binding_state(1);
 	current_view = view_play;
 }
 
@@ -1996,7 +2000,12 @@ void blastem_nuklear_init(uint8_t file_loaded)
 	
 	texture_init();
 	
-	current_view = file_loaded ? view_play : view_menu;
+	if (file_loaded) {
+		current_view = view_play;
+	} else {
+		current_view = view_menu;
+		set_content_binding_state(0);
+	}
 	render_set_ui_render_fun(blastem_nuklear_render);
 	render_set_event_handler(handle_event);
 	render_set_gl_context_handlers(context_destroyed, context_created);
