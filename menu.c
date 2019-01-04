@@ -134,24 +134,6 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 		switch (address >> 2)
 		{
 		case 0: {
-#if _WIN32
-			//handle virtual "drives" directory
-			if (menu->curpath[0] == PATH_SEP[0]) {
-				char drivestrings[4096];
-				if (sizeof(drivestrings) >= GetLogicalDriveStrings(sizeof(drivestrings), drivestrings)) {
-					for (char *cur = drivestrings; *cur; cur += strlen(cur) + 1)
-					{
-						dst = copy_dir_entry_to_guest(dst, m68k, cur, 1);
-					}
-				}
-				//terminate list
-				uint8_t *dest = get_native_pointer(dst, (void **)m68k->mem_pointers, &m68k->options->gen);
-				if (dest) {
-					*dest = dest[1] = 0;
-				}
-				break;
-			}
-#endif
 			size_t num_entries;
 			dir_entry *entries = get_dir_list(menu->curpath, &num_entries);
 			if (entries) {
@@ -163,12 +145,6 @@ void * menu_write_w(uint32_t address, void * context, uint16_t value)
 				entries->is_dir = 1;
 				num_entries = 1;
 			}
-#ifdef _WIN32
-			if (menu->curpath[1] == ':' && !menu->curpath[2]) {
-				//Add fake .. entry to allow navigation to virtual "drives" directory
-				dst = copy_dir_entry_to_guest(dst, m68k, "..", 1);
-			}
-#endif
 			uint32_t num_exts;
 			char **ext_list = get_extension_list(config, &num_exts);
 			for (size_t i = 0; dst && i < num_entries; i++)
