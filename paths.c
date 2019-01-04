@@ -7,8 +7,7 @@ static char **current_path;
 
 static void persist_path(void)
 {
-	char const *parts[] = {get_userdata_dir(), PATH_SEP, "sticky_path"};
-	char *pathfname = alloc_concat_m(3, parts);
+	char *pathfname = alloc_concat(get_userdata_dir(), PATH_SEP "blastem" PATH_SEP "sticky_path");
 	FILE *f = fopen(pathfname, "wb");
 	if (f) {
 		if (fwrite(*current_path, 1, strlen(*current_path), f) != strlen(*current_path)) {
@@ -63,8 +62,7 @@ void get_initial_browse_path(char **dst)
 	*dst = NULL;
 	char *remember_path = tern_find_path(config, "ui\0remember_path\0", TVAL_PTR).ptrval;
 	if (!remember_path || !strcmp("on", remember_path)) {
-		char const *parts[] = {get_userdata_dir(), PATH_SEP, "sticky_path"};
-		char *pathfname = alloc_concat_m(3, parts);
+		char *pathfname = alloc_concat(get_userdata_dir(), PATH_SEP "blastem" PATH_SEP "sticky_path");
 		FILE *f = fopen(pathfname, "rb");
 		if (f) {
 			long pathsize = file_size(f);
