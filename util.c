@@ -891,7 +891,14 @@ char const *get_userdata_dir()
 
 char const *get_config_dir()
 {
-	return get_userdata_dir();
+	static char* confdir;
+	if (!confdir) {
+		char const *base = get_userdata_dir();
+		if (base) {	
+			confdir = alloc_concat(base,  PATH_SEP "blastem");
+		}
+	}
+	return confdir;
 }
 #define CONFIG_PREFIX ""
 #define SAVE_PREFIX ""
