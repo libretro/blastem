@@ -537,34 +537,70 @@ char * get_exe_dir()
 
 dir_entry *get_dir_list(char *path, size_t *numret)
 {
-	HANDLE dir;
-	WIN32_FIND_DATA file;
-	char *pattern = alloc_concat(path, "/*.*");
-	dir = FindFirstFile(pattern, &file);
-	free(pattern);
-	if (dir == INVALID_HANDLE_VALUE) {
+	dir_entry *ret;
+	if (path[0] == PATH_SEP[0] && !path[1]) {
+		int drives = GetLogicalDrives();
+		size_t count = 0;
+		for (int i = 0; i < 26; i++)
+		{
+			if (drives & (1 << i)) {
+				count++;
+			}
+		}
+		ret = calloc(count, sizeof(dir_entry));
+		dir_entry *cur = ret;
+		for (int i = 0; i < 26; i++)
+		{
+			if (drives & (1 << i)) {
+				cur->name = malloc(4);
+				cur->name[0] = 'A' + i;
+				cur->name[1] = ':';
+				cur->name[2] = PATH_SEP[0];
+				cur->name[3] = 0;
+				cur->is_dir = 1;
+				cur++;
+			}
+		}
 		if (numret) {
-			*numret = 0;
+			*numret = count;
 		}
-		return NULL;
-	}
-	
-	size_t storage = 64;
-	dir_entry *ret = malloc(sizeof(dir_entry) * storage);
-	size_t pos = 0;
-	
-	do {
-		if (pos == storage) {
-			storage = storage * 2;
-			ret = realloc(ret, sizeof(dir_entry) * storage);
+	} else {
+		HANDLE dir;
+		WIN32_FIND_DATA file;
+		char *pattern = alloc_concat(path, "/*.*");
+		dir = FindFirstFile(pattern, &file);
+		free(pattern);
+		if (dir == INVALID_HANDLE_VALUE) {
+			if (numret) {
+				*numret = 0;
+			}
+			return NULL;
 		}
-		ret[pos].name = strdup(file.cFileName);
-		ret[pos++].is_dir = (file.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-	} while (FindNextFile(dir, &file));
-	
-	FindClose(dir);
-	if (numret) {
-		*numret = pos;
+		
+		size_t storage = 64;
+		ret = malloc(sizeof(dir_entry) * storage);
+		size_t pos = 0;
+		
+		if (path[1] == ':' && (!path[2] || (path[2] == PATH_SEP[0] && !path[3]))) {
+			//we are in the root of a drive, add a virtual .. entry
+			//for navigating to the virtual root directory
+			ret[pos].name = strdup("..");
+			ret[pos++].is_dir = 1;
+		}
+		
+		do {
+			if (pos == storage) {
+				storage = storage * 2;
+				ret = realloc(ret, sizeof(dir_entry) * storage);
+			}
+			ret[pos].name = strdup(file.cFileName);
+			ret[pos++].is_dir = (file.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+		} while (FindNextFile(dir, &file));
+		
+		FindClose(dir);
+		if (numret) {
+			*numret = pos;
+		}
 	}
 	return ret;
 }
