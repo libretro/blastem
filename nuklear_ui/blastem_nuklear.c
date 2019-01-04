@@ -160,7 +160,7 @@ void view_lock_on(struct nk_context *context)
 void view_about(struct nk_context *context)
 {
 	const char *lines[] = {
-		"BlastEm v0.6.0",
+		"BlastEm v0.6.1",
 		"Copyright 2012-2017 Michael Pavone",
 		"",
 		"BlastEm is a high performance open source",

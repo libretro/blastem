@@ -1,3 +1,13 @@
+0.6.1
+-----
+*Bugfixes*
+
+ - Fixed build script so controller images are actually included so UI doesn't crash
+ - Disabled most bindings when UI active (fixes crashes/wonkiness when pressing certain keys)
+ - Fixed Windows implementation of get_config_dir() so config file ends up in %localappdata%\blastem like it should
+ - Fixed the location of sticky_path on all platforms
+ - Added virtual root directory used by ROM UI to new Nuklear UI
+
 0.6.0
 -----
 *New Features*
@@ -15,6 +25,7 @@
 *Bugfixes*
 
  - Fixed a number of 68K decoder bugs (mostly illegal instruction decoding)
+ - Fixed implementation of the UNLK instruction when register is a7
  - Fixed a number of memory leaks
  
  *Accuracy/Completeness Improvements*
@@ -23,6 +34,13 @@
  - Implemented Z80 interrupt mode 2
  - Fixed the timing of a number of 68K instructions
  - Fixed the timing of the Z80 JP cc, nn instruction
+ - Fixed the order bytes of a word are written to VRAM from the FIFO (fixes minor corruption in Road Rash 3 bike menu)
+ 
+*Other Changes*
+ - Added support for Open GL ES in addition to the existing desktop GL support
+ - Some small optimizations
+ - Added ROM DB entry for Squirrel King to support it's copy protection
+ - Added support for float32 audio output (fixes an issue with defautl SDL2 driver in Windows when using more recent SDL2 versions)
  
 0.5.1
 -----
