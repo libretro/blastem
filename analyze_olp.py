@@ -148,6 +148,30 @@ def analyze_vram(chanmap, datafile):
 						print 'refresh @ {0}'.format(num)
 						state = 'begin'
 			last = sample
+			
+def analyze_z80_mreq(chanmap, datafile):
+	m1 = chanmap['!M1']
+	mreq = chanmap['!MREQ']
+	addressMask = 0x3FF
+	last = None
+	lastWasM1 = False
+	for line in datafile.readlines():
+		line = line.strip()
+		if line and not line.startswith(';'):
+			sample,_,num = line.partition('@')
+			sample = int(sample, 16)
+			if not (last is None):
+				if detect_rise(last, sample, mreq):
+					address = last & addressMask
+					if detect_low(last, m1):
+						print 'M1 read {0:02X} @ {1}'.format(address, num)
+						lastWasM1 = True
+					elif lastWasM1:
+						print 'Refresh {0:02X} @ {1}'.format(address, num)
+						lastWasM1 = False
+					else:
+						print 'Access {0:02X} @ {1}'.format(address, num)
+			last = sample
 
 def main(args):
 	if len(args) < 2:
@@ -163,10 +187,11 @@ def main(args):
 		chanmap[channels[i]] = i
 	datafile = olpfile.open('data.ols')
 	#analyze_delays(chanmap, datafile)
-	analyze_vram(chanmap, datafile)
-	datafile.close()
-	#datafile = olpfile.open('data.ols')
+	#analyze_vram(chanmap, datafile)
 	#analyze_refresh(chanmap, datafile)
+	analyze_z80_mreq(chanmap, datafile)
+	datafile.close()
+	
 
 if __name__ == '__main__':
 	main(argv)
