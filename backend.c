@@ -99,7 +99,7 @@ uint16_t read_word(uint32_t address, void **mem_pointers, cpu_options *opts, voi
 	if (!chunk) {
 		return 0xFFFF;
 	}
-	uint32_t offset = (address - chunk->start) & chunk->mask;
+	uint32_t offset = address & chunk->mask;
 	if (chunk->flags & MMAP_READ) {
 		uint8_t *base;
 		if (chunk->flags & MMAP_PTR_IDX) {
