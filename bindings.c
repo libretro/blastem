@@ -957,14 +957,26 @@ void handle_joy_added(int joystick)
 			char numstr[2] = {dpad + '0', 0};
 			tern_node * pad_dpad = tern_find_node(dpad_node, numstr);
 			char * dirs[] = {"up", "down", "left", "right"};
-			//TODO: Support controllers that have d-pads implemented as analog axes or buttons
+			char *render_dirs[] = {"dpup", "dpdown", "dpleft", "dpright"};
 			int dirnums[] = {RENDER_DPAD_UP, RENDER_DPAD_DOWN, RENDER_DPAD_LEFT, RENDER_DPAD_RIGHT};
 			for (int dir = 0; dir < sizeof(dirs)/sizeof(dirs[0]); dir++) {
 				char * target = tern_find_ptr(pad_dpad, dirs[dir]);
 				if (target) {
 					uint8_t subtype_a = 0, subtype_b = 0;
 					int bindtype = parse_binding_target(joystick, target, get_pad_buttons(), get_mouse_buttons(), &subtype_a, &subtype_b);
-					bind_dpad(joystick, dpad, dirnums[dir], bindtype, subtype_a, subtype_b);
+					int32_t hostbutton = dpad >0 ? -1 : render_translate_input_name(joystick, render_dirs[dir], 0);
+					if (hostbutton < 0) {
+						//assume this is a raw dpad mapping
+						bind_dpad(joystick, dpad, dirnums[dir], bindtype, subtype_a, subtype_b);
+					} else if (hostbutton & RENDER_DPAD_BIT) {
+						bind_dpad(joystick, render_dpad_part(hostbutton), render_direction_part(hostbutton), bindtype, subtype_a, subtype_b);
+					} else if (hostbutton & RENDER_AXIS_BIT) {
+						//SDL2 knows internally whether this should be a positive or negative binding, but doesn't expose that externally
+						//for now I'll just assume that any controller with axes for a d-pad has these mapped the "sane" way
+						bind_axis(joystick, render_axis_part(hostbutton), dir == 1 || dir == 3 ? 1 : 0, bindtype, subtype_a, subtype_b);
+					} else {
+						bind_button(joystick, hostbutton, bindtype, subtype_a, subtype_b);
+					}
 				}
 			}
 		}
