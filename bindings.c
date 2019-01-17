@@ -259,15 +259,16 @@ static uint8_t mouse_captured;
 
 void handle_binding_up(keybinding * binding)
 {
+	uint8_t allow_content_binds = content_binds_enabled && current_system;
 	switch(binding->bind_type)
 	{
 	case BIND_GAMEPAD:
-		if (content_binds_enabled && current_system->gamepad_up) {
+		if (allow_content_binds && current_system->gamepad_up) {
 			current_system->gamepad_up(current_system, binding->subtype_a, binding->subtype_b);
 		}
 		break;
 	case BIND_MOUSE:
-		if (content_binds_enabled && current_system->mouse_up) {
+		if (allow_content_binds && current_system->mouse_up) {
 			current_system->mouse_up(current_system, binding->subtype_a, binding->subtype_b);
 		}
 		break;
@@ -275,22 +276,22 @@ void handle_binding_up(keybinding * binding)
 		switch (binding->subtype_a)
 		{
 		case UI_DEBUG_MODE_INC:
-			if (content_binds_enabled) {
+			if (allow_content_binds) {
 				current_system->inc_debug_mode(current_system);
 			}
 			break;
 		case UI_ENTER_DEBUGGER:
-			if (content_binds_enabled) {
+			if (allow_content_binds) {
 				current_system->enter_debugger = 1;
 			}
 			break;
 		case UI_SAVE_STATE:
-			if (content_binds_enabled) {
+			if (allow_content_binds) {
 				current_system->save_state = QUICK_SAVE_SLOT+1;
 			}
 			break;
 		case UI_NEXT_SPEED:
-			if (content_binds_enabled) {
+			if (allow_content_binds) {
 				current_speed++;
 				if (current_speed >= num_speeds) {
 					current_speed = 0;
@@ -300,7 +301,7 @@ void handle_binding_up(keybinding * binding)
 			}
 			break;
 		case UI_PREV_SPEED:
-			if (content_binds_enabled) {
+			if (allow_content_binds) {
 				current_speed--;
 				if (current_speed < 0) {
 					current_speed = num_speeds - 1;
@@ -310,7 +311,7 @@ void handle_binding_up(keybinding * binding)
 			}
 			break;
 		case UI_SET_SPEED:
-			if (content_binds_enabled) {
+			if (allow_content_binds) {
 				if (binding->subtype_b < num_speeds) {
 					current_speed = binding->subtype_b;
 					printf("Setting speed to %d: %d\n", current_speed, speeds[current_speed]);
@@ -328,7 +329,7 @@ void handle_binding_up(keybinding * binding)
 			}
 			break;
 		case UI_TOGGLE_KEYBOARD_CAPTURE:
-			if (content_binds_enabled && current_system->has_keyboard) {
+			if (allow_content_binds && current_system->has_keyboard) {
 				keyboard_captured = !keyboard_captured;
 			}
 			break;
@@ -336,22 +337,22 @@ void handle_binding_up(keybinding * binding)
 			render_toggle_fullscreen();
 			break;
 		case UI_SOFT_RESET:
-			if (content_binds_enabled) {
+			if (allow_content_binds) {
 				current_system->soft_reset(current_system);
 			}
 			break;
 		case UI_RELOAD:
-			if (content_binds_enabled) {
+			if (allow_content_binds) {
 				reload_media();
 			}
 			break;
 		case UI_SMS_PAUSE:
-			if (content_binds_enabled && current_system->gamepad_down) {
+			if (allow_content_binds && current_system->gamepad_down) {
 				current_system->gamepad_down(current_system, GAMEPAD_MAIN_UNIT, MAIN_UNIT_PAUSE);
 			}
 			break;
 		case UI_SCREENSHOT: {
-			if (content_binds_enabled) {
+			if (allow_content_binds) {
 				char *screenshot_base = tern_find_path(config, "ui\0screenshot_path\0", TVAL_PTR).ptrval;
 				if (!screenshot_base) {
 					screenshot_base = "$HOME";
@@ -398,7 +399,7 @@ void handle_binding_up(keybinding * binding)
 		case UI_VRAM_DEBUG: 
 		case UI_CRAM_DEBUG:
 		case UI_COMPOSITE_DEBUG:
-			if (content_binds_enabled) {
+			if (allow_content_binds) {
 				vdp_context *vdp = NULL;
 				if (current_system->type == SYSTEM_GENESIS) {
 					genesis_context *gen = (genesis_context *)current_system;
