@@ -69,6 +69,14 @@ tern_node * config;
 #define romclose gzclose
 #endif
 
+uint16_t *process_smd_block(uint16_t *dst, uint8_t *src, size_t bytes)
+{
+	for (uint8_t *low = src, *high = (src+bytes/2), *end = src+bytes; high < end; high++, low++) {
+		*(dst++) = *low << 8 | *high;
+	}
+	return dst;
+}
+
 int load_smd_rom(ROMFILE f, void **buffer)
 {
 	uint8_t block[SMD_BLOCK_SIZE];
@@ -89,9 +97,7 @@ int load_smd_rom(ROMFILE f, void **buffer)
 		}
 		read = romread(block, 1, SMD_BLOCK_SIZE, f);
 		if (read > 0) {
-			for (uint8_t *low = block, *high = (block+read/2), *end = block+read; high < end; high++, low++) {
-				*(dst++) = *low << 8 | *high;
-			}
+			dst = process_smd_block(dst, block, read);
 			readsize += read;
 		}
 	} while(read > 0);
@@ -102,9 +108,28 @@ int load_smd_rom(ROMFILE f, void **buffer)
 	return readsize;
 }
 
+uint8_t is_smd_format(const char *filename, uint8_t *header)
+{
+	if (header[1] == SMD_MAGIC1 && header[8] == SMD_MAGIC2 && header[9] == SMD_MAGIC3) {
+		int i;
+		for (i = 3; i < 8; i++) {
+			if (header[i] != 0) {
+				return 0;
+			}
+		}
+		if (i == 8) {
+			if (header[2]) {
+				fatal_error("%s is a split SMD ROM which is not currently supported", filename);
+			}
+			return 1;
+		}
+	}
+	return 0;
+}
+
 uint32_t load_rom_zip(const char *filename, void **dst)
 {
-	static const char *valid_exts[] = {"bin", "md", "gen", "sms", "rom"};
+	static const char *valid_exts[] = {"bin", "md", "gen", "sms", "rom", "smd"};
 	const uint32_t num_exts = sizeof(valid_exts)/sizeof(*valid_exts);
 	zip_file *z = zip_open(filename);
 	if (!z) {
@@ -123,6 +148,16 @@ uint32_t load_rom_zip(const char *filename, void **dst)
 				size_t out_size = nearest_pow2(z->entries[i].size);
 				*dst = zip_read(z, i, &out_size);
 				if (*dst) {
+					if (is_smd_format(z->entries[i].name, *dst)) {
+						size_t offset;
+						for (offset = 0; offset + SMD_BLOCK_SIZE + SMD_HEADER_SIZE < out_size; offset += SMD_BLOCK_SIZE)
+						{
+							uint8_t tmp[SMD_BLOCK_SIZE];
+							memcpy(tmp, *dst + offset + SMD_HEADER_SIZE, SMD_BLOCK_SIZE);
+							process_smd_block(*dst + offset, tmp, SMD_BLOCK_SIZE);
+						}
+						out_size = offset;
+					}
 					free(ext);
 					zip_close(z);
 					return out_size;
@@ -152,22 +187,11 @@ uint32_t load_rom(const char * filename, void **dst, system_type *stype)
 		fatal_error("Error reading from %s\n", filename);
 	}
 	
-	if (header[1] == SMD_MAGIC1 && header[8] == SMD_MAGIC2 && header[9] == SMD_MAGIC3) {
-		int i;
-		for (i = 3; i < 8; i++) {
-			if (header[i] != 0) {
-				break;
-			}
+	if (is_smd_format(filename, header)) {
+		if (stype) {
+			*stype = SYSTEM_GENESIS;
 		}
-		if (i == 8) {
-			if (header[2]) {
-				fatal_error("%s is a split SMD ROM which is not currently supported", filename);
-			}
-			if (stype) {
-				*stype = SYSTEM_GENESIS;
-			}
-			return load_smd_rom(f, dst);
-		}
+		return load_smd_rom(f, dst);
 	}
 	
 	size_t filesize = 512 * 1024;
