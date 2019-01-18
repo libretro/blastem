@@ -1872,7 +1872,11 @@ static void handle_event(SDL_Event *event)
 
 static void context_destroyed(void)
 {
-	nk_sdl_shutdown();
+	if (context)
+	{
+		nk_sdl_shutdown();
+		context = NULL;
+	}
 }
 
 static struct nk_image load_image_texture(uint32_t *buf, uint32_t width, uint32_t height)
