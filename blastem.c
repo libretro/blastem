@@ -30,7 +30,7 @@
 #include "nuklear_ui/blastem_nuklear.h"
 #endif
 
-#define BLASTEM_VERSION "0.6.1"
+#define BLASTEM_VERSION "0.6.2-pre"
 
 #ifdef __ANDROID__
 #define FULLSCREEN_DEFAULT 1
