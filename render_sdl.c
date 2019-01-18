@@ -45,6 +45,7 @@ static uint8_t scanlines = 0;
 
 static uint32_t last_frame = 0;
 
+static uint8_t output_channels;
 static uint32_t buffer_samples, sample_rate;
 static uint32_t missing_count;
 
@@ -83,23 +84,28 @@ static int32_t mix_s16(audio_source *audio, void *vstream, int len)
 {
 	int samples = len/(sizeof(int16_t)*2);
 	int16_t *stream = vstream;
-	int16_t *end = stream + 2*samples;
+	int16_t *end = stream + output_channels*samples;
 	int16_t *src = audio->front;
 	uint32_t i = audio->read_start;
 	uint32_t i_end = audio->read_end;
 	int16_t *cur = stream;
+	size_t first_add = output_channels > 1 ? 1 : 0, second_add = output_channels > 1 ? output_channels - 1 : 1;
 	if (audio->num_channels == 1) {
 		while (cur < end && i != i_end)
 		{
-			*(cur++) += src[i];
-			*(cur++) += src[i++];
+			*cur += src[i];
+			cur += first_add;
+			*cur += src[i++];
+			cur += second_add;
 			i &= audio->mask;
 		}
 	} else {
 		while (cur < end && i != i_end)
 		{
-			*(cur++) += src[i++];
-			*(cur++) += src[i++];
+			*cur += src[i++];
+			cur += first_add;
+			*cur += src[i++];
+			cur += second_add;
 			i &= audio->mask;
 		}
 	}
@@ -127,18 +133,23 @@ static int32_t mix_f32(audio_source *audio, void *vstream, int len)
 	uint32_t i = audio->read_start;
 	uint32_t i_end = audio->read_end;
 	float *cur = stream;
+	size_t first_add = output_channels > 1 ? 1 : 0, second_add = output_channels > 1 ? output_channels - 1 : 1;
 	if (audio->num_channels == 1) {
 		while (cur < end && i != i_end)
 		{
-			*(cur++) += ((float)src[i]) / 0x7FFF;
-			*(cur++) += ((float)src[i++]) / 0x7FFF;
+			*cur += ((float)src[i]) / 0x7FFF;
+			cur += first_add;
+			*cur += ((float)src[i++]) / 0x7FFF;
+			cur += second_add;
 			i &= audio->mask;
 		}
 	} else {
 		while(cur < end && i != i_end)
 		{
-			*(cur++) += ((float)src[i++]) / 0x7FFF;
-			*(cur++) += ((float)src[i++]) / 0x7FFF;
+			*cur += ((float)src[i++]) / 0x7FFF;
+			cur += first_add;
+			*cur += ((float)src[i++]) / 0x7FFF;
+			cur += second_add;
 			i &= audio->mask;
 		}
 	}
@@ -1027,6 +1038,7 @@ static void init_audio()
 	}
 	buffer_samples = actual.samples;
 	sample_rate = actual.freq;
+	output_channels = actual.channels;
 	printf("Initialized audio at frequency %d with a %d sample buffer, ", actual.freq, actual.samples);
 	if (actual.format == AUDIO_S16SYS) {
 		puts("signed 16-bit int format");
