@@ -76,14 +76,16 @@ int load_smd_rom(ROMFILE f, void **buffer)
 
 	size_t filesize = 512 * 1024;
 	size_t readsize = 0;
-	uint16_t *dst = malloc(filesize);
+	uint16_t *dst, *buf;
+	dst = buf = malloc(filesize);
 	
 
 	size_t read;
 	do {
 		if ((readsize + SMD_BLOCK_SIZE > filesize)) {
 			filesize *= 2;
-			dst = realloc(dst, filesize);
+			buf = realloc(buf, filesize);
+			dst = buf + readsize/sizeof(uint16_t);
 		}
 		read = romread(block, 1, SMD_BLOCK_SIZE, f);
 		if (read > 0) {
@@ -95,7 +97,7 @@ int load_smd_rom(ROMFILE f, void **buffer)
 	} while(read > 0);
 	romclose(f);
 	
-	*buffer = dst;
+	*buffer = buf;
 	
 	return readsize;
 }
