@@ -1377,7 +1377,7 @@ void render_set_video_standard(vid_std std)
 	source_frame = 0;
 	source_frame_count = frame_repeat[0];
 	//sync samples with audio thread approximately every 8 lines
-	sync_samples = sync_to_audio ? buffer_samples : 8 * sample_rate / (source_hz * (VID_PAL ? 313 : 262));
+	sync_samples = sync_to_audio ? buffer_samples : 8 * sample_rate / (source_hz * (std == VID_PAL ? 313 : 262));
 	max_repeat++;
 	min_buffered = (((float)max_repeat * (float)sample_rate/(float)source_hz)/* / (float)buffer_samples*/);// + 0.9999;
 	//min_buffered *= buffer_samples;
