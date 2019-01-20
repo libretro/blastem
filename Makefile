@@ -76,7 +76,11 @@ endif #Darwin
 
 else
 CFLAGS:=$(shell pkg-config --cflags-only-I $(LIBS)) $(CFLAGS)
+ifeq ($(MAKECMDGOALS),libblastem.so)
+LDFLAGS:=-lm
+else
 LDFLAGS:=-lm $(shell pkg-config --libs $(LIBS))
+endif #libblastem.so
 
 ifeq ($(OS),Darwin)
 LDFLAGS+= -framework OpenGL -framework AppKit
@@ -164,6 +168,10 @@ endif
 MAINOBJS=blastem.o system.o genesis.o debug.o gdb_remote.o vdp.o $(RENDEROBJS) io.o romdb.o hash.o menu.o xband.o \
 	realtec.o i2c.o nor.o sega_mapper.o multi_game.o megawifi.o $(NET) serialize.o $(TERMINAL) $(CONFIGOBJS) gst.o \
 	$(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS) saves.o zip.o bindings.o jcart.o
+
+LIBOBJS=libblastem.o system.o genesis.o debug.o gdb_remote.o vdp.o io.o romdb.o hash.o menu.o xband.o realtec.o \
+	i2c.o nor.o sega_mapper.o multi_game.o megawifi.o $(NET) serialize.o $(TERMINAL) $(CONFIGOBJS) gst.o \
+	$(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS) saves.o jcart.o
 	
 ifdef NONUKLEAR
 CFLAGS+= -DDISABLE_NUKLEAR
@@ -187,6 +195,7 @@ ifdef NOZ80
 CFLAGS+=-DNO_Z80
 else
 MAINOBJS+= sms.o $(Z80OBJS)
+LIBOBJS+= sms.o $(Z80OBJS)
 endif
 
 ifeq ($(OS),Windows)
@@ -198,7 +207,14 @@ ifneq ($(OS),Windows)
 ALL+= termhelper
 endif
 
+ifeq ($(MAKECMDGOALS),libblastem.so)
+CFLAGS+= -fpic
+endif
+
 all : $(ALL)
+
+libblastem.so : $(LIBOBJS)
+	$(CC) -shared -o $@ $^ $(LDFLAGS)
 
 blastem$(EXE) : $(MAINOBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
