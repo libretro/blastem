@@ -35,6 +35,8 @@ struct genesis_context {
 	uint8_t         *save_storage;
 	void            *mapper_temp;
 	eeprom_map      *eeprom_map;
+	uint8_t         *serialize_tmp;
+	size_t          serialize_size;
 	uint32_t        num_eeprom;
 	uint32_t        save_size;
 	uint32_t        save_ram_mask;
