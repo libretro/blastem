@@ -254,9 +254,9 @@ void process_events()
 			int16_t new_state = retro_input_state(port, RETRO_DEVICE_JOYPAD, 0, id);
 			if (new_state != prev_state[port][id]) {
 				if (new_state) {
-					current_system->gamepad_down(current_system, port, map[id]);
+					current_system->gamepad_down(current_system, port + 1, map[id]);
 				} else {
-					current_system->gamepad_up(current_system, port, map[id]);
+					current_system->gamepad_up(current_system, port + 1, map[id]);
 				}
 				prev_state[port][id] = new_state;
 			}
