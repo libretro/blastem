@@ -56,6 +56,9 @@ RETRO_API void retro_init(void)
 
 RETRO_API void retro_deinit(void)
 {
+	if (current_system) {
+		retro_unload_game();
+	}
 }
 
 RETRO_API unsigned retro_api_version(void)
@@ -185,11 +188,14 @@ RETRO_API bool retro_load_game_special(unsigned game_type, const struct retro_ga
 /* Unloads a currently loaded game. */
 RETRO_API void retro_unload_game(void)
 {
-	
 	free(media.dir);
 	free(media.name);
 	free(media.extension);
-	
+	media.dir = media.name = media.extension = NULL;
+	//buffer is freed by the context
+	media.buffer = NULL;
+	current_system->free_context(current_system);
+	current_system = NULL;
 }
 
 /* Gets region of game. */
