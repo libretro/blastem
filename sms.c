@@ -386,18 +386,22 @@ static void run_sms(system_header *system)
 			target_cycle -= adjust;
 		}
 	}
+#ifndef IS_LIB
 	bindings_release_capture();
 	vdp_release_framebuffer(sms->vdp);
 	render_pause_source(sms->psg->audio);
+#endif
 	sms->should_return = 0;
 }
 
 static void resume_sms(system_header *system)
 {
 	sms_context *sms = (sms_context *)system;
+#ifndef IS_LIB
 	bindings_reacquire_capture();
 	vdp_reacquire_framebuffer(sms->vdp);
 	render_resume_source(sms->psg->audio);
+#endif
 	run_sms(system);
 }
 
@@ -446,6 +450,7 @@ static void request_exit(system_header *system)
 {
 	sms_context *sms = (sms_context *)system;
 	sms->should_return = 1;
+	sms->z80->target_cycle = sms->z80->sync_cycle = sms->z80->current_cycle;
 }
 
 static void inc_debug_mode(system_header *system)

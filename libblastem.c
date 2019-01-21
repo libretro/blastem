@@ -1,3 +1,5 @@
+#include <stdlib.h>
+#include <string.h>
 #include "libretro.h"
 #include "system.h"
 #include "util.h"
@@ -284,6 +286,7 @@ static uint8_t num_audio_sources;
 audio_source *render_audio_source(uint64_t master_clock, uint64_t sample_divider, uint8_t channels)
 {
 	audio_sources[num_audio_sources] = calloc(1, sizeof(audio_source));
+	audio_sources[num_audio_sources]->freq = master_clock / sample_divider;
 	return audio_sources[num_audio_sources++];
 }
 
@@ -295,11 +298,8 @@ static void check_put_sample(void)
 {
 	for (int i = 0; i < num_audio_sources; i++)
 	{
-		if (!audio_sources[i]->num_samples) {
-			return;
-		}
-		int32_t effective_freq = audio_sources[i]->freq / audio_sources[i]->num_samples;
-		if (abs(effective_freq - 53267) > 53267) {
+		int32_t min_samples = audio_sources[i]->freq / 53267;
+		if (audio_sources[i]->num_samples < min_samples) {
 			return;
 		}
 	}
@@ -327,12 +327,7 @@ void render_put_stereo_sample(audio_source *src, int16_t left, int16_t right)
 	src->num_samples++;
 	check_put_sample();
 }
-void render_pause_source(audio_source *src)
-{
-}
-void render_resume_source(audio_source *src)
-{
-}
+
 void render_free_source(audio_source *src)
 {
 	int index;
@@ -348,11 +343,5 @@ void render_free_source(audio_source *src)
 }
 
 void bindings_set_mouse_mode(uint8_t mode)
-{
-}
-void bindings_release_capture(void)
-{
-}
-void bindings_reacquire_capture(void)
 {
 }
