@@ -235,6 +235,18 @@ void sms_serialize(sms_context *sms, serialize_buffer *buf)
 	end_section(buf);
 }
 
+static uint8_t *serialize(system_header *sys, size_t *size_out)
+{
+	sms_context *sms = (sms_context *)sys;
+	serialize_buffer state;
+	init_serialize(&state);
+	sms_serialize(sms, &state);
+	if (size_out) {
+		*size_out = state.size;
+	}
+	return state.data;
+}
+
 static void ram_deserialize(deserialize_buffer *buf, void *vsms)
 {
 	sms_context *sms = vsms;
@@ -290,6 +302,16 @@ void sms_deserialize(deserialize_buffer *buf, sms_context *sms)
 		//cart RAM is enabled, invalidate the region in case there is any code there
 		z80_invalidate_code_range(sms->z80, 0x8000, 0xC000);
 	}
+	free(buf->handlers);
+	buf->handlers = NULL;
+}
+
+static void deserialize(system_header *sys, uint8_t *data, size_t size)
+{
+	sms_context *sms = (sms_context *)sys;
+	deserialize_buffer buffer;
+	init_deserialize(&buffer, data, size);
+	sms_deserialize(&buffer, sms);
 }
 
 static void save_state(sms_context *sms, uint8_t slot)
@@ -603,6 +625,8 @@ sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t for
 	sms->header.keyboard_down = keyboard_down;
 	sms->header.keyboard_up = keyboard_up;
 	sms->header.config_updated = config_updated;
+	sms->header.serialize = serialize;
+	sms->header.deserialize = deserialize;
 	sms->header.type = SYSTEM_SMS;
 	
 	return sms;

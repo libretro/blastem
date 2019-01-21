@@ -1,5 +1,6 @@
 #ifndef SYSTEM_H_
 #define SYSTEM_H_
+#include <stddef.h>
 #include <stdint.h>
 
 typedef struct system_header system_header;
@@ -27,43 +28,47 @@ typedef uint8_t (*system_u8_fun_r8)(system_header *, uint8_t);
 typedef void (*system_u8_u8_fun)(system_header *, uint8_t, uint8_t);
 typedef void (*system_mabs_fun)(system_header *, uint8_t, uint16_t, uint16_t);
 typedef void (*system_mrel_fun)(system_header *, uint8_t, int32_t, int32_t);
+typedef uint8_t *(*system_ptrszt_fun_rptr8)(system_header *, size_t *);
+typedef void (*system_ptr8_sizet_fun)(system_header *, uint8_t *, size_t);
 
 #include "arena.h"
 #include "romdb.h"
 
 struct system_header {
-	system_header     *next_context;
-	system_str_fun    start_context;
-	system_fun        resume_context;
-	system_fun        load_save;
-	system_fun        persist_save;
-	system_u8_fun_r8  load_state;
-	system_fun        request_exit;
-	system_fun        soft_reset;
-	system_fun        free_context;
-	system_fun_r16    get_open_bus_value;
-	system_u32_fun    set_speed_percent;
-	system_fun        inc_debug_mode;
-	system_u8_u8_fun  gamepad_down;
-	system_u8_u8_fun  gamepad_up;
-	system_u8_u8_fun  mouse_down;
-	system_u8_u8_fun  mouse_up;
-	system_mabs_fun   mouse_motion_absolute;
-	system_mrel_fun   mouse_motion_relative;
-	system_u8_fun     keyboard_down;
-	system_u8_fun     keyboard_up;
-	system_fun        config_updated;
-	rom_info          info;
-	arena             *arena;
-	char              *next_rom;
-	char              *save_dir;
-	uint8_t           enter_debugger;
-	uint8_t           should_exit;
-	uint8_t           save_state;
-	uint8_t           delayed_load_slot;
-	uint8_t           has_keyboard;
-	debugger_type     debugger_type;
-	system_type       type;
+	system_header           *next_context;
+	system_str_fun          start_context;
+	system_fun              resume_context;
+	system_fun              load_save;
+	system_fun              persist_save;
+	system_u8_fun_r8        load_state;
+	system_fun              request_exit;
+	system_fun              soft_reset;
+	system_fun              free_context;
+	system_fun_r16          get_open_bus_value;
+	system_u32_fun          set_speed_percent;
+	system_fun              inc_debug_mode;
+	system_u8_u8_fun        gamepad_down;
+	system_u8_u8_fun        gamepad_up;
+	system_u8_u8_fun        mouse_down;
+	system_u8_u8_fun        mouse_up;
+	system_mabs_fun         mouse_motion_absolute;
+	system_mrel_fun         mouse_motion_relative;
+	system_u8_fun           keyboard_down;
+	system_u8_fun           keyboard_up;
+	system_fun              config_updated;
+	system_ptrszt_fun_rptr8 serialize;
+	system_ptr8_sizet_fun   deserialize;
+	rom_info                info;
+	arena                   *arena;
+	char                    *next_rom;
+	char                    *save_dir;
+	uint8_t                 enter_debugger;
+	uint8_t                 should_exit;
+	uint8_t                 save_state;
+	uint8_t                 delayed_load_slot;
+	uint8_t                 has_keyboard;
+	debugger_type           debugger_type;
+	system_type             type;
 };
 
 struct system_media {
