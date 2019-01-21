@@ -75,10 +75,10 @@ endif
 endif #Darwin
 
 else
-CFLAGS:=$(shell pkg-config --cflags-only-I $(LIBS)) $(CFLAGS)
 ifeq ($(MAKECMDGOALS),libblastem.so)
 LDFLAGS:=-lm
 else
+CFLAGS:=$(shell pkg-config --cflags-only-I $(LIBS)) $(CFLAGS)
 LDFLAGS:=-lm $(shell pkg-config --libs $(LIBS))
 endif #libblastem.so
 
@@ -208,7 +208,7 @@ ALL+= termhelper
 endif
 
 ifeq ($(MAKECMDGOALS),libblastem.so)
-CFLAGS+= -fpic
+CFLAGS+= -fpic -DIS_LIB
 endif
 
 all : $(ALL)

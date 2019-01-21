@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include "genesis.h"
 
 static io_port *get_ports(m68k_context *m68k)

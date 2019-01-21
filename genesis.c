@@ -33,7 +33,11 @@ uint32_t MCLKS_PER_68K;
 #define LINES_NTSC 262
 #define LINES_PAL 313
 
+#ifdef IS_LIB
+#define MAX_SOUND_CYCLES 1000
+#else
 #define MAX_SOUND_CYCLES 100000	
+#endif
 
 void genesis_serialize(genesis_context *gen, serialize_buffer *buf, uint32_t m68k_pc)
 {
@@ -1070,10 +1074,12 @@ static void handle_reset_requests(genesis_context *gen)
 			resume_68k(gen->m68k);
 		}
 	}
+#ifndef IS_LIB
 	bindings_release_capture();
 	vdp_release_framebuffer(gen->vdp);
 	render_pause_source(gen->ym->audio);
 	render_pause_source(gen->psg->audio);
+#endif
 }
 
 static void start_genesis(system_header *system, char *statefile)
@@ -1116,11 +1122,13 @@ static void start_genesis(system_header *system, char *statefile)
 static void resume_genesis(system_header *system)
 {
 	genesis_context *gen = (genesis_context *)system;
+#ifndef IS_LIB
 	render_set_video_standard((gen->version_reg & HZ50) ? VID_PAL : VID_NTSC);
 	bindings_reacquire_capture();
 	vdp_reacquire_framebuffer(gen->vdp);
 	render_resume_source(gen->ym->audio);
 	render_resume_source(gen->psg->audio);
+#endif
 	resume_68k(gen->m68k);
 	handle_reset_requests(gen);
 }
@@ -1134,6 +1142,7 @@ static void inc_debug_mode(system_header *system)
 static void request_exit(system_header *system)
 {
 	genesis_context *gen = (genesis_context *)system;
+	gen->m68k->target_cycle = gen->m68k->current_cycle;
 	gen->m68k->should_return = 1;
 }
 

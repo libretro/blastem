@@ -6,7 +6,7 @@
 #ifndef RENDER_H_
 #define RENDER_H_
 
-//TODO: Throw an ifdef in here once there's more than one renderer
+#ifndef IS_LIB
 #include <SDL.h>
 #define RENDERKEY_UP       SDLK_UP
 #define RENDERKEY_DOWN     SDLK_DOWN
@@ -61,6 +61,7 @@
 #define RENDER_DPAD_LEFT   SDL_HAT_LEFT
 #define RENDER_DPAD_RIGHT  SDL_HAT_RIGHT
 #define render_relative_mouse SDL_SetRelativeMouseMode
+#endif
 
 #define MAX_JOYSTICKS 8
 #define MAX_MICE 8
