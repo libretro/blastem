@@ -1512,7 +1512,11 @@ shader_prog *get_shader_list(uint32_t *num_out)
 		progs = NULL;
 		prog_storage = 0;
 	}
+#ifdef DATA_PATH
+	shader_dir = path_append(DATA_PATH, "shaders");
+#else
 	shader_dir = path_append(get_exe_dir(), "shaders");
+#endif
 	entries = get_dir_list(shader_dir, &num_entries);
 	progs = get_shader_progs(entries, num_entries, progs, &num_progs, &prog_storage);
 	*num_out = num_progs;
