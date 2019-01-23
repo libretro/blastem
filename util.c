@@ -875,14 +875,18 @@ char const *get_userdata_dir()
 
 char *read_bundled_file(char *name, uint32_t *sizeret)
 {
-	char *exe_dir = get_exe_dir();
-	if (!exe_dir) {
+#ifdef DATA_PATH
+	char *data_dir = DATA_PATH;
+#else
+	char *data_dir = get_exe_dir();
+	if (!data_dir) {
 		if (sizeret) {
 			*sizeret = -1;
 		}
 		return NULL;
 	}
-	char const *pieces[] = {exe_dir, PATH_SEP, name};
+#endif
+	char const *pieces[] = {data_dir, PATH_SEP, name};
 	char *path = alloc_concat_m(3, pieces);
 	FILE *f = fopen(path, "rb");
 	free(path);

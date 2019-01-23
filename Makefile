@@ -47,6 +47,14 @@ endif #USE_GLES
 FONT:=nuklear_ui/font.o
 endif #Darwin
 
+ifdef HOST_ZLIB
+LIBS+= zlib
+LIBZOBJS=
+else
+LIBZOBJS=zlib/adler32.o zlib/compress.o zlib/crc32.o zlib/deflate.o zlib/gzclose.o zlib/gzlib.o zlib/gzread.o\
+	zlib/gzwrite.o zlib/infback.o zlib/inffast.o zlib/inflate.o zlib/inftrees.o zlib/trees.o zlib/uncompr.o zlib/zutil.o
+endif
+
 ifeq ($(OS),Darwin)
 #This should really be based on whether or not the C compiler is clang rather than based on the OS
 CFLAGS+= -Wno-logical-op-parentheses
@@ -156,8 +164,6 @@ AUDIOOBJS=ym2612.o psg.o wave.o
 CONFIGOBJS=config.o tern.o util.o paths.o 
 NUKLEAROBJS=$(FONT) nuklear_ui/blastem_nuklear.o nuklear_ui/sfnt.o controller_info.o
 RENDEROBJS=render_sdl.o ppm.o
-LIBZOBJS=zlib/adler32.o zlib/compress.o zlib/crc32.o zlib/deflate.o zlib/gzclose.o zlib/gzlib.o zlib/gzread.o\
-	zlib/gzwrite.o zlib/infback.o zlib/inffast.o zlib/inflate.o zlib/inftrees.o zlib/trees.o zlib/uncompr.o zlib/zutil.o
 	
 ifdef NOZLIB
 CFLAGS+= -DDISABLE_ZLIB
@@ -200,6 +206,14 @@ endif
 
 ifeq ($(OS),Windows)
 MAINOBJS+= res.o
+endif
+
+ifdef CONFIG_PATH
+CFLAGS+= -DCONFIG_PATH='"'$(CONFIG_PATH)'"'
+endif
+
+ifdef DATA_PATH
+CFLAGS+= -DDATA_PATH='"'$(DATA_PATH)'"'
 endif
 
 ALL=dis$(EXE) zdis$(EXE) stateview$(EXE) vgmplay$(EXE) blastem$(EXE)

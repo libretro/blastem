@@ -13,6 +13,7 @@
 #include "genesis.h"
 #include "bindings.h"
 #include "util.h"
+#include "paths.h"
 #include "ppm.h"
 #include "png.h"
 #include "config.h"
@@ -489,24 +490,28 @@ static GLuint load_shader(char * fname, GLenum shader_type)
 	char * shader_path = alloc_concat_m(3, parts);
 	FILE * f = fopen(shader_path, "rb");
 	free(shader_path);
-	if (!f) {
-		parts[0] = get_exe_dir();
-		parts[1] = "/shaders/";
-		shader_path = alloc_concat_m(3, parts);
-		f = fopen(shader_path, "rb");
+	GLchar * text;
+	long fsize;
+	if (f) {
+		fsize = file_size(f);
+		text = malloc(fsize);
+		if (fread(text, 1, fsize, f) != fsize) {
+			warning("Error reading from shader file %s\n", fname);
+			free(text);
+			return 0;
+		}
+	} else {
+		shader_path = path_append("shaders", fname);
+		uint32_t fsize32;
+		text = read_bundled_file(shader_path, &fsize32);
 		free(shader_path);
-		if (!f) {
+		if (!text) {
 			warning("Failed to open shader file %s for reading\n", fname);
 			return 0;
 		}
+		fsize = fsize32;
 	}
-	long fsize = file_size(f);
-	GLchar * text = malloc(fsize);
-	if (fread(text, 1, fsize, f) != fsize) {
-		warning("Error reading from shader file %s\n", fname);
-		free(text);
-		return 0;
-	}
+	
 	if (strncmp(text, "#version", strlen("#version"))) {
 		GLchar *tmp = text;
 		text = alloc_concat(shader_prefix, tmp);

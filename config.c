@@ -205,14 +205,24 @@ uint8_t serialize_config_file(tern_node *config, char *path)
 
 tern_node *parse_bundled_config(char *config_name)
 {
+	tern_node *ret = NULL;
+#ifdef CONFIG_PATH
+	if (!strcmp("default.cfg", config_name) || !strcmp("blastem.cfg", config_name)) {
+		char *confpath = path_append(CONFIG_PATH, config_name);
+		ret = parse_config_file(confpath);
+		free(confpath);
+	} else {
+#endif
 	uint32_t confsize;
 	char *confdata = read_bundled_file(config_name, &confsize);
-	tern_node *ret = NULL;
 	if (confdata) {
 		confdata[confsize] = 0;
 		ret = parse_config(confdata);
 		free(confdata);
 	}
+#ifdef CONFIG_PATH
+	}
+#endif
 	return ret;
 }
 
