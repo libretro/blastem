@@ -76,12 +76,14 @@ RETRO_API void retro_get_system_info(struct retro_system_info *info)
 }
 
 static vid_std video_standard;
-static uint32_t last_width;
+static uint32_t last_width, last_height;
 RETRO_API void retro_get_system_av_info(struct retro_system_av_info *info)
 {
 	last_width = LINEBUF_SIZE;
 	info->geometry.base_width = info->geometry.max_width = LINEBUF_SIZE;
-	info->geometry.base_height = info->geometry.max_height = video_standard == VID_NTSC ? 243 : 294;
+	info->geometry.base_height = video_standard == VID_NTSC ? 243 : 294;
+	last_height = info->geometry.base_height;
+	info->geometry.max_height = info->geometry.base_height * 2;
 	info->geometry.aspect_ratio = 0;
 	info->timing.fps = video_standard == VID_NTSC ? 60 : 50;
 	info->timing.sample_rate = 53267; //approximate sample rate of YM2612
@@ -235,25 +237,38 @@ void render_destroy_window(uint8_t which)
 }
 
 static uint32_t fb[LINEBUF_SIZE * 294 * 2];
+static uint8_t last_fb;
 uint32_t *render_get_framebuffer(uint8_t which, int *pitch)
 {
 	*pitch = LINEBUF_SIZE * sizeof(uint32_t);
-	//TODO: deal with interlace
-	return fb;
+	if (which != last_fb) {
+		*pitch = *pitch * 2;
+	}
+
+	if (which) {
+		return fb + LINEBUF_SIZE;
+	} else {
+		return fb;
+	}
 }
 
 void render_framebuffer_updated(uint8_t which, int width)
 {
-	//TODO: deal with interlace
 	unsigned height = video_standard == VID_NTSC ? 243 : 294;
-	if (width != last_width) {
+	unsigned base_height = height;
+	if (which != last_fb) {
+		height *= 2;
+		last_fb = which;
+	}
+	if (width != last_width || height != last_height) {
 		struct retro_game_geometry geometry = {
 			.base_width = width,
 			.base_height = height,
-			.aspect_ratio = (float)LINEBUF_SIZE / height
+			.aspect_ratio = (float)LINEBUF_SIZE / base_height
 		};
 		retro_environment(RETRO_ENVIRONMENT_SET_GEOMETRY, &geometry);
 		last_width = width;
+		last_height = height;
 	}
 	retro_video_refresh(fb, width, height, LINEBUF_SIZE * sizeof(uint32_t));
 	current_system->request_exit(current_system);
