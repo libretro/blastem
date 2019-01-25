@@ -953,14 +953,12 @@ class Program:
 		hFile.write('\n#endif //{0}_'.format(macro))
 		hFile.write('\n')
 		hFile.close()
-	def build(self, otype):
-		body = []
+		
+	def _buildTable(self, otype, table, body):
 		pieces = []
-		for include in self.includes:
-			body.append('#include "{0}"\n'.format(include))
-		for table in self.instructions:
-			opmap = [None] * (1 << self.opsize)
-			bodymap = {}
+		opmap = [None] * (1 << self.opsize)
+		bodymap = {}
+		if table in self.instructions:
 			instructions = self.instructions[table]
 			instructions.sort()
 			for inst in instructions:
@@ -973,17 +971,31 @@ class Program:
 						self.lastOp = None
 						opmap[val] = inst.generateName(val)
 						bodymap[val] = inst.generateBody(val, self, otype)
-			
-			pieces.append('\ntypedef void (*impl_fun)({pre}context *context);'.format(pre=self.prefix))
-			pieces.append('\nstatic impl_fun impl_{name}[{sz}] = {{'.format(name = table, sz=len(opmap)))
-			for inst in range(0, len(opmap)):
-				op = opmap[inst]
-				if op is None:
-					pieces.append('\n\tunimplemented,')
-				else:
-					pieces.append('\n\t' + op + ',')
-					body.append(bodymap[inst])
-			pieces.append('\n};')
+		
+		pieces.append('\ntypedef void (*impl_fun)({pre}context *context);'.format(pre=self.prefix))
+		pieces.append('\nstatic impl_fun impl_{name}[{sz}] = {{'.format(name = table, sz=len(opmap)))
+		for inst in range(0, len(opmap)):
+			op = opmap[inst]
+			if op is None:
+				pieces.append('\n\tunimplemented,')
+			else:
+				pieces.append('\n\t' + op + ',')
+				body.append(bodymap[inst])
+		pieces.append('\n};')
+		body.extend(pieces)
+	
+	def build(self, otype):
+		body = []
+		pieces = []
+		for include in self.includes:
+			body.append('#include "{0}"\n'.format(include))
+		body.append('\nstatic void unimplemented({pre}context *context)'.format(pre = self.prefix))
+		body.append('\n{')
+		body.append('\n\tfatal_error("Unimplemented instruction");')
+		body.append('\n}\n')
+		for table in self.extra_tables:
+			self._buildTable(otype, table, body)
+		self._buildTable(otype, 'main', body)
 		if self.body in self.subroutines:
 			pieces.append('\nvoid {pre}execute({type} *context, uint32_t target_cycle)'.format(pre = self.prefix, type = self.context_type))
 			pieces.append('\n{')
@@ -994,10 +1006,6 @@ class Program:
 			self.subroutines[self.body].inline(self, [], pieces, otype, None)
 			pieces.append('\n\t}')
 			pieces.append('\n}')
-		body.append('\nstatic void unimplemented({pre}context *context)'.format(pre = self.prefix))
-		body.append('\n{')
-		body.append('\n\tfatal_error("Unimplemented instruction");')
-		body.append('\n}\n')
 		return ''.join(body) +  ''.join(pieces)
 		
 	def checkBool(self, name):
