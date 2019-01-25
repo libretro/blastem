@@ -898,7 +898,7 @@ class Flags:
 						src=src, dst=dst, srcbit=srcbit, dstbit=dstbit
 					))
 			if direct:
-				output.append('\n\t{dst} |= {src} & {mask}'.format(
+				output.append('\n\t{dst} |= {src} & {mask};'.format(
 					dst=dst, src=src, mask=direct
 				))
 		return ''.join(output)
