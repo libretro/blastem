@@ -372,6 +372,19 @@ def _asrCImpl(prog, params, rawParams):
 	shiftSize = prog.paramSize(rawParams[0])
 	mask = 1 << (shiftSize - 1)
 	return '\n\t{dst} = ({a} >> {b}) | ({a} & {mask});'.format(a = params[0], b = params[1], dst = params[2], mask = mask)
+	
+def _sext(size, src):
+	if size == 16:
+		return src | 0xFF00 if src & 0x80 else src
+	else:
+		return src | 0xFFFF0000 if src & 0x8000 else src
+
+def _sextCImpl(prog, params, rawParms):
+	if params[0] == 16:
+		fmt = '\n\t{dst} = {src} & 0x80 ? {src} | 0xFF00 : {src};'
+	else:
+		fmt = '\n\t{dst} = {src} & 0x8000 ? {src} | 0xFFFF0000 : {src};'
+	return fmt.format(src=params[1], dst=params[2])
 		
 _opMap = {
 	'mov': Op(lambda val: val).cUnaryOperator(''),
@@ -390,6 +403,7 @@ _opMap = {
 		'c', 1, lambda prog, params: '\n\t{dst} = abs({src});'.format(dst=params[1], src=params[0])
 	),
 	'cmp': Op().addImplementation('c', None, _cmpCImpl),
+	'sext': Op(_sext).addImplementation('c', 2, _sextCImpl),
 	'ocall': Op().addImplementation('c', None, lambda prog, params: '\n\t{pre}{fun}({args});'.format(
 		pre = prog.prefix, fun = params[0], args = ', '.join(['context'] + [str(p) for p in params[1:]])
 	)),
