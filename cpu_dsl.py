@@ -385,23 +385,32 @@ def _sextCImpl(prog, params, rawParms):
 	else:
 		fmt = '\n\t{dst} = {src} & 0x8000 ? {src} | 0xFFFF0000 : {src};'
 	return fmt.format(src=params[1], dst=params[2])
-
-def _adcCImpl(prog, params, rawParams):
+	
+def _getCarryCheck(prog):
 	carryFlag = None
 	for flag in prog.flags.flagCalc:
 		if prog.flags.flagCalc[flag] == 'carry':
 			carryFlag = flag
 	if carryFlag is None:
 		raise Exception('adc requires a defined carry flag')
-	base = '\n\t{dst} = {a} + {b} + ('.format(dst = params[2], a = params[0], b = params[1])
 	carryStorage = prog.flags.getStorage(carryFlag)
 	if type(carryStorage) is tuple:
 		reg,bit = carryStorage
 		reg = prog.resolveReg(reg, None, (), False)
-		check = '({reg} & 1 << {bit})'.format(reg=reg, bit=bit)
+		return '({reg} & 1 << {bit})'.format(reg=reg, bit=bit)
 	else:
-		check = prog.resolveReg(carryStorage, None, (), False)
-	return base + check + ' ? 1 : 0);'
+		return prog.resolveReg(carryStorage, None, (), False)
+
+def _adcCImpl(prog, params, rawParams):
+	
+	return '\n\t{dst} = {a} + {b} + ({check} ? 1 : 0);'.format(dst = params[2],
+		a = params[0], b = params[1], check=_getCarryCheck(prog)
+	)
+
+def _sbcCImpl(prog, params, rawParams):
+	return '\n\t{dst} = {a} - {b} - ({check} ? 1 : 0);'.format(dst = params[2],
+		a = params[0], b = params[1], check=_getCarryCheck(prog)
+	)
 
 _opMap = {
 	'mov': Op(lambda val: val).cUnaryOperator(''),
@@ -411,6 +420,7 @@ _opMap = {
 	'add': Op(lambda a, b: a + b).cBinaryOperator('+'),
 	'adc': Op().addImplementation('c', 2, _adcCImpl),
 	'sub': Op(lambda a, b: b - a).cBinaryOperator('-'),
+	'sbc': Op().addImplementation('c', 2, _sbcCImpl),
 	'lsl': Op(lambda a, b: a << b).cBinaryOperator('<<'),
 	'lsr': Op(lambda a, b: a >> b).cBinaryOperator('>>'),
 	'asr': Op(lambda a, b: a >> b).addImplementation('c', 2, _asrCImpl),
