@@ -240,8 +240,8 @@ class Op:
 				decl,name = prog.getTemp(size)
 				dst = prog.carryFlowDst = name
 				prog.lastA = a
-				prog.lastB = '(-' + b + ')' if op == '-' else b
-				prog.lastWasSub = op == '-'
+				prog.lastB = b
+				prog.lastBFlow = '(-' + b + ')' if op == '-' else b
 			else:
 				dst = params[2]
 			return decl + '\n\t{dst} = {a} {op} {b};'.format(
@@ -313,11 +313,10 @@ def _updateFlagsCImpl(prog, params, rawParams):
 				resultBit = prog.paramSize(prog.lastDst)
 			elif calc == 'half':
 				resultBit = 4
-				fmt = '({a} ^ {b} ^ ~{res})' if prog.lastWasSub else '({a} ^ {b} ^ {res})'
-				myRes = fmt.format(a = prog.lastA, b = prog.lastB, res = lastDst)
+				myRes = '({a} ^ {b} ^ {res})'.format(a = prog.lastA, b = prog.lastB, res = lastDst)
 			elif calc == 'overflow':
 				resultBit = prog.paramSize(prog.lastDst) - 1
-				myRes = '((~({a} ^ {b})) & ({a} ^ {res}))'.format(a = prog.lastA, b = prog.lastB, res = lastDst)
+				myRes = '((~({a} ^ {b})) & ({a} ^ {res}))'.format(a = prog.lastA, b = prog.lastBFlow, res = lastDst)
 			else:
 				resultBit = int(resultBit)
 			if type(storage) is tuple:
@@ -991,7 +990,7 @@ class Program:
 		self.carryFlowDst = None
 		self.lastA = None
 		self.lastB = None
-		self.lastWasSub = False
+		self.lastBFlow = None
 		
 	def __str__(self):
 		pieces = []
