@@ -159,7 +159,12 @@ TRANSOBJS+= gen_x86.o backend_x86.o
 endif
 endif
 
+ifdef NEW_CORE
+Z80OBJS=z80.o
+CFLAGS+= -DNEW_CORE
+else
 Z80OBJS=z80inst.o z80_to_x86.o
+endif
 AUDIOOBJS=ym2612.o psg.o wave.o
 CONFIGOBJS=config.o tern.o util.o paths.o 
 NUKLEAROBJS=$(FONT) nuklear_ui/blastem_nuklear.o nuklear_ui/sfnt.o controller_info.o
@@ -295,6 +300,9 @@ offsets : offsets.c z80_to_x86.h m68k_core.h
 
 vos_prog_info : vos_prog_info.o vos_program_module.o
 	$(CC) -o vos_prog_info vos_prog_info.o vos_program_module.o
+	
+%.c : %.cpu
+	./cpu_dsl.py $< > $@
 
 %.o : %.S
 	$(CC) -c -o $@ $<
