@@ -240,7 +240,8 @@ class Op:
 				decl,name = prog.getTemp(size)
 				dst = prog.carryFlowDst = name
 				prog.lastA = a
-				prog.lastB = b
+				prog.lastB = '(-' + b + ')' if op == '-' else b
+				prog.lastWasSub = op == '-'
 			else:
 				dst = params[2]
 			return decl + '\n\t{dst} = {a} {op} {b};'.format(
@@ -312,7 +313,8 @@ def _updateFlagsCImpl(prog, params, rawParams):
 				resultBit = prog.paramSize(prog.lastDst)
 			elif calc == 'half':
 				resultBit = 4
-				myRes = '({a} ^ {b} ^ {res})'.format(a = prog.lastA, b = prog.lastB, res = lastDst)
+				fmt = '({a} ^ {b} ^ ~{res})' if prog.lastWasSub else '({a} ^ {b} ^ {res})'
+				myRes = fmt.format(a = prog.lastA, b = prog.lastB, res = lastDst)
 			elif calc == 'overflow':
 				resultBit = prog.paramSize(prog.lastDst) - 1
 				myRes = '((~({a} ^ {b})) & ({a} ^ {res}))'.format(a = prog.lastA, b = prog.lastB, res = lastDst)
@@ -989,6 +991,7 @@ class Program:
 		self.carryFlowDst = None
 		self.lastA = None
 		self.lastB = None
+		self.lastWasSub = False
 		
 	def __str__(self):
 		pieces = []
