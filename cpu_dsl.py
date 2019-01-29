@@ -448,8 +448,31 @@ def _adcCImpl(prog, params, rawParams, flagUpdates):
 		a = params[0], b = params[1], check = carryCheck
 	)
 
-def _sbcCImpl(prog, params, rawParams):
-	return '\n\t{dst} = {a} - {b} - ({check} ? 1 : 0);'.format(dst = params[2],
+def _sbcCImpl(prog, params, rawParams, flagUpdates):
+	needsCarry = needsOflow = needsHalf = False
+	if flagUpdates:
+		for flag in flagUpdates:
+			calc = prog.flags.flagCalc[flag]
+			if calc == 'carry':
+				needsCarry = True
+			elif calc == 'half-carry':
+				needsHalf = True
+			elif calc == 'overflow':
+				needsOflow = True
+	decl = ''
+	carryCheck = _getCarryCheck(prog)
+	if needsCarry or needsOflow or needsHalf:
+		size = prog.paramSize(rawParams[2])
+		if needsCarry:
+			size *= 2
+		decl,name = prog.getTemp(size)
+		dst = prog.carryFlowDst = name
+		prog.lastA = params[1]
+		prog.lastB = '({b} ^ ({check} ? 1 : 0))'.format(b = params[0], check = carryCheck)
+		prog.lastBFlow = '((-{b}) ^ ({check} ? -1 : 0))'.format(b = params[0], check = carryCheck)
+	else:
+		dst = params[2]
+	return decl + '\n\t{dst} = {b} - {a} - ({check} ? 1 : 0);'.format(dst = dst,
 		a = params[0], b = params[1], check=_getCarryCheck(prog)
 	)
 
