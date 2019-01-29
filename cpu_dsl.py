@@ -324,14 +324,11 @@ def _updateFlagsCImpl(prog, params, rawParams):
 				output.append('\n\t{reg} = {res} ? ({reg} & {mask}U) : ({reg} | {bit}U);'.format(
 					reg = reg, mask = ~(1 << storageBit), res = lastDst, bit = 1 << storageBit
 				))
-			elif prog.paramSize(prog.lastDst) > prog.paramSize(storage):
-				reg = prog.resolveParam(storage, None, {})
-				output.append('\n\t{reg} = {res} != 0;'.format(
-					reg = reg, res = lastDst
-				))
 			else:
 				reg = prog.resolveParam(storage, None, {})
-				output.append('\n\t{reg} = {res};'.format(reg = reg, res = lastDst))
+				output.append('\n\t{reg} = {res} == 0;'.format(
+					reg = reg, res = lastDst
+				))
 		elif calc == 'half-carry':
 			pass
 		elif calc == 'carry':
@@ -978,6 +975,7 @@ class Program:
 		self.regs.writeHeader(otype, hFile)
 		hFile.write('\n}} {0}context;'.format(self.prefix))
 		hFile.write('\n')
+		hFile.write('\nvoid {pre}execute({type} *context, uint32_t target_cycle);'.format(pre = self.prefix, type = self.context_type))
 		hFile.write('\n#endif //{0}_'.format(macro))
 		hFile.write('\n')
 		hFile.close()

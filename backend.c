@@ -129,6 +129,73 @@ uint16_t read_word(uint32_t address, void **mem_pointers, cpu_options *opts, voi
 	return 0xFFFF;
 }
 
+uint8_t read_byte(uint32_t address, void **mem_pointers, cpu_options *opts, void *context)
+{
+	memmap_chunk const *chunk = find_map_chunk(address, opts, 0, NULL);
+	if (!chunk) {
+		return 0xFF;
+	}
+	uint32_t offset = address & chunk->mask;
+	if (chunk->flags & MMAP_READ) {
+		uint8_t *base;
+		if (chunk->flags & MMAP_PTR_IDX) {
+			base = mem_pointers[chunk->ptr_index];
+		} else {
+			base = chunk->buffer;
+		}
+		if (base) {
+			if ((chunk->flags & MMAP_ONLY_ODD) || (chunk->flags & MMAP_ONLY_EVEN)) {
+				if (address & 1) {
+					if (chunk->flags & MMAP_ONLY_EVEN) {
+						return 0xFF;
+					}
+				} else if (chunk->flags & MMAP_ONLY_ODD) {
+					return 0xFF;
+				}
+				offset /= 2;
+			}
+			return base[offset];
+		}
+	}
+	if ((!(chunk->flags & MMAP_READ) || (chunk->flags & MMAP_FUNC_NULL)) && chunk->read_8) {
+		return chunk->read_8(offset, context);
+	}
+	return 0xFF;
+}
+
+void write_byte(uint32_t address, uint8_t value, void **mem_pointers, cpu_options *opts, void *context)
+{
+	memmap_chunk const *chunk = find_map_chunk(address, opts, 0, NULL);
+	if (!chunk) {
+		return;
+	}
+	uint32_t offset = address & chunk->mask;
+	if (chunk->flags & MMAP_WRITE) {
+		uint8_t *base;
+		if (chunk->flags & MMAP_PTR_IDX) {
+			base = mem_pointers[chunk->ptr_index];
+		} else {
+			base = chunk->buffer;
+		}
+		if (base) {
+			if ((chunk->flags & MMAP_ONLY_ODD) || (chunk->flags & MMAP_ONLY_EVEN)) {
+				if (address & 1) {
+					if (chunk->flags & MMAP_ONLY_EVEN) {
+						return;
+					}
+				} else if (chunk->flags & MMAP_ONLY_ODD) {
+					return;
+				}
+				offset /= 2;
+			}
+			base[offset] = value;
+		}
+	}
+	if ((!(chunk->flags & MMAP_WRITE) || (chunk->flags & MMAP_FUNC_NULL)) && chunk->write_8) {
+		chunk->write_8(offset, context, value);
+	}
+}
+
 uint32_t chunk_size(cpu_options *opts, memmap_chunk const *chunk)
 {
 	if (chunk->mask == opts->address_mask) {
