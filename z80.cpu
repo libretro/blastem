@@ -1,0 +1,778 @@
+info
+	prefix z80_
+	opcode_size 8
+	extra_tables cb ed dded fded dd fd
+	body z80_run_op
+	include z80_util.c
+	header z80.h
+	
+regs
+	main 8 b c d e h l f a
+	alt 8 b' c' d' e' h' l' f' a'
+	i 8
+	r 8
+	iff1 8
+	iff2 8
+	imode 8
+	sp 16
+	ix 16
+	iy 16
+	pc 16
+	wz 16
+	nflag 8
+	last_flag_result 8
+	pvflag 8
+	chflags 8
+	zflag 8
+	scratch1 16
+	scratch2 16
+	
+flags
+	register f
+	S 7 sign last_flag_result.7
+	Z 6 zero zflag
+	Y 5 bit-5 last_flag_result.5
+	H 4 half-carry chflags.3
+	P 2 parity pvflag
+	V 2 overflow pvflag
+	X 3 bit-3 last_flag_result.3
+	N 1 none nflag
+	C 0 carry chflags.7
+
+	
+z80_op_fetch
+	cycles 1
+	add 1 r r
+	mov pc scratch1
+	ocall read_8
+	add 1 pc pc
+	
+z80_run_op
+	z80_op_fetch
+	dispatch scratch1
+	
+11001011 cb_prefix
+	z80_op_fetch
+	dispatch scratch1 cb
+
+11011101 dd_prefix
+	z80_op_fetch
+	dispatch scratch1 dd
+
+11011101 ed_prefix
+	z80_op_fetch
+	dispatch scratch1 ed
+
+11111101 fd_prefix
+	z80_op_fetch
+	dispatch scratch1 fd
+	
+z80_check_cond
+	arg cond 8
+	local invert 8
+	switch cond
+	case 0
+	meta istrue invert
+	lnot zflag invert
+	
+	case 1
+	meta istrue zflag
+	
+	case 2
+	meta istrue invert
+	not chflags invert
+	and 0x80 invert invert
+	
+	case 3
+	meta istrue invert
+	and 0x80 invert invert
+	
+	case 4
+	meta istrue invert
+	lnot pvflag invert
+	
+	case 5
+	meta istrue pvflag
+	
+	case 6
+	meta istrue invert
+	not last_flag_result invert
+	and 0x80 invert invert
+	
+	case 7
+	meta istrue invert
+	and 0x80 last_flag_result invert
+	
+	end
+	
+z80_fetch_hl
+	lsl h 8 scratch1
+	or l scratch1 scratch1
+	ocall read_8
+	
+z80_store_hl
+	lsl h 8 scratch2
+	or l scratch2 scratch2
+	ocall write_8
+
+z80_fetch_immed
+	mov pc scratch1
+	ocall read_8
+	add 1 pc pc
+	
+z80_fetch_immed16
+	mov pc scratch1
+	ocall read_8
+	mov scratch1 wz
+	add 1 pc pc
+	mov pc scratch1
+	ocall read_8
+	add 1 pc pc
+	lsl scratch1 8 scratch1
+	or scratch1 wz wz
+
+z80_fetch_immed_reg16
+	mov pc scratch1
+	ocall read_8
+	mov scratch1 low
+	add 1 pc pc
+	mov pc scratch1
+	ocall read_8
+	mov scratch1 high
+	add 1 pc pc
+	
+z80_fetch_immed_to_reg16
+	mov pc scratch1
+	ocall read_8
+	mov scratch1 reg
+	add 1 pc pc
+	mov pc scratch1
+	ocall read_8
+	add 1 pc pc
+	lsl scratch1 8 scratch1
+	or scratch1 reg reg
+	
+z80_calc_index
+	z80_fetch_immed
+	add scratch1 index wz
+	cycles 5
+	
+z80_fetch_index
+	z80_calc_index
+	mov wz scratch1
+	ocall read_8
+
+z80_fetch_ix
+	meta index ix
+	z80_fetch_index
+
+z80_fetch_iy
+	meta index iy
+	z80_fetch_index
+
+01RRR110 ld_from_hl
+	z80_fetch_hl
+	mov scratch1 main.R
+
+01DDDSSS ld_from_reg
+	mov main.S main.D
+	
+dd 01RRR110 ld_from_ix
+	z80_fetch_ix
+	mov scratch1 main.R
+
+fd 01RRR110 ld_from_iy
+	z80_fetch_iy
+	mov scratch1 main.R
+
+00RRR110 ld_immed
+	z80_fetch_immed
+	mov scratch1 main.R
+
+01110RRR ld_to_hl
+	mov main.R scratch1
+	z80_store_hl
+
+dd 01110RRR ld_to_ix
+	meta index ix
+	z80_calc_index
+	mov wz scratch2
+	mov main.R scratch1
+	ocall write_8
+
+fd 01110RRR ld_to_iy
+	meta index iy
+	z80_calc_index
+	mov wz scratch2
+	mov main.R scratch1
+	ocall write_8
+
+00110110 ld_to_hl_immed
+	z80_fetch_immed
+	z80_store_hl
+
+00001010 ld_a_from_bc
+	lsl b 8 scratch1
+	or c scratch2 scratch1
+	ocall read_8
+	mov scratch1 a
+
+00011010 ld_a_from_de
+	lsl d 8 scratch1
+	or e scratch2 scratch1
+	ocall write_8
+	mov scratch1 a
+
+00111010 ld_a_from_immed
+	z80_fetch_immed16
+	mov wz scratch1
+	ocall read_8
+	mov scratch1 a
+	
+00000010 ld_a_to_bc
+	lsl b 8 scratch2
+	or c scratch2 scratch2
+	mov a scratch1
+	ocall write_8
+	
+00010010 ld_a_to_de
+	lsl d 8 scratch2
+	or e scratch2 scratch2
+	mov a scratch1
+	ocall write_8
+
+00110010 ld_a_to_immed
+	z80_fetch_immed16
+	mov wz scratch2
+	mov a scratch1
+	ocall write_8
+
+ed 01000111 ld_i_a
+	mov a i
+	cycles 1
+
+ed 01001111 ld_r_a
+	mov a r
+	cycles 1
+
+00000001 ld_bc_immed
+	meta high b
+	meta low c
+	z80_fetch_immed_reg16
+
+00010001 ld_de_immed
+	meta high d
+	meta low e
+	z80_fetch_immed_reg16
+
+00100001 ld_hl_immed
+	meta high h
+	meta low l
+	z80_fetch_immed_reg16
+
+00110001 ld_sp_immed
+	meta reg sp
+	z80_fetch_immed_to_reg16
+
+dd 00100001 ld_ix_immed
+	meta reg ix
+	z80_fetch_immed_to_reg16
+
+fd 00100001 ld_iy_immed
+	meta reg iy
+	z80_fetch_immed_to_reg16
+	
+z80_fetch16_from_immed
+	z80_fetch_immed16
+	mov wz scratch1
+	ocall read_8
+	mov scratch1 low
+	add 1 wz wz
+	mov wz scratch1
+	ocall read_8
+	mov scratch1 high
+
+00101010 ld_hl_from_immed
+	meta low l
+	meta high h
+	z80_fetch16_from_immed
+
+ed 01001011 ld_bc_from_immed
+	meta low c
+	meta high b
+	z80_fetch16_from_immed
+
+ed 01011011 ld_de_from_immed
+	meta low e
+	meta high c
+	z80_fetch16_from_immed
+
+ed 01101011 ld_hl_from_immed_slow
+	meta low l
+	meta high h
+	z80_fetch16_from_immed
+	
+z80_fetch_reg16_from_immed
+	z80_fetch_immed16
+	mov wz scratch1
+	ocall read_8
+	mov scratch1 reg
+	add 1 wz wz
+	mov wz scratch1
+	ocall read_8
+	lsl scratch1 8 scratch1
+	or scratch1 reg reg
+
+ed 01111011 ld_sp_from_immed
+	meta reg sp
+	z80_fetch_reg16_from_immed
+
+dd 00101010 ld_ix_from_immed
+	meta reg ix
+	z80_fetch_reg16_from_immed
+
+fd 00101010 ld_iy_from_immed
+	meta reg iy
+	z80_fetch_reg16_from_immed
+
+00100010 ld_hl_to_immed
+	z80_fetch_immed16
+	mov wz scratch2
+	mov l scratch1
+	ocall write_8
+	add 1 wz wz
+	mov wz scratch2
+	mov h scratch1
+	ocall write_8
+	
+z80_regpair_to_immed
+	z80_fetch_immed16
+	mov wz scratch2
+	mov low scratch1
+	ocall write_8
+	add 1 wz wz
+	mov high scratch1
+	mov wz scratch2
+	ocall write_8
+	
+ed 01000011 ld_bc_to_immed
+	meta low c
+	meta high b
+	z80_regpair_to_immed
+
+ed 01010011 ld_de_to_immed
+	meta low e
+	meta high d
+	z80_regpair_to_immed
+	
+ed 01100011 ld_hl_to_immed_slow
+	meta low l
+	meta high h
+	z80_regpair_to_immed
+	
+ed 01110011 ld_sp_to_immed
+	meta low sp
+	local sph 8
+	lsr sp 8 sph
+	meta high sph
+	z80_regpair_to_immed
+
+11111001 ld_sp_hl
+	cycles 2
+	lsl h 8 sp
+	or l sp sp
+	mov wz scratch2
+	mov sp scratch1
+	ocall write_8
+	add 1 wz wz
+	lsr sp 8 scratch1
+	mov wz scratch2
+	ocall write_8
+
+z80_push
+	cycles 1
+	sub 1 sp sp
+	mov sp scratch2
+	mov high scratch1
+	ocall write_8
+	sub 1 sp sp
+	mov sp scratch2
+	mov low scratch1
+	ocall write_8
+
+11000101 push_bc
+	meta high b
+	meta low c
+	z80_push
+
+11010101 push_de
+	meta high d
+	meta low e
+	z80_push
+
+11100101 push_hl
+	meta high h
+	meta low l
+	z80_push
+
+11110101 push_af
+	meta high a
+	meta low f
+	z80_push
+	
+dd 11100101 push_ix
+	local ixh 8
+	lsr ix 8 ixh
+	meta high ixh
+	meta low ix
+	z80_push
+
+fd 11100101 push_iy
+	local iyh 8
+	lsr iy 8 iyh
+	meta high iyh
+	meta low iy
+	z80_push
+
+z80_pop
+	mov sp scratch1
+	ocall read_8
+	add 1 sp sp
+	mov scratch1 low
+	mov sp scratch1
+	ocall read_8
+	add 1 sp sp
+	mov scratch1 high
+
+11000001 pop_bc
+	meta high b
+	meta low c
+	z80_pop
+
+11010001 pop_de
+	meta high d
+	meta low e
+	z80_pop
+
+11100001 pop_hl
+	meta high h
+	meta low l
+	z80_pop
+
+11110001 pop_af
+	meta high a
+	meta low f
+	z80_pop
+
+dd 11100001 pop_ix
+	local ixh 16
+	meta high ixh
+	meta low ix
+	z80_pop
+	lsl ixh 8 ixh
+	or ixh ix ix
+
+fd 11100001 pop_iy
+	local iyh 16
+	meta high iyh
+	meta low iy
+	z80_pop
+	lsl iyh 8 iyh
+	or iyh iy iy
+
+11101011 ex_de_hl
+	xchg e l
+	xchg d h
+
+00001000 ex_af_af
+	xchg a a'
+	xchg f f'
+
+11011001 exx
+	xchg b b'
+	xchg c c'
+	xchg d d'
+	xchg e e'
+	xchg h h'
+	xchg l l'
+
+11100011 ex_sp_hl
+	mov sp scratch1
+	ocall read_8
+	xchg l scratch1
+	cycles 1
+	mov sp scratch2
+	ocall write_8
+	add 1 sp wz
+	mov wz scratch2
+	ocall read_8
+	xchg h scratch1
+	cycles 2
+	mov wz scratch2
+	ocall write_8
+
+10000RRR add_reg
+	add a main.R a
+	update_flags SZYHVXN0C
+	
+10000110 add_hl
+	z80_fetch_hl
+	add a scratch1 a
+	update_flags SZYHVXN0C
+
+11000110 add_immed
+	z80_fetch_immed
+	add a scratch1 a
+	update_flags SZYHVXN0C
+	
+10001RRR adc_reg
+	adc a main.R a
+	update_flags SZYHVXN0C
+
+10001110 adc_hl
+	z80_fetch_hl
+	adc a scratch1 a
+	update_flags SZYHVXN0C
+
+11001110 adc_immed
+	z80_fetch_immed
+	adc a scratch1 a
+	update_flags SZYHVXN0C
+
+10010RRR sub_reg
+	sub main.R a a
+	update_flags SZYHVXN1C
+	
+10010110 sub_hl
+	z80_fetch_hl
+	sub scratch1 a a
+	update_flags SZYHVXN1C
+
+11010110 sub_immed
+	z80_fetch_immed
+	sub scratch1 a a
+	update_flags SZYHVXN1C
+
+10011RRR sbc_reg
+	sbc main.R a a
+	update_flags SZYHVXN1C
+	
+10011110 sbc_hl
+	z80_fetch_hl
+	sbc scratch1 a a
+	update_flags SZYHVXN1C
+
+11011110 sbc_immed
+	z80_fetch_immed
+	sbc scratch1 a a
+	update_flags SZYHVXN1C
+
+10100RRR and_reg
+	and a main.R a
+	update_flags SZYH1PXN0C0
+	
+10100110 and_hl
+	z80_fetch_hl
+	and a scratch1 a
+	update_flags SZYH1PXN0C0
+
+11100110 and_immed
+	z80_fetch_immed
+	and a scratch1 a
+	update_flags SZYH1PXN0C0
+	
+10110RRR or_reg
+	or a main.R a
+	update_flags SZYH1PXN0C0
+	
+10110110 or_hl
+	z80_fetch_hl
+	or a scratch1 a
+	update_flags SZYH1PXN0C0
+
+11110110 or_immed
+	z80_fetch_immed
+	or a scratch1 a
+	update_flags SZYH1PXN0C0
+	
+10101RRR xor_reg
+	xor a main.R a
+	update_flags SZYH1PXN0C0
+	
+10101110 xor_hl
+	z80_fetch_hl
+	xor a scratch1 a
+	update_flags SZYH1PXN0C0
+
+11101110 xor_immed
+	z80_fetch_immed
+	xor a scratch1 a
+	update_flags SZYH1PXN0C0
+
+10111RRR cp_reg
+	cmp main.R a
+	update_flags SZYHVXN1C
+	
+10111110 cp_hl
+	z80_fetch_hl
+	cmp scratch1 a
+	update_flags SZYHVXN1C
+
+11111110 cp_immed
+	z80_fetch_immed
+	cmp scratch1 a
+	update_flags SZYHVXN1C
+
+00RRR100 inc_reg
+	add 1 main.R main.R
+	update_flags SZYHVXN0
+	
+00110100 inc_hl
+	z80_fetch_hl
+	#TODO: fix size
+	add 1 scratch1 scratch1
+	update_flags SZYHVXN0
+	z80_store_hl
+
+00RRR101 dec_reg
+	add 1 main.R main.R
+	update_flags SZYHVXN0
+	
+00110101 dec_hl
+	z80_fetch_hl
+	#TODO: fix size
+	add 1 scratch1 scratch1
+	update_flags SZYHVXN0
+	z80_store_hl
+
+00101111 cpl
+	not a a
+	update_flags YH1XN1
+
+11101101 neg
+	neg a a
+	update_flags SZYHVXN1C
+
+00111111 ccf
+	xor 0x80 chflags chflags
+
+00111111 scf
+	or 0x80 chflags chflags
+
+00000000 nop
+
+11110011 di
+	mov 0 iff1
+	mov 0 iff2
+	#TODO: update interrupt/sync cycle
+
+11111011 ei
+	mov 1 iff1
+	mov 1 iff2
+	#TODO: update interrupt/sync cycle
+
+ed 01000110 im0
+	mov 0 imode
+
+ed 01010110 im1
+	mov 1 imode
+
+ed 01011110 im2
+	mov 2 imode
+	
+11000011 jp
+	z80_fetch_immed16
+	mov wz pc
+	
+11CCC010 jp_cc
+	z80_check_cond C
+	z80_fetch_immed16
+	if istrue
+	
+	mov wz pc
+	
+	end
+	
+00011000 jr
+	z80_fetch_immed
+	#TODO: determine if this updates wz
+	sext 16 scratch1 scratch1
+	add scratch1 pc pc
+	cycles 5
+	
+001CC000 jr_cc
+	z80_check_cond C
+	z80_fetch_immed
+	
+	if istrue
+	
+	sext 16 scratch1 scratch1
+	add scratch1 pc pc
+	cycles 5
+	
+	end
+	
+00010000 djnz
+	cycles 1
+	z80_fetch_immed
+	sub 1 b b
+	
+	if b
+	
+	sext 16 scratch1 scratch1
+	add scratch1 pc pc
+	cycles 5
+	
+	end
+	
+
+11001101 call_uncond
+	z80_fetch_immed16
+	local pch 8
+	lsr pc 8 pch
+	meta high pch
+	meta low pc
+	z80_push
+	mov wz pc
+	
+11TTT111 rst
+	local pch 8
+	lsr pc 8 pch
+	meta high pch
+	meta low pc
+	z80_push
+	lsl T 3 scratch1
+	mov scratch1 pc
+
+11001001 ret
+	#TODO: confirm this goes through wz
+	local wzh 16
+	meta high wzh
+	meta low wz
+	z80_pop
+	lsl wzh 8 wzh
+	or wzh wz wz
+	mov wz pc
+
+11011011 in_abs
+	z80_fetch_immed
+	ocall io_read8
+	mov scratch1 a
+	
+ed 01RRR000 in_bc
+	lsl b 8 scratch1
+	or c scratch1 scratch1
+	ocall io_read8
+	mov scratch1 main.R
+	
+11010011 out_abs
+	z80_fetch_immed
+	mov scratch1 scratch2
+	mov a scratch1
+	ocall io_write8
+	
+ed 01RRR001 out_bc
+	lsl b 8 scratch2
+	or c scratch2 scratch2
+	mov main.R scratch1
+	ocall io_write8
