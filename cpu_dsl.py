@@ -304,7 +304,7 @@ def _updateFlagsCImpl(prog, params, rawParams):
 		else:
 			lastDst = prog.resolveParam(prog.lastDst, None, {})
 		storage = prog.flags.getStorage(flag)
-		if calc == 'bit' or calc == 'sign' or calc == 'carry' or calc == 'half':
+		if calc == 'bit' or calc == 'sign' or calc == 'carry' or calc == 'half' or calc == 'overflow':
 			myRes = lastDst
 			if calc == 'sign':
 				resultBit = prog.paramSize(prog.lastDst) - 1
@@ -313,6 +313,9 @@ def _updateFlagsCImpl(prog, params, rawParams):
 			elif calc == 'half':
 				resultBit = 4
 				myRes = '({a} ^ {b} ^ {res})'.format(a = prog.lastA, b = prog.lastB, res = lastDst)
+			elif calc == 'overflow':
+				resultBit = prog.paramSize(prog.lastDst) - 1
+				myRes = '((~({a} ^ {b})) & ({a} ^ {res}))'.format(a = prog.lastA, b = prog.lastB, res = lastDst)
 			else:
 				resultBit = int(resultBit)
 			if type(storage) is tuple:
@@ -347,9 +350,7 @@ def _updateFlagsCImpl(prog, params, rawParams):
 				reg = prog.resolveParam(storage, None, {})
 				output.append('\n\t{reg} = {res} == 0;'.format(
 					reg = reg, res = lastDst
-				))			
-		elif calc == 'overflow':
-			pass
+				))
 		elif calc == 'parity':
 			pass
 		else:

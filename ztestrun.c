@@ -116,7 +116,7 @@ int main(int argc, char ** argv)
 	printf("Flags: SZYHXVNC\n"
 	       "       %d%d%d%d%d%d%d%d\n", 
 			context->last_flag_result >> 7, context->zflag != 0, context->last_flag_result >> 5 & 1, context->chflags >> 3 & 1, 
-			context->last_flag_result >> 3 & 1, context->pvflag != 0, context->nflag, context->chflags >> 7 & 1
+			context->last_flag_result >> 3 & 1, context->pvflag != 0, context->nflag != 0, context->chflags >> 7 & 1
 	);
 	puts("--Alternate Regs--");
 	printf("A: %X\nB: %X\nC: %X\nD: %X\nE: %X\nHL: %X\n",
