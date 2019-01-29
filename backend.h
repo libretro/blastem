@@ -96,6 +96,8 @@ void patch_for_retranslate(cpu_options *opts, code_ptr native_address, code_ptr 
 code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t num_chunks, ftype fun_type, code_ptr *after_inc);
 void * get_native_pointer(uint32_t address, void ** mem_pointers, cpu_options * opts);
 uint16_t read_word(uint32_t address, void **mem_pointers, cpu_options *opts, void *context);
+uint8_t read_byte(uint32_t address, void **mem_pointers, cpu_options *opts, void *context);
+void write_byte(uint32_t address, uint8_t value, void **mem_pointers, cpu_options *opts, void *context);
 memmap_chunk const *find_map_chunk(uint32_t address, cpu_options *opts, uint16_t flags, uint32_t *size_sum);
 uint32_t chunk_size(cpu_options *opts, memmap_chunk const *chunk);
 uint32_t ram_size(cpu_options *opts);
