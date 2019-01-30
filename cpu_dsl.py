@@ -272,6 +272,14 @@ class Op:
 		return not self.evalFun is None
 	def numArgs(self):
 		return self.evalFun.__code__.co_argcount
+	def numParams(self):
+		if self.outOp:
+			params = max(self.outOp) + 1
+		else:
+			params = 0
+		if self.evalFun:
+			params = max(params, self.numArgs())
+		return params
 	def generate(self, otype, prog, params, rawParams, flagUpdates):
 		if self.impls[otype].__code__.co_argcount == 2:
 			return self.impls[otype](prog, params)
@@ -586,6 +594,8 @@ class NormalOp:
 			#TODO: Disassembler
 			pass
 		elif not opDef is None:
+			if opDef.numParams() > len(procParams):
+				raise Exception('Insufficient params for ' + self.op + ' (' + ', '.join(self.params) + ')')
 			if opDef.canEval() and allParamsConst:
 				#do constant folding
 				if opDef.numArgs() >= len(procParams):
