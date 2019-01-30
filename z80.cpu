@@ -59,7 +59,7 @@ z80_run_op
 	z80_op_fetch
 	dispatch scratch1 dd
 
-11011101 ed_prefix
+11101101 ed_prefix
 	z80_op_fetch
 	dispatch scratch1 ed
 
