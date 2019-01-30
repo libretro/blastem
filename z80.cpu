@@ -525,6 +525,43 @@ fd 11100001 pop_iy
 	add a scratch1 a
 	update_flags SZYHVXN0C
 	
+z80_add16_hl
+	arg src 16
+	lsl h 8 hlt
+	or l hlt hlt
+	add 1 hlt wz
+	add src hlt hlt
+	update_flags YHXN0C
+	mov hlt l
+	lsr hlt 8 h
+	
+00001001 add_hl_bc
+	local hlw 16
+	local bcw 16
+	meta hlt hlw
+	lsl b 8 bcw
+	or c bcw bcw
+	z80_add16_hl bcw
+	
+00011001 add_hl_de
+	local hlw 16
+	local dew 16
+	meta hlt hlw
+	lsl d 8 dew
+	or e dew dew
+	z80_add16_hl dew
+	
+00101001 add_hl_hl
+	local hlw 16
+	meta hlt hlw
+	z80_add16_hl hlw
+
+	
+00111001 add_hl_sp
+	local hlw 16
+	meta hlt hlw
+	z80_add16_hl sp
+	
 10001RRR adc_reg
 	adc a main.R a
 	update_flags SZYHVXN0C
@@ -538,6 +575,43 @@ fd 11100001 pop_iy
 	z80_fetch_immed
 	adc a scratch1 a
 	update_flags SZYHVXN0C
+	
+z80_adc16_hl
+	arg src 16
+	lsl h 8 hlt
+	or l hlt hlt
+	add 1 hlt wz
+	adc src hlt hlt
+	update_flags SZYHVXN0C
+	mov hlt l
+	lsr hlt 8 h
+	
+ed 01001010 adc_hl_bc
+	local hlw 16
+	local bcw 16
+	meta hlt hlw
+	lsl b 8 bcw
+	or c bcw bcw
+	z80_adc16_hl bcw
+	
+ed 01011010 adc_hl_de
+	local hlw 16
+	local dew 16
+	meta hlt hlw
+	lsl d 8 dew
+	or e dew dew
+	z80_adc16_hl dew
+	
+ed 01101010 adc_hl_hl
+	local hlw 16
+	meta hlt hlw
+	z80_adc16_hl hlw
+
+	
+ed 01111010 adc_hl_sp
+	local hlw 16
+	meta hlt hlw
+	z80_adc16_hl sp
 
 10010RRR sub_reg
 	sub main.R a a
