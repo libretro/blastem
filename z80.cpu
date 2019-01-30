@@ -151,24 +151,6 @@ z80_fetch_immed_to_reg16
 	add 1 pc pc
 	lsl scratch1 8 scratch1
 	or scratch1 reg reg
-	
-z80_calc_index
-	z80_fetch_immed
-	add scratch1 index wz
-	cycles 5
-	
-z80_fetch_index
-	z80_calc_index
-	mov wz scratch1
-	ocall read_8
-
-z80_fetch_ix
-	meta index ix
-	z80_fetch_index
-
-z80_fetch_iy
-	meta index iy
-	z80_fetch_index
 
 01RRR110 ld_from_hl
 	z80_fetch_hl
@@ -177,12 +159,30 @@ z80_fetch_iy
 01DDDSSS ld_from_reg
 	mov main.S main.D
 	
+z80_calc_index
+	arg index 16
+	mov index wz
+	z80_fetch_immed
+	sext 16 scratch1 scratch1
+	add scratch1 wz wz
+
+z80_fetch_index
+	arg index 16
+	z80_calc_index index
+	mov wz scratch1
+	cycles 5
+	ocall read_8
+	
+z80_store_index
+	mov wz scratch2
+	ocall write_8
+	
 dd 01RRR110 ld_from_ix
-	z80_fetch_ix
+	z80_fetch_index ix
 	mov scratch1 main.R
 
 fd 01RRR110 ld_from_iy
-	z80_fetch_iy
+	z80_fetch_index iy
 	mov scratch1 main.R
 
 00RRR110 ld_immed
@@ -194,15 +194,13 @@ fd 01RRR110 ld_from_iy
 	z80_store_hl
 
 dd 01110RRR ld_to_ix
-	meta index ix
-	z80_calc_index
+	z80_calc_index ix
 	mov wz scratch2
 	mov main.R scratch1
 	ocall write_8
 
 fd 01110RRR ld_to_iy
-	meta index iy
-	z80_calc_index
+	z80_calc_index iy
 	mov wz scratch2
 	mov main.R scratch1
 	ocall write_8
@@ -519,6 +517,16 @@ fd 11100001 pop_iy
 	z80_fetch_hl
 	add a scratch1 a
 	update_flags SZYHVXN0C
+	
+dd 10000110 add_ixd
+	z80_fetch_index ix
+	add a scratch1 a
+	update_flags SZYHVXN0C
+	
+fd 10000110 add_iyd
+	z80_fetch_index iy
+	add a scratch1 a
+	update_flags SZYHVXN0C
 
 11000110 add_immed
 	z80_fetch_immed
@@ -640,6 +648,43 @@ ed 01111010 adc_hl_sp
 	z80_fetch_immed
 	sbc scratch1 a a
 	update_flags SZYHVXN1C
+	
+z80_sbc16_hl
+	arg src 16
+	lsl h 8 hlt
+	or l hlt hlt
+	add 1 hlt wz
+	sbc src hlt hlt
+	update_flags SZYHVXN1C
+	mov hlt l
+	lsr hlt 8 h
+	
+ed 01000010 sbc_hl_bc
+	local hlw 16
+	local bcw 16
+	meta hlt hlw
+	lsl b 8 bcw
+	or c bcw bcw
+	z80_sbc16_hl bcw
+	
+ed 01010010 sbc_hl_de
+	local hlw 16
+	local dew 16
+	meta hlt hlw
+	lsl d 8 dew
+	or e dew dew
+	z80_sbc16_hl dew
+	
+ed 01100010 sbc_hl_hl
+	local hlw 16
+	meta hlt hlw
+	z80_sbc16_hl hlw
+
+	
+ed 01110010 sbc_hl_sp
+	local hlw 16
+	meta hlt hlw
+	z80_sbc16_hl sp
 
 10100RRR and_reg
 	and a main.R a
@@ -702,22 +747,130 @@ ed 01111010 adc_hl_sp
 	update_flags SZYHVXN0
 	
 00110100 inc_hl
+	local tmp 8
 	z80_fetch_hl
-	#TODO: fix size
-	add 1 scratch1 scratch1
+	#TODO: Either make DSL compiler smart enough to optimize these unnecessary moves out
+	#or add some syntax to force a certain size on an operation so they are unnecessary
+	mov scratch1 tmp
+	add 1 tmp tmp
 	update_flags SZYHVXN0
+	mov tmp scratch1
 	z80_store_hl
+	
+dd 00110100 inc_ixd
+	local tmp 8
+	z80_fetch_index ix
+	#TODO: Either make DSL compiler smart enough to optimize these unnecessary moves out
+	#or add some syntax to force a certain size on an operation so they are unnecessary
+	mov scratch1 tmp
+	add 1 tmp tmp
+	update_flags SZYHVXN0
+	mov tmp scratch1
+	cycles 1
+	z80_store_index
+
+fd 00110100 inc_iyd
+	local tmp 8
+	z80_fetch_index iy
+	#TODO: Either make DSL compiler smart enough to optimize these unnecessary moves out
+	#or add some syntax to force a certain size on an operation so they are unnecessary
+	mov scratch1 tmp
+	add 1 tmp tmp
+	update_flags SZYHVXN0
+	mov tmp scratch1
+	cycles 1
+	z80_store_index
+	
+z80_inc_pair
+	arg high 8
+	arg low 8
+	local word 16
+	lsl high 8 word
+	or low word word
+	add 1 word word
+	mov word low
+	lsr word 8 high
+	
+00000011 inc_bc
+	z80_inc_pair b c
+	
+00010011 inc_de
+	z80_inc_pair d e
+	
+00100011 inc16_hl
+	z80_inc_pair h l
+
+00110011 inc_sp
+	add 1 sp sp
+	
+dd 00100011 inc_ix
+	add 1 ix ix
+
+fd 00100011 inc_iy
+	add 1 iy iy
 
 00RRR101 dec_reg
-	add 1 main.R main.R
-	update_flags SZYHVXN0
+	sub 1 main.R main.R
+	update_flags SZYHVXN1
 	
 00110101 dec_hl
 	z80_fetch_hl
 	#TODO: fix size
-	add 1 scratch1 scratch1
-	update_flags SZYHVXN0
+	sub 1 scratch1 scratch1
+	update_flags SZYHVXN1
 	z80_store_hl
+	
+dd 00110101 dec_ixd
+	local tmp 8
+	z80_fetch_index ix
+	#TODO: Either make DSL compiler smart enough to optimize these unnecessary moves out
+	#or add some syntax to force a certain size on an operation so they are unnecessary
+	mov scratch1 tmp
+	sub 1 tmp tmp
+	update_flags SZYHVXN1
+	mov tmp scratch1
+	cycles 1
+	z80_store_index
+
+fd 00110101 dec_iyd
+	local tmp 8
+	z80_fetch_index iy
+	#TODO: Either make DSL compiler smart enough to optimize these unnecessary moves out
+	#or add some syntax to force a certain size on an operation so they are unnecessary
+	mov scratch1 tmp
+	sub 1 tmp tmp
+	update_flags SZYHVXN1
+	mov tmp scratch1
+	cycles 1
+	z80_store_index
+	
+z80_dec_pair
+	arg high 8
+	arg low 8
+	local word 16
+	lsl high 8 word
+	or low word word
+	sub 1 word word
+	mov word low
+	lsr word 8 high
+	
+00001011 dec_bc
+	z80_dec_pair b c
+	
+00011011 dec_de
+	z80_dec_pair d e
+	
+00101011 dec16_hl
+	z80_dec_pair h l
+
+00111011 dec_sp
+	sub 1 sp sp
+	
+dd 00101011 dec_ix
+	sub 1 ix ix
+
+fd 00101011 dec_iy
+	sub 1 iy iy
 
 00101111 cpl
 	not a a
