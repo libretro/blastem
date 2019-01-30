@@ -296,7 +296,7 @@ def _dispatchCImpl(prog, params):
 def _updateFlagsCImpl(prog, params, rawParams):
 	autoUpdate, explicit = prog.flags.parseFlagUpdate(params[0])
 	output = []
-	#TODO: handle autoUpdate flags
+	parity = None
 	for flag in autoUpdate:
 		calc = prog.flags.flagCalc[flag]
 		calc,_,resultBit = calc.partition('-')
@@ -353,12 +353,38 @@ def _updateFlagsCImpl(prog, params, rawParams):
 					reg = reg, res = lastDst
 				))
 		elif calc == 'parity':
-			pass
+			parity = storage
+			paritySize = prog.paramSize(prog.lastDst)
+			if prog.carryFlowDst:
+				parityDst = paritySrc = prog.carryFlowDst
+			else:
+				paritySrc = lastDst
+				decl,name = prog.getTemp(paritySize)
+				output.append(decl)
+				parityDst = name
 		else:
 			raise Exception('Unknown flag calc type: ' + calc)
 	if prog.carryFlowDst:
 		output.append('\n\t{dst} = {tmpdst};'.format(dst = prog.resolveParam(prog.lastDst, None, {}), tmpdst = prog.carryFlowDst))
 		prog.carryFlowDst = None
+	if parity:
+		if paritySize > 8:
+			if paritySize > 16:
+				output.append('\n\t{dst} = {src} ^ ({src} >> 16);'.format(dst=parityDst, src=paritySrc))
+				paritySrc = parityDst
+			output.append('\n\t{dst} = {src} ^ ({src} >> 8);'.format(dst=parityDst, src=paritySrc))
+			paritySrc = parityDst
+		output.append('\n\t{dst} = ({src} ^ ({src} >> 4)) & 0xF;'.format(dst=parityDst, src=paritySrc))
+		if type(parity) is tuple:
+			reg,bit = parity
+			reg = prog.resolveParam(reg, None, {})
+			output.append('\n\t{flag} = ({flag} & ~{mask}U) | ((0x6996 >> {parity}) << {bit} & {mask}U);'.format(
+				flag=reg, mask = 1 << bit, bit = bit, parity = parityDst
+			))
+		else:
+			reg = prog.resolveParam(parity, None, {})
+			output.append('\n\t{flag} = 0x9669 >> {parity} & 1;'.format(flag=reg, parity=parityDst))
+			
 	#TODO: combine explicit flags targeting the same storage location
 	for flag in explicit:
 		location = prog.flags.getStorage(flag)
