@@ -241,7 +241,7 @@ class Op:
 				dst = prog.carryFlowDst = name
 				prog.lastA = a
 				prog.lastB = b
-				prog.lastBFlow = '(-' + b + ')' if op == '-' else b
+				prog.lastBFlow = b if op == '-' else '(~{b})'.format(b=b)
 			else:
 				dst = params[2]
 			return decl + '\n\t{dst} = {a} {op} {b};'.format(
@@ -316,7 +316,7 @@ def _updateFlagsCImpl(prog, params, rawParams):
 				myRes = '({a} ^ {b} ^ {res})'.format(a = prog.lastA, b = prog.lastB, res = lastDst)
 			elif calc == 'overflow':
 				resultBit = prog.paramSize(prog.lastDst) - 1
-				myRes = '((~({a} ^ {b})) & ({a} ^ {res}))'.format(a = prog.lastA, b = prog.lastBFlow, res = lastDst)
+				myRes = '((({a} ^ {b})) & ({a} ^ {res}))'.format(a = prog.lastA, b = prog.lastBFlow, res = lastDst)
 			else:
 				resultBit = int(resultBit)
 			if type(storage) is tuple:
@@ -440,8 +440,8 @@ def _adcCImpl(prog, params, rawParams, flagUpdates):
 		decl,name = prog.getTemp(size)
 		dst = prog.carryFlowDst = name
 		prog.lastA = params[0]
-		prog.lastB = '({b} ^ ({check} ? 1 : 0))'.format(b = params[1], check = carryCheck)
-		prog.lastBFlow = prog.lastB
+		prog.lastB = '({b} + ({check} ? 1 : 0))'.format(b = params[1], check = carryCheck)
+		prog.lastBFlow = '(~{b})'.format(b=params[1])
 	else:
 		dst = params[2]
 	return decl + '\n\t{dst} = {a} + {b} + ({check} ? 1 : 0);'.format(dst = dst,
@@ -469,7 +469,7 @@ def _sbcCImpl(prog, params, rawParams, flagUpdates):
 		dst = prog.carryFlowDst = name
 		prog.lastA = params[1]
 		prog.lastB = '({b} ^ ({check} ? 1 : 0))'.format(b = params[0], check = carryCheck)
-		prog.lastBFlow = '((-{b}) ^ ({check} ? -1 : 0))'.format(b = params[0], check = carryCheck)
+		prog.lastBFlow = params[0]
 	else:
 		dst = params[2]
 	return decl + '\n\t{dst} = {b} - {a} - ({check} ? 1 : 0);'.format(dst = dst,
