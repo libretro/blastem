@@ -55,7 +55,7 @@ class Instruction(Block):
 	def addOp(self, op):
 		if op.op == 'local':
 			name = op.params[0]
-			size = op.params[1]
+			size = int(op.params[1])
 			self.locals[name] = size
 		elif op.op == 'invalid':
 			name = op.params[0]
@@ -312,13 +312,15 @@ def _updateFlagsCImpl(prog, params, rawParams):
 			elif calc == 'carry':
 				resultBit = prog.paramSize(prog.lastDst)
 			elif calc == 'half':
-				resultBit = 4
+				resultBit = prog.paramSize(prog.lastDst) - 4
 				myRes = '({a} ^ {b} ^ {res})'.format(a = prog.lastA, b = prog.lastB, res = lastDst)
 			elif calc == 'overflow':
 				resultBit = prog.paramSize(prog.lastDst) - 1
 				myRes = '((({a} ^ {b})) & ({a} ^ {res}))'.format(a = prog.lastA, b = prog.lastBFlow, res = lastDst)
 			else:
-				resultBit = int(resultBit)
+				#Note: offsetting this by the operation size - 8 makes sense for the Z80
+				#but might not for other CPUs with this kind of fixed bit flag behavior
+				resultBit = int(resultBit) + prog.paramSize(prog.lastDst) - 8
 			if type(storage) is tuple:
 				reg,storageBit = storage
 				reg = prog.resolveParam(reg, None, {})
@@ -339,7 +341,11 @@ def _updateFlagsCImpl(prog, params, rawParams):
 					))
 			else:
 				reg = prog.resolveParam(storage, None, {})
-				output.append('\n\t{reg} = {res} & {mask}U;'.format(reg=reg, res=myRes, mask = 1 << resultBit))
+				maxBit = prog.paramSize(storage) - 1
+				if resultBit > maxBit:
+					output.append('\n\t{reg} = {res} >> {shift} & {mask}U;'.format(reg=reg, res=myRes, shift = resultBit - maxBit, mask = 1 << maxBit))
+				else:
+					output.append('\n\t{reg} = {res} & {mask}U;'.format(reg=reg, res=myRes, mask = 1 << resultBit))
 		elif calc == 'zero':
 			if type(storage) is tuple:
 				reg,storageBit = storage
@@ -1176,6 +1182,8 @@ class Program:
 						return parent.regValues[param]
 					maybeLocal = parent.resolveLocal(param)
 					if maybeLocal:
+						if isdst:
+							self.lastDst = param
 						return maybeLocal
 				if param in fieldVals:
 					param = fieldVals[param]
@@ -1183,7 +1191,9 @@ class Program:
 					param = self.meta[param]
 					keepGoing = True
 				elif self.isReg(param):
-					param = self.resolveReg(param, parent, fieldVals, isdst)
+					return self.resolveReg(param, parent, fieldVals, isdst)
+		if isdst:
+			self.lastDst = param
 		return param
 	
 	def isReg(self, name):
@@ -1233,9 +1243,12 @@ class Program:
 	
 	
 	def paramSize(self, name):
-		size = self.currentScope.localSize(name)
-		if size:
-			return size
+		if name in self.meta:
+			return self.paramSize(self.meta[name])
+		for i in range(len(self.scopes) -1, -1, -1):
+			size = self.scopes[i].localSize(name)
+			if size:
+				return size
 		begin,sep,_ = name.partition('.')
 		if sep and self.regs.isRegArray(begin):
 			return self.regs.regArrays[begin][0]
