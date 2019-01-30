@@ -583,31 +583,31 @@ fd 11100001 pop_iy
 	
 10110RRR or_reg
 	or a main.R a
-	update_flags SZYH1PXN0C0
+	update_flags SZYH0PXN0C0
 	
 10110110 or_hl
 	z80_fetch_hl
 	or a scratch1 a
-	update_flags SZYH1PXN0C0
+	update_flags SZYH0PXN0C0
 
 11110110 or_immed
 	z80_fetch_immed
 	or a scratch1 a
-	update_flags SZYH1PXN0C0
+	update_flags SZYH0PXN0C0
 	
 10101RRR xor_reg
 	xor a main.R a
-	update_flags SZYH1PXN0C0
+	update_flags SZYH0PXN0C0
 	
 10101110 xor_hl
 	z80_fetch_hl
 	xor a scratch1 a
-	update_flags SZYH1PXN0C0
+	update_flags SZYH0PXN0C0
 
 11101110 xor_immed
 	z80_fetch_immed
 	xor a scratch1 a
-	update_flags SZYH1PXN0C0
+	update_flags SZYH0PXN0C0
 
 10111RRR cp_reg
 	cmp main.R a
