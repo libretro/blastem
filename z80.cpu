@@ -840,10 +840,40 @@ ed 01110010 sbc_hl_sp
 	and a main.R a
 	update_flags SZYH1PXN0C0
 	
+dd 10100100 and_ixh
+	lsr ix 8 scratch1
+	and scratch1 a a
+	update_flags SZYH1PXN0C0
+	
+dd 10100101 and_ixl
+	and ix a a
+	update_flags SZYH1PXN0C0
+	
+fd 10100100 and_iyh
+	lsr iy 8 scratch1
+	and scratch1 a a
+	update_flags SZYH1PXN0C0
+	
+fd 10100101 and_iyl
+	and iy a a
+	update_flags SZYH1PXN0C0
+	
 10100110 and_hl
 	z80_fetch_hl
 	and a scratch1 a
 	update_flags SZYH1PXN0C0
+	
+dd 10100110 and_ixd
+	z80_fetch_index ix
+	and a scratch1 a
+	update_flags SZYH1PXN0C0
+	cycles 3
+	
+fd 10100110 and_iyd
+	z80_fetch_index iy
+	and a scratch1 a
+	update_flags SZYH1PXN0C0
+	cycles 3
 
 11100110 and_immed
 	z80_fetch_immed
@@ -854,10 +884,40 @@ ed 01110010 sbc_hl_sp
 	or a main.R a
 	update_flags SZYH0PXN0C0
 	
+dd 10110100 or_ixh
+	lsr ix 8 scratch1
+	or scratch1 a a
+	update_flags SZYH0PXN0C0
+	
+dd 10110101 or_ixl
+	or ix a a
+	update_flags SZYH0PXN0C0
+	
+fd 10110100 or_iyh
+	lsr iy 8 scratch1
+	or scratch1 a a
+	update_flags SZYH0PXN0C0
+	
+fd 10110101 or_iyl
+	or iy a a
+	update_flags SZYH0PXN0C0
+	
 10110110 or_hl
 	z80_fetch_hl
 	or a scratch1 a
 	update_flags SZYH0PXN0C0
+	
+dd 10110110 or_ixd
+	z80_fetch_index ix
+	or a scratch1 a
+	update_flags SZYH0PXN0C0
+	cycles 3
+	
+fd 10110110 or_iyd
+	z80_fetch_index iy
+	or a scratch1 a
+	update_flags SZYH0PXN0C0
+	cycles 3
 
 11110110 or_immed
 	z80_fetch_immed
@@ -868,10 +928,40 @@ ed 01110010 sbc_hl_sp
 	xor a main.R a
 	update_flags SZYH0PXN0C0
 	
+dd 10101100 xor_ixh
+	lsr ix 8 scratch1
+	xor scratch1 a a
+	update_flags SZYH0PXN0C0
+	
+dd 10101101 xor_ixl
+	xor ix a a
+	update_flags SZYH0PXN0C0
+	
+fd 10101100 xor_iyh
+	lsr iy 8 scratch1
+	xor scratch1 a a
+	update_flags SZYH0PXN0C0
+	
+fd 10101101 xor_iyl
+	xor iy a a
+	update_flags SZYH0PXN0C0
+	
 10101110 xor_hl
 	z80_fetch_hl
 	xor a scratch1 a
 	update_flags SZYH0PXN0C0
+	
+dd 10101110 xor_ixd
+	z80_fetch_index ix
+	xor a scratch1 a
+	update_flags SZYH0PXN0C0
+	cycles 3
+	
+fd 10101110 xor_iyd
+	z80_fetch_index iy
+	xor a scratch1 a
+	update_flags SZYH0PXN0C0
+	cycles 3
 
 11101110 xor_immed
 	z80_fetch_immed
@@ -914,12 +1004,14 @@ dd 10111110 cp_ixd
 	mov scratch1 last_flag_result
 	cmp scratch1 a
 	update_flags SZHVN1C
+	cycles 3
 	
 fd 10111110 cp_iyd
 	z80_fetch_index iy
 	mov scratch1 last_flag_result
 	cmp scratch1 a
 	update_flags SZHVN1C
+	cycles 3
 
 11111110 cp_immed
 	z80_fetch_immed
