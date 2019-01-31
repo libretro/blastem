@@ -879,18 +879,53 @@ ed 01110010 sbc_hl_sp
 	update_flags SZYH0PXN0C0
 
 10111RRR cp_reg
+	mov main.R last_flag_result
 	cmp main.R a
-	update_flags SZYHVXN1C
+	update_flags SZHVN1C
+	
+dd 10111100 cp_ixh
+	lsr ix 8 last_flag_result
+	cmp last_flag_result a
+	update_flags SZHVN1C
+	
+dd 10111101 cp_ixl
+	mov ix last_flag_result
+	cmp last_flag_result a
+	update_flags SZHVN1C
+	
+fd 10111100 cp_iyh
+	lsr iy 8 last_flag_result
+	cmp last_flag_result a
+	update_flags SZHVN1C
+	
+fd 10111101 cp_iyl
+	mov iy last_flag_result
+	cmp last_flag_result a
+	update_flags SZHVN1C
 	
 10111110 cp_hl
 	z80_fetch_hl
+	mov scratch1 last_flag_result
 	cmp scratch1 a
-	update_flags SZYHVXN1C
+	update_flags SZHVN1C
+	
+dd 10111110 cp_ixd
+	z80_fetch_index ix
+	mov scratch1 last_flag_result
+	cmp scratch1 a
+	update_flags SZHVN1C
+	
+fd 10111110 cp_iyd
+	z80_fetch_index iy
+	mov scratch1 last_flag_result
+	cmp scratch1 a
+	update_flags SZHVN1C
 
 11111110 cp_immed
 	z80_fetch_immed
+	mov scratch1 last_flag_result
 	cmp scratch1 a
-	update_flags SZYHVXN1C
+	update_flags SZHVN1C
 
 00RRR100 inc_reg
 	add 1 main.R main.R

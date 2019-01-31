@@ -379,7 +379,8 @@ def _updateFlagsCImpl(prog, params, rawParams):
 		else:
 			raise Exception('Unknown flag calc type: ' + calc)
 	if prog.carryFlowDst:
-		output.append('\n\t{dst} = {tmpdst};'.format(dst = prog.resolveParam(prog.lastDst, None, {}), tmpdst = prog.carryFlowDst))
+		if prog.lastOp.op != 'cmp':
+			output.append('\n\t{dst} = {tmpdst};'.format(dst = prog.resolveParam(prog.lastDst, None, {}), tmpdst = prog.carryFlowDst))
 		prog.carryFlowDst = None
 	if parity:
 		if paritySize > 8:
@@ -417,14 +418,26 @@ def _updateFlagsCImpl(prog, params, rawParams):
 			output.append('\n\t{reg} = {val};'.format(reg=reg, val=explicit[flag]))
 	return ''.join(output)
 	
-def _cmpCImpl(prog, params):
-	size = prog.paramSize(params[1])
+def _cmpCImpl(prog, params, rawParams, flagUpdates):
+	size = prog.paramSize(rawParams[1])
+	needsCarry = False
+	if flagUpdates:
+		for flag in flagUpdates:
+			calc = prog.flags.flagCalc[flag]
+			if calc == 'carry':
+				needsCarry = True
+				break
+	if needsCarry:
+		size *= 2
 	tmpvar = 'cmp_tmp{sz}__'.format(sz=size)
-	typename = ''
+	prog.carryFlowDst = tmpvar
+	prog.lastA = params[1]
+	prog.lastB = params[0]
+	prog.lastBFlow = params[0]
 	scope = prog.getRootScope()
 	if not scope.resolveLocal(tmpvar):
 		scope.addLocal(tmpvar, size)
-	prog.lastDst = tmpvar
+	prog.lastDst = rawParams[1]
 	return '\n\t{var} = {b} - {a};'.format(var = tmpvar, a = params[0], b = params[1])
 
 def _asrCImpl(prog, params, rawParams):
