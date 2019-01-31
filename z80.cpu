@@ -513,6 +513,26 @@ fd 11100001 pop_iy
 	add a main.R a
 	update_flags SZYHVXN0C
 	
+dd 10000100 add_ixh
+	lsr ix 8 scratch1
+	add a scratch1 a
+	update_flags SZYHVXN0C
+	
+dd 10000101 add_ixl
+	and ix 0xFF scratch1
+	add a scratch1 a
+	update_flags SZYHVXN0C
+	
+fd 10000100 add_iyh
+	lsr iy 8 scratch1
+	add a scratch1 a
+	update_flags SZYHVXN0C
+	
+fd 10000101 add_iyl
+	and iy 0xFF scratch1
+	add a scratch1 a
+	update_flags SZYHVXN0C
+	
 10000110 add_hl
 	z80_fetch_hl
 	add a scratch1 a
@@ -563,19 +583,88 @@ z80_add16_hl
 	local hlw 16
 	meta hlt hlw
 	z80_add16_hl hlw
-
 	
 00111001 add_hl_sp
 	local hlw 16
 	meta hlt hlw
 	z80_add16_hl sp
 	
+dd 00001001 add_ix_bc
+	lsl b 8 scratch1
+	or c scratch1 scratch1
+	add scratch1 ix ix
+	update_flags YHXN0C
+	
+dd 00011001 add_ix_de
+	lsl d 8 scratch1
+	or e scratch1 scratch1
+	add scratch1 ix ix
+	update_flags YHXN0C
+	
+dd 00101001 add_ix_ix
+	add ix ix ix
+	update_flags YHXN0C
+	
+dd 00111001 add_ix_sp
+	add sp ix ix
+	update_flags YHXN0C
+	
+fd 00001001 add_iy_bc
+	lsl b 8 scratch1
+	or c scratch1 scratch1
+	add scratch1 iy iy
+	update_flags YHXN0C
+	
+fd 00011001 add_iy_de
+	lsl d 8 scratch1
+	or e scratch1 scratch1
+	add scratch1 iy iy
+	update_flags YHXN0C
+	
+fd 00101001 add_iy_iy
+	add iy iy iy
+	update_flags YHXN0C
+	
+fd 00111001 add_iy_sp
+	add sp iy iy
+	update_flags YHXN0C
+	
 10001RRR adc_reg
 	adc a main.R a
+	update_flags SZYHVXN0C
+	
+dd 10001100 adc_ixh
+	lsr ix 8 scratch1
+	adc a scratch1 a
+	update_flags SZYHVXN0C
+	
+dd 10001101 adc_ixl
+	and ix 0xFF scratch1
+	adc a scratch1 a
+	update_flags SZYHVXN0C
+	
+fd 10001100 adc_iyh
+	lsr iy 8 scratch1
+	adc a scratch1 a
+	update_flags SZYHVXN0C
+	
+fd 10001101 adc_iyl
+	and iy 0xFF scratch1
+	adc a scratch1 a
 	update_flags SZYHVXN0C
 
 10001110 adc_hl
 	z80_fetch_hl
+	adc a scratch1 a
+	update_flags SZYHVXN0C
+	
+dd 10001110 adc_ixd
+	z80_fetch_index ix
+	adc a scratch1 a
+	update_flags SZYHVXN0C
+	
+fd 10001110 adc_iyd
+	z80_fetch_index iy
 	adc a scratch1 a
 	update_flags SZYHVXN0C
 
@@ -625,8 +714,38 @@ ed 01111010 adc_hl_sp
 	sub main.R a a
 	update_flags SZYHVXN1C
 	
+dd 10010100 sub_ixh
+	lsr ix 8 scratch1
+	sub scratch1 a a
+	update_flags SZYHVXN1C
+	
+dd 10010101 sub_ixl
+	and ix 0xFF scratch1
+	sub scratch1 a a
+	update_flags SZYHVXN1C
+	
+fd 10010100 sub_iyh
+	lsr iy 8 scratch1
+	sub scratch1 a a
+	update_flags SZYHVXN1C
+	
+fd 10010101 sub_iyl
+	and iy 0xFF scratch1
+	sub scratch1 a a
+	update_flags SZYHVXN1C
+	
 10010110 sub_hl
 	z80_fetch_hl
+	sub scratch1 a a
+	update_flags SZYHVXN1C
+	
+dd 10010110 sub_ixd
+	z80_fetch_index ix
+	sub scratch1 a a
+	update_flags SZYHVXN1C
+
+fd 10010110 sub_iyd
+	z80_fetch_index iy
 	sub scratch1 a a
 	update_flags SZYHVXN1C
 
@@ -639,8 +758,39 @@ ed 01111010 adc_hl_sp
 	sbc main.R a a
 	update_flags SZYHVXN1C
 	
+dd 10011100 sbc_ixh
+	lsr ix 8 scratch1
+	sbc scratch1 a a
+	update_flags SZYHVXN1C
+	
+dd 10011101 sbc_ixl
+	and ix 0xFF scratch1
+	sbc scratch1 a a
+	update_flags SZYHVXN1C
+	
+fd 10011100 sbc_iyh
+	lsr iy 8 scratch1
+	sbc scratch1 a a
+	update_flags SZYHVXN1C
+	
+fd 10011101 sbc_iyl
+	and iy 0xFF scratch1
+	sbc scratch1 a a
+	update_flags SZYHVXN1C
+	
+	
 10011110 sbc_hl
 	z80_fetch_hl
+	sbc scratch1 a a
+	update_flags SZYHVXN1C
+	
+dd 10011110 sbc_ixd
+	z80_fetch_index ix
+	sbc scratch1 a a
+	update_flags SZYHVXN1C
+
+fd 10011110 sbc_iyd
+	z80_fetch_index iy
 	sbc scratch1 a a
 	update_flags SZYHVXN1C
 
@@ -746,6 +896,30 @@ ed 01110010 sbc_hl_sp
 	add 1 main.R main.R
 	update_flags SZYHVXN0
 	
+dd 00100100 inc_ixh
+	add 0x100 ix ix
+	update_flags SZYHVXN0
+	
+dd 00101100 inc_ixl
+	local tmp 8
+	mov ix tmp
+	add 1 tmp tmp
+	update_flags SZYHVXN0
+	and 0xFF00 ix ix
+	or tmp ix ix
+	
+fd 00100100 inc_iyh
+	add 0x100 iy iy
+	update_flags SZYHVXN0
+	
+fd 00101100 inc_iyl
+	local tmp 8
+	mov iy tmp
+	add 1 tmp tmp
+	update_flags SZYHVXN0
+	and 0xFF00 iy iy
+	or tmp iy iy
+	
 00110100 inc_hl
 	local tmp 8
 	z80_fetch_hl
@@ -812,6 +986,30 @@ fd 00100011 inc_iy
 00RRR101 dec_reg
 	sub 1 main.R main.R
 	update_flags SZYHVXN1
+	
+dd 00100101 dec_ixh
+	sub 0x100 ix ix
+	update_flags SZYHVXN1
+	
+dd 00101101 dec_ixl
+	local tmp 8
+	mov ix tmp
+	sub 1 tmp tmp
+	update_flags SZYHVXN1
+	and 0xFF00 ix ix
+	or tmp ix ix
+	
+fd 00100101 dec_iyh
+	sub 0x100 iy iy
+	update_flags SZYHVXN1
+	
+fd 00101101 dec_iyl
+	local tmp 8
+	mov iy tmp
+	sub 1 tmp tmp
+	update_flags SZYHVXN1
+	and 0xFF00 iy iy
+	or tmp iy iy
 	
 00110101 dec_hl
 	z80_fetch_hl
