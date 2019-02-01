@@ -157,11 +157,12 @@ class SubRoutine(Block):
 		self.arg_map = {}
 		self.locals = {}
 		self.regValues = {}
+		self.argValues = {}
 	
 	def addOp(self, op):
 		if op.op == 'arg':
 			name = op.params[0]
-			size = op.params[1]
+			size = int(op.params[1])
 			self.arg_map[name] = len(self.args)
 			self.args.append((name, size))
 		elif op.op == 'local':
@@ -180,7 +181,12 @@ class SubRoutine(Block):
 		self.locals[name] = size
 	
 	def localSize(self, name):
-		return self.locals.get(name)
+		if name in self.locals:
+			return self.locals[name]
+		if name in self.arg_map:
+			argIndex = self.arg_map[name]
+			return self.args[argIndex][1]
+		return None
 			
 	def inline(self, prog, params, output, otype, parent):
 		if len(params) != len(self.args):
@@ -196,6 +202,7 @@ class SubRoutine(Block):
 		for name in self.locals:
 			size = self.locals[name]
 			output.append('\n\tuint{size}_t {sub}_{local};'.format(size=size, sub=self.name, local=name))
+		self.argValues = argValues
 		self.processOps(prog, argValues, output, otype, self.implementation)
 		prog.popScope()
 		
@@ -355,6 +362,10 @@ def _updateFlagsCImpl(prog, params, rawParams):
 				else:
 					output.append('\n\t{reg} = {res} & {mask}U;'.format(reg=reg, res=myRes, mask = 1 << resultBit))
 		elif calc == 'zero':
+			if prog.carryFlowDst:
+				realSize = prog.paramSize(prog.lastDst)
+				if realSize != prog.paramSize(prog.carryFlowDst):
+					lastDst = '({res} & {mask})'.format(res=lastDst, mask = (1 << realSize) - 1)
 			if type(storage) is tuple:
 				reg,storageBit = storage
 				reg = prog.resolveParam(reg, None, {})
@@ -528,6 +539,80 @@ def _sbcCImpl(prog, params, rawParams, flagUpdates):
 	return decl + '\n\t{dst} = {b} - {a} - ({check} ? 1 : 0);'.format(dst = dst,
 		a = params[0], b = params[1], check=_getCarryCheck(prog)
 	)
+	
+def _rolCImpl(prog, params, rawParams, flagUpdates):
+	needsCarry = False
+	if flagUpdates:
+		for flag in flagUpdates:
+			calc = prog.flags.flagCalc[flag]
+			if calc == 'carry':
+				needsCarry = True
+	decl = ''
+	size = prog.paramSize(rawParams[2])
+	if needsCarry:
+		decl,name = prog.getTemp(size * 2)
+		dst = prog.carryFlowDst = name
+	else:
+		dst = params[2]
+	return decl + '\n\t{dst} = {a} << {b} | {a} >> ({size} - {b});'.format(dst = dst,
+		a = params[0], b = params[1], size=size
+	)
+	
+def _rlcCImpl(prog, params, rawParams, flagUpdates):
+	needsCarry = False
+	if flagUpdates:
+		for flag in flagUpdates:
+			calc = prog.flags.flagCalc[flag]
+			if calc == 'carry':
+				needsCarry = True
+	decl = ''
+	carryCheck = _getCarryCheck(prog)
+	size = prog.paramSize(rawParams[2])
+	if needsCarry:
+		decl,name = prog.getTemp(size * 2)
+		dst = prog.carryFlowDst = name
+	else:
+		dst = params[2]
+	return decl + '\n\t{dst} = {a} << {b} | {a} >> ({size} + 1 - {b}) | ({check} ? 1 : 0) << ({b} - 1);'.format(dst = dst,
+		a = params[0], b = params[1], size=size, check=carryCheck
+	)
+	
+def _rorCImpl(prog, params, rawParams, flagUpdates):
+	needsCarry = False
+	if flagUpdates:
+		for flag in flagUpdates:
+			calc = prog.flags.flagCalc[flag]
+			if calc == 'carry':
+				needsCarry = True
+	decl = ''
+	size = prog.paramSize(rawParams[2])
+	if needsCarry:
+		decl,name = prog.getTemp(size)
+		dst = prog.carryFlowDst = name
+	else:
+		dst = params[2]
+	return decl + '\n\t{dst} = {a} >> {b} | {a} << ({size} - {b});'.format(dst = dst,
+		a = params[0], b = params[1], size=size
+	)
+
+def _rrcCImpl(prog, params, rawParams, flagUpdates):
+	needsCarry = False
+	if flagUpdates:
+		for flag in flagUpdates:
+			calc = prog.flags.flagCalc[flag]
+			if calc == 'carry':
+				needsCarry = True
+	decl = ''
+	carryCheck = _getCarryCheck(prog)
+	size = prog.paramSize(rawParams[2])
+	if needsCarry:
+		decl,name = prog.getTemp(size * 2)
+		dst = prog.carryFlowDst = name
+	else:
+		dst = params[2]
+	return decl + '\n\t{dst} = {a} >> {b} | {a} << ({size} + 1 - {b}) | ({check} ? 1 : 0) << ({size}-{b});'.format(dst = dst,
+		a = params[0], b = params[1], size=size, check=carryCheck
+	)
 
 _opMap = {
 	'mov': Op(lambda val: val).cUnaryOperator(''),
@@ -541,6 +626,10 @@ _opMap = {
 	'lsl': Op(lambda a, b: a << b).cBinaryOperator('<<'),
 	'lsr': Op(lambda a, b: a >> b).cBinaryOperator('>>'),
 	'asr': Op(lambda a, b: a >> b).addImplementation('c', 2, _asrCImpl),
+	'rol': Op().addImplementation('c', 2, _rolCImpl),
+	'rlc': Op().addImplementation('c', 2, _rlcCImpl),
+	'ror': Op().addImplementation('c', 2, _rorCImpl),
+	'rrc': Op().addImplementation('c', 2, _rrcCImpl),
 	'and': Op(lambda a, b: a & b).cBinaryOperator('&'),
 	'or':  Op(lambda a, b: a | b).cBinaryOperator('|'),
 	'xor': Op(lambda a, b: a ^ b).cBinaryOperator('^'),
@@ -628,6 +717,16 @@ class NormalOp:
 			else:
 				output.append(opDef.generate(otype, prog, procParams, self.params, flagUpdates))
 		elif self.op in prog.subroutines:
+			procParams = []
+			for param in self.params:
+				begin,sep,end = param.partition('.')
+				if sep:
+					if end in fieldVals:
+						param = begin + '.' + str(fieldVals[end])
+				else:
+					if param in fieldVals:
+						param = fieldVals[param]
+				procParams.append(param)
 			prog.subroutines[self.op].inline(prog, procParams, output, otype, parent)
 		else:
 			output.append('\n\t' + self.op + '(' + ', '.join([str(p) for p in procParams]) + ');')
@@ -1210,6 +1309,8 @@ class Program:
 						return maybeLocal
 				if param in fieldVals:
 					param = fieldVals[param]
+					fieldVals = {}
+					keepGoing = True
 				elif param in self.meta:
 					param = self.meta[param]
 					keepGoing = True
