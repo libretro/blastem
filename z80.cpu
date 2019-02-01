@@ -1,7 +1,7 @@
 info
 	prefix z80_
 	opcode_size 8
-	extra_tables cb ed dded fded dd fd
+	extra_tables cb ed dded fded ddcb fdcb dd fd
 	body z80_run_op
 	include z80_util.c
 	header z80.h
@@ -66,6 +66,22 @@ z80_run_op
 11111101 fd_prefix
 	z80_op_fetch
 	dispatch scratch1 fd
+	
+dd 11001011 ddcb_prefix
+	z80_calc_index ix
+	cycles 2
+	mov pc scratch1
+	ocall read_8
+	add 1 pc pc
+	dispatch scratch1 ddcb
+	
+fd 11001011 fdcb_prefix
+	z80_calc_index iy
+	cycles 2
+	mov pc scratch1
+	ocall read_8
+	add 1 pc pc
+	dispatch scratch1 fdcb
 	
 z80_check_cond
 	arg cond 8
@@ -867,13 +883,11 @@ dd 10100110 and_ixd
 	z80_fetch_index ix
 	and a scratch1 a
 	update_flags SZYH1PXN0C0
-	cycles 3
 	
 fd 10100110 and_iyd
 	z80_fetch_index iy
 	and a scratch1 a
 	update_flags SZYH1PXN0C0
-	cycles 3
 
 11100110 and_immed
 	z80_fetch_immed
@@ -911,13 +925,11 @@ dd 10110110 or_ixd
 	z80_fetch_index ix
 	or a scratch1 a
 	update_flags SZYH0PXN0C0
-	cycles 3
 	
 fd 10110110 or_iyd
 	z80_fetch_index iy
 	or a scratch1 a
 	update_flags SZYH0PXN0C0
-	cycles 3
 
 11110110 or_immed
 	z80_fetch_immed
@@ -955,13 +967,11 @@ dd 10101110 xor_ixd
 	z80_fetch_index ix
 	xor a scratch1 a
 	update_flags SZYH0PXN0C0
-	cycles 3
 	
 fd 10101110 xor_iyd
 	z80_fetch_index iy
 	xor a scratch1 a
 	update_flags SZYH0PXN0C0
-	cycles 3
 
 11101110 xor_immed
 	z80_fetch_immed
@@ -1004,14 +1014,12 @@ dd 10111110 cp_ixd
 	mov scratch1 last_flag_result
 	cmp scratch1 a
 	update_flags SZHVN1C
-	cycles 3
 	
 fd 10111110 cp_iyd
 	z80_fetch_index iy
 	mov scratch1 last_flag_result
 	cmp scratch1 a
 	update_flags SZHVN1C
-	cycles 3
 
 11111110 cp_immed
 	z80_fetch_immed
@@ -1328,3 +1336,92 @@ ed 01RRR001 out_bc
 	or c scratch2 scratch2
 	mov main.R scratch1
 	ocall io_write8
+	
+00000111 rlca
+	rol a 1 a
+	update_flags YH0XN0C
+	
+00010111 rla
+	rlc a 1 a
+	update_flags YH0XN0C
+	
+00001111 rrca
+	ror a 1 a
+	update_flags YH0XN0C
+
+00011111 rra
+	rrc a 1 a
+	update_flags YH0XN0C
+	
+cb 00000RRR rlc
+	rol main.R 1 main.R
+	update_flags SZYH0PXN0C
+	
+cb 00000110 rlc_hl
+	local tmp 8
+	z80_fetch_hl
+	mov scratch1 tmp
+	rol tmp 1 tmp
+	update_flags SZYH0PXN0C
+	mov tmp scratch1
+	z80_store_hl
+	
+z80_rlc_index
+	arg tmp 8
+	mov wz scratch1
+	ocall read_8
+	cycles 1
+	mov scratch1 tmp
+	rol tmp 1 tmp
+	update_flags SZYH0PXN0C
+	mov tmp scratch1
+	z80_store_index
+	
+ddcb 00000110 rlc_ixd
+	local tmp 8
+	z80_rlc_index tmp
+	
+ddcb 00000RRR rlc_ixd_reg
+	z80_rlc_index main.R
+	
+fdcb 00000110 rlc_iyd
+	local tmp 8
+	z80_rlc_index tmp
+	
+fdcb 00000RRR rlc_iyd_reg
+	z80_rlc_index main.R
+	
+cb 00010RRR rl
+	rlc main.R 1 main.R
+	update_flags SZYH0PXN0C
+
+cb 00010110 rl_hl
+	local tmp 8
+	z80_fetch_hl
+	mov scratch1 tmp
+	rlc tmp 1 tmp
+	update_flags SZYH0PXN0C
+	mov tmp scratch1
+	z80_store_hl
+	
+ddcb 00010110 rl_ixd
+	local tmp 8
+	mov wz scratch1
+	ocall read_8
+	cycles 1
+	mov scratch1 tmp
+	rlc tmp 1 tmp
+	update_flags SZYH0PXN0C
+	mov tmp scratch1
+	z80_store_index
+	
+fdcb 00010110 rl_iyd
+	local tmp 8
+	mov wz scratch1
+	ocall read_8
+	cycles 1
+	mov scratch1 tmp
+	rlc tmp 1 tmp
+	update_flags SZYH0PXN0C
+	mov tmp scratch1
+	z80_store_index
