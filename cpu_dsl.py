@@ -326,6 +326,8 @@ def _updateFlagsCImpl(prog, params, rawParams):
 				resultBit = prog.paramSize(prog.lastDst) - 1
 			elif calc == 'carry':
 				resultBit = prog.paramSize(prog.lastDst)
+				if prog.lastOp.op == 'ror':
+					resultBit -= 1
 			elif calc == 'half':
 				resultBit = prog.paramSize(prog.lastDst) - 4
 				myRes = '({a} ^ {b} ^ {res})'.format(a = prog.lastA, b = prog.lastB, res = lastDst)
@@ -578,20 +580,8 @@ def _rlcCImpl(prog, params, rawParams, flagUpdates):
 	)
 	
 def _rorCImpl(prog, params, rawParams, flagUpdates):
-	needsCarry = False
-	if flagUpdates:
-		for flag in flagUpdates:
-			calc = prog.flags.flagCalc[flag]
-			if calc == 'carry':
-				needsCarry = True
-	decl = ''
 	size = prog.paramSize(rawParams[2])
-	if needsCarry:
-		decl,name = prog.getTemp(size)
-		dst = prog.carryFlowDst = name
-	else:
-		dst = params[2]
-	return decl + '\n\t{dst} = {a} >> {b} | {a} << ({size} - {b});'.format(dst = dst,
+	return '\n\t{dst} = {a} >> {b} | {a} << ({size} - {b});'.format(dst = params[2],
 		a = params[0], b = params[1], size=size
 	)
 
