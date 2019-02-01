@@ -227,14 +227,14 @@ fd 01110RRR ld_to_iy
 
 00001010 ld_a_from_bc
 	lsl b 8 scratch1
-	or c scratch2 scratch1
+	or c scratch1 scratch1
 	ocall read_8
 	mov scratch1 a
 
 00011010 ld_a_from_de
 	lsl d 8 scratch1
-	or e scratch2 scratch1
-	ocall write_8
+	or e scratch1 scratch1
+	ocall read_8
 	mov scratch1 a
 
 00111010 ld_a_from_immed
@@ -318,7 +318,7 @@ ed 01001011 ld_bc_from_immed
 
 ed 01011011 ld_de_from_immed
 	meta low e
-	meta high c
+	meta high d
 	z80_fetch16_from_immed
 
 ed 01101011 ld_hl_from_immed_slow
