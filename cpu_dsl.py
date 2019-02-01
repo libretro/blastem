@@ -242,7 +242,7 @@ class Op:
 			decl = ''
 			if needsCarry or needsOflow or needsHalf:
 				size = prog.paramSize(rawParams[2])
-				if needsCarry:
+				if needsCarry and op != 'lsr':
 					size *= 2
 				decl,name = prog.getTemp(size)
 				dst = prog.carryFlowDst = name
@@ -325,9 +325,13 @@ def _updateFlagsCImpl(prog, params, rawParams):
 			if calc == 'sign':
 				resultBit = prog.paramSize(prog.lastDst) - 1
 			elif calc == 'carry':
-				resultBit = prog.paramSize(prog.lastDst)
-				if prog.lastOp.op == 'ror':
-					resultBit -= 1
+				if prog.lastOp.op in ('asr', 'lsr'):
+					resultBit = 0
+					myRes = prog.lastA
+				else:
+					resultBit = prog.paramSize(prog.lastDst)
+					if prog.lastOp.op == 'ror':
+						resultBit -= 1
 			elif calc == 'half':
 				resultBit = prog.paramSize(prog.lastDst) - 4
 				myRes = '({a} ^ {b} ^ {res})'.format(a = prog.lastA, b = prog.lastB, res = lastDst)
@@ -453,10 +457,24 @@ def _cmpCImpl(prog, params, rawParams, flagUpdates):
 	prog.lastDst = rawParams[1]
 	return '\n\t{var} = {b} - {a};'.format(var = tmpvar, a = params[0], b = params[1])
 
-def _asrCImpl(prog, params, rawParams):
-	shiftSize = prog.paramSize(rawParams[0])
-	mask = 1 << (shiftSize - 1)
-	return '\n\t{dst} = ({a} >> {b}) | ({a} & {mask});'.format(a = params[0], b = params[1], dst = params[2], mask = mask)
+def _asrCImpl(prog, params, rawParams, flagUpdates):
+	needsCarry = False
+	if flagUpdates:
+		for flag in flagUpdates:
+			calc = prog.flags.flagCalc[flag]
+			if calc == 'carry':
+				needsCarry = True
+	decl = ''
+	size = prog.paramSize(rawParams[2])
+	if needsCarry:
+		decl,name = prog.getTemp(size * 2)
+		dst = prog.carryFlowDst = name
+		prog.lastA = params[0]
+	else:
+		dst = params[2]
+	mask = 1 << (size - 1)
+	return decl + '\n\t{dst} = ({a} >> {b}) | ({a} & {mask} ? 0xFFFFFFFFU << ({size} - {b}) : 0);'.format(
+		a = params[0], b = params[1], dst = dst, mask = mask, size=size)
 	
 def _sext(size, src):
 	if size == 16:
