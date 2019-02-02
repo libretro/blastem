@@ -258,9 +258,30 @@ class Op:
 		self.outOp = (2,)
 		return self
 	def cUnaryOperator(self, op):
-		def _impl(prog, params):
-			return '\n\t{dst} = {op}{a};'.format(
-				dst = params[1], a = params[0], op = op
+		def _impl(prog, params, rawParams, flagUpdates):
+			dst = params[1]
+			decl = ''
+			if op == '-':
+				if flagUpdates:
+					for flag in flagUpdates:
+						calc = prog.flags.flagCalc[flag]
+						if calc == 'carry':
+							needsCarry = True
+						elif calc == 'half-carry':
+							needsHalf = True
+						elif calc == 'overflow':
+							needsOflow = True
+				if needsCarry or needsOflow or needsHalf:
+					size = prog.paramSize(rawParams[1])
+					if needsCarry:
+						size *= 2
+					decl,name = prog.getTemp(size)
+					dst = prog.carryFlowDst = name
+					prog.lastA = 0
+					prog.lastB = params[0]
+					prog.lastBFlow = params[0]
+			return decl + '\n\t{dst} = {op}{a};'.format(
+				dst = dst, a = params[0], op = op
 			)
 		self.impls['c'] = _impl
 		self.outOp = (1,)
