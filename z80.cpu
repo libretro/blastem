@@ -1271,6 +1271,16 @@ ed 01D01110 im3
 	z80_fetch_immed16
 	mov wz pc
 	
+11101001 jp_hl
+	lsl h 8 pc
+	or l pc pc
+	
+dd 11101001 jp_ix
+	mov ix pc
+	
+fd 11101001 jp_iy
+	mov iy pc
+	
 11CCC010 jp_cc
 	z80_check_cond C
 	z80_fetch_immed16
