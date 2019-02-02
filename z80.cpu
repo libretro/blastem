@@ -101,7 +101,7 @@ z80_check_cond
 	
 	case 3
 	meta istrue invert
-	and 0x80 invert invert
+	and 0x80 chflags invert
 	
 	case 4
 	meta istrue invert
@@ -518,7 +518,7 @@ fd 11100001 pop_iy
 	mov sp scratch2
 	ocall write_8
 	add 1 sp wz
-	mov wz scratch2
+	mov wz scratch1
 	ocall read_8
 	xchg h scratch1
 	cycles 2
@@ -984,47 +984,63 @@ fd 10101110 xor_iyd
 	update_flags SZHVN1C
 	
 dd 10111100 cp_ixh
-	lsr ix 8 last_flag_result
+	local tmp 8
+	lsr ix 8 tmp
+	mov tmp last_flag_result
 	cmp last_flag_result a
 	update_flags SZHVN1C
 	
 dd 10111101 cp_ixl
+	local tmp 8
+	mov ix tmp
 	mov ix last_flag_result
-	cmp last_flag_result a
+	cmp tmp a
 	update_flags SZHVN1C
 	
 fd 10111100 cp_iyh
-	lsr iy 8 last_flag_result
-	cmp last_flag_result a
+	local tmp 8
+	lsr iy 8 tmp
+	mov tmp last_flag_result
+	cmp tmp a
 	update_flags SZHVN1C
 	
 fd 10111101 cp_iyl
+	local tmp 8
+	mov iy tmp
 	mov iy last_flag_result
-	cmp last_flag_result a
+	cmp tmp a
 	update_flags SZHVN1C
 	
 10111110 cp_hl
+	local tmp 8
 	z80_fetch_hl
+	mov scratch1 tmp
 	mov scratch1 last_flag_result
-	cmp scratch1 a
+	cmp tmp a
 	update_flags SZHVN1C
 	
 dd 10111110 cp_ixd
+	local tmp 8
 	z80_fetch_index ix
+	mov scratch1 tmp
 	mov scratch1 last_flag_result
-	cmp scratch1 a
+	cmp tmp a
 	update_flags SZHVN1C
 	
 fd 10111110 cp_iyd
+	local tmp 8
 	z80_fetch_index iy
+	mov scratch1 tmp
 	mov scratch1 last_flag_result
-	cmp scratch1 a
+	cmp tmp a
 	update_flags SZHVN1C
 
 11111110 cp_immed
+	local tmp 8
 	z80_fetch_immed
+	mov scratch1 tmp
 	mov scratch1 last_flag_result
-	cmp scratch1 a
+	cmp tmp a
 	update_flags SZHVN1C
 
 00RRR100 inc_reg
@@ -1209,17 +1225,25 @@ fd 00101011 dec_iy
 	not a a
 	update_flags YH1XN1
 
-11101101 neg
+ed 01DDD100 neg
 	neg a a
 	update_flags SZYHVXN1C
 
 00111111 ccf
+	local tmp 8
+	and 0x80 chflags chflags
+	lsr chflags 4 tmp
+	or tmp chflags chflags
 	xor 0x80 chflags chflags
+	update_flags N0
 
-00111111 scf
-	or 0x80 chflags chflags
+00110111 scf
+	update_flags H0N0C1
 
 00000000 nop
+
+01110110 halt
+	sub 1 pc pc
 
 11110011 di
 	mov 0 iff1
@@ -1231,14 +1255,17 @@ fd 00101011 dec_iy
 	mov 1 iff2
 	#TODO: update interrupt/sync cycle
 
-ed 01000110 im0
+ed 01D00110 im0
 	mov 0 imode
 
-ed 01010110 im1
+ed 01D10110 im1
 	mov 1 imode
 
-ed 01011110 im2
+ed 01D11110 im2
 	mov 2 imode
+	
+ed 01D01110 im3
+	mov 3 imode
 	
 11000011 jp
 	z80_fetch_immed16
