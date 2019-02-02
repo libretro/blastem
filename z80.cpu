@@ -226,40 +226,58 @@ fd 01110RRR ld_to_iy
 	z80_store_hl
 
 00001010 ld_a_from_bc
-	lsl b 8 scratch1
-	or c scratch1 scratch1
+	lsl b 8 wz
+	or c wz wz
+	mov wz scratch1
+	add 1 wz wz
 	ocall read_8
 	mov scratch1 a
 
 00011010 ld_a_from_de
-	lsl d 8 scratch1
-	or e scratch1 scratch1
+	lsl d 8 wz
+	or e wz wz
+	mov wz scratch1
+	add 1 wz wz
 	ocall read_8
 	mov scratch1 a
 
 00111010 ld_a_from_immed
 	z80_fetch_immed16
 	mov wz scratch1
+	add 1 wz wz
 	ocall read_8
 	mov scratch1 a
 	
 00000010 ld_a_to_bc
+	local tmp 8
 	lsl b 8 scratch2
 	or c scratch2 scratch2
 	mov a scratch1
+	add c 1 tmp
+	lsl a 8 wz
+	or tmp wz wz
 	ocall write_8
 	
 00010010 ld_a_to_de
+	local tmp 8
 	lsl d 8 scratch2
 	or e scratch2 scratch2
 	mov a scratch1
+	add e 1 tmp
+	lsl a 8 wz
+	or tmp wz wz
 	ocall write_8
 
 00110010 ld_a_to_immed
+	local tmp 16
 	z80_fetch_immed16
 	mov wz scratch2
 	mov a scratch1
+	add 1 wz wz
 	ocall write_8
+	and 0xFF wz wz
+	lsl a 8 tmp
+	or tmp wz wz
 
 ed 01000111 ld_i_a
 	mov a i
@@ -305,6 +323,7 @@ z80_fetch16_from_immed
 	mov wz scratch1
 	ocall read_8
 	mov scratch1 high
+	add 1 wz wz
 
 00101010 ld_hl_from_immed
 	meta low l
@@ -336,6 +355,7 @@ z80_fetch_reg16_from_immed
 	ocall read_8
 	lsl scratch1 8 scratch1
 	or scratch1 reg reg
+	add 1 wz wz
 
 ed 01111011 ld_sp_from_immed
 	meta reg sp
@@ -358,6 +378,7 @@ fd 00101010 ld_iy_from_immed
 	mov wz scratch2
 	mov h scratch1
 	ocall write_8
+	add 1 wz wz
 	
 z80_regpair_to_immed
 	z80_fetch_immed16
@@ -368,6 +389,7 @@ z80_regpair_to_immed
 	mov high scratch1
 	mov wz scratch2
 	ocall write_8
+	add 1 wz wz
 	
 ed 01000011 ld_bc_to_immed
 	meta low c
@@ -395,13 +417,6 @@ ed 01110011 ld_sp_to_immed
 	cycles 2
 	lsl h 8 sp
 	or l sp sp
-	mov wz scratch2
-	mov sp scratch1
-	ocall write_8
-	add 1 wz wz
-	lsr sp 8 scratch1
-	mov wz scratch2
-	ocall write_8
 
 z80_push
 	cycles 1
@@ -1700,3 +1715,39 @@ fdcb 00111110 srl_iyd
 	
 fdcb 00111RRR srl_iyd_reg
 	z80_srl_index main.R
+	
+cb 01BBBRRR bit_reg
+	local tmp 8
+	lsl 1 B tmp
+	mov main.R last_flag_result
+	and main.R tmp tmp
+	update_flags SZH1PN0
+	
+cb 01BBB110 bit_hl
+	local tmp 8
+	z80_fetch_hl
+	lsl 1 B tmp
+	lsr wz 8 last_flag_result
+	and scratch1 tmp tmp
+	update_flags SZH1PN0
+	
+	
+ddcb 01BBBRRR bit_ixd
+	local tmp 8
+	mov wz scratch1
+	ocall read_8
+	cycles 1
+	lsl 1 B tmp
+	lsr wz 8 last_flag_result
+	and scratch1 tmp tmp
+	update_flags SZH1PN0
+	
+fdcb 01BBBRRR bit_iyd
+	local tmp 8
+	mov wz scratch1
+	ocall read_8
+	cycles 1
+	lsl 1 B tmp
+	lsr wz 8 last_flag_result
+	and scratch1 tmp tmp
+	update_flags SZH1PN0
