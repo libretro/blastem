@@ -745,6 +745,13 @@ class NormalOp:
 					output.append(_opMap['mov'].generate(otype, prog, shortProc, shortParams, None))
 			else:
 				output.append(opDef.generate(otype, prog, procParams, self.params, flagUpdates))
+				for dstIdx in opDef.outOp:
+					dst = self.params[dstIdx]
+					while dst in prog.meta:
+						dst = prog.meta[dst]
+					if dst in parent.regValues:
+						del parent.regValues[dst]
+					
 		elif self.op in prog.subroutines:
 			procParams = []
 			for param in self.params:

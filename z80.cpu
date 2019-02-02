@@ -1751,3 +1751,44 @@ fdcb 01BBBRRR bit_iyd
 	lsr wz 8 last_flag_result
 	and scratch1 tmp tmp
 	update_flags SZH1PN0
+	
+cb 10BBBRRR res_reg
+	local tmp 8
+	lsl 1 B tmp
+	not tmp tmp
+	and main.R tmp main.R
+	
+cb 10BBB110 res_hl
+	z80_fetch_hl
+	cycles 1
+	local tmp 8
+	lsl 1 B tmp
+	not tmp tmp
+	and scratch1 tmp scratch1
+	z80_store_hl
+	
+z80_res_index
+	arg bit 8
+	arg tmp 8
+	lsl 1 bit tmp
+	not tmp tmp
+	mov wz scratch1
+	ocall read_8
+	cycles 1
+	and scratch1 tmp tmp
+	mov tmp scratch1
+	z80_store_index
+	
+ddcb 10BBB110 res_ixd
+	local tmp 8
+	z80_res_index B tmp
+	
+ddcb 10BBBRRR res_ixd_reg
+	z80_res_index B main.R
+	
+fdcb 10BBB110 res_iyd
+	local tmp 8
+	z80_res_index B tmp
+	
+fdcb 10BBBRRR res_iyd_reg
+	z80_res_index B main.R
