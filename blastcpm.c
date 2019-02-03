@@ -4,7 +4,11 @@
 #include <string.h>
 #include <sys/select.h>
 
+#ifdef NEW_CORE
+#include "z80.h"
+#else
 #include "z80_to_x86.h"
+#endif
 #include "util.h"
 
 uint8_t ram[64 * 1024];
@@ -14,10 +18,12 @@ uint8_t ram[64 * 1024];
 #define OS_RESET 0xE403
 int headless = 1;
 
+#ifndef NEW_CORE
 void z80_next_int_pulse(z80_context * context)
 {
 	context->int_pulse_start = context->int_pulse_end = CYCLE_NEVER;
 }
+#endif
 
 void render_errorbox(char *title, char *message)
 {
@@ -65,7 +71,7 @@ const memmap_chunk z80_map[] = {
 	{ 0x0000, 0x10000,  0xFFFF, 0, 0, MMAP_READ | MMAP_WRITE | MMAP_CODE, ram, NULL, NULL, NULL, NULL},
 };
 
-const memmap_chunk io_map[] = {
+memmap_chunk io_map[] = {
 	{ 0x0, 0x1, 0xFFFF, 0, 0, 0, NULL, NULL, NULL, console_read, console_write},
 	{ 0x1, 0x2, 0xFFFF, 0, 0, 0, NULL, NULL, NULL, console_status_read, console_flush_write},
 	{ 0x2, 0x3, 0xFFFF, 0, 0, 0, NULL, NULL, NULL, NULL, exit_write},
@@ -101,12 +107,32 @@ int main(int argc, char **argv)
 	
 	z80_options opts;
 	z80_context *context;
+#ifdef NEW_CORE
+	memset(&opts, 0, sizeof(opts));
+	opts.gen.memmap = z80_map;
+	opts.gen.memmap_chunks = 1;
+	opts.gen.address_mask = 0xFFFF;
+	opts.gen.max_address = 0xFFFF;
+	opts.gen.clock_divider = 1;
+	context = calloc(1, sizeof(z80_context));
+	context->opts = &opts;
+	context->io_map = io_map;
+	context->io_chunks = 3;
+	context->io_mask = 0xFF;
+#else
 	init_z80_opts(&opts, z80_map, 1, io_map, 3, 1, 0xFF);
 	context = init_z80_context(&opts);
+#endif
 	for(;;)
 	{
+#ifdef NEW_CORE
+		z80_execute(context, 1000000);
+		context->cycles = 0;
+#else
 		z80_run(context, 1000000);
 		context->current_cycle = 0;
+#endif
+		
 	}
 	return 0;
 }
