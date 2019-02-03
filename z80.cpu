@@ -175,6 +175,74 @@ z80_fetch_immed_to_reg16
 01DDDSSS ld_from_reg
 	mov main.S main.D
 	
+dd 01DDD100 ld_from_ixh
+	invalid D 6
+	lsr ix 8 main.D
+	
+dd 01100SSS ld_to_ixh
+	invalid S 6
+	local tmp 16
+	and 0xFF ix ix
+	lsl main.S 8 tmp
+	or tmp ix ix
+	
+dd 0110D10S ld_ixb_to_ixb
+
+dd 01DDD101 ld_from_ixl
+	invalid D 6
+	mov ix main.D
+	
+dd 01101SSS ld_to_ixl
+	invalid S 6
+	and 0xFF00 ix ix
+	or main.S ix ix
+	
+dd 01100101 ld_ixl_to_ixh
+	local tmp 16
+	lsl ix 8 tmp
+	and 0xFF ix ix
+	or tmp ix ix
+	
+dd 01101100 ld_ixh_to_ixl
+	local tmp 16
+	lsr ix 8 tmp
+	and 0xFF00 ix ix
+	or tmp ix ix
+	
+fd 01DDD100 ld_from_iyh
+	invalid D 6
+	lsr iy 8 main.D
+	
+fd 01100SSS ld_to_iyh
+	invalid S 6
+	local tmp 16
+	and 0xFF iy iy
+	lsl main.S 8 tmp
+	or tmp iy iy
+	
+fd 0110D10S ld_iyb_to_iyb
+
+fd 01DDD101 ld_from_iyl
+	invalid D 6
+	mov iy main.D
+	
+fd 01101SSS ld_to_iyl
+	invalid S 6
+	and 0xFF00 iy iy
+	or main.S iy iy
+	
+fd 01100101 ld_iyl_to_iyh
+	local tmp 16
+	lsl iy 8 tmp
+	and 0xFF iy iy
+	or tmp iy iy
+	
+fd 01101100 ld_iyh_to_iyl
+	local tmp 16
+	lsr iy 8 tmp
+	and 0xFF00 iy iy
+	or tmp iy iy
+	
 z80_calc_index
 	arg index 16
 	mov index wz
@@ -204,6 +272,28 @@ fd 01RRR110 ld_from_iy
 00RRR110 ld_immed
 	z80_fetch_immed
 	mov scratch1 main.R
+	
+dd 00100110 ld_immed_ixh
+	z80_fetch_immed
+	lsl scratch1 8 scratch1
+	and 0xFF ix ix
+	or scratch1 ix ix
+	
+dd 00101110 ld_immed_ixl
+	z80_fetch_immed
+	and 0xFF00 ix ix
+	or scratch1 ix ix
+	
+fd 00100110 ld_immed_iyh
+	z80_fetch_immed
+	lsl scratch1 8 scratch1
+	and 0xFF iy iy
+	or scratch1 iy iy
+	
+fd 00101110 ld_immed_iyl
+	z80_fetch_immed
+	and 0xFF00 iy iy
+	or scratch1 iy iy
 
 01110RRR ld_to_hl
 	mov main.R scratch1
@@ -224,6 +314,20 @@ fd 01110RRR ld_to_iy
 00110110 ld_to_hl_immed
 	z80_fetch_immed
 	z80_store_hl
+	
+dd 00110110 ld_to_ixd_immed
+	z80_calc_index ix
+	z80_fetch_immed
+	cycles 2
+	mov wz scratch2
+	ocall write_8
+	
+fd 00110110 ld_to_iyd_immed
+	z80_calc_index iy
+	z80_fetch_immed
+	cycles 2
+	mov wz scratch2
+	ocall write_8
 
 00001010 ld_a_from_bc
 	lsl b 8 wz
@@ -380,6 +484,28 @@ fd 00101010 ld_iy_from_immed
 	ocall write_8
 	add 1 wz wz
 	
+dd 00100010 ld_ix_to_immed
+	z80_fetch_immed16
+	mov wz scratch2
+	mov ix scratch1
+	ocall write_8
+	add 1 wz wz
+	mov wz scratch2
+	lsr ix 8 scratch1
+	ocall write_8
+	add 1 wz wz
+	
+fd 00100010 ld_iy_to_immed
+	z80_fetch_immed16
+	mov wz scratch2
+	mov iy scratch1
+	ocall write_8
+	add 1 wz wz
+	mov wz scratch2
+	lsr iy 8 scratch1
+	ocall write_8
+	add 1 wz wz
+	
 z80_regpair_to_immed
 	z80_fetch_immed16
 	mov wz scratch2
@@ -417,6 +543,14 @@ ed 01110011 ld_sp_to_immed
 	cycles 2
 	lsl h 8 sp
 	or l sp sp
+	
+dd 11111001 ld_sp_ix
+	cycles 2
+	mov ix sp
+
+fd 11111001 ld_sp_iy
+	cycles 2
+	mov iy sp
 
 z80_push
 	cycles 1
