@@ -666,13 +666,50 @@ fd 11100001 pop_iy
 	cycles 1
 	mov sp scratch2
 	ocall write_8
-	add 1 sp wz
-	mov wz scratch1
+	add 1 sp scratch1
 	ocall read_8
 	xchg h scratch1
 	cycles 2
-	mov wz scratch2
+	add 1 sp scratch2
 	ocall write_8
+	lsl h 8 wz
+	or l wz wz
+	
+dd 11100011 ex_sp_ix
+	mov sp scratch1
+	ocall read_8
+	mov scratch1 wz
+	mov ix scratch1
+	cycles 1
+	mov sp scratch2
+	ocall write_8
+	add 1 sp scratch1
+	ocall read_8
+	lsl scratch1 8 scratch1
+	or scratch1 wz wz
+	lsr ix 8 scratch1
+	cycles 2
+	add 1 sp scratch2
+	ocall write_8
+	mov wz ix
+	
+fd 11100011 ex_sp_iy
+	mov sp scratch1
+	ocall read_8
+	mov scratch1 wz
+	mov iy scratch1
+	cycles 1
+	mov sp scratch2
+	ocall write_8
+	add 1 sp scratch1
+	ocall read_8
+	lsl scratch1 8 scratch1
+	or scratch1 wz wz
+	lsr iy 8 scratch1
+	cycles 2
+	add 1 sp scratch2
+	ocall write_8
+	mov wz iy
 
 10000RRR add_reg
 	add a main.R a
