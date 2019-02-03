@@ -11,6 +11,7 @@ regs
 	alt 8 b' c' d' e' h' l' f' a'
 	i 8
 	r 8
+	rhigh 8
 	iff1 8
 	iff2 8
 	imode 8
@@ -389,7 +390,21 @@ ed 01000111 ld_i_a
 
 ed 01001111 ld_r_a
 	mov a r
+	and 0x80 a rhigh
 	cycles 1
+
+ed 01011111 ld_a_r
+	cycles 1
+	and 0x7F r a
+	or rhigh a a
+	update_flags SZYH0XN0
+	mov iff2 pvflag
+	
+ed 01010111 ld_a_i
+	cycles 1
+	mov i a
+	update_flags SZYH0XN0
+	mov iff2 pvflag
 
 00000001 ld_bc_immed
 	meta high b
