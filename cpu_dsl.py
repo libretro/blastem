@@ -1026,7 +1026,7 @@ class Registers:
 			self.addRegArray(parts[0], int(parts[1]), parts[2:])
 		else:
 			if parts[1].startswith('ptr'):
-				self.addPointer(parts[0], int(parts[1][3:]))
+				self.addPointer(parts[0], parts[1][3:])
 			else:
 				self.addReg(parts[0], int(parts[1]))
 		return self
@@ -1034,7 +1034,14 @@ class Registers:
 	def writeHeader(self, otype, hFile):
 		fieldList = []
 		for pointer in self.pointers:
-			hFile.write('\n\tuint{sz}_t *{nm};'.format(nm=pointer, sz=self.pointers[pointer]))
+			stars = '*'
+			ptype = self.pointers[pointer]
+			while ptype.startswith('ptr'):
+				stars += '*'
+				ptype = ptype[3:]
+			if ptype.isdigit():
+				ptype = 'uint{sz}_t'.format(sz=ptype)
+			hFile.write('\n\t{ptype} {stars}{nm};'.format(nm=pointer, ptype=ptype, stars=stars))
 		for reg in self.regs:
 			if not self.isRegArrayMember(reg):
 				fieldList.append((self.regs[reg], 1, reg))

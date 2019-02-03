@@ -27,6 +27,9 @@ regs
 	zflag 8
 	scratch1 16
 	scratch2 16
+	io_map ptrmemmap_chunk
+	io_chunks 32
+	io_mask 32
 	
 flags
 	register f
