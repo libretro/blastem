@@ -873,11 +873,19 @@ def _geuCImpl(prog, parent, fieldVals, output):
 		params = [prog.resolveParam(p, parent, fieldVals) for p in prog.lastOp.params]
 		return '\n\tif ({a} >= {b}) '.format(a=params[1], b = params[0]) + '{'
 	else:
-		raise ion(">=U not implemented in the general case yet")
+		raise Exception(">=U not implemented in the general case yet")
+
+def _eqCImpl(prog, parent, fieldVals, output):
+	return '\n\tif (!{a}) {'.format(a=prog.resolveParam(prog.lastDst, None, {}))
+
+def _neqCImpl(prog, parent, fieldVals, output):
+	return '\n\tif ({a}) {'.format(a=prog.resolveParam(prog.lastDst, None, {}))
 	
 _ifCmpImpl = {
 	'c': {
-		'>=U': _geuCImpl
+		'>=U': _geuCImpl,
+		'=': _eqCImpl,
+		'!=': _neqCImpl
 	}
 }
 #represents a DSL conditional construct
