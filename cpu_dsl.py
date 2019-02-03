@@ -167,7 +167,7 @@ class SubRoutine(Block):
 			self.args.append((name, size))
 		elif op.op == 'local':
 			name = op.params[0]
-			size = op.params[1]
+			size = int(op.params[1])
 			self.locals[name] = size
 		else:
 			self.implementation.append(op)
@@ -339,7 +339,7 @@ def _updateFlagsCImpl(prog, params, rawParams):
 		if prog.carryFlowDst:
 			lastDst = prog.carryFlowDst
 		else:
-			lastDst = prog.resolveParam(prog.lastDst, None, {})
+			lastDst = prog.resolveParam(prog.lastDst, prog.currentScope, {})
 		storage = prog.flags.getStorage(flag)
 		if calc == 'bit' or calc == 'sign' or calc == 'carry' or calc == 'half' or calc == 'overflow':
 			myRes = lastDst

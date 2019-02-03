@@ -2016,31 +2016,37 @@ fdcb 11BBB110 set_iyd
 	
 fdcb 11BBBRRR set_iyd_reg
 	z80_set_index B main.R
-
-ed 10100000 ldi
+	
+z80_fetch_mod_hl
 	local tmp 16
-	local tmp8 8
+	arg change 16
 	lsl h 8 tmp
 	or l tmp tmp
 	mov tmp scratch1
-	add 1 tmp tmp
+	add change tmp tmp
 	mov tmp l
 	lsr tmp 8 h
 	ocall read_8
 	cycles 1
 	
+z80_ldd_ldi
+	arg change 16
+	local tmp 16
+	local tmp8 8
+	z80_fetch_mod_hl change
+	
 	add a scratch1 tmp8
 	update_flags H0XN0
 	
 	and 0x2 tmp8 tmp8
-	lsl 4 tmp8 tmp8
+	lsl tmp8 4 tmp8
 	and 0x88 last_flag_result last_flag_result
 	or tmp8 last_flag_result last_flag_result
 	
 	lsl d 8 tmp
 	or e tmp tmp
 	mov tmp scratch2
-	add 1 tmp tmp
+	add change tmp tmp
 	mov tmp e
 	lsr tmp 8 d
 	ocall write_8
@@ -2054,7 +2060,34 @@ ed 10100000 ldi
 	mov c pvflag
 	or b pvflag pvflag
 	
-	
-	
 	cycles 5
+	
+
+ed 10100000 ldi
+	z80_ldd_ldi 1
+
+ed 10101000 ldd
+	z80_ldd_ldi -1
+
+ed 10110000 ldir
+	z80_ldd_ldi 1
+	if pvflag
+	
+	add 1 pc wz
+	sub 1 pc pc
+	cycles 5
+	
+	end
+
+ed 10111000 lddr
+	z80_ldd_ldi -1
+	if pvflag
+	
+	add 1 pc wz
+	sub 1 pc pc
+	cycles 5
+	
+	end
+	
+
 	
