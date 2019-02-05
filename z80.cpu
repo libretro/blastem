@@ -2221,6 +2221,9 @@ ed 10111001 cpdr
 	
 	end
 	
-	
+dd OOOOOOOO dd_normal
+	dispatch O
 
+fd OOOOOOOO fd_normal
+	dispatch O
 	

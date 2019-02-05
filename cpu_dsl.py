@@ -1316,7 +1316,6 @@ class Program:
 						opmap[val] = inst.generateName(val)
 						bodymap[val] = inst.generateBody(val, self, otype)
 		
-		pieces.append('\ntypedef void (*impl_fun)({pre}context *context);'.format(pre=self.prefix))
 		pieces.append('\nstatic impl_fun impl_{name}[{sz}] = {{'.format(name = table, sz=len(opmap)))
 		for inst in range(0, len(opmap)):
 			op = opmap[inst]
@@ -1335,8 +1334,12 @@ class Program:
 			body.append('#include "{0}"\n'.format(include))
 		body.append('\nstatic void unimplemented({pre}context *context)'.format(pre = self.prefix))
 		body.append('\n{')
-		body.append('\n\tfatal_error("Unimplemented instruction");')
+		body.append('\n\tfatal_error("Unimplemented instruction\\n");')
 		body.append('\n}\n')
+		body.append('\ntypedef void (*impl_fun)({pre}context *context);'.format(pre=self.prefix))
+		for table in self.extra_tables:
+			body.append('\nstatic impl_fun impl_{name}[{sz}];'.format(name = table, sz=(1 << self.opsize)))
+		body.append('\nstatic impl_fun impl_main[{sz}];'.format(sz=(1 << self.opsize)))
 		for table in self.extra_tables:
 			self._buildTable(otype, table, body)
 		self._buildTable(otype, 'main', body)
