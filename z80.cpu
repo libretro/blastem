@@ -2171,4 +2171,52 @@ ed 10111001 cpdr
 	
 	end
 
+00100111 daa
+	local diff 8
+	local tmp 8
+	local low 8
+	and 0xF a low
+	and 0x8 chflags tmp
+	if tmp
+	
+	mov 6 diff
+	
+	else
+	
+	cmp 0xA low
+	if >=U
+	mov 6 diff
+	else
+	mov 0 diff
+	end
+	
+	end
+	
+	and 0x80 chflags tmp
+	if tmp
+	
+	or 0x60 diff diff
+	
+	else
+	
+	cmp 0xA0 a
+	if >=U
+	or 0x60 diff diff
+	end
+	end
+	
+	if nflag
+	
+	sub diff a a
+	update_flags SZYHPXC
+	
+	else
+	
+	add diff a a
+	update_flags SZYHPXC
+	
+	end
+	
+	
+
 	
