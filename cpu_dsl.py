@@ -418,7 +418,7 @@ def _updateFlagsCImpl(prog, params, rawParams):
 			raise Exception('Unknown flag calc type: ' + calc)
 	if prog.carryFlowDst:
 		if prog.lastOp.op != 'cmp':
-			output.append('\n\t{dst} = {tmpdst};'.format(dst = prog.resolveParam(prog.lastDst, None, {}), tmpdst = prog.carryFlowDst))
+			output.append('\n\t{dst} = {tmpdst};'.format(dst = prog.resolveParam(prog.lastDst, prog.currentScope, {}), tmpdst = prog.carryFlowDst))
 		prog.carryFlowDst = None
 	if parity:
 		if paritySize > 8:
@@ -1363,8 +1363,8 @@ class Program:
 	def getTemp(self, size):
 		if size in self.temp:
 			return ('', self.temp[size])
-		self.temp[size] = 'tmp{sz}'.format(sz=size);
-		return ('\n\tuint{sz}_t tmp{sz};'.format(sz=size), self.temp[size])
+		self.temp[size] = 'gen_tmp{sz}__'.format(sz=size);
+		return ('\n\tuint{sz}_t gen_tmp{sz}__;'.format(sz=size), self.temp[size])
 		
 	def resolveParam(self, param, parent, fieldVals, allowConstant=True, isdst=False):
 		keepGoing = True

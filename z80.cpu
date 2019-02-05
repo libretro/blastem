@@ -2127,11 +2127,18 @@ ed 10111000 lddr
 z80_cpd_cpi
 	local tmp 16
 	local tmp8 8
+	local hf 8
 	arg change 16
 	
 	z80_fetch_mod_hl change
 	sub scratch1 a tmp8
-	update_flags SZHXN1
+	update_flags SZHN1
+	
+	lsr chflags 3 hf
+	and 1 hf hf
+	
+	sub hf tmp8 tmp8
+	update_flags X
 	
 	and 0x2 tmp8 tmp8
 	lsl tmp8 4 tmp8
@@ -2159,20 +2166,30 @@ ed 10110001 cpir
 	z80_cpd_cpi 1
 	if pvflag
 	
+	if zflag
+	
+	else
+	
 	add 1 pc wz
 	sub 2 pc pc
 	cycles 5
 	
+	end
 	end
 	
 ed 10111001 cpdr
 	z80_cpd_cpi -1
 	if pvflag
 	
+	if zflag
+	
+	else
+	
 	add 1 pc wz
 	sub 2 pc pc
 	cycles 5
 	
+	end
 	end
 
 00100111 daa
