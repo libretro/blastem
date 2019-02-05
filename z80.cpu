@@ -1367,10 +1367,14 @@ fd 00101101 dec_iyl
 	or tmp iy iy
 	
 00110101 dec_hl
+	local tmp 8
 	z80_fetch_hl
-	#TODO: fix size
-	sub 1 scratch1 scratch1
+	#TODO: Either make DSL compiler smart enough to optimize these unnecessary moves out
+	#or add some syntax to force a certain size on an operation so they are unnecessary
+	mov scratch1 tmp
+	sub 1 tmp tmp
 	update_flags SZYHVXN1
+	mov tmp scratch1
 	z80_store_hl
 	
 dd 00110101 dec_ixd
