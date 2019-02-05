@@ -2227,3 +2227,38 @@ dd OOOOOOOO dd_normal
 fd OOOOOOOO fd_normal
 	dispatch O
 	
+ed 01101111 rld
+	local tmp 8
+	local tmp2 8
+	z80_fetch_hl
+	cycles 4
+	
+	lsr scratch1 4 tmp
+	
+	lsl scratch1 4 scratch1
+	
+	and 0xF a tmp2
+	or tmp2 scratch1 scratch1
+	
+	and 0xF0 a a
+	or tmp a a
+	update_flags SZYH0XPN0
+	z80_store_hl
+	
+ed 01100111 rrd
+	local tmp 8
+	local tmp2 8
+	z80_fetch_hl
+	cycles 4
+	
+	and 0xF scratch1 tmp
+	lsr scratch1 4 scratch1
+	
+	lsl a 4 tmp2
+	or tmp2 scratch1 scratch1
+	
+	and 0xF0 a a
+	or tmp a a
+	update_flags SZYH0XPN0
+	z80_store_hl
+	
