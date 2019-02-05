@@ -1536,6 +1536,21 @@ fd 11101001 jp_iy
 	z80_push
 	mov wz pc
 	
+11CCC100 call_cond
+	local pch 8
+	z80_fetch_immed16
+	z80_check_cond C
+	
+	if istrue
+	
+	lsr pc 8 pch
+	meta high pch
+	meta low pc
+	z80_push
+	mov wz pc
+	
+	end
+	
 11TTT111 rst
 	local pch 8
 	lsr pc 8 pch
@@ -1546,14 +1561,27 @@ fd 11101001 jp_iy
 	mov scratch1 pc
 
 11001001 ret
-	#TODO: confirm this goes through wz
-	local wzh 16
-	meta high wzh
-	meta low wz
+	local pch 16
+	cycles 1
+	meta high pch
+	meta low pc
 	z80_pop
-	lsl wzh 8 wzh
-	or wzh wz wz
-	mov wz pc
+	lsl pch 8 pch
+	or pch pc pc
+	
+11CCC000 ret_cond
+	local pch 16
+	cycles 1
+	z80_check_cond C
+	if istrue
+	
+	meta high pch
+	meta low pc
+	z80_pop
+	lsl pch 8 pch
+	or pch pc pc
+	
+	end
 
 11011011 in_abs
 	z80_fetch_immed
@@ -2077,7 +2105,7 @@ ed 10110000 ldir
 	if pvflag
 	
 	add 1 pc wz
-	sub 1 pc pc
+	sub 2 pc pc
 	cycles 5
 	
 	end
@@ -2087,10 +2115,60 @@ ed 10111000 lddr
 	if pvflag
 	
 	add 1 pc wz
-	sub 1 pc pc
+	sub 2 pc pc
 	cycles 5
 	
 	end
 	
+z80_cpd_cpi
+	local tmp 16
+	local tmp8 8
+	arg change 16
+	
+	z80_fetch_mod_hl change
+	sub scratch1 a tmp8
+	update_flags SZHXN1
+	
+	and 0x2 tmp8 tmp8
+	lsl tmp8 4 tmp8
+	and 0x88 last_flag_result last_flag_result
+	or tmp8 last_flag_result last_flag_result
+	
+	lsl b 8 tmp
+	or c tmp tmp
+	sub 1 tmp tmp
+	
+	mov tmp c
+	lsr tmp 8 b
+	mov c pvflag
+	or b pvflag pvflag
+	
+	cycles 5
+	
+ed 10100001 cpi
+	z80_cpd_cpi 1
+	
+ed 10101001 cpd
+	z80_cpd_cpi -1
+	
+ed 10110001 cpir
+	z80_cpd_cpi 1
+	if pvflag
+	
+	add 1 pc wz
+	sub 2 pc pc
+	cycles 5
+	
+	end
+	
+ed 10111001 cpdr
+	z80_cpd_cpi -1
+	if pvflag
+	
+	add 1 pc wz
+	sub 2 pc pc
+	cycles 5
+	
+	end
 
 	
