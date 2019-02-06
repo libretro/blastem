@@ -545,7 +545,7 @@ def _adcCImpl(prog, params, rawParams, flagUpdates):
 		decl,name = prog.getTemp(size)
 		dst = prog.carryFlowDst = name
 		prog.lastA = params[0]
-		prog.lastB = '({b} + ({check} ? 1 : 0))'.format(b = params[1], check = carryCheck)
+		prog.lastB = params[1]
 		prog.lastBFlow = '(~{b})'.format(b=params[1])
 	else:
 		dst = params[2]
@@ -573,7 +573,7 @@ def _sbcCImpl(prog, params, rawParams, flagUpdates):
 		decl,name = prog.getTemp(size)
 		dst = prog.carryFlowDst = name
 		prog.lastA = params[1]
-		prog.lastB = '({b} ^ ({check} ? 1 : 0))'.format(b = params[0], check = carryCheck)
+		prog.lastB = params[0]
 		prog.lastBFlow = params[0]
 	else:
 		dst = params[2]
