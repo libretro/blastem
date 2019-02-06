@@ -1191,7 +1191,7 @@ dd 10111100 cp_ixh
 	local tmp 8
 	lsr ix 8 tmp
 	mov tmp last_flag_result
-	cmp last_flag_result a
+	cmp tmp a
 	update_flags SZHVN1C
 	
 dd 10111101 cp_ixl
