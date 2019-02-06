@@ -468,10 +468,11 @@ def _cmpCImpl(prog, params, rawParams, flagUpdates):
 	if needsCarry:
 		size *= 2
 	tmpvar = 'cmp_tmp{sz}__'.format(sz=size)
-	prog.carryFlowDst = tmpvar
-	prog.lastA = params[1]
-	prog.lastB = params[0]
-	prog.lastBFlow = params[0]
+	if flagUpdates:
+		prog.carryFlowDst = tmpvar
+		prog.lastA = params[1]
+		prog.lastB = params[0]
+		prog.lastBFlow = params[0]
 	scope = prog.getRootScope()
 	if not scope.resolveLocal(tmpvar):
 		scope.addLocal(tmpvar, size)

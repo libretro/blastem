@@ -1439,6 +1439,9 @@ ed 01DDD100 neg
 
 00111111 ccf
 	local tmp 8
+	and 0x80 last_flag_result last_flag_result
+	and 0x7F a tmp
+	or tmp last_flag_result last_flag_result
 	and 0x80 chflags chflags
 	lsr chflags 4 tmp
 	or tmp chflags chflags
@@ -1446,6 +1449,10 @@ ed 01DDD100 neg
 	update_flags N0
 
 00110111 scf
+	local tmp 8
+	and 0x80 last_flag_result last_flag_result
+	and 0x7F a tmp
+	or tmp last_flag_result last_flag_result
 	update_flags H0N0C1
 
 00000000 nop
@@ -2217,24 +2224,28 @@ ed 10111001 cpdr
 	if tmp
 	
 	or 0x60 diff diff
+	update_flags C1
 	
 	else
 	
-	cmp 0xA0 a
+	cmp 0x9A a
 	if >=U
 	or 0x60 diff diff
+	update_flags C1
+	else
+	update_flags C0
 	end
 	end
 	
 	if nflag
 	
 	sub diff a a
-	update_flags SZYHPXC
+	update_flags SZYHPX
 	
 	else
 	
 	add diff a a
-	update_flags SZYHPXC
+	update_flags SZYHPX
 	
 	end
 	
