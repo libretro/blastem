@@ -333,6 +333,7 @@ def _updateFlagsCImpl(prog, params, rawParams):
 	autoUpdate, explicit = prog.flags.parseFlagUpdate(params[0])
 	output = []
 	parity = None
+	directFlags = {}
 	for flag in autoUpdate:
 		calc = prog.flags.flagCalc[flag]
 		calc,_,resultBit = calc.partition('-')
@@ -365,13 +366,10 @@ def _updateFlagsCImpl(prog, params, rawParams):
 				resultBit = int(resultBit) + prog.paramSize(prog.lastDst) - 8
 			if type(storage) is tuple:
 				reg,storageBit = storage
-				reg = prog.resolveParam(reg, None, {})
 				if storageBit == resultBit:
-					#TODO: optimize this case
-					output.append('\n\t{reg} = ({reg} & ~{mask}U) | ({res} & {mask}U);'.format(
-						reg = reg, mask = 1 << resultBit, res = myRes
-					))
+					directFlags.setdefault((reg, myRes), []).append(resultBit)
 				else:
+					reg = prog.resolveParam(reg, None, {})
 					if resultBit > storageBit:
 						op = '>>'
 						shift = resultBit - storageBit
@@ -416,6 +414,18 @@ def _updateFlagsCImpl(prog, params, rawParams):
 				parityDst = name
 		else:
 			raise Exception('Unknown flag calc type: ' + calc)
+	for reg, myRes in directFlags:
+		bits = directFlags[(reg, myRes)]
+		resolved = prog.resolveParam(reg, None, {})
+		if len(bits) == len(prog.flags.storageToFlags[reg]):
+			output.append('\n\t{reg} = {res};'.format(reg = resolved, res = myRes))
+		else:
+			mask = 0
+			for bit in bits:
+				mask |= 1 << bit
+			output.append('\n\t{reg} = ({reg} & ~{mask}U) | ({res} & {mask}U);'.format(
+				reg = resolved, mask = mask, res = myRes
+			))
 	if prog.carryFlowDst:
 		if prog.lastOp.op != 'cmp':
 			output.append('\n\t{dst} = {tmpdst};'.format(dst = prog.resolveParam(prog.lastDst, prog.currentScope, {}), tmpdst = prog.carryFlowDst))
@@ -1090,6 +1100,7 @@ class Flags:
 		self.flagCalc = {}
 		self.flagStorage = {}
 		self.flagReg = None
+		self.storageToFlags = {}
 		self.maxBit = -1
 	
 	def processLine(self, parts):
@@ -1110,6 +1121,8 @@ class Flags:
 				self.flagBits[flag] = bit
 			self.flagCalc[flag] = calc
 			self.flagStorage[flag] = storage
+			storage,_,storebit = storage.partition('.')
+			self.storageToFlags.setdefault(storage, []).append((storebit, flag))
 		return self
 	
 	def getStorage(self, flag):
