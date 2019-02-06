@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <errno.h>
+#include <time.h>
 
 extern z80inst z80_tbl_a[256];
 extern z80inst z80_tbl_extd[0xC0-0x40];
@@ -530,6 +531,7 @@ void z80_gen_all()
 
 int main(int argc, char ** argv)
 {
+	srand(time(NULL));
 	z80_gen_all();
 	return 0;
 }
