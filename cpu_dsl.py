@@ -1281,6 +1281,7 @@ class Program:
 		self.lastB = None
 		self.lastBFlow = None
 		self.conditional = False
+		self.declares = []
 		
 	def __str__(self):
 		pieces = []
@@ -1308,6 +1309,8 @@ class Program:
 		hFile.write('\n}} {0}context;'.format(self.prefix))
 		hFile.write('\n')
 		hFile.write('\nvoid {pre}execute({type} *context, uint32_t target_cycle);'.format(pre = self.prefix, type = self.context_type))
+		for decl in self.declares:
+			hFile.write('\n' + decl)
 		hFile.write('\n#endif //{0}_'.format(macro))
 		hFile.write('\n')
 		hFile.close()
@@ -1491,6 +1494,7 @@ def parse(f):
 	subroutines = {}
 	registers = None
 	flags = None
+	declares = []
 	errors = []
 	info = {}
 	line_num = 0
@@ -1505,6 +1509,8 @@ def parse(f):
 				parts = [el.strip() for el in line.split(' ')]
 				if type(cur_object) is dict:
 					cur_object[parts[0]] = parts[1:]
+				elif type(cur_object) is list:
+					cur_object.append(line.strip())
 				else:
 					cur_object = cur_object.processLine(parts)
 				
@@ -1562,6 +1568,8 @@ def parse(f):
 				if flags is None:
 					flags = Flags()
 				cur_object = flags
+			elif line.strip() == 'declare':
+				cur_object = declares
 			else:
 				cur_object = SubRoutine(line.strip())
 				subroutines[cur_object.name] = cur_object
@@ -1569,6 +1577,7 @@ def parse(f):
 		print(errors)
 	else:
 		p = Program(registers, instructions, subroutines, info, flags)
+		p.declares = declares
 		p.booleans['dynarec'] = False
 		p.booleans['interp'] = True
 		
