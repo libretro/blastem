@@ -107,22 +107,8 @@ int main(int argc, char **argv)
 	
 	z80_options opts;
 	z80_context *context;
-#ifdef NEW_CORE
-	memset(&opts, 0, sizeof(opts));
-	opts.gen.memmap = z80_map;
-	opts.gen.memmap_chunks = 1;
-	opts.gen.address_mask = 0xFFFF;
-	opts.gen.max_address = 0xFFFF;
-	opts.gen.clock_divider = 1;
-	context = calloc(1, sizeof(z80_context));
-	context->opts = &opts;
-	context->io_map = io_map;
-	context->io_chunks = 3;
-	context->io_mask = 0xFF;
-#else
 	init_z80_opts(&opts, z80_map, 1, io_map, 3, 1, 0xFF);
 	context = init_z80_context(&opts);
-#endif
 	for(;;)
 	{
 #ifdef NEW_CORE

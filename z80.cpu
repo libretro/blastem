@@ -6,6 +6,10 @@ info
 	include z80_util.c
 	header z80.h
 	
+declare
+	void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t num_chunks, memmap_chunk const * io_chunks, uint32_t num_io_chunks, uint32_t clock_divider, uint32_t io_address_mask);
+	z80_context * init_z80_context(z80_options *options);
+	
 regs
 	main 8 b c d e h l f a
 	alt 8 b' c' d' e' h' l' f' a'
