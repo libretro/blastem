@@ -302,7 +302,7 @@ vos_prog_info : vos_prog_info.o vos_program_module.o
 	$(CC) -o vos_prog_info vos_prog_info.o vos_program_module.o
 	
 %.c : %.cpu
-	./cpu_dsl.py $< > $@
+	./cpu_dsl.py -d goto $< > $@
 
 %.o : %.S
 	$(CC) -c -o $@ $<
