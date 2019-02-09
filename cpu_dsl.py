@@ -1032,8 +1032,8 @@ class Registers:
 	def addReg(self, name, size):
 		self.regs[name] = size
 		
-	def addPointer(self, name, size):
-		self.pointers[name] = size
+	def addPointer(self, name, size, count):
+		self.pointers[name] = (size, count)
 	
 	def addRegArray(self, name, size, regs):
 		self.regArrays[name] = (size, regs)
@@ -1070,12 +1070,15 @@ class Registers:
 	
 	def processLine(self, parts):
 		if len(parts) == 3:
-			self.addRegArray(parts[0], int(parts[1]), int(parts[2]))
+			if parts[1].startswith('ptr'):
+				self.addPointer(parts[0], parts[1][3:], int(parts[2]))
+			else:
+				self.addRegArray(parts[0], int(parts[1]), int(parts[2]))
 		elif len(parts) > 2:
 			self.addRegArray(parts[0], int(parts[1]), parts[2:])
 		else:
 			if parts[1].startswith('ptr'):
-				self.addPointer(parts[0], parts[1][3:])
+				self.addPointer(parts[0], parts[1][3:], 1)
 			else:
 				self.addReg(parts[0], int(parts[1]))
 		return self
@@ -1084,13 +1087,17 @@ class Registers:
 		fieldList = []
 		for pointer in self.pointers:
 			stars = '*'
-			ptype = self.pointers[pointer]
+			ptype, count = self.pointers[pointer]
 			while ptype.startswith('ptr'):
 				stars += '*'
 				ptype = ptype[3:]
 			if ptype.isdigit():
 				ptype = 'uint{sz}_t'.format(sz=ptype)
-			hFile.write('\n\t{ptype} {stars}{nm};'.format(nm=pointer, ptype=ptype, stars=stars))
+			if count > 1:
+				arr = '[{n}]'.format(n=count)
+			else:
+				arr = ''
+			hFile.write('\n\t{ptype} {stars}{nm}{arr};'.format(nm=pointer, ptype=ptype, stars=stars, arr=arr))
 		for reg in self.regs:
 			if not self.isRegArrayMember(reg):
 				fieldList.append((self.regs[reg], 1, reg))
