@@ -117,7 +117,8 @@ CFLAGS+= -DZ80_LOG_ADDRESS
 endif
 
 ifdef PROFILE
-LDFLAGS+= -Wl,--no-as-needed -lprofiler -Wl,--as-needed
+PROFFLAGS:= -Wl,--no-as-needed -lprofiler -Wl,--as-needed
+CFLAGS+= -g3
 endif
 ifdef NOGL
 CFLAGS+= -DDISABLE_OPENGL
@@ -236,7 +237,7 @@ libblastem.so : $(LIBOBJS)
 	$(CC) -shared -o $@ $^ $(LDFLAGS)
 
 blastem$(EXE) : $(MAINOBJS)
-	$(CC) -o $@ $^ $(LDFLAGS)
+	$(CC) -o $@ $^ $(LDFLAGS) $(PROFFLAGS)
 	$(FIXUP) ./$@
 	
 blastjag$(EXE) : jaguar.o jag_video.o $(RENDEROBJS) serialize.o $(M68KOBJS) $(TRANSOBJS) $(CONFIGOBJS)
@@ -275,7 +276,7 @@ vgmplay$(EXE) : vgmplay.o $(RENDEROBJS) serialize.o $(CONFIGOBJS) $(AUDIOOBJS)
 	$(FIXUP) ./$@
 
 blastcpm : blastcpm.o util.o serialize.o $(Z80OBJS) $(TRANSOBJS)
-	$(CC) -o $@ $^ $(OPT)
+	$(CC) -o $@ $^ $(OPT) $(PROFFLAGS)
 
 test : test.o vdp.o
 	$(CC) -o test test.o vdp.o
