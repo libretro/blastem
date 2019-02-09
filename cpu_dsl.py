@@ -130,7 +130,13 @@ class Instruction(Block):
 		self.newLocals = []
 		fieldVals,_ = self.getFieldVals(value)
 		self.processOps(prog, fieldVals, output, otype, self.implementation)
-		begin = '\nvoid ' + self.generateName(value) + '(' + prog.context_type + ' *context)\n{'
+		
+		if prog.dispatch == 'call':
+			begin = '\nvoid ' + self.generateName(value) + '(' + prog.context_type + ' *context)\n{'
+		elif prog.dispatch == 'goto':
+			begin = '\n' + self.generateName(value) + ': {'
+		else:
+			raise Exception('Unsupported dispatch type ' + prog.dispatch)
 		if prog.needFlagCoalesce:
 			begin += prog.flags.coalesceFlags(prog, otype)
 		if prog.needFlagDisperse:
@@ -138,6 +144,8 @@ class Instruction(Block):
 		for var in self.newLocals:
 			begin += '\n\tuint{sz}_t {name};'.format(sz=self.locals[var], name=var)
 		prog.popScope()
+		if prog.dispatch == 'goto':
+			output += prog.nextInstruction(otype)
 		return begin + ''.join(output) + '\n}'
 		
 	def __str__(self):
@@ -327,7 +335,12 @@ def _dispatchCImpl(prog, params):
 		table = 'main'
 	else:
 		table = params[1]
-	return '\n\timpl_{tbl}[{op}](context);'.format(tbl = table, op = params[0])
+	if prog.dispatch == 'call':
+		return '\n\timpl_{tbl}[{op}](context);'.format(tbl = table, op = params[0])
+	elif prog.dispatch == 'goto':
+		return '\n\tgoto *impl_{tbl}[{op}];'.format(tbl = table, op = params[0])
+	else:
+		raise Exception('Unsupported dispatch type ' + prog.dispatch)
 
 def _updateFlagsCImpl(prog, params, rawParams):
 	autoUpdate, explicit = prog.flags.parseFlagUpdate(params[0])
@@ -1315,7 +1328,7 @@ class Program:
 		hFile.write('\n')
 		hFile.close()
 		
-	def _buildTable(self, otype, table, body):
+	def _buildTable(self, otype, table, body, lateBody):
 		pieces = []
 		opmap = [None] * (1 << self.opsize)
 		bodymap = {}
@@ -1333,34 +1346,61 @@ class Program:
 						opmap[val] = inst.generateName(val)
 						bodymap[val] = inst.generateBody(val, self, otype)
 		
-		pieces.append('\nstatic impl_fun impl_{name}[{sz}] = {{'.format(name = table, sz=len(opmap)))
-		for inst in range(0, len(opmap)):
-			op = opmap[inst]
-			if op is None:
-				pieces.append('\n\tunimplemented,')
-			else:
-				pieces.append('\n\t' + op + ',')
-				body.append(bodymap[inst])
-		pieces.append('\n};')
+		if self.dispatch == 'call':
+			pieces.append('\nstatic impl_fun impl_{name}[{sz}] = {{'.format(name = table, sz=len(opmap)))
+			for inst in range(0, len(opmap)):
+				op = opmap[inst]
+				if op is None:
+					pieces.append('\n\tunimplemented,')
+				else:
+					pieces.append('\n\t' + op + ',')
+					body.append(bodymap[inst])
+			pieces.append('\n};')
+		elif self.dispatch == 'goto':
+			body.append('\n\tstatic void *impl_{name}[{sz}] = {{'.format(name = table, sz=len(opmap)))
+			for inst in range(0, len(opmap)):
+				op = opmap[inst]
+				if op is None:
+					body.append('\n\t\t&&unimplemented,')
+				else:
+					body.append('\n\t\t&&' + op + ',')
+					lateBody.append(bodymap[inst])
+			body.append('\n\t};')
+		else:
+			raise Exception("unimplmeneted dispatch type " + self.dispatch)
 		body.extend(pieces)
+		
+	def nextInstruction(self, otype):
+		output = []
+		if self.dispatch == 'goto':
+			output.append('\n\tif (context->cycles >= target_cycle) { return; }')
+			self.meta = {}
+			self.temp = {}
+			self.subroutines[self.body].inline(self, [], output, otype, None)
+		return output
 	
 	def build(self, otype):
 		body = []
 		pieces = []
 		for include in self.includes:
 			body.append('#include "{0}"\n'.format(include))
-		body.append('\nstatic void unimplemented({pre}context *context)'.format(pre = self.prefix))
-		body.append('\n{')
-		body.append('\n\tfatal_error("Unimplemented instruction\\n");')
-		body.append('\n}\n')
-		body.append('\ntypedef void (*impl_fun)({pre}context *context);'.format(pre=self.prefix))
+		if self.dispatch == 'call':
+			body.append('\nstatic void unimplemented({pre}context *context)'.format(pre = self.prefix))
+			body.append('\n{')
+			body.append('\n\tfatal_error("Unimplemented instruction\\n");')
+			body.append('\n}\n')
+			body.append('\ntypedef void (*impl_fun)({pre}context *context);'.format(pre=self.prefix))
+			for table in self.extra_tables:
+				body.append('\nstatic impl_fun impl_{name}[{sz}];'.format(name = table, sz=(1 << self.opsize)))
+			body.append('\nstatic impl_fun impl_main[{sz}];'.format(sz=(1 << self.opsize)))
+		elif self.dispatch == 'goto':
+			body.append('\nvoid {pre}execute({type} *context, uint32_t target_cycle)'.format(pre = self.prefix, type = self.context_type))
+			body.append('\n{')
+			
 		for table in self.extra_tables:
-			body.append('\nstatic impl_fun impl_{name}[{sz}];'.format(name = table, sz=(1 << self.opsize)))
-		body.append('\nstatic impl_fun impl_main[{sz}];'.format(sz=(1 << self.opsize)))
-		for table in self.extra_tables:
-			self._buildTable(otype, table, body)
-		self._buildTable(otype, 'main', body)
-		if self.body in self.subroutines:
+			self._buildTable(otype, table, body, pieces)
+		self._buildTable(otype, 'main', body, pieces)
+		if self.dispatch == 'call' and self.body in self.subroutines:
 			pieces.append('\nvoid {pre}execute({type} *context, uint32_t target_cycle)'.format(pre = self.prefix, type = self.context_type))
 			pieces.append('\n{')
 			pieces.append('\n\twhile (context->cycles < target_cycle)')
@@ -1369,6 +1409,11 @@ class Program:
 			self.temp = {}
 			self.subroutines[self.body].inline(self, [], pieces, otype, None)
 			pieces.append('\n\t}')
+			pieces.append('\n}')
+		elif self.dispatch == 'goto':
+			body += self.nextInstruction(otype)
+			pieces.append('\nunimplemented:')
+			pieces.append('\n\tfatal_error("Unimplemented instruction\\n");')
 			pieces.append('\n}')
 		return ''.join(body) +  ''.join(pieces)
 		
@@ -1489,7 +1534,8 @@ class Program:
 	def getRootScope(self):
 		return self.scopes[0]
 
-def parse(f):
+def parse(args):
+	f = args.source
 	instructions = {}
 	subroutines = {}
 	registers = None
@@ -1577,9 +1623,19 @@ def parse(f):
 		print(errors)
 	else:
 		p = Program(registers, instructions, subroutines, info, flags)
+		p.dispatch = args.dispatch
 		p.declares = declares
 		p.booleans['dynarec'] = False
 		p.booleans['interp'] = True
+		if args.define:
+			for define in args.define:
+				name,sep,val = define.partition('=')
+				name = name.strip()
+				val = val.strip()
+				if sep:
+					p.booleans[name] = bool(val)
+				else:
+					p.booleans[name] = True
 		
 		if 'header' in info:
 			print('#include "{0}"'.format(info['header'][0]))
@@ -1589,8 +1645,12 @@ def parse(f):
 		print(p.build('c'))
 
 def main(argv):
-	f =  open(argv[1])
-	parse(f)
+	from argparse import ArgumentParser, FileType
+	argParser = ArgumentParser(description='CPU emulator DSL compiler')
+	argParser.add_argument('source', type=FileType('r'))
+	argParser.add_argument('-D', '--define', action='append')
+	argParser.add_argument('-d', '--dispatch', choices=('call', 'switch', 'goto'), default='call')
+	parse(argParser.parse_args(argv[1:]))
 
 if __name__ == '__main__':
 	from sys import argv
