@@ -34,6 +34,7 @@ regs
 	io_map ptrmemmap_chunk
 	io_chunks 32
 	io_mask 32
+	fastmem ptr8 64
 	
 flags
 	register f
