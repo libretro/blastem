@@ -9,7 +9,11 @@
 #include <stdint.h>
 #include "system.h"
 #include "m68k_core.h"
+#ifdef NEW_CORE
+#include "z80.h"
+#else
 #include "z80_to_x86.h"
+#endif
 #include "ym2612.h"
 #include "vdp.h"
 #include "psg.h"
@@ -55,6 +59,7 @@ struct genesis_context {
 	uint8_t         version_reg;
 	uint8_t         bus_busy;
 	uint8_t         reset_requested;
+	uint8_t         z80_bank_reg;
 	eeprom_state    eeprom;
 	nor_state       nor;
 };

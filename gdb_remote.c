@@ -132,7 +132,7 @@ void update_status(m68k_context * context, uint16_t value)
 	}
 }
 
-uint8_t read_byte(m68k_context * context, uint32_t address)
+uint8_t m68k_read_byte(m68k_context * context, uint32_t address)
 {
 	
 	genesis_context *gen = context->system;
@@ -150,7 +150,7 @@ uint8_t read_byte(m68k_context * context, uint32_t address)
 	return 0;
 }
 
-void write_byte(m68k_context * context, uint32_t address, uint8_t value)
+void m68k_write_byte(m68k_context * context, uint32_t address, uint8_t value)
 {
 	genesis_context *gen = context->system;
 	//TODO: Use generated read/write functions so that memory map is properly respected
@@ -170,7 +170,7 @@ void write_byte(m68k_context * context, uint32_t address, uint8_t value)
 	if (address >= 0xA00000 && address < 0xA04000) {
 		gen->zram[address & 0x1FFF] = value;
 		genesis_context * gen = context->system;
-#ifndef NO_Z80
+#if !defined(NO_Z80) && !defined(NEW_CORE)
 		z80_handle_code_write(address & 0x1FFF, gen->z80);
 #endif
 		return;
@@ -305,7 +305,7 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 		char *cur = send_buf;
 		while (size)
 		{
-			hex_8(read_byte(context, address), cur);
+			hex_8(m68k_read_byte(context, address), cur);
 			cur += 2;
 			address++;
 			size--;
@@ -326,7 +326,7 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 			tmp[0] = *(cur++);
 			tmp[1] = *(cur++);
 			tmp[2] = 0;
-			write_byte(context, address, strtoul(tmp, NULL, 16));
+			m68k_write_byte(context, address, strtoul(tmp, NULL, 16));
 			address++;
 			size--;
 		}

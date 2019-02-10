@@ -4,7 +4,11 @@
 #include "system.h"
 #include "vdp.h"
 #include "psg.h"
+#ifdef NEW_CORE
+#include "z80.h"
+#else
 #include "z80_to_x86.h"
+#endif
 #include "io.h"
 
 #define SMS_RAM_SIZE (8*1024)

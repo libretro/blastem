@@ -7,7 +7,7 @@ void z80_read_8(z80_context *context)
 	if (fast) {
 		context->scratch1 = fast[context->scratch1 & 0x3FF];
 	} else {
-		context->scratch1 = read_byte(context->scratch1, NULL, &context->opts->gen, context);
+		context->scratch1 = read_byte(context->scratch1, (void **)context->mem_pointers, &context->opts->gen, context);
 	}
 }
 
@@ -18,7 +18,7 @@ void z80_write_8(z80_context *context)
 	if (fast) {
 		fast[context->scratch2 & 0x3FF] = context->scratch1;
 	} else {
-		write_byte(context->scratch2, context->scratch1, NULL, &context->opts->gen, context);
+		write_byte(context->scratch2, context->scratch1, (void **)context->mem_pointers, &context->opts->gen, context);
 	}
 }
 
@@ -32,7 +32,7 @@ void z80_io_read8(z80_context *context)
 	context->opts->gen.memmap = context->io_map;
 	context->opts->gen.memmap_chunks = context->io_chunks;
 	
-	context->scratch1 = read_byte(context->scratch1, NULL, &context->opts->gen, context);
+	context->scratch1 = read_byte(context->scratch1, (void **)context->mem_pointers, &context->opts->gen, context);
 	
 	context->opts->gen.address_mask = tmp_mask;
 	context->opts->gen.memmap = tmp_map;
@@ -49,7 +49,7 @@ void z80_io_write8(z80_context *context)
 	context->opts->gen.memmap = context->io_map;
 	context->opts->gen.memmap_chunks = context->io_chunks;
 	
-	write_byte(context->scratch2, context->scratch1, NULL, &context->opts->gen, context);
+	write_byte(context->scratch2, context->scratch1, (void **)context->mem_pointers, &context->opts->gen, context);
 	
 	context->opts->gen.address_mask = tmp_mask;
 	context->opts->gen.memmap = tmp_map;
@@ -72,6 +72,11 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	tmp_io_mask = io_address_mask;
 }
 
+void z80_options_free(z80_options *opts)
+{
+	free(opts);
+}
+
 z80_context * init_z80_context(z80_options *options)
 {
 	z80_context *context = calloc(1, sizeof(z80_context));
@@ -79,11 +84,12 @@ z80_context * init_z80_context(z80_options *options)
 	context->io_map = (memmap_chunk *)tmp_io_chunks;
 	context->io_chunks = tmp_num_io_chunks;
 	context->io_mask = tmp_io_mask;
+	context->int_cycle = context->nmi_cycle = 0xFFFFFFFFU;
 	for(uint32_t address = 0; address < 0x10000; address+=1024)
 	{
-		uint8_t *start = get_native_pointer(address, NULL, &options->gen);
+		uint8_t *start = get_native_pointer(address, (void**)context->mem_pointers, &options->gen);
 		if (start) {
-			uint8_t *end = get_native_pointer(address + 1023, NULL, &options->gen);
+			uint8_t *end = get_native_pointer(address + 1023, (void**)context->mem_pointers, &options->gen);
 			if (end && end - start == 1023) {
 				context->fastmem[address >> 10] = start;
 			}
@@ -92,3 +98,136 @@ z80_context * init_z80_context(z80_options *options)
 	return context;
 }
 
+uint32_t z80_sync_cycle(z80_context *context, uint32_t target_cycle)
+{
+	if (context->iff1 && context->int_cycle < target_cycle) {
+		target_cycle = context->int_cycle;
+	};
+	if (context->nmi_cycle < target_cycle) {
+		target_cycle = context->nmi_cycle;
+	}
+	return target_cycle;
+}
+
+void z80_run(z80_context *context, uint32_t target_cycle)
+{
+	if (context->reset || context->busack) {
+		context->cycles = target_cycle;
+	} else if (target_cycle > context->cycles) {
+		if (context->busreq) {
+			//busreq is sampled at the end of an m-cycle
+			//we can approximate that by running for a single m-cycle after a bus request
+			target_cycle = context->cycles + 4 * context->opts->gen.clock_divider;
+		}
+		z80_execute(context, target_cycle);
+		if (context->busreq) {
+			context->busack = 1;
+		}
+	}
+}
+
+void z80_assert_reset(z80_context * context, uint32_t cycle)
+{
+	z80_run(context, cycle);
+	context->reset = 1;
+}
+
+void z80_clear_reset(z80_context * context, uint32_t cycle)
+{
+	z80_run(context, cycle);
+	if (context->reset) {
+		context->imode = 0;
+		context->iff1 = context->iff2 = 0;
+		context->pc = 0;
+		context->reset = 0;
+		if (context->busreq) {
+			//TODO: Figure out appropriate delay
+			context->busack = 1;
+		}
+	}
+}
+
+#define MAX_MCYCLE_LENGTH 6
+void z80_assert_busreq(z80_context * context, uint32_t cycle)
+{
+	z80_run(context, cycle);
+	context->busreq = 1;
+	//this is an imperfect aproximation since most M-cycles take less tstates than the max
+	//and a short 3-tstate m-cycle can take an unbounded number due to wait states
+	if (context->cycles - cycle > MAX_MCYCLE_LENGTH * context->opts->gen.clock_divider) {
+		context->busack = 1;
+	}
+}
+
+void z80_clear_busreq(z80_context * context, uint32_t cycle)
+{
+	z80_run(context, cycle);
+	context->busreq = 0;
+	context->busack = 0;
+	//there appears to be at least a 1 Z80 cycle delay between busreq
+	//being released and resumption of execution
+	context->cycles += context->opts->gen.clock_divider;
+}
+
+void z80_assert_nmi(z80_context *context, uint32_t cycle)
+{
+	context->nmi_cycle = cycle;
+}
+
+uint8_t z80_get_busack(z80_context * context, uint32_t cycle)
+{
+	z80_run(context, cycle);
+	return context->busack;
+}
+
+void z80_invalidate_code_range(z80_context *context, uint32_t startA, uint32_t endA)
+{
+	for(startA &= ~0x3FF; startA += 1024; startA < endA)
+	{
+		uint8_t *start = get_native_pointer(startA, (void**)context->mem_pointers, &context->opts->gen);
+		if (start) {
+			uint8_t *end = get_native_pointer(startA + 1023, (void**)context->mem_pointers, &context->opts->gen);
+			if (!end || end - start != 1023) {
+				start = NULL;
+			}
+		}
+		context->fastmem[startA >> 10] = start;
+	}
+}
+
+void z80_adjust_cycles(z80_context * context, uint32_t deduction)
+{
+	context->cycles -= deduction;
+	if (context->int_cycle != 0xFFFFFFFFU) {
+		if (context->int_cycle > deduction) {
+			context->int_cycle -= deduction;
+		} else {
+			context->int_cycle = 0;
+		}
+	}
+	if (context->nmi_cycle != 0xFFFFFFFFU) {
+		if (context->nmi_cycle > deduction) {
+			context->nmi_cycle -= deduction;
+		} else {
+			context->nmi_cycle = 0;
+		}
+	}
+}
+
+void z80_serialize(z80_context *context, serialize_buffer *buf)
+{
+	//TODO: Implement me
+}
+
+void z80_deserialize(deserialize_buffer *buf, void *vcontext)
+{
+	//TODO: Implement me
+}
+
+void zinsert_breakpoint(z80_context * context, uint16_t address, uint8_t * bp_handler)
+{
+}
+
+void zremove_breakpoint(z80_context * context, uint16_t address)
+{
+}
