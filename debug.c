@@ -9,6 +9,13 @@
 #include "render.h"
 #include "util.h"
 #include "terminal.h"
+#include "z80inst.h"
+
+#ifdef NEW_CORE
+#define Z80_OPTS opts
+#else
+#define Z80_OPTS options
+#endif
 
 static bp_def * breakpoints = NULL;
 static bp_def * zbreakpoints = NULL;
@@ -190,6 +197,7 @@ void zdebugger_print(z80_context * context, char format_char, char * param)
 	}
 	switch (param[0])
 	{
+#ifndef NEW_CORE
 	case 'a':
 		if (param[1] == 'f') {
 			if(param[2] == '\'') {
@@ -331,6 +339,7 @@ void zdebugger_print(z80_context * context, char format_char, char * param)
 			value = context->im;
 		}
 		break;
+#endif
 	case 's':
 		if (param[1] == 'p') {
 			value = context->sp;
@@ -342,7 +351,7 @@ void zdebugger_print(z80_context * context, char format_char, char * param)
 			if (p_addr < 0x4000) {
 				value = system->zram[p_addr & 0x1FFF];
 			} else if(p_addr >= 0x8000) {
-				uint32_t v_addr = context->bank_reg << 15;
+				uint32_t v_addr = system->z80_bank_reg << 15;
 				v_addr += p_addr & 0x7FFF;
 				if (v_addr < 0x400000) {
 					value = system->cart[v_addr/2];
@@ -377,7 +386,7 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 	} else {
 		zremove_breakpoint(context, address);
 	}
-	uint8_t * pc = get_native_pointer(address, (void **)context->mem_pointers, &context->options->gen);
+	uint8_t * pc = get_native_pointer(address, (void **)context->mem_pointers, &context->Z80_OPTS->gen);
 	if (!pc) {
 		fatal_error("Failed to get native pointer on entering Z80 debugger at address %X\n", address);
 	}
@@ -487,19 +496,21 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 					if (inst.addr_mode == Z80_IMMED) {
 						after = inst.immed;
 					} else if (inst.ea_reg == Z80_HL) {
+#ifndef NEW_CORE
 						after = context->regs[Z80_H] << 8 | context->regs[Z80_L];
 					} else if (inst.ea_reg == Z80_IX) {
 						after = context->regs[Z80_IXH] << 8 | context->regs[Z80_IXL];
 					} else if (inst.ea_reg == Z80_IY) {
 						after = context->regs[Z80_IYH] << 8 | context->regs[Z80_IYL];
+#endif
 					}
 				} else if(inst.op == Z80_JR) {
 					after += inst.immed;
 				} else if(inst.op == Z80_RET) {
-					uint8_t *sp = get_native_pointer(context->sp, (void **)context->mem_pointers, &context->options->gen);
+					uint8_t *sp = get_native_pointer(context->sp, (void **)context->mem_pointers, &context->Z80_OPTS->gen);
 					if (sp) {
 						after = *sp;
-						sp = get_native_pointer((context->sp + 1) & 0xFFFF, (void **)context->mem_pointers, &context->options->gen);
+						sp = get_native_pointer((context->sp + 1) & 0xFFFF, (void **)context->mem_pointers, &context->Z80_OPTS->gen);
 						if (sp) {
 							after |= *sp << 8;
 						}
@@ -527,9 +538,9 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 					break;
 				}
 				memmap_chunk const *ram_chunk = NULL;
-				for (int i = 0; i < context->options->gen.memmap_chunks; i++)
+				for (int i = 0; i < context->Z80_OPTS->gen.memmap_chunks; i++)
 				{
-					memmap_chunk const *cur = context->options->gen.memmap + i;
+					memmap_chunk const *cur = context->Z80_OPTS->gen.memmap + i;
 					if (cur->flags & MMAP_WRITE) {
 						ram_chunk = cur;
 						break;
@@ -540,7 +551,7 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 					if (size > ram_chunk->mask) {
 						size = ram_chunk->mask+1;
 					}
-					uint8_t *buf = get_native_pointer(ram_chunk->start, (void **)context->mem_pointers, &context->options->gen);
+					uint8_t *buf = get_native_pointer(ram_chunk->start, (void **)context->mem_pointers, &context->Z80_OPTS->gen);
 					FILE * f = fopen(param, "wb");
 					if (f) {
 						if(fwrite(buf, 1, size, f) != size) {
@@ -558,8 +569,8 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 			}
 			default:
 				if (
-					!context->options->gen.debug_cmd_handler
-					|| !context->options->gen.debug_cmd_handler(&system->header, input_buf)
+					!context->Z80_OPTS->gen.debug_cmd_handler
+					|| !context->Z80_OPTS->gen.debug_cmd_handler(&system->header, input_buf)
 				) {
 					fprintf(stderr, "Unrecognized debugger command %s\n", input_buf);
 				}

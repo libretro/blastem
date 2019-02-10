@@ -666,6 +666,9 @@ def _rrcCImpl(prog, params, rawParams, flagUpdates):
 	return decl + '\n\t{dst} = {a} >> {b} | {a} << ({size} + 1 - {b}) | ({check} ? 1 : 0) << ({size}-{b});'.format(dst = dst,
 		a = params[0], b = params[1], size=size, check=carryCheck
 	)
+	
+def _updateSyncCImpl(prog, params):
+	return '\n\tsync_cycle = {sync}(context, target_cycle);'.format(sync=prog.sync_cycle)
 
 _opMap = {
 	'mov': Op(lambda val: val).cUnaryOperator(''),
@@ -711,7 +714,8 @@ _opMap = {
 	)),
 	'xchg': Op().addImplementation('c', (0,1), _xchgCImpl),
 	'dispatch': Op().addImplementation('c', None, _dispatchCImpl),
-	'update_flags': Op().addImplementation('c', None, _updateFlagsCImpl)
+	'update_flags': Op().addImplementation('c', None, _updateFlagsCImpl),
+	'update_sync': Op().addImplementation('c', None, _updateSyncCImpl)
 }
 
 #represents a simple DSL instruction
@@ -1028,6 +1032,7 @@ class Registers:
 		self.pointers = {}
 		self.regArrays = {}
 		self.regToArray = {}
+		self.addReg('cycles', 32)
 	
 	def addReg(self, name, size):
 		self.regs[name] = size
@@ -1290,6 +1295,8 @@ class Program:
 		self.extra_tables = info.get('extra_tables', [])
 		self.context_type = self.prefix + 'context'
 		self.body = info.get('body', [None])[0]
+		self.interrupt = info.get('interrupt', [None])[0]
+		self.sync_cycle = info.get('sync_cycle', [None])[0]
 		self.includes = info.get('include', [])
 		self.flags = flags
 		self.lastDst = None
@@ -1324,7 +1331,6 @@ class Program:
 		hFile.write('\n}} {0}options;'.format(self.prefix))
 		hFile.write('\n\ntypedef struct {')
 		hFile.write('\n\t{0}options *opts;'.format(self.prefix))
-		hFile.write('\n\tuint32_t cycles;')
 		self.regs.writeHeader(otype, hFile)
 		hFile.write('\n}} {0}context;'.format(self.prefix))
 		hFile.write('\n')
@@ -1380,7 +1386,15 @@ class Program:
 	def nextInstruction(self, otype):
 		output = []
 		if self.dispatch == 'goto':
+			if self.interrupt in self.subroutines:
+				output.append('\n\tif (context->cycles >= sync_cycle) {')
 			output.append('\n\tif (context->cycles >= target_cycle) { return; }')
+			if self.interrupt in self.subroutines:
+				self.meta = {}
+				self.temp = {}
+				self.subroutines[self.interrupt].inline(self, [], output, otype, None)
+				output.append('\n\t}')
+			
 			self.meta = {}
 			self.temp = {}
 			self.subroutines[self.body].inline(self, [], output, otype, None)
@@ -1410,14 +1424,17 @@ class Program:
 		if self.dispatch == 'call' and self.body in self.subroutines:
 			pieces.append('\nvoid {pre}execute({type} *context, uint32_t target_cycle)'.format(pre = self.prefix, type = self.context_type))
 			pieces.append('\n{')
+			pieces.append('\n\tuint32_t sync_cycle = {sync}(context, target_cycle);'.format(sync=self.sync_cycle))
 			pieces.append('\n\twhile (context->cycles < target_cycle)')
 			pieces.append('\n\t{')
+			#TODO: Handle interrupts in call dispatch mode
 			self.meta = {}
 			self.temp = {}
 			self.subroutines[self.body].inline(self, [], pieces, otype, None)
 			pieces.append('\n\t}')
 			pieces.append('\n}')
 		elif self.dispatch == 'goto':
+			body.append('\n\tuint32_t sync_cycle = {sync}(context, target_cycle);'.format(sync=self.sync_cycle))
 			body += self.nextInstruction(otype)
 			pieces.append('\nunimplemented:')
 			pieces.append('\n\tfatal_error("Unimplemented instruction\\n");')

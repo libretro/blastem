@@ -39,6 +39,15 @@ uint32_t MCLKS_PER_68K;
 #define MAX_SOUND_CYCLES 100000	
 #endif
 
+#ifdef NEW_CORE
+#define Z80_CYCLE cycles
+#define Z80_OPTS opts
+#define z80_handle_code_write(...)
+#else
+#define Z80_CYCLE current_cycle
+#define Z80_OPTS options
+#endif
+
 void genesis_serialize(genesis_context *gen, serialize_buffer *buf, uint32_t m68k_pc)
 {
 	start_section(buf, SECTION_68000);
@@ -64,7 +73,7 @@ void genesis_serialize(genesis_context *gen, serialize_buffer *buf, uint32_t m68
 	start_section(buf, SECTION_GEN_BUS_ARBITER);
 	save_int8(buf, gen->z80->reset);
 	save_int8(buf, gen->z80->busreq);
-	save_int16(buf, gen->z80->bank_reg);
+	save_int16(buf, gen->z80_bank_reg);
 	end_section(buf);
 	
 	start_section(buf, SECTION_SEGA_IO_1);
@@ -141,8 +150,8 @@ static void zram_deserialize(deserialize_buffer *buf, void *vgen)
 
 static void update_z80_bank_pointer(genesis_context *gen)
 {
-	if (gen->z80->bank_reg < 0x140) {
-		gen->z80->mem_pointers[1] = get_native_pointer(gen->z80->bank_reg << 15, (void **)gen->m68k->mem_pointers, &gen->m68k->options->gen);
+	if (gen->z80_bank_reg < 0x140) {
+		gen->z80->mem_pointers[1] = get_native_pointer(gen->z80_bank_reg << 15, (void **)gen->m68k->mem_pointers, &gen->m68k->options->gen);
 	} else {
 		gen->z80->mem_pointers[1] = NULL;
 	}
@@ -153,7 +162,7 @@ static void bus_arbiter_deserialize(deserialize_buffer *buf, void *vgen)
 	genesis_context *gen = vgen;
 	gen->z80->reset = load_int8(buf);
 	gen->z80->busreq = load_int8(buf);
-	gen->z80->bank_reg = load_int16(buf) & 0x1FF;
+	gen->z80_bank_reg = load_int16(buf) & 0x1FF;
 }
 
 static void adjust_int_cycle(m68k_context * context, vdp_context * v_context);
@@ -284,6 +293,7 @@ static void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 #define dputs
 #endif
 
+#ifndef NEW_CORE
 static void z80_next_int_pulse(z80_context * z_context)
 {
 	genesis_context * gen = z_context->system;
@@ -291,6 +301,7 @@ static void z80_next_int_pulse(z80_context * z_context)
 	z_context->int_pulse_end = z_context->int_pulse_start + Z80_INT_PULSE_MCLKS;
 	z_context->im2_vector = 0xFF;
 }
+#endif
 
 static void sync_z80(z80_context * z_context, uint32_t mclks)
 {
@@ -300,7 +311,7 @@ static void sync_z80(z80_context * z_context, uint32_t mclks)
 	} else
 #endif
 	{
-		z_context->current_cycle = mclks;
+		z_context->Z80_CYCLE = mclks;
 	}
 }
 
@@ -410,9 +421,14 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			gen->header.enter_debugger = 0;
 			debugger(context, address);
 		}
+#ifdef NEW_CORE
+		if (gen->header.save_state) {
+#else
 		if (gen->header.save_state && (z_context->pc || !z_context->native_pc || z_context->reset || !z_context->busreq)) {
+#endif
 			uint8_t slot = gen->header.save_state - 1;
 			gen->header.save_state = 0;
+#ifndef NEW_CORE
 			if (z_context->native_pc && !z_context->reset) {
 				//advance Z80 core to the start of an instruction
 				while (!z_context->pc)
@@ -420,6 +436,7 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 					sync_z80(z_context, z_context->current_cycle + MCLKS_PER_Z80);
 				}
 			}
+#endif
 			char *save_path = slot == SERIALIZE_SLOT ? NULL : get_slot_name(&gen->header, slot, use_native_states ? "state" : "gst");
 			if (use_native_states || slot == SERIALIZE_SLOT) {
 				serialize_buffer state;
@@ -571,16 +588,16 @@ static void * z80_vdp_port_write(uint32_t vdp_port, void * vcontext, uint8_t val
 	if (vdp_port < 0x10) {
 		//These probably won't currently interact well with the 68K accessing the VDP
 		if (vdp_port < 4) {
-			vdp_run_context(gen->vdp, context->current_cycle);
+			vdp_run_context(gen->vdp, context->Z80_CYCLE);
 			vdp_data_port_write(gen->vdp, value << 8 | value);
 		} else if (vdp_port < 8) {
-			vdp_run_context_full(gen->vdp, context->current_cycle);
+			vdp_run_context_full(gen->vdp, context->Z80_CYCLE);
 			vdp_control_port_write(gen->vdp, value << 8 | value);
 		} else {
 			fatal_error("Illegal write to HV Counter port %X\n", vdp_port);
 		}
 	} else if (vdp_port < 0x18) {
-		sync_sound(gen, context->current_cycle);
+		sync_sound(gen, context->Z80_CYCLE);
 		psg_write(gen->psg, value);
 	} else {
 		vdp_test_port_write(gen->vdp, value);
@@ -659,7 +676,7 @@ static uint8_t z80_vdp_port_read(uint32_t vdp_port, void * vcontext)
 	genesis_context * gen = context->system;
 	//VDP access goes over the 68K bus like a bank area access
 	//typical delay from bus arbitration
-	context->current_cycle += 3 * MCLKS_PER_Z80;
+	context->Z80_CYCLE += 3 * MCLKS_PER_Z80;
 	//TODO: add cycle for an access right after a previous one
 	//TODO: Below cycle time is an estimate based on the time between 68K !BG goes low and Z80 !MREQ goes high
 	//      Needs a new logic analyzer capture to get the actual delay on the 68K side
@@ -670,7 +687,7 @@ static uint8_t z80_vdp_port_read(uint32_t vdp_port, void * vcontext)
 	uint16_t ret;
 	if (vdp_port < 0x10) {
 		//These probably won't currently interact well with the 68K accessing the VDP
-		vdp_run_context(gen->vdp, context->current_cycle);
+		vdp_run_context(gen->vdp, context->Z80_CYCLE);
 		if (vdp_port < 4) {
 			ret = vdp_data_port_read(gen->vdp);
 		} else if (vdp_port < 8) {
@@ -711,9 +728,9 @@ static m68k_context * io_write(uint32_t location, m68k_context * context, uint8_
 					ym_address_write_part1(gen->ym, value);
 				}
 			} else if (location == 0x6000) {
-				gen->z80->bank_reg = (gen->z80->bank_reg >> 1 | value << 8) & 0x1FF;
-				if (gen->z80->bank_reg < 0x80) {
-					gen->z80->mem_pointers[1] = (gen->z80->bank_reg << 15) + ((char *)gen->z80->mem_pointers[2]);
+				gen->z80_bank_reg = (gen->z80_bank_reg >> 1 | value << 8) & 0x1FF;
+				if (gen->z80_bank_reg < 0x80) {
+					gen->z80->mem_pointers[1] = (gen->z80_bank_reg << 15) + ((char *)gen->z80->mem_pointers[2]);
 				} else {
 					gen->z80->mem_pointers[1] = NULL;
 				}
@@ -942,7 +959,7 @@ static void * z80_write_ym(uint32_t location, void * vcontext, uint8_t value)
 {
 	z80_context * context = vcontext;
 	genesis_context * gen = context->system;
-	sync_sound(gen, context->current_cycle);
+	sync_sound(gen, context->Z80_CYCLE);
 	if (location & 1) {
 		ym_data_write(gen->ym, value);
 	} else if (location & 2) {
@@ -957,7 +974,7 @@ static uint8_t z80_read_ym(uint32_t location, void * vcontext)
 {
 	z80_context * context = vcontext;
 	genesis_context * gen = context->system;
-	sync_sound(gen, context->current_cycle);
+	sync_sound(gen, context->Z80_CYCLE);
 	return ym_read_status(gen->ym);
 }
 
@@ -966,10 +983,10 @@ static uint8_t z80_read_bank(uint32_t location, void * vcontext)
 	z80_context * context = vcontext;
 	genesis_context *gen = context->system;
 	if (gen->bus_busy) {
-		context->current_cycle = context->sync_cycle;
+		context->Z80_CYCLE = gen->m68k->current_cycle;
 	}
 	//typical delay from bus arbitration
-	context->current_cycle += 3 * MCLKS_PER_Z80;
+	context->Z80_CYCLE += 3 * MCLKS_PER_Z80;
 	//TODO: add cycle for an access right after a previous one
 	//TODO: Below cycle time is an estimate based on the time between 68K !BG goes low and Z80 !MREQ goes high
 	//      Needs a new logic analyzer capture to get the actual delay on the 68K side
@@ -979,11 +996,11 @@ static uint8_t z80_read_bank(uint32_t location, void * vcontext)
 	if (context->mem_pointers[1]) {
 		return context->mem_pointers[1][location ^ 1];
 	}
-	uint32_t address = context->bank_reg << 15 | location;
+	uint32_t address = gen->z80_bank_reg << 15 | location;
 	if (address >= 0xC00000 && address < 0xE00000) {
 		return z80_vdp_port_read(location & 0xFF, context);
 	} else {
-		fprintf(stderr, "Unhandled read by Z80 from address %X through banked memory area (%X)\n", address, context->bank_reg << 15);
+		fprintf(stderr, "Unhandled read by Z80 from address %X through banked memory area (%X)\n", address, gen->z80_bank_reg << 15);
 	}
 	return 0;
 }
@@ -993,17 +1010,17 @@ static void *z80_write_bank(uint32_t location, void * vcontext, uint8_t value)
 	z80_context * context = vcontext;
 	genesis_context *gen = context->system;
 	if (gen->bus_busy) {
-		context->current_cycle = context->sync_cycle;
+		context->Z80_CYCLE = gen->m68k->current_cycle;
 	}
 	//typical delay from bus arbitration
-	context->current_cycle += 3 * MCLKS_PER_Z80;
+	context->Z80_CYCLE += 3 * MCLKS_PER_Z80;
 	//TODO: add cycle for an access right after a previous one
 	//TODO: Below cycle time is an estimate based on the time between 68K !BG goes low and Z80 !MREQ goes high
 	//      Needs a new logic analyzer capture to get the actual delay on the 68K side
 	gen->m68k->current_cycle += 8 * MCLKS_PER_68K;
 
 	location &= 0x7FFF;
-	uint32_t address = context->bank_reg << 15 | location;
+	uint32_t address = gen->z80_bank_reg << 15 | location;
 	if (address >= 0xE00000) {
 		address &= 0xFFFF;
 		((uint8_t *)gen->work_ram)[address ^ 1] = value;
@@ -1018,8 +1035,9 @@ static void *z80_write_bank(uint32_t location, void * vcontext, uint8_t value)
 static void *z80_write_bank_reg(uint32_t location, void * vcontext, uint8_t value)
 {
 	z80_context * context = vcontext;
+	genesis_context *gen = context->system;
 
-	context->bank_reg = (context->bank_reg >> 1 | value << 8) & 0x1FF;
+	gen->z80_bank_reg = (gen->z80_bank_reg >> 1 | value << 8) & 0x1FF;
 	update_z80_bank_pointer(context->system);
 
 	return context;
@@ -1240,7 +1258,7 @@ static void free_genesis(system_header *system)
 	free(gen->cart);
 	free(gen->m68k);
 	free(gen->work_ram);
-	z80_options_free(gen->z80->options);
+	z80_options_free(gen->z80->Z80_OPTS);
 	free(gen->z80);
 	free(gen->zram);
 	ym_free(gen->ym);
@@ -1368,7 +1386,9 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	z80_options *z_opts = malloc(sizeof(z80_options));
 	init_z80_opts(z_opts, z80_map, 5, NULL, 0, MCLKS_PER_Z80, 0xFFFF);
 	gen->z80 = init_z80_context(z_opts);
+#ifndef NEW_CORE
 	gen->z80->next_int_pulse = z80_next_int_pulse;
+#endif
 	z80_assert_reset(gen->z80, 0);
 #else
 	gen->z80 = calloc(1, sizeof(z80_context));

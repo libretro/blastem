@@ -161,7 +161,7 @@ endif
 endif
 
 ifdef NEW_CORE
-Z80OBJS=z80.o
+Z80OBJS=z80.o z80inst.o 
 CFLAGS+= -DNEW_CORE
 else
 Z80OBJS=z80inst.o z80_to_x86.o
@@ -302,7 +302,7 @@ offsets : offsets.c z80_to_x86.h m68k_core.h
 vos_prog_info : vos_prog_info.o vos_program_module.o
 	$(CC) -o vos_prog_info vos_prog_info.o vos_program_module.o
 	
-%.c : %.cpu
+%.c : %.cpu cpu_dsl.py
 	./cpu_dsl.py -d goto $< > $@
 
 %.o : %.S
