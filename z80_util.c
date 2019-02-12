@@ -3,7 +3,7 @@
 void z80_read_8(z80_context *context)
 {
 	context->cycles += 3 * context->opts->gen.clock_divider;
-	uint8_t *fast = context->fastmem[context->scratch1 >> 10];
+	uint8_t *fast = context->fastread[context->scratch1 >> 10];
 	if (fast) {
 		context->scratch1 = fast[context->scratch1 & 0x3FF];
 	} else {
@@ -14,7 +14,7 @@ void z80_read_8(z80_context *context)
 void z80_write_8(z80_context *context)
 {
 	context->cycles += 3 * context->opts->gen.clock_divider;
-	uint8_t *fast = context->fastmem[context->scratch2 >> 10];
+	uint8_t *fast = context->fastwrite[context->scratch2 >> 10];
 	if (fast) {
 		fast[context->scratch2 & 0x3FF] = context->scratch1;
 	} else {
@@ -84,24 +84,19 @@ z80_context * init_z80_context(z80_options *options)
 	context->io_map = (memmap_chunk *)tmp_io_chunks;
 	context->io_chunks = tmp_num_io_chunks;
 	context->io_mask = tmp_io_mask;
-	context->int_cycle = context->nmi_cycle = 0xFFFFFFFFU;
-	for(uint32_t address = 0; address < 0x10000; address+=1024)
-	{
-		uint8_t *start = get_native_pointer(address, (void**)context->mem_pointers, &options->gen);
-		if (start) {
-			uint8_t *end = get_native_pointer(address + 1023, (void**)context->mem_pointers, &options->gen);
-			if (end && end - start == 1023) {
-				context->fastmem[address >> 10] = start;
-			}
-		}
-	}
+	context->int_cycle = context->int_end_cycle = context->nmi_cycle = 0xFFFFFFFFU;
+	z80_invalidate_code_range(context, 0, 0xFFFF);
 	return context;
 }
 
 uint32_t z80_sync_cycle(z80_context *context, uint32_t target_cycle)
 {
 	if (context->iff1 && context->int_cycle < target_cycle) {
-		target_cycle = context->int_cycle;
+		if (context->cycles > context->int_end_cycle) {
+			context->int_cycle = 0xFFFFFFFFU;
+		} else {
+			target_cycle = context->int_cycle;
+		}
 	};
 	if (context->nmi_cycle < target_cycle) {
 		target_cycle = context->nmi_cycle;
@@ -182,7 +177,7 @@ uint8_t z80_get_busack(z80_context * context, uint32_t cycle)
 
 void z80_invalidate_code_range(z80_context *context, uint32_t startA, uint32_t endA)
 {
-	for(startA &= ~0x3FF; startA += 1024; startA < endA)
+	for(startA &= ~0x3FF; startA < endA; startA += 1024)
 	{
 		uint8_t *start = get_native_pointer(startA, (void**)context->mem_pointers, &context->opts->gen);
 		if (start) {
@@ -191,7 +186,15 @@ void z80_invalidate_code_range(z80_context *context, uint32_t startA, uint32_t e
 				start = NULL;
 			}
 		}
-		context->fastmem[startA >> 10] = start;
+		context->fastread[startA >> 10] = start;
+		start = get_native_write_pointer(startA, (void**)context->mem_pointers, &context->opts->gen);
+		if (start) {
+			uint8_t *end = get_native_write_pointer(startA + 1023, (void**)context->mem_pointers, &context->opts->gen);
+			if (!end || end - start != 1023) {
+				start = NULL;
+			}
+		}
+		context->fastwrite[startA >> 10] = start;
 	}
 }
 
@@ -203,6 +206,13 @@ void z80_adjust_cycles(z80_context * context, uint32_t deduction)
 			context->int_cycle -= deduction;
 		} else {
 			context->int_cycle = 0;
+		}
+	}
+	if (context->int_end_cycle != 0xFFFFFFFFU) {
+		if (context->int_end_cycle > deduction) {
+			context->int_end_cycle -= deduction;
+		} else {
+			context->int_end_cycle = 0;
 		}
 	}
 	if (context->nmi_cycle != 0xFFFFFFFFU) {

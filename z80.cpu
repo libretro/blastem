@@ -54,10 +54,12 @@ regs
 	io_chunks 32
 	io_mask 32
 	int_cycle 32
+	int_end_cycle 32
 	int_value 8
 	nmi_cycle 32
 	system ptrvoid
-	fastmem ptr8 64
+	fastread ptr8 64
+	fastwrite ptr8 64
 	mem_pointers ptr8 4
 	
 flags
@@ -81,6 +83,7 @@ z80_op_fetch
 	add 1 pc pc
 	
 z80_run_op
+	#printf "Z80: %X @ %d\n" pc cycles
 	z80_op_fetch
 	dispatch scratch1
 
@@ -88,7 +91,6 @@ z80_interrupt
 	cmp int_cycle cycles
 	if >=U
 	
-	mov 0xFFFFFFFF int_cycle
 	mov 0 iff1
 	mov 0 iff2
 	cycles 6
@@ -1535,12 +1537,18 @@ ed 01DDD100 neg
 11110011 di
 	mov 0 iff1
 	mov 0 iff2
-	#TODO: update interrupt/sync cycle
+	update_sync
 
 11111011 ei
 	mov 1 iff1
 	mov 1 iff2
-	#TODO: update interrupt/sync cycle
+	update_sync
+	cmp int_cycle cycles
+	if >=U
+	
+	add 1 cycles int_cycle
+	
+	end
 
 ed 01D00110 im0
 	mov 0 imode
@@ -1654,6 +1662,25 @@ fd 11101001 jp_iy
 	lsl pch 8 pch
 	or pch pc pc
 	
+ed 01001101 reti
+	local pch 16
+	cycles 1
+	meta high pch
+	meta low pc
+	z80_pop
+	lsl pch 8 pch
+	or pch pc pc
+	
+ed 01NN1101 retn
+	mov iff2 iff1
+	local pch 16
+	cycles 1
+	meta high pch
+	meta low pc
+	z80_pop
+	lsl pch 8 pch
+	or pch pc pc
+	
 11CCC000 ret_cond
 	local pch 16
 	cycles 1
@@ -1690,6 +1717,60 @@ ed 01RRR001 out_bc
 	or c scratch2 scratch2
 	mov main.R scratch1
 	ocall io_write8
+	
+z80_outi_outd
+	arg change 16
+	local tmp 8
+	cycles 1
+	z80_fetch_hl
+	
+	and 0x80 scratch1 nflag
+	
+	lsl h 8 scratch2
+	or l scratch2 scratch2
+	add change scratch2 scratch2
+	mov scratch2 l
+	lsr scratch2 8 h
+	
+	add l scratch1 tmp
+	update_flags C
+	and 7 tmp tmp
+	
+	lsl 8 b scratch2
+	or c scratch2 scratch2
+	ocall io_write8
+	
+	lsl 8 b wz
+	or c wz wz
+	
+	sub 1 b b
+	update_flags SZYX
+	xor b tmp tmp
+	update_flags P
+	lsr chflags 4 tmp
+	or tmp chflags chflags
+	
+ed 10100011 outi
+	z80_outi_outd 1
+
+ed 10110011 otir
+	z80_outi_outd 1
+	if zflag
+	else
+	sub 2 pc pc
+	cycles 5
+	end
+	
+ed 10101011 outd
+	z80_outi_outd -1
+	
+ed 10111011 otdr
+	z80_outi_outd -1
+	if zflag
+	else
+	sub 2 pc pc
+	cycles 5
+	end
 	
 00000111 rlca
 	rol a 1 a

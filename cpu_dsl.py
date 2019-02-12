@@ -696,7 +696,7 @@ _opMap = {
 	'sext': Op(_sext).addImplementation('c', 2, _sextCImpl),
 	'ocall': Op().addImplementation('c', None, lambda prog, params: '\n\t{pre}{fun}({args});'.format(
 		pre = prog.prefix, fun = params[0], args = ', '.join(['context'] + [str(p) for p in params[1:]])
-	)),
+	) + _updateSyncCImpl(prog, params)),
 	'cycles': Op().addImplementation('c', None,
 		lambda prog, params: '\n\tcontext->cycles += context->opts->gen.clock_divider * {0};'.format(
 			params[0]
