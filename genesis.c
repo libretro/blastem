@@ -155,6 +155,7 @@ static void update_z80_bank_pointer(genesis_context *gen)
 	} else {
 		gen->z80->mem_pointers[1] = NULL;
 	}
+	z80_invalidate_code_range(gen->z80, 0x8000, 0xFFFF);
 }
 
 static void bus_arbiter_deserialize(deserialize_buffer *buf, void *vgen)
@@ -293,20 +294,27 @@ static void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 #define dputs
 #endif
 
-#ifndef NEW_CORE
 static void z80_next_int_pulse(z80_context * z_context)
 {
 	genesis_context * gen = z_context->system;
+#ifdef NEW_CORE
+	z_context->int_cycle = vdp_next_vint_z80(gen->vdp);
+	z_context->int_end_cycle = z_context->int_cycle + Z80_INT_PULSE_MCLKS;
+	z_context->int_value = 0xFF;
+#else
 	z_context->int_pulse_start = vdp_next_vint_z80(gen->vdp);
 	z_context->int_pulse_end = z_context->int_pulse_start + Z80_INT_PULSE_MCLKS;
 	z_context->im2_vector = 0xFF;
-}
 #endif
+}
 
 static void sync_z80(z80_context * z_context, uint32_t mclks)
 {
 #ifndef NO_Z80
 	if (z80_enabled) {
+#ifdef NEW_CORE
+		z80_next_int_pulse(z_context);
+#endif
 		z80_run(z_context, mclks);
 	} else
 #endif
