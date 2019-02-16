@@ -52,6 +52,7 @@ struct genesis_context {
 	uint32_t        int_latency_prev2;
 	uint32_t        reset_cycle;
 	uint8_t         bank_regs[8];
+	uint16_t        z80_bank_reg;
 	uint16_t        mapper_start_index;
 	uint8_t         mapper_type;
 	uint8_t         save_type;
@@ -59,7 +60,6 @@ struct genesis_context {
 	uint8_t         version_reg;
 	uint8_t         bus_busy;
 	uint8_t         reset_requested;
-	uint8_t         z80_bank_reg;
 	eeprom_state    eeprom;
 	nor_state       nor;
 };
