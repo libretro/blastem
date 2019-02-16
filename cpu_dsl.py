@@ -1576,11 +1576,22 @@ def parse(args):
 			continue
 		if line[0].isspace():
 			if not cur_object is None:
-				parts = [el.strip() for el in line.split(' ')]
+				sep = True
+				parts = []
+				while sep:
+					before,sep,after = line.partition('"')
+					before = before.strip()
+					if before:
+						parts += [el.strip() for el in before.split(' ')]
+					if sep:
+						#TODO: deal with escaped quotes
+						inside,sep,after = after.partition('"')
+						parts.append('"' + inside + '"')
+					line = after
 				if type(cur_object) is dict:
 					cur_object[parts[0]] = parts[1:]
 				elif type(cur_object) is list:
-					cur_object.append(line.strip())
+					cur_object.append(' '.join(parts))
 				else:
 					cur_object = cur_object.processLine(parts)
 				
