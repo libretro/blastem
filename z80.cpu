@@ -83,7 +83,7 @@ z80_op_fetch
 	add 1 pc pc
 	
 z80_run_op
-	#printf "Z80: %X @ %d\n" pc cycles
+	#printf "Z80: %X - A: %X, B: %X, C: %X D: %X, E: %X, H: %X, L: %X, SP: %X, IX: %X, IY: %X @ %d\n" pc a b c d e h l sp ix iy cycles
 	z80_op_fetch
 	dispatch scratch1
 
@@ -1706,6 +1706,64 @@ ed 01RRR000 in_bc
 	ocall io_read8
 	mov scratch1 main.R
 	
+z80_ini_ind
+	arg change 16
+	local tmp 8
+	cycles 1
+	
+	lsl 8 b wz
+	or c wz wz
+	add change wz wz
+	
+	sub 1 b b
+	update_flags SZYX
+	
+	lsl b 8 scratch1
+	or c scratch1 scratch1
+	ocall io_read8
+	
+	and 0x80 scratch1 nflag
+	
+	mov wz tmp
+	add tmp scratch1 tmp
+	update_flags C
+	
+	z80_store_hl
+	
+	lsl h 8 scratch2
+	or l scratch2 scratch2
+	add change scratch2 scratch2
+	mov scratch2 l
+	lsr scratch2 8 h
+	
+	and 7 tmp tmp
+	xor b tmp tmp
+	update_flags P
+	lsr chflags 4 tmp
+	or tmp chflags chflags
+	
+ed 10100010 ini
+	z80_ini_ind 1
+	
+ed 10110010 inir
+	z80_ini_ind 1
+	if zflag
+	else
+	sub 2 pc pc
+	cycles 5
+	end
+	
+ed 10101010 ind
+	z80_ini_ind -1
+	
+ed 10111010 indr
+	z80_ini_ind -1
+	if zflag
+	else
+	sub 2 pc pc
+	cycles 5
+	end
+	
 11010011 out_abs
 	z80_fetch_immed
 	mov scratch1 scratch2
@@ -1736,15 +1794,17 @@ z80_outi_outd
 	update_flags C
 	and 7 tmp tmp
 	
-	lsl 8 b scratch2
+	lsl b 8 scratch2
 	or c scratch2 scratch2
 	ocall io_write8
 	
-	lsl 8 b wz
-	or c wz wz
-	
 	sub 1 b b
 	update_flags SZYX
+	
+	lsl 8 b wz
+	or c wz wz
+	add change wz wz
+	
 	xor b tmp tmp
 	update_flags P
 	lsr chflags 4 tmp
