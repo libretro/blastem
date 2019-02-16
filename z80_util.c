@@ -32,6 +32,7 @@ void z80_io_read8(z80_context *context)
 	context->opts->gen.memmap = context->io_map;
 	context->opts->gen.memmap_chunks = context->io_chunks;
 	
+	context->cycles += 4 * context->opts->gen.clock_divider;
 	context->scratch1 = read_byte(context->scratch1, (void **)context->mem_pointers, &context->opts->gen, context);
 	
 	context->opts->gen.address_mask = tmp_mask;
@@ -49,6 +50,7 @@ void z80_io_write8(z80_context *context)
 	context->opts->gen.memmap = context->io_map;
 	context->opts->gen.memmap_chunks = context->io_chunks;
 	
+	context->cycles += 4 * context->opts->gen.clock_divider;
 	write_byte(context->scratch2, context->scratch1, (void **)context->mem_pointers, &context->opts->gen, context);
 	
 	context->opts->gen.address_mask = tmp_mask;
