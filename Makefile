@@ -262,7 +262,7 @@ transz80 : transz80.o $(Z80OBJS) $(TRANSOBJS)
 	$(CC) -o transz80 transz80.o $(Z80OBJS) $(TRANSOBJS)
 
 ztestrun : ztestrun.o serialize.o $(Z80OBJS) $(TRANSOBJS)
-	$(CC) -o ztestrun ztestrun.o $(Z80OBJS) $(TRANSOBJS) $(OPT)
+	$(CC) -o ztestrun $^ $(OPT)
 
 ztestgen : ztestgen.o z80inst.o
 	$(CC) -ggdb -o ztestgen ztestgen.o z80inst.o
