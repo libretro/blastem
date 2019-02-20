@@ -383,12 +383,14 @@ dd 01110RRR ld_to_ix
 	z80_calc_index ix
 	mov wz scratch2
 	mov main.R scratch1
+	cycles 5
 	ocall write_8
 
 fd 01110RRR ld_to_iy
 	z80_calc_index iy
 	mov wz scratch2
 	mov main.R scratch1
+	cycles 5
 	ocall write_8
 
 00110110 ld_to_hl_immed
@@ -987,6 +989,7 @@ z80_adc16_hl
 	update_flags SZYHVXN0C
 	mov hlt l
 	lsr hlt 8 h
+	cycles 7
 	
 ed 01001010 adc_hl_bc
 	local hlw 16
@@ -1113,6 +1116,7 @@ z80_sbc16_hl
 	update_flags SZYHVXN1C
 	mov hlt l
 	lsr hlt 8 h
+	cycles 7
 	
 ed 01000010 sbc_hl_bc
 	local hlw 16
@@ -1369,6 +1373,7 @@ fd 00101100 inc_iyl
 	add 1 tmp tmp
 	update_flags SZYHVXN0
 	mov tmp scratch1
+	cycles 1
 	z80_store_hl
 	
 dd 00110100 inc_ixd
@@ -1461,6 +1466,7 @@ fd 00101101 dec_iyl
 	sub 1 tmp tmp
 	update_flags SZYHVXN1
 	mov tmp scratch1
+	cycles 1
 	z80_store_hl
 	
 dd 00110101 dec_ixd
