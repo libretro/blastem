@@ -91,7 +91,7 @@ z80_context * init_z80_context(z80_options *options)
 	return context;
 }
 
-uint32_t z80_sync_cycle(z80_context *context, uint32_t target_cycle)
+void z80_sync_cycle(z80_context *context, uint32_t target_cycle)
 {
 	if (context->iff1 && context->int_cycle < target_cycle) {
 		if (context->cycles > context->int_end_cycle) {
@@ -103,7 +103,7 @@ uint32_t z80_sync_cycle(z80_context *context, uint32_t target_cycle)
 	if (context->nmi_cycle < target_cycle) {
 		target_cycle = context->nmi_cycle;
 	}
-	return target_cycle;
+	context->sync_cycle = target_cycle;
 }
 
 void z80_run(z80_context *context, uint32_t target_cycle)
