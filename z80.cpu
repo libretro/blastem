@@ -1545,7 +1545,22 @@ ed 01DDD100 neg
 00000000 nop
 
 01110110 halt
+	cmp nmi_cycle cycles
+	if >=U
+	
+	else
+	cmp int_cycle cycles
+	if >=U
+	
+	if iff1
+	else
 	sub 1 pc pc
+	end
+	
+	else
+	sub 1 pc pc
+	end
+	end
 
 11110011 di
 	mov 0 iff1
