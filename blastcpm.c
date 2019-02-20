@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
+#include <time.h>
 #include <sys/select.h>
 
 #ifdef NEW_CORE
@@ -61,8 +62,18 @@ uint8_t console_status_read(uint32_t address, void *context)
 	return select(fileno(stdin)+1, &read_fds, NULL, NULL, &timeout) > 0; 
 }
 
+time_t start;
+uint64_t total_cycles;
 void *exit_write(uint32_t address, void *context, uint8_t value)
 {
+	time_t duration = time(NULL) - start;
+	z80_context *z80 = context;
+#ifdef NEW_CORE
+	total_cycles += z80->cycles;
+#else
+	total_cycles += context->current_cycle;
+#endif
+	printf("Effective clock speed: %f MHz\n", ((double)total_cycles) / (1000000.0 * duration));
 	exit(0);
 	return context;
 }
@@ -109,13 +120,16 @@ int main(int argc, char **argv)
 	z80_context *context;
 	init_z80_opts(&opts, z80_map, 1, io_map, 3, 1, 0xFF);
 	context = init_z80_context(&opts);
+	start = time(NULL);
 	for(;;)
 	{
 #ifdef NEW_CORE
 		z80_execute(context, 1000000);
+		total_cycles += context->cycles;
 		context->cycles = 0;
 #else
 		z80_run(context, 1000000);
+		total_cycles += context->current_cycle;
 		context->current_cycle = 0;
 #endif
 		
