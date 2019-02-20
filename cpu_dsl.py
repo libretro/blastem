@@ -731,6 +731,10 @@ class NormalOp:
 		for param in self.params:
 			allowConst = (self.op in prog.subroutines or len(procParams) != len(self.params) - 1) and param in parent.regValues
 			isDst = (not opDef is None) and len(procParams) in opDef.outOp
+			if isDst and self.op == 'xchg':
+				#xchg uses its regs as both source and destination
+				#we need to resolve as both so that disperse/coalesce flag stuff gets done
+				prog.resolveParam(param, parent, fieldVals, allowConst, False)
 			param = prog.resolveParam(param, parent, fieldVals, allowConst, isDst)
 			
 			if (not type(param) is int) and len(procParams) != len(self.params) - 1:
