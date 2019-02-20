@@ -301,6 +301,7 @@ static void z80_next_int_pulse(z80_context * z_context)
 	z_context->int_cycle = vdp_next_vint_z80(gen->vdp);
 	z_context->int_end_cycle = z_context->int_cycle + Z80_INT_PULSE_MCLKS;
 	z_context->int_value = 0xFF;
+	z80_sync_cycle(z_context, z_context->sync_cycle);
 #else
 	z_context->int_pulse_start = vdp_next_vint_z80(gen->vdp);
 	z_context->int_pulse_end = z_context->int_pulse_start + Z80_INT_PULSE_MCLKS;
@@ -313,7 +314,9 @@ static void sync_z80(z80_context * z_context, uint32_t mclks)
 #ifndef NO_Z80
 	if (z80_enabled) {
 #ifdef NEW_CORE
-		z80_next_int_pulse(z_context);
+		if (z_context->int_cycle == 0xFFFFFFFFU) {
+			z80_next_int_pulse(z_context);
+		}
 #endif
 		z80_run(z_context, mclks);
 	} else
