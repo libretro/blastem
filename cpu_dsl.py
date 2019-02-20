@@ -668,7 +668,7 @@ def _rrcCImpl(prog, params, rawParams, flagUpdates):
 	)
 	
 def _updateSyncCImpl(prog, params):
-	return '\n\tsync_cycle = {sync}(context, target_cycle);'.format(sync=prog.sync_cycle)
+	return '\n\t{sync}(context, target_cycle);'.format(sync=prog.sync_cycle)
 
 _opMap = {
 	'mov': Op(lambda val: val).cUnaryOperator(''),
@@ -696,7 +696,7 @@ _opMap = {
 	'sext': Op(_sext).addImplementation('c', 2, _sextCImpl),
 	'ocall': Op().addImplementation('c', None, lambda prog, params: '\n\t{pre}{fun}({args});'.format(
 		pre = prog.prefix, fun = params[0], args = ', '.join(['context'] + [str(p) for p in params[1:]])
-	) + _updateSyncCImpl(prog, params)),
+	)),
 	'cycles': Op().addImplementation('c', None,
 		lambda prog, params: '\n\tcontext->cycles += context->opts->gen.clock_divider * {0};'.format(
 			params[0]
@@ -1033,6 +1033,7 @@ class Registers:
 		self.regArrays = {}
 		self.regToArray = {}
 		self.addReg('cycles', 32)
+		self.addReg('sync_cycle', 32)
 	
 	def addReg(self, name, size):
 		self.regs[name] = size
@@ -1387,7 +1388,7 @@ class Program:
 		output = []
 		if self.dispatch == 'goto':
 			if self.interrupt in self.subroutines:
-				output.append('\n\tif (context->cycles >= sync_cycle) {')
+				output.append('\n\tif (context->cycles >= context->sync_cycle) {')
 			output.append('\n\tif (context->cycles >= target_cycle) { return; }')
 			if self.interrupt in self.subroutines:
 				self.meta = {}
@@ -1424,7 +1425,7 @@ class Program:
 		if self.dispatch == 'call' and self.body in self.subroutines:
 			pieces.append('\nvoid {pre}execute({type} *context, uint32_t target_cycle)'.format(pre = self.prefix, type = self.context_type))
 			pieces.append('\n{')
-			pieces.append('\n\tuint32_t sync_cycle = {sync}(context, target_cycle);'.format(sync=self.sync_cycle))
+			pieces.append('\n\t{sync}(context, target_cycle);'.format(sync=self.sync_cycle))
 			pieces.append('\n\twhile (context->cycles < target_cycle)')
 			pieces.append('\n\t{')
 			#TODO: Handle interrupts in call dispatch mode
@@ -1434,7 +1435,7 @@ class Program:
 			pieces.append('\n\t}')
 			pieces.append('\n}')
 		elif self.dispatch == 'goto':
-			body.append('\n\tuint32_t sync_cycle = {sync}(context, target_cycle);'.format(sync=self.sync_cycle))
+			body.append('\n\t{sync}(context, target_cycle);'.format(sync=self.sync_cycle))
 			body += self.nextInstruction(otype)
 			pieces.append('\nunimplemented:')
 			pieces.append('\n\tfatal_error("Unimplemented instruction\\n");')
