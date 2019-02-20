@@ -72,6 +72,7 @@ static void update_interrupts(sms_context *sms)
 	uint32_t hint = vdp_next_hint(sms->vdp);
 #ifdef NEW_CORE
 	sms->z80->int_cycle = vint < hint ? vint : hint;
+	z80_sync_cycle(sms->z80, sms->z80->sync_cycle);
 #else
 	sms->z80->int_pulse_start = vint < hint ? vint : hint;
 #endif

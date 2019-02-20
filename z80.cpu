@@ -25,6 +25,7 @@ declare
 	void zinsert_breakpoint(z80_context * context, uint16_t address, uint8_t * bp_handler);
 	void zremove_breakpoint(z80_context * context, uint16_t address);
 	void z80_options_free(z80_options *opts);
+	void z80_sync_cycle(z80_context *context, uint32_t target_cycle);
 
 regs
 	main 8 b c d e h l f a
@@ -83,6 +84,7 @@ z80_op_fetch
 	add 1 pc pc
 	
 z80_run_op
+	printf "Z80: %X @ %d\n" pc cycles
 	#printf "Z80: %X - A: %X, B: %X, C: %X D: %X, E: %X, H: %X, L: %X, SP: %X, IX: %X, IY: %X @ %d\n" pc a b c d e h l sp ix iy cycles
 	z80_op_fetch
 	dispatch scratch1
@@ -856,6 +858,7 @@ z80_add16_hl
 	update_flags YHXN0C
 	mov hlt l
 	lsr hlt 8 h
+	cycles 7
 	
 00001001 add_hl_bc
 	local hlw 16
@@ -888,40 +891,48 @@ dd 00001001 add_ix_bc
 	or c scratch1 scratch1
 	add scratch1 ix ix
 	update_flags YHXN0C
+	cycles 7
 	
 dd 00011001 add_ix_de
 	lsl d 8 scratch1
 	or e scratch1 scratch1
 	add scratch1 ix ix
 	update_flags YHXN0C
+	cycles 7
 	
 dd 00101001 add_ix_ix
 	add ix ix ix
 	update_flags YHXN0C
+	cycles 7
 	
 dd 00111001 add_ix_sp
 	add sp ix ix
 	update_flags YHXN0C
+	cycles 7
 	
 fd 00001001 add_iy_bc
 	lsl b 8 scratch1
 	or c scratch1 scratch1
 	add scratch1 iy iy
 	update_flags YHXN0C
+	cycles 7
 	
 fd 00011001 add_iy_de
 	lsl d 8 scratch1
 	or e scratch1 scratch1
 	add scratch1 iy iy
 	update_flags YHXN0C
+	cycles 7
 	
 fd 00101001 add_iy_iy
 	add iy iy iy
 	update_flags YHXN0C
+	cycles 7
 	
 fd 00111001 add_iy_sp
 	add sp iy iy
 	update_flags YHXN0C
+	cycles 7
 	
 10001RRR adc_reg
 	adc a main.R a
@@ -1387,6 +1398,7 @@ fd 00110100 inc_iyd
 z80_inc_pair
 	arg high 8
 	arg low 8
+	cycles 2
 	local word 16
 	lsl high 8 word
 	or low word word
@@ -1484,6 +1496,7 @@ z80_dec_pair
 	sub 1 word word
 	mov word low
 	lsr word 8 high
+	cycles 2
 	
 00001011 dec_bc
 	z80_dec_pair b c
@@ -1655,7 +1668,6 @@ fd 11101001 jp_iy
 
 11001001 ret
 	local pch 16
-	cycles 1
 	meta high pch
 	meta low pc
 	z80_pop
@@ -2169,6 +2181,7 @@ cb 01BBBRRR bit_reg
 cb 01BBB110 bit_hl
 	local tmp 8
 	z80_fetch_hl
+	cycles 1
 	lsl 1 B tmp
 	lsr wz 8 last_flag_result
 	and scratch1 tmp tmp
@@ -2284,7 +2297,7 @@ z80_fetch_mod_hl
 	mov tmp l
 	lsr tmp 8 h
 	ocall read_8
-	cycles 1
+	cycles 2
 	
 z80_ldd_ldi
 	arg change 16
@@ -2316,8 +2329,6 @@ z80_ldd_ldi
 	lsr tmp 8 b
 	mov c pvflag
 	or b pvflag pvflag
-	
-	cycles 5
 	
 
 ed 10100000 ldi
