@@ -368,6 +368,9 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			num_cycles += 8; //3 for displacement, 5 for address addition
 			break;
 		}
+		if (inst->reg == Z80_USE_IMMED) {
+			num_cycles += 3;
+		}
 		cycles(&opts->gen, num_cycles);
 		if (inst->addr_mode & Z80_DIR) {
 			translate_z80_ea(inst, &dst_op, opts, DONT_READ, MODIFY);
@@ -874,7 +877,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		} else if(inst->addr_mode == Z80_IMMED) {
 			num_cycles += 3;
 		} else if(z80_size(inst) == SZ_W) {
-			num_cycles += 4;
+			num_cycles += 7;
 		}
 		cycles(&opts->gen, num_cycles);
 		translate_z80_reg(inst, &dst_op, opts);
@@ -1853,7 +1856,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		break;
 	case Z80_BIT: {
 		if (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) {
-			num_cycles += 8;
+			num_cycles += 4;
 		}
 		cycles(&opts->gen, num_cycles);
 		uint8_t bit;
@@ -2593,7 +2596,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		break;
 	}
 	case Z80_OUT:
-		if (inst->reg == Z80_A) {
+		if (inst->addr_mode == Z80_IMMED_INDIRECT) {
 			num_cycles += 3;
 		}
 		cycles(&opts->gen, num_cycles);//T States: 4 3/4
@@ -2658,7 +2661,6 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
 		break;
 	case Z80_OTIR: {
-		code_ptr start = code->cur;
 		cycles(&opts->gen, num_cycles + 1);//T States: 4, 5
 		//read from (HL)
 		zreg_to_native(opts, Z80_HL, opts->gen.scratch1);
@@ -2758,7 +2760,6 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		setcc_rdisp(code, CC_P, opts->gen.context_reg, zf_off(ZF_PV));
 		break;
 	case Z80_OTDR: {
-		code_ptr start = code->cur;
 		cycles(&opts->gen, num_cycles + 1);//T States: 4, 5
 		//read from (HL)
 		zreg_to_native(opts, Z80_HL, opts->gen.scratch1);
@@ -3420,14 +3421,15 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	jcc(code, CC_NZ, is_nmi);
 	mov_irdisp(code, 0, options->gen.context_reg, offsetof(z80_context, iff1), SZ_B);
 	mov_irdisp(code, 0, options->gen.context_reg, offsetof(z80_context, iff2), SZ_B);
+	cycles(&options->gen, 6); //interupt ack cycle
 	code_ptr after_int_disable = code->cur + 1;
 	jmp(code, after_int_disable);
 	*is_nmi = code->cur - (is_nmi + 1);
 	mov_rdispr(code, options->gen.context_reg, offsetof(z80_context, iff1), options->gen.scratch2, SZ_B);
 	mov_irdisp(code, 0, options->gen.context_reg, offsetof(z80_context, iff1), SZ_B);
 	mov_rrdisp(code, options->gen.scratch2, options->gen.context_reg, offsetof(z80_context, iff2), SZ_B);
+	cycles(&options->gen, 5); //NMI processing cycles
 	*after_int_disable = code->cur - (after_int_disable + 1);
-	cycles(&options->gen, 7);
 	//save return address (in scratch1) to Z80 stack
 	sub_ir(code, 2, options->regs[Z80_SP], SZ_W);
 	mov_rr(code, options->regs[Z80_SP], options->gen.scratch2, SZ_W);
@@ -3453,7 +3455,6 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	cmp_irdisp(code, 0, options->gen.context_reg, offsetof(z80_context, int_is_nmi), SZ_B);
 	is_nmi = code->cur + 1;
 	jcc(code, CC_NZ, is_nmi);
-	cycles(&options->gen, 6); //interupt ack cycle
 	//TODO: Support interrupt mode 0, not needed for Genesis sit it seems to read $FF during intack
 	//which is conveniently rst $38, i.e. the same thing that im 1 does
 	//check interrupt mode
@@ -3461,6 +3462,7 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	code_ptr im2 = code->cur + 1;
 	jcc(code, CC_Z, im2);
 	mov_ir(code, 0x38, options->gen.scratch1, SZ_W);
+	cycles(&options->gen, 1); //total time for mode 0/1 is 13 t-states
 	code_ptr after_int_dest = code->cur + 1;
 	jmp(code, after_int_dest);
 	*im2 = code->cur - (im2 + 1);
@@ -3501,10 +3503,12 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	//HACK
 	options->gen.address_size = SZ_D;
 	options->gen.address_mask = io_address_mask;
+	options->gen.bus_cycles = 4;
 	options->read_io = gen_mem_fun(&options->gen, io_chunks, num_io_chunks, READ_8, NULL);
 	options->write_io = gen_mem_fun(&options->gen, io_chunks, num_io_chunks, WRITE_8, NULL);
 	options->gen.address_size = SZ_W;
 	options->gen.address_mask = 0xFFFF;
+	options->gen.bus_cycles = 3;
 
 	options->read_16 = code->cur;
 	cycles(&options->gen, 3);
