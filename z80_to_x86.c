@@ -355,6 +355,8 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 			}
 			if (inst->reg == Z80_I || inst->ea_reg == Z80_I || inst->reg == Z80_R || inst->ea_reg == Z80_R) {
 				num_cycles += 1;
+			} else if (inst->reg == Z80_USE_IMMED) {
+				num_cycles += 3;
 			}
 			break;
 		case Z80_IMMED:
@@ -367,9 +369,6 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		case Z80_IY_DISPLACE:
 			num_cycles += 8; //3 for displacement, 5 for address addition
 			break;
-		}
-		if (inst->reg == Z80_USE_IMMED) {
-			num_cycles += 3;
 		}
 		cycles(&opts->gen, num_cycles);
 		if (inst->addr_mode & Z80_DIR) {
@@ -945,7 +944,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		} else if(inst->addr_mode == Z80_IMMED) {
 			num_cycles += 3;
 		} else if(z80_size(inst) == SZ_W) {
-			num_cycles += 4;
+			num_cycles += 7;
 		}
 		cycles(&opts->gen, num_cycles);
 		translate_z80_reg(inst, &dst_op, opts);
@@ -1076,7 +1075,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		} else if(inst->addr_mode == Z80_IMMED) {
 			num_cycles += 3;
 		} else if(z80_size(inst) == SZ_W) {
-			num_cycles += 4;
+			num_cycles += 7;
 		}
 		cycles(&opts->gen, num_cycles);
 		translate_z80_reg(inst, &dst_op, opts);
@@ -1264,6 +1263,10 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 	case Z80_DEC:
 		if(z80_size(inst) == SZ_W) {
 			num_cycles += 2;
+		} else if (inst->addr_mode == Z80_REG_INDIRECT) {
+			num_cycles += 1;
+		} else if (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) {
+			num_cycles += 9;
 		}
 		cycles(&opts->gen, num_cycles);
 		translate_z80_reg(inst, &dst_op, opts);
@@ -1917,7 +1920,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 	}
 	case Z80_SET: {
 		if (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) {
-			num_cycles += 8;
+			num_cycles += 4;
 		}
 		cycles(&opts->gen, num_cycles);
 		uint8_t bit;
@@ -1986,7 +1989,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 	}
 	case Z80_RES: {
 		if (inst->addr_mode == Z80_IX_DISPLACE || inst->addr_mode == Z80_IY_DISPLACE) {
-			num_cycles += 8;
+			num_cycles += 4;
 		}
 		cycles(&opts->gen, num_cycles);
 		uint8_t bit;
