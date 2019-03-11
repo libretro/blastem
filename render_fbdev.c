@@ -943,7 +943,8 @@ static char *vid_std_names[NUM_VID_STD] = {"ntsc", "pal"};
 
 static void init_audio()
 {
-	int res = snd_pcm_open(&audio_handle, "default", SND_PCM_STREAM_PLAYBACK, 0);
+	char *device_name = tern_find_path_default(config, "audio\0alsa_device\0", (tern_val){.ptrval="default"}, TVAL_PTR).ptrval;
+	int res = snd_pcm_open(&audio_handle, device_name, SND_PCM_STREAM_PLAYBACK, 0);
 	if (res < 0) {
 		fatal_error("Failed to open ALSA device: %s\n", snd_strerror(res));
 	}
@@ -1364,7 +1365,7 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 			}
 			int to_check[] = {KEY_ENTER, BTN_MOUSE, BTN_GAMEPAD};
 			device_type dtype = DEV_NONE;
-			for (int i = 0; i < 4; i++)
+			for (int i = 0; i < 3; i++)
 			{
 				if (1 & button_bits[to_check[i]/(8*sizeof(button_bits[0]))] >> to_check[i]%(8*sizeof(button_bits[0]))) {
 					dtype = i + 1;
