@@ -1084,37 +1084,80 @@ static pthread_mutex_t buffer_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t buffer_cond = PTHREAD_COND_INITIALIZER;
 static uint8_t buffer_ready;
 static uint32_t *copy_buffer;
-static uint32_t last_width, last_height;
+static uint32_t last_width, last_width_scale, last_height;
 static uint32_t max_multiple;
 static void do_buffer_copy(void)
 {
-	uint32_t width_multiple = main_width / last_width;
+	uint32_t width_multiple = main_width / last_width_scale;
 	uint32_t height_multiple = main_height / last_height;
 	uint32_t multiple = width_multiple < height_multiple ? width_multiple : height_multiple;
 	if (max_multiple && multiple > max_multiple) {
 		multiple = max_multiple;
 	}
-	uint32_t *cur_line = framebuffer + (main_width - last_width * multiple)/2;
+	uint32_t *cur_line = framebuffer + (main_width - last_width_scale * multiple)/2;
 	cur_line += fb_stride * (main_height - last_height * multiple) / (2 * sizeof(uint32_t));
 	uint32_t *src_line = copy_buffer;
-	for (uint32_t y = 0; y < last_height; y++)
-	{
-		for (uint32_t i = 0; i < multiple; i++)
+	if (last_width == last_width_scale) {
+		for (uint32_t y = 0; y < last_height; y++)
 		{
-			uint32_t *cur = cur_line;
-			uint32_t *src = src_line;
-			for (uint32_t x = 0; x < last_width	; x++)
+			for (uint32_t i = 0; i < multiple; i++)
 			{
-				uint32_t pixel = *(src++);
-				for (uint32_t j = 0; j < multiple; j++)
+				uint32_t *cur = cur_line;
+				uint32_t *src = src_line;
+				for (uint32_t x = 0; x < last_width	; x++)
 				{
-					*(cur++) = pixel;
+					uint32_t pixel = *(src++);
+					for (uint32_t j = 0; j < multiple; j++)
+					{
+						*(cur++) = pixel;
+					}
 				}
+				
+				cur_line += fb_stride / sizeof(uint32_t);
 			}
-			
-			cur_line += fb_stride / sizeof(uint32_t);
+			src_line += LINEBUF_SIZE;
 		}
-		src_line += LINEBUF_SIZE;
+	} else {
+		float scale_multiple = ((float)(last_width_scale * multiple)) / (float)last_width;
+		float remaining = 0.0f;
+		uint32_t last_pixel = 0;
+		for (uint32_t y = 0; y < last_height; y++)
+		{
+			for (uint32_t i = 0; i < multiple; i++)
+			{
+				uint32_t *cur = cur_line;
+				uint32_t *src = src_line;
+				for (uint32_t x = 0; x < last_width	; x++)
+				{
+					uint32_t pixel = *(src++);
+					float count = scale_multiple;
+					if (remaining > 0.0f) {
+						float a,b,c,d;
+						a = (last_pixel & 255) * remaining;
+						b = (last_pixel >> 8 & 255) * remaining;
+						c = (last_pixel >> 16 & 255) * remaining;
+						d = (last_pixel >> 24 & 255) * remaining;
+						remaining = 1.0f - remaining;
+						a += (pixel & 255) * remaining;
+						b += (pixel >> 8 & 255) * remaining;
+						c += (pixel >> 16 & 255) * remaining;
+						d += (pixel >> 24 & 255) * remaining;
+						count -= remaining;
+						uint32_t mixed = ((int)d) << 24 | ((int)c) << 16 | ((int)b) << 8 | ((int)a);
+						*(cur++) = mixed;
+					}
+					for (; count >= 1; count -= 1.0f)
+					{
+						*(cur++) = pixel;
+					}
+					remaining = count;
+					last_pixel = pixel;
+				}
+				
+				cur_line += fb_stride / sizeof(uint32_t);
+			}
+			src_line += LINEBUF_SIZE;
+		}
 	}
 }
 static void *buffer_copy(void *data)
@@ -1578,6 +1621,7 @@ void render_framebuffer_updated(uint8_t which, int width)
 			pthread_mutex_lock(&buffer_lock);
 				buffer_ready = 1;
 				last_width = width;
+				last_width_scale = LINEBUF_SIZE - (overscan_left[video_standard] + overscan_right[video_standard]);
 				last_height = height;
 				copy_buffer = texture_buf + texture_off + overscan_left[video_standard] + LINEBUF_SIZE * overscan_top[video_standard];
 				texture_off = texture_off ? 0 : LINEBUF_SIZE * 512;
@@ -1585,6 +1629,7 @@ void render_framebuffer_updated(uint8_t which, int width)
 			pthread_mutex_unlock(&buffer_lock);
 		} else {
 			last_width = width;
+			last_width_scale = LINEBUF_SIZE - (overscan_left[video_standard] + overscan_right[video_standard]);
 			last_height = height;
 			copy_buffer = texture_buf + texture_off + overscan_left[video_standard] + LINEBUF_SIZE * overscan_top[video_standard];
 			do_buffer_copy();
