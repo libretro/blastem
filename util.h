@@ -32,6 +32,8 @@ long file_size(FILE * f);
 char * strip_ws(char * text);
 //Inserts a null after the first word, returns a pointer to the second word
 char * split_keyval(char * text);
+//Checks if haystack starts with prefix
+uint8_t startswith(const char *haystack, const char *prefix);
 //Takes a binary byte buffer and produces a lowercase hex string
 void bin_to_hex(uint8_t *output, uint8_t *input, uint64_t size);
 //Takes an (optionally) null-terminated UTF16-BE string and converts a maximum of max_size code-units to UTF-8
