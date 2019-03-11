@@ -1,5 +1,8 @@
 #include <string.h>
+#include <stdlib.h>
+#ifndef USE_FBDEV
 #include "render_sdl.h"
+#endif
 #include "controller_info.h"
 #include "config.h"
 #include "util.h"
@@ -70,6 +73,7 @@ static void load_ctype_config(void)
 
 controller_info get_controller_info(int joystick)
 {
+#ifndef USE_FBDEV
 	load_ctype_config();
 	char guid_string[33];
 	SDL_Joystick *stick = render_get_joystick(joystick);
@@ -148,6 +152,9 @@ controller_info get_controller_info(int joystick)
 			return res;
 		}
 	}
+#else
+	const char *name = "Unknown";
+#endif
 	//default to a 360
 	return (controller_info){
 		.type = TYPE_GENERIC_MAPPING,
@@ -159,6 +166,7 @@ controller_info get_controller_info(int joystick)
 
 static void mappings_iter(char *key, tern_val val, uint8_t valtype, void *data)
 {
+#ifndef USE_FBDEV
 	if (valtype != TVAL_NODE) {
 		return;
 	}
@@ -169,6 +177,7 @@ static void mappings_iter(char *key, tern_val val, uint8_t valtype, void *data)
 		SDL_GameControllerAddMapping(full);
 		free(full);
 	}
+#endif
 }
 
 void controller_add_mappings(void)
@@ -181,6 +190,7 @@ void controller_add_mappings(void)
 
 void save_controller_info(int joystick, controller_info *info)
 {
+#ifndef USE_FBDEV
 	char guid_string[33];
 	SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(render_get_joystick(joystick)), guid_string, sizeof(guid_string));
 	tern_node *existing = tern_find_node(info_config, guid_string);
@@ -188,17 +198,19 @@ void save_controller_info(int joystick, controller_info *info)
 	existing = tern_insert_ptr(existing, "variant",  (void *)variant_names[info->variant]);
 	info_config = tern_insert_node(info_config, guid_string, existing);
 	persist_config_at(info_config, "controller_types.cfg");
-	
+#endif	
 }
 
 void save_controller_mapping(int joystick, char *mapping_string)
 {
+#ifndef USE_FBDEV
 	char guid_string[33];
 	SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(render_get_joystick(joystick)), guid_string, sizeof(guid_string));
 	tern_node *existing = tern_find_node(info_config, guid_string);
 	existing = tern_insert_ptr(existing, "mapping", mapping_string);
 	info_config = tern_insert_node(info_config, guid_string, existing);
 	persist_config_at(info_config, "controller_types.cfg");
+#endif
 }
 
 char const *labels_xbox[] = {
@@ -255,10 +267,12 @@ static const char** label_source(controller_info *info)
 
 const char *get_button_label(controller_info *info, int button)
 {
+#ifndef USE_FBDEV
 	if (button >= SDL_CONTROLLER_BUTTON_DPAD_UP) {
 		static char const * dirs[] = {"Up", "Down", "Left", "Right"};
 		return dirs[button - SDL_CONTROLLER_BUTTON_DPAD_UP];
 	}
+#endif
 	return label_source(info)[button];
 }
 
@@ -267,11 +281,15 @@ static char const *axis_labels[] = {
 };
 const char *get_axis_label(controller_info *info, int axis)
 {
+#ifndef USE_FBDEV
 	if (axis < SDL_CONTROLLER_AXIS_TRIGGERLEFT) {
 		return axis_labels[axis];
 	} else {
 		return label_source(info)[axis - SDL_CONTROLLER_AXIS_TRIGGERLEFT + SDL_CONTROLLER_BUTTON_RIGHTSHOULDER + 1];
 	}
+#else
+	return NULL;
+#endif
 }
 
 char *make_controller_type_key(controller_info *info)
@@ -316,6 +334,9 @@ char *make_human_readable_type_name(controller_info *info)
 		prefix = "Normal ";
 	} else {
 		static const char *parts[] = {"6 button (", NULL, "/", NULL, ") "};
+#ifdef USE_FBDEV
+		parts[1] = parts[3] = "??";
+#else
 		if (info->variant == VARIANT_6B_BUMPERS) {
 			parts[1] = get_button_label(info, SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
 			parts[3] = get_button_label(info, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
@@ -323,6 +344,7 @@ char *make_human_readable_type_name(controller_info *info)
 			parts[1] = get_button_label(info, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
 			parts[3] = get_axis_label(info, SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
 		}
+#endif
 		prefix = alloc_concat_m(5, parts);
 	}
 	char *ret = alloc_concat(prefix, base);
