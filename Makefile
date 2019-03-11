@@ -38,12 +38,21 @@ ifeq ($(OS),Darwin)
 LIBS=sdl2 glew
 FONT:=nuklear_ui/font_mac.o
 else
+
+ifdef USE_FBDEV
+LIBS=alsa
+ifndef NOGL
+LIBS+=glesv2 egl
+endif
+CFLAGS+= -DUSE_GLES -DUSE_FBDEV -pthread
+else
 ifdef USE_GLES
 LIBS=sdl2 glesv2
 CFLAGS+= -DUSE_GLES
 else
 LIBS=sdl2 glew gl
 endif #USE_GLES
+endif #USE_FBDEV
 FONT:=nuklear_ui/font.o
 endif #Darwin
 
@@ -88,6 +97,9 @@ LDFLAGS:=-lm
 else
 CFLAGS:=$(shell pkg-config --cflags-only-I $(LIBS)) $(CFLAGS)
 LDFLAGS:=-lm $(shell pkg-config --libs $(LIBS))
+ifdef USE_FBDEV
+LDFLAGS+= -pthread
+endif
 endif #libblastem.so
 
 ifeq ($(OS),Darwin)
@@ -168,8 +180,13 @@ Z80OBJS=z80inst.o z80_to_x86.o
 endif
 AUDIOOBJS=ym2612.o psg.o wave.o
 CONFIGOBJS=config.o tern.o util.o paths.o 
-NUKLEAROBJS=$(FONT) nuklear_ui/blastem_nuklear.o nuklear_ui/sfnt.o controller_info.o
-RENDEROBJS=render_sdl.o ppm.o
+NUKLEAROBJS=$(FONT) nuklear_ui/blastem_nuklear.o nuklear_ui/sfnt.o
+RENDEROBJS=ppm.o controller_info.o
+ifdef USE_FBDEV
+RENDEROBJS+= render_fbdev.o
+else
+RENDEROBJS+= render_sdl.o
+endif
 	
 ifdef NOZLIB
 CFLAGS+= -DDISABLE_ZLIB

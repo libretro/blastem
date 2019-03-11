@@ -7,6 +7,10 @@
 #define RENDER_H_
 
 #ifndef IS_LIB
+#ifdef USE_FBDEV
+#include "special_keys_evdev.h"
+#define render_relative_mouse(V)
+#else
 #include <SDL.h>
 #define RENDERKEY_UP       SDLK_UP
 #define RENDERKEY_DOWN     SDLK_DOWN
@@ -61,6 +65,7 @@
 #define RENDER_DPAD_LEFT   SDL_HAT_LEFT
 #define RENDER_DPAD_RIGHT  SDL_HAT_RIGHT
 #define render_relative_mouse SDL_SetRelativeMouseMode
+#endif
 #endif
 
 #define MAX_JOYSTICKS 8
