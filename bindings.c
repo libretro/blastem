@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdlib.h>
 #include "render.h"
 #include "system.h"
 #include "io.h"
@@ -557,7 +558,7 @@ int parse_binding_target(int device_num, char * target, tern_node * padbuttons, 
 {
 	const int gpadslen = strlen("gamepads.");
 	const int mouselen = strlen("mouse.");
-	if (!strncmp(target, "gamepads.", gpadslen)) {
+	if (startswith(target, "gamepads.")) {
 		int padnum = target[gpadslen] == 'n' ? device_num + 1 : target[gpadslen] - '0';
 		if (padnum >= 1 && padnum <= 8) {
 			int button = tern_find_int(padbuttons, target + gpadslen + 1, 0);
@@ -575,7 +576,7 @@ int parse_binding_target(int device_num, char * target, tern_node * padbuttons, 
 		} else {
 			warning("Gamepad mapping string '%s' refers to an invalid gamepad number %c\n", target, target[gpadslen]);
 		}
-	} else if(!strncmp(target, "mouse.", mouselen)) {
+	} else if(startswith(target, "mouse.")) {
 		int mousenum = target[mouselen] == 'n' ? device_num + 1 : target[mouselen] - '0';
 		if (mousenum >= 1 && mousenum <= 8) {
 			int button = tern_find_int(mousebuttons, target + mouselen + 1, 0);
@@ -593,7 +594,7 @@ int parse_binding_target(int device_num, char * target, tern_node * padbuttons, 
 		} else {
 			warning("Gamepad mapping string '%s' refers to an invalid mouse number %c\n", target, target[mouselen]);
 		}
-	} else if(!strncmp(target, "ui.", strlen("ui."))) {
+	} else if(startswith(target, "ui.")) {
 		if (!strcmp(target + 3, "vdp_debug_mode")) {
 			*subtype_a = UI_DEBUG_MODE_INC;
 		} else if(!strcmp(target + 3, "vdp_debug_pal")) {
@@ -603,7 +604,7 @@ int parse_binding_target(int device_num, char * target, tern_node * padbuttons, 
 			*subtype_a = UI_ENTER_DEBUGGER;
 		} else if(!strcmp(target + 3, "save_state")) {
 			*subtype_a = UI_SAVE_STATE;
-		} else if(!strncmp(target + 3, "set_speed.", strlen("set_speed."))) {
+		} else if(startswith(target + 3, "set_speed.")) {
 			*subtype_a = UI_SET_SPEED;
 			*subtype_b = atoi(target + 3 + strlen("set_speed."));
 		} else if(!strcmp(target + 3, "next_speed")) {

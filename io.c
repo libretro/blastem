@@ -219,8 +219,7 @@ void process_device(char * device_type, io_port * port)
 	}
 
 	const int gamepad_len = strlen("gamepad");
-	const int mouse_len = strlen("mouse");
-	if (!strncmp(device_type, "gamepad", gamepad_len))
+	if (startswith(device_type, "gamepad"))
 	{
 		if (
 			(device_type[gamepad_len] != '3' && device_type[gamepad_len] != '6' && device_type[gamepad_len] != '2')
@@ -236,10 +235,10 @@ void process_device(char * device_type, io_port * port)
 			port->device_type = IO_GAMEPAD6;
 		}
 		port->device.pad.gamepad_num = device_type[gamepad_len+2] - '0';
-	} else if(!strncmp(device_type, "mouse", mouse_len)) {
+	} else if(startswith(device_type, "mouse")) {
 		if (port->device_type != IO_MOUSE) {
 			port->device_type = IO_MOUSE;
-			port->device.mouse.mouse_num = device_type[mouse_len+1] - '0';
+			port->device.mouse.mouse_num = device_type[strlen("mouse")+1] - '0';
 			port->device.mouse.last_read_x = 0;
 			port->device.mouse.last_read_y = 0;
 			port->device.mouse.cur_x = 0;
