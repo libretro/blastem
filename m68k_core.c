@@ -1216,9 +1216,7 @@ void m68k_options_free(m68k_options *opts)
 
 m68k_context * init_68k_context(m68k_options * opts, m68k_reset_handler reset_handler)
 {
-	size_t ctx_size = sizeof(m68k_context) + ram_size(&opts->gen) / (1 << opts->gen.ram_flags_shift) / 8;
-	m68k_context * context = malloc(ctx_size);
-	memset(context, 0, ctx_size);
+	m68k_context * context = calloc(1, sizeof(m68k_context) + ram_size(&opts->gen) / (1 << opts->gen.ram_flags_shift) / 8);
 	context->options = opts;
 	context->int_cycle = CYCLE_NEVER;
 	context->status = 0x27;

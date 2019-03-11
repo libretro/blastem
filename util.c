@@ -189,6 +189,11 @@ char * split_keyval(char * text)
 	return text+1;
 }
 
+uint8_t startswith(const char *haystack, const char *prefix)
+{
+	return !strncmp(haystack, prefix, strlen(prefix));
+}
+
 void bin_to_hex(uint8_t *output, uint8_t *input, uint64_t size)
 {
 	while (size)
