@@ -1297,6 +1297,12 @@ void window_setup(void)
 void restore_tty(void)
 {
 	ioctl(STDIN_FILENO, KDSETMODE, KD_TEXT);
+	for (int i = 0; i < cur_devices; i++)
+	{
+		if (device_types[i] == DEV_KEYBOARD) {
+			ioctl(device_fds[i], EVIOCGRAB, 0);
+		}
+	}
 }
 
 void render_init(int width, int height, char * title, uint8_t fullscreen)
@@ -1380,11 +1386,15 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 				char *names[] = {"Keyboard", "Mouse", "Gamepad"};
 				ioctl(fd, EVIOCGNAME(sizeof(name)), name);
 				printf("%s is a %s\n%s\n", filename, names[dtype - 1], name);
-				//set FD to non-blocking mode for event polling
-				fcntl(fd, F_SETFL, O_NONBLOCK);
+				
 				if (dtype == DEV_GAMEPAD) {
 					handle_joy_added(joystick_counter++);
+				} else if (dtype == DEV_KEYBOARD && isatty(STDIN_FILENO)) {
+					ioctl(fd, EVIOCGRAB, 1);
 				}
+				
+				//set FD to non-blocking mode for event polling
+				fcntl(fd, F_SETFL, O_NONBLOCK);
 				cur_devices++;
 			}
 			free(filename);
