@@ -228,12 +228,108 @@ void z80_adjust_cycles(z80_context * context, uint32_t deduction)
 
 void z80_serialize(z80_context *context, serialize_buffer *buf)
 {
-	//TODO: Implement me
+	save_int8(buf, context->main[1]);//C
+	save_int8(buf, context->main[0]);//B
+	save_int8(buf, context->main[3]);//E
+	save_int8(buf, context->main[2]);//D
+	save_int8(buf, context->main[5]);//L
+	save_int8(buf, context->main[4]);//H
+	save_int8(buf, context->ix);//IXL
+	save_int8(buf, context->ix >> 8);//IXH
+	save_int8(buf, context->iy);//IYL
+	save_int8(buf, context->iy >> 8);//IYH
+	save_int8(buf, context->i);
+	save_int8(buf, (context->rhigh & 0x80) | (context->r & 0x7F));
+	save_int8(buf, context->main[7]);//A
+	uint8_t f = context->last_flag_result & 0xA8
+		| (context->zflag ? 0x40 : 0)
+		| (context->chflags & 8 ? 0x10 : 0)
+		| (context->pvflag ? 4 : 0)
+		| (context->nflag ? 2 : 0)
+		| (context->chflags & 0x80 ? 1 : 0);
+	save_int8(buf, f);
+	save_int8(buf, context->alt[1]);//C
+	save_int8(buf, context->alt[0]);//B
+	save_int8(buf, context->alt[3]);//E
+	save_int8(buf, context->alt[2]);//D
+	save_int8(buf, context->alt[5]);//L
+	save_int8(buf, context->alt[4]);//H
+	save_int8(buf, 0);//non-existant alt ixl
+	save_int8(buf, 0);//non-existant alt ixh
+	save_int8(buf, 0);//non-existant alt iyl
+	save_int8(buf, 0);//non-existant alt iyh
+	save_int8(buf, 0);//non-existant alt i
+	save_int8(buf, 0);//non-existant alt r
+	save_int8(buf, context->alt[7]);//A
+	save_int8(buf, context->alt[6]);//F
+	
+	save_int16(buf, context->pc);
+	save_int16(buf, context->sp);
+	save_int8(buf, context->imode);
+	save_int8(buf, context->iff1);
+	save_int8(buf, context->iff2);
+	uint8_t is_nmi = context->nmi_cycle != 0xFFFFFFFF && (context->nmi_cycle < context->int_cycle || !context->iff1);
+	save_int8(buf,  is_nmi);//int_is_nmi
+	save_int8(buf, context->busack);
+	save_int32(buf, context->cycles);
+	save_int32(buf, is_nmi ? context->nmi_cycle : context->int_cycle);//int_cycle
+	save_int32(buf, 0);//int_enable_cycle
+	save_int32(buf, context->int_cycle);
+	save_int32(buf, context->int_end_cycle);
+	save_int32(buf, context->nmi_cycle);
 }
 
 void z80_deserialize(deserialize_buffer *buf, void *vcontext)
 {
-	//TODO: Implement me
+	z80_context *context = vcontext;
+	context->main[1] = load_int8(buf);//C
+	context->main[0] = load_int8(buf);//B
+	context->main[3] = load_int8(buf);//E
+	context->main[2] = load_int8(buf);//D
+	context->main[5] = load_int8(buf);//L
+	context->main[4] = load_int8(buf);//H
+	context->ix = load_int8(buf);//IXL
+	context->ix |= load_int8(buf) << 8;//IXH
+	context->iy = load_int8(buf);//IYL
+	context->iy |= load_int8(buf) << 8;//IYH
+	context->i = load_int8(buf);
+	context->r = load_int8(buf);
+	context->rhigh = context->r & 0x80;
+	context->main[7] = load_int8(buf);//A
+	context->last_flag_result = load_int8(buf);
+	context->zflag = context->last_flag_result & 0x40;
+	context->chflags = context->last_flag_result & 0x10 ? 8 : 0;
+	context->pvflag = context->last_flag_result & 4;
+	context->nflag = context->last_flag_result & 2;
+	context->chflags |= context->last_flag_result & 1 ? 0x80 : 0;
+	context->alt[1] = load_int8(buf);//C
+	context->alt[0] = load_int8(buf);//B
+	context->alt[3] = load_int8(buf);//E
+	context->alt[2] = load_int8(buf);//D
+	context->alt[5] = load_int8(buf);//L
+	context->alt[4] = load_int8(buf);//H
+	load_int8(buf);//non-existant alt ixl
+	load_int8(buf);//non-existant alt ixh
+	load_int8(buf);//non-existant alt iyl
+	load_int8(buf);//non-existant alt iyh
+	load_int8(buf);//non-existant alt i
+	load_int8(buf);//non-existant alt r
+	context->alt[7] = load_int8(buf);//A
+	context->alt[6] = load_int8(buf);//F
+	
+	context->pc = load_int16(buf);
+	context->sp = load_int16(buf);
+	context->imode = load_int8(buf);
+	context->iff1 = load_int8(buf);
+	context->iff2 = load_int8(buf);
+	load_int8(buf);//int_is_nmi
+	context->busack = load_int8(buf);
+	context->cycles = load_int32(buf);
+	load_int32(buf);//int_cycle
+	load_int32(buf);//int_enable_cycle
+	context->int_cycle = load_int32(buf);
+	context->int_end_cycle = load_int32(buf);
+	context->nmi_cycle = load_int32(buf);
 }
 
 void zinsert_breakpoint(z80_context * context, uint16_t address, uint8_t * bp_handler)
