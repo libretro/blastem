@@ -589,14 +589,6 @@ static void update_aspect()
 	}
 }
 
-/*
-static ui_render_fun on_context_destroyed, on_context_created;
-void render_set_gl_context_handlers(ui_render_fun destroy, ui_render_fun create)
-{
-	on_context_destroyed = destroy;
-	on_context_created = create;
-}*/
-
 static uint8_t scancode_map[128] = {
 	[KEY_A] = 0x1C,
 	[KEY_B] = 0x32,
@@ -806,22 +798,9 @@ void render_set_drag_drop_handler(drop_handler handler)
 	drag_drop_handler = handler;
 }
 
-/*static event_handler custom_event_handler;
-void render_set_event_handler(event_handler handler)
-{
-	custom_event_handler = handler;
-}*/
-
 char* render_joystick_type_id(int index)
 {
-	return "";
-	/*SDL_Joystick *stick = render_get_joystick(index);
-	if (!stick) {
-		return NULL;
-	}
-	char *guid_string = malloc(33);
-	SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(stick), guid_string, 33);
-	return guid_string;*/
+	return strdup("");
 }
 
 static uint32_t overscan_top[NUM_VID_STD] = {2, 21};
@@ -1359,86 +1338,6 @@ void window_setup(void)
 	}
 #endif
 	
-	/*
-#ifndef DISABLE_OPENGL
-	char *gl_enabled_str = tern_find_path_default(config, "video\0gl\0", def, TVAL_PTR).ptrval;
-	uint8_t gl_enabled = strcmp(gl_enabled_str, "off") != 0;
-	if (gl_enabled)
-	{
-		flags |= SDL_WINDOW_OPENGL;
-		SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 5);
-		SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 5);
-		SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 5);
-		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
-		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-#ifdef USE_GLES
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-#endif
-	}
-#endif
-	main_window = SDL_CreateWindow(caption, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, main_width, main_height, flags);
-	if (!main_window) {
-		fatal_error("Unable to create SDL window: %s\n", SDL_GetError());
-	}
-#ifndef DISABLE_OPENGL
-	if (gl_enabled)
-	{
-		main_context = SDL_GL_CreateContext(main_window);
-#ifdef USE_GLES
-		int major_version;
-		if (SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &major_version) == 0 && major_version >= 2) {
-#else
-		GLenum res = glewInit();
-		if (res != GLEW_OK) {
-			warning("Initialization of GLEW failed with code %d\n", res);
-		}
-
-		if (res == GLEW_OK && GLEW_VERSION_2_0) {
-#endif
-			render_gl = 1;
-			SDL_GL_MakeCurrent(main_window, main_context);
-			if (!strcmp("tear", vsync)) {
-				if (SDL_GL_SetSwapInterval(-1) < 0) {
-					warning("late tear is not available (%s), using normal vsync\n", SDL_GetError());
-					vsync = "on";
-				} else {
-					vsync = NULL;
-				}
-			}
-			if (vsync) {
-				if (SDL_GL_SetSwapInterval(!strcmp("on", vsync)) < 0) {
-					warning("Failed to set vsync to %s: %s\n", vsync, SDL_GetError());
-				}
-			}
-		} else {
-			warning("OpenGL 2.0 is unavailable, falling back to SDL2 renderer\n");
-		}
-	}
-	if (!render_gl) {
-#endif
-		flags = SDL_RENDERER_ACCELERATED;
-		if (!strcmp("on", vsync) || !strcmp("tear", vsync)) {
-			flags |= SDL_RENDERER_PRESENTVSYNC;
-		}
-		main_renderer = SDL_CreateRenderer(main_window, -1, flags);
-
-		if (!main_renderer) {
-			fatal_error("unable to create SDL renderer: %s\n", SDL_GetError());
-		}
-		SDL_RendererInfo rinfo;
-		SDL_GetRendererInfo(main_renderer, &rinfo);
-		printf("SDL2 Render Driver: %s\n", rinfo.name);
-		main_clip.x = main_clip.y = 0;
-		main_clip.w = main_width;
-		main_clip.h = main_height;
-#ifndef DISABLE_OPENGL
-	}
-#endif
-
-	SDL_GetWindowSize(main_window, &main_width, &main_height);
-	printf("Window created with size: %d x %d\n", main_width, main_height);*/
 	update_aspect();
 	render_alloc_surfaces();
 	def.ptrval = "off";
@@ -1746,185 +1645,8 @@ void render_framebuffer_updated(uint8_t which, int width)
 #ifndef DISABLE_OPENGL
 	}
 #endif
-	/*
-	FILE *screenshot_file = NULL;
-	uint32_t shot_height, shot_width;
-	char *ext;
-	if (screenshot_path && which == FRAMEBUFFER_ODD) {
-		screenshot_file = fopen(screenshot_path, "wb");
-		if (screenshot_file) {
-#ifndef DISABLE_ZLIB
-			ext = path_extension(screenshot_path);
-#endif
-			info_message("Saving screenshot to %s\n", screenshot_path);
-		} else {
-			warning("Failed to open screenshot file %s for writing\n", screenshot_path);
-		}
-		free(screenshot_path);
-		screenshot_path = NULL;
-		shot_height = video_standard == VID_NTSC ? 243 : 294;
-		shot_width = width;
-	}
-	interlaced = last != which;
-	width -= overscan_left[video_standard] + overscan_right[video_standard];
-#ifndef DISABLE_OPENGL
-	if (render_gl && which <= FRAMEBUFFER_EVEN) {
-		SDL_GL_MakeCurrent(main_window, main_context);
-		glBindTexture(GL_TEXTURE_2D, textures[which]);
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, LINEBUF_SIZE, height, SRC_FORMAT, GL_UNSIGNED_BYTE, texture_buf + overscan_left[video_standard] + LINEBUF_SIZE * overscan_top[video_standard]);
-		
-		if (screenshot_file) {
-			//properly supporting interlaced modes here is non-trivial, so only save the odd field for now
-#ifndef DISABLE_ZLIB
-			if (!strcasecmp(ext, "png")) {
-				free(ext);
-				save_png(screenshot_file, texture_buf, shot_width, shot_height, LINEBUF_SIZE*sizeof(uint32_t));
-			} else {
-				free(ext);
-#endif
-				save_ppm(screenshot_file, texture_buf, shot_width, shot_height, LINEBUF_SIZE*sizeof(uint32_t));
-#ifndef DISABLE_ZLIB
-			}
-#endif
-		}
-	} else {
-#endif
-		if (which <= FRAMEBUFFER_EVEN && last != which) {
-			uint8_t *cur_dst = (uint8_t *)locked_pixels;
-			uint8_t *cur_saved = (uint8_t *)texture_buf;
-			uint32_t dst_off = which == FRAMEBUFFER_EVEN ? 0 : locked_pitch;
-			uint32_t src_off = which == FRAMEBUFFER_EVEN ? locked_pitch : 0;
-			for (int i = 0; i < height; ++i)
-			{
-				//copy saved line from other field
-				memcpy(cur_dst + dst_off, cur_saved, locked_pitch);
-				//save line from this field to buffer for next frame
-				memcpy(cur_saved, cur_dst + src_off, locked_pitch);
-				cur_dst += locked_pitch * 2;
-				cur_saved += locked_pitch;
-			}
-			height = 480;
-		}
-		if (screenshot_file) {
-			uint32_t shot_pitch = locked_pitch;
-			if (which == FRAMEBUFFER_EVEN) {
-				shot_height *= 2;
-			} else {
-				shot_pitch *= 2;
-			}
-#ifndef DISABLE_ZLIB
-			if (!strcasecmp(ext, "png")) {
-				free(ext);
-				save_png(screenshot_file, locked_pixels, shot_width, shot_height, shot_pitch);
-			} else {
-				free(ext);
-#endif
-				save_ppm(screenshot_file, locked_pixels, shot_width, shot_height, shot_pitch);
-#ifndef DISABLE_ZLIB
-			}
-#endif
-		}
-		SDL_UnlockTexture(sdl_textures[which]);
-#ifndef DISABLE_OPENGL
-	}
-#endif
-	last_height = height;
-	if (which <= FRAMEBUFFER_EVEN) {
-		render_update_display();
-	} else {
-		SDL_RenderCopy(extra_renderers[which - FRAMEBUFFER_USER_START], sdl_textures[which], NULL, NULL);
-		SDL_RenderPresent(extra_renderers[which - FRAMEBUFFER_USER_START]);
-	}
-	if (screenshot_file) {
-		fclose(screenshot_file);
-	}
-	if (which <= FRAMEBUFFER_EVEN) {
-		last = which;
-		static uint32_t frame_counter, start;
-		frame_counter++;
-		last_frame= SDL_GetTicks();
-		if ((last_frame - start) > FPS_INTERVAL) {
-			if (start && (last_frame-start)) {
-	#ifdef __ANDROID__
-				info_message("%s - %.1f fps", caption, ((float)frame_counter) / (((float)(last_frame-start)) / 1000.0));
-	#else
-				if (!fps_caption) {
-					fps_caption = malloc(strlen(caption) + strlen(" - 100000000.1 fps") + 1);
-				}
-				sprintf(fps_caption, "%s - %.1f fps", caption, ((float)frame_counter) / (((float)(last_frame-start)) / 1000.0));
-				SDL_SetWindowTitle(main_window, fps_caption);
-	#endif
-			}
-			start = last_frame;
-			frame_counter = 0;
-		}
-	}
-	if (!sync_to_audio) {
-		int32_t local_cur_min, local_min_remaining;
-		SDL_LockAudio();
-			if (last_buffered > NO_LAST_BUFFERED) {
-				average_change *= 0.9f;
-				average_change += (cur_min_buffered - last_buffered) * 0.1f;
-			}
-			local_cur_min = cur_min_buffered;
-			local_min_remaining = min_remaining_buffer;
-			last_buffered = cur_min_buffered;
-		SDL_UnlockAudio();
-		float frames_to_problem;
-		if (average_change < 0) {
-			frames_to_problem = (float)local_cur_min / -average_change;
-		} else {
-			frames_to_problem = (float)local_min_remaining / average_change;
-		}
-		float adjust_ratio = 0.0f;
-		if (
-			frames_to_problem < BUFFER_FRAMES_THRESHOLD
-			|| (average_change < 0 && local_cur_min < 3*min_buffered / 4)
-			|| (average_change >0 && local_cur_min > 5 * min_buffered / 4)
-			|| cur_min_buffered < 0
-		) {
-			
-			if (cur_min_buffered < 0) {
-				adjust_ratio = max_adjust;
-				SDL_PauseAudio(1);
-				last_buffered = NO_LAST_BUFFERED;
-				cur_min_buffered = 0;
-			} else {
-				adjust_ratio = -1.0 * average_change / ((float)sample_rate / (float)source_hz);
-				adjust_ratio /= 2.5 * source_hz;
-				if (fabsf(adjust_ratio) > max_adjust) {
-					adjust_ratio = adjust_ratio > 0 ? max_adjust : -max_adjust;
-				}
-			}
-		} else if (local_cur_min < min_buffered / 2) {
-			adjust_ratio = max_adjust;
-		}
-		if (adjust_ratio != 0.0f) {
-			average_change = 0;
-			for (uint8_t i = 0; i < num_audio_sources; i++)
-			{
-				audio_sources[i]->buffer_inc = ((double)audio_sources[i]->buffer_inc) + ((double)audio_sources[i]->buffer_inc) * adjust_ratio + 0.5;
-			}
-		}
-		while (source_frame_count > 0)
-		{
-			render_update_display();
-			source_frame_count--;
-		}
-		source_frame++;
-		if (source_frame >= source_hz) {
-			source_frame = 0;
-		}
-		source_frame_count = frame_repeat[source_frame];
-	}*/
 }
-/*
-static ui_render_fun render_ui;
-void render_set_ui_render_fun(ui_render_fun fun)
-{
-	render_ui = fun;
-}
-*/
+
 void render_update_display()
 {
 #ifndef DISABLE_OPENGL
