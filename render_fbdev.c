@@ -430,7 +430,8 @@ static GLuint load_shader(char * fname, GLenum shader_type)
 }
 #endif
 
-static uint32_t texture_buf[513 * 512 * 2];
+#define MAX_FB_LINES 590
+static uint32_t texture_buf[MAX_FB_LINES * LINEBUF_SIZE * 2];
 #ifdef DISABLE_OPENGL
 #define RENDER_FORMAT SDL_PIXELFORMAT_ARGB8888
 #else
@@ -1084,79 +1085,186 @@ static pthread_mutex_t buffer_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t buffer_cond = PTHREAD_COND_INITIALIZER;
 static uint8_t buffer_ready;
 static uint32_t *copy_buffer;
-static uint32_t last_width, last_width_scale, last_height;
+static uint32_t last_width, last_width_scale, last_height, last_height_scale;
 static uint32_t max_multiple;
+
+static uint32_t mix_pixel(uint32_t last, uint32_t cur, float ratio)
+{
+	float a,b,c,d;
+	a = (last & 255) * ratio;
+	b = (last >> 8 & 255) * ratio;
+	c = (last >> 16 & 255) * ratio;
+	d = (last >> 24 & 255) * ratio;
+	ratio = 1.0f - ratio;
+	a += (cur & 255) * ratio;
+	b += (cur >> 8 & 255) * ratio;
+	c += (cur >> 16 & 255) * ratio;
+	d += (cur >> 24 & 255) * ratio;
+	return ((int)d) << 24 | ((int)c) << 16 | ((int)b) << 8 | ((int)a);
+}
 static void do_buffer_copy(void)
 {
 	uint32_t width_multiple = main_width / last_width_scale;
-	uint32_t height_multiple = main_height / last_height;
+	uint32_t height_multiple = main_height / last_height_scale;
 	uint32_t multiple = width_multiple < height_multiple ? width_multiple : height_multiple;
 	if (max_multiple && multiple > max_multiple) {
 		multiple = max_multiple;
 	}
+	height_multiple = last_height_scale * multiple / last_height;
 	uint32_t *cur_line = framebuffer + (main_width - last_width_scale * multiple)/2;
-	cur_line += fb_stride * (main_height - last_height * multiple) / (2 * sizeof(uint32_t));
+	cur_line += fb_stride * (main_height - last_height_scale * multiple) / (2 * sizeof(uint32_t));
 	uint32_t *src_line = copy_buffer;
-	if (last_width == last_width_scale) {
-		for (uint32_t y = 0; y < last_height; y++)
-		{
-			for (uint32_t i = 0; i < multiple; i++)
+	if (height_multiple * last_height == multiple * last_height_scale) {
+		if (last_width == last_width_scale) {
+			for (uint32_t y = 0; y < last_height; y++)
 			{
-				uint32_t *cur = cur_line;
-				uint32_t *src = src_line;
-				for (uint32_t x = 0; x < last_width	; x++)
+				for (uint32_t i = 0; i < height_multiple; i++)
 				{
-					uint32_t pixel = *(src++);
-					for (uint32_t j = 0; j < multiple; j++)
+					uint32_t *cur = cur_line;
+					uint32_t *src = src_line;
+					for (uint32_t x = 0; x < last_width	; x++)
 					{
-						*(cur++) = pixel;
+						uint32_t pixel = *(src++);
+						for (uint32_t j = 0; j < multiple; j++)
+						{
+							*(cur++) = pixel;
+						}
 					}
+					
+					cur_line += fb_stride / sizeof(uint32_t);
 				}
-				
-				cur_line += fb_stride / sizeof(uint32_t);
+				src_line += LINEBUF_SIZE;
 			}
-			src_line += LINEBUF_SIZE;
+		} else {
+			float scale_multiple = ((float)(last_width_scale * multiple)) / (float)last_width;
+			float remaining = 0.0f;
+			uint32_t last_pixel = 0;
+			for (uint32_t y = 0; y < last_height; y++)
+			{
+				for (uint32_t i = 0; i < height_multiple; i++)
+				{
+					uint32_t *cur = cur_line;
+					uint32_t *src = src_line;
+					for (uint32_t x = 0; x < last_width	; x++)
+					{
+						uint32_t pixel = *(src++);
+						float count = scale_multiple;
+						if (remaining > 0.0f) {
+							*(cur++) = mix_pixel(last_pixel, pixel, remaining);
+							count -= 1.0f - remaining;
+						}
+						for (; count >= 1; count -= 1.0f)
+						{
+							*(cur++) = pixel;
+						}
+						remaining = count;
+						last_pixel = pixel;
+					}
+					
+					cur_line += fb_stride / sizeof(uint32_t);
+				}
+				src_line += LINEBUF_SIZE;
+			}
 		}
 	} else {
-		float scale_multiple = ((float)(last_width_scale * multiple)) / (float)last_width;
-		float remaining = 0.0f;
-		uint32_t last_pixel = 0;
-		for (uint32_t y = 0; y < last_height; y++)
-		{
-			for (uint32_t i = 0; i < multiple; i++)
+		float height_scale = ((float)(last_height_scale * multiple)) / (float)last_height;
+		float height_remaining = 0.0f;
+		uint32_t *last_line;
+		if (last_width == last_width_scale) {
+			for (uint32_t y = 0; y < last_height; y++)
 			{
-				uint32_t *cur = cur_line;
-				uint32_t *src = src_line;
-				for (uint32_t x = 0; x < last_width	; x++)
-				{
-					uint32_t pixel = *(src++);
-					float count = scale_multiple;
-					if (remaining > 0.0f) {
-						float a,b,c,d;
-						a = (last_pixel & 255) * remaining;
-						b = (last_pixel >> 8 & 255) * remaining;
-						c = (last_pixel >> 16 & 255) * remaining;
-						d = (last_pixel >> 24 & 255) * remaining;
-						remaining = 1.0f - remaining;
-						a += (pixel & 255) * remaining;
-						b += (pixel >> 8 & 255) * remaining;
-						c += (pixel >> 16 & 255) * remaining;
-						d += (pixel >> 24 & 255) * remaining;
-						count -= remaining;
-						uint32_t mixed = ((int)d) << 24 | ((int)c) << 16 | ((int)b) << 8 | ((int)a);
-						*(cur++) = mixed;
-					}
-					for (; count >= 1; count -= 1.0f)
+				float hcount = height_scale;
+				if (height_remaining > 0.0f) {
+					uint32_t *cur = cur_line;
+					uint32_t *src = src_line;
+					uint32_t *last = last_line;
+					for (uint32_t x = 0; x < last_width	; x++)
 					{
-						*(cur++) = pixel;
+						uint32_t mixed = mix_pixel(*(last++), *(src++), height_remaining);
+						for (uint32_t j = 0; j < multiple; j++)
+						{
+							*(cur++) = mixed;
+						}
 					}
-					remaining = count;
-					last_pixel = pixel;
+					hcount -= 1.0f - height_remaining;
+					cur_line += fb_stride / sizeof(uint32_t);
+				}
+				for(; hcount >= 1; hcount -= 1.0f)
+				{
+					uint32_t *cur = cur_line;
+					uint32_t *src = src_line;
+					for (uint32_t x = 0; x < last_width	; x++)
+					{
+						uint32_t pixel = *(src++);
+						for (uint32_t j = 0; j < multiple; j++)
+						{
+							*(cur++) = pixel;
+						}
+					}
+					
+					cur_line += fb_stride / sizeof(uint32_t);
+				}
+				height_remaining = hcount;
+				last_line = src_line;
+				src_line += LINEBUF_SIZE;
+			}
+		} else {
+			float scale_multiple = ((float)(last_width_scale * multiple)) / (float)last_width;
+			float remaining = 0.0f;
+			uint32_t last_pixel = 0;
+			for (uint32_t y = 0; y < last_height; y++)
+			{
+				float hcount = height_scale;
+				if (height_remaining > 0.0f) {
+					uint32_t *cur = cur_line;
+					uint32_t *src = src_line;
+					uint32_t *last = last_line;
+					
+					for (uint32_t x = 0; x < last_width; x++)
+					{
+						uint32_t pixel = mix_pixel(*(last++), *(src++), height_remaining);
+						float count = scale_multiple;
+						if (remaining > 0.0f) {
+							*(cur++) = mix_pixel(last_pixel, pixel, remaining);
+							count -= 1.0f - remaining;
+						}
+						for (; count >= 1.0f; count -= 1.0f)
+						{
+							*(cur++) = pixel;
+						}
+						remaining = count;
+						last_pixel = pixel;
+					}
+					hcount -= 1.0f - height_remaining;
+					cur_line += fb_stride / sizeof(uint32_t);
 				}
 				
-				cur_line += fb_stride / sizeof(uint32_t);
+				for (; hcount >= 1.0f; hcount -= 1.0f)
+				{
+					uint32_t *cur = cur_line;
+					uint32_t *src = src_line;
+					for (uint32_t x = 0; x < last_width	; x++)
+					{
+						uint32_t pixel = *(src++);
+						float count = scale_multiple;
+						if (remaining > 0.0f) {
+							*(cur++) = mix_pixel(last_pixel, pixel, remaining);
+							count -= 1.0f - remaining;
+						}
+						for (; count >= 1; count -= 1.0f)
+						{
+							*(cur++) = pixel;
+						}
+						remaining = count;
+						last_pixel = pixel;
+					}
+					
+					cur_line += fb_stride / sizeof(uint32_t);
+				}
+				height_remaining = hcount;
+				last_line = src_line;
+				src_line += LINEBUF_SIZE;
 			}
-			src_line += LINEBUF_SIZE;
 		}
 	}
 }
@@ -1547,49 +1655,24 @@ void render_destroy_window(uint8_t which)
 	//not supported under fbdev
 }
 
-uint32_t *locked_pixels;
-uint32_t locked_pitch;
-uint32_t texture_off;
+static uint8_t last_fb;
+static uint32_t texture_off;
 uint32_t *render_get_framebuffer(uint8_t which, int *pitch)
 {
 	if (max_multiple == 1 && !render_gl) {
+		if (last_fb != which) {
+			*pitch = fb_stride * 2;
+			return framebuffer + (which == FRAMEBUFFER_EVEN ? fb_stride / sizeof(uint32_t) : 0);
+		}
 		*pitch = fb_stride;
 		return framebuffer;
 	}
+	if (!render_gl && last_fb != which) {
+		*pitch = LINEBUF_SIZE * sizeof(uint32_t) * 2;
+		return texture_buf + texture_off + (which == FRAMEBUFFER_EVEN ? LINEBUF_SIZE : 0);
+	}
 	*pitch = LINEBUF_SIZE * sizeof(uint32_t);
 	return texture_buf + texture_off;
-	/*
-#ifndef DISABLE_OPENGL
-	if (render_gl && which <= FRAMEBUFFER_EVEN) {
-		*pitch = LINEBUF_SIZE * sizeof(uint32_t);
-		return texture_buf;
-	} else {
-#endif
-		if (which >= num_textures) {
-			warning("Request for invalid framebuffer number %d\n", which);
-			return NULL;
-		}
-		void *pixels;
-		if (SDL_LockTexture(sdl_textures[which], NULL, &pixels, pitch) < 0) {
-			warning("Failed to lock texture: %s\n", SDL_GetError());
-			return NULL;
-		}
-		static uint8_t last;
-		if (which <= FRAMEBUFFER_EVEN) {
-			locked_pixels = pixels;
-			if (which == FRAMEBUFFER_EVEN) {
-				pixels += *pitch;
-			}
-			locked_pitch = *pitch;
-			if (which != last) {
-				*pitch *= 2;
-			}
-			last = which;
-		}
-		return pixels;
-#ifndef DISABLE_OPENGL
-	}
-#endif*/
 }
 
 uint8_t events_processed;
@@ -1622,19 +1705,40 @@ void render_framebuffer_updated(uint8_t which, int width)
 				buffer_ready = 1;
 				last_width = width;
 				last_width_scale = LINEBUF_SIZE - (overscan_left[video_standard] + overscan_right[video_standard]);
-				last_height = height;
+				last_height = last_height_scale = height;
 				copy_buffer = texture_buf + texture_off + overscan_left[video_standard] + LINEBUF_SIZE * overscan_top[video_standard];
-				texture_off = texture_off ? 0 : LINEBUF_SIZE * 512;
+				if (which != last_fb) {
+					last_height *= 2;
+					copy_buffer += LINEBUF_SIZE * overscan_top[video_standard];
+					uint32_t *src = texture_buf + (texture_off ? 0 : LINEBUF_SIZE * MAX_FB_LINES) + overscan_left[video_standard] + LINEBUF_SIZE * overscan_top[video_standard] + LINEBUF_SIZE * overscan_top[video_standard];
+					uint32_t *dst = copy_buffer;
+					if (which == FRAMEBUFFER_ODD) {
+						src += LINEBUF_SIZE;
+						dst += LINEBUF_SIZE;
+					}
+					for (int i = 0; i < height; i++)
+					{
+						memcpy(dst, src, width * sizeof(uint32_t));
+						src += LINEBUF_SIZE * 2;
+						dst += LINEBUF_SIZE * 2;
+					}
+				}
+				texture_off = texture_off ? 0 : LINEBUF_SIZE * MAX_FB_LINES;
 				pthread_cond_signal(&buffer_cond);
 			pthread_mutex_unlock(&buffer_lock);
 		} else {
 			last_width = width;
 			last_width_scale = LINEBUF_SIZE - (overscan_left[video_standard] + overscan_right[video_standard]);
-			last_height = height;
+			last_height = last_height_scale = height;
 			copy_buffer = texture_buf + texture_off + overscan_left[video_standard] + LINEBUF_SIZE * overscan_top[video_standard];
+			if (which != last_fb) {
+				last_height *= 2;
+				copy_buffer += LINEBUF_SIZE * overscan_top[video_standard];
+			}
 			do_buffer_copy();
 		}
 	}
+	last_fb = which;
 	if (!events_processed) {
 		process_events();
 	}
