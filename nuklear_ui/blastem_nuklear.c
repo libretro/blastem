@@ -1924,6 +1924,9 @@ static void texture_init(void)
 static void context_created(void)
 {
 	context = nk_sdl_init(render_get_window());
+	context->style.checkbox.padding.x = render_height() / 120;
+	context->style.checkbox.padding.y = render_height() / 120;
+	context->style.checkbox.border = render_height() / 240;
 	texture_init();
 }
 
@@ -2003,6 +2006,9 @@ ui_image *load_ui_image(char *name)
 void blastem_nuklear_init(uint8_t file_loaded)
 {
 	context = nk_sdl_init(render_get_window());
+	context->style.checkbox.padding.x = render_height() / 120;
+	context->style.checkbox.padding.y = render_height() / 120;
+	context->style.checkbox.border = render_height() / 240;
 	
 	controller_360 = load_ui_image("images/360.png");
 	controller_ps4 = load_ui_image("images/ps4.png");
