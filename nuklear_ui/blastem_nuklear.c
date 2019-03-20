@@ -1719,6 +1719,7 @@ void view_system_settings(struct nk_context *context)
 		selected_init = find_match(ram_inits, num_inits, "system\0ram_init\0", "zero");
 	}
 	const char *io_opts_1[] = {
+		"none",
 		"gamepad2.1",
 		"gamepad3.1",
 		"gamepad6.1",
@@ -1727,6 +1728,7 @@ void view_system_settings(struct nk_context *context)
 		"xband keyboard"
 	};
 	const char *io_opts_2[] = {
+		"none",
 		"gamepad2.2",
 		"gamepad3.2",
 		"gamepad6.2",
