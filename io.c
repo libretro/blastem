@@ -335,7 +335,7 @@ void setup_io_devices(tern_node * config, rom_info *rom, sega_io *io)
 				warning("IO port %s is configured to use the sega parallel board, but no paralell_pipe is set!\n", io_name(i));
 				ports[i].device_type = IO_NONE;
 			} else {
-				printf("IO port: %s connected to device '%s' with pipe name: %s\n", io_name(i), device_type_names[ports[i].device_type], pipe_name);
+				debug_message("IO port: %s connected to device '%s' with pipe name: %s\n", io_name(i), device_type_names[ports[i].device_type], pipe_name);
 				if (!strcmp("stdin", pipe_name))
 				{
 					ports[i].device.stream.data_fd = STDIN_FILENO;
@@ -361,7 +361,7 @@ void setup_io_devices(tern_node * config, rom_info *rom, sega_io *io)
 				warning("IO port %s is configured to use generic IO, but no socket is set!\n", io_name(i));
 				ports[i].device_type = IO_NONE;
 			} else {
-				printf("IO port: %s connected to device '%s' with socket name: %s\n", io_name(i), device_type_names[ports[i].device_type], sock_name);
+				debug_message("IO port: %s connected to device '%s' with socket name: %s\n", io_name(i), device_type_names[ports[i].device_type], sock_name);
 				ports[i].device.stream.data_fd = -1;
 				ports[i].device.stream.listen_fd = socket(AF_UNIX, SOCK_STREAM, 0);
 				size_t pathlen = strlen(sock_name);
@@ -391,9 +391,9 @@ cleanup_sock:
 		} else
 #endif
 		if (ports[i].device_type == IO_GAMEPAD3 || ports[i].device_type == IO_GAMEPAD6 || ports[i].device_type == IO_GAMEPAD2) {
-			printf("IO port %s connected to gamepad #%d with type '%s'\n", io_name(i), ports[i].device.pad.gamepad_num, device_type_names[ports[i].device_type]);
+			debug_message("IO port %s connected to gamepad #%d with type '%s'\n", io_name(i), ports[i].device.pad.gamepad_num, device_type_names[ports[i].device_type]);
 		} else {
-			printf("IO port %s connected to device '%s'\n", io_name(i), device_type_names[ports[i].device_type]);
+			debug_message("IO port %s connected to device '%s'\n", io_name(i), device_type_names[ports[i].device_type]);
 		}
 	}
 }
@@ -471,7 +471,7 @@ static void wait_for_connection(io_port * port)
 {
 	if (port->device.stream.data_fd == -1)
 	{
-		puts("Waiting for socket connection...");
+		debug_message("Waiting for socket connection...");
 		port->device.stream.data_fd = accept(port->device.stream.listen_fd, NULL, NULL);
 		fcntl(port->device.stream.data_fd, F_SETFL, O_NONBLOCK | O_RDWR);
 	}
