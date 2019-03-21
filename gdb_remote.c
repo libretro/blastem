@@ -596,5 +596,7 @@ void gdb_remote_init(void)
 		fatal_error("accept returned an error while listening on GDB remote debugging socket");
 	}
 	closesocket(listen_sock);
+#else
+	disable_stdout_messages();
 #endif
 }
