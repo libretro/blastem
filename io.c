@@ -391,7 +391,7 @@ cleanup_sock:
 		} else
 #endif
 		if (ports[i].device_type == IO_GAMEPAD3 || ports[i].device_type == IO_GAMEPAD6 || ports[i].device_type == IO_GAMEPAD2) {
-			printf("IO port %s connected to gamepad #%d with type '%s'\n", io_name(i), ports[i].device.pad.gamepad_num + 1, device_type_names[ports[i].device_type]);
+			printf("IO port %s connected to gamepad #%d with type '%s'\n", io_name(i), ports[i].device.pad.gamepad_num, device_type_names[ports[i].device_type]);
 		} else {
 			printf("IO port %s connected to device '%s'\n", io_name(i), device_type_names[ports[i].device_type]);
 		}
