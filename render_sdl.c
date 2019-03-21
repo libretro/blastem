@@ -112,13 +112,12 @@ static int32_t mix_s16(audio_source *audio, void *vstream, int len)
 	}
 	
 	if (cur != end) {
-		printf("Underflow of %d samples, read_start: %d, read_end: %d, mask: %X\n", (int)(end-cur)/2, audio->read_start, audio->read_end, audio->mask);
+		debug_message("Underflow of %d samples, read_start: %d, read_end: %d, mask: %X\n", (int)(end-cur)/2, audio->read_start, audio->read_end, audio->mask);
 	}
 	if (!sync_to_audio) {
 		audio->read_start = i;
 	}
 	if (cur != end) {
-		//printf("Underflow of %d samples, read_start: %d, read_end: %d, mask: %X\n", (int)(end-cur)/2, audio->read_start, audio->read_end, audio->mask);
 		return (cur-end)/2;
 	} else {
 		return ((i_end - i) & audio->mask) / audio->num_channels;
@@ -158,7 +157,7 @@ static int32_t mix_f32(audio_source *audio, void *vstream, int len)
 		audio->read_start = i;
 	}
 	if (cur != end) {
-		printf("Underflow of %d samples, read_start: %d, read_end: %d, mask: %X\n", (int)(end-cur)/2, audio->read_start, audio->read_end, audio->mask);
+		debug_message("Underflow of %d samples, read_start: %d, read_end: %d, mask: %X\n", (int)(end-cur)/2, audio->read_start, audio->read_end, audio->mask);
 		return (cur-end)/2;
 	} else {
 		return ((i_end - i) & audio->mask) / audio->num_channels;
@@ -922,8 +921,8 @@ static int32_t handle_event(SDL_Event *event)
 				SDL_Joystick * joy = joysticks[index] = SDL_JoystickOpen(event->jdevice.which);
 				joystick_sdl_index[index] = event->jdevice.which;
 				if (joy) {
-					printf("Joystick %d added: %s\n", index, SDL_JoystickName(joy));
-					printf("\tNum Axes: %d\n\tNum Buttons: %d\n\tNum Hats: %d\n", SDL_JoystickNumAxes(joy), SDL_JoystickNumButtons(joy), SDL_JoystickNumHats(joy));
+					debug_message("Joystick %d added: %s\n", index, SDL_JoystickName(joy));
+					debug_message("\tNum Axes: %d\n\tNum Buttons: %d\n\tNum Hats: %d\n", SDL_JoystickNumAxes(joy), SDL_JoystickNumButtons(joy), SDL_JoystickNumHats(joy));
 					handle_joy_added(index);
 				}
 			}
@@ -934,9 +933,9 @@ static int32_t handle_event(SDL_Event *event)
 		if (index >= 0) {
 			SDL_JoystickClose(joysticks[index]);
 			joysticks[index] = NULL;
-			printf("Joystick %d removed\n", index);
+			debug_message("Joystick %d removed\n", index);
 		} else {
-			printf("Failed to find removed joystick with instance ID: %d\n", index);
+			debug_message("Failed to find removed joystick with instance ID: %d\n", index);
 		}
 		break;
 	}
@@ -1033,7 +1032,7 @@ static void init_audio()
    	if (!samples) {
    		samples = 512;
    	}
-    printf("config says: %d\n", samples);
+    debug_message("config says: %d\n", samples);
     desired.samples = samples*2;
 	desired.callback = sync_to_audio ? audio_callback : audio_callback_drc;
 	desired.userdata = NULL;
@@ -1044,15 +1043,15 @@ static void init_audio()
 	buffer_samples = actual.samples;
 	sample_rate = actual.freq;
 	output_channels = actual.channels;
-	printf("Initialized audio at frequency %d with a %d sample buffer, ", actual.freq, actual.samples);
+	debug_message("Initialized audio at frequency %d with a %d sample buffer, ", actual.freq, actual.samples);
 	if (actual.format == AUDIO_S16SYS) {
-		puts("signed 16-bit int format");
+		debug_message("signed 16-bit int format");
 		mix = mix_s16;
 	} else if (actual.format == AUDIO_F32SYS) {
-		puts("32-bit float format");
+		debug_message("32-bit float format");
 		mix = mix_f32;
 	} else {
-		printf("unsupported format %X\n", actual.format);
+		debug_message("unsupported format %X\n", actual.format);
 		warning("Unsupported audio sample format: %X\n", actual.format);
 		mix = mix_null;
 	}
@@ -1174,7 +1173,7 @@ void window_setup(void)
 		}
 		SDL_RendererInfo rinfo;
 		SDL_GetRendererInfo(main_renderer, &rinfo);
-		printf("SDL2 Render Driver: %s\n", rinfo.name);
+		debug_message("SDL2 Render Driver: %s\n", rinfo.name);
 		main_clip.x = main_clip.y = 0;
 		main_clip.w = main_width;
 		main_clip.h = main_height;
@@ -1183,7 +1182,7 @@ void window_setup(void)
 #endif
 
 	SDL_GetWindowSize(main_window, &main_width, &main_height);
-	printf("Window created with size: %d x %d\n", main_width, main_height);
+	debug_message("Window created with size: %d x %d\n", main_width, main_height);
 	update_aspect();
 	render_alloc_surfaces();
 	def.ptrval = "off";
@@ -1200,7 +1199,7 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 		float aspect = config_aspect() > 0.0f ? config_aspect() : 4.0f/3.0f;
 		height = ((float)width / aspect) + 0.5f;
 	}
-	printf("width: %d, height: %d\n", width, height);
+	debug_message("width: %d, height: %d\n", width, height);
 	windowed_width = width;
 	windowed_height = height;
 	
@@ -1233,7 +1232,7 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 	if (db_data) {
 		int added = SDL_GameControllerAddMappingsFromRW(SDL_RWFromMem(db_data, db_size), 1);
 		free(db_data);
-		printf("Added %d game controller mappings from gamecontrollerdb.txt\n", added);
+		debug_message("Added %d game controller mappings from gamecontrollerdb.txt\n", added);
 	}
 	
 	controller_add_mappings();
@@ -1386,7 +1385,7 @@ void render_set_video_standard(vid_std std)
 	max_repeat++;
 	min_buffered = (((float)max_repeat * (float)sample_rate/(float)source_hz)/* / (float)buffer_samples*/);// + 0.9999;
 	//min_buffered *= buffer_samples;
-	printf("Min samples buffered before audio start: %d\n", min_buffered);
+	debug_message("Min samples buffered before audio start: %d\n", min_buffered);
 	max_adjust = BASE_MAX_ADJUST / source_hz;
 }
 

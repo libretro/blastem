@@ -560,7 +560,7 @@ void add_eeprom_map(tern_node *node, uint32_t start, uint32_t end, map_iter_stat
 	if (bits_write) {
 		tern_foreach(bits_write, eeprom_write_fun, eep_map);
 	}
-	printf("EEPROM address %X: sda read: %X, sda write: %X, scl: %X\n", start, eep_map->sda_read_bit, eep_map->sda_write_mask, eep_map->scl_mask);
+	debug_message("EEPROM address %X: sda read: %X, sda write: %X, scl: %X\n", start, eep_map->sda_read_bit, eep_map->sda_write_mask, eep_map->scl_mask);
 	state->info->num_eeprom++;
 }
 
@@ -847,18 +847,18 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, void *l
 		product_id[i] = rom[GAME_ID_OFF + i];
 
 	}
-	printf("Product ID: %s\n", product_id);
+	debug_message("Product ID: %s\n", product_id);
 	uint8_t raw_hash[20];
 	sha1(vrom, rom_size, raw_hash);
 	uint8_t hex_hash[41];
 	bin_to_hex(hex_hash, raw_hash, 20);
-	printf("SHA1: %s\n", hex_hash);
+	debug_message("SHA1: %s\n", hex_hash);
 	tern_node * entry = tern_find_node(rom_db, hex_hash);
 	if (!entry) {
 		entry = tern_find_node(rom_db, product_id);
 	}
 	if (!entry) {
-		puts("Not found in ROM DB, examining header\n");
+		debug_message("Not found in ROM DB, examining header\n");
 		if (xband_detect(rom, rom_size)) {
 			return xband_configure_rom(rom_db, rom, rom_size, lock_on, lock_on_size, base_map, base_chunks);
 		}
@@ -871,7 +871,7 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, void *l
 	info.mapper_type = MAPPER_NONE;
 	info.name = tern_find_ptr(entry, "name");
 	if (info.name) {
-		printf("Found name: %s\n", info.name);
+		debug_message("Found name: %s\n", info.name);
 		info.name = strdup(info.name);
 	} else {
 		info.name = get_header_name(rom);

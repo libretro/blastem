@@ -84,5 +84,9 @@ void fatal_error(char *format, ...);
 void info_message(char *format, ...);
 //Prints an information message to stderr and to a message box if not in headless mode and not attached to a console
 void warning(char *format, ...);
+//Prints a debug message to stdout
+void debug_message(char *format, ...);
+//Disables output of info and debug messages to stdout
+void disable_stdout_messages(void);
 
 #endif //UTIL_H_
