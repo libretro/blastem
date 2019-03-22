@@ -293,6 +293,46 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 		info->map[8].write_16 = (write_16_fun)write_bank_reg_w;
 		info->map[8].write_8 = (write_8_fun)write_bank_reg_b;
 		return;
+	} else if(!memcmp("SEGA MEGAWIFI", rom + 0x100, strlen("SEGA MEGAWIFI"))) {
+		info->mapper_type = MAPPER_NONE;
+		info->map_chunks = base_chunks + 2;
+		info->map = malloc(sizeof(memmap_chunk) * info->map_chunks);
+		memset(info->map, 0, sizeof(memmap_chunk)*2);
+		memcpy(info->map+2, base_map, sizeof(memmap_chunk) * base_chunks);
+		info->save_size = 0x400000;
+		info->save_bus = RAM_FLAG_BOTH;
+		info->save_type = SAVE_NOR;
+		info->map[0].start = 0;
+		info->map[0].end = 0x400000;
+		info->map[0].mask = 0xFFFFFF;
+		info->map[0].write_16 = nor_flash_write_w;
+		info->map[0].write_8 = nor_flash_write_b;
+		info->map[0].read_16 = nor_flash_read_w;
+		info->map[0].read_8 = nor_flash_read_b;
+		info->map[0].flags = MMAP_READ_CODE | MMAP_CODE;
+		info->map[0].buffer = info->save_buffer = malloc(info->save_size);
+		uint32_t init_size = size < info->save_size ? size : info->save_size;
+		memcpy(info->save_buffer, rom, init_size);
+		byteswap_rom(info->save_size, (uint16_t *)info->save_buffer);
+		info->nor = calloc(1, sizeof(nor_state));
+		nor_flash_init(info->nor, info->save_buffer, info->save_size, 128, 0xDA45, RAM_FLAG_BOTH);
+		info->nor->cmd_address1 = 0xAAB;
+		info->nor->cmd_address2 = 0x555;
+		info->map[1].start = 0xA130C0;
+		info->map[1].end = 0xA130D0;
+		info->map[1].mask = 0xFFFFFF;
+		if (!strcmp(
+			"on", 
+			tern_find_path_default(config, "system\0megawifi\0", (tern_val){.ptrval="off"}, TVAL_PTR).ptrval)
+		) {
+			info->map[1].write_16 = megawifi_write_w;
+			info->map[1].write_8 = megawifi_write_b;
+			info->map[1].read_16 = megawifi_read_w;
+			info->map[1].read_8 = megawifi_read_b;
+		} else {
+			warning("ROM uses MegaWiFi, but it is disabled\n");
+		}
+		return;
 	} else if (has_ram_header(rom, size)) {
 		uint32_t ram_start = read_ram_header(info, rom);
 
