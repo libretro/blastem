@@ -3,6 +3,9 @@ OS:=$(shell uname -s)
 endif
 FIXUP:=true
 
+BUNDLED_LIBZ:=zlib/adler32.o zlib/compress.o zlib/crc32.o zlib/deflate.o zlib/gzclose.o zlib/gzlib.o zlib/gzread.o\
+	zlib/gzwrite.o zlib/infback.o zlib/inffast.o zlib/inflate.o zlib/inftrees.o zlib/trees.o zlib/uncompr.o zlib/zutil.o
+
 ifeq ($(OS),Windows)
 ifndef SDL2_PREFIX
 SDL2_PREFIX:="sdl/i686-w64-mingw32"
@@ -23,6 +26,7 @@ CC:=i686-w64-mingw32-gcc-win32
 CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -I"$(SDL2_PREFIX)/include/SDL2" -I"$(GLEW_PREFIX)/include" -DGLEW_STATIC
 LDFLAGS:= $(GLEW32S_LIB) -L"$(SDL2_PREFIX)/lib" -lm -lmingw32 -lSDL2main -lSDL2 -lws2_32 -lopengl32 -lglu32 -mwindows
 CPU:=i686
+LIBZOBJS=$(BUNDLED_LIBZ)
 
 else
 
@@ -60,8 +64,7 @@ ifdef HOST_ZLIB
 LIBS+= zlib
 LIBZOBJS=
 else
-LIBZOBJS=zlib/adler32.o zlib/compress.o zlib/crc32.o zlib/deflate.o zlib/gzclose.o zlib/gzlib.o zlib/gzread.o\
-	zlib/gzwrite.o zlib/infback.o zlib/inffast.o zlib/inflate.o zlib/inftrees.o zlib/trees.o zlib/uncompr.o zlib/zutil.o
+LIBZOBJS=$(BUNDLED_LIBZ)
 endif
 
 ifeq ($(OS),Darwin)
