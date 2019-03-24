@@ -1334,10 +1334,20 @@ static void keyboard_up(system_header *system, uint8_t scancode)
 	io_keyboard_up(&gen->io, scancode);
 }
 
+static void set_gain_config(genesis_context *gen)
+{
+	char *config_gain;
+	config_gain = tern_find_path(config, "audio\0psg_gain\0", TVAL_PTR).ptrval;
+	render_audio_source_gaindb(gen->psg->audio, config_gain ? atof(config_gain) : 0.0f);
+	config_gain = tern_find_path(config, "audio\0fm_gain\0", TVAL_PTR).ptrval;
+	render_audio_source_gaindb(gen->ym->audio, config_gain ? atof(config_gain) : 0.0f);
+}
+
 static void config_updated(system_header *system)
 {
 	genesis_context *gen = (genesis_context *)system;
 	setup_io_devices(config, &system->info, &gen->io);
+	set_gain_config(gen);
 }
 
 genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on, uint32_t system_opts, uint8_t force_region)
@@ -1391,6 +1401,8 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 
 	gen->psg = malloc(sizeof(psg_context));
 	psg_init(gen->psg, gen->master_clock, MCLKS_PER_PSG);
+	
+	set_gain_config(gen);
 
 	z80_map[0].buffer = gen->zram = calloc(1, Z80_RAM_BYTES);
 #ifndef NO_Z80

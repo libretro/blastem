@@ -569,6 +569,13 @@ static void keyboard_up(system_header *system, uint8_t scancode)
 	io_keyboard_up(&sms->io, scancode);
 }
 
+static void set_gain_config(sms_context *sms)
+{
+	char *config_gain;
+	config_gain = tern_find_path(config, "audio\0psg_gain\0", TVAL_PTR).ptrval;
+	render_audio_source_gaindb(sms->psg->audio, config_gain ? atof(config_gain) : 0.0f);
+}
+
 static void config_updated(system_header *system)
 {
 	sms_context *sms = (sms_context *)system;
@@ -619,6 +626,8 @@ sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t for
 	
 	sms->psg = malloc(sizeof(psg_context));
 	psg_init(sms->psg, sms->master_clock, 15*16);
+	
+	set_gain_config(sms);
 	
 	sms->vdp = init_vdp_context(0);
 	sms->vdp->system = &sms->header;
