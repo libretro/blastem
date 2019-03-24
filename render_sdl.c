@@ -61,6 +61,7 @@ struct audio_source {
 	double   dt;
 	uint64_t buffer_fraction;
 	uint64_t buffer_inc;
+	float    gain_mult;
 	uint32_t buffer_pos;
 	uint32_t read_start;
 	uint32_t read_end;
@@ -78,77 +79,72 @@ static uint8_t num_audio_sources;
 static uint8_t num_inactive_audio_sources;
 static uint8_t sync_to_audio;
 static uint32_t min_buffered;
+static float overall_gain_mult, *mix_buf;
+static int sample_size;
 
-typedef int32_t (*mix_func)(audio_source *audio, void *vstream, int len);
+typedef void (*conv_func)(float *samples, void *vstream, int sample_count);
 
-static int32_t mix_s16(audio_source *audio, void *vstream, int len)
+static void convert_null(float *samples, void *vstream, int sample_count)
 {
-	int samples = len/(sizeof(int16_t)*2);
+	memset(vstream, 0, sample_count * sample_size);
+}
+
+static void convert_s16(float *samples, void *vstream, int sample_count)
+{
 	int16_t *stream = vstream;
-	int16_t *end = stream + output_channels*samples;
-	int16_t *src = audio->front;
-	uint32_t i = audio->read_start;
-	uint32_t i_end = audio->read_end;
-	int16_t *cur = stream;
-	size_t first_add = output_channels > 1 ? 1 : 0, second_add = output_channels > 1 ? output_channels - 1 : 1;
-	if (audio->num_channels == 1) {
-		while (cur < end && i != i_end)
-		{
-			*cur += src[i];
-			cur += first_add;
-			*cur += src[i++];
-			cur += second_add;
-			i &= audio->mask;
+	for (int16_t *end = stream + sample_count; stream < end; stream++, samples++)
+	{
+		float sample = *samples;
+		int16_t out_sample;
+		if (sample >= 1.0f) {
+			out_sample = 0x7FFF;
+		} else if (sample <= -1.0f) {
+			out_sample = -0x8000;
+		} else {
+			out_sample = sample * 0x7FFF;
 		}
-	} else {
-		while (cur < end && i != i_end)
-		{
-			*cur += src[i++];
-			cur += first_add;
-			*cur += src[i++];
-			cur += second_add;
-			i &= audio->mask;
-		}
-	}
-	
-	if (cur != end) {
-		debug_message("Underflow of %d samples, read_start: %d, read_end: %d, mask: %X\n", (int)(end-cur)/2, audio->read_start, audio->read_end, audio->mask);
-	}
-	if (!sync_to_audio) {
-		audio->read_start = i;
-	}
-	if (cur != end) {
-		return (cur-end)/2;
-	} else {
-		return ((i_end - i) & audio->mask) / audio->num_channels;
+		*stream = out_sample;
 	}
 }
 
-static int32_t mix_f32(audio_source *audio, void *vstream, int len)
+static void clamp_f32(float *samples, void *vstream, int sample_count)
 {
-	int samples = len/(sizeof(float)*2);
-	float *stream = vstream;
-	float *end = stream + 2*samples;
+	for (; sample_count > 0; sample_count--, samples++)
+	{
+		float sample = *samples;
+		if (sample > 1.0f) {
+			sample = 1.0f;
+		} else if (sample < -1.0f) {
+			sample = -1.0f;
+		}
+		*samples = sample;
+	}
+}
+
+static int32_t mix_f32(audio_source *audio, float *stream, int samples)
+{
+	float *end = stream + samples;
 	int16_t *src = audio->front;
 	uint32_t i = audio->read_start;
 	uint32_t i_end = audio->read_end;
 	float *cur = stream;
+	float gain_mult = audio->gain_mult * overall_gain_mult;
 	size_t first_add = output_channels > 1 ? 1 : 0, second_add = output_channels > 1 ? output_channels - 1 : 1;
 	if (audio->num_channels == 1) {
 		while (cur < end && i != i_end)
 		{
-			*cur += ((float)src[i]) / 0x7FFF;
+			*cur += gain_mult * ((float)src[i]) / 0x7FFF;
 			cur += first_add;
-			*cur += ((float)src[i++]) / 0x7FFF;
+			*cur += gain_mult * ((float)src[i++]) / 0x7FFF;
 			cur += second_add;
 			i &= audio->mask;
 		}
 	} else {
 		while(cur < end && i != i_end)
 		{
-			*cur += ((float)src[i++]) / 0x7FFF;
+			*cur += gain_mult * ((float)src[i++]) / 0x7FFF;
 			cur += first_add;
-			*cur += ((float)src[i++]) / 0x7FFF;
+			*cur += gain_mult * ((float)src[i++]) / 0x7FFF;
 			cur += second_add;
 			i &= audio->mask;
 		}
@@ -164,17 +160,15 @@ static int32_t mix_f32(audio_source *audio, void *vstream, int len)
 	}
 }
 
-static int32_t mix_null(audio_source *audio, void *vstream, int len)
-{
-	return 0;
-}
-
-static mix_func mix;
+static conv_func convert;
 
 static void audio_callback(void * userdata, uint8_t *byte_stream, int len)
 {
 	uint8_t num_populated;
-	memset(byte_stream, 0, len);
+	float *mix_dest = mix_buf ? mix_buf : (float *)byte_stream;
+	
+	int samples = len / sample_size;
+	memset(mix_dest, 0, samples * sizeof(float));
 	SDL_LockMutex(audio_mutex);
 		do {
 			num_populated = 0;
@@ -192,12 +186,13 @@ static void audio_callback(void * userdata, uint8_t *byte_stream, int len)
 		if (!quitting) {
 			for (uint8_t i = 0; i < num_audio_sources; i++)
 			{
-				mix(audio_sources[i], byte_stream, len);
+				mix_f32(audio_sources[i], mix_dest, samples);
 				audio_sources[i]->front_populated = 0;
 				SDL_CondSignal(audio_sources[i]->cond);
 			}
 		}
 	SDL_UnlockMutex(audio_mutex);
+	convert(mix_dest, byte_stream, samples);
 }
 
 #define NO_LAST_BUFFERED -2000000000
@@ -210,21 +205,24 @@ static int32_t cur_min_buffered;
 static uint32_t min_remaining_buffer;
 static void audio_callback_drc(void *userData, uint8_t *byte_stream, int len)
 {
-	memset(byte_stream, 0, len);
 	if (cur_min_buffered < 0) {
 		//underflow last frame, but main thread hasn't gotten a chance to call SDL_PauseAudio yet
 		return;
 	}
 	cur_min_buffered = 0x7FFFFFFF;
 	min_remaining_buffer = 0xFFFFFFFF;
+	float *mix_dest = mix_buf ? mix_buf : (float *)byte_stream;	
+	int samples = len / sample_size;
+	memset(mix_dest, 0, samples * sizeof(float));
 	for (uint8_t i = 0; i < num_audio_sources; i++)
 	{
 		
-		int32_t buffered = mix(audio_sources[i], byte_stream, len);
+		int32_t buffered = mix_f32(audio_sources[i], mix_dest, samples);
 		cur_min_buffered = buffered < cur_min_buffered ? buffered : cur_min_buffered;
 		uint32_t remaining = (audio_sources[i]->mask + 1)/audio_sources[i]->num_channels - buffered;
 		min_remaining_buffer = remaining < min_remaining_buffer ? remaining : min_remaining_buffer;
 	}
+	convert(mix_dest, byte_stream, samples);
 }
 
 static void lock_audio()
@@ -250,6 +248,10 @@ static void render_close_audio()
 	SDL_LockMutex(audio_mutex);
 		quitting = 1;
 		SDL_CondSignal(audio_ready);
+		if (mix_buf) {
+			free(mix_buf);
+			mix_buf = NULL;
+		}
 	SDL_UnlockMutex(audio_mutex);
 	SDL_CloseAudio();
 }
@@ -296,6 +298,16 @@ audio_source *render_audio_source(uint64_t master_clock, uint64_t sample_divider
 		SDL_PauseAudio(0);
 	}
 	return ret;
+}
+
+static float db_to_mult(float gain)
+{
+	return powf(10.0f, gain/20.0f);
+}
+
+void render_audio_source_gaindb(audio_source *src, float gain)
+{
+	src->gain_mult = db_to_mult(gain);
 }
 
 void render_pause_source(audio_source *src)
@@ -1044,17 +1056,23 @@ static void init_audio()
 	sample_rate = actual.freq;
 	output_channels = actual.channels;
 	debug_message("Initialized audio at frequency %d with a %d sample buffer, ", actual.freq, actual.samples);
+	sample_size = SDL_AUDIO_BITSIZE(actual.format) / 8;
 	if (actual.format == AUDIO_S16SYS) {
 		debug_message("signed 16-bit int format");
-		mix = mix_s16;
+		convert = convert_s16;
+		mix_buf = calloc(output_channels * buffer_samples, sizeof(float));
 	} else if (actual.format == AUDIO_F32SYS) {
 		debug_message("32-bit float format");
-		mix = mix_f32;
+		convert = clamp_f32;
+		mix_buf = NULL;
 	} else {
 		debug_message("unsupported format %X\n", actual.format);
 		warning("Unsupported audio sample format: %X\n", actual.format);
-		mix = mix_null;
+		convert = convert_null;
+		mix_buf = calloc(output_channels * buffer_samples, sizeof(float));
 	}
+	char * gain_str = tern_find_path(config, "audio\0gain\0", TVAL_PTR).ptrval;
+	overall_gain_mult = db_to_mult(gain_str ? atof(gain_str) : 0.0f);
 }
 
 void window_setup(void)
