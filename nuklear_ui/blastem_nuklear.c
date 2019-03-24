@@ -1438,6 +1438,21 @@ void settings_int_property(struct nk_context *context, char *label, char *name, 
 	}
 }
 
+void settings_float_property(struct nk_context *context, char *label, char *name, char *path, float def, float min, float max, float step)
+{
+	char *curstr = tern_find_path(config, path, TVAL_PTR).ptrval;
+	float curval = curstr ? atof(curstr) : def;
+	nk_label(context, label, NK_TEXT_LEFT);
+	float val = curval;
+	nk_property_float(context, name, min, &val, max, step, step);
+	if (val != curval) {
+		char buffer[64];
+		sprintf(buffer, "%f", val);
+		config_dirty = 1;
+		config = tern_insert_path(config, path, (tern_val){.ptrval = strdup(buffer)}, TVAL_PTR);
+	}
+}
+
 typedef struct {
 	char *fragment;
 	char *vertex;
@@ -1672,6 +1687,9 @@ void view_audio_settings(struct nk_context *context)
 		selected_rate = settings_dropdown(context, "Rate in Hz", rates, num_rates, selected_rate, "audio\0rate\0");
 		selected_size = settings_dropdown(context, "Buffer Samples", sizes, num_sizes, selected_size, "audio\0buffer\0");
 		settings_int_input(context, "Lowpass Cutoff Hz", "audio\0lowpass_cutoff\0", "3390");
+		settings_float_property(context, "Gain", "Overall", "audio\0gain\0", 0, -30.0f, 30.0f, 0.5f);
+		settings_float_property(context, "", "FM", "audio\0fm_gain\0", 0, -30.0f, 30.0f, 0.5f);
+		settings_float_property(context, "", "PSG", "audio\0psg_gain\0", 0, -30.0f, 30.0f, 0.5f);
 		if (nk_button_label(context, "Back")) {
 			pop_view();
 		}

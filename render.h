@@ -131,6 +131,7 @@ uint32_t render_elapsed_ms(void);
 void render_sleep_ms(uint32_t delay);
 uint8_t render_has_gl(void);
 audio_source *render_audio_source(uint64_t master_clock, uint64_t sample_divider, uint8_t channels);
+void render_audio_source_gaindb(audio_source *src, float gain);
 void render_audio_adjust_clock(audio_source *src, uint64_t master_clock, uint64_t sample_divider);
 void render_put_mono_sample(audio_source *src, int16_t value);
 void render_put_stereo_sample(audio_source *src, int16_t left, int16_t right);
