@@ -165,10 +165,6 @@ static conv_func convert;
 static void audio_callback(void * userdata, uint8_t *byte_stream, int len)
 {
 	uint8_t num_populated;
-	float *mix_dest = mix_buf ? mix_buf : (float *)byte_stream;
-	
-	int samples = len / sample_size;
-	memset(mix_dest, 0, samples * sizeof(float));
 	SDL_LockMutex(audio_mutex);
 		do {
 			num_populated = 0;
@@ -183,6 +179,9 @@ static void audio_callback(void * userdata, uint8_t *byte_stream, int len)
 				SDL_CondWait(audio_ready, audio_mutex);
 			}
 		} while(!quitting && num_populated < num_audio_sources);
+		int samples = len / sample_size;
+		float *mix_dest = mix_buf ? mix_buf : (float *)byte_stream;
+		memset(mix_dest, 0, samples * sizeof(float));
 		if (!quitting) {
 			for (uint8_t i = 0; i < num_audio_sources; i++)
 			{
@@ -191,8 +190,8 @@ static void audio_callback(void * userdata, uint8_t *byte_stream, int len)
 				SDL_CondSignal(audio_sources[i]->cond);
 			}
 		}
+		convert(mix_dest, byte_stream, samples);
 	SDL_UnlockMutex(audio_mutex);
-	convert(mix_dest, byte_stream, samples);
 }
 
 #define NO_LAST_BUFFERED -2000000000
@@ -248,12 +247,12 @@ static void render_close_audio()
 	SDL_LockMutex(audio_mutex);
 		quitting = 1;
 		SDL_CondSignal(audio_ready);
-		if (mix_buf) {
-			free(mix_buf);
-			mix_buf = NULL;
-		}
 	SDL_UnlockMutex(audio_mutex);
 	SDL_CloseAudio();
+	if (mix_buf) {
+		free(mix_buf);
+		mix_buf = NULL;
+	}
 }
 
 #define BUFFER_INC_RES 0x40000000UL
@@ -522,6 +521,7 @@ static GLuint load_shader(char * fname, GLenum shader_type)
 		}
 		fsize = fsize32;
 	}
+	text[fsize] = 0;
 	
 	if (strncmp(text, "#version", strlen("#version"))) {
 		GLchar *tmp = text;
