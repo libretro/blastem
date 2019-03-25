@@ -292,6 +292,7 @@ audio_source *render_audio_source(uint64_t master_clock, uint64_t sample_divider
 		ret->read_start = 0;
 		ret->read_end = sync_to_audio ? buffer_samples * channels : 0;
 		ret->mask = sync_to_audio ? 0xFFFFFFFF : alloc_size-1;
+		ret->gain_mult = 1.0f;
 	}
 	if (sync_to_audio && SDL_GetAudioStatus() == SDL_AUDIO_PAUSED) {
 		SDL_PauseAudio(0);
