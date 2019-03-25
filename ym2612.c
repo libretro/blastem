@@ -256,6 +256,7 @@ void ym_init(ym2612_context * context, uint32_t master_clock, uint32_t clock_div
 		}
 	}
 	ym_reset(context);
+	ym_enable_zero_offset(context, 1);
 }
 
 void ym_free(ym2612_context *context)
@@ -267,8 +268,18 @@ void ym_free(ym2612_context *context)
 	free(context);
 }
 
-#define YM_VOLUME_MULTIPLIER 2
-#define YM_VOLUME_DIVIDER 3
+void ym_enable_zero_offset(ym2612_context *context, uint8_t enabled)
+{
+	if (enabled) {
+		context->zero_offset = 0x70;
+		context->volume_mult = 79;
+		context->volume_div = 120;
+	} else {
+		context->zero_offset = 0;
+		context->volume_mult = 2;
+		context->volume_div = 3;
+	}
+}
 #define YM_MOD_SHIFT 1
 
 #define CSM_MODE 0x80
@@ -549,7 +560,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 					if (value & 0x2000) {
 						value |= 0xC000;
 					}
-					dfprintf(debug_file, "channel %d output: %d\n", channel, (value * YM_VOLUME_MULTIPLIER) / YM_VOLUME_DIVIDER);
+					dfprintf(debug_file, "channel %d output: %d\n", channel, (value * context->volume_mult) / context->volume_div);
 				}
 			}
 			//puts("operator update done");
@@ -571,14 +582,19 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 						value |= 0xC000;
 					}
 				}
+				if (value >= 0) {
+					value += context->zero_offset;
+				} else {
+					value -= context->zero_offset;
+				}
 				if (context->channels[i].logfile) {
 					fwrite(&value, sizeof(value), 1, context->channels[i].logfile);
 				}
 				if (context->channels[i].lr & 0x80) {
-					left += (value * YM_VOLUME_MULTIPLIER) / YM_VOLUME_DIVIDER;
+					left += (value * context->volume_mult) / context->volume_div;
 				}
 				if (context->channels[i].lr & 0x40) {
-					right += (value * YM_VOLUME_MULTIPLIER) / YM_VOLUME_DIVIDER;
+					right += (value * context->volume_mult) / context->volume_div;
 				}
 			}
 			render_put_stereo_sample(context->audio, left, right);
