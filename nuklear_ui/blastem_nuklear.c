@@ -1668,13 +1668,24 @@ void view_audio_settings(struct nk_context *context)
 		"128",
 		"64"
 	};
+	const char *dac[] = {
+		"zero_offset",
+		"linear"
+	};
+	const char *dac_desc[] = {
+		"Zero Offset",
+		"Linear"
+	};
 	const uint32_t num_rates = sizeof(rates)/sizeof(*rates);
 	const uint32_t num_sizes = sizeof(sizes)/sizeof(*sizes);
+	const uint32_t num_dacs = sizeof(dac)/sizeof(*dac);
 	static int32_t selected_rate = -1;
 	static int32_t selected_size = -1;
-	if (selected_rate < 0 || selected_size < 0) {
+	static int32_t selected_dac = -1;
+	if (selected_rate < 0 || selected_size < 0 || selected_dac < 0) {
 		selected_rate = find_match(rates, num_rates, "autio\0rate\0", "48000");
 		selected_size = find_match(sizes, num_sizes, "audio\0buffer\0", "512");
+		selected_dac = find_match(dac, num_dacs, "audio\0fm_dac\0", "zero_offset");
 	}
 	uint32_t width = render_width();
 	uint32_t height = render_height();
@@ -1690,6 +1701,7 @@ void view_audio_settings(struct nk_context *context)
 		settings_float_property(context, "Gain", "Overall", "audio\0gain\0", 0, -30.0f, 30.0f, 0.5f);
 		settings_float_property(context, "", "FM", "audio\0fm_gain\0", 0, -30.0f, 30.0f, 0.5f);
 		settings_float_property(context, "", "PSG", "audio\0psg_gain\0", 0, -30.0f, 30.0f, 0.5f);
+		selected_dac = settings_dropdown_ex(context, "FM DAC", dac, dac_desc, num_dacs, selected_dac, "audio\0fm_dac\0");
 		if (nk_button_label(context, "Back")) {
 			pop_view();
 		}
