@@ -21,9 +21,9 @@ if [ $result -ne 0 ]; then
 		{
 			"title": "Build $name failed!",
 			"type": "rich",
-			"description": "Build falied with return code $result stopping $CONTAINER_NAME"
+			"description": "Build falied with return code $result stopping $CONTAINER_NAME",
 			"timestamp": "$curdate",
-			"color": 16711680,
+			"color": 16711680
 		}
 	]
 }
@@ -43,12 +43,18 @@ curl -d'@-' -H 'Content-Type: application/json' "$WEBHOOKURL" <<WEBHOOKEOF
 {
 	"embeds": [
 		{
-			"title": "New build of $name succeeded!",
+			"title": "$artifact",
 			"type": "rich",
-			"url": "https://www.retrodev.com/blastem/nightlies/$artifact"
-			"description": "Version: $version"
+			"url": "https://www.retrodev.com/blastem/nightlies/$artifact",
+			"description": "New build of $name succeeded!",
 			"timestamp": "$curdate",
 			"color": 65280,
+			"fields": [
+				{
+					"name": "Version",
+					"value": "$version"
+				}
+			]
 		}
 	]
 }
