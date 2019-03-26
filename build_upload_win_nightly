@@ -1,6 +1,6 @@
 #!/bin/sh
 name=$1
-
+. "$HOME/$name.params"
 cd $HOME/blastem_win
 hg revert -a
 hg pull
@@ -12,9 +12,39 @@ export OS=Windows
 result=$?
 if [ $result -ne 0 ]; then
 	echo Build falied with return code $result
+	curdate=`date -Iseconds`
+	curl -d'@-' -H 'Content-Type: application/json' "$WEBHOOKURL" <<WEBHOOKEOF
+{
+	"embeds": [
+		{
+			"title": "Build $name failed!",
+			"type": "rich",
+			"description": "Build falied with return code $result"
+			"timestamp": "$curdate",
+			"color": 16711680,
+		}
+	]
+}
+WEBHOOKEOF
 	exit $result
 fi
 . $HOME/remote.params
 artifact=$(tail -n 1 /tmp/build_${name}_out.log)
 echo "Uploaing $artifact to $REMOTE_HOST"
 scp -i "$REMOTE_IDENT" "$HOME/blastem_win/$artifact" $REMOTE_USER@$REMOTE_HOST:/home/$REMOTE_USER/nightlies
+curdate=`date -Iseconds`
+version=`echo "$artifact" | sed -E 's/[^-]+-([0-9]+\.[0-9]+\.[0-9]+[^.]*)\..*$/\1/'`
+curl -d'@-' -H 'Content-Type: application/json' "$WEBHOOKURL" <<WEBHOOKEOF
+{
+	"embeds": [
+		{
+			"title": "New build of $name succeeded!",
+			"type": "rich",
+			"url": "https://www.retrodev.com/blastem/nightlies/$artifact"
+			"description": "Version: $version"
+			"timestamp": "$curdate",
+			"color": 65280,
+		}
+	]
+}
+WEBHOOKEOF
