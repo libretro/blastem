@@ -519,7 +519,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			if (operator->am) {
 				uint16_t base_am = (context->lfo_am_step & 0x80 ? context->lfo_am_step : ~context->lfo_am_step) & 0x7E;
 				if (ams_shift[chan->ams] >= 0) {
-					env += base_am >> ams_shift[chan->ams];
+					env += (base_am >> ams_shift[chan->ams]) & MAX_ENVELOPE;
 				} else {
 					env += base_am << (-ams_shift[chan->ams]);
 				}
@@ -687,6 +687,7 @@ static uint32_t ym_calc_phase_inc(ym2612_context * context, ym_operator * operat
 		inc = context->ch3_supp[index].fnum;
 		if (channel->pms) {
 			inc = inc * 2 + lfo_pm_table[(inc & 0x7F0) * 16 + channel->pms + context->lfo_pm_step];
+			inc &= 0xFFF;
 		}
 		if (!context->ch3_supp[index].block) {
 			inc >>= 1;
@@ -855,7 +856,6 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 				operator->rates[PHASE_ATTACK] = value & 0x1F;
 				break;
 			case REG_DECAY_AM:
-				//TODO: AM flag for LFO
 				operator->am = value & 0x80;
 				operator->rates[PHASE_DECAY] = value & 0x1F;
 				break;
