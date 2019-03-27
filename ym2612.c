@@ -592,9 +592,21 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				}
 				if (context->channels[i].lr & 0x80) {
 					left += (value * context->volume_mult) / context->volume_div;
+				} else if (context->zero_offset) {
+					if (value >= 0) {
+						left += (context->zero_offset * context->volume_mult) / context->volume_div;
+					} else {
+						left -= (context->zero_offset * context->volume_mult) / context->volume_div;
+					}
 				}
 				if (context->channels[i].lr & 0x40) {
 					right += (value * context->volume_mult) / context->volume_div;
+				} else if (context->zero_offset) {
+					if (value >= 0) {
+						right += (context->zero_offset * context->volume_mult) / context->volume_div;
+					} else {
+						right -= (context->zero_offset * context->volume_mult) / context->volume_div;
+					}
 				}
 			}
 			render_put_stereo_sample(context->audio, left, right);
