@@ -1057,7 +1057,7 @@ void view_controller_bindings(struct nk_context *context)
 		binding_box(context, bindings, "Right Shoulder", bind_box_left, font->height/2, bind_box_width,
 			selected_controller_info.variant == VARIANT_6B_BUMPERS ? 1 : 2, 
 			(int[]){
-			selected_controller_info.variant == VARIANT_6B_RIGHT ? SDL_CONTROLLER_BUTTON_LEFTSHOULDER : SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
+			selected_controller_info.variant == VARIANT_6B_RIGHT ? SDL_CONTROLLER_BUTTON_LEFTSHOULDER : AXIS | SDL_CONTROLLER_AXIS_TRIGGERRIGHT,
 			AXIS | SDL_CONTROLLER_AXIS_TRIGGERLEFT
 		});
 		
@@ -1099,7 +1099,7 @@ void view_controller_bindings(struct nk_context *context)
 		binding_box(context, bindings, "Left Shoulder", bind_box_left, font->height/2, bind_box_width, 
 			selected_controller_info.variant == VARIANT_6B_BUMPERS ? 1 : 2, 
 			(int[]){
-			selected_controller_info.variant == VARIANT_6B_RIGHT ? SDL_CONTROLLER_BUTTON_LEFTSTICK : SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
+			selected_controller_info.variant == VARIANT_6B_RIGHT ? SDL_CONTROLLER_BUTTON_LEFTSTICK : AXIS | SDL_CONTROLLER_AXIS_TRIGGERLEFT,
 			SDL_CONTROLLER_BUTTON_RIGHTSTICK
 		});
 		
