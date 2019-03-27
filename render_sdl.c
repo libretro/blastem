@@ -1864,6 +1864,7 @@ int32_t render_translate_input_name(int32_t controller, char *name, uint8_t is_a
 	}
 	
 	SDL_GameControllerButtonBind cbind;
+	int32_t is_positive = RENDER_AXIS_POS;
 	if (is_axis) {
 		
 		int sdl_axis = render_lookup_axis(name);
@@ -1878,6 +1879,10 @@ int32_t render_translate_input_name(int32_t controller, char *name, uint8_t is_a
 			SDL_GameControllerClose(control);
 			return RENDER_INVALID_NAME;
 		}
+		if (sdl_button == SDL_CONTROLLER_BUTTON_DPAD_UP || sdl_button == SDL_CONTROLLER_BUTTON_DPAD_LEFT) {
+			//assume these will be negative if they are an axis
+			is_positive = 0;
+		}
 		cbind = SDL_GameControllerGetBindForButton(control, sdl_button);
 	}
 	SDL_GameControllerClose(control);
@@ -1886,7 +1891,7 @@ int32_t render_translate_input_name(int32_t controller, char *name, uint8_t is_a
 	case SDL_CONTROLLER_BINDTYPE_BUTTON:
 		return cbind.value.button;
 	case SDL_CONTROLLER_BINDTYPE_AXIS:
-		return RENDER_AXIS_BIT | cbind.value.axis;
+		return RENDER_AXIS_BIT | cbind.value.axis | is_positive;
 	case SDL_CONTROLLER_BINDTYPE_HAT:
 		return RENDER_DPAD_BIT | (cbind.value.hat.hat << 4) | cbind.value.hat.hat_mask;
 	}
