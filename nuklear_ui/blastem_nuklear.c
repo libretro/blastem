@@ -1228,12 +1228,17 @@ static void view_controller_mappings(struct nk_context *context)
 			}
 		}
 			
-		if (added_mapping) {
+		while (added_mapping) {
 			quiet = QUIET_FRAMES;
 			if (current_button < SDL_CONTROLLER_BUTTON_MAX) {
 				current_button++;
 				if (current_button == SDL_CONTROLLER_BUTTON_MAX) {
 					current_axis = 0;
+					if (get_axis_label(&selected_controller_info, current_axis)) {
+						added_mapping = 0;
+					}
+				} else if (get_button_label(&selected_controller_info, current_button)) {
+					added_mapping = 0;
 				}
 			} else {
 				current_axis++;
@@ -1246,6 +1251,9 @@ static void view_controller_mappings(struct nk_context *context)
 					pop_view();
 					push_view(view_controller_bindings);
 					controller_binding_changed = 0;
+					added_mapping = 0;
+				} else if (get_axis_label(&selected_controller_info, current_axis)) {
+					added_mapping = 0;
 				}
 			}
 		}
