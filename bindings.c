@@ -825,7 +825,7 @@ void process_pad_button(char *key, tern_val val, uint8_t valtype, void *data)
 			bind_dpad(hostpadnum, render_dpad_part(hostbutton), render_direction_part(hostbutton), bindtype, subtype_a, subtype_b);
 			return;
 		} else if (hostbutton & RENDER_AXIS_BIT) {
-			bind_axis(hostpadnum, render_axis_part(hostbutton), 1, bindtype, subtype_a, subtype_b);
+			bind_axis(hostpadnum, render_axis_part(hostbutton), hostbutton & RENDER_AXIS_POS, bindtype, subtype_a, subtype_b);
 			return;
 		}
 	}

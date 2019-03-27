@@ -1128,7 +1128,7 @@ static int current_button;
 static int current_axis;
 static int button_pressed, last_button;
 static int hat_moved, hat_value, last_hat, last_hat_value;
-static int axis_moved, axis_value, last_axis;
+static int axis_moved, axis_value, last_axis, last_axis_value;
 static char *mapping_string;
 static size_t mapping_pos;
 
@@ -1206,7 +1206,11 @@ static void view_controller_mappings(struct nk_context *context)
 				
 				last_hat = hat_moved;
 				last_hat_value = hat_value;
-			} else if (axis_moved >= 0 && abs(axis_value) > 1000 && axis_moved != last_axis) {
+			} else if (axis_moved >= 0 && abs(axis_value) > 1000 && (
+					axis_moved != last_axis || (
+						axis_value/abs(axis_value) != last_axis_value/abs(axis_value) && current_button >= SDL_CONTROLLER_BUTTON_DPAD_UP
+					)
+				)) {
 				if (current_button <= SDL_CONTROLLER_BUTTON_B || axis_moved != button_a_axis) {
 					start_mapping();
 					mapping_string[mapping_pos++] = 'a';
@@ -1214,7 +1218,11 @@ static void view_controller_mappings(struct nk_context *context)
 						mapping_string[mapping_pos++] = '0' + axis_moved / 10;
 					}
 					mapping_string[mapping_pos++] = '0' + axis_moved % 10;
+					if (current_button >= SDL_CONTROLLER_BUTTON_DPAD_UP) {
+						mapping_string[mapping_pos++] = axis_value >= 0 ? '+' : '-';
+					}
 					last_axis = axis_moved;
+					last_axis_value = axis_value;
 				}
 				added_mapping = 1;
 			}
@@ -1295,6 +1303,7 @@ static void view_controller_variant(struct nk_context *context)
 			last_hat = -1;
 			axis_moved = -1;
 			last_axis = -1;
+			last_axis_value = 0;
 			SDL_Joystick *joy = render_get_joystick(selected_controller);
 			const char *name = SDL_JoystickName(joy);
 			size_t namesz = strlen(name);
