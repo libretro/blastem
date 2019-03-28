@@ -1,3 +1,33 @@
+0.6.2
+-----
+*New Features*
+
+ - Zipped and gzipped SMD ROMs are now supported
+ - Gain control for overall volume and FM/PSG invidually
+ 
+*Accuracy/Completeness Improvements*
+
+ - Fixed timing of a few instructions in Z80 core
+ - Added optional emulation of YM2612 imperfections (aka "ladder effect")
+ - Fixed some unintentional extra precision in some FM LFO calculations
+ - Added a 1 sample delay in some FM operator results when used as modulators to match hardware
+
+*Bugfixes*
+
+ - Fixed regression in NBA JAM TE and possibly other 32MBit Acclaim mapper titles
+ - Added code to handle controllers that have their d-pads mapped as buttons or axes
+ - Removed some problematic SDL2 game controller mappings
+ - Fixed crash that occurred when releasing mouse too clickly when loading a ROM
+ - Fixed SMD ROM support
+ - Fixed handling of audio contexts with more or less than 2 channels
+ - Fixed off-by-one error in IO device selection UI
+ - Fixed regression in GDB remote debugging support on Linux and OS X
+
+*Other Changes*
+
+ - MegaWiFi hardware can now be enabled by a header string (still gated by config)
+ - Tweaked the style of checkboxes in the Nuklear UI to hopefully make the on/off state more clear
+
 0.6.1
 -----
 *Bugfixes*
@@ -40,7 +70,7 @@
  - Added support for Open GL ES in addition to the existing desktop GL support
  - Some small optimizations
  - Added ROM DB entry for Squirrel King to support it's copy protection
- - Added support for float32 audio output (fixes an issue with defautl SDL2 driver in Windows when using more recent SDL2 versions)
+ - Added support for float32 audio output (fixes an issue with default SDL2 driver in Windows when using more recent SDL2 versions)
  
 0.5.1
 -----

@@ -281,6 +281,22 @@ low-pass filter. The default value of 3390 Hz is supposedly what is present in
 at least some Genesis/Megadrive models. Other models reportedly use an even
 lower value.
 
+"gain" specifies the gain in decibels to be applied to the overall output.
+
+"fm_gain" specifies the gain to be applied to the emulated FM output before
+mixing with the PSG.
+
+"psg_gain" specifies the gain to be applied to the emulated PSG output before
+mixing with the FM chip.
+
+"fm_dac" controls the characteristics of the DAC in the emulated FM chip. If
+this is set to "linear", then the DAC will have precise linear output similar
+to the integrated YM3438 in later Gen/MD consoles. If it is set to "zero_offset",
+there will be a larger gap between -1 and 0. This is commonly referred to as the
+"ladder effect". This will also cause "leakage" on channels that are muted or
+panned to one side in a similar manner to a discrete YM2612.
+
+
 Clocks
 ------
 
@@ -495,6 +511,15 @@ Charles MacDonald  - While it hasn't been updated in a while, I still find his
 Eke-Eke            - Eke-Eke wrote a great document on the use of I2C EEPROM in
                      Genesis games and also left some useful very helpful 
                      comments about problematic games in Genesis Plus GX
+					 
+Sauraen            - Sauraen has analyzed the YM2203 and YM2612 dies and written
+                     a VHDL operator implementation. These have been useful in
+                     improving the accuracy of my YM2612 core.
+
+Alexey Khokholov   - Alexey (aka Nuke.YKT) has analyzed the YM3438 die and written
+                     a fairly direct C implementation from that analysis. This
+                     has been a useful reference for verifying and improving my
+                     YM2612 core.
 
 Bart Trzynadlowski - His documents on the Genecyst save-state format and the
                      mapper used in Super Street Fighter 2 were definitely
@@ -530,5 +555,6 @@ License version 3 or higher. This gives you the right to redistribute and/or
 modify the program as long as you follow the terms of the license. See the file
 COPYING for full license details.
 
-Binary releases of BlastEm are packaged with GLEW and SDL2 which have thier own
-licenses. See GLEW-LICENSE and SDL-LICENSE for details.
+Binary releases of BlastEm are packaged with GLEW, SDL2 and zlib which have their
+own licenses. See GLEW-LICENSE and SDL-LICENSE for details. For zlib license
+information, please see zlib.h in the source code release.
