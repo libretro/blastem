@@ -1715,7 +1715,7 @@ void view_audio_settings(struct nk_context *context)
 		selected_rate = settings_dropdown(context, "Rate in Hz", rates, num_rates, selected_rate, "audio\0rate\0");
 		selected_size = settings_dropdown(context, "Buffer Samples", sizes, num_sizes, selected_size, "audio\0buffer\0");
 		settings_int_input(context, "Lowpass Cutoff Hz", "audio\0lowpass_cutoff\0", "3390");
-		settings_float_property(context, "Gain", "Overall", "audio\0gain\0", 0, -30.0f, 30.0f, 0.5f);
+		settings_float_property(context, "Gain (dB)", "Overall", "audio\0gain\0", 0, -30.0f, 30.0f, 0.5f);
 		settings_float_property(context, "", "FM", "audio\0fm_gain\0", 0, -30.0f, 30.0f, 0.5f);
 		settings_float_property(context, "", "PSG", "audio\0psg_gain\0", 0, -30.0f, 30.0f, 0.5f);
 		selected_dac = settings_dropdown_ex(context, "FM DAC", dac, dac_desc, num_dacs, selected_dac, "audio\0fm_dac\0");
@@ -1968,12 +1968,22 @@ static void texture_init(void)
 	}
 }
 
-static void context_created(void)
+static void style_init(void)
 {
-	context = nk_sdl_init(render_get_window());
 	context->style.checkbox.padding.x = render_height() / 120;
 	context->style.checkbox.padding.y = render_height() / 120;
 	context->style.checkbox.border = render_height() / 240;
+	context->style.checkbox.cursor_normal.type = NK_STYLE_ITEM_COLOR;
+	context->style.checkbox.cursor_normal.data.color = (struct nk_color){
+		.r = 255, .g = 128, .b = 0, .a = 255
+	};
+	context->style.checkbox.cursor_hover = context->style.checkbox.cursor_normal;
+}
+
+static void context_created(void)
+{
+	context = nk_sdl_init(render_get_window());
+	style_init();
 	texture_init();
 }
 
@@ -2053,9 +2063,7 @@ ui_image *load_ui_image(char *name)
 void blastem_nuklear_init(uint8_t file_loaded)
 {
 	context = nk_sdl_init(render_get_window());
-	context->style.checkbox.padding.x = render_height() / 120;
-	context->style.checkbox.padding.y = render_height() / 120;
-	context->style.checkbox.border = render_height() / 240;
+	style_init();
 	
 	controller_360 = load_ui_image("images/360.png");
 	controller_ps4 = load_ui_image("images/ps4.png");
