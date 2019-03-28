@@ -898,7 +898,7 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, void *l
 		entry = tern_find_node(rom_db, product_id);
 	}
 	if (!entry) {
-		debug_message("Not found in ROM DB, examining header\n");
+		debug_message("Not found in ROM DB, examining header\n\n");
 		if (xband_detect(rom, rom_size)) {
 			return xband_configure_rom(rom_db, rom, rom_size, lock_on, lock_on_size, base_map, base_chunks);
 		}
@@ -911,7 +911,7 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, void *l
 	info.mapper_type = MAPPER_NONE;
 	info.name = tern_find_ptr(entry, "name");
 	if (info.name) {
-		debug_message("Found name: %s\n", info.name);
+		debug_message("Found name: %s\n\n", info.name);
 		info.name = strdup(info.name);
 	} else {
 		info.name = get_header_name(rom);
