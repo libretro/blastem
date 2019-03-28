@@ -1059,11 +1059,11 @@ static void init_audio()
 	debug_message("Initialized audio at frequency %d with a %d sample buffer, ", actual.freq, actual.samples);
 	sample_size = SDL_AUDIO_BITSIZE(actual.format) / 8;
 	if (actual.format == AUDIO_S16SYS) {
-		debug_message("signed 16-bit int format");
+		debug_message("signed 16-bit int format\n");
 		convert = convert_s16;
 		mix_buf = calloc(output_channels * buffer_samples, sizeof(float));
 	} else if (actual.format == AUDIO_F32SYS) {
-		debug_message("32-bit float format");
+		debug_message("32-bit float format\n");
 		convert = clamp_f32;
 		mix_buf = NULL;
 	} else {
