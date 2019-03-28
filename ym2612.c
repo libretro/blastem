@@ -481,8 +481,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 				if (operator->mod_src[0]) {
 					mod = *operator->mod_src[0];
 					if (operator->mod_src[1]) {
-						mod += *
-						operator->mod_src[1];
+						mod += *operator->mod_src[1];
 					}
 					mod >>= YM_MOD_SHIFT;
 				}
@@ -540,6 +539,8 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 			}
 			if (op % 4 == 0) {
 				chan->op1_old = operator->output;
+			} else if (op % 4 == 2) {
+				chan->op2_old = operator->output;
 			}
 			operator->output = output;
 			//Update the channel output if we've updated all operators
@@ -712,6 +713,7 @@ static uint32_t ym_calc_phase_inc(ym2612_context * context, ym_operator * operat
 		inc = channel->fnum;
 		if (channel->pms) {
 			inc = inc * 2 + lfo_pm_table[(inc & 0x7F0) * 16 + channel->pms + context->lfo_pm_step];
+			inc &= 0xFFF;
 		}
 		if (!channel->block) {
 			inc >>= 1;
@@ -928,6 +930,8 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 				{
 				case 0:
 					//operator 3 modulated by operator 2
+					//this uses a special op2 result reg on HW, but that reg will have the most recent
+					//result from op2 when op3 starts executing
 					context->operators[channel*4+1].mod_src[0] = &context->operators[channel*4+2].output;
 					context->operators[channel*4+1].mod_src[1] = NULL;
 					
@@ -940,7 +944,11 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 					break;
 				case 1:
 					//operator 3 modulated by operator 1+2
-					context->operators[channel*4+1].mod_src[0] = &context->operators[channel*4+0].output;
+					//op1 starts executing before this, but due to pipeline length the most current result is
+					//not available and instead the previous result is used
+					context->operators[channel*4+1].mod_src[0] = &context->channels[channel].op1_old;
+					//this uses a special op2 result reg on HW, but that reg will have the most recent
+					//result from op2 when op3 starts executing
 					context->operators[channel*4+1].mod_src[1] = &context->operators[channel*4+2].output;
 					
 					//operator 2 unmodulated
@@ -952,6 +960,8 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 					break;
 				case 2:
 					//operator 3 modulated by operator 2
+					//this uses a special op2 result reg on HW, but that reg will have the most recent
+					//result from op2 when op3 starts executing
 					context->operators[channel*4+1].mod_src[0] = &context->operators[channel*4+2].output;
 					context->operators[channel*4+1].mod_src[1] = NULL;
 					
@@ -959,6 +969,8 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 					context->operators[channel*4+2].mod_src[0] = NULL;
 					
 					//operator 4 modulated by operator 1+3
+					//this uses a special op1 result reg on HW, but that reg will have the most recent
+					//result from op1 when op4 starts executing
 					context->operators[channel*4+3].mod_src[0] = &context->operators[channel*4+0].output;
 					context->operators[channel*4+3].mod_src[1] = &context->operators[channel*4+1].output;
 					break;
@@ -971,7 +983,9 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 					context->operators[channel*4+2].mod_src[0] = &context->operators[channel*4+0].output;
 					
 					//operator 4 modulated by operator 2+3
-					context->operators[channel*4+3].mod_src[0] = &context->operators[channel*4+2].output;
+					//op2 starts executing before this, but due to pipeline length the most current result is
+					//not available and instead the previous result is used
+					context->operators[channel*4+3].mod_src[0] = &context->channels[channel].op2_old;
 					context->operators[channel*4+3].mod_src[1] = &context->operators[channel*4+1].output;
 					break;
 				case 4:
@@ -988,13 +1002,17 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 					break;
 				case 5:
 					//operator 3 modulated by operator 1
-					context->operators[channel*4+1].mod_src[0] = &context->operators[channel*4+0].output;
+					//op1 starts executing before this, but due to pipeline length the most current result is
+					//not available and instead the previous result is used
+					context->operators[channel*4+1].mod_src[0] = &context->channels[channel].op1_old;
 					context->operators[channel*4+1].mod_src[1] = NULL;
 					
 					//operator 2 modulated by operator 1
 					context->operators[channel*4+2].mod_src[0] = &context->operators[channel*4+0].output;
 					
 					//operator 4 modulated by operator 1
+					//this uses a special op1 result reg on HW, but that reg will have the most recent
+					//result from op1 when op4 starts executing
 					context->operators[channel*4+3].mod_src[0] = &context->operators[channel*4+0].output;
 					context->operators[channel*4+3].mod_src[1] = NULL;
 					break;

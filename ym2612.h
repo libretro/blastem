@@ -39,6 +39,7 @@ typedef struct {
 	uint16_t fnum;
 	int16_t  output;
 	int16_t  op1_old;
+	int16_t  op2_old;
 	uint8_t  block_fnum_latch;
 	uint8_t  block;
 	uint8_t  keycode;
