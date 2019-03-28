@@ -160,8 +160,8 @@ void view_lock_on(struct nk_context *context)
 void view_about(struct nk_context *context)
 {
 	const char *lines[] = {
-		"BlastEm v0.6.1",
-		"Copyright 2012-2017 Michael Pavone",
+		"BlastEm v0.6.2",
+		"Copyright 2012-2019 Michael Pavone",
 		"",
 		"BlastEm is a high performance open source",
 		"(GPLv3) Genesis/Megadrive emulator",
@@ -171,6 +171,8 @@ void view_about(struct nk_context *context)
 		"Nemesis: Documentation and test ROMs",
 		"Charles MacDonald: Documentation",
 		"Eke-Eke: Documentation",
+		"Sauraen: YM2612/YM2203 Die Analysis",
+		"Alexey Khokholov: YM3438 Die Analysis",
 		"Bart Trzynadlowski: Documentation",
 		"KanedaFR: Hosting the best Sega forum",
 		"Titan: Awesome demos and documentation",
