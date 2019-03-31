@@ -531,6 +531,10 @@ static GLuint load_shader(char * fname, GLenum shader_type)
 		fsize += strlen(shader_prefix);
 	}
 	GLuint ret = glCreateShader(shader_type);
+	if (!ret) {
+		warning("glCreateShader failed with error %d\n", glGetError());
+		return 0;
+	}
 	glShaderSource(ret, 1, (const GLchar **)&text, (const GLint *)&fsize);
 	free(text);
 	glCompileShader(ret);
@@ -965,6 +969,9 @@ static int32_t handle_event(SDL_Event *event)
 		switch (event->window.event)
 		{
 		case SDL_WINDOWEVENT_SIZE_CHANGED:
+			if (!main_window) {
+				break;
+			}
 			main_width = event->window.data1;
 			main_height = event->window.data2;
 			update_aspect();
@@ -984,7 +991,7 @@ static int32_t handle_event(SDL_Event *event)
 #endif
 			break;
 		case SDL_WINDOWEVENT_CLOSE:
-			if (SDL_GetWindowID(main_window) == event->window.windowID) {
+			if (main_window && SDL_GetWindowID(main_window) == event->window.windowID) {
 				exit(0);
 			} else {
 				for (int i = 0; i < num_textures - FRAMEBUFFER_USER_START; i++)
@@ -1305,6 +1312,7 @@ void render_config_updated(void)
 #endif
 	in_toggle = 1;
 	SDL_DestroyWindow(main_window);
+	main_window = NULL;
 	drain_events();
 	
 	char *config_width = tern_find_path(config, "video\0width\0", TVAL_PTR).ptrval;
