@@ -295,6 +295,7 @@ static void menu(struct nk_context *context, uint32_t num_entries, const menu_it
 					free_slot_info(slots);
 					slots = NULL;
 				} else if (current_view == view_play) {
+					clear_view_stack();
 					set_content_binding_state(1);
 				}
 			} else {
@@ -316,6 +317,7 @@ void binding_loop(char *key, tern_val val, uint8_t valtype, void *data)
 
 static int32_t keycode;
 static const char *set_binding;
+static uint8_t bind_click_release, click;
 char *set_label;
 void binding_group(struct nk_context *context, char *name, const char **binds, const char **bind_names, uint32_t num_binds, tern_node *binding_lookup)
 {
@@ -334,6 +336,7 @@ void binding_group(struct nk_context *context, char *name, const char **binds, c
 			if (nk_button_label(context, tern_find_ptr_default(binding_lookup, binds[i], "Not Set"))) {
 				set_binding = binds[i];
 				set_label = strdup(label);
+				bind_click_release = 0;
 				keycode = 0;
 			}
 			if (label_alloc) {
@@ -485,7 +488,7 @@ void view_key_bindings(struct nk_context *context)
 		nk_layout_row_static(context, 30, width/2-30, 1);
 		nk_label(context, "Press new key for", NK_TEXT_CENTERED);
 		nk_label(context, set_label, NK_TEXT_CENTERED);
-		if (nk_button_label(context, "Cancel")) {
+		if (nk_button_label(context, "Cancel") && bind_click_release) {
 			free(set_label);
 			set_binding = set_label = NULL;
 		} else if (keycode) {
@@ -519,6 +522,8 @@ void view_key_bindings(struct nk_context *context)
 			}
 			free(set_label);
 			set_binding = set_label = NULL;
+		} else if (!click) {
+			bind_click_release = 1;
 		}
 		nk_end(context);
 	}
@@ -1921,6 +1926,10 @@ static void handle_event(SDL_Event *event)
 			axis_moved = event->jaxis.axis;
 			axis_value = event->jaxis.value;
 		}
+	} else if (event->type == SDL_MOUSEBUTTONDOWN && event->button.button == 0) {
+		click = 1;
+	} else if (event->type == SDL_MOUSEBUTTONUP && event->button.button == 0) {
+		click = 0;
 	}
 	nk_sdl_handle_event(event);
 }
@@ -1991,11 +2000,16 @@ static void context_created(void)
 
 void show_pause_menu(void)
 {
-	set_content_binding_state(0);
-	context->style.window.background = nk_rgba(0, 0, 0, 128);
-	context->style.window.fixed_background = nk_style_item_color(nk_rgba(0, 0, 0, 128));
-	current_view = view_pause;
-	current_system->request_exit(current_system);
+	if (current_view == view_play) {
+		set_content_binding_state(0);
+		context->style.window.background = nk_rgba(0, 0, 0, 128);
+		context->style.window.fixed_background = nk_style_item_color(nk_rgba(0, 0, 0, 128));
+		current_view = view_pause;
+		current_system->request_exit(current_system);
+	} else if (current_system && !set_binding) {
+		clear_view_stack();
+		show_play_view();
+	}
 }
 
 void show_play_view(void)
