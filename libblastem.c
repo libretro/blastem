@@ -69,7 +69,7 @@ RETRO_API unsigned retro_api_version(void)
 RETRO_API void retro_get_system_info(struct retro_system_info *info)
 {
 	info->library_name = "BlastEm";
-	info->library_version = "0.6.2-pre"; //TODO: share this with blastem.c
+	info->library_version = "0.6.3-pre"; //TODO: share this with blastem.c
 	info->valid_extensions = "md|gen|sms|bin|rom";
 	info->need_fullpath = 0;
 	info->block_extract = 0;
