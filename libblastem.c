@@ -341,6 +341,11 @@ void render_audio_adjust_clock(audio_source *src, uint64_t master_clock, uint64_
 {
 }
 
+void render_audio_source_gaindb(audio_source *src, float gain)
+{
+	//TODO: Implement this once I hook up a core option for individual FM/PSG gain
+}
+
 static void check_put_sample(void)
 {
 	for (int i = 0; i < num_audio_sources; i++)
