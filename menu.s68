@@ -1251,7 +1251,7 @@ prev_str:
 	dc.b "Prev", 0
 	
 about_text:
-	dc.b "BlastEm v0.6.2", 0
+	dc.b "BlastEm v0.6.3-pre", 0
 	dc.b "Copyright 2011-2019 Michael Pavone", 0
 	dc.b " ", 0
 	dc.b "BlastEm is a high performance, open", 0
