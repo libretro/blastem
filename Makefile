@@ -1,3 +1,6 @@
+#disable built-in rules
+.SUFFIXES :
+
 ifndef OS
 OS:=$(shell uname -s)
 endif
@@ -203,7 +206,7 @@ MAINOBJS=blastem.o system.o genesis.o debug.o gdb_remote.o vdp.o $(RENDEROBJS) i
 
 LIBOBJS=libblastem.o system.o genesis.o debug.o gdb_remote.o vdp.o io.o romdb.o hash.o menu.o xband.o realtec.o \
 	i2c.o nor.o sega_mapper.o multi_game.o megawifi.o $(NET) serialize.o $(TERMINAL) $(CONFIGOBJS) gst.o \
-	$(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS) saves.o jcart.o
+	$(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS) saves.o jcart.o rom.db.o
 	
 ifdef NONUKLEAR
 CFLAGS+= -DDISABLE_NUKLEAR
@@ -324,6 +327,9 @@ vos_prog_info : vos_prog_info.o vos_program_module.o
 	
 %.c : %.cpu cpu_dsl.py
 	./cpu_dsl.py -d goto $< > $@
+
+%.db.c : %.db
+	sed $< -e 's/"/\\"/g' -e 's/^\(.*\)$$/"\1\\n"/' -e'1s/^\(.*\)$$/const char $(shell echo $< | tr '.' '_')_data[] = \1/' -e '$$s/^\(.*\)$$/\1;/' > $@
 
 %.o : %.S
 	$(CC) -c -o $@ $<

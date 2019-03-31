@@ -857,6 +857,7 @@ void sort_dir_list(dir_entry *list, size_t num_entries)
 #ifdef __ANDROID__
 
 #include <SDL.h>
+#ifndef IS_LIB
 char *read_bundled_file(char *name, uint32_t *sizeret)
 {
 	SDL_RWops *rw = SDL_RWFromFile(name, "rb");
@@ -884,6 +885,7 @@ char *read_bundled_file(char *name, uint32_t *sizeret)
 	SDL_RWclose(rw);
 	return ret;
 }
+#endif
 
 char const *get_config_dir()
 {
@@ -897,6 +899,7 @@ char const *get_userdata_dir()
 
 #else
 
+#ifndef IS_LIB
 char *read_bundled_file(char *name, uint32_t *sizeret)
 {
 #ifdef DATA_PATH
@@ -940,7 +943,7 @@ char *read_bundled_file(char *name, uint32_t *sizeret)
 	fclose(f);
 	return ret;
 }
-
+#endif
 
 #ifdef _WIN32
 char const *get_userdata_dir()
