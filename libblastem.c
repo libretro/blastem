@@ -397,3 +397,15 @@ void render_free_source(audio_source *src)
 void bindings_set_mouse_mode(uint8_t mode)
 {
 }
+
+extern const char rom_db_data[];
+char *read_bundled_file(char *name, uint32_t *sizeret)
+{
+	if (!strcmp(name, "rom.db")) {
+		*sizeret = strlen(rom_db_data);
+		char *ret = malloc(*sizeret+1);
+		memcpy(ret, rom_db_data, *sizeret + 1);
+		return ret;
+	}
+	return NULL;
+}
