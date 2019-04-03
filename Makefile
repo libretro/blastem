@@ -25,10 +25,19 @@ TERMINAL:=terminal_win.o
 FONT:=nuklear_ui/font_win.o
 NET:=net_win.o
 EXE:=.exe
-CC:=i686-w64-mingw32-gcc-win32
-CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -I"$(SDL2_PREFIX)/include/SDL2" -I"$(GLEW_PREFIX)/include" -DGLEW_STATIC
-LDFLAGS:= $(GLEW32S_LIB) -L"$(SDL2_PREFIX)/lib" -lm -lmingw32 -lSDL2main -lSDL2 -lws2_32 -lopengl32 -lglu32 -mwindows
+SO:=dll
 CPU:=i686
+ifeq ($(CPU),i686)
+CC:=i686-w64-mingw32-gcc-win32
+else
+CC:=x86_64-w64-mingw32-gcc-win32
+endif
+CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration
+LDFLAGS:=-lm -lmingw32 -lws2_32 -mwindows
+ifneq ($(MAKECMDGOALS),libblastem.dll)
+CFLAGS+= -I"$(SDL2_PREFIX)/include/SDL2" -I"$(GLEW_PREFIX)/include" -DGLEW_STATIC
+LDFLAGS+= $(GLEW32S_LIB) -L"$(SDL2_PREFIX)/lib" -lSDL2main -lSDL2 -lopengl32 -lglu32
+endif
 LIBZOBJS=$(BUNDLED_LIBZ)
 
 else
@@ -44,7 +53,9 @@ CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-d
 ifeq ($(OS),Darwin)
 LIBS=sdl2 glew
 FONT:=nuklear_ui/font_mac.o
+SO:=dylib
 else
+SO:=so
 
 ifdef USE_FBDEV
 LIBS=alsa
@@ -98,7 +109,7 @@ endif
 endif #Darwin
 
 else
-ifeq ($(MAKECMDGOALS),libblastem.so)
+ifeq ($(MAKECMDGOALS),libblastem.$(SO))
 LDFLAGS:=-lm
 else
 CFLAGS:=$(shell pkg-config --cflags-only-I $(LIBS)) $(CFLAGS)
@@ -204,7 +215,7 @@ MAINOBJS=blastem.o system.o genesis.o debug.o gdb_remote.o vdp.o $(RENDEROBJS) i
 	realtec.o i2c.o nor.o sega_mapper.o multi_game.o megawifi.o $(NET) serialize.o $(TERMINAL) $(CONFIGOBJS) gst.o \
 	$(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS) saves.o zip.o bindings.o jcart.o
 
-LIBOBJS=libblastem.o system.o genesis.o debug.o gdb_remote.o vdp.o io.o romdb.o hash.o menu.o xband.o realtec.o \
+LIBOBJS=libblastem.o system.o genesis.o debug.o gdb_remote.o vdp.o io.o romdb.o hash.o xband.o realtec.o \
 	i2c.o nor.o sega_mapper.o multi_game.o megawifi.o $(NET) serialize.o $(TERMINAL) $(CONFIGOBJS) gst.o \
 	$(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS) saves.o jcart.o rom.db.o
 	
@@ -250,13 +261,13 @@ ifneq ($(OS),Windows)
 ALL+= termhelper
 endif
 
-ifeq ($(MAKECMDGOALS),libblastem.so)
+ifeq ($(MAKECMDGOALS),libblastem.$(SO))
 CFLAGS+= -fpic -DIS_LIB
 endif
 
 all : $(ALL)
 
-libblastem.so : $(LIBOBJS)
+libblastem.$(SO) : $(LIBOBJS)
 	$(CC) -shared -o $@ $^ $(LDFLAGS)
 
 blastem$(EXE) : $(MAINOBJS)

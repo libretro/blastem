@@ -284,6 +284,11 @@ void render_set_video_standard(vid_std std)
 	video_standard = std;
 }
 
+int render_fullscreen(void)
+{
+	return 1;
+}
+
 void process_events()
 {
 	static int16_t prev_state[2][RETRO_DEVICE_ID_JOYPAD_L2];
