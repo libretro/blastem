@@ -277,6 +277,9 @@ blastem$(EXE) : $(MAINOBJS)
 blastjag$(EXE) : jaguar.o jag_video.o $(RENDEROBJS) serialize.o $(M68KOBJS) $(TRANSOBJS) $(CONFIGOBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
 
+termhelper : termhelper.o
+	$(CC) -o $@ $^ $(LDFLAGS)
+
 dis$(EXE) : dis.o 68kinst.o tern.o vos_program_module.o
 	$(CC) -o $@ $^ $(OPT)
 	
