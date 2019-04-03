@@ -1328,16 +1328,14 @@ static sh_pixel composite_highlight(vdp_context *context, uint8_t *debug_dst, ui
 	return (sh_pixel){.index = pixel, .intensity = intensity};
 }
 
-static void render_normal(vdp_context *context, int32_t col, uint32_t *dst, uint8_t *debug_dst, int plane_a_off, int plane_b_off)
+static void render_normal(vdp_context *context, int32_t col, uint8_t *dst, uint8_t *debug_dst, int plane_a_off, int plane_b_off)
 {
 	int start = 0;
 	if (!col && (context->regs[REG_MODE_1] & BIT_COL0_MASK)) {
-		uint32_t bgcolor = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
-		for (int i = 0; i < 8; ++i)
-		{
-			*(dst++) = bgcolor;
-			*(debug_dst++) = DBG_SRC_BG;
-		}
+		memset(dst, 0, 8);
+		memset(debug_dst, DBG_SRC_BG, 8);
+		dst += 8;
+		debug_dst += 8;
 		start = 8;
 	}
 	uint8_t *sprite_buf = context->linebuf + col * 8 + start;
@@ -1347,22 +1345,19 @@ static void render_normal(vdp_context *context, int32_t col, uint32_t *dst, uint
 		plane_a = context->tmp_buf_a[plane_a_off & SCROLL_BUFFER_MASK];
 		plane_b = context->tmp_buf_b[plane_b_off & SCROLL_BUFFER_MASK];
 		sprite = *sprite_buf;
-		uint8_t pixel = composite_normal(context, debug_dst, sprite, plane_a, plane_b, context->regs[REG_BG_COLOR]);
+		*(dst++) = composite_normal(context, debug_dst, sprite, plane_a, plane_b, context->regs[REG_BG_COLOR]) & 0x3F;
 		debug_dst++;
-		*(dst++) = context->colors[pixel & 0x3F];
 	}
 }
 
-static void render_highlight(vdp_context *context, int32_t col, uint32_t *dst, uint8_t *debug_dst, int plane_a_off, int plane_b_off)
+static void render_highlight(vdp_context *context, int32_t col, uint8_t *dst, uint8_t *debug_dst, int plane_a_off, int plane_b_off)
 {
 	int start = 0;
 	if (!col && (context->regs[REG_MODE_1] & BIT_COL0_MASK)) {
-		uint32_t bgcolor = context->colors[SHADOW_OFFSET + (context->regs[REG_BG_COLOR] & 0x3F)];
-		for (int i = 0; i < 8; ++i)
-		{
-			*(dst++) = bgcolor;
-			*(debug_dst++) = DBG_SRC_BG | DBG_SHADOW;
-		}
+		memset(dst, SHADOW_OFFSET + (context->regs[REG_BG_COLOR] & 0x3F), 8);
+		memset(debug_dst, DBG_SRC_BG | DBG_SHADOW, 8);
+		dst += 8;
+		debug_dst += 8;
 		start = 8;
 	}
 	uint8_t *sprite_buf = context->linebuf + col * 8 + start;
@@ -1373,20 +1368,20 @@ static void render_highlight(vdp_context *context, int32_t col, uint32_t *dst, u
 		plane_b = context->tmp_buf_b[plane_b_off & SCROLL_BUFFER_MASK];
 		sprite = *sprite_buf;
 		sh_pixel pixel = composite_highlight(context, debug_dst, sprite, plane_a, plane_b, context->regs[REG_BG_COLOR]);
-		uint32_t *colors;
+		uint8_t final_pixel;
 		if (pixel.intensity == BUF_BIT_PRIORITY << 1) {
-			colors = context->colors + HIGHLIGHT_OFFSET;
+			final_pixel = (pixel.index & 0x3F) + HIGHLIGHT_OFFSET;
 		} else if (pixel.intensity) {
-			colors = context->colors;
+			final_pixel = pixel.index & 0x3F;
 		} else {
-			colors = context->colors + SHADOW_OFFSET;
+			final_pixel = (pixel.index & 0x3F) + SHADOW_OFFSET;
 		}
 		debug_dst++;
-		*(dst++) = colors[pixel.index & 0x3F];
+		*(dst++) = final_pixel;
 	}
 }
 
-static void render_testreg(vdp_context *context, int32_t col, uint32_t *dst, uint8_t *debug_dst, int plane_a_off, int plane_b_off, uint8_t output_disabled, uint8_t test_layer)
+static void render_testreg(vdp_context *context, int32_t col, uint8_t *dst, uint8_t *debug_dst, int plane_a_off, int plane_b_off, uint8_t output_disabled, uint8_t test_layer)
 {
 	if (output_disabled) {
 		switch (test_layer)
@@ -1402,7 +1397,7 @@ static void render_testreg(vdp_context *context, int32_t col, uint32_t *dst, uin
 			uint8_t *sprite_buf = context->linebuf + col * 8;
 			for (int i = 0; i < 16; i++)
 			{
-				*(dst++) = context->colors[*(sprite_buf++) & 0x3F];
+				*(dst++) = *(sprite_buf++) & 0x3F;
 				*(debug_dst++) = DBG_SRC_S;
 			}
 			break;
@@ -1410,14 +1405,14 @@ static void render_testreg(vdp_context *context, int32_t col, uint32_t *dst, uin
 		case 2:
 			for (int i = 0; i < 16; i++)
 			{
-				*(dst++) = context->colors[context->tmp_buf_a[(plane_a_off++) & SCROLL_BUFFER_MASK] & 0x3F];
+				*(dst++) = context->tmp_buf_a[(plane_a_off++) & SCROLL_BUFFER_MASK] & 0x3F;
 				*(debug_dst++) = DBG_SRC_A;
 			}
 			break;
 		case 3:
 			for (int i = 0; i < 16; i++)
 			{
-				*(dst++) = context->colors[context->tmp_buf_b[(plane_b_off++) & SCROLL_BUFFER_MASK] & 0x3F];
+				*(dst++) = context->tmp_buf_b[(plane_b_off++) & SCROLL_BUFFER_MASK] & 0x3F;
 				*(debug_dst++) = DBG_SRC_B;
 			}
 			break;
@@ -1427,7 +1422,7 @@ static void render_testreg(vdp_context *context, int32_t col, uint32_t *dst, uin
 		uint8_t *sprite_buf = context->linebuf + col * 8;
 		if (!col && (context->regs[REG_MODE_1] & BIT_COL0_MASK)) {
 			//TODO: Confirm how test register interacts with column 0 blanking
-			uint8_t pixel = context->regs[REG_BG_COLOR] & 0x3F;
+			uint8_t pixel = 0x3F;
 			uint8_t src = DBG_SRC_BG;
 			for (int i = 0; i < 8; ++i)
 			{
@@ -1453,7 +1448,7 @@ static void render_testreg(vdp_context *context, int32_t col, uint32_t *dst, uin
 					break;
 				}
 				
-				*(dst++) = context->colors[pixel & 0x3F];
+				*(dst++) = pixel;
 				*(debug_dst++) = src;
 			}
 			plane_a_off += 8;
@@ -1467,7 +1462,7 @@ static void render_testreg(vdp_context *context, int32_t col, uint32_t *dst, uin
 			plane_a = context->tmp_buf_a[plane_a_off & SCROLL_BUFFER_MASK];
 			plane_b = context->tmp_buf_b[plane_b_off & SCROLL_BUFFER_MASK];
 			sprite = *sprite_buf;
-			uint8_t pixel = composite_normal(context, debug_dst, sprite, plane_a, plane_b, 0x3F);
+			uint8_t pixel = composite_normal(context, debug_dst, sprite, plane_a, plane_b, 0x3F) & 0x3F;
 			switch (test_layer)
 			{
 			case 1:
@@ -1490,18 +1485,18 @@ static void render_testreg(vdp_context *context, int32_t col, uint32_t *dst, uin
 				break;
 			}
 			debug_dst++;
-			*(dst++) = context->colors[pixel & 0x3F];
+			*(dst++) = pixel;
 		}
 	}
 }
 
-static void render_testreg_highlight(vdp_context *context, int32_t col, uint32_t *dst, uint8_t *debug_dst, int plane_a_off, int plane_b_off, uint8_t output_disabled, uint8_t test_layer)
+static void render_testreg_highlight(vdp_context *context, int32_t col, uint8_t *dst, uint8_t *debug_dst, int plane_a_off, int plane_b_off, uint8_t output_disabled, uint8_t test_layer)
 {
 	int start = 0;
 	uint8_t *sprite_buf = context->linebuf + col * 8;
 	if (!col && (context->regs[REG_MODE_1] & BIT_COL0_MASK)) {
 		//TODO: Confirm how test register interacts with column 0 blanking
-		uint8_t pixel = context->regs[REG_BG_COLOR] & 0x3F;
+		uint8_t pixel = 0x3F;
 		uint8_t src = DBG_SRC_BG | DBG_SHADOW;
 		for (int i = 0; i < 8; ++i)
 		{
@@ -1527,7 +1522,7 @@ static void render_testreg_highlight(vdp_context *context, int32_t col, uint32_t
 				break;
 			}
 			
-			*(dst++) = context->colors[SHADOW_OFFSET + (pixel & 0x3F)];
+			*(dst++) = SHADOW_OFFSET + pixel;
 			*(debug_dst++) = src;
 		}
 		plane_a_off += 8;
@@ -1542,16 +1537,10 @@ static void render_testreg_highlight(vdp_context *context, int32_t col, uint32_t
 		plane_b = context->tmp_buf_b[plane_b_off & SCROLL_BUFFER_MASK];
 		sprite = *sprite_buf;
 		sh_pixel pixel = composite_highlight(context, debug_dst, sprite, plane_a, plane_b, 0x3F);
-		uint32_t *colors;
-		if (pixel.intensity == BUF_BIT_PRIORITY << 1) {
-			colors = context->colors + HIGHLIGHT_OFFSET;
-		} else if (pixel.intensity) {
-			colors = context->colors;
-		} else {
-			colors = context->colors + SHADOW_OFFSET;
-		}
 		if (output_disabled) {
 			pixel.index = 0x3F;
+		} else {
+			pixel.index &= 0x3F;
 		}
 		switch (test_layer)
 		{
@@ -1574,37 +1563,35 @@ static void render_testreg_highlight(vdp_context *context, int32_t col, uint32_t
 			}
 			break;
 		}
+		if (pixel.intensity == BUF_BIT_PRIORITY << 1) {
+			pixel.index += HIGHLIGHT_OFFSET;
+		} else if (!pixel.intensity) {
+			pixel.index += SHADOW_OFFSET;
+		}
 		debug_dst++;
-		*(dst++) = colors[pixel.index & 0x3F];
+		*(dst++) = pixel.index;
 	}
 }
 
 static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 {
-	uint32_t *dst;
+	uint8_t *dst;
 	uint8_t *debug_dst;
 	uint8_t output_disabled = (context->test_port & TEST_BIT_DISABLE) != 0;
 	uint8_t test_layer = context->test_port >> 7 & 3;
 	if (context->state == PREPARING && !test_layer) {
 		if (col) {
 			col -= 2;
-			dst = context->output + BORDER_LEFT + col * 8;
+			dst = context->compositebuf + BORDER_LEFT + col * 8;
 		} else {
-			dst = context->output;
+			dst = context->compositebuf;
 			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
-			for (int i = 0; i < BORDER_LEFT; i++, dst++)
-			{
-				*dst = bg_color;
-			}
-			context->done_output = dst;
+			memset(dst, 0, BORDER_LEFT);
+			context->done_composite = dst + BORDER_LEFT;
 			return;
 		}
-		uint32_t color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
-		for (int i = 0; i < 16; i++)
-		{
-			*(dst++) = color;
-		}
-		context->done_output = dst;
+		memset(dst, 0, 16);
+		context->done_composite = dst + 16;
 		return;
 	}
 	line &= 0xFF;
@@ -1615,7 +1602,7 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 	if (col)
 	{
 		col-=2;
-		dst = context->output + BORDER_LEFT + col * 8;
+		dst = context->compositebuf + BORDER_LEFT + col * 8;
 		debug_dst = context->layer_debug_buf + BORDER_LEFT + col * 8;
 		
 		
@@ -1645,24 +1632,18 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		}
 		dst += 16;
 	} else {
-		dst = context->output;
+		dst = context->compositebuf;
 		debug_dst = context->layer_debug_buf;
-		uint8_t pixel = context->regs[REG_BG_COLOR] & 0x3F;
+		uint8_t pixel = 0;
 		if (output_disabled) {
 			pixel = 0x3F;
 		}
-		uint32_t bg_color = context->colors[pixel];
 		if (test_layer) {
 			switch(test_layer)
 			{
 			case 1:
-				bg_color = context->colors[0];
-				for (int i = 0; i < BORDER_LEFT; i++, dst++, debug_dst++)
-				{
-					*dst = bg_color;
-					*debug_dst = DBG_SRC_BG;
-					
-				}
+				memset(dst, 0, BORDER_LEFT);
+				memset(debug_dst, DBG_SRC_BG, BORDER_LEFT);
 				break;
 			case 2: {
 				//plane A
@@ -1673,7 +1654,7 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 				//uint8_t *src = context->tmp_buf_a + ((context->buf_a_off + (i ? 0 : (16 - BORDER_LEFT) - (context->hscroll_a & 0xF))) & SCROLL_BUFFER_MASK); 
 				for (; i < BORDER_LEFT; buf_off++, i++, dst++, debug_dst++)
 				{
-					*dst = context->colors[context->tmp_buf_a[buf_off & SCROLL_BUFFER_MASK]];
+					*dst = context->tmp_buf_a[buf_off & SCROLL_BUFFER_MASK];
 					*debug_dst = DBG_SRC_A;
 				}
 				break;
@@ -1686,21 +1667,19 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 				//uint8_t *src = context->tmp_buf_b + ((context->buf_b_off + (i ? 0 : (16 - BORDER_LEFT) - (context->hscroll_b & 0xF))) & SCROLL_BUFFER_MASK); 
 				for (; i < BORDER_LEFT; buf_off++, i++, dst++, debug_dst++)
 				{
-					*dst = context->colors[context->tmp_buf_b[buf_off & SCROLL_BUFFER_MASK]];
+					*dst = context->tmp_buf_b[buf_off & SCROLL_BUFFER_MASK];
 					*debug_dst = DBG_SRC_B;
 				}
 				break;
 			}
 			}
 		} else {
-			for (int i = 0; i < BORDER_LEFT; i++, dst++, debug_dst++)
-			{
-				*dst = bg_color;
-				*debug_dst = DBG_SRC_BG;
-			}
+			memset(dst, pixel, BORDER_LEFT);
+			memset(debug_dst, DBG_SRC_BG, BORDER_LEFT);
 		}
+		dst += BORDER_LEFT;
 	}
-	context->done_output = dst;
+	context->done_composite = dst;
 	context->buf_a_off = (context->buf_a_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
 	context->buf_b_off = (context->buf_b_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
 }
@@ -1745,15 +1724,12 @@ static void render_map_mode4(uint32_t line, int32_t col, vdp_context * context)
 	}
 	context->buf_a_off = (context->buf_a_off + 8) & 15;
 	
-	uint8_t bgcolor = 0x10 | (context->regs[REG_BG_COLOR] & 0xF) + MODE4_OFFSET;
-	uint32_t *dst = context->output + col * 8 + BORDER_LEFT;
+	uint8_t *dst = context->compositebuf + col * 8 + BORDER_LEFT;
 	uint8_t *debug_dst = context->layer_debug_buf + col * 8 + BORDER_LEFT;
 	if (context->state == PREPARING) {
-		for (int i = 0; i < 16; i++)
-		{
-			*(dst++) = context->colors[bgcolor];
-		}
-		context->done_output = dst;
+		memset(dst, 0, 8);
+		memset(debug_dst, DBG_SRC_BG, 8);
+		context->done_composite = dst + 8;
 		return;
 	}
 	
@@ -1767,22 +1743,21 @@ static void render_map_mode4(uint32_t line, int32_t col, vdp_context * context)
 			uint8_t *bg_src = context->tmp_buf_a + ((8 + i + col * 8 - (context->hscroll_a & 0x7)) & 15);
 			if ((*bg_src & 0x4F) > 0x40 || !*sprite_src) {
 				//background plane has priority and is opaque or sprite layer is transparent
-				*(dst++) = context->colors[(*bg_src & 0x1F) + MODE4_OFFSET];
-				*(debug_dst++) = DBG_SRC_A;
+				uint8_t pixel = *bg_src & 0x1F;
+				*(dst++) = pixel + MODE4_OFFSET;
+				*(debug_dst++) = pixel ? DBG_SRC_A : DBG_SRC_BG;
 			} else {
 				//sprite layer is opaque and not covered by high priority BG pixels
-				*(dst++) = context->colors[*sprite_src | 0x10 + MODE4_OFFSET];
+				*(dst++) = (*sprite_src | 0x10) + MODE4_OFFSET;
 				*(debug_dst++) = DBG_SRC_S;
 			}
 		}
+		context->done_composite = dst;
 	} else {
-		for (int i = 0; i < 8; i++)
-		{
-			*(dst++) = context->colors[bgcolor];
-			*(debug_dst++) = DBG_SRC_BG;
-		}
+		memset(dst, 0, 8);
+		memset(dst, DBG_SRC_BG, 8);
+		context->done_composite = dst + 8;
 	}
-	context->done_output = dst;
 }
 
 static uint32_t const h40_hsync_cycles[] = {19, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20, 20, 19};
@@ -2103,7 +2078,6 @@ static void advance_output_line(vdp_context *context)
 			output_line = INVALID_LINE;
 		}
 		context->output = (uint32_t *)(((char *)context->fb) + context->output_pitch * output_line);
-		context->done_output = context->output;
 #ifdef DEBUG_FB_FILL
 		for (int i = 0; i < LINEBUF_SIZE; i++)
 		{
@@ -2148,22 +2122,18 @@ static void render_border_garbage(vdp_context *context, uint32_t address, uint8_
 
 static void draw_right_border(vdp_context *context)
 {
-	uint32_t *dst = context->output + BORDER_LEFT + ((context->regs[REG_MODE_4] & BIT_H40) ? 320 : 256);
+	uint8_t *dst = context->compositebuf + BORDER_LEFT + ((context->regs[REG_MODE_4] & BIT_H40) ? 320 : 256);
 	uint8_t pixel = context->regs[REG_BG_COLOR] & 0x3F;
 	if ((context->test_port & TEST_BIT_DISABLE) != 0) {
 		pixel = 0x3F;
 	}
-	uint32_t bg_color = context->colors[pixel];
 	uint8_t test_layer = context->test_port >> 7 & 3;
 	if (test_layer) {
 		switch(test_layer)
 			{
 			case 1:
-				bg_color = context->colors[0];
-				for (int i = 0; i < BORDER_RIGHT; i++, dst++)
-				{
-					*dst = bg_color;
-				}
+				memset(dst, 0, BORDER_RIGHT);
+				dst += BORDER_RIGHT;
 				break;
 			case 2: {
 				//plane A
@@ -2174,7 +2144,7 @@ static void draw_right_border(vdp_context *context)
 				//uint8_t *src = context->tmp_buf_a + ((context->buf_a_off + (i ? 0 : (16 - BORDER_LEFT) - (context->hscroll_a & 0xF))) & SCROLL_BUFFER_MASK); 
 				for (; i < BORDER_RIGHT; buf_off++, i++, dst++)
 				{
-					*dst = context->colors[context->tmp_buf_a[buf_off & SCROLL_BUFFER_MASK] & 0x3F];
+					*dst = context->tmp_buf_a[buf_off & SCROLL_BUFFER_MASK] & 0x3F;
 				}
 				break;
 			}
@@ -2186,84 +2156,148 @@ static void draw_right_border(vdp_context *context)
 				//uint8_t *src = context->tmp_buf_b + ((context->buf_b_off + (i ? 0 : (16 - BORDER_LEFT) - (context->hscroll_b & 0xF))) & SCROLL_BUFFER_MASK); 
 				for (; i < BORDER_RIGHT; buf_off++, i++, dst++)
 				{
-					*dst = context->colors[context->tmp_buf_b[buf_off & SCROLL_BUFFER_MASK] & 0x3F];
+					*dst = context->tmp_buf_b[buf_off & SCROLL_BUFFER_MASK] & 0x3F;
 				}
 				break;
 			}
 			}
 	} else {
-		for (int i = 0; i < BORDER_RIGHT; i++, dst++)
-		{
-			*dst = bg_color;
-		}
+		memset(dst, 0, BORDER_RIGHT);
+		dst += BORDER_RIGHT;
 	}
-	context->done_output = dst;
+	context->done_composite = dst;
 	context->buf_a_off = (context->buf_a_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
 	context->buf_b_off = (context->buf_b_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
 }
 
 #define CHECK_ONLY if (context->cycles >= target_cycles) { return; }
 #define CHECK_LIMIT if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); } context->hslot++; context->cycles += slot_cycles; CHECK_ONLY
+#define OUTPUT_PIXEL(slot) if ((slot) >= BG_START_SLOT) {\
+		uint8_t *src = context->compositebuf + ((slot) - BG_START_SLOT) *2;\
+		uint32_t *dst = context->output + ((slot) - BG_START_SLOT) *2;\
+		if ((*src & 0x3F) | test_layer) {\
+			*(dst++) = context->colors[*(src++)];\
+		} else {\
+			*(dst++) = context->colors[(*(src++) & 0xC0) | bgindex];\
+		}\
+		if ((*src & 0x3F) | test_layer) {\
+			*(dst++) = context->colors[*(src++)];\
+		} else {\
+			*(dst++) = context->colors[(*(src++) & 0xC0) | bgindex];\
+		}\
+	}
+	
+#define OUTPUT_PIXEL_H40(slot) if (slot <= (BG_START_SLOT + LINEBUF_SIZE/2)) {\
+		uint8_t *src = context->compositebuf + (slot - BG_START_SLOT) *2;\
+		uint32_t *dst = context->output + (slot - BG_START_SLOT) *2;\
+		if ((*src & 0x3F) | test_layer) {\
+			*(dst++) = context->colors[*(src++)];\
+		} else {\
+			*(dst++) = context->colors[(*(src++) & 0xC0) | bgindex];\
+		}\
+		if (slot != (BG_START_SLOT + LINEBUF_SIZE/2)) {\
+			if ((*src & 0x3F) | test_layer) {\
+				*(dst++) = context->colors[*(src++)];\
+			} else {\
+				*(dst++) = context->colors[(*(src++) & 0xC0) | bgindex];\
+			}\
+		}\
+	}
+	
+#define OUTPUT_PIXEL_H32(slot) if (slot <= (BG_START_SLOT + (256+HORIZ_BORDER)/2)) {\
+		uint8_t *src = context->compositebuf + (slot - BG_START_SLOT) *2;\
+		uint32_t *dst = context->output + (slot - BG_START_SLOT) *2;\
+		if ((*src & 0x3F) | test_layer) {\
+			*(dst++) = context->colors[*(src++)];\
+		} else {\
+			*(dst++) = context->colors[(*(src++) & 0xC0) | bgindex];\
+		}\
+		if (slot != (BG_START_SLOT + (256+HORIZ_BORDER)/2)) {\
+			if ((*src & 0x3F) | test_layer) {\
+				*(dst++) = context->colors[*(src++)];\
+			} else {\
+				*(dst++) = context->colors[(*(src++) & 0xC0) | bgindex];\
+			}\
+		}\
+	}
 
 #define COLUMN_RENDER_BLOCK(column, startcyc) \
 	case startcyc:\
+		OUTPUT_PIXEL(startcyc)\
 		read_map_scroll_a(column, context->vcounter, context);\
 		CHECK_LIMIT\
 	case ((startcyc+1)&0xFF):\
+		OUTPUT_PIXEL((startcyc+1)&0xFF)\
 		external_slot(context);\
 		CHECK_LIMIT\
 	case ((startcyc+2)&0xFF):\
+		OUTPUT_PIXEL((startcyc+2)&0xFF)\
 		render_map_1(context);\
 		CHECK_LIMIT\
 	case ((startcyc+3)&0xFF):\
+		OUTPUT_PIXEL((startcyc+3)&0xFF)\
 		render_map_2(context);\
 		CHECK_LIMIT\
 	case ((startcyc+4)&0xFF):\
+		OUTPUT_PIXEL((startcyc+4)&0xFF)\
 		read_map_scroll_b(column, context->vcounter, context);\
 		CHECK_LIMIT\
 	case ((startcyc+5)&0xFF):\
+		OUTPUT_PIXEL((startcyc+5)&0xFF)\
 		read_sprite_x(context->vcounter, context);\
 		CHECK_LIMIT\
 	case ((startcyc+6)&0xFF):\
+		OUTPUT_PIXEL((startcyc+6)&0xFF)\
 		render_map_3(context);\
 		CHECK_LIMIT\
 	case ((startcyc+7)&0xFF):\
+		OUTPUT_PIXEL((startcyc+7)&0xFF)\
 		render_map_output(context->vcounter, column, context);\
 		CHECK_LIMIT
 
 #define COLUMN_RENDER_BLOCK_REFRESH(column, startcyc) \
 	case startcyc:\
+		OUTPUT_PIXEL(startcyc)\
 		read_map_scroll_a(column, context->vcounter, context);\
 		CHECK_LIMIT\
 	case (startcyc+1):\
-		/* refresh, no don't run dma src */\
+		/* refresh, so don't run dma src */\
+		OUTPUT_PIXEL((startcyc+1)&0xFF)\
 		context->hslot++;\
 		context->cycles += slot_cycles;\
 		CHECK_ONLY\
 	case (startcyc+2):\
+		OUTPUT_PIXEL((startcyc+2)&0xFF)\
 		render_map_1(context);\
 		CHECK_LIMIT\
 	case (startcyc+3):\
+		OUTPUT_PIXEL((startcyc+3)&0xFF)\
 		render_map_2(context);\
 		CHECK_LIMIT\
 	case (startcyc+4):\
+		OUTPUT_PIXEL((startcyc+4)&0xFF)\
 		read_map_scroll_b(column, context->vcounter, context);\
 		CHECK_LIMIT\
 	case (startcyc+5):\
+		OUTPUT_PIXEL((startcyc+5)&0xFF)\
 		read_sprite_x(context->vcounter, context);\
 		CHECK_LIMIT\
 	case (startcyc+6):\
+		OUTPUT_PIXEL((startcyc+6)&0xFF)\
 		render_map_3(context);\
 		CHECK_LIMIT\
 	case (startcyc+7):\
+		OUTPUT_PIXEL((startcyc+7)&0xFF)\
 		render_map_output(context->vcounter, column, context);\
 		CHECK_LIMIT
 		
 #define COLUMN_RENDER_BLOCK_MODE4(column, startcyc) \
 	case startcyc:\
+		OUTPUT_PIXEL(startcyc)\
 		read_map_mode4(column, context->vcounter, context);\
 		CHECK_LIMIT\
 	case ((startcyc+1)&0xFF):\
+		OUTPUT_PIXEL((startcyc+1)&0xFF)\
 		if (column & 3) {\
 			scan_sprite_table_mode4(context);\
 		} else {\
@@ -2271,9 +2305,11 @@ static void draw_right_border(vdp_context *context)
 		}\
 		CHECK_LIMIT\
 	case ((startcyc+2)&0xFF):\
+		OUTPUT_PIXEL((startcyc+2)&0xFF)\
 		fetch_map_mode4(column, context->vcounter, context);\
 		CHECK_LIMIT\
 	case ((startcyc+3)&0xFF):\
+		OUTPUT_PIXEL((startcyc+3)&0xFF)\
 		render_map_mode4(context->vcounter, column, context);\
 		CHECK_LIMIT
 		
@@ -2293,6 +2329,7 @@ static void draw_right_border(vdp_context *context)
 
 #define SPRITE_RENDER_H40(slot) \
 	case slot:\
+		OUTPUT_PIXEL_H40(slot)\
 		if ((slot) == BG_START_SLOT + LINEBUF_SIZE/2) {\
 			advance_output_line(context);\
 		}\
@@ -2327,6 +2364,7 @@ static void draw_right_border(vdp_context *context)
 //as we're bumping up against the hcounter jump
 #define SPRITE_RENDER_H32(slot) \
 	case slot:\
+		OUTPUT_PIXEL_H32(slot)\
 		if ((slot) == BG_START_SLOT + (256+HORIZ_BORDER)/2) {\
 			advance_output_line(context);\
 		}\
@@ -2379,30 +2417,27 @@ static void draw_right_border(vdp_context *context)
 		
 #define SPRITE_RENDER_H32_MODE4(slot) \
 	case slot:\
+		OUTPUT_PIXEL_H32(slot)\
 		read_sprite_x_mode4(context);\
 		MODE4_CHECK_SLOT_LINE(slot)\
 	case CALC_SLOT(slot, 1):\
+		OUTPUT_PIXEL(CALC_SLOT(slot, 1))\
 		read_sprite_x_mode4(context);\
 		MODE4_CHECK_SLOT_LINE(CALC_SLOT(slot,1))\
 	case CALC_SLOT(slot, 2):\
+		OUTPUT_PIXEL(CALC_SLOT(slot, 2))\
 		fetch_sprite_cells_mode4(context);\
 		MODE4_CHECK_SLOT_LINE(CALC_SLOT(slot, 2))\
 	case CALC_SLOT(slot, 3):\
-		if ((slot + 3) == 140) {\
-			uint32_t *dst = context->output + BORDER_LEFT + 256 + 8;\
-			uint32_t bgcolor = context->colors[0x10 | (context->regs[REG_BG_COLOR] & 0xF) + MODE4_OFFSET];\
-			for (int i = 0; i < BORDER_RIGHT-8; i++, dst++)\
-			{\
-				*dst = bgcolor;\
-			}\
-			context->done_output = dst;\
-		}\
+		OUTPUT_PIXEL(CALC_SLOT(slot, 3))\
 		render_sprite_cells_mode4(context);\
 		MODE4_CHECK_SLOT_LINE(CALC_SLOT(slot, 3))\
 	case CALC_SLOT(slot, 4):\
+		OUTPUT_PIXEL(CALC_SLOT(slot, 4))\
 		fetch_sprite_cells_mode4(context);\
 		MODE4_CHECK_SLOT_LINE(CALC_SLOT(slot, 4))\
 	case CALC_SLOT(slot, 5):\
+		OUTPUT_PIXEL(CALC_SLOT(slot, 5))\
 		render_sprite_cells_mode4(context);\
 		MODE4_CHECK_SLOT_LINE(CALC_SLOT(slot, 5))
 
@@ -2411,11 +2446,14 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	uint16_t address;
 	uint32_t mask;
 	uint32_t const slot_cycles = MCLKS_SLOT_H40;
+	uint8_t bgindex = context->regs[REG_BG_COLOR] & 0x3F;
+	uint8_t test_layer = context->test_port >> 7 & 3;
 	switch(context->hslot)
 	{
 	for (;;)
 	{
 	case 165:
+		OUTPUT_PIXEL(165)
 		if (!(context->regs[REG_MODE_3] & BIT_VSCROLL)) {
 			//TODO: Develop some tests on hardware to see when vscroll latch actually happens for full plane mode
 			//See note in vdp_h32 for why this was originally moved out of read_map_scroll
@@ -2425,31 +2463,14 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 			context->vscroll_latch[1] = context->vsram[1];
 		}
 		if (context->state == PREPARING) {
-			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
-			uint32_t *dst = context->output + (context->hslot - BG_START_SLOT) * 2;
-			if (dst >= context->done_output) {
-				*dst = bg_color;
-			}
-			dst++;
-			if (dst >= context->done_output) {
-				*dst = bg_color;
-			}
 			external_slot(context);
 		} else {
 			render_sprite_cells(context);
 		}
 		CHECK_LIMIT
 	case 166:
+		OUTPUT_PIXEL(166)
 		if (context->state == PREPARING) {
-			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
-			uint32_t *dst = context->output + (context->hslot - BG_START_SLOT) * 2;
-			if (dst >= context->done_output) {
-				*dst = bg_color;
-			}
-			dst++;
-			if (dst >= context->done_output) {
-				*dst = bg_color;
-			}
 			external_slot(context);
 		} else {
 			render_sprite_cells(context);
@@ -2462,16 +2483,7 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		CHECK_LIMIT
 	//sprite attribute table scan starts
 	case 167:
-		if (context->state == PREPARING) {
-			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
-			uint32_t *dst = context->output + (context->hslot - BG_START_SLOT) * 2;
-			for (int i = 0; i < LINEBUF_SIZE - 2 * (context->hslot - BG_START_SLOT); i++, dst++)
-			{
-				if (dst >= context->done_output) {
-					*dst = bg_color;
-				}
-			}
-		}
+		OUTPUT_PIXEL(167)
 		context->sprite_index = 0x80;
 		context->slot_counter = 0;
 		render_border_garbage(
@@ -2591,13 +2603,16 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	COLUMN_RENDER_BLOCK(38, 145)
 	COLUMN_RENDER_BLOCK_REFRESH(40, 153)
 	case 161:
+		OUTPUT_PIXEL(161)
 		external_slot(context);
 		CHECK_LIMIT
 	case 162:
+		OUTPUT_PIXEL(162)
 		external_slot(context);
 		CHECK_LIMIT
 	//sprite render to line buffer starts
 	case 163:
+		OUTPUT_PIXEL(163)
 		context->cur_slot = MAX_DRAWS-1;
 		memset(context->linebuf, 0, LINEBUF_SIZE);
 		render_border_garbage(
@@ -2609,6 +2624,7 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		render_sprite_cells(context);
 		CHECK_LIMIT
 	case 164:
+		OUTPUT_PIXEL(164)
 		render_border_garbage(
 			context,
 			context->sprite_draw_list[context->cur_slot].address,
@@ -2636,37 +2652,23 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 	uint16_t address;
 	uint32_t mask;
 	uint32_t const slot_cycles = MCLKS_SLOT_H32;
+	uint8_t bgindex = context->regs[REG_BG_COLOR] & 0x3F;
+	uint8_t test_layer = context->test_port >> 7 & 3;
 	switch(context->hslot)
 	{
 	for (;;)
 	{
 	case 133:
+		OUTPUT_PIXEL(133)
 		if (context->state == PREPARING) {
-			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
-			uint32_t *dst = context->output + (context->hslot - BG_START_SLOT) * 2;
-			if (dst >= context->done_output) {
-				*dst = bg_color;
-			}
-			dst++;
-			if (dst >= context->done_output) {
-				*dst = bg_color;
-			}
 			external_slot(context);
 		} else {
 			render_sprite_cells(context);
 		}
 		CHECK_LIMIT
 	case 134:
+		OUTPUT_PIXEL(134)
 		if (context->state == PREPARING) {
-			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
-			uint32_t *dst = context->output + (context->hslot - BG_START_SLOT) * 2;
-			if (dst >= context->done_output) {
-				*dst = bg_color;
-			}
-			dst++;
-			if (dst >= context->done_output) {
-				*dst = bg_color;
-			}
 			external_slot(context);
 		} else {
 			render_sprite_cells(context);
@@ -2679,16 +2681,7 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 		CHECK_LIMIT
 	//sprite attribute table scan starts
 	case 135:
-		if (context->state == PREPARING) {
-			uint32_t bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
-			uint32_t *dst = context->output + (context->hslot - BG_START_SLOT) * 2;
-			for (int i = 0; i < (256+HORIZ_BORDER) - 2 * (context->hslot - BG_START_SLOT); i++)
-			{
-				if (dst >= context->done_output) {
-					*(dst++) = bg_color;
-				}
-			}
-		}
+		OUTPUT_PIXEL(135)
 		context->sprite_index = 0x80;
 		context->slot_counter = 0;
 		render_border_garbage(
@@ -2710,6 +2703,7 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 	SPRITE_RENDER_H32(143)
 	SPRITE_RENDER_H32(144)
 	case 145:
+		OUTPUT_PIXEL(145)
 		external_slot(context);
 		CHECK_LIMIT
 	SPRITE_RENDER_H32(146)
@@ -2815,14 +2809,17 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 	COLUMN_RENDER_BLOCK(30, 113)
 	COLUMN_RENDER_BLOCK_REFRESH(32, 121)
 	case 129:
+		OUTPUT_PIXEL(129)
 		external_slot(context);
 		CHECK_LIMIT
 	case 130: {
+		OUTPUT_PIXEL(130)
 		external_slot(context);
 		CHECK_LIMIT
 	}
 	//sprite render to line buffer starts
 	case 131:
+		OUTPUT_PIXEL(131)
 		context->cur_slot = MAX_DRAWS_H32-1;
 		memset(context->linebuf, 0, LINEBUF_SIZE);
 		render_border_garbage(
@@ -2834,6 +2831,7 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 		render_sprite_cells(context);
 		CHECK_LIMIT
 	case 132:
+		OUTPUT_PIXEL(132)
 		render_border_garbage(
 			context,
 			context->sprite_draw_list[context->cur_slot].address,
@@ -2860,6 +2858,8 @@ static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
 	uint16_t address;
 	uint32_t mask;
 	uint32_t const slot_cycles = MCLKS_SLOT_H32;
+	uint8_t bgindex = 0x10 | (context->regs[REG_BG_COLOR] & 0xF) + MODE4_OFFSET;
+	uint8_t test_layer = context->test_port >> 7 & 3;
 	switch(context->hslot)
 	{
 	for (;;)
@@ -2909,13 +2909,6 @@ static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
 		CHECK_LIMIT
 	case 0: {
 		scan_sprite_table_mode4(context);
-		uint32_t *dst = context->output;;
-		uint32_t bgcolor = context->colors[0x10 | (context->regs[REG_BG_COLOR] & 0xF) + MODE4_OFFSET];
-		for (int i = 0; i < BORDER_LEFT-8; i++, dst++)
-		{
-			*dst = bgcolor;
-		}
-		context->done_output = dst;
 		CHECK_LIMIT
 	}
 	case 1:
@@ -2931,13 +2924,6 @@ static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
 		scan_sprite_table_mode4(context);
 		context->buf_a_off = 8;
 		memset(context->tmp_buf_a, 0, 8);
-		uint32_t *dst = context->output + BORDER_LEFT - 8;
-		uint32_t bgcolor = context->colors[0x10 | (context->regs[REG_BG_COLOR] & 0xF) + MODE4_OFFSET];
-		for (int i = 0; i < 8; i++, dst++)
-		{
-			*dst = bgcolor;
-		}
-		context->done_output = dst;
 		CHECK_LIMIT
 	}
 	COLUMN_RENDER_BLOCK_MODE4(0, 5)
@@ -2973,27 +2959,24 @@ static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
 	COLUMN_RENDER_BLOCK_MODE4(30, 125)
 	COLUMN_RENDER_BLOCK_MODE4(31, 129)
 	case 133:
+		OUTPUT_PIXEL(133)
 		external_slot(context);
 		CHECK_LIMIT
 	case 134:
+		OUTPUT_PIXEL(134)
 		external_slot(context);
 		CHECK_LIMIT
 	case 135:
+		OUTPUT_PIXEL(135)
 		external_slot(context);
 		CHECK_LIMIT
 	case 136: {
+		OUTPUT_PIXEL(136)
 		external_slot(context);
 		//set things up for sprite rendering in the next slot
 		memset(context->linebuf, 0, LINEBUF_SIZE);
 		context->cur_slot = context->sprite_index = MAX_DRAWS_H32_MODE4-1;
 		context->sprite_draws = MAX_DRAWS_H32_MODE4;
-		uint32_t *dst = context->output + BORDER_LEFT + 256;
-		uint32_t bgcolor = context->colors[0x10 | (context->regs[REG_BG_COLOR] & 0xF) + MODE4_OFFSET];
-		for (int i = 0; i < 8; i++, dst++)
-		{
-			*dst = bgcolor;
-		}
-		context->done_output = dst;
 		CHECK_LIMIT
 	}}
 	default:
@@ -3008,7 +2991,7 @@ static void inactive_test_output(vdp_context *context, uint8_t is_h40, uint8_t t
 	if (context->hslot > max_slot) {
 		return;
 	}
-	uint32_t *dst = context->output + (context->hslot >> 3) * SCROLL_BUFFER_DRAW;
+	uint8_t *dst = context->compositebuf + (context->hslot >> 3) * SCROLL_BUFFER_DRAW;
 	int32_t len;
 	uint32_t src_off;
 	if (context->hslot) {
@@ -3030,16 +3013,15 @@ static void inactive_test_output(vdp_context *context, uint8_t is_h40, uint8_t t
 		src = context->tmp_buf_b;
 	} else {
 		//sprite layer
-		for (; len >=0; len--, dst++, src_off++)
-		{
-			*dst = context->colors[0];
-		}
+		memset(dst, 0, len);
+		dst += len;
+		len = 0;
 	}
 	for (; len >=0; len--, dst++, src_off++)
 	{
-		*dst = context->colors[src[src_off & SCROLL_BUFFER_MASK] & 0x3F];
+		*dst = src[src_off & SCROLL_BUFFER_MASK] & 0x3F;
 	}
-	context->done_output = dst;
+	context->done_composite = dst;
 	context->buf_a_off = (context->buf_a_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_DRAW;
 	context->buf_b_off = (context->buf_b_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_DRAW;
 }
@@ -3134,14 +3116,11 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 	}
 		
 	uint8_t test_layer = context->test_port >> 7 & 3;
-	if (test_layer) {
-		dst = NULL;
-	}
 	
 	while(context->cycles < target_cycles)
 	{
 		check_switch_inactive(context, is_h40);
-		if (context->hslot == BG_START_SLOT && !test_layer && (
+		if (context->hslot == BG_START_SLOT && (
 			context->vcounter < context->inactive_start + context->border_bot 
 			|| context->vcounter >= 0x200 - context->border_top
 		)) {
@@ -3200,30 +3179,58 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 		}
 		
 		if (dst) {
+			uint8_t bg_index;
 			if (mode_5) {
-				bg_color = context->colors[context->regs[REG_BG_COLOR] & 0x3F];
+				bg_index = context->regs[REG_BG_COLOR] & 0x3F;
+				bg_color = context->colors[bg_index];
 			} else if (context->regs[REG_MODE_1] & BIT_MODE_4) {
-				bg_color = context->colors[MODE4_OFFSET + 0x10 + (context->regs[REG_BG_COLOR] & 0xF)];
+				bg_index = 0x10 + (context->regs[REG_BG_COLOR] & 0xF);
+				bg_color = context->colors[MODE4_OFFSET + bg_index];
 			}
-			if (dst >= context->done_output) {
+			if (context->done_composite) {
+				uint8_t pixel = context->compositebuf[dst-context->output];
+				if (!(pixel & 0x3F | test_layer)) {
+					pixel = pixel & 0xC0 | bg_index;
+				}
+				*(dst++) = context->colors[pixel];
+				if ((dst - context->output) == (context->done_composite - context->compositebuf)) {
+					context->done_composite = NULL;
+					memset(context->compositebuf, 0, sizeof(context->compositebuf));
+				}
+			} else {
 				*(dst++) = bg_color;
 				*(debug_dst++) = DBG_SRC_BG;
-			} else {
-				dst++;
-				debug_dst++;
 			}
-			if (dst >= context->done_output) {
+			if (context->done_composite) {
+				uint8_t pixel = context->compositebuf[dst-context->output];
+				if (!(pixel & 0x3F | test_layer)) {
+					pixel = pixel & 0xC0 | bg_index;
+				}
+				*(dst++) = context->colors[pixel];
+				if ((dst - context->output) == (context->done_composite - context->compositebuf)) {
+					context->done_composite = NULL;
+					memset(context->compositebuf, 0, sizeof(context->compositebuf));
+				}
+			} else {
 				*(dst++) = bg_color;
 				*(debug_dst++) = DBG_SRC_BG;
-				context->done_output = dst;
-			} else {
-				dst++;
-				debug_dst++;
 			}
+			
 			if (context->hslot == (bg_end_slot-1)) {
-				*(dst++) = bg_color;
-				*(debug_dst++) = DBG_SRC_BG;
-				context->done_output = dst;
+				if (context->done_composite) {
+					uint8_t pixel = context->compositebuf[dst-context->output];
+					if (!(pixel & 0x3F | test_layer)) {
+						pixel = pixel & 0xC0 | bg_index;
+					}
+					*(dst++) = context->colors[pixel];
+					if ((dst - context->output) == (context->done_composite - context->compositebuf)) {
+						context->done_composite = NULL;
+						memset(context->compositebuf, 0, sizeof(context->compositebuf));
+					}
+				} else {
+					*(dst++) = bg_color;
+					*(debug_dst++) = DBG_SRC_BG;
+				}
 			}
 		}
 		
