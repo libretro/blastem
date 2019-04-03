@@ -163,9 +163,9 @@ typedef struct {
 	system_header  *system;
 	//pointer to current line in framebuffer
 	uint32_t       *output;
-	uint32_t       *done_output;
 	//pointer to current framebuffer
 	uint32_t       *fb;
+	uint8_t        *done_composite;
 	uint32_t       *debug_fbs[VDP_NUM_DEBUG_TYPES];
 	uint32_t       output_pitch;
 	uint32_t       debug_fb_pitch[VDP_NUM_DEBUG_TYPES];
@@ -205,6 +205,7 @@ typedef struct {
 	uint16_t       test_port;
 	//stores 2-bit palette + 4-bit palette index + priority for current sprite line
 	uint8_t        linebuf[LINEBUF_SIZE];
+	uint8_t        compositebuf[LINEBUF_SIZE];
 	uint8_t        layer_debug_buf[LINEBUF_SIZE];
 	uint8_t        hslot; //hcounter/2
 	uint8_t	       sprite_index;
