@@ -811,12 +811,14 @@ void map_iter_fun(char *key, tern_val val, uint8_t valtype, void *data)
 		map->mask = 0xFF;
 		map->write_16 = (write_16_fun)write_bank_reg_w;
 		map->write_8 = (write_8_fun)write_bank_reg_b;
+#ifndef IS_LIB
 	} else if (!strcmp(dtype, "MENU")) {
 		//fake hardware for supporting menu
 		map->buffer = NULL;
 		map->mask = 0xFF;
 		map->write_16 = menu_write_w;
 		map->read_16 = menu_read_w;
+#endif
 	} else if (!strcmp(dtype, "fixed")) {
 		uint16_t *value =  malloc(2);
 		map->buffer = value;
