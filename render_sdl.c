@@ -554,7 +554,9 @@ static GLuint load_shader(char * fname, GLenum shader_type)
 #endif
 
 static uint32_t texture_buf[512 * 513];
-#ifndef DISABLE_OPENGL
+#ifdef DISABLE_OPENGL
+#define RENDER_FORMAT SDL_PIXELFORMAT_ARGB8888
+#else
 #ifdef USE_GLES
 #define INTERNAL_FORMAT GL_RGBA
 #define SRC_FORMAT GL_RGBA
@@ -699,7 +701,9 @@ static float config_aspect()
 static void update_aspect()
 {
 	//reset default values
+#ifndef DISABLE_OPENGL
 	memcpy(vertex_data, vertex_data_default, sizeof(vertex_data));
+#endif
 	main_clip.w = main_width;
 	main_clip.h = main_height;
 	main_clip.x = main_clip.y = 0;
@@ -731,11 +735,16 @@ static void update_aspect()
 	}
 }
 
-static ui_render_fun on_context_destroyed, on_context_created;
+static ui_render_fun on_context_destroyed, on_context_created, on_ui_fb_resized;
 void render_set_gl_context_handlers(ui_render_fun destroy, ui_render_fun create)
 {
 	on_context_destroyed = destroy;
 	on_context_created = create;
+}
+
+void render_set_ui_fb_resize_handler(ui_render_fun resize)
+{
+	on_ui_fb_resized = resize;
 }
 
 static uint8_t scancode_map[SDL_NUM_SCANCODES] = {
@@ -906,6 +915,7 @@ static uint32_t overscan_bot[NUM_VID_STD] = {1, 17};
 static uint32_t overscan_left[NUM_VID_STD] = {13, 13};
 static uint32_t overscan_right[NUM_VID_STD] = {14, 14};
 static vid_std video_standard = VID_NTSC;
+static uint8_t need_ui_fb_resize;
 
 static int32_t handle_event(SDL_Event *event)
 {
@@ -974,6 +984,7 @@ static int32_t handle_event(SDL_Event *event)
 			}
 			main_width = event->window.data1;
 			main_height = event->window.data2;
+			need_ui_fb_resize = 1;
 			update_aspect();
 #ifndef DISABLE_OPENGL
 			if (render_gl) {
@@ -1338,6 +1349,9 @@ void render_config_updated(void)
 		main_width = windowed_width;
 		main_height = windowed_height;
 	}
+	if (on_ui_fb_resized) {
+		on_ui_fb_resized();
+	}
 	
 	window_setup();
 	update_aspect();
@@ -1497,6 +1511,16 @@ uint32_t *render_get_framebuffer(uint8_t which, int *pitch)
 		return texture_buf;
 	} else {
 #endif
+		if (which == FRAMEBUFFER_UI && which >= num_textures) {
+			sdl_textures = realloc(sdl_textures, sizeof(*sdl_textures) * (FRAMEBUFFER_UI + 1));
+			for (; num_textures <= FRAMEBUFFER_UI; num_textures++)
+			{
+				sdl_textures[num_textures] = NULL;
+			}
+		}
+		if (which == FRAMEBUFFER_UI && !sdl_textures[which]) {
+			sdl_textures[which] = SDL_CreateTexture(main_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, main_width, main_height);
+		}
 		if (which >= num_textures) {
 			warning("Request for invalid framebuffer number %d\n", which);
 			return NULL;
@@ -1634,6 +1658,16 @@ void render_framebuffer_updated(uint8_t which, int width)
 	last_height = height;
 	if (which <= FRAMEBUFFER_EVEN) {
 		render_update_display();
+	} else if (which == FRAMEBUFFER_UI) {
+		SDL_RenderCopy(main_renderer, sdl_textures[which], NULL, NULL);
+		if (need_ui_fb_resize) {
+			SDL_DestroyTexture(sdl_textures[which]);
+			sdl_textures[which] = NULL;
+			if (on_ui_fb_resized) {
+				on_ui_fb_resized();
+			}
+			need_ui_fb_resize = 0;
+		}
 	} else {
 		SDL_RenderCopy(extra_renderers[which - FRAMEBUFFER_USER_START], sdl_textures[which], NULL, NULL);
 		SDL_RenderPresent(extra_renderers[which - FRAMEBUFFER_USER_START]);
@@ -1970,6 +2004,7 @@ void render_toggle_fullscreen()
 	SDL_SetWindowSize(main_window, windowed_width, windowed_height);
 	drain_events();
 	in_toggle = 0;
+	need_ui_fb_resize = 1;
 }
 
 uint32_t render_audio_buffer()
