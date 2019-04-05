@@ -151,7 +151,6 @@ CFLAGS+= -g3
 endif
 ifdef NOGL
 CFLAGS+= -DDISABLE_OPENGL
-NONUKLEAR:=1
 endif
 
 ifdef M68030
