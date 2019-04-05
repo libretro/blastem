@@ -47,6 +47,7 @@ NK_API void                 nk_sdl_device_create(void);
 
 #include <string.h>
 
+#ifndef DISABLE_OPENGL
 struct nk_sdl_device {
     struct nk_buffer cmds;
     struct nk_draw_null_texture null;
@@ -69,10 +70,13 @@ struct nk_sdl_vertex {
     GLfloat uv[2];
     nk_byte col[4];
 };
+#endif
 
 static struct nk_sdl {
     SDL_Window *win;
+#ifndef DISABLE_OPENGL
     struct nk_sdl_device ogl;
+#endif
     struct nk_context ctx;
     struct nk_font_atlas atlas;
 } sdl;
@@ -85,7 +89,7 @@ static struct nk_sdl {
 #define DECLARE_PRECISION
 #endif
 
-
+#ifndef DISABLE_OPENGL
 NK_API void
 nk_sdl_device_create(void)
 {
@@ -296,6 +300,7 @@ nk_sdl_render(enum nk_anti_aliasing AA, int max_vertex_buffer, int max_element_b
     glDisable(GL_BLEND);
     glDisable(GL_SCISSOR_TEST);
 }
+#endif
 
 static void
 nk_sdl_clipbard_paste(nk_handle usr, struct nk_text_edit *edit)
@@ -327,10 +332,10 @@ nk_sdl_init(SDL_Window *win)
     sdl.ctx.clip.copy = nk_sdl_clipbard_copy;
     sdl.ctx.clip.paste = nk_sdl_clipbard_paste;
     sdl.ctx.clip.userdata = nk_handle_ptr(0);
-    nk_sdl_device_create();
     return &sdl.ctx;
 }
 
+#ifndef DISABLE_OPENGL
 NK_API void
 nk_sdl_font_stash_begin(struct nk_font_atlas **atlas)
 {
@@ -350,6 +355,7 @@ nk_sdl_font_stash_end(void)
         nk_style_set_font(&sdl.ctx, &sdl.atlas.default_font->handle);
 
 }
+#endif
 
 NK_API int
 nk_sdl_handle_event(SDL_Event *evt)
@@ -447,7 +453,9 @@ void nk_sdl_shutdown(void)
 {
     nk_font_atlas_clear(&sdl.atlas);
     nk_free(&sdl.ctx);
+#ifndef DISABLE_OPENGL
     nk_sdl_device_destroy();
+#endif
     memset(&sdl, 0, sizeof(sdl));
 }
 

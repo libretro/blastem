@@ -74,7 +74,8 @@
 
 #define FRAMEBUFFER_ODD 0
 #define FRAMEBUFFER_EVEN 1
-#define FRAMEBUFFER_USER_START 2
+#define FRAMEBUFFER_UI 2
+#define FRAMEBUFFER_USER_START 3
 
 #include "vdp.h"
 
@@ -94,6 +95,7 @@ typedef enum {
 typedef struct audio_source audio_source;
 typedef void (*drop_handler)(const char *filename);
 typedef void (*window_close_handler)(uint8_t which);
+typedef void (*ui_render_fun)(void);
 
 uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b);
 void render_save_screenshot(char *path);
@@ -140,6 +142,9 @@ void render_pause_source(audio_source *src);
 void render_resume_source(audio_source *src);
 void render_free_source(audio_source *src);
 void render_config_updated(void);
+void render_set_gl_context_handlers(ui_render_fun destroy, ui_render_fun create);
+void render_set_ui_render_fun(ui_render_fun);
+void render_set_ui_fb_resize_handler(ui_render_fun resize);
 
 #endif //RENDER_H_
 

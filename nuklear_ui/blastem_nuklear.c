@@ -1,9 +1,12 @@
 #define NK_IMPLEMENTATION
 #define NK_SDL_GLES2_IMPLEMENTATION
+#define NK_RAWFB_IMPLEMENTATION
+#define RAWFB_RGBX_8888
 
 #include <stdlib.h>
 #include <limits.h>
 #include "blastem_nuklear.h"
+#include "nuklear_rawfb.h"
 #include "font.h"
 #include "../render.h"
 #include "../render_sdl.h"
@@ -18,6 +21,7 @@
 #include "../bindings.h"
 
 static struct nk_context *context;
+static struct rawfb_context *fb_context;
 
 typedef struct
 {
@@ -1899,7 +1903,15 @@ void blastem_nuklear_render(void)
 	if (current_view != view_play) {
 		nk_input_end(context);
 		current_view(context);
-		nk_sdl_render(NK_ANTI_ALIASING_ON, 512 * 1024, 128 * 1024);
+		if (fb_context) {
+			fb_context->fb.pixels = render_get_framebuffer(FRAMEBUFFER_UI, &fb_context->fb.pitch);
+			nk_rawfb_render(fb_context, nk_rgb(0,0,0), 0);
+			render_framebuffer_updated(FRAMEBUFFER_UI, render_width());
+		} else {
+#ifndef DISABLE_OPENGL
+			nk_sdl_render(NK_ANTI_ALIASING_ON, 512 * 1024, 128 * 1024);
+#endif
+		}
 		nk_input_begin(context);
 	}
 }
@@ -1957,6 +1969,12 @@ static void context_destroyed(void)
 	}
 }
 
+static void fb_resize(void)
+{
+	nk_rawfb_resize_fb(fb_context, NULL, render_width(), render_height(), 0);
+}
+
+#ifndef DISABLE_OPENGL
 static struct nk_image load_image_texture(uint32_t *buf, uint32_t width, uint32_t height)
 {
 	GLuint tex;
@@ -1973,11 +1991,29 @@ static struct nk_image load_image_texture(uint32_t *buf, uint32_t width, uint32_
 #endif
 	return nk_image_id((int)tex);
 }
+#endif
+
+static struct nk_image load_image_rawfb(uint32_t *buf, uint32_t width, uint32_t height)
+{
+	struct rawfb_image *fbimg = calloc(1, sizeof(struct rawfb_image));
+	fbimg->pixels = buf;
+	fbimg->pitch = width * sizeof(uint32_t);
+	fbimg->w = width;
+	fbimg->h = height;
+	fbimg->format = NK_FONT_ATLAS_RGBA32;
+	return nk_image_ptr(fbimg);
+}
 
 static void texture_init(void)
 {
 	struct nk_font_atlas *atlas;
-	nk_sdl_font_stash_begin(&atlas);
+	if (fb_context) {
+		nk_rawfb_font_stash_begin(fb_context, &atlas);
+	} else {
+#ifndef DISABLE_OPENGL
+		nk_sdl_font_stash_begin(&atlas);
+#endif
+	}
 	uint32_t font_size;
 	uint8_t *font = default_font(&font_size);
 	if (!font) {
@@ -1985,11 +2021,25 @@ static void texture_init(void)
 	}
 	def_font = nk_font_atlas_add_from_memory(atlas, font, font_size, render_height() / 16, NULL);
 	free(font);
-	nk_sdl_font_stash_end();
+	if (fb_context) {
+		nk_rawfb_font_stash_end(fb_context);
+	} else {
+#ifndef DISABLE_OPENGL
+		nk_sdl_font_stash_end();
+#endif
+	}
 	nk_style_set_font(context, &def_font->handle);
 	for (uint32_t i = 0; i < num_ui_images; i++)
 	{
-		ui_images[i]->ui = load_image_texture(ui_images[i]->image_data, ui_images[i]->width, ui_images[i]->height);
+#ifndef DISABLE_OPENGL
+		if (fb_context) {
+#endif
+			ui_images[i]->ui = load_image_rawfb(ui_images[i]->image_data, ui_images[i]->width, ui_images[i]->height);
+#ifndef DISABLE_OPENGL
+		} else {
+			ui_images[i]->ui = load_image_texture(ui_images[i]->image_data, ui_images[i]->width, ui_images[i]->height);
+		}
+#endif
 	}
 }
 
@@ -2040,10 +2090,10 @@ uint8_t is_nuklear_active(void)
 
 uint8_t is_nuklear_available(void)
 {
-	if (!render_has_gl()) {
+	/*if (!render_has_gl()) {
 		//currently no fallback if GL2 unavailable
 		return 0;
-	}
+	}*/
 	char *style = tern_find_path(config, "ui\0style\0", TVAL_PTR).ptrval;
 	if (!style) {
 		return 1;
@@ -2093,6 +2143,16 @@ ui_image *load_ui_image(char *name)
 void blastem_nuklear_init(uint8_t file_loaded)
 {
 	context = nk_sdl_init(render_get_window());
+#ifndef DISABLE_OPENGL
+	if (render_has_gl()) {
+		nk_sdl_device_create();
+	} else {
+#endif
+		fb_context = nk_rawfb_init(NULL, context, render_width(), render_height(), 0);
+		render_set_ui_fb_resize_handler(fb_resize);
+#ifndef DISABLE_OPENGL
+	}
+#endif
 	style_init();
 	
 	controller_360 = load_ui_image("images/360.png");
