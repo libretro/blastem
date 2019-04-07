@@ -2111,7 +2111,12 @@ uint32_t prep_args(code_info *code, uint32_t num_args, va_list args)
 	}
 #ifdef X86_64
 	uint32_t stack_args = 0;
+#ifdef _WIN32
+	//Microsoft is too good for the ABI that everyone else uses on x86-64 apparently
+	uint8_t abi_regs[] = {RCX, RDX, R8, R9};
+#else
 	uint8_t abi_regs[] = {RDI, RSI, RDX, RCX, R8, R9};
+#endif
 	int8_t reg_swap[R15+1];
 	uint32_t usage = 0;
 	memset(reg_swap, -1, sizeof(reg_swap));
@@ -2153,6 +2158,11 @@ uint32_t prep_args(code_info *code, uint32_t num_args, va_list args)
 		push_r(code, arg_arr[i]);
 	}
 	free(arg_arr);
+#if defined(X86_64) && defined(_WIN32)
+	sub_ir(code, 32, RSP, SZ_PTR);
+	code->stack_off += 32;
+	adjust += 32;
+#endif
 	
 	return stack_args * sizeof(void *) + adjust;
 }

@@ -3601,7 +3601,7 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	tmp_stack_off = code->stack_off;
 	save_callee_save_regs(code);
 #ifdef X86_64
-	mov_rr(code, RDI, options->gen.context_reg, SZ_PTR);
+	mov_rr(code, FIRST_ARG_REG, options->gen.context_reg, SZ_PTR);
 #else
 	mov_rdispr(code, RSP, 5 * sizeof(int32_t), options->gen.context_reg, SZ_PTR);
 #endif
