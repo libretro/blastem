@@ -5,6 +5,7 @@
 
 #include <stdlib.h>
 #include <limits.h>
+#include <math.h>
 #include "blastem_nuklear.h"
 #include "nuklear_rawfb.h"
 #include "font.h"
