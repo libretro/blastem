@@ -2658,8 +2658,11 @@ void init_m68k_opts(m68k_options * opts, memmap_chunk * memmap, uint32_t num_chu
 	opts->start_context = (start_fun)code->cur;
 	save_callee_save_regs(code);
 #ifdef X86_64
-	if (opts->gen.scratch2 != RDI) {
-		mov_rr(code, RDI, opts->gen.scratch2, SZ_PTR);
+	if (opts->gen.scratch2 != FIRST_ARG_REG) {
+		mov_rr(code, FIRST_ARG_REG, opts->gen.scratch2, SZ_PTR);
+	}
+	if (opts->gen.context_reg != SECOND_ARG_REG) {
+		mov_rr(code, SECOND_ARG_REG, opts->gen.context_reg, SZ_PTR);
 	}
 #else
 	mov_rdispr(code, RSP, 20, opts->gen.scratch2, SZ_D);
