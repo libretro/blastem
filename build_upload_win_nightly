@@ -7,7 +7,7 @@ hg pull
 hg up
 rev=`hg summary |  sed -E -n 's/^parent: [^:]+:([^ ]+) .*$/\1/p'`
 sed -i -E "s/(define BLASTEM_VERSION \"[^-]+)-pre\"/\1-pre-$rev\"/" blastem.c
-export OS=Windows
+export OS
 ./build_release > /tmp/build_${name}_out.log
 result=$?
 if [ $result -ne 0 ]; then
