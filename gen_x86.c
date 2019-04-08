@@ -2228,7 +2228,8 @@ void save_callee_save_regs(code_info *code)
 	push_r(code, R13);
 	push_r(code, R14);
 	push_r(code, R15);
-#else
+#endif
+#if !defined(X86_64) || defined(_WIN32)
 	push_r(code, RDI);
 	push_r(code, RSI);
 #endif
@@ -2236,14 +2237,15 @@ void save_callee_save_regs(code_info *code)
 
 void restore_callee_save_regs(code_info *code)
 {
+#if !defined(X86_64) || defined(_WIN32)
+	pop_r(code, RSI);
+	pop_r(code, RDI);
+#endif
 #ifdef X86_64
 	pop_r(code, R15);
 	pop_r(code, R14);
 	pop_r(code, R13);
 	pop_r(code, R12);
-#else
-	pop_r(code, RSI);
-	pop_r(code, RDI);
 #endif
 	pop_r(code, RBP);
 	pop_r(code, RBX);
