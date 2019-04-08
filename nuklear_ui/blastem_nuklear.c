@@ -2059,6 +2059,7 @@ static void style_init(void)
 static void context_created(void)
 {
 	context = nk_sdl_init(render_get_window());
+	nk_sdl_device_create();
 	style_init();
 	texture_init();
 }
