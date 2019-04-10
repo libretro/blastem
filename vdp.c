@@ -51,8 +51,6 @@
 #define BORDER_BOT_V28_PAL 32
 #define BORDER_BOT_V30_PAL 24
 
-#define INVALID_LINE (PAL_INACTIVE_START+BORDER_TOP_V30_PAL+BORDER_BOT_V30_PAL)
-
 enum {
 	INACTIVE = 0,
 	PREPARING, //used for line 0x1FF
@@ -2075,7 +2073,7 @@ static void advance_output_line(vdp_context *context)
 			}
 			output_line = context->output_lines++;//context->vcounter - (0x200 - context->border_top);
 		} else {
-			output_line = INVALID_LINE;
+			context->output = NULL;
 		}
 		context->output = (uint32_t *)(((char *)context->fb) + context->output_pitch * output_line);
 #ifdef DEBUG_FB_FILL
@@ -2084,7 +2082,7 @@ static void advance_output_line(vdp_context *context)
 			context->output[i] = 0xFFFF00FF;
 		}
 #endif	
-		if (output_line != INVALID_LINE && (context->regs[REG_MODE_4] & BIT_H40)) {
+		if (context->output && (context->regs[REG_MODE_4] & BIT_H40)) {
 			context->h40_lines++;
 		}
 	}
@@ -2105,7 +2103,7 @@ void vdp_reacquire_framebuffer(vdp_context *context)
 	if (context->output_lines <= lines_max && context->output_lines > 0) {
 		context->output = (uint32_t *)(((char *)context->fb) + context->output_pitch * (context->output_lines - 1));
 	} else {
-		context->output = (uint32_t *)(((char *)context->fb) + context->output_pitch * INVALID_LINE);
+		context->output = NULL;
 	}
 }
 
@@ -2332,6 +2330,9 @@ static void draw_right_border(vdp_context *context)
 		OUTPUT_PIXEL_H40(slot)\
 		if ((slot) == BG_START_SLOT + LINEBUF_SIZE/2) {\
 			advance_output_line(context);\
+			if (!context->output) {\
+				context->output = dummy_buffer;\
+			}\
 		}\
 		if (slot == 168 || slot == 247 || slot == 248) {\
 			render_border_garbage(\
@@ -2367,6 +2368,9 @@ static void draw_right_border(vdp_context *context)
 		OUTPUT_PIXEL_H32(slot)\
 		if ((slot) == BG_START_SLOT + (256+HORIZ_BORDER)/2) {\
 			advance_output_line(context);\
+			if (!context->output) {\
+				context->output = dummy_buffer;\
+			}\
 		}\
 		if (slot == 136 || slot == 247 || slot == 248) {\
 			render_border_garbage(\
@@ -2398,6 +2402,9 @@ static void draw_right_border(vdp_context *context)
 		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); } \
 		if ((slot) == BG_START_SLOT + (256+HORIZ_BORDER)/2) {\
 			advance_output_line(context);\
+			if (!context->output) {\
+				context->output = dummy_buffer;\
+			}\
 		}\
 		if ((slot) == 147) {\
 			context->hslot = 233;\
@@ -2441,6 +2448,7 @@ static void draw_right_border(vdp_context *context)
 		render_sprite_cells_mode4(context);\
 		MODE4_CHECK_SLOT_LINE(CALC_SLOT(slot, 5))
 
+static uint32_t dummy_buffer[LINEBUF_SIZE];
 static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 {
 	uint16_t address;
@@ -2448,6 +2456,11 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	uint32_t const slot_cycles = MCLKS_SLOT_H40;
 	uint8_t bgindex = context->regs[REG_BG_COLOR] & 0x3F;
 	uint8_t test_layer = context->test_port >> 7 & 3;
+	if (!context->output) {
+		//This shouldn't happen normally, but it can theoretically
+		//happen when doing border busting
+		context->output = dummy_buffer;
+	}
 	switch(context->hslot)
 	{
 	for (;;)
@@ -2654,6 +2667,11 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 	uint32_t const slot_cycles = MCLKS_SLOT_H32;
 	uint8_t bgindex = context->regs[REG_BG_COLOR] & 0x3F;
 	uint8_t test_layer = context->test_port >> 7 & 3;
+	if (!context->output) {
+		//This shouldn't happen normally, but it can theoretically
+		//happen when doing border busting
+		context->output = dummy_buffer;
+	}
 	switch(context->hslot)
 	{
 	for (;;)
@@ -2860,6 +2878,11 @@ static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
 	uint32_t const slot_cycles = MCLKS_SLOT_H32;
 	uint8_t bgindex = 0x10 | (context->regs[REG_BG_COLOR] & 0xF) + MODE4_OFFSET;
 	uint8_t test_layer = context->test_port >> 7 & 3;
+	if (!context->output) {
+		//This shouldn't happen normally, but it can theoretically
+		//happen when doing border busting
+		context->output = dummy_buffer;
+	}
 	switch(context->hslot)
 	{
 	for (;;)
@@ -3002,7 +3025,7 @@ static void inactive_test_output(vdp_context *context, uint8_t is_h40, uint8_t t
 		src_off = SCROLL_BUFFER_DRAW - BORDER_LEFT;
 		len = BORDER_LEFT;
 	}
-	uint8_t *src;
+	uint8_t *src = NULL;
 	if (test_layer == 2) {
 		//plane A
 		src_off += context->buf_a_off + context->hscroll_a;
@@ -3017,9 +3040,11 @@ static void inactive_test_output(vdp_context *context, uint8_t is_h40, uint8_t t
 		dst += len;
 		len = 0;
 	}
-	for (; len >=0; len--, dst++, src_off++)
-	{
-		*dst = src[src_off & SCROLL_BUFFER_MASK] & 0x3F;
+	if (src) {
+		for (; len >=0; len--, dst++, src_off++)
+		{
+			*dst = src[src_off & SCROLL_BUFFER_MASK] & 0x3F;
+		}
 	}
 	context->done_composite = dst;
 	context->buf_a_off = (context->buf_a_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_DRAW;
@@ -3095,24 +3120,11 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 	}
 	uint32_t *dst;
 	uint8_t *debug_dst;
-	if (
-		(
-			context->vcounter < context->inactive_start + context->border_bot 
-			|| context->vcounter >= 0x200 - context->border_top
-		) && context->hslot >= BG_START_SLOT && context->hslot < bg_end_slot
-	) {
+	if (context->output && context->hslot >= BG_START_SLOT && context->hslot < bg_end_slot) {
 		dst = context->output + 2 * (context->hslot - BG_START_SLOT);
 		debug_dst = context->layer_debug_buf + 2 * (context->hslot - BG_START_SLOT);
 	} else {
 		dst = NULL;
-	}
-		
-	if (
-		!dst && context->vcounter == context->inactive_start + context->border_bot
-		&& context->hslot >= line_change  && context->hslot < bg_end_slot
-	) {
-		dst = context->output + 2 * (context->hslot - BG_START_SLOT);
-		debug_dst = context->layer_debug_buf + 2 * (context->hslot - BG_START_SLOT);
 	}
 		
 	uint8_t test_layer = context->test_port >> 7 & 3;
@@ -3120,10 +3132,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 	while(context->cycles < target_cycles)
 	{
 		check_switch_inactive(context, is_h40);
-		if (context->hslot == BG_START_SLOT && (
-			context->vcounter < context->inactive_start + context->border_bot 
-			|| context->vcounter >= 0x200 - context->border_top
-		)) {
+		if (context->hslot == BG_START_SLOT && context->output) {
 			dst = context->output + (context->hslot - BG_START_SLOT) * 2;
 			debug_dst = context->layer_debug_buf + 2 * (context->hslot - BG_START_SLOT);
 		} else if (context->hslot == bg_end_slot) {
