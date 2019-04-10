@@ -1,0 +1,39 @@
+UNAME=$(shell uname -s)
+UNAMEM=$(shell uname -m)
+
+platform ?= unix
+ifneq ($(findstring MINGW64,$(UNAME)),)
+	platform = win
+	OS :=Windows
+	CC :=gcc
+	ABI := x86_64
+	target = libblastem.dll
+	libname = blastem_libretro.dll
+else ifneq ($(findstring MINGW32,$(UNAME)),)
+	platform = win
+	OS :=Windows
+	CC :=gcc
+	ABI := i686
+	target = libblastem.dll
+	libname = blastem_libretro.dll
+else ifneq ($(findstring Darwin,$(UNAME)),)
+	platform = osx
+else
+	platform = linux
+	OS :=Linux
+	CC :=gcc
+	ABI := x86_64
+	target = libblastem.so
+	libname = blastem_libretro.so
+endif
+
+
+
+core: $(OBJ)
+	make $(target) OS=$(OS) CC=$(CC) CPU=$(ABI)
+	cp -v $(target) $(libname)
+
+.PHONY: clean
+
+clean:
+	make clean
