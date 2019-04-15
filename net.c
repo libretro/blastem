@@ -19,6 +19,10 @@ static void format_address(uint8_t *dst, struct sockaddr_in *addr)
 
 uint8_t get_host_address(iface_info *out)
 {
+#ifdef __ANDROID__
+	//TODO: write an implementation for Android
+	return 0;
+#else
 	struct ifaddrs *entries, *current, *localhost;
 	if (getifaddrs(&entries)) {
 		return 0;
@@ -46,4 +50,5 @@ uint8_t get_host_address(iface_info *out)
 	}
 	freeifaddrs(entries);
 	return ret;
+#endif
 }
