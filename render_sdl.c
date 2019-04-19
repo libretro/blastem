@@ -497,12 +497,15 @@ static const GLchar shader_prefix[] =
 
 static GLuint load_shader(char * fname, GLenum shader_type)
 {
-	char const * parts[] = {get_home_dir(), "/.config/blastem/shaders/", fname};
-	char * shader_path = alloc_concat_m(3, parts);
-	FILE * f = fopen(shader_path, "rb");
-	free(shader_path);
-	GLchar * text;
+	char * shader_path;
+	FILE *f;
+	GLchar *text;
 	long fsize;
+#ifndef __ANDROID__
+	char const * parts[] = {get_home_dir(), "/.config/blastem/shaders/", fname};
+	shader_path = alloc_concat_m(3, parts);
+	f = fopen(shader_path, "rb");
+	free(shader_path);
 	if (f) {
 		fsize = file_size(f);
 		text = malloc(fsize);
@@ -512,6 +515,7 @@ static GLuint load_shader(char * fname, GLenum shader_type)
 			return 0;
 		}
 	} else {
+#endif
 		shader_path = path_append("shaders", fname);
 		uint32_t fsize32;
 		text = read_bundled_file(shader_path, &fsize32);
@@ -521,7 +525,9 @@ static GLuint load_shader(char * fname, GLenum shader_type)
 			return 0;
 		}
 		fsize = fsize32;
+#ifndef __ANDROID__
 	}
+#endif
 	text[fsize] = 0;
 	
 	if (strncmp(text, "#version", strlen("#version"))) {
@@ -1190,7 +1196,11 @@ void window_setup(void)
 			}
 			if (vsync) {
 				if (SDL_GL_SetSwapInterval(!strcmp("on", vsync)) < 0) {
+#ifdef __ANDROID__
+					debug_message("Failed to set vsync to %s: %s\n", vsync, SDL_GetError());
+#else
 					warning("Failed to set vsync to %s: %s\n", vsync, SDL_GetError());
+#endif
 				}
 			}
 		} else {
@@ -1683,7 +1693,7 @@ void render_framebuffer_updated(uint8_t which, int width)
 		if ((last_frame - start) > FPS_INTERVAL) {
 			if (start && (last_frame-start)) {
 	#ifdef __ANDROID__
-				info_message("%s - %.1f fps", caption, ((float)frame_counter) / (((float)(last_frame-start)) / 1000.0));
+				debug_message("%s - %.1f fps", caption, ((float)frame_counter) / (((float)(last_frame-start)) / 1000.0));
 	#else
 				if (!fps_caption) {
 					fps_caption = malloc(strlen(caption) + strlen(" - 100000000.1 fps") + 1);

@@ -4,3 +4,5 @@
 # APP_STL := stlport_static 
 
 APP_ABI := x86
+APP_PLATFORM := android-16
+APP_OPTIM := release

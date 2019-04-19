@@ -1,13 +1,13 @@
 #!/bin/sh
 name=$1
 . "$HOME/$name.params"
-cd $HOME/blastem_win
+cd $HOME/$DIR
 hg revert -a
 hg pull
 hg up
 rev=`hg summary |  sed -E -n 's/^parent: [^:]+:([^ ]+) .*$/\1/p'`
 sed -i -E "s/(define BLASTEM_VERSION \"[^-]+)-pre\"/\1-pre-$rev\"/" blastem.c
-export OS=Windows
+export OS
 ./build_release > /tmp/build_${name}_out.log
 result=$?
 if [ $result -ne 0 ]; then
@@ -31,7 +31,7 @@ fi
 . $HOME/remote.params
 artifact=$(tail -n 1 /tmp/build_${name}_out.log)
 echo "Uploaing $artifact to $REMOTE_HOST"
-scp -i "$REMOTE_IDENT" "$HOME/blastem_win/$artifact" $REMOTE_USER@$REMOTE_HOST:/home/$REMOTE_USER/nightlies
+scp -i "$REMOTE_IDENT" "$HOME/$DIR/$artifact" $REMOTE_USER@$REMOTE_HOST:/home/$REMOTE_USER/nightlies
 curdate=`date -Iseconds`
 version=`echo "$artifact" | sed -E 's/[^-]+-([0-9]+\.[0-9]+\.[0-9]+[^.]*)\..*$/\1/'`
 curl -d'@-' -H 'Content-Type: application/json' "$WEBHOOKURL" <<WEBHOOKEOF

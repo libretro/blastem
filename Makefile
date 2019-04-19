@@ -10,16 +10,8 @@ BUNDLED_LIBZ:=zlib/adler32.o zlib/compress.o zlib/crc32.o zlib/deflate.o zlib/gz
 	zlib/gzwrite.o zlib/infback.o zlib/inffast.o zlib/inflate.o zlib/inftrees.o zlib/trees.o zlib/uncompr.o zlib/zutil.o
 
 ifeq ($(OS),Windows)
-ifndef SDL2_PREFIX
-SDL2_PREFIX:="sdl/i686-w64-mingw32"
-endif
-ifndef GLEW_PREFIX
-GLEW_PREFIX:=glew
-endif
-ifndef GLEW32S_LIB
-GLEW32S_LIB:=$(GLEW_PREFIX)/lib/Release/Win32/glew32s.lib
-endif
 
+GLEW_PREFIX:=glew
 MEM:=mem_win.o
 TERMINAL:=terminal_win.o
 FONT:=nuklear_ui/font_win.o
@@ -29,9 +21,16 @@ SO:=dll
 CPU:=i686
 ifeq ($(CPU),i686)
 CC:=i686-w64-mingw32-gcc-win32
+WINDRES:=i686-w64-mingw32-windres
+GLUDIR:=Win32
+SDL2_PREFIX:="sdl/i686-w64-mingw32"
 else
 CC:=x86_64-w64-mingw32-gcc-win32
+WINDRES:=x86_64-w64-mingw32-windres
+SDL2_PREFIX:="sdl/x86_64-w64-mingw32"
+GLUDIR:=x64
 endif
+GLEW32S_LIB:=$(GLEW_PREFIX)/lib/Release/$(GLUDIR)/glew32s.lib
 CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration
 LDFLAGS:=-lm -lmingw32 -lws2_32 -mwindows
 ifneq ($(MAKECMDGOALS),libblastem.dll)
@@ -151,7 +150,6 @@ CFLAGS+= -g3
 endif
 ifdef NOGL
 CFLAGS+= -DDISABLE_OPENGL
-NONUKLEAR:=1
 endif
 
 ifdef M68030
@@ -370,7 +368,7 @@ m68k.c : m68k.cpu cpu_dsl.py
 %.bin : %.sz8
 	vasmz80_mot -Fbin -spaces -o $@ $<
 res.o : blastem.rc
-	i686-w64-mingw32-windres blastem.rc res.o
+	$(WINDRES) blastem.rc res.o
 
 arrow.tiles : arrow.png
 cursor.tiles : cursor.png
