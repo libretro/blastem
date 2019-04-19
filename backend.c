@@ -154,6 +154,38 @@ uint16_t read_word(uint32_t address, void **mem_pointers, cpu_options *opts, voi
 	return 0xFFFF;
 }
 
+void write_word(uint32_t address, uint16_t value, void **mem_pointers, cpu_options *opts, void *context)
+{
+	memmap_chunk const *chunk = find_map_chunk(address, opts, 0, NULL);
+	if (!chunk) {
+		return;
+	}
+	uint32_t offset = (address - chunk->start) & chunk->mask;
+	if (chunk->flags & MMAP_WRITE) {
+		uint8_t *base;
+		if (chunk->flags & MMAP_PTR_IDX) {
+			base = mem_pointers[chunk->ptr_index];
+		} else {
+			base = chunk->buffer;
+		}
+		if (base) {
+			if ((chunk->flags & MMAP_ONLY_ODD) || (chunk->flags & MMAP_ONLY_EVEN)) {
+				offset /= 2;
+				if (chunk->flags & MMAP_ONLY_EVEN) {
+					value >>= 16;
+				}
+				base[offset] = value;
+			} else {
+				*(uint16_t *)(base + offset) = value;
+			}
+			return;
+		}
+	}
+	if ((!(chunk->flags & MMAP_WRITE) || (chunk->flags & MMAP_FUNC_NULL)) && chunk->write_16) {
+		chunk->write_16(offset, context, value);
+	}
+}
+
 uint8_t read_byte(uint32_t address, void **mem_pointers, cpu_options *opts, void *context)
 {
 	memmap_chunk const *chunk = find_map_chunk(address, opts, 0, NULL);
