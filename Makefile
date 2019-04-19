@@ -176,22 +176,23 @@ endif
 endif
 
 TRANSOBJS=gen.o backend.o $(MEM) arena.o tern.o
-M68KOBJS=68kinst.o m68k_core.o
-ifeq ($(CPU),x86_64)
-M68KOBJS+= m68k_core_x86.o
-TRANSOBJS+= gen_x86.o backend_x86.o
-else
-ifeq ($(CPU),i686)
-M68KOBJS+= m68k_core_x86.o
-TRANSOBJS+= gen_x86.o backend_x86.o
-endif
-endif
+M68KOBJS=68kinst.o
 
 ifdef NEW_CORE
 Z80OBJS=z80.o z80inst.o 
+M68KOBJS+= m68k.o
 CFLAGS+= -DNEW_CORE
 else
 Z80OBJS=z80inst.o z80_to_x86.o
+ifeq ($(CPU),x86_64)
+M68KOBJS+= m68k_core.o m68k_core_x86.o
+TRANSOBJS+= gen_x86.o backend_x86.o
+else
+ifeq ($(CPU),i686)
+M68KOBJS+= m68k_core.o m68k_core_x86.o
+TRANSOBJS+= gen_x86.o backend_x86.o
+endif
+endif
 endif
 AUDIOOBJS=ym2612.o psg.o wave.o
 CONFIGOBJS=config.o tern.o util.o paths.o 
@@ -337,6 +338,9 @@ offsets : offsets.c z80_to_x86.h m68k_core.h
 vos_prog_info : vos_prog_info.o vos_program_module.o
 	$(CC) -o vos_prog_info vos_prog_info.o vos_program_module.o
 	
+m68k.c : m68k.cpu cpu_dsl.py
+	./cpu_dsl.py -d call $< > $@
+
 %.c : %.cpu cpu_dsl.py
 	./cpu_dsl.py -d goto $< > $@
 

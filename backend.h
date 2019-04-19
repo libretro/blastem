@@ -97,6 +97,7 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 void * get_native_pointer(uint32_t address, void ** mem_pointers, cpu_options * opts);
 void * get_native_write_pointer(uint32_t address, void ** mem_pointers, cpu_options * opts);
 uint16_t read_word(uint32_t address, void **mem_pointers, cpu_options *opts, void *context);
+void write_word(uint32_t address, uint16_t value, void **mem_pointers, cpu_options *opts, void *context);
 uint8_t read_byte(uint32_t address, void **mem_pointers, cpu_options *opts, void *context);
 void write_byte(uint32_t address, uint8_t value, void **mem_pointers, cpu_options *opts, void *context);
 memmap_chunk const *find_map_chunk(uint32_t address, cpu_options *opts, uint16_t flags, uint32_t *size_sum);
