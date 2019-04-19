@@ -136,7 +136,10 @@ class Indexed(object):
 			num = already.get('label', 0)+1
 			already['label'] = num
 			if (already[str(self.index)] + self.disp) & 1:
-				self.disp += 1
+				if self.disp > 0:
+					self.disp -= 1
+				else:
+					self.disp += 1
 			address = 'lbl_' + str(num) + ' + 2 + ' + str(self.disp) + ' + ' + str(index)
 		else:
 			if self.base == self.index:
