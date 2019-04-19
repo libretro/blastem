@@ -5,6 +5,7 @@
 
 #include <stdlib.h>
 #include <limits.h>
+#include <math.h>
 #include "blastem_nuklear.h"
 #include "nuklear_rawfb.h"
 #include "font.h"
@@ -2058,6 +2059,7 @@ static void style_init(void)
 static void context_created(void)
 {
 	context = nk_sdl_init(render_get_window());
+	nk_sdl_device_create();
 	style_init();
 	texture_init();
 }

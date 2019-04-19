@@ -816,7 +816,7 @@ void process_pad_button(char *key, tern_val val, uint8_t valtype, void *data)
 			if (hostbutton == RENDER_INVALID_NAME) {
 				warning("%s is not a valid gamepad input name\n", key);
 			} else if (hostbutton == RENDER_NOT_MAPPED && hostpadnum != map_warning_pad) {
-				warning("No SDL 2 mapping exists for input %s on gamepad %d\n", key, hostpadnum);
+				debug_message("No SDL 2 mapping exists for input %s on gamepad %d\n", key, hostpadnum);
 				map_warning_pad = hostpadnum;
 			}
 			return;
@@ -863,7 +863,7 @@ void process_pad_axis(char *key, tern_val val, uint8_t valtype, void *data)
 			if (axis == RENDER_INVALID_NAME) {
 				warning("%s is not a valid gamepad input name\n", key);
 			} else if (axis == RENDER_NOT_MAPPED && hostpadnum != map_warning_pad) {
-				warning("No SDL 2 mapping exists for input %s on gamepad %d\n", key, hostpadnum);
+				debug_message("No SDL 2 mapping exists for input %s on gamepad %d\n", key, hostpadnum);
 				map_warning_pad = hostpadnum;
 			}
 			goto done;

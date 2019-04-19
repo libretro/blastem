@@ -25,10 +25,16 @@ if [ $OS = "Linux" ]; then
 	cd ..
 fi
 echo "Path is: $PATH"
-make PORTABLE=1 clean all
+if [ $OS = "Win64" ]; then
+	make PORTABLE=1 OS=Windows CPU=x86_64 clean all
+	SDLDLLPATH=sdl/x86_64-w64-mingw32/bin
+else
+	make PORTABLE=1 clean all
+	SDLDLLPATH=sdl/i686-w64-mingw32/bin
+fi
 make menu.bin
-if [ $OS = "Windows" ]; then
-	binaries="dis.exe zdis.exe stateview.exe vgmplay.exe blastem.exe SDL2.dll"
+if [ $OS = "Windows" -o $OS = "Win64" ]; then
+	binaries="dis.exe zdis.exe stateview.exe vgmplay.exe blastem.exe $SDLDLLPATH/SDL2.dll"
 	verstr=`sed -E -n 's/^[^B]+BLASTEM_VERSION "([^"]+)"/blastem \1/p' blastem.c`
 	txt=".txt"
 else
@@ -45,6 +51,8 @@ binaries="$binaries menu.bin"
 ver=`echo $verstr | awk '/blastem/ { gsub(/\r/, "", $2); print $2 }'`
 if [ $OS = "Windows" ]; then
 	suffix='-win32'
+elif [ $OS = "Win64" ]; then
+	suffix='-win64'
 elif [ $OS = "Darwin" ]; then
 	suffix='-osx'
 else
@@ -65,7 +73,7 @@ else
 fi
 cp glew/LICENSE.txt "$dir"/GLEW-LICENSE$txt
 
-if [ $OS = "Windows" ]; then
+if [ $OS = "Windows" -o $OS = "Win64" ]; then
 	rm -f "${dir}.zip"
 	zip -r "${dir}.zip" "$dir"
 	echo "${dir}.zip"

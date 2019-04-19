@@ -63,6 +63,13 @@ enum {
 #ifdef X86_64
 #define SZ_PTR SZ_Q
 #define MAX_INST_LEN 14
+#ifdef _WIN32
+#define FIRST_ARG_REG RCX
+#define SECOND_ARG_REG RDX
+#else
+#define FIRST_ARG_REG RDI
+#define SECOND_ARG_REG RSI
+#endif
 #else
 #define SZ_PTR SZ_D
 #define MAX_INST_LEN 11
