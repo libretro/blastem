@@ -50,12 +50,14 @@ static void push_view(view_fun new_view)
 	}
 	previous_views[num_prev++] = current_view;
 	current_view = new_view;
+	context->input.selected_widget = 0;
 }
 
 static void pop_view()
 {
 	if (num_prev) {
 		current_view = previous_views[--num_prev];
+		context->input.selected_widget = 0;
 	}
 }
 
@@ -2071,6 +2073,7 @@ void show_pause_menu(void)
 		context->style.window.background = nk_rgba(0, 0, 0, 128);
 		context->style.window.fixed_background = nk_style_item_color(nk_rgba(0, 0, 0, 128));
 		current_view = view_pause;
+		context->input.selected_widget = 0;
 		current_system->request_exit(current_system);
 	} else if (current_system && !set_binding) {
 		clear_view_stack();
@@ -2082,6 +2085,7 @@ void show_play_view(void)
 {
 	set_content_binding_state(1);
 	current_view = view_play;
+	context->input.selected_widget = 0;
 }
 
 static uint8_t active;
