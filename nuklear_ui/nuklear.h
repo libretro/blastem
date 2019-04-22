@@ -14618,7 +14618,7 @@ nk_draw_selectable(struct nk_command_buffer *out,
 NK_INTERN int
 nk_do_selectable(nk_flags *state, struct nk_command_buffer *out,
     struct nk_rect bounds, const char *str, int len, nk_flags align, int *value,
-    const struct nk_style_selectable *style, const struct nk_input *in,
+    const struct nk_style_selectable *style, struct nk_input *in,
     const struct nk_user_font *font)
 {
     int old_value;
@@ -14647,6 +14647,8 @@ nk_do_selectable(nk_flags *state, struct nk_command_buffer *out,
 		
 	if (!old_value && !(*value) && in && in->selected_widget == in->widget_counter) {
 		*value = 1;
+	} else if (!old_value && *value && in) {
+		in->selected_widget = in->widget_counter;
 	}
 
     /* draw selectable */
@@ -20292,14 +20294,17 @@ nk_widget_gen(struct nk_rect *bounds, struct nk_context *ctx, nk_byte is_keynav)
     c.h = (float)((int)c.h);
 	if (is_keynav) {
 		ctx->input.widget_counter++;
-		if (ctx->input.selected_widget == ctx->input.widget_counter) {
-			if (ctx->input.keyboard.keys[NK_KEY_UP].clicked && ctx->input.keyboard.keys[NK_KEY_UP].down && ctx->input.selected_widget) {
-				ctx->input.selected_widget--;
-				ctx->input.keyboard.keys[NK_KEY_UP].clicked = 0;
-			} else if (ctx->input.keyboard.keys[NK_KEY_DOWN].clicked && ctx->input.keyboard.keys[NK_KEY_DOWN].down) {
-				ctx->input.keyboard.keys[NK_KEY_DOWN].clicked = 0;
-				ctx->input.selected_widget++;
-			}
+		if (
+			ctx->input.selected_widget == (ctx->input.widget_counter + 1) && 
+			ctx->input.keyboard.keys[NK_KEY_UP].clicked && ctx->input.keyboard.keys[NK_KEY_UP].down
+		) {
+			ctx->input.selected_widget--;
+		} else if (
+			ctx->input.selected_widget == (ctx->input.widget_counter - 1) &&
+			ctx->input.keyboard.keys[NK_KEY_DOWN].clicked && ctx->input.keyboard.keys[NK_KEY_DOWN].down
+		) {
+			ctx->input.keyboard.keys[NK_KEY_DOWN].clicked = 0;
+			ctx->input.selected_widget++;
 		}
 	}
 
@@ -20895,7 +20900,7 @@ nk_selectable_text(struct nk_context *ctx, const char *str, int len,
 {
     struct nk_window *win;
     struct nk_panel *layout;
-    const struct nk_input *in;
+    struct nk_input *in;
     const struct nk_style *style;
 
     enum nk_widget_layout_states state;
