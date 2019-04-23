@@ -242,7 +242,7 @@ uint32_t read_ram_header(rom_info *info, uint8_t *rom)
 		save_size /= 2;
 	}
 	info->save_size = save_size;
-	info->save_buffer = malloc(save_size);
+	info->save_buffer = calloc(save_size, 1);
 	return ram_start;
 }
 
@@ -310,7 +310,7 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 		info->map[0].read_16 = nor_flash_read_w;
 		info->map[0].read_8 = nor_flash_read_b;
 		info->map[0].flags = MMAP_READ_CODE | MMAP_CODE;
-		info->map[0].buffer = info->save_buffer = malloc(info->save_size);
+		info->map[0].buffer = info->save_buffer = calloc(info->save_size, 1);
 		uint32_t init_size = size < info->save_size ? size : info->save_size;
 		memcpy(info->save_buffer, rom, init_size);
 		byteswap_rom(info->save_size, (uint16_t *)info->save_buffer);
@@ -489,8 +489,7 @@ void process_sram_def(char *key, map_iter_state *state)
 			fatal_error("SRAM size %s is invalid\n", size);
 		}
 		state->info->save_mask = nearest_pow2(state->info->save_size)-1;
-		state->info->save_buffer = malloc(state->info->save_size);
-		memset(state->info->save_buffer, 0, state->info->save_size);
+		state->info->save_buffer = calloc(state->info->save_size, 1);
 		char *bus = tern_find_path(state->root, "SRAM\0bus\0", TVAL_PTR).ptrval;
 		if (!strcmp(bus, "odd")) {
 			state->info->save_type = RAM_FLAG_ODD;
@@ -567,6 +566,9 @@ void process_nor_def(char *key, map_iter_state *state)
 		if (!strcmp(init, "ROM")) {
 			uint32_t init_size = state->rom_size > state->info->save_size ? state->info->save_size : state->rom_size;
 			memcpy(state->info->save_buffer, state->rom, init_size);
+			if (init_size < state->info->save_size) {
+				memset(state->info->save_buffer + init_size, 0xFF, state->info->save_size - init_size);
+			}
 			if (state->info->save_bus == RAM_FLAG_BOTH) {
 				byteswap_rom(state->info->save_size, (uint16_t *)state->info->save_buffer);
 			}
@@ -712,7 +714,7 @@ void map_iter_fun(char *key, tern_val val, uint8_t valtype, void *data)
 		if (!size || size > map->end - map->start) {
 			size = map->end - map->start;
 		}
-		map->buffer = malloc(size);
+		map->buffer = calloc(size, 1);
 		map->mask = calc_mask(size, start, end);
 		map->flags = MMAP_READ | MMAP_WRITE;
 		char *bus = tern_find_ptr_default(node, "bus", "both");
