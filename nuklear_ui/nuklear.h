@@ -16175,8 +16175,16 @@ nk_do_property(nk_flags *ws,
     nk_draw_property(out, style, &property, &label, *ws, name, name_len, font);
     if (style->draw_end) style->draw_end(out, style->userdata);
 
-    /* execute right button  */
-    if (nk_do_button_symbol(ws, out, left, style->sym_left, behavior, &style->dec_button, in, font)) {
+	int selected = in && in->selected_widget == in->widget_counter;
+	if (selected) {
+		//prevent left/right buttons from activating when enter is pressed
+		in->selected_widget = -1;
+	}
+    /* execute left button  */
+    if (
+		nk_do_button_symbol(ws, out, left, style->sym_left, behavior, &style->dec_button, in, font)
+		|| (selected && in->keyboard.keys[NK_KEY_LEFT].clicked && in->keyboard.keys[NK_KEY_LEFT].down)
+	) {
         switch (variant->kind) {
         default: break;
         case NK_PROPERTY_INT:
@@ -16187,8 +16195,11 @@ nk_do_property(nk_flags *ws,
             variant->value.d = NK_CLAMP(variant->min_value.d, variant->value.d - variant->step.d, variant->max_value.d); break;
         }
     }
-    /* execute left button  */
-    if (nk_do_button_symbol(ws, out, right, style->sym_right, behavior, &style->inc_button, in, font)) {
+    /* execute right button  */
+    if (
+		nk_do_button_symbol(ws, out, right, style->sym_right, behavior, &style->inc_button, in, font)
+		|| (selected && in->keyboard.keys[NK_KEY_RIGHT].clicked && in->keyboard.keys[NK_KEY_RIGHT].down)
+	) {
         switch (variant->kind) {
         default: break;
         case NK_PROPERTY_INT:
@@ -16199,6 +16210,9 @@ nk_do_property(nk_flags *ws,
             variant->value.d = NK_CLAMP(variant->min_value.d, variant->value.d + variant->step.d, variant->max_value.d); break;
         }
     }
+	if (selected) {
+		in->selected_widget = in->widget_counter;
+	}
     if (old != NK_PROPERTY_EDIT && (*state == NK_PROPERTY_EDIT)) {
         /* property has been activated so setup buffer */
         NK_MEMCPY(buffer, dst, (nk_size)*length);
@@ -21013,7 +21027,7 @@ nk_check_text(struct nk_context *ctx, const char *text, int len, int active)
     style = &ctx->style;
     layout = win->layout;
 
-    state = nk_widget(&bounds, ctx);
+    state = nk_keynav_widget(&bounds, ctx);
     if (!state) return active;
     in = (state == NK_WIDGET_ROM || layout->flags & NK_WINDOW_ROM) ? 0 : &ctx->input;
     nk_do_toggle(&ctx->last_widget_state, &win->buffer, bounds, &active,
@@ -21488,7 +21502,7 @@ nk_property(struct nk_context *ctx, const char *name, struct nk_property_variant
     win = ctx->current;
     layout = win->layout;
     style = &ctx->style;
-    s = nk_widget(&bounds, ctx);
+    s = nk_keynav_widget(&bounds, ctx);
     if (!s) return;
 
     /* calculate hash from name */
