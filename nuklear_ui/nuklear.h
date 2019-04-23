@@ -20292,6 +20292,7 @@ nk_widget_gen(struct nk_rect *bounds, struct nk_context *ctx, nk_byte is_keynav)
     c.y = (float)((int)c.y);
     c.w = (float)((int)c.w);
     c.h = (float)((int)c.h);
+	int newly_selected = nk_false;
 	if (is_keynav) {
 		ctx->input.widget_counter++;
 		if (
@@ -20299,16 +20300,26 @@ nk_widget_gen(struct nk_rect *bounds, struct nk_context *ctx, nk_byte is_keynav)
 			ctx->input.keyboard.keys[NK_KEY_UP].clicked && ctx->input.keyboard.keys[NK_KEY_UP].down
 		) {
 			ctx->input.selected_widget--;
+			newly_selected = nk_true;
 		} else if (
 			ctx->input.selected_widget == (ctx->input.widget_counter - 1) &&
 			ctx->input.keyboard.keys[NK_KEY_DOWN].clicked && ctx->input.keyboard.keys[NK_KEY_DOWN].down
 		) {
 			ctx->input.keyboard.keys[NK_KEY_DOWN].clicked = 0;
 			ctx->input.selected_widget++;
+			newly_selected = nk_true;
 		}
 	}
 
     nk_unify(&v, &c, bounds->x, bounds->y, bounds->x + bounds->w, bounds->y + bounds->h);
+	if (is_keynav && newly_selected) {
+		//ensure widget is fully on-screen if it was newly selected via a keyboard action
+		if ((bounds->y + bounds->h) > (c.y + c.h)) {
+			*layout->offset_y += bounds->y + bounds->h - (c.y + c.h);
+		} else if(c.y > bounds->y){
+			*layout->offset_y -= c.y - bounds->y;
+		}
+	}
     if (!NK_INTERSECT(c.x, c.y, c.w, c.h, bounds->x, bounds->y, bounds->w, bounds->h))
         return NK_WIDGET_INVALID;
     if ((is_keynav && ctx->input.selected_widget == ctx->input.widget_counter ) || NK_INBOX(in->mouse.pos.x, in->mouse.pos.y, v.x, v.y, v.w, v.h))
