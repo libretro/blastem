@@ -465,7 +465,9 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			} else {
 				save_gst(gen, save_path, address);
 			}
-			printf("Saved state to %s\n", save_path);
+			if (slot != SERIALIZE_SLOT) {
+				debug_message("Saved state to %s\n", save_path);
+			}
 			free(save_path);
 		} else if(gen->header.save_state) {
 			context->sync_cycle = context->current_cycle + 1;
