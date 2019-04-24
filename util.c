@@ -80,7 +80,7 @@ char *replace_vars(char *base, tern_node *vars, uint8_t allow_env)
 	for (char *cur = base; *cur; ++cur)
 	{
 		if (in_var) {
-			if (!(*cur == '_' || isalnum(*cur))) {
+			if (!isalnum(*cur)) {
 				positions[num_vars].end = cur-base;
 				if (positions[num_vars].end - positions[num_vars].start > max_var_len) {
 					max_var_len = positions[num_vars].end - positions[num_vars].start;

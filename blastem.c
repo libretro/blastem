@@ -267,6 +267,7 @@ static char *get_save_dir(system_media *media)
 		savedir_template = "$USERDATA/blastem/$ROMNAME";
 	}
 	tern_node *vars = tern_insert_ptr(NULL, "ROMNAME", media->name);
+	vars = tern_insert_ptr(vars, "ROMDIR", media->dir);
 	vars = tern_insert_ptr(vars, "HOME", get_home_dir());
 	vars = tern_insert_ptr(vars, "EXEDIR", get_exe_dir());
 	vars = tern_insert_ptr(vars, "USERDATA", (char *)get_userdata_dir());
@@ -343,6 +344,11 @@ static void on_drag_drop(const char *filename)
 }
 
 static system_media cart, lock_on;
+const system_media *current_media(void)
+{
+	return &cart;
+}
+
 void reload_media(void)
 {
 	if (!current_system) {
