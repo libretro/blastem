@@ -1230,7 +1230,13 @@ static void persist_save(system_header *system)
 		fprintf(stderr, "Failed to open %s file %s for writing\n", save_type_name(gen->save_type), save_filename);
 		return;
 	}
+	if (gen->save_type == RAM_FLAG_BOTH) {
+		byteswap_rom(gen->save_size, (uint16_t *)gen->save_storage);
+	}
 	fwrite(gen->save_storage, 1, gen->save_size, f);
+	if (gen->save_type == RAM_FLAG_BOTH) {
+		byteswap_rom(gen->save_size, (uint16_t *)gen->save_storage);
+	}
 	fclose(f);
 	printf("Saved %s to %s\n", save_type_name(gen->save_type), save_filename);
 }
@@ -1243,6 +1249,9 @@ static void load_save(system_header *system)
 		uint32_t read = fread(gen->save_storage, 1, gen->save_size, f);
 		fclose(f);
 		if (read > 0) {
+			if (gen->save_type == RAM_FLAG_BOTH) {
+				byteswap_rom(gen->save_size, (uint16_t *)gen->save_storage);
+			}
 			printf("Loaded %s from %s\n", save_type_name(gen->save_type), save_filename);
 		}
 	}
