@@ -1593,7 +1593,7 @@ void render_framebuffer_updated(uint8_t which, int width)
 #ifndef DISABLE_ZLIB
 			ext = path_extension(screenshot_path);
 #endif
-			info_message("Saving screenshot to %s\n", screenshot_path);
+			debug_message("Saving screenshot to %s\n", screenshot_path);
 		} else {
 			warning("Failed to open screenshot file %s for writing\n", screenshot_path);
 		}
