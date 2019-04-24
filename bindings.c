@@ -358,21 +358,30 @@ void handle_binding_up(keybinding * binding)
 				if (!screenshot_base) {
 					screenshot_base = "$HOME";
 				}
+				const system_media *media = current_media();
 				tern_node *vars = tern_insert_ptr(NULL, "HOME", get_home_dir());
 				vars = tern_insert_ptr(vars, "EXEDIR", get_exe_dir());
+				vars = tern_insert_ptr(vars, "USERDATA", (char *)get_userdata_dir());
+				vars = tern_insert_ptr(vars, "ROMNAME", media->name);
+				vars = tern_insert_ptr(vars, "ROMDIR", media->dir);
 				screenshot_base = replace_vars(screenshot_base, vars, 1);
 				tern_free(vars);
+				ensure_dir_exists(screenshot_base);
 				time_t now = time(NULL);
 				struct tm local_store;
 				char fname_part[256];
 				char *template = tern_find_path(config, "ui\0screenshot_template\0", TVAL_PTR).ptrval;
-				if (!template) {
-					template = "blastem_%c.ppm";
+				if (template) {
+					vars = tern_insert_ptr(NULL, "ROMNAME", media->name);
+					template = replace_vars(template, vars, 0);
+				} else {
+					template = strdup("blastem_%c.ppm");
 				}
 				strftime(fname_part, sizeof(fname_part), template, localtime_r(&now, &local_store));
 				char const *parts[] = {screenshot_base, PATH_SEP, fname_part};
 				char *path = alloc_concat_m(3, parts);
 				free(screenshot_base);
+				free(template);
 				render_save_screenshot(path);
 			}
 			break;
