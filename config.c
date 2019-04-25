@@ -225,7 +225,7 @@ tern_node *parse_bundled_config(char *config_name)
 	return ret;
 }
 
-tern_node *load_overrideable_config(char *name, char *bundled_name)
+tern_node *load_overrideable_config(char *name, char *bundled_name, uint8_t *used_config_dir)
 {
 	char const *confdir = get_config_dir();
 	char *confpath = NULL;
@@ -233,58 +233,60 @@ tern_node *load_overrideable_config(char *name, char *bundled_name)
 	if (confdir) {
 		confpath = path_append(confdir, name);
 		ret = parse_config_file(confpath);
-		if (ret) {
-			free(confpath);
-			return ret;
+	}
+	free(confpath);
+	if (used_config_dir) {
+		*used_config_dir = ret != NULL;
+	}
+	
+	if (!ret) {
+		ret = parse_bundled_config(name);
+		if (!ret) {
+			ret = parse_bundled_config(bundled_name);
 		}
 	}
 
-	ret = parse_bundled_config(bundled_name);
-	if (ret) {
-		free(confpath);
-		return ret;
-	}
-	return NULL;
+	return ret;
 }
 
+static uint8_t app_config_in_config_dir;
 tern_node *load_config()
 {
-	char const *confdir = get_config_dir();
-	char *confpath = NULL;
-	tern_node *ret = load_overrideable_config("blastem.cfg", "default.cfg");
-	if (confdir) {
-		confpath = path_append(confdir, "blastem.cfg");
-		ret = parse_config_file(confpath);
-		if (ret) {
-			free(confpath);
-			return ret;
+	tern_node *ret = load_overrideable_config("blastem.cfg", "default.cfg", &app_config_in_config_dir);
+	
+	if (!ret) {
+		if (get_config_dir()) {
+			fatal_error("Failed to find a config file at %s or in the blastem executable directory\n", get_config_dir());
+		} else {
+			fatal_error("Failed to find a config file in the BlastEm executable directory and the config directory path could not be determined\n");
 		}
 	}
-
-	ret = parse_bundled_config("default.cfg");
-	if (ret) {
-		free(confpath);
-		return ret;
-	}
-
-	if (get_config_dir()) {
-		fatal_error("Failed to find a config file at %s or in the blastem executable directory\n", get_config_dir());
-	} else {
-		fatal_error("Failed to find a config file in the BlastEm executable directory and the config directory path could not be determined\n");
-	}
-	//this will never get reached, but the compiler doesn't know that. Let's make it happy
-	return NULL;
+	return ret;
 }
 
-void persist_config_at(tern_node *config, char *fname)
+void persist_config_at(tern_node *app_config, tern_node *to_save, char *fname)
 {
-	char const *confdir = get_config_dir();
-	if (!confdir) {
-		fatal_error("Failed to locate config file directory\n");
+	char*use_exe_dir = tern_find_path_default(app_config, "ui\0config_in_exe_dir\0", (tern_val){.ptrval = "off"}, TVAL_PTR).ptrval;
+	char *confpath;
+	if (!strcmp(use_exe_dir, "on")) {
+		confpath = path_append(get_exe_dir(), fname);
+		if (app_config == to_save && app_config_in_config_dir) {
+			//user switched to "portable" configs this session and there is an
+			//existing config file in the user-specific config directory
+			//delete it so we don't end up loading it next time
+			char *oldpath = path_append(get_config_dir(), fname);
+			delete_file(oldpath);
+			free(oldpath);
+		}
+	} else {
+		char const *confdir = get_config_dir();
+		if (!confdir) {
+			fatal_error("Failed to locate config file directory\n");
+		}
+		ensure_dir_exists(confdir);
+		confpath = path_append(confdir, fname);
 	}
-	ensure_dir_exists(confdir);
-	char *confpath = path_append(confdir, fname);
-	if (!serialize_config_file(config, confpath)) {
+	if (!serialize_config_file(to_save, confpath)) {
 		fatal_error("Failed to write config to %s\n", confpath);
 	}
 	free(confpath);
@@ -292,7 +294,7 @@ void persist_config_at(tern_node *config, char *fname)
 
 void persist_config(tern_node *config)
 {
-	persist_config_at(config, "blastem.cfg");
+	persist_config_at(config, config, "blastem.cfg");
 }
 
 char **get_extension_list(tern_node *config, uint32_t *num_exts_out)

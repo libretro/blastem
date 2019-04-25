@@ -1827,6 +1827,7 @@ void view_system_settings(struct nk_context *context)
 		selected_sync = settings_dropdown(context, "Sync Source", sync_opts, num_sync_opts, selected_sync, "system\0sync_source\0");
 		settings_int_property(context, "68000 Clock Divider", "", "clocks\0m68k_divider\0", 7, 1, 53);
 		settings_toggle(context, "Remember ROM Path", "ui\0remember_path\0", 1);
+		settings_toggle(context, "Save config with EXE", "ui\0config_in_exe_dir\0", 0);
 		selected_region = settings_dropdown_ex(context, "Default Region", region_codes, regions, num_regions, selected_region, "system\0default_region\0");
 		selected_format = settings_dropdown(context, "Save State Format", formats, num_formats, selected_format, "ui\0state_format\0");
 		selected_init = settings_dropdown(context, "Initial RAM Value", ram_inits, num_inits, selected_init, "system\0ram_init\0");
