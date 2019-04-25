@@ -854,6 +854,16 @@ void sort_dir_list(dir_entry *list, size_t num_entries)
 	qsort(list, num_entries, sizeof(dir_entry), sort_dir_alpha);
 }
 
+uint8_t delete_file(char *path)
+{
+#ifdef _WIN32
+	//TODO: Call Unicode version and prepend special string to remove max path limitation
+	return 0 != DeleteFileA(path);
+#else
+	return 0 == unlink(path);
+#endif
+}
+
 #ifdef __ANDROID__
 
 #include <SDL.h>
@@ -943,7 +953,7 @@ char *read_bundled_file(char *name, uint32_t *sizeret)
 	fclose(f);
 	return ret;
 }
-#endif
+#endif //ISLIB
 
 #ifdef _WIN32
 char const *get_userdata_dir()
@@ -1000,8 +1010,6 @@ char const *get_userdata_dir()
 }
 
 
-#endif
+#endif //_WIN32
+#endif //__ANDROID__
 
-
-
-#endif

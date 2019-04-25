@@ -6,6 +6,7 @@
 #include "controller_info.h"
 #include "config.h"
 #include "util.h"
+#include "blastem.h"
 
 typedef struct {
 	char const      *name;
@@ -66,7 +67,7 @@ static const char *variant_names[] = {
 static void load_ctype_config(void)
 {
 	if (!loaded) {
-		info_config = load_overrideable_config("controller_types.cfg", "controller_types.cfg");
+		info_config = load_overrideable_config("controller_types.cfg", "controller_types.cfg", NULL);
 		loaded = 1;
 	}
 }
@@ -197,7 +198,7 @@ void save_controller_info(int joystick, controller_info *info)
 	existing = tern_insert_ptr(existing, "subtype", (void *)subtype_names[info->subtype]);
 	existing = tern_insert_ptr(existing, "variant",  (void *)variant_names[info->variant]);
 	info_config = tern_insert_node(info_config, guid_string, existing);
-	persist_config_at(info_config, "controller_types.cfg");
+	persist_config_at(config, info_config, "controller_types.cfg");
 #endif	
 }
 
@@ -209,7 +210,7 @@ void save_controller_mapping(int joystick, char *mapping_string)
 	tern_node *existing = tern_find_node(info_config, guid_string);
 	existing = tern_insert_ptr(existing, "mapping", mapping_string);
 	info_config = tern_insert_node(info_config, guid_string, existing);
-	persist_config_at(info_config, "controller_types.cfg");
+	persist_config_at(config, info_config, "controller_types.cfg");
 #endif
 }
 
