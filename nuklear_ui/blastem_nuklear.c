@@ -1468,6 +1468,24 @@ void settings_int_input(struct nk_context *context, char *label, char *path, cha
 	}
 }
 
+void settings_string(struct nk_context *context, char *label, char *path, char *def)
+{
+	nk_label(context, label, NK_TEXT_LEFT);
+	char *curstr = tern_find_path_default(config, path, (tern_val){.ptrval = def}, TVAL_PTR).ptrval;
+	uint32_t len = strlen(curstr);
+	uint32_t buffer_len = len > 100 ? len + 1 : 101;
+	char *buffer = malloc(buffer_len);
+	memcpy(buffer, curstr, len);
+	memset(buffer+len, 0, buffer_len-len);
+	nk_edit_string(context, NK_EDIT_SIMPLE, buffer, &len, buffer_len-1, nk_filter_default);
+	buffer[len] = 0;
+	if (strcmp(buffer, curstr)) {
+		config_dirty = 1;
+		config = tern_insert_path(config, path, (tern_val){.ptrval = strdup(buffer)}, TVAL_PTR);
+	}
+	free(buffer);
+}
+
 void settings_int_property(struct nk_context *context, char *label, char *name, char *path, int def, int min, int max)
 {
 	char *curstr = tern_find_path(config, path, TVAL_PTR).ptrval;
@@ -1828,6 +1846,7 @@ void view_system_settings(struct nk_context *context)
 		settings_int_property(context, "68000 Clock Divider", "", "clocks\0m68k_divider\0", 7, 1, 53);
 		settings_toggle(context, "Remember ROM Path", "ui\0remember_path\0", 1);
 		settings_toggle(context, "Save config with EXE", "ui\0config_in_exe_dir\0", 0);
+		settings_string(context, "Game Save Path", "ui\0save_path\0", "$USERDATA/blastem/$ROMNAME");
 		selected_region = settings_dropdown_ex(context, "Default Region", region_codes, regions, num_regions, selected_region, "system\0default_region\0");
 		selected_format = settings_dropdown(context, "Save State Format", formats, num_formats, selected_format, "ui\0state_format\0");
 		selected_init = settings_dropdown(context, "Initial RAM Value", ram_inits, num_inits, selected_init, "system\0ram_init\0");
