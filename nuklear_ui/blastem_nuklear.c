@@ -2076,6 +2076,10 @@ static void style_init(void)
 		.r = 255, .g = 128, .b = 0, .a = 255
 	};
 	context->style.checkbox.cursor_hover = context->style.checkbox.cursor_normal;
+	context->style.property.inc_button.text_hover = (struct nk_color){
+		.r = 255, .g = 128, .b = 0, .a = 255
+	};
+	context->style.property.dec_button.text_hover = context->style.property.inc_button.text_hover;
 }
 
 static void context_created(void)
