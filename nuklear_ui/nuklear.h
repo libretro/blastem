@@ -16176,9 +16176,11 @@ nk_do_property(nk_flags *ws,
     if (style->draw_end) style->draw_end(out, style->userdata);
 
 	int selected = in && in->selected_widget == in->widget_counter;
+	int enter_clicked;
 	if (selected) {
 		//prevent left/right buttons from activating when enter is pressed
-		in->selected_widget = -1;
+		enter_clicked = in->keyboard.keys[NK_KEY_ENTER].clicked;
+		in->keyboard.keys[NK_KEY_ENTER].clicked = 0;
 	}
     /* execute left button  */
     if (
@@ -16211,7 +16213,7 @@ nk_do_property(nk_flags *ws,
         }
     }
 	if (selected) {
-		in->selected_widget = in->widget_counter;
+		in->keyboard.keys[NK_KEY_ENTER].clicked = enter_clicked;
 	}
     if (old != NK_PROPERTY_EDIT && (*state == NK_PROPERTY_EDIT)) {
         /* property has been activated so setup buffer */
@@ -20698,9 +20700,13 @@ nk_button_text_styled(struct nk_context *ctx,
 
     if (!state) return 0;
     in = (state == NK_WIDGET_ROM || layout->flags & NK_WINDOW_ROM) ? 0 : &ctx->input;
-    return nk_do_button_text(&ctx->last_widget_state, &win->buffer, bounds,
+    int ret = nk_do_button_text(&ctx->last_widget_state, &win->buffer, bounds,
                     title, len, style->text_alignment, ctx->button_behavior,
                     style, in, ctx->style.font);
+	if (ctx->last_widget_state & NK_WIDGET_STATE_ENTERED) {
+		ctx->input.selected_widget = ctx->input.widget_counter;
+	}
+	return ret;
 }
 
 NK_API int
@@ -20751,6 +20757,9 @@ nk_button_color(struct nk_context *ctx, struct nk_color color)
     ret = nk_do_button(&ctx->last_widget_state, &win->buffer, bounds,
                 &button, in, ctx->button_behavior, &content);
     nk_draw_button(&win->buffer, &bounds, ctx->last_widget_state, &button);
+	if (ctx->last_widget_state & NK_WIDGET_STATE_ENTERED) {
+		ctx->input.selected_widget = ctx->input.widget_counter;
+	}
     return ret;
 }
 
@@ -20776,8 +20785,12 @@ nk_button_symbol_styled(struct nk_context *ctx,
     state = nk_keynav_widget(&bounds, ctx);
     if (!state) return 0;
     in = (state == NK_WIDGET_ROM || layout->flags & NK_WINDOW_ROM) ? 0 : &ctx->input;
-    return nk_do_button_symbol(&ctx->last_widget_state, &win->buffer, bounds,
+    int ret = nk_do_button_symbol(&ctx->last_widget_state, &win->buffer, bounds,
             symbol, ctx->button_behavior, style, in, ctx->style.font);
+	if (ctx->last_widget_state & NK_WIDGET_STATE_ENTERED) {
+		ctx->input.selected_widget = ctx->input.widget_counter;
+	}
+	return ret;
 }
 
 NK_API int
@@ -21552,6 +21565,7 @@ nk_property(struct nk_context *ctx, const char *name, struct nk_property_variant
             ctx->input.mouse.grab = nk_true;
             ctx->input.mouse.grabbed = nk_true;
         }
+		ctx->input.selected_widget = ctx->input.widget_counter;
     }
     /* check if previously active property is now inactive */
     if (*state == NK_PROPERTY_DEFAULT && old_state != NK_PROPERTY_DEFAULT) {
