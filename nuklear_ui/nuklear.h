@@ -20375,7 +20375,7 @@ nk_widget_fitting(struct nk_rect *bounds, struct nk_context *ctx,
     win = ctx->current;
     style = &ctx->style;
     layout = win->layout;
-    state = nk_widget(bounds, ctx);
+    state = nk_keynav_widget(bounds, ctx);
 
     panel_padding = nk_panel_get_padding(style, layout->type);
     if (layout->row.index == 1) {
@@ -22776,8 +22776,11 @@ nk_contextual_end(struct nk_context *ctx)
             body.y = (panel->at_y + panel->footer_height + panel->border + padding.y + panel->row.height);
             body.h = (panel->bounds.y + panel->bounds.h) - body.y;
         }
+		int selected = ctx->input.selected_widget;
+		ctx->input.selected_widget = -1;
         {int pressed = nk_input_is_mouse_pressed(&ctx->input, NK_BUTTON_LEFT);
         int in_body = nk_input_is_mouse_hovering_rect(&ctx->input, body);
+		ctx->input.selected_widget = selected;
         if (pressed && in_body)
             popup->flags |= NK_WINDOW_HIDDEN;
         }
@@ -22850,7 +22853,7 @@ nk_combo_begin_text(struct nk_context *ctx, const char *selected, int len,
 
     win = ctx->current;
     style = &ctx->style;
-    s = nk_widget(&header, ctx);
+    s = nk_keynav_widget(&header, ctx);
     if (s == NK_WIDGET_INVALID)
         return 0;
 
@@ -23411,11 +23414,21 @@ nk_combo(struct nk_context *ctx, const char **items, int count,
     size.y = NK_MIN(size.y, (float)max_height);
     if (nk_combo_begin_label(ctx, items[selected], size)) {
         nk_layout_row_dynamic(ctx, (float)item_height, 1);
+		int main_item_widget = ctx->input.widget_counter;
         for (i = 0; i < count; ++i) {
-            if (nk_combo_item_label(ctx, items[i], NK_TEXT_LEFT))
+            if (nk_combo_item_label(ctx, items[i], NK_TEXT_LEFT)) {
                 selected = i;
+				ctx->input.selected_widget = main_item_widget;
+				//prevent below code from advancing selected widget
+				main_item_widget--;
+			}
         }
         nk_combo_end(ctx);
+		if (ctx->input.selected_widget <= main_item_widget) {
+			ctx->input.selected_widget = main_item_widget + 1;
+		} else if (ctx->input.selected_widget > main_item_widget + count) {
+			ctx->input.selected_widget = main_item_widget + count;
+		}
     }
     return selected;
 }

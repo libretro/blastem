@@ -2080,6 +2080,7 @@ static void style_init(void)
 		.r = 255, .g = 128, .b = 0, .a = 255
 	};
 	context->style.property.dec_button.text_hover = context->style.property.inc_button.text_hover;
+	context->style.combo.button.text_hover = context->style.property.inc_button.text_hover;
 }
 
 static void context_created(void)
