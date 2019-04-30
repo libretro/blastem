@@ -1596,6 +1596,7 @@ shader_prog *get_shader_list(uint32_t *num_out)
 	shader_dir = path_append(get_exe_dir(), "shaders");
 #endif
 	entries = get_dir_list(shader_dir, &num_entries);
+	free(shader_dir);
 	progs = get_shader_progs(entries, num_entries, progs, &num_progs, &prog_storage);
 	*num_out = num_progs;
 	return progs;
