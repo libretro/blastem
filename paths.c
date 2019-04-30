@@ -59,7 +59,7 @@ cleanup:
 
 void get_initial_browse_path(char **dst)
 {
-	*dst = NULL;
+	char *base = NULL;
 	char *remember_path = tern_find_path(config, "ui\0remember_path\0", TVAL_PTR).ptrval;
 	if (!remember_path || !strcmp("on", remember_path)) {
 		char *pathfname = alloc_concat(get_userdata_dir(), PATH_SEP "blastem" PATH_SEP "sticky_path");
@@ -67,13 +67,13 @@ void get_initial_browse_path(char **dst)
 		if (f) {
 			long pathsize = file_size(f);
 			if (pathsize > 0) {
-				*dst = malloc(pathsize + 1);
-				if (fread(*dst, 1, pathsize, f) != pathsize) {
+				base = malloc(pathsize + 1);
+				if (fread(base, 1, pathsize, f) != pathsize) {
 					warning("Error restoring saved file browser path");
-					free(*dst);
-					*dst = NULL;
+					free(base);
+					base = NULL;
 				} else {
-					(*dst)[pathsize] = 0;
+					base[pathsize] = 0;
 				}
 			}
 			fclose(f);
@@ -84,19 +84,20 @@ void get_initial_browse_path(char **dst)
 			current_path = dst;
 		}
 	}
-	if (!*dst) {
-		*dst = tern_find_path(config, "ui\0initial_path\0", TVAL_PTR).ptrval;
+	if (!base) {
+		base = tern_find_path(config, "ui\0initial_path\0", TVAL_PTR).ptrval;
 	}
-	if (!*dst){
+	if (!base){
 #ifdef __ANDROID__
-		*dst = get_external_storage_path();
+		base = get_external_storage_path();
 #else
-		*dst = "$HOME";
+		base = "$HOME";
 #endif
 	}
 	tern_node *vars = tern_insert_ptr(NULL, "HOME", get_home_dir());
 	vars = tern_insert_ptr(vars, "EXEDIR", get_exe_dir());
-	*dst = replace_vars(*dst, vars, 1);
+	*dst = replace_vars(base, vars, 1);
+	free(base);
 	tern_free(vars);
 }
 
