@@ -195,8 +195,8 @@ void save_controller_info(int joystick, controller_info *info)
 	char guid_string[33];
 	SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(render_get_joystick(joystick)), guid_string, sizeof(guid_string));
 	tern_node *existing = tern_find_node(info_config, guid_string);
-	existing = tern_insert_ptr(existing, "subtype", (void *)subtype_names[info->subtype]);
-	existing = tern_insert_ptr(existing, "variant",  (void *)variant_names[info->variant]);
+	existing = tern_insert_ptr(existing, "subtype", strdup(subtype_names[info->subtype]));
+	existing = tern_insert_ptr(existing, "variant", strdup(variant_names[info->variant]));
 	info_config = tern_insert_node(info_config, guid_string, existing);
 	persist_config_at(config, info_config, "controller_types.cfg");
 #endif	

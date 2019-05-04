@@ -1175,6 +1175,7 @@ static void start_mapping(void)
 	mapping_string[mapping_pos++] = ':';
 }
 
+static uint8_t initial_controller_config;
 #define QUIET_FRAMES 9
 static void view_controller_mappings(struct nk_context *context)
 {
@@ -1277,8 +1278,10 @@ static void view_controller_mappings(struct nk_context *context)
 					save_controller_mapping(selected_controller, mapping_string);
 					free(mapping_string);
 					pop_view();
-					push_view(view_controller_bindings);
-					controller_binding_changed = 0;
+					if (initial_controller_config) {
+						push_view(view_controller_bindings);
+						controller_binding_changed = 0;
+					}
 					added_mapping = 0;
 				} else if (get_axis_label(&selected_controller_info, current_axis)) {
 					added_mapping = 0;
@@ -1290,6 +1293,31 @@ static void view_controller_mappings(struct nk_context *context)
 		axis_moved = -1;
 		nk_end(context);
 	}
+}
+
+static void show_mapping_view(void)
+{
+	current_button = SDL_CONTROLLER_BUTTON_A;
+	button_pressed = -1;
+	last_button = -1;
+	last_hat = -1;
+	axis_moved = -1;
+	last_axis = -1;
+	last_axis_value = 0;
+	SDL_Joystick *joy = render_get_joystick(selected_controller);
+	const char *name = SDL_JoystickName(joy);
+	size_t namesz = strlen(name);
+	mapping_string = malloc(512 + namesz);
+	for (mapping_pos = 0; mapping_pos < namesz; mapping_pos++)
+	{
+		char c = name[mapping_pos];
+		if (c == ',' || c == '\n' || c == '\r') {
+			c = ' ';
+		}
+		mapping_string[mapping_pos] = c;
+	}
+	
+	push_view(view_controller_mappings);
 }
 
 static void view_controller_variant(struct nk_context *context)
@@ -1327,33 +1355,15 @@ static void view_controller_variant(struct nk_context *context)
 	if (selected) {
 		save_controller_info(selected_controller, &selected_controller_info);
 		pop_view();
-		SDL_GameController *controller = render_get_controller(selected_controller);
-		if (controller) {
-			push_view(view_controller_bindings);
-			controller_binding_changed = 0;
-			SDL_GameControllerClose(controller);
-		} else {
-			current_button = SDL_CONTROLLER_BUTTON_A;
-			button_pressed = -1;
-			last_button = -1;
-			last_hat = -1;
-			axis_moved = -1;
-			last_axis = -1;
-			last_axis_value = 0;
-			SDL_Joystick *joy = render_get_joystick(selected_controller);
-			const char *name = SDL_JoystickName(joy);
-			size_t namesz = strlen(name);
-			mapping_string = malloc(512 + namesz);
-			for (mapping_pos = 0; mapping_pos < namesz; mapping_pos++)
-			{
-				char c = name[mapping_pos];
-				if (c == ',' || c == '\n' || c == '\r') {
-					c = ' ';
-				}
-				mapping_string[mapping_pos] = c;
+		if (initial_controller_config) {
+			SDL_GameController *controller = render_get_controller(selected_controller);
+			if (controller) {
+				push_view(view_controller_bindings);
+				controller_binding_changed = 0;
+				SDL_GameControllerClose(controller);
+			} else {
+				show_mapping_view();
 			}
-			
-			push_view(view_controller_mappings);
 		}
 	}
 }
@@ -1398,35 +1408,84 @@ void view_controller_type(struct nk_context *context)
 void view_controllers(struct nk_context *context)
 {
 	if (nk_begin(context, "Controllers", nk_rect(0, 0, render_width(), render_height()), NK_WINDOW_NO_SCROLLBAR)) {
-		int height = (render_width() - 2*context->style.font->height) / MAX_JOYSTICKS;
+		int height = (render_height() - 2*context->style.font->height) / 5;
+		int inner_height = height - context->style.window.spacing.y;
+		const struct nk_user_font *font = context->style.font;
+		int bindings_width = font->width(font->userdata, font->height, "Bindings", strlen("Bindings")) + context->style.button.padding.x * 2;
+		int remap_width = font->width(font->userdata, font->height, "Remap", strlen("Remap")) + context->style.button.padding.x * 2;
+		int change_type_width = font->width(font->userdata, font->height, "Change Type", strlen("Change Type")) + context->style.button.padding.x * 2;
+		int total = bindings_width + remap_width + change_type_width;
+		float bindings_ratio = (float)bindings_width / total;
+		float remap_ratio = (float)remap_width / total;
+		float change_type_ratio = (float)change_type_width / total;
+		
+		
+		uint8_t found_controller = 0;
 		for (int i = 0; i < MAX_JOYSTICKS; i++)
 		{
 			SDL_Joystick *joy = render_get_joystick(i);
 			if (joy) {
+				found_controller = 1;
 				controller_info info = get_controller_info(i);
 				ui_image *controller_image = select_best_image(&info);
-				int image_width = height * controller_image->width / controller_image->height;
-				nk_layout_row_begin(context, NK_STATIC, height, 2);
-				nk_layout_row_push(context, image_width);
+				int image_width = inner_height * controller_image->width / controller_image->height;
+				nk_layout_space_begin(context, NK_STATIC, height, INT_MAX);
+				nk_layout_space_push(context, nk_rect(context->style.font->height / 2, 0, image_width, inner_height));
 				if (info.type == TYPE_UNKNOWN || info.type == TYPE_GENERIC_MAPPING) {
 					nk_label(context, "?", NK_TEXT_CENTERED);
 				} else {
 					nk_image(context, controller_image->ui);
 				}
-				nk_layout_row_push(context, render_width() - image_width - 2 * context->style.font->height);
-				if (nk_button_label(context, info.name)) {
-					selected_controller = i;
-					selected_controller_info = info;
-					if (info.type == TYPE_UNKNOWN || info.type == TYPE_GENERIC_MAPPING) {
+				int button_start = image_width + context->style.font->height;
+				int button_area_width = render_width() - image_width - 2 * context->style.font->height;
+				
+				nk_layout_space_push(context, nk_rect(button_start, 0, button_area_width, inner_height/2));
+				nk_label(context, info.name, NK_TEXT_CENTERED);
+				const struct nk_user_font *font = context->style.font;
+				if (info.type == TYPE_UNKNOWN || info.type == TYPE_GENERIC_MAPPING) {
+					int button_width = font->width(font->userdata, font->height, "Configure", strlen("Configure"));
+					nk_layout_space_push(context, nk_rect(button_start, height/2, button_width, inner_height/2));
+					if (nk_button_label(context, "Configure")) {
+						selected_controller = i;
+						selected_controller_info = info;
+						initial_controller_config = 1;
 						push_view(view_controller_type);
-					} else {
+					}
+				} else {
+					button_area_width -= 2 * context->style.window.spacing.x;
+					bindings_width = bindings_ratio * button_area_width;
+					nk_layout_space_push(context, nk_rect(button_start, height/2, bindings_width, inner_height/2));
+					if (nk_button_label(context, "Bindings")) {
+						selected_controller = i;
+						selected_controller_info = info;
 						push_view(view_controller_bindings);
 						controller_binding_changed = 0;
 					}
-					
+					button_start += bindings_width + context->style.window.spacing.x;
+					remap_width = remap_ratio * button_area_width;
+					nk_layout_space_push(context, nk_rect(button_start, height/2, remap_width, inner_height/2));
+					if (nk_button_label(context, "Remap")) {
+						selected_controller = i;
+						selected_controller_info = info;
+						initial_controller_config = 0;
+						show_mapping_view();
+					}
+					button_start += remap_width + context->style.window.spacing.x;
+					change_type_width = change_type_ratio * button_area_width;
+					nk_layout_space_push(context, nk_rect(button_start, height/2, change_type_width, inner_height/2));
+					if (nk_button_label(context, "Change Type")) {
+						selected_controller = i;
+						selected_controller_info = info;
+						initial_controller_config = 0;
+						push_view(view_controller_type);
+					}
 				}
-				nk_layout_row_end(context);
+				//nk_layout_row_end(context);
 			}
+		}
+		if (!found_controller) {
+			nk_layout_row_static(context, context->style.font->height, render_width() - 2 * context->style.font->height, 1);
+			nk_label(context, "No controllers detected", NK_TEXT_CENTERED);
 		}
 		nk_layout_row_static(context, context->style.font->height, (render_width() - 2 * context->style.font->height) / 2, 2);
 		nk_label(context, "", NK_TEXT_LEFT);
