@@ -7,6 +7,7 @@
 #include "config.h"
 #include "util.h"
 #include "blastem.h"
+#include "bindings.h"
 
 typedef struct {
 	char const      *name;
@@ -199,6 +200,7 @@ void save_controller_info(int joystick, controller_info *info)
 	existing = tern_insert_ptr(existing, "variant", strdup(variant_names[info->variant]));
 	info_config = tern_insert_node(info_config, guid_string, existing);
 	persist_config_at(config, info_config, "controller_types.cfg");
+	handle_joy_added(joystick);
 #endif	
 }
 
@@ -211,6 +213,11 @@ void save_controller_mapping(int joystick, char *mapping_string)
 	existing = tern_insert_ptr(existing, "mapping", mapping_string);
 	info_config = tern_insert_node(info_config, guid_string, existing);
 	persist_config_at(config, info_config, "controller_types.cfg");
+	const char *parts[] = {guid_string, ",", mapping_string};
+	char * full = alloc_concat_m(3, parts);
+	SDL_GameControllerAddMapping(full);
+	free(full);
+	handle_joy_added(joystick);
 #endif
 }
 

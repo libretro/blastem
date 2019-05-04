@@ -950,6 +950,11 @@ int lock_joystick_index(int joystick, int desired_index)
 	joysticks[desired_index] = tmp_joy;
 	joystick_sdl_index[desired_index] = tmp_index;
 	joystick_index_locked[desired_index] = 1;
+	//update bindings as the controllers being swapped may have different mappings
+	handle_joy_added(desired_index);
+	if (joysticks[joystick]) {
+		handle_joy_added(joystick);
+	}
 	return desired_index;
 }
 
