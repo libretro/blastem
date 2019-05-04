@@ -446,6 +446,7 @@ void render_put_stereo_sample(audio_source *src, int16_t left, int16_t right)
 
 static SDL_Joystick * joysticks[MAX_JOYSTICKS];
 static int joystick_sdl_index[MAX_JOYSTICKS];
+static uint8_t joystick_index_locked[MAX_JOYSTICKS];
 
 int render_width()
 {
@@ -889,6 +890,16 @@ static int lowest_unused_joystick_index()
 	return -1;
 }
 
+static int lowest_unlocked_joystick_index(void)
+{
+	for (int i = 0; i < MAX_JOYSTICKS; i++) {
+		if (!joystick_index_locked[i]) {
+			return i;
+		}
+	}
+	return -1;
+}
+
 SDL_Joystick *render_get_joystick(int index)
 {
 	if (index >= MAX_JOYSTICKS) {
@@ -923,6 +934,25 @@ static uint32_t overscan_right[NUM_VID_STD] = {14, 14};
 static vid_std video_standard = VID_NTSC;
 static uint8_t need_ui_fb_resize;
 
+int lock_joystick_index(int joystick, int desired_index)
+{
+	if (desired_index < 0) {
+		desired_index = lowest_unlocked_joystick_index();
+		if (desired_index < 0 || desired_index >= joystick) {
+			return joystick;
+		}
+	}
+	SDL_Joystick *tmp_joy = joysticks[joystick];
+	int tmp_index = joystick_sdl_index[joystick];
+	joysticks[joystick] = joysticks[desired_index];
+	joystick_sdl_index[joystick] = joystick_sdl_index[desired_index];
+	joystick_index_locked[joystick] = joystick_sdl_index[desired_index];
+	joysticks[desired_index] = tmp_joy;
+	joystick_sdl_index[desired_index] = tmp_index;
+	joystick_index_locked[desired_index] = 1;
+	return desired_index;
+}
+
 static int32_t handle_event(SDL_Event *event)
 {
 	if (custom_event_handler) {
@@ -939,13 +969,13 @@ static int32_t handle_event(SDL_Event *event)
 		handle_joydown(find_joystick_index(event->jbutton.which), event->jbutton.button);
 		break;
 	case SDL_JOYBUTTONUP:
-		handle_joyup(find_joystick_index(event->jbutton.which), event->jbutton.button);
+		handle_joyup(lock_joystick_index(find_joystick_index(event->jbutton.which), -1), event->jbutton.button);
 		break;
 	case SDL_JOYHATMOTION:
-		handle_joy_dpad(find_joystick_index(event->jhat.which), event->jhat.hat, event->jhat.value);
+		handle_joy_dpad(lock_joystick_index(find_joystick_index(event->jhat.which), -1), event->jhat.hat, event->jhat.value);
 		break;
 	case SDL_JOYAXISMOTION:
-		handle_joy_axis(find_joystick_index(event->jaxis.which), event->jaxis.axis, event->jaxis.value);
+		handle_joy_axis(lock_joystick_index(find_joystick_index(event->jaxis.which), -1), event->jaxis.axis, event->jaxis.value);
 		break;
 	case SDL_JOYDEVICEADDED:
 		if (event->jdevice.which < MAX_JOYSTICKS) {
@@ -953,6 +983,7 @@ static int32_t handle_event(SDL_Event *event)
 			if (index >= 0) {
 				SDL_Joystick * joy = joysticks[index] = SDL_JoystickOpen(event->jdevice.which);
 				joystick_sdl_index[index] = event->jdevice.which;
+				joystick_index_locked[index] = 0;
 				if (joy) {
 					debug_message("Joystick %d added: %s\n", index, SDL_JoystickName(joy));
 					debug_message("\tNum Axes: %d\n\tNum Buttons: %d\n\tNum Hats: %d\n", SDL_JoystickNumAxes(joy), SDL_JoystickNumButtons(joy), SDL_JoystickNumHats(joy));
