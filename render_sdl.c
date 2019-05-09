@@ -921,10 +921,27 @@ char* render_joystick_type_id(int index)
 
 SDL_GameController *render_get_controller(int index)
 {
-	if (index >= MAX_JOYSTICKS) {
+	if (index >= MAX_JOYSTICKS || !joysticks[index]) {
 		return NULL;
 	}
 	return SDL_GameControllerOpen(joystick_sdl_index[index]);
+}
+
+static uint8_t gc_events_enabled;
+static SDL_GameController *controllers[MAX_JOYSTICKS];
+void render_enable_gamepad_events(uint8_t enabled)
+{
+	if (enabled != gc_events_enabled) {
+		gc_events_enabled = enabled;
+		for (int i = 0; i < MAX_JOYSTICKS; i++) {
+			if (enabled) {
+				controllers[i] = render_get_controller(i);
+			} else if (controllers[i]) {
+				SDL_GameControllerClose(controllers[i]);
+				controllers[i] = NULL;
+			}
+		}
+	}
 }
 
 static uint32_t overscan_top[NUM_VID_STD] = {2, 21};
@@ -989,6 +1006,9 @@ static int32_t handle_event(SDL_Event *event)
 				SDL_Joystick * joy = joysticks[index] = SDL_JoystickOpen(event->jdevice.which);
 				joystick_sdl_index[index] = event->jdevice.which;
 				joystick_index_locked[index] = 0;
+				if (gc_events_enabled) {
+					controllers[index] = SDL_GameControllerOpen(event->jdevice.which);
+				}
 				if (joy) {
 					debug_message("Joystick %d added: %s\n", index, SDL_JoystickName(joy));
 					debug_message("\tNum Axes: %d\n\tNum Buttons: %d\n\tNum Hats: %d\n", SDL_JoystickNumAxes(joy), SDL_JoystickNumButtons(joy), SDL_JoystickNumHats(joy));
@@ -1002,6 +1022,10 @@ static int32_t handle_event(SDL_Event *event)
 		if (index >= 0) {
 			SDL_JoystickClose(joysticks[index]);
 			joysticks[index] = NULL;
+			if (controllers[index]) {
+				SDL_GameControllerClose(controllers[index]);
+				controllers[index] = NULL;
+			}
 			debug_message("Joystick %d removed\n", index);
 		} else {
 			debug_message("Failed to find removed joystick with instance ID: %d\n", index);

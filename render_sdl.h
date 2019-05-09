@@ -11,5 +11,6 @@ SDL_Joystick *render_get_joystick(int index);
 SDL_GameController *render_get_controller(int index);
 int render_lookup_button(char *name);
 int render_lookup_axis(char *name);
+void render_enable_gamepad_events(uint8_t enabled);
 
 #endif //RENDER_SDL_H_

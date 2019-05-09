@@ -2001,6 +2001,7 @@ void blastem_nuklear_render(void)
 
 void ui_idle_loop(void)
 {
+	render_enable_gamepad_events(1);
 	const uint32_t MIN_UI_DELAY = 15;
 	static uint32_t last;
 	while (current_view != view_play)
@@ -2017,6 +2018,7 @@ void ui_idle_loop(void)
 		persist_config(config);
 		config_dirty = 0;
 	}
+	render_enable_gamepad_events(0);
 }
 static void handle_event(SDL_Event *event)
 {

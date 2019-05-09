@@ -414,6 +414,30 @@ nk_sdl_handle_event(SDL_Event *evt)
             else nk_input_key(ctx, NK_KEY_RIGHT, down);
         } else return 0;
         return 1;
+	} else if (evt->type == SDL_CONTROLLERBUTTONDOWN || evt->type == SDL_CONTROLLERBUTTONUP) {
+		int down = evt->type == SDL_CONTROLLERBUTTONDOWN;
+		if (evt->cbutton.button == SDL_CONTROLLER_BUTTON_DPAD_UP) {
+			nk_input_key(ctx, NK_KEY_UP, down);
+		} else if (evt->cbutton.button == SDL_CONTROLLER_BUTTON_DPAD_DOWN) {
+			nk_input_key(ctx, NK_KEY_DOWN, down);
+		} else if (evt->cbutton.button == SDL_CONTROLLER_BUTTON_A || evt->cbutton.button == SDL_CONTROLLER_BUTTON_START) {
+			nk_input_key(ctx, NK_KEY_ENTER, down);
+		}
+	} else if (evt->type == SDL_CONTROLLERAXISMOTION) {
+		if (evt->caxis.axis == SDL_CONTROLLER_AXIS_LEFTY || evt->caxis.axis ==  SDL_CONTROLLER_AXIS_RIGHTY) {
+			int down = abs(evt->caxis.value) > 2000;
+			if (evt->caxis.value >= 0) {
+				if (ctx->input.keyboard.keys[NK_KEY_UP].down) {
+					nk_input_key(ctx, NK_KEY_UP, 0);
+				}
+				nk_input_key(ctx, NK_KEY_DOWN, down);
+			} else {
+				if (ctx->input.keyboard.keys[NK_KEY_DOWN].down) {
+					nk_input_key(ctx, NK_KEY_DOWN, 0);
+				}
+				nk_input_key(ctx, NK_KEY_UP, down);
+			}
+		}
     } else if (evt->type == SDL_MOUSEBUTTONDOWN || evt->type == SDL_MOUSEBUTTONUP) {
         /* mouse button */
         int down = evt->type == SDL_MOUSEBUTTONDOWN;
