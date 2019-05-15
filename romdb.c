@@ -77,6 +77,7 @@ void cart_serialize(system_header *sys, serialize_buffer *buf)
 	switch(gen->mapper_type)
 	{
 	case MAPPER_SEGA:
+	case MAPPER_SEGA_SRAM:
 		sega_mapper_serialize(gen, buf);
 		break;
 	case MAPPER_REALTEC:
@@ -96,13 +97,14 @@ void cart_deserialize(deserialize_buffer *buf, void *vcontext)
 {
 	genesis_context *gen = vcontext;
 	uint8_t mapper_type = load_int8(buf);
-	if (mapper_type != gen->mapper_type) {
-		warning("Mapper type mismatch, skipping load of mapper state");
+	if (mapper_type != gen->mapper_type && (mapper_type != MAPPER_SEGA || gen->mapper_type != MAPPER_SEGA_SRAM)) {
+		warning("Mapper type mismatch, skipping load of mapper state\n");
 		return;
 	}
 	switch(gen->mapper_type)
 	{
 	case MAPPER_SEGA:
+	case MAPPER_SEGA_SRAM:
 		sega_mapper_deserialize(buf, gen);
 		break;
 	case MAPPER_REALTEC:
@@ -365,7 +367,7 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 				info->map[1].buffer = info->save_buffer;
 			} else {
 				//Assume the standard Sega mapper
-				info->mapper_type = MAPPER_SEGA;
+				info->mapper_type = MAPPER_SEGA_SRAM;
 				info->map[0].end = 0x200000;
 				info->map[0].mask = 0xFFFFFF;
 				info->map[0].flags = MMAP_READ;

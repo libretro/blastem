@@ -116,7 +116,7 @@ m68k_context * write_bank_reg_w(uint32_t address, m68k_context * context, uint16
 				context->mem_pointers[gen->mapper_start_index + i] = gen->cart + 0x40000*gen->bank_regs[i];
 			}
 		}
-	} else {
+	} else if (gen->mapper_type == MAPPER_SEGA) {
 		void *new_ptr = gen->cart + 0x40000*value;
 		if (context->mem_pointers[gen->mapper_start_index + address] != new_ptr) {
 			m68k_invalidate_code_range(gen->m68k, address * 0x80000, (address + 1) * 0x80000);
