@@ -8,7 +8,7 @@
 
 #include <stdint.h>
 #include "serialize.h"
-#include "render.h"
+#include "render_audio.h"
 
 typedef struct {
 	audio_source *audio;
