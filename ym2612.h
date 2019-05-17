@@ -9,7 +9,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "serialize.h"
-#include "render.h"
+#include "render_audio.h"
 
 #define NUM_PART_REGS (0xB7-0x30)
 #define NUM_CHANNELS 6
