@@ -11,6 +11,33 @@ static retro_environment_t retro_environment;
 RETRO_API void retro_set_environment(retro_environment_t re)
 {
 	retro_environment = re;
+#	define input_descriptor_macro(pad_num) \
+		{ pad_num, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" }, \
+		{ pad_num, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,    "D-Pad Up" }, \
+		{ pad_num, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "D-Pad Down" }, \
+		{ pad_num, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "D-Pad Right" }, \
+		{ pad_num, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,     "A" }, \
+		{ pad_num, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,     "B" }, \
+		{ pad_num, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,     "Y" }, \
+		{ pad_num, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,     "X" }, \
+		{ pad_num, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L,     "Z" }, \
+		{ pad_num, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R,     "C" }, \
+		{ pad_num, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT,    "Mode" }, \
+		{ pad_num, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START,    "Start" }, \
+
+	static const struct retro_input_descriptor desc[] = {
+		input_descriptor_macro(0)
+		input_descriptor_macro(1)
+		input_descriptor_macro(2)
+		input_descriptor_macro(3)
+		input_descriptor_macro(4)
+		input_descriptor_macro(5)
+		input_descriptor_macro(6)
+		input_descriptor_macro(7)
+		{ 0 },
+	};
+
+	re(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, (void*)desc);
 }
 
 static retro_video_refresh_t retro_video_refresh;
