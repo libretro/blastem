@@ -24,8 +24,6 @@
 #define LINEBUF_SIZE (320+HORIZ_BORDER) //H40 + full border
 #define SCROLL_BUFFER_SIZE 32
 #define BORDER_BOTTOM 13 //TODO: Replace with actual value
-#define MAX_DRAWS 40
-#define MAX_DRAWS_H32 32
 #define MAX_DRAWS_H32_MODE4 8
 #define MAX_SPRITES_LINE 20
 #define MAX_SPRITES_LINE_H32 16
@@ -133,6 +131,8 @@ typedef struct {
 	int16_t x_pos;
 	uint8_t pal_priority;
 	uint8_t h_flip;
+	uint8_t width;
+	uint8_t height;
 } sprite_draw;
 
 typedef struct {
@@ -195,7 +195,7 @@ typedef struct {
 	uint16_t       hscroll_b;
 	uint16_t       h40_lines;
 	uint16_t       output_lines;
-	sprite_draw    sprite_draw_list[MAX_DRAWS];
+	sprite_draw    sprite_draw_list[MAX_SPRITES_LINE];
 	sprite_info    sprite_info_list[MAX_SPRITES_LINE];
 	uint8_t        sat_cache[SAT_CACHE_SIZE];
 	uint16_t       col_1;
