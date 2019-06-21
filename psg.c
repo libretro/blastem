@@ -4,7 +4,6 @@
  BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater. See COPYING for full license text.
 */
 #include "psg.h"
-#include "render.h"
 #include "blastem.h"
 #include <string.h>
 #include <stdlib.h>

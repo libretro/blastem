@@ -46,151 +46,41 @@ static uint8_t scanlines = 0;
 
 static uint32_t last_frame = 0;
 
-static uint8_t output_channels;
-static uint32_t buffer_samples, sample_rate;
-static uint32_t missing_count;
-
 static SDL_mutex * audio_mutex;
 static SDL_cond * audio_ready;
 static uint8_t quitting = 0;
 
-struct audio_source {
-	SDL_cond *cond;
-	int16_t  *front;
-	int16_t  *back;
-	double   dt;
-	uint64_t buffer_fraction;
-	uint64_t buffer_inc;
-	float    gain_mult;
-	uint32_t buffer_pos;
-	uint32_t read_start;
-	uint32_t read_end;
-	uint32_t lowpass_alpha;
-	uint32_t mask;
-	int16_t  last_left;
-	int16_t  last_right;
-	uint8_t  num_channels;
-	uint8_t  front_populated;
-};
-
-static audio_source *audio_sources[8];
-static audio_source *inactive_audio_sources[8];
-static uint8_t num_audio_sources;
-static uint8_t num_inactive_audio_sources;
 static uint8_t sync_to_audio;
 static uint32_t min_buffered;
-static float overall_gain_mult, *mix_buf;
-static int sample_size;
 
-typedef void (*conv_func)(float *samples, void *vstream, int sample_count);
-
-static void convert_null(float *samples, void *vstream, int sample_count)
+uint32_t render_min_buffered(void)
 {
-	memset(vstream, 0, sample_count * sample_size);
+	return min_buffered;
 }
 
-static void convert_s16(float *samples, void *vstream, int sample_count)
+uint8_t render_is_audio_sync(void)
 {
-	int16_t *stream = vstream;
-	for (int16_t *end = stream + sample_count; stream < end; stream++, samples++)
-	{
-		float sample = *samples;
-		int16_t out_sample;
-		if (sample >= 1.0f) {
-			out_sample = 0x7FFF;
-		} else if (sample <= -1.0f) {
-			out_sample = -0x8000;
-		} else {
-			out_sample = sample * 0x7FFF;
-		}
-		*stream = out_sample;
-	}
+	return sync_to_audio;
 }
 
-static void clamp_f32(float *samples, void *vstream, int sample_count)
+void render_buffer_consumed(audio_source *src)
 {
-	for (; sample_count > 0; sample_count--, samples++)
-	{
-		float sample = *samples;
-		if (sample > 1.0f) {
-			sample = 1.0f;
-		} else if (sample < -1.0f) {
-			sample = -1.0f;
-		}
-		*samples = sample;
-	}
+	SDL_CondSignal(src->opaque);
 }
-
-static int32_t mix_f32(audio_source *audio, float *stream, int samples)
-{
-	float *end = stream + samples;
-	int16_t *src = audio->front;
-	uint32_t i = audio->read_start;
-	uint32_t i_end = audio->read_end;
-	float *cur = stream;
-	float gain_mult = audio->gain_mult * overall_gain_mult;
-	size_t first_add = output_channels > 1 ? 1 : 0, second_add = output_channels > 1 ? output_channels - 1 : 1;
-	if (audio->num_channels == 1) {
-		while (cur < end && i != i_end)
-		{
-			*cur += gain_mult * ((float)src[i]) / 0x7FFF;
-			cur += first_add;
-			*cur += gain_mult * ((float)src[i++]) / 0x7FFF;
-			cur += second_add;
-			i &= audio->mask;
-		}
-	} else {
-		while(cur < end && i != i_end)
-		{
-			*cur += gain_mult * ((float)src[i++]) / 0x7FFF;
-			cur += first_add;
-			*cur += gain_mult * ((float)src[i++]) / 0x7FFF;
-			cur += second_add;
-			i &= audio->mask;
-		}
-	}
-	if (!sync_to_audio) {
-		audio->read_start = i;
-	}
-	if (cur != end) {
-		debug_message("Underflow of %d samples, read_start: %d, read_end: %d, mask: %X\n", (int)(end-cur)/2, audio->read_start, audio->read_end, audio->mask);
-		return (cur-end)/2;
-	} else {
-		return ((i_end - i) & audio->mask) / audio->num_channels;
-	}
-}
-
-static conv_func convert;
 
 static void audio_callback(void * userdata, uint8_t *byte_stream, int len)
 {
-	uint8_t num_populated;
 	SDL_LockMutex(audio_mutex);
+		uint8_t all_ready;
 		do {
-			num_populated = 0;
-			for (uint8_t i = 0; i < num_audio_sources; i++)
-			{
-				if (audio_sources[i]->front_populated) {
-					num_populated++;
-				}
-			}
-			if (!quitting && num_populated < num_audio_sources) {
-				fflush(stdout);
+			all_ready = all_sources_ready();
+			if (!quitting && !all_ready) {
 				SDL_CondWait(audio_ready, audio_mutex);
 			}
-		} while(!quitting && num_populated < num_audio_sources);
-		int samples = len / sample_size;
-		float *mix_dest = mix_buf ? mix_buf : (float *)byte_stream;
-		memset(mix_dest, 0, samples * sizeof(float));
+		} while(!quitting && !all_ready);
 		if (!quitting) {
-			for (uint8_t i = 0; i < num_audio_sources; i++)
-			{
-				mix_f32(audio_sources[i], mix_dest, samples);
-				audio_sources[i]->front_populated = 0;
-				SDL_CondSignal(audio_sources[i]->cond);
-			}
+			mix_and_convert(byte_stream, len, NULL);
 		}
-		convert(mix_dest, byte_stream, samples);
 	SDL_UnlockMutex(audio_mutex);
 }
 
@@ -208,23 +98,10 @@ static void audio_callback_drc(void *userData, uint8_t *byte_stream, int len)
 		//underflow last frame, but main thread hasn't gotten a chance to call SDL_PauseAudio yet
 		return;
 	}
-	cur_min_buffered = 0x7FFFFFFF;
-	min_remaining_buffer = 0xFFFFFFFF;
-	float *mix_dest = mix_buf ? mix_buf : (float *)byte_stream;	
-	int samples = len / sample_size;
-	memset(mix_dest, 0, samples * sizeof(float));
-	for (uint8_t i = 0; i < num_audio_sources; i++)
-	{
-		
-		int32_t buffered = mix_f32(audio_sources[i], mix_dest, samples);
-		cur_min_buffered = buffered < cur_min_buffered ? buffered : cur_min_buffered;
-		uint32_t remaining = (audio_sources[i]->mask + 1)/audio_sources[i]->num_channels - buffered;
-		min_remaining_buffer = remaining < min_remaining_buffer ? remaining : min_remaining_buffer;
-	}
-	convert(mix_dest, byte_stream, samples);
+	cur_min_buffered = mix_and_convert(byte_stream, len, &min_remaining_buffer);
 }
 
-static void lock_audio()
+void render_lock_audio()
 {
 	if (sync_to_audio) {
 		SDL_LockMutex(audio_mutex);
@@ -233,7 +110,7 @@ static void lock_audio()
 	}
 }
 
-static void unlock_audio()
+void render_unlock_audio()
 {
 	if (sync_to_audio) {
 		SDL_UnlockMutex(audio_mutex);
@@ -249,127 +126,55 @@ static void render_close_audio()
 		SDL_CondSignal(audio_ready);
 	SDL_UnlockMutex(audio_mutex);
 	SDL_CloseAudio();
+	/*
+	FIXME: move this to render_audio.c
 	if (mix_buf) {
 		free(mix_buf);
 		mix_buf = NULL;
 	}
+	*/
 }
 
-#define BUFFER_INC_RES 0x40000000UL
-
-void render_audio_adjust_clock(audio_source *src, uint64_t master_clock, uint64_t sample_divider)
+void *render_new_audio_opaque(void)
 {
-	src->buffer_inc = ((BUFFER_INC_RES * (uint64_t)sample_rate) / master_clock) * sample_divider;
+	return SDL_CreateCond();
 }
 
-audio_source *render_audio_source(uint64_t master_clock, uint64_t sample_divider, uint8_t channels)
+void render_free_audio_opaque(void *opaque)
 {
-	audio_source *ret = NULL;
-	uint32_t alloc_size = sync_to_audio ? channels * buffer_samples : nearest_pow2(min_buffered * 4 * channels);
-	lock_audio();
-		if (num_audio_sources < 8) {
-			ret = malloc(sizeof(audio_source));
-			ret->back = malloc(alloc_size * sizeof(int16_t));
-			ret->front = sync_to_audio ? malloc(alloc_size * sizeof(int16_t)) : ret->back;
-			ret->front_populated = 0;
-			ret->cond = SDL_CreateCond();
-			ret->num_channels = channels;
-			audio_sources[num_audio_sources++] = ret;
-		}
-	unlock_audio();
-	if (!ret) {
-		fatal_error("Too many audio sources!");
-	} else {
-		render_audio_adjust_clock(ret, master_clock, sample_divider);
-		double lowpass_cutoff = get_lowpass_cutoff(config);
-		double rc = (1.0 / lowpass_cutoff) / (2.0 * M_PI);
-		ret->dt = 1.0 / ((double)master_clock / (double)(sample_divider));
-		double alpha = ret->dt / (ret->dt + rc);
-		ret->lowpass_alpha = (int32_t)(((double)0x10000) * alpha);
-		ret->buffer_pos = 0;
-		ret->buffer_fraction = 0;
-		ret->last_left = ret->last_right = 0;
-		ret->read_start = 0;
-		ret->read_end = sync_to_audio ? buffer_samples * channels : 0;
-		ret->mask = sync_to_audio ? 0xFFFFFFFF : alloc_size-1;
-		ret->gain_mult = 1.0f;
-	}
+	SDL_DestroyCond(opaque);
+}
+
+void render_audio_created(audio_source *source)
+{
 	if (sync_to_audio && SDL_GetAudioStatus() == SDL_AUDIO_PAUSED) {
 		SDL_PauseAudio(0);
 	}
-	return ret;
 }
 
-static float db_to_mult(float gain)
+void render_source_paused(audio_source *src, uint8_t remaining_sources)
 {
-	return powf(10.0f, gain/20.0f);
-}
-
-void render_audio_source_gaindb(audio_source *src, float gain)
-{
-	src->gain_mult = db_to_mult(gain);
-}
-
-void render_pause_source(audio_source *src)
-{
-	uint8_t need_pause = 0;
-	lock_audio();
-		for (uint8_t i = 0; i < num_audio_sources; i++)
-		{
-			if (audio_sources[i] == src) {
-				audio_sources[i] = audio_sources[--num_audio_sources];
-				if (sync_to_audio) {
-					SDL_CondSignal(audio_ready);
-				}
-				break;
-			}
-		}
-		if (!num_audio_sources) {
-			need_pause = 1;
-		}
-	unlock_audio();
-	if (need_pause) {
-		SDL_PauseAudio(1);
+	if (sync_to_audio) {
+		SDL_CondSignal(audio_ready);
 	}
-	inactive_audio_sources[num_inactive_audio_sources++] = src;
+	if (!remaining_sources) {
+		SDL_PauseAudio(0);
+	}
 }
 
-void render_resume_source(audio_source *src)
+void render_source_resumed(audio_source *src)
 {
-	lock_audio();
-		if (num_audio_sources < 8) {
-			audio_sources[num_audio_sources++] = src;
-		}
-	unlock_audio();
-	for (uint8_t i = 0; i < num_inactive_audio_sources; i++)
-	{
-		if (inactive_audio_sources[i] == src) {
-			inactive_audio_sources[i] = inactive_audio_sources[--num_inactive_audio_sources];
-		}
-	}
 	if (sync_to_audio) {
 		SDL_PauseAudio(0);
 	}
 }
 
-void render_free_source(audio_source *src)
-{
-	render_pause_source(src);
-	
-	free(src->front);
-	if (sync_to_audio) {
-		free(src->back);
-		SDL_DestroyCond(src->cond);
-	}
-	free(src);
-}
-static uint32_t sync_samples;
-static void do_audio_ready(audio_source *src)
+void render_do_audio_ready(audio_source *src)
 {
 	if (sync_to_audio) {
 		SDL_LockMutex(audio_mutex);
 			while (src->front_populated) {
-				SDL_CondWait(src->cond, audio_mutex);
+				SDL_CondWait(src->opaque, audio_mutex);
 			}
 			int16_t *tmp = src->front;
 			src->front = src->back;
@@ -388,60 +193,6 @@ static void do_audio_ready(audio_source *src)
 			SDL_PauseAudio(0);
 		}
 	}
-}
-
-static int16_t lowpass_sample(audio_source *src, int16_t last, int16_t current)
-{
-	int32_t tmp = current * src->lowpass_alpha + last * (0x10000 - src->lowpass_alpha);
-	current = tmp >> 16;
-	return current;
-}
-
-static void interp_sample(audio_source *src, int16_t last, int16_t current)
-{
-	int64_t tmp = last * ((src->buffer_fraction << 16) / src->buffer_inc);
-	tmp += current * (0x10000 - ((src->buffer_fraction << 16) / src->buffer_inc));
-	src->back[src->buffer_pos++] = tmp >> 16;
-}
-
-void render_put_mono_sample(audio_source *src, int16_t value)
-{
-	value = lowpass_sample(src, src->last_left, value);
-	src->buffer_fraction += src->buffer_inc;
-	uint32_t base = sync_to_audio ? 0 : src->read_end;
-	while (src->buffer_fraction > BUFFER_INC_RES)
-	{
-		src->buffer_fraction -= BUFFER_INC_RES;
-		interp_sample(src, src->last_left, value);
-		
-		if (((src->buffer_pos - base) & src->mask) >= sync_samples) {
-			do_audio_ready(src);
-		}
-		src->buffer_pos &= src->mask;
-	}
-	src->last_left = value;
-}
-
-void render_put_stereo_sample(audio_source *src, int16_t left, int16_t right)
-{
-	left = lowpass_sample(src, src->last_left, left);
-	right = lowpass_sample(src, src->last_right, right);
-	src->buffer_fraction += src->buffer_inc;
-	uint32_t base = sync_to_audio ? 0 : src->read_end;
-	while (src->buffer_fraction > BUFFER_INC_RES)
-	{
-		src->buffer_fraction -= BUFFER_INC_RES;
-		
-		interp_sample(src, src->last_left, left);
-		interp_sample(src, src->last_right, right);
-		
-		if (((src->buffer_pos - base) & src->mask)/2 >= sync_samples) {
-			do_audio_ready(src);
-		}
-		src->buffer_pos &= src->mask;
-	}
-	src->last_left = left;
-	src->last_right = right;
 }
 
 static SDL_Joystick * joysticks[MAX_JOYSTICKS];
@@ -1113,6 +864,7 @@ static int source_frame;
 static int source_frame_count;
 static int frame_repeat[60];
 
+static uint32_t sample_rate;
 static void init_audio()
 {
 	SDL_AudioSpec desired, actual;
@@ -1137,27 +889,20 @@ static void init_audio()
 	if (SDL_OpenAudio(&desired, &actual) < 0) {
 		fatal_error("Unable to open SDL audio: %s\n", SDL_GetError());
 	}
-	buffer_samples = actual.samples;
 	sample_rate = actual.freq;
-	output_channels = actual.channels;
 	debug_message("Initialized audio at frequency %d with a %d sample buffer, ", actual.freq, actual.samples);
-	sample_size = SDL_AUDIO_BITSIZE(actual.format) / 8;
+	render_audio_format format = RENDER_AUDIO_UNKNOWN;
 	if (actual.format == AUDIO_S16SYS) {
 		debug_message("signed 16-bit int format\n");
-		convert = convert_s16;
-		mix_buf = calloc(output_channels * buffer_samples, sizeof(float));
+		format = RENDER_AUDIO_S16;
 	} else if (actual.format == AUDIO_F32SYS) {
 		debug_message("32-bit float format\n");
-		convert = clamp_f32;
-		mix_buf = NULL;
+		format = RENDER_AUDIO_FLOAT;
 	} else {
 		debug_message("unsupported format %X\n", actual.format);
 		warning("Unsupported audio sample format: %X\n", actual.format);
-		convert = convert_null;
-		mix_buf = calloc(output_channels * buffer_samples, sizeof(float));
 	}
-	char * gain_str = tern_find_path(config, "audio\0gain\0", TVAL_PTR).ptrval;
-	overall_gain_mult = db_to_mult(gain_str ? atof(gain_str) : 0.0f);
+	render_audio_initialized(format, actual.freq, actual.channels, actual.samples, SDL_AUDIO_BITSIZE(actual.format) / 8);
 }
 
 void window_setup(void)
@@ -1352,26 +1097,6 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 }
 #include<unistd.h>
 static int in_toggle;
-static void update_source(audio_source *src, double rc, uint8_t sync_changed)
-{
-	double alpha = src->dt / (src->dt + rc);
-	int32_t lowpass_alpha = (int32_t)(((double)0x10000) * alpha);
-	src->lowpass_alpha = lowpass_alpha;
-	if (sync_changed) {
-		uint32_t alloc_size = sync_to_audio ? src->num_channels * buffer_samples : nearest_pow2(min_buffered * 4 * src->num_channels);
-		src->back = realloc(src->back, alloc_size * sizeof(int16_t));
-		if (sync_to_audio) {
-			src->front = malloc(alloc_size * sizeof(int16_t));
-		} else {
-			free(src->front);
-			src->front = src->back;
-		}
-		src->mask = sync_to_audio ? 0xFFFFFFFF : alloc_size-1;
-		src->read_start = 0;
-		src->read_end = sync_to_audio ? buffer_samples * src->num_channels : 0;
-		src->buffer_pos = 0;
-	}
-}
 
 void render_config_updated(void)
 {
@@ -1438,18 +1163,6 @@ void render_config_updated(void)
 	init_audio();
 	render_set_video_standard(video_standard);
 	
-	double lowpass_cutoff = get_lowpass_cutoff(config);
-	double rc = (1.0 / lowpass_cutoff) / (2.0 * M_PI);
-	lock_audio();
-		for (uint8_t i = 0; i < num_audio_sources; i++)
-		{
-			update_source(audio_sources[i], rc, old_sync_to_audio != sync_to_audio);
-		}
-	unlock_audio();
-	for (uint8_t i = 0; i < num_inactive_audio_sources; i++)
-	{
-		update_source(inactive_audio_sources[i], rc, old_sync_to_audio != sync_to_audio);
-	}
 	drain_events();
 	in_toggle = 0;
 	if (!was_paused) {
@@ -1460,6 +1173,12 @@ void render_config_updated(void)
 SDL_Window *render_get_window(void)
 {
 	return main_window;
+}
+
+uint32_t render_audio_syncs_per_sec(void)
+{
+	//sync samples with audio thread approximately every 8 lines when doing sync to video
+	return sync_to_audio ? 0 : source_hz * (video_standard == VID_PAL ? 313 : 262) / 8;
 }
 
 void render_set_video_standard(vid_std std)
@@ -1491,8 +1210,6 @@ void render_set_video_standard(vid_std std)
 	}
 	source_frame = 0;
 	source_frame_count = frame_repeat[0];
-	//sync samples with audio thread approximately every 8 lines
-	sync_samples = sync_to_audio ? buffer_samples : 8 * sample_rate / (source_hz * (std == VID_PAL ? 313 : 262));
 	max_repeat++;
 	min_buffered = (((float)max_repeat * (float)sample_rate/(float)source_hz)/* / (float)buffer_samples*/);// + 0.9999;
 	//min_buffered *= buffer_samples;
@@ -1808,10 +1525,8 @@ void render_framebuffer_updated(uint8_t which, int width)
 		}
 		if (adjust_ratio != 0.0f) {
 			average_change = 0;
-			for (uint8_t i = 0; i < num_audio_sources; i++)
-			{
-				audio_sources[i]->buffer_inc = ((double)audio_sources[i]->buffer_inc) + ((double)audio_sources[i]->buffer_inc) * adjust_ratio + 0.5;
-			}
+			render_audio_adjust_speed(adjust_ratio);
+			
 		}
 		while (source_frame_count > 0)
 		{
@@ -1909,7 +1624,7 @@ uint32_t render_overscan_top()
 	return overscan_top[video_standard];
 }
 
-void render_wait_quit(vdp_context * context)
+void render_wait_quit(void)
 {
 	SDL_Event event;
 	while(SDL_WaitEvent(&event)) {
@@ -2075,16 +1790,6 @@ void render_toggle_fullscreen()
 	drain_events();
 	in_toggle = 0;
 	need_ui_fb_resize = 1;
-}
-
-uint32_t render_audio_buffer()
-{
-	return buffer_samples;
-}
-
-uint32_t render_sample_rate()
-{
-	return sample_rate;
 }
 
 void render_errorbox(char *title, char *message)

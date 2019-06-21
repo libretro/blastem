@@ -197,7 +197,7 @@ endif
 AUDIOOBJS=ym2612.o psg.o wave.o
 CONFIGOBJS=config.o tern.o util.o paths.o 
 NUKLEAROBJS=$(FONT) nuklear_ui/blastem_nuklear.o nuklear_ui/sfnt.o
-RENDEROBJS=ppm.o controller_info.o
+RENDEROBJS=ppm.o controller_info.o render_audio.o
 ifdef USE_FBDEV
 RENDEROBJS+= render_fbdev.o
 else
