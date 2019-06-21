@@ -144,7 +144,7 @@ vdp_context *init_vdp_context(uint8_t region_pal)
 		context->cur_buffer = FRAMEBUFFER_ODD;
 		context->fb = render_get_framebuffer(FRAMEBUFFER_ODD, &context->output_pitch);
 	}
-	context->sprite_draws = MAX_DRAWS;
+	context->sprite_draws = MAX_SPRITES_LINE;
 	context->fifo_write = 0;
 	context->fifo_read = -1;
 	context->regs[REG_HINT] = context->hint_counter = 0xFF;
@@ -269,40 +269,63 @@ static void increment_address(vdp_context *context)
 
 static void render_sprite_cells(vdp_context * context)
 {
+	if (context->cur_slot > MAX_SPRITES_LINE) {
+		context->cur_slot--;
+		return;
+	}
+	if (context->cur_slot < 0) {
+		return;
+	}
 	sprite_draw * d = context->sprite_draw_list + context->cur_slot;
 	context->serial_address = d->address;
-	if (context->cur_slot >= context->sprite_draws) {
-
-		uint16_t dir;
-		int16_t x;
-		if (d->h_flip) {
-			x = d->x_pos + 7;
-			dir = -1;
-		} else {
-			x = d->x_pos;
-			dir = 1;
+	uint16_t dir;
+	int16_t x;
+	if (d->h_flip) {
+		x = d->x_pos + 7 + 8 * (d->width - 1);
+		dir = -1;
+	} else {
+		x = d->x_pos;
+		dir = 1;
+	}
+	if (d->x_pos) {
+		context->flags |= FLAG_CAN_MASK;
+		if (!(context->flags & FLAG_MASKED)) {
+			x -= 128;
+			//printf("Draw Slot %d of %d, Rendering sprite cell from %X to x: %d\n", context->cur_slot, context->sprite_draws, d->address, x);
+			
+			for (uint16_t address = d->address; address != ((d->address+4) & 0xFFFF); address++) {
+				if (x >= 0 && x < 320) {
+					if (!(context->linebuf[x] & 0xF)) {
+						context->linebuf[x] = (context->vdpmem[address] >> 4) | d->pal_priority;
+					} else if (context->vdpmem[address] >> 4) {
+						context->flags2 |= FLAG2_SPRITE_COLLIDE;
+					}
+				}
+				x += dir;
+				if (x >= 0 && x < 320) {
+					if (!(context->linebuf[x] & 0xF)) {
+						context->linebuf[x] = (context->vdpmem[address] & 0xF)  | d->pal_priority;
+					} else if (context->vdpmem[address] & 0xF) {
+						context->flags2 |= FLAG2_SPRITE_COLLIDE;
+					}
+				}
+				x += dir;
+			}
 		}
-		//printf("Draw Slot %d of %d, Rendering sprite cell from %X to x: %d\n", context->cur_slot, context->sprite_draws, d->address, x);
-		context->cur_slot--;
-		for (uint16_t address = d->address; address != ((d->address+4) & 0xFFFF); address++) {
-			if (x >= 0 && x < 320) {
-				if (!(context->linebuf[x] & 0xF)) {
-					context->linebuf[x] = (context->vdpmem[address] >> 4) | d->pal_priority;
-				} else if (context->vdpmem[address] >> 4) {
-					context->flags2 |= FLAG2_SPRITE_COLLIDE;
-				}
-			}
-			x += dir;
-			if (x >= 0 && x < 320) {
-				if (!(context->linebuf[x] & 0xF)) {
-					context->linebuf[x] = (context->vdpmem[address] & 0xF)  | d->pal_priority;
-				} else if (context->vdpmem[address] & 0xF) {
-					context->flags2 |= FLAG2_SPRITE_COLLIDE;
-				}
-			}
-			x += dir;
+	} else if (context->flags & FLAG_CAN_MASK) {
+		context->flags |= FLAG_MASKED;
+		context->flags &= ~FLAG_CAN_MASK;
+	}
+	if (d->width) {
+		d->width--;
+	}
+	if (d->width) {
+		d->address += d->height * 4;
+		if (!d->h_flip) {
+			d->x_pos += 8;
 		}
 	} else {
+		d->x_pos = 0;
 		context->cur_slot--;
 	}
 }
@@ -695,47 +718,13 @@ static void read_sprite_x(uint32_t line, vdp_context * context)
 			} else {
 				address = ((tileinfo & 0x7FF) << 5) + row * 4;
 			}
-			int16_t x = ((context->vdpmem[att_addr+ 2] & 0x3) << 8 | context->vdpmem[att_addr + 3]) & 0x1FF;
-			if (x) {
-				context->flags |= FLAG_CAN_MASK;
-			} else if(context->flags & (FLAG_CAN_MASK | FLAG_DOT_OFLOW)) {
-				context->flags |= FLAG_MASKED;
-			}
-
-			context->flags &= ~FLAG_DOT_OFLOW;
-			int16_t i;
-			if (context->flags & FLAG_MASKED) {
-				for (i=0; i < width && context->sprite_draws; i++) {
-					--context->sprite_draws;
-					context->sprite_draw_list[context->sprite_draws].x_pos = -128;
-					context->sprite_draw_list[context->sprite_draws].address = address + i * height * 4;
-				}
-			} else {
-				x -= 128;
-				int16_t base_x = x;
-				int16_t dir;
-				if (tileinfo & MAP_BIT_H_FLIP) {
-					x += (width-1) * 8;
-					dir = -8;
-				} else {
-					dir = 8;
-				}
-				//printf("Sprite %d | x: %d, y: %d, width: %d, height: %d, pal_priority: %X, row: %d, tile addr: %X\n", context->sprite_info_list[context->cur_slot].index, x, context->sprite_info_list[context->cur_slot].y, width, height, pal_priority, row, address);
-				for (i=0; i < width && context->sprite_draws; i++, x += dir) {
-					--context->sprite_draws;
-					context->sprite_draw_list[context->sprite_draws].address = address + i * height * 4;
-					context->sprite_draw_list[context->sprite_draws].x_pos = x;
-					context->sprite_draw_list[context->sprite_draws].pal_priority = pal_priority;
-					context->sprite_draw_list[context->sprite_draws].h_flip = (tileinfo & MAP_BIT_H_FLIP) ? 1 : 0;
-				}
-			}
-			//Used to be i < width
-			//TODO: Confirm this is the right condition on hardware
-			if (!context->sprite_draws) {
-				context->flags |= FLAG_DOT_OFLOW;
-			}
-		} else {
-			context->flags |= FLAG_DOT_OFLOW;
+			context->sprite_draws--;
+			context->sprite_draw_list[context->sprite_draws].x_pos = ((context->vdpmem[att_addr+ 2] & 0x3) << 8 | context->vdpmem[att_addr + 3]) & 0x1FF;
+			context->sprite_draw_list[context->sprite_draws].address = address;
+			context->sprite_draw_list[context->sprite_draws].pal_priority = pal_priority;
+			context->sprite_draw_list[context->sprite_draws].h_flip = (tileinfo & MAP_BIT_H_FLIP) ? 1 : 0;
+			context->sprite_draw_list[context->sprite_draws].width = width;
+			context->sprite_draw_list[context->sprite_draws].height = height;
 		}
 	}
 	context->cur_slot++;
@@ -2581,6 +2570,9 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		CHECK_LIMIT
 	SPRITE_RENDER_H40(254)
 	case 255:
+		if (context->cur_slot >= 0 && context->sprite_draw_list[context->cur_slot].x_pos) {
+			context->flags |= FLAG_DOT_OFLOW;
+		}
 		render_map_3(context);
 		scan_sprite_table(context->vcounter, context);//Just a guess
 		CHECK_LIMIT
@@ -2592,8 +2584,7 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		//so we set cur_slot to slot_counter and let it wrap around to
 		//the beginning of the list
 		context->cur_slot = context->slot_counter;
-		context->sprite_draws = MAX_DRAWS;
-		context->flags &= (~FLAG_CAN_MASK & ~FLAG_MASKED);
+		context->sprite_draws = MAX_SPRITES_LINE;
 		CHECK_LIMIT
 	COLUMN_RENDER_BLOCK(2, 1)
 	COLUMN_RENDER_BLOCK(4, 9)
@@ -2626,7 +2617,7 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	//sprite render to line buffer starts
 	case 163:
 		OUTPUT_PIXEL(163)
-		context->cur_slot = MAX_DRAWS-1;
+		context->cur_slot = MAX_SPRITES_LINE-1;
 		memset(context->linebuf, 0, LINEBUF_SIZE);
 		render_border_garbage(
 			context,
@@ -2634,6 +2625,7 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 			context->tmp_buf_a, context->buf_a_off,
 			context->col_1
 		);
+		context->flags &= ~FLAG_MASKED;
 		render_sprite_cells(context);
 		CHECK_LIMIT
 	case 164:
@@ -2782,6 +2774,9 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 		CHECK_LIMIT
 	SPRITE_RENDER_H32(250)
 	case 251:
+		if (context->cur_slot >= 0 && context->sprite_draw_list[context->cur_slot].x_pos) {
+			context->flags |= FLAG_DOT_OFLOW;
+		}
 		render_map_1(context);
 		scan_sprite_table(context->vcounter, context);//Just a guess
 		CHECK_LIMIT
@@ -2807,8 +2802,7 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 		//filled rather than the number of available slots
 		//context->slot_counter = MAX_SPRITES_LINE - context->slot_counter;
 		context->cur_slot = context->slot_counter;
-		context->sprite_draws = MAX_DRAWS_H32;
-		context->flags &= (~FLAG_CAN_MASK & ~FLAG_MASKED);
+		context->sprite_draws = MAX_SPRITES_LINE_H32;
 		CHECK_LIMIT
 	COLUMN_RENDER_BLOCK(2, 1)
 	COLUMN_RENDER_BLOCK(4, 9)
@@ -2838,7 +2832,7 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 	//sprite render to line buffer starts
 	case 131:
 		OUTPUT_PIXEL(131)
-		context->cur_slot = MAX_DRAWS_H32-1;
+		context->cur_slot = MAX_SPRITES_LINE_H32-1;
 		memset(context->linebuf, 0, LINEBUF_SIZE);
 		render_border_garbage(
 			context,
@@ -2846,6 +2840,7 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 			context->tmp_buf_a, context->buf_a_off,
 			context->col_1
 		);
+		context->flags &= ~FLAG_MASKED;
 		render_sprite_cells(context);
 		CHECK_LIMIT
 	case 132:
@@ -3072,7 +3067,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 			buf_clear_slot = 163;
 			index_reset_slot = 167;
 			bg_end_slot = BG_START_SLOT + LINEBUF_SIZE/2;
-			max_draws = MAX_DRAWS-1;
+			max_draws = MAX_SPRITES_LINE-1;
 			max_sprites = MAX_SPRITES_LINE;
 			index_reset_value = 0x80;
 			vint_slot = VINT_SLOT_H40;
@@ -3081,7 +3076,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 			jump_dest = 229;
 		} else {
 			bg_end_slot = BG_START_SLOT + (256+HORIZ_BORDER)/2;
-			max_draws = MAX_DRAWS_H32-1;
+			max_draws = MAX_SPRITES_LINE_H32-1;
 			max_sprites = MAX_SPRITES_LINE_H32;
 			buf_clear_slot = 128;
 			index_reset_slot = 132;
@@ -3934,8 +3929,10 @@ void vdp_int_ack(vdp_context * context)
 	}
 }
 
+#define VDP_STATE_VERSION 1
 void vdp_serialize(vdp_context *context, serialize_buffer *buf)
 {
+	save_int8(buf, VDP_STATE_VERSION);
 	save_int8(buf, VRAM_SIZE / 1024);//VRAM size in KB, needed for future proofing
 	save_buffer8(buf, context->vdpmem, VRAM_SIZE);
 	save_buffer16(buf, context->cram, CRAM_SIZE);
@@ -3990,13 +3987,15 @@ void vdp_serialize(vdp_context *context, serialize_buffer *buf)
 	save_int8(buf, context->sprite_draws);
 	save_int8(buf, context->slot_counter);
 	save_int8(buf, context->cur_slot);
-	for (int i = 0; i < MAX_DRAWS; i++)
+	for (int i = 0; i < MAX_SPRITES_LINE; i++)
 	{
 		sprite_draw *draw = context->sprite_draw_list + i;
 		save_int16(buf, draw->address);
 		save_int16(buf, draw->x_pos);
 		save_int8(buf, draw->pal_priority);
 		save_int8(buf, draw->h_flip);
+		save_int8(buf, draw->width);
+		save_int8(buf, draw->height);
 	}
 	for (int i = 0; i < MAX_SPRITES_LINE; i++)
 	{
@@ -4015,7 +4014,17 @@ void vdp_serialize(vdp_context *context, serialize_buffer *buf)
 void vdp_deserialize(deserialize_buffer *buf, void *vcontext)
 {
 	vdp_context *context = vcontext;
-	uint8_t vramk = load_int8(buf);
+	uint8_t version = load_int8(buf);
+	uint8_t vramk;
+	if (version == 64) {
+		vramk = version;
+		version = 0;
+	} else {
+		vramk = load_int8(buf);
+	}
+	if (version > VDP_STATE_VERSION) {
+		warning("Save state has VDP version %d, but this build only understands versions %d and lower", version, VDP_STATE_VERSION);
+	}
 	load_buffer8(buf, context->vdpmem, (vramk * 1024) <= VRAM_SIZE ? vramk * 1024 : VRAM_SIZE);
 	if ((vramk * 1024) > VRAM_SIZE) {
 		buf->cur_pos += (vramk * 1024) - VRAM_SIZE;
@@ -4077,13 +4086,50 @@ void vdp_deserialize(deserialize_buffer *buf, void *vcontext)
 	context->sprite_draws = load_int8(buf);
 	context->slot_counter = load_int8(buf);
 	context->cur_slot = load_int8(buf);
-	for (int i = 0; i < MAX_DRAWS; i++)
-	{
-		sprite_draw *draw = context->sprite_draw_list + i;
-		draw->address = load_int16(buf);
-		draw->x_pos = load_int16(buf);
-		draw->pal_priority = load_int8(buf);
-		draw->h_flip = load_int8(buf);
+	if (version == 0) {
+		int cur_draw = 0;
+		for (int i = 0; i < MAX_SPRITES_LINE * 2; i++)
+		{
+			if (cur_draw < MAX_SPRITES_LINE) {
+				sprite_draw *last = cur_draw ? context->sprite_draw_list + cur_draw - 1 : NULL;
+				sprite_draw *draw = context->sprite_draw_list + cur_draw++;
+				draw->address = load_int16(buf);
+				draw->x_pos = load_int16(buf);
+				draw->pal_priority = load_int8(buf);
+				draw->h_flip = load_int8(buf);
+				draw->width = 1;
+				draw->height = 8;
+				
+				if (last && last->width < 4 && last->h_flip == draw->h_flip && last->pal_priority == draw->pal_priority) {
+					int adjust_x = draw->x_pos + draw->h_flip ? -8 : 8;
+					int height = draw->address - last->address /4;
+					if (last->x_pos == adjust_x && (
+						(last->width > 1 && height == last->height) || 
+						(last->width == 1 && (height == 8 || height == 16 || height == 24 || height == 32))
+					)) {
+						//current draw appears to be part of the same sprite as the last one, combine it
+						cur_draw--;
+						last->width++;
+					}
+				}
+			} else {
+				load_int16(buf);
+				load_int16(buf);
+				load_int8(buf);
+				load_int8(buf);
+			}
+		}
+	} else {
+		for (int i = 0; i < MAX_SPRITES_LINE; i++)
+		{
+			sprite_draw *draw = context->sprite_draw_list + i;
+			draw->address = load_int16(buf);
+			draw->x_pos = load_int16(buf);
+			draw->pal_priority = load_int8(buf);
+			draw->h_flip = load_int8(buf);
+			draw->width = load_int8(buf);
+			draw->height = load_int8(buf);
+		}
 	}
 	for (int i = 0; i < MAX_SPRITES_LINE; i++)
 	{
