@@ -353,12 +353,12 @@ void render_infobox(char *title, char *message)
 {
 }
 
-struct audio_source {
+typedef struct {
 	int32_t freq;
 	int32_t left_accum;
 	int32_t right_accum;
 	int32_t num_samples;
-};
+} audio_source;
 
 static audio_source *audio_sources[8];
 static uint8_t num_audio_sources;
