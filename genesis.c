@@ -648,7 +648,7 @@ static uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 	} else if (vdp_port < 0x18){
 		fatal_error("Illegal read from PSG  port %X\n", vdp_port);
 	} else {
-		value = vdp_test_port_read(v_context);
+		value = get_open_bus_value(&gen->header);
 	}
 	if (v_context->cycles != before_cycle) {
 		//printf("68K paused for %d (%d) cycles at cycle %d (%d) for read\n", v_context->cycles - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
@@ -1012,6 +1012,10 @@ static uint8_t z80_read_bank(uint32_t location, void * vcontext)
 	uint32_t address = gen->z80_bank_reg << 15 | location;
 	if (address >= 0xC00000 && address < 0xE00000) {
 		return z80_vdp_port_read(location & 0xFF, context);
+	} else if (address >= 0xA10000 && address <= 0xA10001) {
+		//Apparently version reg can be read through Z80 banked area
+		//TODO: Check rest of IO region addresses
+		return gen->version_reg;
 	} else {
 		fprintf(stderr, "Unhandled read by Z80 from address %X through banked memory area (%X)\n", address, gen->z80_bank_reg << 15);
 	}

@@ -3631,12 +3631,6 @@ uint8_t vdp_data_port_read_pbc(vdp_context * context)
 	return context->prefetch;
 }
 
-uint16_t vdp_test_port_read(vdp_context * context)
-{
-	//TODO: Find out what actually gets returned here
-	return context->test_port;
-}
-
 void vdp_adjust_cycles(vdp_context * context, uint32_t deduction)
 {
 	context->cycles -= deduction;
