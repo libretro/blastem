@@ -254,7 +254,6 @@ uint16_t vdp_data_port_read(vdp_context * context);
 uint8_t vdp_data_port_read_pbc(vdp_context * context);
 void vdp_latch_hv(vdp_context *context);
 uint16_t vdp_hv_counter_read(vdp_context * context);
-uint16_t vdp_test_port_read(vdp_context * context);
 void vdp_adjust_cycles(vdp_context * context, uint32_t deduction);
 uint32_t vdp_next_hint(vdp_context * context);
 uint32_t vdp_next_vint(vdp_context * context);
