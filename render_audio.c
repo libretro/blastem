@@ -9,7 +9,6 @@
 
 static uint8_t output_channels;
 static uint32_t buffer_samples, sample_rate;
-static uint32_t missing_count;
 
 static audio_source *audio_sources[8];
 static audio_source *inactive_audio_sources[8];
@@ -238,7 +237,19 @@ void render_resume_source(audio_source *src)
 
 void render_free_source(audio_source *src)
 {
-	render_pause_source(src);
+	uint8_t found = 0;
+	for (uint8_t i = 0; i < num_inactive_audio_sources; i++)
+	{
+		if (inactive_audio_sources[i] == src) {
+			inactive_audio_sources[i] = inactive_audio_sources[--num_inactive_audio_sources];
+			found = 1;
+			break;
+		}
+	}
+	if (!found) {
+		render_pause_source(src);
+		num_inactive_audio_sources--;
+	}
 	
 	free(src->front);
 	if (render_is_audio_sync()) {
@@ -246,7 +257,6 @@ void render_free_source(audio_source *src)
 		render_free_audio_opaque(src->opaque);
 	}
 	free(src);
-	num_inactive_audio_sources--;
 }
 
 static int16_t lowpass_sample(audio_source *src, int16_t last, int16_t current)
