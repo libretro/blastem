@@ -277,14 +277,16 @@ static void render_sprite_cells(vdp_context * context)
 		return;
 	}
 	sprite_draw * d = context->sprite_draw_list + context->cur_slot;
-	context->serial_address = d->address;
+	uint16_t address = d->address;
+	address += context->sprite_x_offset * d->height * 4;
+	context->serial_address = address;
 	uint16_t dir;
 	int16_t x;
 	if (d->h_flip) {
-		x = d->x_pos + 7 + 8 * (d->width - 1);
+		x = d->x_pos + 7 + 8 * (d->width - context->sprite_x_offset - 1);
 		dir = -1;
 	} else {
-		x = d->x_pos;
+		x = d->x_pos + context->sprite_x_offset * 8;
 		dir = 1;
 	}
 	if (d->x_pos) {
@@ -293,7 +295,7 @@ static void render_sprite_cells(vdp_context * context)
 			x -= 128;
 			//printf("Draw Slot %d of %d, Rendering sprite cell from %X to x: %d\n", context->cur_slot, context->sprite_draws, d->address, x);
 			
-			for (uint16_t address = d->address; address != ((d->address+4) & 0xFFFF); address++) {
+			for (; address != ((context->serial_address+4) & 0xFFFF); address++) {
 				if (x >= 0 && x < 320) {
 					if (!(context->linebuf[x] & 0xF)) {
 						context->linebuf[x] = (context->vdpmem[address] >> 4) | d->pal_priority;
@@ -316,16 +318,11 @@ static void render_sprite_cells(vdp_context * context)
 		context->flags |= FLAG_MASKED;
 		context->flags &= ~FLAG_CAN_MASK;
 	}
-	if (d->width) {
-		d->width--;
-	}
-	if (d->width) {
-		d->address += d->height * 4;
-		if (!d->h_flip) {
-			d->x_pos += 8;
-		}
-	} else {
+
+	context->sprite_x_offset++;
+	if (context->sprite_x_offset == d->width) {
 		d->x_pos = 0;
+		context->sprite_x_offset = 0;
 		context->cur_slot--;
 	}
 }
@@ -553,6 +550,9 @@ void vdp_print_reg_explain(vdp_context * context)
 		   (context->flags & FLAG_PENDING) ? "word" : (context->flags2 & FLAG2_BYTE_PENDING) ? "byte" : "none",
 		   context->vcounter, context->hslot*2, (context->flags2 & FLAG2_VINT_PENDING) ? "true" : "false",
 		   (context->flags2 & FLAG2_HINT_PENDING) ? "true" : "false", vdp_control_port_read(context));
+	printf("\nDebug Register: %X | Output disabled: %s, Force Layer: %d\n", context->test_port, 
+		(context->test_port & TEST_BIT_DISABLE)  ? "true" : "false", context->test_port >> 7 & 3
+	);
 	//restore flags as calling vdp_control_port_read can change them
 	context->flags = old_flags;
 	context->flags2 = old_flags2;
@@ -2584,6 +2584,7 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		//so we set cur_slot to slot_counter and let it wrap around to
 		//the beginning of the list
 		context->cur_slot = context->slot_counter;
+		context->sprite_x_offset = 0;
 		context->sprite_draws = MAX_SPRITES_LINE;
 		CHECK_LIMIT
 	COLUMN_RENDER_BLOCK(2, 1)
@@ -3023,11 +3024,11 @@ static void inactive_test_output(vdp_context *context, uint8_t is_h40, uint8_t t
 	uint8_t *src = NULL;
 	if (test_layer == 2) {
 		//plane A
-		src_off += context->buf_a_off + context->hscroll_a;
+		src_off += context->buf_a_off - (context->hscroll_a & 0xF);
 		src = context->tmp_buf_a;
 	} else if (test_layer == 3){
 		//plane B
-		src_off += context->buf_b_off + context->hscroll_b;
+		src_off += context->buf_b_off - (context->hscroll_b & 0xF);
 		src = context->tmp_buf_b;
 	} else {
 		//sprite layer
@@ -3151,6 +3152,8 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 				break;
 			case 0:
 				render_border_garbage(context, context->serial_address, context->tmp_buf_b, context->buf_b_off+8, context->col_2);
+				break;
+			case 1:
 				inactive_test_output(context, is_h40, test_layer);
 				break;
 			}
