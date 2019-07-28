@@ -212,6 +212,7 @@ typedef struct {
 	uint8_t        sprite_draws;
 	int8_t         slot_counter;
 	int8_t         cur_slot;
+	uint8_t        sprite_x_offset;
 	uint8_t        max_sprites_frame;
 	uint8_t        max_sprites_line;
 	uint8_t        fetch_tmp[2];
