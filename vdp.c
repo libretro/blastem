@@ -2803,6 +2803,7 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 		//filled rather than the number of available slots
 		//context->slot_counter = MAX_SPRITES_LINE - context->slot_counter;
 		context->cur_slot = context->slot_counter;
+		context->sprite_x_offset = 0;
 		context->sprite_draws = MAX_SPRITES_LINE_H32;
 		CHECK_LIMIT
 	COLUMN_RENDER_BLOCK(2, 1)
