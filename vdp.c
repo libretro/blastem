@@ -2438,6 +2438,194 @@ static void draw_right_border(vdp_context *context)
 		MODE4_CHECK_SLOT_LINE(CALC_SLOT(slot, 5))
 
 static uint32_t dummy_buffer[LINEBUF_SIZE];
+static void vdp_h40_line(vdp_context * context)
+{
+	uint16_t address;
+	uint32_t mask;
+	uint32_t const slot_cycles = MCLKS_SLOT_H40;
+	uint8_t bgindex = context->regs[REG_BG_COLOR] & 0x3F;
+	uint8_t test_layer = context->test_port >> 7 & 3;
+	
+	//165
+	if (!(context->regs[REG_MODE_3] & BIT_VSCROLL)) {
+		//TODO: Develop some tests on hardware to see when vscroll latch actually happens for full plane mode
+		//See note in vdp_h32 for why this was originally moved out of read_map_scroll
+		//Skitchin' has a similar problem, but uses H40 mode. It seems to be able to hit the extern slot at 232
+		//pretty consistently
+		context->vscroll_latch[0] = context->vsram[0];
+		context->vscroll_latch[1] = context->vsram[1];
+	}
+	render_sprite_cells(context);
+	//166
+	render_sprite_cells(context);
+	//167
+	context->sprite_index = 0x80;
+	context->slot_counter = 0;
+	render_border_garbage(
+		context,
+		context->sprite_draw_list[context->cur_slot].address,
+		context->tmp_buf_b, context->buf_b_off,
+		context->col_1
+	);
+	render_sprite_cells(context);
+	scan_sprite_table(context->vcounter, context);
+	//168
+	render_border_garbage(
+		context,
+		context->sprite_draw_list[context->cur_slot].address,
+		context->tmp_buf_b,
+		context->buf_b_off + 8,
+		context->col_2
+	);
+	//Do palette lookup for end of previous line
+	uint8_t *src = context->compositebuf + (LINE_CHANGE_H40 - BG_START_SLOT) *2;
+	uint32_t *dst = context->output + (LINE_CHANGE_H40 - BG_START_SLOT) *2;
+	if (test_layer) {
+		for (int i = 0; i < LINEBUF_SIZE - (LINE_CHANGE_H40 - BG_START_SLOT) * 2; i++)
+		{
+			*(dst++) = context->colors[*(src++)];
+		}
+	} else {
+		for (int i = 0; i < LINEBUF_SIZE - (LINE_CHANGE_H40 - BG_START_SLOT) * 2; i++)
+		{
+			if (*src & 0x3F) {
+				*(dst++) = context->colors[*(src++)];
+			} else {
+				*(dst++) = context->colors[(*(src++) & 0xC0) | bgindex];
+			}
+		}
+	}
+	advance_output_line(context);
+	//168-242 (inclusive)
+	for (int i = 0; i < 28; i++)
+	{
+		render_sprite_cells(context);
+		scan_sprite_table(context->vcounter, context);
+	}
+	//243
+	render_border_garbage(
+		context,
+		context->sprite_draw_list[context->cur_slot].address,
+		context->tmp_buf_a,
+		context->buf_a_off,
+		context->col_1
+	);
+	//244
+	address = (context->regs[REG_HSCROLL] & 0x3F) << 10;
+	mask = 0;
+	if (context->regs[REG_MODE_3] & 0x2) {
+		mask |= 0xF8;
+	}
+	if (context->regs[REG_MODE_3] & 0x1) {
+		mask |= 0x7;
+	}
+	render_border_garbage(context, address, context->tmp_buf_a, context->buf_a_off+8, context->col_2);
+	address += (context->vcounter & mask) * 4;
+	context->hscroll_a = context->vdpmem[address] << 8 | context->vdpmem[address+1];
+	context->hscroll_b = context->vdpmem[address+2] << 8 | context->vdpmem[address+3];
+	//printf("%d: HScroll A: %d, HScroll B: %d\n", context->vcounter, context->hscroll_a, context->hscroll_b);
+	//243-246 inclusive
+	for (int i = 0; i < 28; i++)
+	{
+		render_sprite_cells(context);
+		scan_sprite_table(context->vcounter, context);
+	}
+	//247
+	render_border_garbage(
+		context,
+		context->sprite_draw_list[context->cur_slot].address,
+		context->tmp_buf_b,
+		context->buf_b_off,
+		context->col_1
+	);
+	render_sprite_cells(context);
+	scan_sprite_table(context->vcounter, context);
+	//248
+	render_border_garbage(
+		context,
+		context->sprite_draw_list[context->cur_slot].address,
+		context->tmp_buf_b,
+		context->buf_b_off + 8,
+		context->col_2
+	);
+	render_sprite_cells(context);
+	scan_sprite_table(context->vcounter, context);
+	context->buf_a_off = (context->buf_a_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
+	context->buf_b_off = (context->buf_b_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
+	//250
+	render_sprite_cells(context);
+	scan_sprite_table(context->vcounter, context);
+	//254
+	render_sprite_cells(context);
+	scan_sprite_table(context->vcounter, context);
+	//255
+	if (context->cur_slot >= 0 && context->sprite_draw_list[context->cur_slot].x_pos) {
+		context->flags |= FLAG_DOT_OFLOW;
+	}
+	scan_sprite_table(context->vcounter, context);
+	//0
+	scan_sprite_table(context->vcounter, context);//Just a guess
+	//seems like the sprite table scan fills a shift register
+	//values are FIFO, but unused slots precede used slots
+	//so we set cur_slot to slot_counter and let it wrap around to
+	//the beginning of the list
+	context->cur_slot = context->slot_counter;
+	context->sprite_x_offset = 0;
+	context->sprite_draws = MAX_SPRITES_LINE;
+	//background planes and layer compositing
+	for (int col = 0; col < 42; col+=2)
+	{
+		read_map_scroll_a(col, context->vcounter, context);
+		render_map_1(context);
+		render_map_2(context);
+		read_map_scroll_b(col, context->vcounter, context);
+		render_map_3(context);
+		render_map_output(context->vcounter, col, context);
+	}
+	//sprite rendering phase 2
+	for (int i = 0; i < 40; i++)
+	{
+		read_sprite_x(context->vcounter, context);
+	}
+	//163
+	context->cur_slot = MAX_SPRITES_LINE-1;
+	memset(context->linebuf, 0, LINEBUF_SIZE);
+	render_border_garbage(
+		context,
+		context->sprite_draw_list[context->cur_slot].address,
+		context->tmp_buf_a, context->buf_a_off,
+		context->col_1
+	);
+	context->flags &= ~FLAG_MASKED;
+	render_sprite_cells(context);
+	//164
+	render_border_garbage(
+		context,
+		context->sprite_draw_list[context->cur_slot].address,
+		context->tmp_buf_a, context->buf_a_off + 8,
+		context->col_2
+	);
+	render_sprite_cells(context);
+	context->cycles += MCLKS_LINE;
+	vdp_advance_line(context);
+	src = context->compositebuf;
+	dst = context->output;
+	if (test_layer) {
+		for (int i = 0; i < (LINE_CHANGE_H40 - BG_START_SLOT) * 2; i++)
+		{
+			*(dst++) = context->colors[*(src++)];
+		}
+	} else {
+		for (int i = 0; i < (LINE_CHANGE_H40 - BG_START_SLOT) * 2; i++)
+		{
+			if (*src & 0x3F) {
+				*(dst++) = context->colors[*(src++)];
+			} else {
+				*(dst++) = context->colors[(*(src++) & 0xC0) | bgindex];
+			}
+		}
+	}
+}
 static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 {
 	uint16_t address;
@@ -2455,6 +2643,13 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 	for (;;)
 	{
 	case 165:
+		//only consider doing a line at a time if the FIFO is empty, there are no pending reads and there is no DMA running
+		if (context->fifo_read == -1 && !(context->flags & FLAG_DMA_RUN) && ((context->cd & 1) || (context->flags & (FLAG_READ_FETCHED|FLAG_PENDING)))) {
+			while (target_cycles - context->cycles >= MCLKS_LINE && context->state != PREPARING && context->vcounter != context->inactive_start) {
+				vdp_h40_line(context);
+			}
+			CHECK_ONLY
+		}
 		OUTPUT_PIXEL(165)
 		if (!(context->regs[REG_MODE_3] & BIT_VSCROLL)) {
 			//TODO: Develop some tests on hardware to see when vscroll latch actually happens for full plane mode
