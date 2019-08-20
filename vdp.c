@@ -2522,7 +2522,7 @@ static void vdp_h40_line(vdp_context * context)
 	context->hscroll_b = context->vdpmem[address+2] << 8 | context->vdpmem[address+3];
 	//printf("%d: HScroll A: %d, HScroll B: %d\n", context->vcounter, context->hscroll_a, context->hscroll_b);
 	//243-246 inclusive
-	for (int i = 0; i < 28; i++)
+	for (int i = 0; i < 3; i++)
 	{
 		render_sprite_cells(context);
 		scan_sprite_table(context->vcounter, context);
@@ -2552,6 +2552,10 @@ static void vdp_h40_line(vdp_context * context)
 	//250
 	render_sprite_cells(context);
 	scan_sprite_table(context->vcounter, context);
+	//251
+	scan_sprite_table(context->vcounter, context);//Just a guess
+	//252
+	scan_sprite_table(context->vcounter, context);//Just a guess
 	//254
 	render_sprite_cells(context);
 	scan_sprite_table(context->vcounter, context);
@@ -2580,7 +2584,7 @@ static void vdp_h40_line(vdp_context * context)
 		render_map_output(context->vcounter, col, context);
 	}
 	//sprite rendering phase 2
-	for (int i = 0; i < 40; i++)
+	for (int i = 0; i < MAX_SPRITES_LINE; i++)
 	{
 		read_sprite_x(context->vcounter, context);
 	}
