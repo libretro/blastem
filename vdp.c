@@ -1197,28 +1197,25 @@ static void render_map(uint16_t col, uint8_t * tmp_buf, uint8_t offset, vdp_cont
 	}
 	uint8_t pal_priority = (col >> 9) & 0x70;
 	uint32_t bits = *((uint32_t *)(&context->vdpmem[address]));
+	tmp_buf += offset;
 	if (col & MAP_BIT_H_FLIP) {
 		uint32_t shift = 28;
 		for (int i = 0; i < 4; i++)
 		{
 			uint8_t right = pal_priority | ((bits >> shift) & 0xF);
 			shift -= 4;
-			tmp_buf[offset++] = pal_priority | ((bits >> shift) & 0xF);
+			*(tmp_buf++) = pal_priority | ((bits >> shift) & 0xF);
 			shift -= 4;
-			offset &= SCROLL_BUFFER_MASK;
-			tmp_buf[offset++] = right;
-			offset &= SCROLL_BUFFER_MASK;
+			*(tmp_buf++) = right;
 		}
 	} else {
 		for (int i = 0; i < 4; i++)
 		{
 			uint8_t right = pal_priority | (bits & 0xF);
 			bits >>= 4;
-			tmp_buf[offset++] = pal_priority | (bits & 0xF);
-			offset &= SCROLL_BUFFER_MASK;
+			*(tmp_buf++) = pal_priority | (bits & 0xF);
 			bits >>= 4;
-			tmp_buf[offset++] = right;
-			offset &= SCROLL_BUFFER_MASK;
+			*(tmp_buf++) = right;
 		}
 	}
 }
