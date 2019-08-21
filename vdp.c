@@ -1314,23 +1314,32 @@ static sh_pixel composite_highlight(vdp_context *context, uint8_t *debug_dst, ui
 
 static void render_normal(vdp_context *context, int32_t col, uint8_t *dst, uint8_t *debug_dst, int plane_a_off, int plane_b_off)
 {
-	int start = 0;
+	uint8_t *sprite_buf = context->linebuf + col * 8;
 	if (!col && (context->regs[REG_MODE_1] & BIT_COL0_MASK)) {
 		memset(dst, 0, 8);
 		memset(debug_dst, DBG_SRC_BG, 8);
 		dst += 8;
 		debug_dst += 8;
-		start = 8;
-	}
-	uint8_t *sprite_buf = context->linebuf + col * 8 + start;
-	for (int i = start; i < 16; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i)
-	{
-		uint8_t sprite, plane_a, plane_b;
-		plane_a = context->tmp_buf_a[plane_a_off & SCROLL_BUFFER_MASK];
-		plane_b = context->tmp_buf_b[plane_b_off & SCROLL_BUFFER_MASK];
-		sprite = *sprite_buf;
-		*(dst++) = composite_normal(context, debug_dst, sprite, plane_a, plane_b, context->regs[REG_BG_COLOR]) & 0x3F;
-		debug_dst++;
+		sprite_buf += 8;
+		plane_a_off += 8;
+		plane_b_off += 8;
+		for (int i = 0; i < 8; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i)
+		{
+			uint8_t sprite, plane_a, plane_b;
+			plane_a = context->tmp_buf_a[plane_a_off & SCROLL_BUFFER_MASK];
+			plane_b = context->tmp_buf_b[plane_b_off & SCROLL_BUFFER_MASK];
+			*(dst++) = composite_normal(context, debug_dst, *sprite_buf, plane_a, plane_b, context->regs[REG_BG_COLOR]) & 0x3F;
+			debug_dst++;
+		}
+	} else {
+		for (int i = 0; i < 16; ++plane_a_off, ++plane_b_off, ++sprite_buf, ++i)
+		{
+			uint8_t sprite, plane_a, plane_b;
+			plane_a = context->tmp_buf_a[plane_a_off & SCROLL_BUFFER_MASK];
+			plane_b = context->tmp_buf_b[plane_b_off & SCROLL_BUFFER_MASK];
+			*(dst++) = composite_normal(context, debug_dst, *sprite_buf, plane_a, plane_b, context->regs[REG_BG_COLOR]) & 0x3F;
+			debug_dst++;
+		}
 	}
 }
 
@@ -1628,6 +1637,7 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 			case 1:
 				memset(dst, 0, BORDER_LEFT);
 				memset(debug_dst, DBG_SRC_BG, BORDER_LEFT);
+				dst += BORDER_LEFT;
 				break;
 			case 2: {
 				//plane A
@@ -1660,8 +1670,8 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 		} else {
 			memset(dst, pixel, BORDER_LEFT);
 			memset(debug_dst, DBG_SRC_BG, BORDER_LEFT);
+			dst += BORDER_LEFT;
 		}
-		dst += BORDER_LEFT;
 	}
 	context->done_composite = dst;
 	context->buf_a_off = (context->buf_a_off + SCROLL_BUFFER_DRAW) & SCROLL_BUFFER_MASK;
