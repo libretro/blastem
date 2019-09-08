@@ -20,6 +20,7 @@
 typedef struct {
 	int16_t  *mod_src[2];
 	uint32_t phase_counter;
+	uint32_t phase_inc;
 	uint16_t envelope;
 	int16_t  output;
 	uint16_t total_level;

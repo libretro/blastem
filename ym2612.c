@@ -388,7 +388,19 @@ void ym_run_timers(ym2612_context *context)
 			context->lfo_counter = lfo_timer_values[context->lfo_freq];
 			context->lfo_am_step += 2;
 			context->lfo_am_step &= 0xFE;
+			uint8_t old_pm_step = context->lfo_pm_step;
 			context->lfo_pm_step = context->lfo_am_step / 8;
+			if (context->lfo_pm_step != old_pm_step) {
+				for (int chan = 0; chan < NUM_CHANNELS; chan++)
+				{
+					if (context->channels[chan].pms) {
+						for (int op = chan * 4; op < (chan + 1) * 4; op++)
+						{
+							context->operators[op].phase_inc = ym_calc_phase_inc(context, context->operators + op, op);
+						}
+					}
+				}
+			}
 		}
 	}
 }
@@ -452,7 +464,7 @@ void ym_run_phase(ym2612_context *context, uint32_t channel, uint32_t op)
 		ym_operator * operator = context->operators + op;
 		ym_channel * chan = context->channels + channel;
 		uint16_t phase = operator->phase_counter >> 10 & 0x3FF;
-		operator->phase_counter += ym_calc_phase_inc(context, operator, op);
+		operator->phase_counter += operator->phase_inc;//ym_calc_phase_inc(context, operator, op);
 		int16_t mod = 0;
 		if (op & 3) {
 			if (operator->mod_src[0]) {
@@ -782,7 +794,19 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 			}*/
 			context->lfo_enable = value & 0x8;
 			if (!context->lfo_enable) {
+				uint8_t old_pm_step = context->lfo_pm_step;
 				context->lfo_am_step = context->lfo_pm_step = 0;
+				if (old_pm_step) {
+					for (int chan = 0; chan < NUM_CHANNELS; chan++)
+					{
+						if (context->channels[chan].pms) {
+							for (int op = chan * 4; op < (chan + 1) * 4; op++)
+							{
+								context->operators[op].phase_inc = ym_calc_phase_inc(context, context->operators + op, op);
+							}
+						}
+					}
+				}
 			}
 			context->lfo_freq = value & 0x7;
 
@@ -818,7 +842,14 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 			if (context->ch3_mode == CSM_MODE && (value & 0xC0) != CSM_MODE && context->csm_keyon) {
 				csm_keyoff(context);
 			}
+			uint8_t old_mode = context->ch3_mode;
 			context->ch3_mode = value & 0xC0;
+			if (context->ch3_mode != old_mode) {
+				for (int op = 2 * 4; op < 3*4; op++)
+				{
+					context->operators[op].phase_inc = ym_calc_phase_inc(context, context->operators + op, op);
+				}
+			}
 			break;
 		}
 		case REG_KEY_ONOFF: {
@@ -870,6 +901,7 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 			case REG_DETUNE_MULT:
 				operator->detune = value >> 4 & 0x7;
 				operator->multiple = value & 0xF;
+				operator->phase_inc = ym_calc_phase_inc(context, operator, op);
 				break;
 			case REG_TOTAL_LEVEL:
 				operator->total_level = (value & 0x7F) << 5;
@@ -916,6 +948,10 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 				context->channels[channel].block = context->channels[channel].block_fnum_latch >> 3 & 0x7;
 				context->channels[channel].fnum = (context->channels[channel].block_fnum_latch & 0x7) << 8 | value;
 				context->channels[channel].keycode = context->channels[channel].block << 2 | fnum_to_keycode[context->channels[channel].fnum >> 7];
+				for (int op = channel * 4; op < (channel + 1) * 4; op++)
+				{
+					context->operators[op].phase_inc = ym_calc_phase_inc(context, context->operators + op, op);
+				}
 				break;
 			case REG_BLOCK_FNUM_H:{
 				context->channels[channel].block_fnum_latch = value;
@@ -926,6 +962,10 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 					context->ch3_supp[channel].block = context->ch3_supp[channel].block_fnum_latch >> 3 & 0x7;
 					context->ch3_supp[channel].fnum = (context->ch3_supp[channel].block_fnum_latch & 0x7) << 8 | value;
 					context->ch3_supp[channel].keycode = context->ch3_supp[channel].block << 2 | fnum_to_keycode[context->ch3_supp[channel].fnum >> 7];
+					if (context->ch3_mode) {
+						int op = 2 * 4 + (channel < 2 ? (channel ^ 1) : channel);
+						context->operators[op].phase_inc = ym_calc_phase_inc(context, context->operators + op, op);
+					}
 				}
 				break;
 			case REG_BLOCK_FN_CH3:
@@ -1051,12 +1091,20 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 				context->channels[channel].feedback = value >> 3 & 0x7;
 				//printf("Algorithm %d, feedback %d for channel %d\n", value & 0x7, value >> 3 & 0x7, channel);
 				break;
-			case REG_LR_AMS_PMS:
+			case REG_LR_AMS_PMS: {
+				uint8_t old_pms = context->channels[channel].pms;
 				context->channels[channel].pms = (value & 0x7) * 32;
 				context->channels[channel].ams = value >> 4 & 0x3;
 				context->channels[channel].lr = value & 0xC0;
+				if (old_pms != context->channels[channel].pms) {
+					for (int op = channel * 4; op < (channel + 1) * 4; op++)
+					{
+						context->operators[op].phase_inc = ym_calc_phase_inc(context, context->operators + op, op);
+					}
+				}
 				//printf("Write of %X to LR_AMS_PMS reg for channel %d\n", value, channel);
 				break;
+			}
 			}
 		}
 	}
