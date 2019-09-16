@@ -316,6 +316,16 @@ int render_fullscreen(void)
 	return 1;
 }
 
+uint32_t render_overscan_top()
+{
+	return 0;
+}
+
+uint32_t render_overscan_bot()
+{
+	return 0;
+}
+
 void process_events()
 {
 	static int16_t prev_state[2][RETRO_DEVICE_ID_JOYPAD_L2];

@@ -185,6 +185,7 @@ typedef struct {
 	uint32_t       cycles;
 	uint32_t       pending_vint_start;
 	uint32_t       pending_hint_start;
+	uint32_t       top_offset;
 	uint16_t       vsram[VSRAM_SIZE];
 	uint16_t       vscroll_latch[2];
 	uint16_t       vcounter;
