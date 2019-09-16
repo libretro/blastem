@@ -70,28 +70,36 @@ static uint8_t debug_base[][3] = {
 	{127, 0, 127}    //Sprites
 };
 
+static uint32_t calc_crop(uint32_t crop, uint32_t border)
+{
+	return crop >= border ? 0 : border - crop;
+}
+
 static void update_video_params(vdp_context *context)
 {
+	uint32_t top_crop = render_overscan_top();
+	uint32_t bot_crop = render_overscan_bot();
+	uint32_t border_top;
 	if (context->regs[REG_MODE_2] & BIT_MODE_5) {
 		if (context->regs[REG_MODE_2] & BIT_PAL) {
 			if (context->flags2 & FLAG2_REGION_PAL) {
 				context->inactive_start = PAL_INACTIVE_START;
-				context->border_top = BORDER_TOP_V30_PAL;
-				context->border_bot = BORDER_BOT_V30_PAL;
+				border_top = BORDER_TOP_V30_PAL;
+				context->border_bot = calc_crop(bot_crop, BORDER_BOT_V30_PAL);
 			} else {
 				//the behavior here is rather weird and needs more investigation
 				context->inactive_start = 0xF0;
-				context->border_top = 1;
-				context->border_bot = 3;
+				border_top = 1;
+				context->border_bot = calc_crop(bot_crop, 3);
 			}
 		} else {
 			context->inactive_start = NTSC_INACTIVE_START;
 			if (context->flags2 & FLAG2_REGION_PAL) {
-				context->border_top = BORDER_TOP_V28_PAL;
-				context->border_bot = BORDER_BOT_V28_PAL;
+				border_top = BORDER_TOP_V28_PAL;
+				context->border_bot = calc_crop(bot_crop, BORDER_BOT_V28_PAL);
 			} else {
-				context->border_top = BORDER_TOP_V28;
-				context->border_bot = BORDER_TOP_V28;
+				border_top = BORDER_TOP_V28;
+				context->border_bot = calc_crop(bot_crop, BORDER_BOT_V28);
 			}
 		}
 		if (context->regs[REG_MODE_4] & BIT_H40) {
@@ -112,11 +120,11 @@ static void update_video_params(vdp_context *context)
 	} else {
 		context->inactive_start = MODE4_INACTIVE_START;
 		if (context->flags2 & FLAG2_REGION_PAL) {
-			context->border_top = BORDER_TOP_V24_PAL;
-			context->border_bot = BORDER_BOT_V24_PAL;
+			border_top = BORDER_TOP_V24_PAL;
+			context->border_bot = calc_crop(bot_crop, BORDER_BOT_V24_PAL);
 		} else {
-			context->border_top = BORDER_TOP_V24;
-			context->border_bot = BORDER_BOT_V24;
+			border_top = BORDER_TOP_V24;
+			context->border_bot = calc_crop(bot_crop, BORDER_BOT_V24);
 		}
 		if (!(context->regs[REG_MODE_1] & BIT_MODE_4)){
 			context->state = INACTIVE;
@@ -130,6 +138,8 @@ static void update_video_params(vdp_context *context)
 			}
 		}
 	}
+	context->border_top = calc_crop(top_crop, border_top);
+	context->top_offset = border_top - context->border_top;
 }
 
 static uint8_t color_map_init_done;
@@ -138,8 +148,8 @@ vdp_context *init_vdp_context(uint8_t region_pal)
 {
 	vdp_context *context = calloc(1, sizeof(vdp_context) + VRAM_SIZE);
 	if (headless) {
-		context->output = malloc(LINEBUF_SIZE * sizeof(uint32_t));
-		context->output_pitch = 0;
+		context->fb = malloc(512 * LINEBUF_SIZE * sizeof(uint32_t));
+		context->output_pitch = LINEBUF_SIZE * sizeof(uint32_t);
 	} else {
 		context->cur_buffer = FRAMEBUFFER_ODD;
 		context->fb = render_get_framebuffer(FRAMEBUFFER_ODD, &context->output_pitch);
@@ -235,9 +245,7 @@ vdp_context *init_vdp_context(uint8_t region_pal)
 		context->flags2 |= FLAG2_REGION_PAL;
 	}
 	update_video_params(context);
-	if (!headless) {
-		context->output = (uint32_t *)(((char *)context->fb) + context->output_pitch * context->border_top);
-	}
+	context->output = (uint32_t *)(((char *)context->fb) + context->output_pitch * context->border_top);
 	return context;
 }
 
@@ -2018,9 +2026,7 @@ static void vdp_update_per_frame_debug(vdp_context *context)
 
 void vdp_force_update_framebuffer(vdp_context *context)
 {
-	uint16_t lines_max = (context->flags2 & FLAG2_REGION_PAL) 
-			? 240 + BORDER_TOP_V30_PAL + BORDER_BOT_V30_PAL 
-			: 224 + BORDER_TOP_V28 + BORDER_BOT_V28;
+	uint16_t lines_max = context->inactive_start + context->border_bot + context->border_top;
 			
 	uint16_t to_fill = lines_max - context->output_lines;
 	memset(
@@ -2035,52 +2041,47 @@ void vdp_force_update_framebuffer(vdp_context *context)
 
 static void advance_output_line(vdp_context *context)
 {
-	if (headless) {
-		if (context->vcounter == context->inactive_start) {
-			context->frame++;
-		}
-		context->vcounter &= 0x1FF;
-	} else {
-		uint16_t lines_max = (context->flags2 & FLAG2_REGION_PAL) 
-			? 240 + BORDER_TOP_V30_PAL + BORDER_BOT_V30_PAL 
-			: 224 + BORDER_TOP_V28 + BORDER_BOT_V28;
+	uint16_t lines_max = context->inactive_start + context->border_bot + context->border_top;
 
-		if (context->output_lines == lines_max) {
+	if (context->output_lines == lines_max) {
+		if (!headless) {
 			render_framebuffer_updated(context->cur_buffer, context->h40_lines > (context->inactive_start + context->border_top) / 2 ? LINEBUF_SIZE : (256+HORIZ_BORDER));
 			context->cur_buffer = context->flags2 & FLAG2_EVEN_FIELD ? FRAMEBUFFER_EVEN : FRAMEBUFFER_ODD;
 			context->fb = render_get_framebuffer(context->cur_buffer, &context->output_pitch);
-			vdp_update_per_frame_debug(context);
-			context->h40_lines = 0;
-			context->frame++;
+		}
+		vdp_update_per_frame_debug(context);
+		context->h40_lines = 0;
+		context->frame++;
+		context->output_lines = 0;
+	}
+	uint32_t output_line = context->vcounter;
+	if (!(context->regs[REG_MODE_2] & BIT_MODE_5)) {
+		//vcounter increment occurs much later in Mode 4
+		output_line++;
+	} 
+	if (output_line < context->inactive_start + context->border_bot && context->output_lines > 0) {
+		output_line = context->output_lines++;//context->border_top + context->vcounter;
+	} else if (output_line >= 0x200 - context->border_top || (!context->border_top && !output_line)) {
+		if (output_line == 0x200 - context->border_top || (!context->border_top && !output_line)) {
+			//We're at the top of the display, force context->output_lines to be zero to avoid
+			//potential screen rolling if the mode is changed at an inopportune time
 			context->output_lines = 0;
 		}
-		uint32_t output_line = context->vcounter;
-		if (!(context->regs[REG_MODE_2] & BIT_MODE_5)) {
-			//vcounter increment occurs much later in Mode 4
-			output_line++;
-		} 
-		if (output_line < context->inactive_start + context->border_bot && context->output_lines > 0) {
-			output_line = context->output_lines++;//context->border_top + context->vcounter;
-		} else if (output_line >= 0x200 - context->border_top) {
-			if (output_line == 0x200 - context->border_top) {
-				//We're at the top of the display, force context->output_lines to be zero to avoid
-				//potential screen rolling if the mode is changed at an inopportune time
-				context->output_lines = 0;
-			}
-			output_line = context->output_lines++;//context->vcounter - (0x200 - context->border_top);
-		} else {
-			context->output = NULL;
-		}
-		context->output = (uint32_t *)(((char *)context->fb) + context->output_pitch * output_line);
+		output_line = context->output_lines++;//context->vcounter - (0x200 - context->border_top);
+	} else {
+		context->output = NULL;
+		return;
+	}
+	output_line += context->top_offset;
+	context->output = (uint32_t *)(((char *)context->fb) + context->output_pitch * output_line);
 #ifdef DEBUG_FB_FILL
-		for (int i = 0; i < LINEBUF_SIZE; i++)
-		{
-			context->output[i] = 0xFFFF00FF;
-		}
+	for (int i = 0; i < LINEBUF_SIZE; i++)
+	{
+		context->output[i] = 0xFFFF00FF;
+	}
 #endif	
-		if (context->output && (context->regs[REG_MODE_4] & BIT_H40)) {
-			context->h40_lines++;
-		}
+	if (context->output && (context->regs[REG_MODE_4] & BIT_H40)) {
+		context->h40_lines++;
 	}
 }
 
@@ -2093,11 +2094,9 @@ void vdp_release_framebuffer(vdp_context *context)
 void vdp_reacquire_framebuffer(vdp_context *context)
 {
 	context->fb = render_get_framebuffer(context->cur_buffer, &context->output_pitch);
-	uint16_t lines_max = (context->flags2 & FLAG2_REGION_PAL) 
-			? 240 + BORDER_TOP_V30_PAL + BORDER_BOT_V30_PAL
-			: 224 + BORDER_TOP_V28 + BORDER_BOT_V28;
+	uint16_t lines_max = context->inactive_start + context->border_bot + context->border_top;
 	if (context->output_lines <= lines_max && context->output_lines > 0) {
-		context->output = (uint32_t *)(((char *)context->fb) + context->output_pitch * (context->output_lines - 1));
+		context->output = (uint32_t *)(((char *)context->fb) + context->output_pitch * (context->output_lines - 1 + context->top_offset));
 	} else {
 		context->output = NULL;
 	}
