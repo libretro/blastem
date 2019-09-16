@@ -1624,6 +1624,11 @@ uint32_t render_overscan_top()
 	return overscan_top[video_standard];
 }
 
+uint32_t render_overscan_bot()
+{
+	return overscan_bot[video_standard];
+}
+
 void render_wait_quit(void)
 {
 	SDL_Event event;
