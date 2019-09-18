@@ -37,7 +37,7 @@ RETRO_API void retro_set_environment(retro_environment_t re)
 		{ 0 },
 	};
 
-	re(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, (void*)desc);
+	re(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, (void *)desc);
 }
 
 static retro_video_refresh_t retro_video_refresh;
@@ -104,11 +104,34 @@ RETRO_API void retro_get_system_info(struct retro_system_info *info)
 
 static vid_std video_standard;
 static uint32_t last_width, last_height;
+static uint32_t overscan_top, overscan_bot, overscan_left, overscan_right;
+static void update_overscan(void)
+{
+	uint8_t overscan;
+	retro_environment(RETRO_ENVIRONMENT_GET_OVERSCAN, &overscan);
+	if (overscan) {
+		overscan_top = overscan_bot = overscan_left = overscan_right = 0;
+	} else {
+		if (video_standard == VID_NTSC) {
+			overscan_top = 11;
+			overscan_bot = 8;
+			overscan_left = 13;
+			overscan_right = 14;
+		} else {
+			overscan_top = 30;
+			overscan_bot = 24;
+			overscan_left = 13;
+			overscan_right = 14;
+		}
+	}
+}
+
 RETRO_API void retro_get_system_av_info(struct retro_system_av_info *info)
 {
+	update_overscan();
 	last_width = LINEBUF_SIZE;
-	info->geometry.base_width = info->geometry.max_width = LINEBUF_SIZE;
-	info->geometry.base_height = video_standard == VID_NTSC ? 243 : 294;
+	info->geometry.base_width = info->geometry.max_width = LINEBUF_SIZE - (overscan_left + overscan_right);
+	info->geometry.base_height = (video_standard == VID_NTSC ? 243 : 294) - (overscan_top + overscan_bot);
 	last_height = info->geometry.base_height;
 	info->geometry.max_height = info->geometry.base_height * 2;
 	info->geometry.aspect_ratio = 0;
@@ -281,7 +304,8 @@ uint32_t *render_get_framebuffer(uint8_t which, int *pitch)
 
 void render_framebuffer_updated(uint8_t which, int width)
 {
-	unsigned height = video_standard == VID_NTSC ? 243 : 294;
+	unsigned height = (video_standard == VID_NTSC ? 243 : 294) - (overscan_top + overscan_bot);
+	width -= (overscan_left + overscan_right);
 	unsigned base_height = height;
 	if (which != last_fb) {
 		height *= 2;
@@ -297,7 +321,7 @@ void render_framebuffer_updated(uint8_t which, int width)
 		last_width = width;
 		last_height = height;
 	}
-	retro_video_refresh(fb, width, height, LINEBUF_SIZE * sizeof(uint32_t));
+	retro_video_refresh(fb + overscan_left + LINEBUF_SIZE * overscan_top, width, height, LINEBUF_SIZE * sizeof(uint32_t));
 	current_system->request_exit(current_system);
 }
 
@@ -318,12 +342,12 @@ int render_fullscreen(void)
 
 uint32_t render_overscan_top()
 {
-	return 0;
+	return overscan_top;
 }
 
 uint32_t render_overscan_bot()
 {
-	return 0;
+	return overscan_bot;
 }
 
 void process_events()
