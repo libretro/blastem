@@ -303,23 +303,23 @@ static void render_sprite_cells(vdp_context * context)
 			x -= 128;
 			//printf("Draw Slot %d of %d, Rendering sprite cell from %X to x: %d\n", context->cur_slot, context->sprite_draws, d->address, x);
 			
-			for (; address != ((context->serial_address+4) & 0xFFFF); address++) {
-				if (x >= 0 && x < 320) {
-					if (!(context->linebuf[x] & 0xF)) {
+				for (; address != ((context->serial_address+4) & 0xFFFF); address++) {
+					if (x >= 0 && x < 320) {
+						if (!(context->linebuf[x] & 0xF)) {
 						context->linebuf[x] = (context->vdpmem[address] >> 4) | d->pal_priority;
 					} else if (context->vdpmem[address] >> 4) {
 						context->flags2 |= FLAG2_SPRITE_COLLIDE;
+						}
 					}
-				}
-				x += dir;
-				if (x >= 0 && x < 320) {
-					if (!(context->linebuf[x] & 0xF)) {
+					x += dir;
+					if (x >= 0 && x < 320) {
+						if (!(context->linebuf[x] & 0xF)) {
 						context->linebuf[x] = (context->vdpmem[address] & 0xF)  | d->pal_priority;
 					} else if (context->vdpmem[address] & 0xF) {
 						context->flags2 |= FLAG2_SPRITE_COLLIDE;
+						}
 					}
-				}
-				x += dir;
+					x += dir;
 			}
 		}
 	} else if (context->flags & FLAG_CAN_MASK) {
@@ -2053,6 +2053,8 @@ static void advance_output_line(vdp_context *context)
 		context->h40_lines = 0;
 		context->frame++;
 		context->output_lines = 0;
+	} else if (context->output_lines && context->vcounter < context->inactive_start && context->vcounter > context->output_lines) {	
+		context->output_lines = context->vcounter;
 	}
 	uint32_t output_line = context->vcounter;
 	if (!(context->regs[REG_MODE_2] & BIT_MODE_5)) {
