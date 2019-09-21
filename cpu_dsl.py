@@ -1593,7 +1593,12 @@ class Program:
 			pieces.append('\n\t{sync}(context, target_cycle);'.format(sync=self.sync_cycle))
 			pieces.append('\n\twhile (context->cycles < target_cycle)')
 			pieces.append('\n\t{')
-			#TODO: Handle interrupts in call dispatch mode
+			if self.interrupt in self.subroutines:
+				pieces.append('\n\t\tif (context->cycles >= context->sync_cycle) {')
+				self.meta = {}
+				self.temp = {}
+				self.subroutines[self.interrupt].inline(self, [], pieces, otype, None)
+				pieces.append('\n\t\t}')
 			self.meta = {}
 			self.temp = {}
 			self.subroutines[self.body].inline(self, [], pieces, otype, None)
