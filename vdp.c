@@ -1612,10 +1612,10 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 			plane_a_off = context->buf_a_off;
 			a_src = DBG_SRC_W;
 		} else {
-			plane_a_off = context->buf_a_off - (context->hscroll_a & 0xF);
+			plane_a_off = context->buf_a_off - context->hscroll_a_fine;
 			a_src = DBG_SRC_A;
 		}
-		plane_b_off = context->buf_b_off - (context->hscroll_b & 0xF);
+		plane_b_off = context->buf_b_off - context->hscroll_b_fine;
 		//printf("A | tmp_buf offset: %d\n", 8 - (context->hscroll_a & 0x7));
 
 		if (context->regs[REG_MODE_4] & BIT_HILIGHT) {
@@ -1652,7 +1652,7 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 				//TODO: Deal with Window layer
 				int i;
 				i = 0;
-				uint8_t buf_off = context->buf_a_off - (context->hscroll_a & 0xF) + (16 - BORDER_LEFT);
+				uint8_t buf_off = context->buf_a_off - context->hscroll_a_fine + (16 - BORDER_LEFT);
 				//uint8_t *src = context->tmp_buf_a + ((context->buf_a_off + (i ? 0 : (16 - BORDER_LEFT) - (context->hscroll_a & 0xF))) & SCROLL_BUFFER_MASK); 
 				for (; i < BORDER_LEFT; buf_off++, i++, dst++, debug_dst++)
 				{
@@ -1665,7 +1665,7 @@ static void render_map_output(uint32_t line, int32_t col, vdp_context * context)
 				//plane B
 				int i;
 				i = 0;
-				uint8_t buf_off = context->buf_b_off - (context->hscroll_b & 0xF) + (16 - BORDER_LEFT);
+				uint8_t buf_off = context->buf_b_off - context->hscroll_b_fine + (16 - BORDER_LEFT);
 				//uint8_t *src = context->tmp_buf_b + ((context->buf_b_off + (i ? 0 : (16 - BORDER_LEFT) - (context->hscroll_b & 0xF))) & SCROLL_BUFFER_MASK); 
 				for (; i < BORDER_LEFT; buf_off++, i++, dst++, debug_dst++)
 				{
@@ -2530,7 +2530,9 @@ static void vdp_h40_line(vdp_context * context)
 	render_border_garbage(context, address, context->tmp_buf_a, context->buf_a_off+8, context->col_2);
 	address += (context->vcounter & mask) * 4;
 	context->hscroll_a = context->vdpmem[address] << 8 | context->vdpmem[address+1];
+	context->hscroll_a_fine = context->hscroll_a & 0xF;
 	context->hscroll_b = context->vdpmem[address+2] << 8 | context->vdpmem[address+3];
+	context->hscroll_b_fine = context->hscroll_b & 0xF;
 	//printf("%d: HScroll A: %d, HScroll B: %d\n", context->vcounter, context->hscroll_a, context->hscroll_b);
 	//243-246 inclusive
 	for (int i = 0; i < 3; i++)
@@ -2749,7 +2751,9 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
 		render_border_garbage(context, address, context->tmp_buf_a, context->buf_a_off+8, context->col_2);
 		address += (context->vcounter & mask) * 4;
 		context->hscroll_a = context->vdpmem[address] << 8 | context->vdpmem[address+1];
+		context->hscroll_a_fine = context->hscroll_a & 0xF;
 		context->hscroll_b = context->vdpmem[address+2] << 8 | context->vdpmem[address+3];
+		context->hscroll_b_fine = context->hscroll_b & 0xF;
 		//printf("%d: HScroll A: %d, HScroll B: %d\n", context->vcounter, context->hscroll_a, context->hscroll_b);
 		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); }
 		context->hslot++;
@@ -2969,7 +2973,9 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 		render_border_garbage(context, address, context->tmp_buf_a, context->buf_a_off+8, context->col_2);
 		address += (context->vcounter & mask) * 4;
 		context->hscroll_a = context->vdpmem[address] << 8 | context->vdpmem[address+1];
+		context->hscroll_a_fine = context->hscroll_a & 0xF;
 		context->hscroll_b = context->vdpmem[address+2] << 8 | context->vdpmem[address+3];
+		context->hscroll_b_fine = context->hscroll_a & 0xF;
 		//printf("%d: HScroll A: %d, HScroll B: %d\n", context->vcounter, context->hscroll_a, context->hscroll_b);
 		CHECK_LIMIT //provides "garbage" for border when plane A selected
 	SPRITE_RENDER_H32(245)
