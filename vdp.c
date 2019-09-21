@@ -302,24 +302,50 @@ static void render_sprite_cells(vdp_context * context)
 		if (!(context->flags & FLAG_MASKED)) {
 			x -= 128;
 			//printf("Draw Slot %d of %d, Rendering sprite cell from %X to x: %d\n", context->cur_slot, context->sprite_draws, d->address, x);
-			
+			uint8_t collide = 0;
+			if (x >= 8 && x < 312) {
+				//sprite is fully visible
+				for (; address != ((context->serial_address+4) & 0xFFFF); address++) {
+					uint8_t pixel = context->vdpmem[address] >> 4;
+					if (!(context->linebuf[x] & 0xF)) {
+						context->linebuf[x] = pixel | d->pal_priority;
+					} else {
+						collide |= pixel;
+					}
+					x += dir;
+					pixel = context->vdpmem[address] & 0xF;
+					if (!(context->linebuf[x] & 0xF)) {
+						context->linebuf[x] = pixel  | d->pal_priority;
+					} else {
+						collide |= pixel;
+					}
+					x += dir;
+				}
+			} else if (x > -8 && x < 327) {
+				//sprite is partially visible
 				for (; address != ((context->serial_address+4) & 0xFFFF); address++) {
 					if (x >= 0 && x < 320) {
+						uint8_t pixel = context->vdpmem[address] >> 4;
 						if (!(context->linebuf[x] & 0xF)) {
-						context->linebuf[x] = (context->vdpmem[address] >> 4) | d->pal_priority;
-					} else if (context->vdpmem[address] >> 4) {
-						context->flags2 |= FLAG2_SPRITE_COLLIDE;
+							context->linebuf[x] = pixel | d->pal_priority;
+						} else {
+							collide |= pixel;
 						}
 					}
 					x += dir;
 					if (x >= 0 && x < 320) {
+						uint8_t pixel = context->vdpmem[address] & 0xF;
 						if (!(context->linebuf[x] & 0xF)) {
-						context->linebuf[x] = (context->vdpmem[address] & 0xF)  | d->pal_priority;
-					} else if (context->vdpmem[address] & 0xF) {
-						context->flags2 |= FLAG2_SPRITE_COLLIDE;
+							context->linebuf[x] = pixel  | d->pal_priority;
+						} else {
+							collide |= pixel;
 						}
 					}
 					x += dir;
+				}
+			}
+			if (collide) {
+				context->flags2 |= FLAG2_SPRITE_COLLIDE;
 			}
 		}
 	} else if (context->flags & FLAG_CAN_MASK) {
