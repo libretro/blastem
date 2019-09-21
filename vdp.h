@@ -193,7 +193,9 @@ typedef struct {
 	uint16_t       border_top;
 	uint16_t       border_bot;
 	uint16_t       hscroll_a;
+	uint16_t       hscroll_a_fine;
 	uint16_t       hscroll_b;
+	uint16_t       hscroll_b_fine;
 	uint16_t       h40_lines;
 	uint16_t       output_lines;
 	sprite_draw    sprite_draw_list[MAX_SPRITES_LINE];
