@@ -126,6 +126,7 @@ static void update_overscan(void)
 	}
 }
 
+static int32_t sample_rate;
 RETRO_API void retro_get_system_av_info(struct retro_system_av_info *info)
 {
 	update_overscan();
@@ -135,8 +136,11 @@ RETRO_API void retro_get_system_av_info(struct retro_system_av_info *info)
 	last_height = info->geometry.base_height;
 	info->geometry.max_height = info->geometry.base_height * 2;
 	info->geometry.aspect_ratio = 0;
-	info->timing.fps = video_standard == VID_NTSC ? 60 : 50;
-	info->timing.sample_rate = 53267; //approximate sample rate of YM2612
+	double master_clock = video_standard == VID_NTSC ? 53693175 : 53203395;
+	double lines = video_standard == VID_NTSC ? 262 : 313;
+	info->timing.fps = master_clock / (3420.0 * lines);
+	info->timing.sample_rate = master_clock / (7 * 6 * 24); //sample rate of YM2612
+	sample_rate = info->timing.sample_rate;
 }
 
 RETRO_API void retro_set_controller_port_device(unsigned port, unsigned device)
@@ -416,7 +420,7 @@ static void check_put_sample(void)
 {
 	for (int i = 0; i < num_audio_sources; i++)
 	{
-		int32_t min_samples = audio_sources[i]->freq / 53267;
+		int32_t min_samples = audio_sources[i]->freq / sample_rate;
 		if (audio_sources[i]->num_samples < min_samples) {
 			return;
 		}
