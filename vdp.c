@@ -2144,7 +2144,7 @@ static void draw_right_border(vdp_context *context)
 				//TODO: Deal with Window layer
 				int i;
 				i = 0;
-				uint8_t buf_off = context->buf_a_off - (context->hscroll_a & 0xF);
+				uint8_t buf_off = context->buf_a_off - context->hscroll_a_fine;
 				//uint8_t *src = context->tmp_buf_a + ((context->buf_a_off + (i ? 0 : (16 - BORDER_LEFT) - (context->hscroll_a & 0xF))) & SCROLL_BUFFER_MASK); 
 				for (; i < BORDER_RIGHT; buf_off++, i++, dst++)
 				{
@@ -2984,7 +2984,7 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
 		context->hscroll_a = context->vdpmem[address] << 8 | context->vdpmem[address+1];
 		context->hscroll_a_fine = context->hscroll_a & 0xF;
 		context->hscroll_b = context->vdpmem[address+2] << 8 | context->vdpmem[address+3];
-		context->hscroll_b_fine = context->hscroll_a & 0xF;
+		context->hscroll_b_fine = context->hscroll_b & 0xF;
 		//printf("%d: HScroll A: %d, HScroll B: %d\n", context->vcounter, context->hscroll_a, context->hscroll_b);
 		CHECK_LIMIT //provides "garbage" for border when plane A selected
 	SPRITE_RENDER_H32(245)
