@@ -1148,32 +1148,15 @@ static void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, 
 	context->v_offset = vscroll & v_offset_mask;
 	//printf("%s | line %d, vsram: %d, vscroll: %d, v_offset: %d\n",(vsram_off ? "B" : "A"), line, context->vsram[context->regs[REG_MODE_3] & 0x4 ? column : 0], vscroll, context->v_offset);
 	vscroll >>= vscroll_shift;
-	uint16_t hscroll_mask;
-	uint16_t v_mul;
-	switch(context->regs[REG_SCROLL] & 0x3)
-	{
-	case 0:
-		hscroll_mask = 0x1F;
-		v_mul = 64;
-		break;
-	case 0x1:
-		hscroll_mask = 0x3F;
-		v_mul = 128;
-		break;
-	case 0x2:
-		//TODO: Verify this behavior
-		hscroll_mask = 0x1F;
-		v_mul = 0;
-		break;
-	case 0x3:
-		hscroll_mask = 0x7F;
-		v_mul = 256;
-		break;
-	}
+	//TODO: Verify the behavior for a setting of 2
+	static const uint16_t hscroll_masks[] = {0x1F, 0x3F, 0x1F, 0x7F};
+	static const uint16_t v_shifts[] = {6, 7, 0, 8};
+	uint16_t hscroll_mask = hscroll_masks[context->regs[REG_SCROLL] & 0x3];
+	uint16_t v_shift = v_shifts[context->regs[REG_SCROLL] & 0x3];
 	uint16_t hscroll, offset;
 	for (int i = 0; i < 2; i++) {
 		hscroll = (column - 2 + i - ((hscroll_val/8) & 0xFFFE)) & hscroll_mask;
-		offset = address + ((vscroll * v_mul + hscroll*2) & 0x1FFF);
+		offset = address + (((vscroll << v_shift) + hscroll*2) & 0x1FFF);
 		//printf("%s | line: %d, col: %d, x: %d, hs_mask %X, scr reg: %X, tbl addr: %X\n", (vsram_off ? "B" : "A"), line, (column-2+i), hscroll, hscroll_mask, context->regs[REG_SCROLL], offset);
 		uint16_t col_val = (context->vdpmem[offset] << 8) | context->vdpmem[offset+1];
 		if (i) {
