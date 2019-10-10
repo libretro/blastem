@@ -233,6 +233,7 @@ typedef struct {
 	uint8_t        enabled_debuggers;
 	uint8_t        debug_fb_indices[VDP_NUM_DEBUG_TYPES];
 	uint8_t        debug_modes[VDP_NUM_DEBUG_TYPES];
+	uint8_t        pushed_frame;
 	uint8_t        vdpmem[];
 } vdp_context;
 
