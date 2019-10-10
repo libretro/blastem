@@ -2050,38 +2050,57 @@ void vdp_force_update_framebuffer(vdp_context *context)
 
 static void advance_output_line(vdp_context *context)
 {
+	//This function is kind of gross because of the need to deal with vertical border busting via mode changes
 	uint16_t lines_max = context->inactive_start + context->border_bot + context->border_top;
-
-	if (context->output_lines == lines_max) {
-		if (!headless) {
-			render_framebuffer_updated(context->cur_buffer, context->h40_lines > (context->inactive_start + context->border_top) / 2 ? LINEBUF_SIZE : (256+HORIZ_BORDER));
-			context->cur_buffer = context->flags2 & FLAG2_EVEN_FIELD ? FRAMEBUFFER_EVEN : FRAMEBUFFER_ODD;
-			context->fb = render_get_framebuffer(context->cur_buffer, &context->output_pitch);
-		}
-		vdp_update_per_frame_debug(context);
-		context->h40_lines = 0;
-		context->frame++;
-		context->output_lines = 0;
-	} else if (context->output_lines && context->vcounter < context->inactive_start && context->vcounter > context->output_lines) {	
-		context->output_lines = context->vcounter;
-	}
 	uint32_t output_line = context->vcounter;
 	if (!(context->regs[REG_MODE_2] & BIT_MODE_5)) {
 		//vcounter increment occurs much later in Mode 4
 		output_line++;
 	} 
-	if (output_line < context->inactive_start + context->border_bot && context->output_lines > 0) {
-		output_line = context->output_lines++;//context->border_top + context->vcounter;
-	} else if (output_line >= 0x200 - context->border_top || (!context->border_top && !output_line)) {
-		if (output_line == 0x200 - context->border_top || (!context->border_top && !output_line)) {
+	
+	if (context->output_lines == lines_max || (!context->pushed_frame && output_line == context->inactive_start + context->border_top)) {
+		//we've either filled up a full frame or we're at the bottom of screen in the current defined mode + border crop
+		if (!headless) {
+			render_framebuffer_updated(context->cur_buffer, context->h40_lines > (context->inactive_start + context->border_top) / 2 ? LINEBUF_SIZE : (256+HORIZ_BORDER));
+			uint8_t is_even = context->flags2 & FLAG2_EVEN_FIELD;
+			if (context->vcounter <= context->inactive_start && (context->regs[REG_MODE_4] & BIT_INTERLACE)) {
+				is_even = !is_even;
+			}
+			context->cur_buffer = is_even ? FRAMEBUFFER_EVEN : FRAMEBUFFER_ODD;
+			context->pushed_frame = 1;
+			context->fb = NULL;
+		}
+		vdp_update_per_frame_debug(context);
+		context->h40_lines = 0;
+		context->frame++;
+		context->output_lines = 0;
+	}
+	
+	if (output_line < context->inactive_start + context->border_bot) {
+		if (context->output_lines) {
+			output_line = context->output_lines++;//context->border_top + context->vcounter;
+		} else if (!output_line && !context->border_top) {
+			//top border is completely cropped so we won't hit the case below
+			output_line = 0;
+			context->output_lines = 1;
+			context->pushed_frame = 0;
+		} else {
+			context->output_lines = output_line + 1;
+		}
+	} else if (output_line >= 0x200 - context->border_top) {
+		if (output_line == 0x200 - context->border_top) {
 			//We're at the top of the display, force context->output_lines to be zero to avoid
 			//potential screen rolling if the mode is changed at an inopportune time
 			context->output_lines = 0;
+			context->pushed_frame = 0;
 		}
 		output_line = context->output_lines++;//context->vcounter - (0x200 - context->border_top);
 	} else {
 		context->output = NULL;
 		return;
+	}
+	if (!context->fb) {
+		context->fb = render_get_framebuffer(context->cur_buffer, &context->output_pitch);
 	}
 	output_line += context->top_offset;
 	context->output = (uint32_t *)(((char *)context->fb) + context->output_pitch * output_line);
@@ -2098,15 +2117,17 @@ static void advance_output_line(vdp_context *context)
 
 void vdp_release_framebuffer(vdp_context *context)
 {
-	render_framebuffer_updated(context->cur_buffer, context->h40_lines > (context->inactive_start + context->border_top) / 2 ? LINEBUF_SIZE : (256+HORIZ_BORDER));
-	context->output = context->fb = NULL;
+	if (context->fb) {
+		render_framebuffer_updated(context->cur_buffer, context->h40_lines > (context->inactive_start + context->border_top) / 2 ? LINEBUF_SIZE : (256+HORIZ_BORDER));
+		context->output = context->fb = NULL;
+	}
 }
 
 void vdp_reacquire_framebuffer(vdp_context *context)
 {
-	context->fb = render_get_framebuffer(context->cur_buffer, &context->output_pitch);
 	uint16_t lines_max = context->inactive_start + context->border_bot + context->border_top;
 	if (context->output_lines <= lines_max && context->output_lines > 0) {
+		context->fb = render_get_framebuffer(context->cur_buffer, &context->output_pitch);
 		context->output = (uint32_t *)(((char *)context->fb) + context->output_pitch * (context->output_lines - 1 + context->top_offset));
 	} else {
 		context->output = NULL;
