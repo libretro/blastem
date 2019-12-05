@@ -39,7 +39,7 @@ system_type detect_system_type(system_media *media)
 	//More certain checks failed, look for a valid 68K reset vector
 	if (media->size >= 8) {
 		char *rom = media->buffer;
-		uint32_t reset = rom[4] << 24 | rom[5] << 16 | rom[6] << 8 | rom[7];
+		uint32_t reset = rom[5] << 16 | rom[6] << 8 | rom[7];
 		if (!(reset & 1) && reset < media->size) {
 			//we have a valid looking reset vector, assume it's a Genesis ROM
 			return SYSTEM_GENESIS;
