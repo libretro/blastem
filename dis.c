@@ -292,7 +292,7 @@ int main(int argc, char ** argv)
 			encoded = NULL;
 			address = def->address;
 			if (!is_visited(address)) {
-				encoded = filebuf + (address - address_off)/2;
+				encoded = filebuf + ((address & 0xFFFFFF) - address_off)/2;
 			}
 			tmpd = def;
 			def = def->next;
@@ -302,7 +302,7 @@ int main(int argc, char ** argv)
 			break;
 		}
 		for(;;) {
-			if (address > address_end || address < address_off) {
+			if ((address & 0xFFFFFF) > address_end || address < address_off) {
 				break;
 			}
 			visit(address);
