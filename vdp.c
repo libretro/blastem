@@ -1738,7 +1738,7 @@ static void render_map_mode4(uint32_t line, int32_t col, vdp_context * context)
 	uint8_t *dst = context->compositebuf + col * 8 + BORDER_LEFT;
 	uint8_t *debug_dst = context->layer_debug_buf + col * 8 + BORDER_LEFT;
 	if (context->state == PREPARING) {
-		memset(dst, 0, 8);
+		memset(dst, 0x10 + (context->regs[REG_BG_COLOR] & 0xF) + MODE4_OFFSET, 8);
 		memset(debug_dst, DBG_SRC_BG, 8);
 		context->done_composite = dst + 8;
 		return;
@@ -1765,8 +1765,8 @@ static void render_map_mode4(uint32_t line, int32_t col, vdp_context * context)
 		}
 		context->done_composite = dst;
 	} else {
-		memset(dst, 0, 8);
-		memset(dst, DBG_SRC_BG, 8);
+		memset(dst, 0x10 + (context->regs[REG_BG_COLOR] & 0xF) + MODE4_OFFSET, 8);
+		memset(debug_dst, DBG_SRC_BG, 8);
 		context->done_composite = dst + 8;
 	}
 }
@@ -1822,11 +1822,21 @@ static void vdp_advance_line(vdp_context *context)
 		}
 		if (context->enabled_debuggers & (1 << VDP_DEBUG_CRAM)) {
 			uint32_t *fb = context->debug_fbs[VDP_DEBUG_CRAM] + context->debug_fb_pitch[VDP_DEBUG_CRAM] * line / sizeof(uint32_t);
-			for (int i = 0; i < 64; i++)
-			{
-				for (int x = 0; x < 8; x++)
+			if (context->regs[REG_MODE_2] & BIT_MODE_5) {
+				for (int i = 0; i < 64; i++)
 				{
-					*(fb++) = context->colors[i];
+					for (int x = 0; x < 8; x++)
+					{
+						*(fb++) = context->colors[i];
+					}
+				}
+			} else {
+				for (int i = MODE4_OFFSET; i < MODE4_OFFSET+32; i++)
+				{
+					for (int x = 0; x < 16; x++)
+					{
+						*(fb++) = context->colors[i];
+					}
 				}
 			}
 		}
@@ -2001,28 +2011,54 @@ static void vdp_update_per_frame_debug(vdp_context *context)
 		uint32_t starting_line = 512 - 32*4;
 		uint32_t *line = context->debug_fbs[VDP_DEBUG_CRAM] 
 			+ context->debug_fb_pitch[VDP_DEBUG_CRAM]  * starting_line / sizeof(uint32_t);
-		for (int pal = 0; pal < 4; pal ++)
-		{
-			uint32_t *cur;
-			for (int y = 0; y < 31; y++)
+		if (context->regs[REG_MODE_2] & BIT_MODE_5) {
+			for (int pal = 0; pal < 4; pal ++)
 			{
-				cur = line;
-				for (int offset = 0; offset < 16; offset++)
+				uint32_t *cur;
+				for (int y = 0; y < 31; y++)
 				{
-					for (int x = 0; x < 31; x++)
+					cur = line;
+					for (int offset = 0; offset < 16; offset++)
 					{
-						*(cur++) = context->colors[pal * 16 + offset];
+						for (int x = 0; x < 31; x++)
+						{
+							*(cur++) = context->colors[pal * 16 + offset];
+						}
+						*(cur++) = 0xFF000000;
 					}
+					line += context->debug_fb_pitch[VDP_DEBUG_CRAM] / sizeof(uint32_t);
+				}
+				cur = line;
+				for (int x = 0; x < 512; x++)
+				{
 					*(cur++) = 0xFF000000;
 				}
 				line += context->debug_fb_pitch[VDP_DEBUG_CRAM] / sizeof(uint32_t);
 			}
-			cur = line;
-			for (int x = 0; x < 512; x++)
+		} else {
+			for (int pal = 0; pal < 2; pal ++)
 			{
-				*(cur++) = 0xFF000000;
+				uint32_t *cur;
+				for (int y = 0; y < 31; y++)
+				{
+					cur = line;
+					for (int offset = MODE4_OFFSET; offset < MODE4_OFFSET + 16; offset++)
+					{
+						for (int x = 0; x < 31; x++)
+						{
+							*(cur++) = context->colors[pal * 16 + offset];
+						}
+						*(cur++) = 0xFF000000;
+					}
+					line += context->debug_fb_pitch[VDP_DEBUG_CRAM] / sizeof(uint32_t);
+				}
+				cur = line;
+				for (int x = 0; x < 512; x++)
+				{
+					*(cur++) = 0xFF000000;
+				}
+				line += context->debug_fb_pitch[VDP_DEBUG_CRAM] / sizeof(uint32_t);
 			}
-			line += context->debug_fb_pitch[VDP_DEBUG_CRAM] / sizeof(uint32_t);
 		}
 		render_framebuffer_updated(context->debug_fb_indices[VDP_DEBUG_CRAM], 512);
 		context->debug_fbs[VDP_DEBUG_CRAM] = render_get_framebuffer(context->debug_fb_indices[VDP_DEBUG_CRAM], &context->debug_fb_pitch[VDP_DEBUG_CRAM]);
@@ -2245,6 +2281,30 @@ static void draw_right_border(vdp_context *context)
 			}\
 		}\
 	}
+	
+//BG_START_SLOT => dst = 0, src = border
+//BG_START_SLOT + 13/2=6, dst = 6, src = border + comp + 13
+#define OUTPUT_PIXEL_MODE4(slot) if ((slot) >= BG_START_SLOT) {\
+		uint8_t *src = context->compositebuf + ((slot) - BG_START_SLOT) *2;\
+		uint32_t *dst = context->output + ((slot) - BG_START_SLOT) *2;\
+		if ((slot) - BG_START_SLOT < BORDER_LEFT/2) {\
+			*(dst++) = context->colors[bgindex];\
+			*(dst++) = context->colors[bgindex];\
+		} else if ((slot) - BG_START_SLOT < (BORDER_LEFT+256)/2){\
+			if ((slot) - BG_START_SLOT == BORDER_LEFT/2) {\
+				*(dst++) = context->colors[bgindex];\
+				src++;\
+			} else {\
+				*(dst++) = context->colors[*(src++)];\
+			}\
+			*(dst++) = context->colors[*(src++)];\
+		} else if ((slot) - BG_START_SLOT <= (HORIZ_BORDER+256)/2) {\
+			*(dst++) = context->colors[bgindex];\
+			if ((slot) - BG_START_SLOT < (HORIZ_BORDER+256)/2) {\
+				*(dst++) = context->colors[bgindex];\
+			}\
+		}\
+	}
 
 #define COLUMN_RENDER_BLOCK(column, startcyc) \
 	case startcyc:\
@@ -2318,11 +2378,11 @@ static void draw_right_border(vdp_context *context)
 		
 #define COLUMN_RENDER_BLOCK_MODE4(column, startcyc) \
 	case startcyc:\
-		OUTPUT_PIXEL(startcyc)\
+		OUTPUT_PIXEL_MODE4(startcyc)\
 		read_map_mode4(column, context->vcounter, context);\
 		CHECK_LIMIT\
 	case ((startcyc+1)&0xFF):\
-		OUTPUT_PIXEL((startcyc+1)&0xFF)\
+		OUTPUT_PIXEL_MODE4((startcyc+1)&0xFF)\
 		if (column & 3) {\
 			scan_sprite_table_mode4(context);\
 		} else {\
@@ -2330,11 +2390,11 @@ static void draw_right_border(vdp_context *context)
 		}\
 		CHECK_LIMIT\
 	case ((startcyc+2)&0xFF):\
-		OUTPUT_PIXEL((startcyc+2)&0xFF)\
+		OUTPUT_PIXEL_MODE4((startcyc+2)&0xFF)\
 		fetch_map_mode4(column, context->vcounter, context);\
 		CHECK_LIMIT\
 	case ((startcyc+3)&0xFF):\
-		OUTPUT_PIXEL((startcyc+3)&0xFF)\
+		OUTPUT_PIXEL_MODE4((startcyc+3)&0xFF)\
 		render_map_mode4(context->vcounter, column, context);\
 		CHECK_LIMIT
 		
@@ -2451,27 +2511,27 @@ static void draw_right_border(vdp_context *context)
 		
 #define SPRITE_RENDER_H32_MODE4(slot) \
 	case slot:\
-		OUTPUT_PIXEL_H32(slot)\
+		OUTPUT_PIXEL_MODE4(slot)\
 		read_sprite_x_mode4(context);\
 		MODE4_CHECK_SLOT_LINE(slot)\
 	case CALC_SLOT(slot, 1):\
-		OUTPUT_PIXEL(CALC_SLOT(slot, 1))\
+		OUTPUT_PIXEL_MODE4(CALC_SLOT(slot, 1))\
 		read_sprite_x_mode4(context);\
 		MODE4_CHECK_SLOT_LINE(CALC_SLOT(slot,1))\
 	case CALC_SLOT(slot, 2):\
-		OUTPUT_PIXEL(CALC_SLOT(slot, 2))\
+		OUTPUT_PIXEL_MODE4(CALC_SLOT(slot, 2))\
 		fetch_sprite_cells_mode4(context);\
 		MODE4_CHECK_SLOT_LINE(CALC_SLOT(slot, 2))\
 	case CALC_SLOT(slot, 3):\
-		OUTPUT_PIXEL(CALC_SLOT(slot, 3))\
+		OUTPUT_PIXEL_MODE4(CALC_SLOT(slot, 3))\
 		render_sprite_cells_mode4(context);\
 		MODE4_CHECK_SLOT_LINE(CALC_SLOT(slot, 3))\
 	case CALC_SLOT(slot, 4):\
-		OUTPUT_PIXEL(CALC_SLOT(slot, 4))\
+		OUTPUT_PIXEL_MODE4(CALC_SLOT(slot, 4))\
 		fetch_sprite_cells_mode4(context);\
 		MODE4_CHECK_SLOT_LINE(CALC_SLOT(slot, 4))\
 	case CALC_SLOT(slot, 5):\
-		OUTPUT_PIXEL(CALC_SLOT(slot, 5))\
+		OUTPUT_PIXEL_MODE4(CALC_SLOT(slot, 5))\
 		render_sprite_cells_mode4(context);\
 		MODE4_CHECK_SLOT_LINE(CALC_SLOT(slot, 5))
 
@@ -3222,19 +3282,19 @@ static void vdp_h32_mode4(vdp_context * context, uint32_t target_cycles)
 	COLUMN_RENDER_BLOCK_MODE4(30, 125)
 	COLUMN_RENDER_BLOCK_MODE4(31, 129)
 	case 133:
-		OUTPUT_PIXEL(133)
+		OUTPUT_PIXEL_MODE4(133)
 		external_slot(context);
 		CHECK_LIMIT
 	case 134:
-		OUTPUT_PIXEL(134)
+		OUTPUT_PIXEL_MODE4(134)
 		external_slot(context);
 		CHECK_LIMIT
 	case 135:
-		OUTPUT_PIXEL(135)
+		OUTPUT_PIXEL_MODE4(135)
 		external_slot(context);
 		CHECK_LIMIT
 	case 136: {
-		OUTPUT_PIXEL(136)
+		OUTPUT_PIXEL_MODE4(136)
 		external_slot(context);
 		//set things up for sprite rendering in the next slot
 		memset(context->linebuf, 0, LINEBUF_SIZE);
@@ -3304,7 +3364,6 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 	uint8_t buf_clear_slot, index_reset_slot, bg_end_slot, vint_slot, line_change, jump_start, jump_dest, latch_slot;
 	uint8_t index_reset_value, max_draws, max_sprites;
 	uint16_t vint_line, active_line;
-	uint32_t bg_color;
 	
 	if (mode_5) {
 		if (is_h40) {
@@ -3348,7 +3407,6 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 		vint_line = context->inactive_start + 1;
 		vint_slot = VINT_SLOT_MODE4;
 		line_change = LINE_CHANGE_MODE4;
-		bg_color = render_map_color(0, 0, 0);
 		jump_start = 147;
 		jump_dest = 233;
 		if (context->regs[REG_MODE_1] & BIT_MODE_4) {
@@ -3431,6 +3489,7 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 		
 		if (dst) {
 			uint8_t bg_index;
+			uint32_t bg_color;
 			if (mode_5) {
 				bg_index = context->regs[REG_BG_COLOR] & 0x3F;
 				bg_color = context->colors[bg_index];
