@@ -387,12 +387,11 @@ static void render_alloc_surfaces()
 	if (texture_init) {
 		return;
 	}
-	sdl_textures= malloc(sizeof(SDL_Texture *) * 2);
-	num_textures = 2;
+	sdl_textures= calloc(sizeof(SDL_Texture *), 3);
+	num_textures = 3;
 	texture_init = 1;
 #ifndef DISABLE_OPENGL
 	if (render_gl) {
-		sdl_textures[0] = sdl_textures[1] = NULL;
 		gl_setup();
 	} else {
 #endif
@@ -1298,13 +1297,6 @@ uint32_t *render_get_framebuffer(uint8_t which, int *pitch)
 		return texture_buf;
 	} else {
 #endif
-		if (which == FRAMEBUFFER_UI && which >= num_textures) {
-			sdl_textures = realloc(sdl_textures, sizeof(*sdl_textures) * (FRAMEBUFFER_UI + 1));
-			for (; num_textures <= FRAMEBUFFER_UI; num_textures++)
-			{
-				sdl_textures[num_textures] = NULL;
-			}
-		}
 		if (which == FRAMEBUFFER_UI && !sdl_textures[which]) {
 			sdl_textures[which] = SDL_CreateTexture(main_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, main_width, main_height);
 		}
