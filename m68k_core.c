@@ -1188,8 +1188,15 @@ void m68k_reset(m68k_context * context)
 {
 	//TODO: Actually execute the M68K reset vector rather than simulating some of its behavior
 	uint16_t *reset_vec = get_native_pointer(0, (void **)context->mem_pointers, &context->options->gen);
+	if (!(context->status & 0x20)) {
+		//switching from user to system mode so swap stack pointers
+		context->aregs[8] = context->aregs[7];
+	}
+	context->status = 0x27;
 	context->aregs[7] = reset_vec[0] << 16 | reset_vec[1];
 	uint32_t address = reset_vec[2] << 16 | reset_vec[3];
+	//interrupt mask may have changed so force a sync
+	sync_components(context, address);
 	start_68k_context(context, address);
 }
 
