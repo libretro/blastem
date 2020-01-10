@@ -2071,6 +2071,9 @@ static void vdp_update_per_frame_debug(vdp_context *context)
 
 void vdp_force_update_framebuffer(vdp_context *context)
 {
+	if (!context->fb) {
+		return;
+	}
 	uint16_t lines_max = context->inactive_start + context->border_bot + context->border_top;
 			
 	uint16_t to_fill = lines_max - context->output_lines;
