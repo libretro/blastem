@@ -2097,7 +2097,7 @@ static void advance_output_line(vdp_context *context)
 		output_line++;
 	} 
 	
-	if (context->output_lines == lines_max || (!context->pushed_frame && output_line == context->inactive_start + context->border_top)) {
+	if (context->output_lines >= lines_max || (!context->pushed_frame && output_line == context->inactive_start + context->border_top)) {
 		//we've either filled up a full frame or we're at the bottom of screen in the current defined mode + border crop
 		if (!headless) {
 			render_framebuffer_updated(context->cur_buffer, context->h40_lines > (context->inactive_start + context->border_top) / 2 ? LINEBUF_SIZE : (256+HORIZ_BORDER));
