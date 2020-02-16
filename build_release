@@ -62,7 +62,7 @@ dir="blastem${suffix}-${ver}"
 echo $dir
 rm -rf "$dir"
 mkdir "$dir"
-cp -r $binaries shaders images default.cfg rom.db gamecontrollerdb.txt "$dir"
+cp -r $binaries shaders images default.cfg rom.db gamecontrollerdb.txt systems.cfg "$dir"
 for file in README COPYING CHANGELOG; do
 	cp "$file" "$dir"/"$file$txt"
 done

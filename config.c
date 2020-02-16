@@ -322,3 +322,18 @@ uint32_t get_lowpass_cutoff(tern_node *config)
 	char * lowpass_cutoff_str = tern_find_path(config, "audio\0lowpass_cutoff\0", TVAL_PTR).ptrval;
 	return lowpass_cutoff_str ? atoi(lowpass_cutoff_str) : DEFAULT_LOWPASS_CUTOFF;
 }
+
+tern_node *get_systems_config(void)
+{
+	static tern_node *systems;
+	if (!systems) {
+		systems = parse_bundled_config("systems.cfg");
+	}
+	return systems;
+}
+
+tern_node *get_model(tern_node *config, system_type stype)
+{
+	char *model = tern_find_path_default(config, "system\0model\0", (tern_val){.ptrval = "md1va3"}, TVAL_PTR);
+	return tern_find_node(get_systems_config(), model);
+}
