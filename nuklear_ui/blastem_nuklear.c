@@ -1831,6 +1831,50 @@ void view_audio_settings(struct nk_context *context)
 		nk_end(context);
 	}
 }
+typedef struct {
+	const char **models;
+	const char **names;
+	uint32_t   num_models;
+	uint32_t   storage;
+} model_foreach_state;
+void model_iter(char *key, tern_val val, uint8_t valtype, void *data)
+{
+	if (valtype != TVAL_NODE) {
+		return;
+	}
+	model_foreach_state *state = data;
+	if (state->num_models == state->storage) {
+		state->storage *= 2;
+		state->models = realloc(state->models, state->storage * sizeof(char *));
+		state->names = realloc(state->names, state->storage * sizeof(char *));
+	}
+	char *def = strdup(key);
+	state->models[state->num_models] = def;
+	state->names[state->num_models++] = tern_find_ptr_default(val.ptrval, "name", def);
+}
+
+typedef struct {
+	const char **models;
+	const char **names;
+} models;
+
+models get_models(uint32_t *num_out)
+{
+	tern_node *systems = get_systems_config();
+	model_foreach_state state = {
+		.models = calloc(4, sizeof(char *)),
+		.names = calloc(4, sizeof(char *)),
+		.num_models = 0,
+		.storage = 4
+	};
+	tern_foreach(systems, model_iter, &state);
+	*num_out = state.num_models;
+	return (models){
+		.models = state.models,
+		.names = state.names
+	};
+}
+
 void view_system_settings(struct nk_context *context)
 {
 	const char *sync_opts[] = {
@@ -1853,12 +1897,25 @@ void view_system_settings(struct nk_context *context)
 	if (selected_region < 0) {
 		selected_region = find_match(region_codes, num_regions, "system\0default_region\0", "U");
 	}
+	static const char **model_opts;
+	static const char **model_names;
+	static uint32_t num_models;
+	if (!model_opts) {
+		models m = get_models(&num_models);
+		model_opts = m.models;
+		model_names = m.names;
+	}
+	static int32_t selected_model = -1;
+	if (selected_model < 0) {
+		selected_model = find_match(model_opts, num_models, "system\0model\0", "md1va3");
+	}
+	
 	const char *formats[] = {
 		"native",
 		"gst"
 	};
 	const uint32_t num_formats = sizeof(formats)/sizeof(*formats);
-	int32_t selected_format = -1;
+	static int32_t selected_format = -1;
 	if (selected_format < 0) {
 		selected_format = find_match(formats, num_formats, "ui\0state_format\0", "native");
 	}
@@ -1908,6 +1965,7 @@ void view_system_settings(struct nk_context *context)
 		settings_toggle(context, "Save config with EXE", "ui\0config_in_exe_dir\0", 0);
 		settings_string(context, "Game Save Path", "ui\0save_path\0", "$USERDATA/blastem/$ROMNAME");
 		selected_region = settings_dropdown_ex(context, "Default Region", region_codes, regions, num_regions, selected_region, "system\0default_region\0");
+		selected_model = settings_dropdown_ex(context, "Model", model_opts, model_names, num_models, selected_model, "system\0model\0");
 		selected_format = settings_dropdown(context, "Save State Format", formats, num_formats, selected_format, "ui\0state_format\0");
 		selected_init = settings_dropdown(context, "Initial RAM Value", ram_inits, num_inits, selected_init, "system\0ram_init\0");
 		selected_io_1 = settings_dropdown_ex(context, "IO Port 1 Device", io_opts_1, device_type_names, num_io, selected_io_1, "io\0devices\0""1\0");
