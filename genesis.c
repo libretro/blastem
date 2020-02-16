@@ -18,6 +18,7 @@
 #include "saves.h"
 #include "bindings.h"
 #include "jcart.h"
+#include "config.h"
 #define MCLKS_NTSC 53693175
 #define MCLKS_PAL  53203395
 
@@ -1405,6 +1406,11 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	gen->header.type = SYSTEM_GENESIS;
 	gen->header.info = *rom;
 	set_region(gen, rom, force_region);
+	tern_node *model = get_model(config, SYSTEM_GENESIS);
+	uint8_t tmss = !strcmp(tern_find_ptr_default(model, "tmss", "off"), "on");
+	if (tmss) {
+		gen->version_reg |= 1;
+	}
 
 	gen->vdp = init_vdp_context(gen->version_reg & 0x40);
 	gen->vdp->system = &gen->header;
@@ -1504,8 +1510,9 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 
 	m68k_options *opts = malloc(sizeof(m68k_options));
 	init_m68k_opts(opts, rom->map, rom->map_chunks, MCLKS_PER_68K);
-	//TODO: make this configurable
-	opts->gen.flags |= M68K_OPT_BROKEN_READ_MODIFY;
+	if (!strcmp(tern_find_ptr_default(model, "tas", "broken"), "broken")) {
+		opts->gen.flags |= M68K_OPT_BROKEN_READ_MODIFY;
+	}
 	gen->m68k = init_68k_context(opts, NULL);
 	gen->m68k->system = gen;
 	opts->address_log = (system_opts & OPT_ADDRESS_LOG) ? fopen("address.log", "w") : NULL;
