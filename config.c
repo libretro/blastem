@@ -6,6 +6,7 @@
 #include "tern.h"
 #include "util.h"
 #include "paths.h"
+#include "config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -334,6 +335,6 @@ tern_node *get_systems_config(void)
 
 tern_node *get_model(tern_node *config, system_type stype)
 {
-	char *model = tern_find_path_default(config, "system\0model\0", (tern_val){.ptrval = "md1va3"}, TVAL_PTR);
+	char *model = tern_find_path_default(config, "system\0model\0", (tern_val){.ptrval = "md1va3"}, TVAL_PTR).ptrval;
 	return tern_find_node(get_systems_config(), model);
 }
