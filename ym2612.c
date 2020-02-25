@@ -21,9 +21,7 @@
 #define dfopen(var, fname, mode)
 #endif
 
-#define BUSY_CYCLES_ADDRESS 17
-#define BUSY_CYCLES_DATA_LOW 83
-#define BUSY_CYCLES_DATA_HIGH 47
+#define BUSY_CYCLES 32
 #define OP_UPDATE_PERIOD 144
 
 #define BIT_TIMERA_ENABLE 0x1
@@ -122,6 +120,21 @@ void ym_adjust_master_clock(ym2612_context * context, uint32_t master_clock)
 	render_audio_adjust_clock(context->audio, master_clock, context->clock_inc * NUM_OPERATORS);
 }
 
+void ym_adjust_cycles(ym2612_context *context, uint32_t deduction)
+{
+	context->current_cycle -= deduction;
+	if (context->write_cycle != CYCLE_NEVER && context->write_cycle >= deduction) {
+		context->write_cycle -= deduction;
+	} else {
+		context->write_cycle = CYCLE_NEVER;
+	}
+	if (context->busy_start != CYCLE_NEVER && context->busy_start >= deduction) {
+		context->busy_start -= deduction;
+	} else {
+		context->busy_start = CYCLE_NEVER;
+	}
+}
+
 #ifdef __ANDROID__
 #define log2(x) (log(x)/log(2))
 #endif
@@ -173,6 +186,7 @@ void ym_init(ym2612_context * context, uint32_t master_clock, uint32_t clock_div
 	dfopen(debug_file, "ym_debug.txt", "w");
 	memset(context, 0, sizeof(*context));
 	context->clock_inc = clock_div * 6;
+	context->busy_cycles = BUSY_CYCLES * context->clock_inc;
 	context->audio = render_audio_source(master_clock, context->clock_inc * NUM_OPERATORS, 2);
 	
 	//some games seem to expect that the LR flags start out as 1
@@ -635,10 +649,6 @@ void ym_run(ym2612_context * context, uint32_t to_cycle)
 		}
 		
 	}
-	if (context->current_cycle >= context->write_cycle + (context->busy_cycles * context->clock_inc / 6)) {
-		context->status &= 0x7F;
-		context->write_cycle = CYCLE_NEVER;
-	}
 	//printf("Done running YM2612 at cycle %d\n", context->current_cycle, to_cycle);
 }
 
@@ -647,9 +657,6 @@ void ym_address_write_part1(ym2612_context * context, uint8_t address)
 	//printf("address_write_part1: %X\n", address);
 	context->selected_reg = address;
 	context->selected_part = 0;
-	context->write_cycle = context->current_cycle;
-	context->busy_cycles = BUSY_CYCLES_ADDRESS;
-	context->status |= 0x80;
 }
 
 void ym_address_write_part2(ym2612_context * context, uint8_t address)
@@ -657,9 +664,6 @@ void ym_address_write_part2(ym2612_context * context, uint8_t address)
 	//printf("address_write_part2: %X\n", address);
 	context->selected_reg = address;
 	context->selected_part = 1;
-	context->write_cycle = context->current_cycle;
-	context->busy_cycles = BUSY_CYCLES_ADDRESS;
-	context->status |= 0x80;
 }
 
 static uint8_t fnum_to_keycode[] = {
@@ -768,6 +772,9 @@ static uint32_t ym_calc_phase_inc(ym2612_context * context, ym_operator * operat
 
 void ym_data_write(ym2612_context * context, uint8_t value)
 {
+	context->write_cycle = context->current_cycle;
+	context->busy_start = context->current_cycle + context->clock_inc;
+	
 	if (context->selected_reg >= YM_REG_END) {
 		return;
 	}
@@ -1108,15 +1115,15 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 			}
 		}
 	}
-
-	context->write_cycle = context->current_cycle;
-	context->busy_cycles = context->selected_reg < 0xA0 ? BUSY_CYCLES_DATA_LOW : BUSY_CYCLES_DATA_HIGH;
-	context->status |= 0x80;
 }
 
-uint8_t ym_read_status(ym2612_context * context)
+uint8_t ym_read_status(ym2612_context * context, uint32_t cycle)
 {
-	return context->status;
+	uint8_t status = context->status;
+	if (cycle >= context->busy_start && cycle < context->busy_start + context->busy_cycles) {
+		status |= 0x80;
+	}
+	return status;
 }
 
 void ym_print_channel_info(ym2612_context *context, int channel)
@@ -1228,7 +1235,7 @@ void ym_serialize(ym2612_context *context, serialize_buffer *buf)
 	save_int8(buf, context->selected_part);
 	save_int32(buf, context->current_cycle);
 	save_int32(buf, context->write_cycle);
-	save_int32(buf, context->busy_cycles);
+	save_int32(buf, context->busy_start);
 }
 
 void ym_deserialize(deserialize_buffer *buf, void *vcontext)
@@ -1303,5 +1310,5 @@ void ym_deserialize(deserialize_buffer *buf, void *vcontext)
 	context->selected_part = load_int8(buf);
 	context->current_cycle = load_int32(buf);
 	context->write_cycle = load_int32(buf);
-	context->busy_cycles = load_int32(buf);
+	context->busy_start = load_int32(buf);
 }
