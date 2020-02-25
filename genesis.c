@@ -403,11 +403,8 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			}
 			context->current_cycle -= deduction;
 			z80_adjust_cycles(z_context, deduction);
-			gen->ym->current_cycle -= deduction;
+			ym_adjust_cycles(gen->ym, deduction);
 			gen->psg->cycles -= deduction;
-			if (gen->ym->write_cycle != CYCLE_NEVER) {
-				gen->ym->write_cycle = gen->ym->write_cycle >= deduction ? gen->ym->write_cycle - deduction : 0;
-			}
 			if (gen->reset_cycle != CYCLE_NEVER) {
 				gen->reset_cycle -= deduction;
 			}
@@ -878,7 +875,7 @@ static uint8_t io_read(uint32_t location, m68k_context * context)
 				value = gen->zram[location & 0x1FFF];
 			} else if (location < 0x6000) {
 				sync_sound(gen, context->current_cycle);
-				value = ym_read_status(gen->ym);
+				value = ym_read_status(gen->ym, context->current_cycle);
 			} else {
 				value = 0xFF;
 			}
@@ -991,7 +988,7 @@ static uint8_t z80_read_ym(uint32_t location, void * vcontext)
 	z80_context * context = vcontext;
 	genesis_context * gen = context->system;
 	sync_sound(gen, context->Z80_CYCLE);
-	return ym_read_status(gen->ym);
+	return ym_read_status(gen->ym, context->Z80_CYCLE);
 }
 
 static uint8_t z80_read_bank(uint32_t location, void * vcontext)

@@ -69,8 +69,8 @@ typedef struct {
 	audio_source *audio;
     uint32_t    clock_inc;
 	uint32_t    current_cycle;
-	//TODO: Condense the next two fields into one
 	uint32_t    write_cycle;
+	uint32_t    busy_start;
 	uint32_t    busy_cycles;
 	int32_t     volume_mult;
 	int32_t     volume_div;
@@ -134,11 +134,12 @@ void ym_reset(ym2612_context *context);
 void ym_free(ym2612_context *context);
 void ym_enable_zero_offset(ym2612_context *context, uint8_t enabled);
 void ym_adjust_master_clock(ym2612_context * context, uint32_t master_clock);
+void ym_adjust_cycles(ym2612_context *context, uint32_t deduction);
 void ym_run(ym2612_context * context, uint32_t to_cycle);
 void ym_address_write_part1(ym2612_context * context, uint8_t address);
 void ym_address_write_part2(ym2612_context * context, uint8_t address);
 void ym_data_write(ym2612_context * context, uint8_t value);
-uint8_t ym_read_status(ym2612_context * context);
+uint8_t ym_read_status(ym2612_context * context, uint32_t cycle);
 uint8_t ym_load_gst(ym2612_context * context, FILE * gstfile);
 uint8_t ym_save_gst(ym2612_context * context, FILE * gstfile);
 void ym_print_channel_info(ym2612_context *context, int channel);
