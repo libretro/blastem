@@ -3413,6 +3413,9 @@ void init_z80_opts(z80_options * options, memmap_chunk const * chunks, uint32_t 
 	add_rdispr(code, options->gen.context_reg, offsetof(z80_context, target_cycle), options->gen.cycles, SZ_D);
 	cmp_rdispr(code, options->gen.context_reg, offsetof(z80_context, int_cycle), options->gen.cycles, SZ_D);
 	jcc(code, CC_B, skip_int);
+	//check that we are not past the end of interrupt pulse
+	cmp_rrdisp(code, options->gen.cycles, options->gen.context_reg, offsetof(z80_context, int_pulse_end), SZ_D);
+	jcc(code, CC_B, skip_int);
 	//set limit to the cycle limit
 	mov_rdispr(code, options->gen.context_reg, offsetof(z80_context, sync_cycle), options->gen.scratch2, SZ_D);
 	mov_rrdisp(code, options->gen.scratch2, options->gen.context_reg, offsetof(z80_context, target_cycle), SZ_D);
