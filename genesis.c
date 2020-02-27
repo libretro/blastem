@@ -875,7 +875,7 @@ static uint8_t io_read(uint32_t location, m68k_context * context)
 				value = gen->zram[location & 0x1FFF];
 			} else if (location < 0x6000) {
 				sync_sound(gen, context->current_cycle);
-				value = ym_read_status(gen->ym, context->current_cycle);
+				value = ym_read_status(gen->ym, context->current_cycle, location);
 			} else {
 				value = 0xFF;
 			}
@@ -988,7 +988,7 @@ static uint8_t z80_read_ym(uint32_t location, void * vcontext)
 	z80_context * context = vcontext;
 	genesis_context * gen = context->system;
 	sync_sound(gen, context->Z80_CYCLE);
-	return ym_read_status(gen->ym, context->Z80_CYCLE);
+	return ym_read_status(gen->ym, context->Z80_CYCLE, location);
 }
 
 static uint8_t z80_read_bank(uint32_t location, void * vcontext)
@@ -1420,6 +1420,10 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	render_set_video_standard((gen->version_reg & HZ50) ? VID_PAL : VID_NTSC);
 	
 	gen->ym = malloc(sizeof(ym2612_context));
+	char *fm = tern_find_ptr_default(model, "fm", "discrete 2612");
+	if (!strcmp(fm + strlen(fm) -4, "3834")) {
+		system_opts |= YM_OPT_3834;
+	}
 	ym_init(gen->ym, gen->master_clock, MCLKS_PER_YM, system_opts);
 
 	gen->psg = malloc(sizeof(psg_context));
