@@ -133,6 +133,12 @@ void ym_adjust_cycles(ym2612_context *context, uint32_t deduction)
 	} else {
 		context->busy_start = CYCLE_NEVER;
 	}
+	if (context->last_status_cycle != CYCLE_NEVER && context->last_status_cycle >= deduction) {
+		context->last_status_cycle -= deduction;
+	} else {
+		context->last_status = 0;
+		context->last_status_cycle = CYCLE_NEVER;
+	}
 }
 
 #ifdef __ANDROID__
@@ -188,6 +194,9 @@ void ym_init(ym2612_context * context, uint32_t master_clock, uint32_t clock_div
 	context->clock_inc = clock_div * 6;
 	context->busy_cycles = BUSY_CYCLES * context->clock_inc;
 	context->audio = render_audio_source(master_clock, context->clock_inc * NUM_OPERATORS, 2);
+	//TODO: pick a randomish high initial value and lower it over time
+	context->invalid_status_decay = 225000 * context->clock_inc;
+	context->status_address_mask = (options & YM_OPT_3834) ? 0 : 3;
 	
 	//some games seem to expect that the LR flags start out as 1
 	for (int i = 0; i < NUM_CHANNELS; i++) {
@@ -1117,13 +1126,25 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 	}
 }
 
-uint8_t ym_read_status(ym2612_context * context, uint32_t cycle)
+uint8_t ym_read_status(ym2612_context * context, uint32_t cycle, uint32_t port)
 {
-	uint8_t status = context->status;
-	if (cycle >= context->busy_start && cycle < context->busy_start + context->busy_cycles) {
-		status |= 0x80;
+	uint8_t status;
+	port &= context->status_address_mask;
+	if (port) {
+		if (context->last_status_cycle != CYCLE_NEVER && cycle - context->last_status_cycle > context->invalid_status_decay) {
+			context->last_status = 0;
+		}
+		status = context->last_status;
+	} else {
+		status = context->status;
+		if (cycle >= context->busy_start && cycle < context->busy_start + context->busy_cycles) {
+			status |= 0x80;
+		}
+		context->last_status = status;
+		context->last_status_cycle = cycle;
 	}
 	return status;
+		
 }
 
 void ym_print_channel_info(ym2612_context *context, int channel)
@@ -1236,6 +1257,9 @@ void ym_serialize(ym2612_context *context, serialize_buffer *buf)
 	save_int32(buf, context->current_cycle);
 	save_int32(buf, context->write_cycle);
 	save_int32(buf, context->busy_start);
+	save_int32(buf, context->last_status_cycle);
+	save_int32(buf, context->invalid_status_decay);
+	save_int8(buf, context->last_status);
 }
 
 void ym_deserialize(deserialize_buffer *buf, void *vcontext)
@@ -1311,4 +1335,12 @@ void ym_deserialize(deserialize_buffer *buf, void *vcontext)
 	context->current_cycle = load_int32(buf);
 	context->write_cycle = load_int32(buf);
 	context->busy_start = load_int32(buf);
+	if (buf->size > buf->cur_pos) {
+		context->last_status_cycle = load_int32(buf);
+		context->invalid_status_decay = load_int32(buf);
+		context->last_status = load_int8(buf);
+	} else {
+		context->last_status = context->status;
+		context->last_status_cycle = context->write_cycle;
+	}
 }
