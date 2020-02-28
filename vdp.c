@@ -144,7 +144,7 @@ static void update_video_params(vdp_context *context)
 
 static uint8_t color_map_init_done;
 
-vdp_context *init_vdp_context(uint8_t region_pal)
+vdp_context *init_vdp_context(uint8_t region_pal, uint8_t has_max_vsram)
 {
 	vdp_context *context = calloc(1, sizeof(vdp_context) + VRAM_SIZE);
 	if (headless) {
@@ -158,6 +158,7 @@ vdp_context *init_vdp_context(uint8_t region_pal)
 	context->fifo_write = 0;
 	context->fifo_read = -1;
 	context->regs[REG_HINT] = context->hint_counter = 0xFF;
+	context->vsram_size = has_max_vsram ? MAX_VSRAM_SIZE : MIN_VSRAM_SIZE;
 
 	if (!color_map_init_done) {
 		uint8_t b,g,r;
@@ -938,7 +939,7 @@ static void external_slot(vdp_context * context)
 			break;
 		}
 		case VSRAM_WRITE:
-			if (((start->address/2) & 63) < VSRAM_SIZE) {
+			if (((start->address/2) & 63) < context->vsram_size) {
 				//printf("VSRAM Write: %X to %X @ frame: %d, vcounter: %d, hslot: %d, cycle: %d\n", start->value, start->address, context->frame, context->vcounter, context->hslot, context->cycles);
 				if (start->partial == 3) {
 					if (start->address & 1) {
@@ -1012,7 +1013,7 @@ static void external_slot(vdp_context * context)
 			break;
 		case VSRAM_READ: {
 			uint16_t address = (context->address /2) & 63;
-			if (address >= VSRAM_SIZE) {
+			if (address >= context->vsram_size) {
 				address = 0;
 			}
 			context->prefetch = context->vsram[address] & VSRAM_BITS;
@@ -4232,14 +4233,14 @@ void vdp_int_ack(vdp_context * context)
 	}
 }
 
-#define VDP_STATE_VERSION 1
+#define VDP_STATE_VERSION 2
 void vdp_serialize(vdp_context *context, serialize_buffer *buf)
 {
 	save_int8(buf, VDP_STATE_VERSION);
 	save_int8(buf, VRAM_SIZE / 1024);//VRAM size in KB, needed for future proofing
 	save_buffer8(buf, context->vdpmem, VRAM_SIZE);
 	save_buffer16(buf, context->cram, CRAM_SIZE);
-	save_buffer16(buf, context->vsram, VSRAM_SIZE);
+	save_buffer16(buf, context->vsram, MAX_VSRAM_SIZE);
 	save_buffer8(buf, context->sat_cache, SAT_CACHE_SIZE);
 	for (int i = 0; i <= REG_DMASRC_H; i++)
 	{
@@ -4337,7 +4338,7 @@ void vdp_deserialize(deserialize_buffer *buf, void *vcontext)
 	{
 		update_color_map(context, i, context->cram[i]);
 	}
-	load_buffer16(buf, context->vsram, VSRAM_SIZE);
+	load_buffer16(buf, context->vsram, version > 1 ? MAX_VSRAM_SIZE : MIN_VSRAM_SIZE);
 	load_buffer8(buf, context->sat_cache, SAT_CACHE_SIZE);
 	for (int i = 0; i <= REG_DMASRC_H; i++)
 	{

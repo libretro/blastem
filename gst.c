@@ -244,11 +244,11 @@ uint8_t vdp_load_gst(vdp_context * context, FILE * state_file)
 		uint16_t value;
 		write_cram_internal(context, i, (tmp_buf[i*2+1] << 8) | tmp_buf[i*2]);
 	}
-	if (fread(tmp_buf, 2, VSRAM_SIZE, state_file) != VSRAM_SIZE) {
+	if (fread(tmp_buf, 2, MIN_VSRAM_SIZE, state_file) != MIN_VSRAM_SIZE) {
 		fputs("Failed to read VSRAM from savestate\n", stderr);
 		return 0;
 	}
-	for (int i = 0; i < VSRAM_SIZE; i++) {
+	for (int i = 0; i < MIN_VSRAM_SIZE; i++) {
 		context->vsram[i] = (tmp_buf[i*2+1] << 8) | tmp_buf[i*2];
 	}
 	fseek(state_file, GST_VDP_MEM, SEEK_SET);
@@ -280,12 +280,12 @@ uint8_t vdp_save_gst(vdp_context * context, FILE * outfile)
 		fputs("Error writing CRAM to savestate\n", stderr);
 		return 0;
 	}
-	for (int i = 0; i < VSRAM_SIZE; i++)
+	for (int i = 0; i < MIN_VSRAM_SIZE; i++)
 	{
 		tmp_buf[i*2] = context->vsram[i];
 		tmp_buf[i*2+1] = context->vsram[i] >> 8;
 	}
-	if (fwrite(tmp_buf, 2, VSRAM_SIZE, outfile) != VSRAM_SIZE) {
+	if (fwrite(tmp_buf, 2, MIN_VSRAM_SIZE, outfile) != MIN_VSRAM_SIZE) {
 		fputs("Error writing VSRAM to savestate\n", stderr);
 		return 0;
 	}
