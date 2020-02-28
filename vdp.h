@@ -16,7 +16,8 @@
 #define SHADOW_OFFSET CRAM_SIZE
 #define HIGHLIGHT_OFFSET (SHADOW_OFFSET+CRAM_SIZE)
 #define MODE4_OFFSET (HIGHLIGHT_OFFSET+CRAM_SIZE)
-#define VSRAM_SIZE 40
+#define MIN_VSRAM_SIZE 40
+#define MAX_VSRAM_SIZE 64
 #define VRAM_SIZE (64*1024)
 #define BORDER_LEFT 13
 #define BORDER_RIGHT 14
@@ -178,6 +179,7 @@ typedef struct {
 	uint32_t       debugcolors[1 << (3 + 1 + 1 + 1)];//3 bits for source, 1 bit for priority, 1 bit for shadow, 1 bit for hilight
 	uint16_t       cram[CRAM_SIZE];
 	uint32_t       frame;
+	uint32_t       vsram_size;
 	uint8_t        cd;
 	uint8_t	       flags;
 	uint8_t        regs[VDP_REGS];
@@ -186,7 +188,7 @@ typedef struct {
 	uint32_t       pending_vint_start;
 	uint32_t       pending_hint_start;
 	uint32_t       top_offset;
-	uint16_t       vsram[VSRAM_SIZE];
+	uint16_t       vsram[MAX_VSRAM_SIZE];
 	uint16_t       vscroll_latch[2];
 	uint16_t       vcounter;
 	uint16_t       inactive_start;
@@ -239,7 +241,7 @@ typedef struct {
 
 
 
-vdp_context *init_vdp_context(uint8_t region_pal);
+vdp_context *init_vdp_context(uint8_t region_pal, uint8_t has_max_vsram);
 void vdp_free(vdp_context *context);
 void vdp_run_context_full(vdp_context * context, uint32_t target_cycles);
 void vdp_run_context(vdp_context * context, uint32_t target_cycles);
