@@ -629,7 +629,7 @@ sms_context *alloc_configure_sms(system_media *media, uint32_t opts, uint8_t for
 	
 	set_gain_config(sms);
 	
-	sms->vdp = init_vdp_context(0);
+	sms->vdp = init_vdp_context(0, 0);
 	sms->vdp->system = &sms->header;
 	
 	sms->header.info.save_type = SAVE_NONE;

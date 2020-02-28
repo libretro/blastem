@@ -1409,7 +1409,8 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 		gen->version_reg |= 1;
 	}
 
-	gen->vdp = init_vdp_context(gen->version_reg & 0x40);
+	uint8_t max_vsram = !strcmp(tern_find_ptr_default(model, "vsram", "40"), "64");
+	gen->vdp = init_vdp_context(gen->version_reg & 0x40, max_vsram);
 	gen->vdp->system = &gen->header;
 	gen->frame_end = vdp_cycles_to_frame_end(gen->vdp);
 	char * config_cycles = tern_find_path(config, "clocks\0max_cycles\0", TVAL_PTR).ptrval;
@@ -1474,7 +1475,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 		{
 			write_cram_internal(gen->vdp, i, rand());
 		}
-		for (int i = 0; i < VSRAM_SIZE; i++)
+		for (int i = 0; i < gen->vdp->vsram_size; i++)
 		{
 			gen->vdp->vsram[i] = rand();
 		}
