@@ -752,9 +752,8 @@ static m68k_context * io_write(uint32_t location, m68k_context * context, uint8_
 			}
 		}
 	} else {
-		location &= 0x1FFF;
-		if (location < 0x100) {
-			switch(location/2)
+		if (location < 0x10100) {
+			switch(location >> 1 & 0xFF)
 			{
 			case 0x1:
 				io_data_write(gen->io.ports, value, context->current_cycle);
@@ -799,7 +798,8 @@ static m68k_context * io_write(uint32_t location, m68k_context * context, uint8_
 				break;
 			}
 		} else {
-			if (location == 0x1100) {
+			uint32_t masked = location & 0xFFF00;
+			if (masked == 0x11100) {
 				if (value & 1) {
 					dputs("bus requesting Z80");
 					if (z80_enabled) {
@@ -824,7 +824,7 @@ static m68k_context * io_write(uint32_t location, m68k_context * context, uint8_
 						gen->z80->busack = 0;
 					}
 				}
-			} else if (location == 0x1200) {
+			} else if (masked == 0x11200) {
 				sync_z80(gen->z80, context->current_cycle);
 				if (value & 1) {
 					if (z80_enabled) {
@@ -840,6 +840,8 @@ static m68k_context * io_write(uint32_t location, m68k_context * context, uint8_
 					}
 					ym_reset(gen->ym);
 				}
+			} else if (masked != 0x11300 && masked != 0x11000) {
+				fatal_error("Machine freeze due to unmapped write to address %X\n", location | 0xA00000);
 			}
 		}
 	}
@@ -876,16 +878,18 @@ static uint8_t io_read(uint32_t location, m68k_context * context)
 			} else if (location < 0x6000) {
 				sync_sound(gen, context->current_cycle);
 				value = ym_read_status(gen->ym, context->current_cycle, location);
+			} else if (location < 0x7F00) {
+				value = 0xFF;
 			} else {
+				fatal_error("Machine freeze due to read of Z80 VDP memory window by 68K: %X\n", location | 0xA00000);
 				value = 0xFF;
 			}
 		} else {
 			value = 0xFF;
 		}
 	} else {
-		location &= 0x1FFF;
-		if (location < 0x100) {
-			switch(location/2)
+		if (location < 0x10100) {
+			switch(location >> 1 & 0xFF)
 			{
 			case 0x0:
 				//version bits should be 0 for now since we're not emulating TMSS
@@ -937,18 +941,24 @@ static uint8_t io_read(uint32_t location, m68k_context * context)
 				value = gen->io.ports[2].serial_ctrl;
 				break;
 			default:
-				value = 0xFF;
+				value = get_open_bus_value(&gen->header) >> 8;
 			}
 		} else {
-			if (location == 0x1100) {
+			uint32_t masked = location & 0xFFF00;
+			if (masked == 0x11100) {
 				value = z80_enabled ? !z80_get_busack(gen->z80, context->current_cycle) : !gen->z80->busack;
 				value |= (get_open_bus_value(&gen->header) >> 8) & 0xFE;
 				dprintf("Byte read of BUSREQ returned %d @ %d (reset: %d)\n", value, context->current_cycle, gen->z80->reset);
-			} else if (location == 0x1200) {
+			} else if (masked == 0x11200) {
 				value = !gen->z80->reset;
+			} else if (masked == 0x11300 || masked == 0x11000) {
+				//A11300 is apparently completely unused
+				//A11000 is the memory control register which I am assuming is write only
+				value = get_open_bus_value(&gen->header) >> 8;
 			} else {
+				location |= 0xA00000;
+				fatal_error("Machine freeze due to read of unmapped IO location %X\n", location);
 				value = 0xFF;
-				printf("Byte read of unknown IO location: %X\n", location);
 			}
 		}
 	}
@@ -1058,6 +1068,80 @@ static void *z80_write_bank_reg(uint32_t location, void * vcontext, uint8_t valu
 	update_z80_bank_pointer(context->system);
 
 	return context;
+}
+
+static uint16_t unused_read(uint32_t location, void *vcontext)
+{
+	m68k_context *context = vcontext;
+	genesis_context *gen = context->system;
+	if ((location >= 0xA13000 && location < 0xA13100) || (location >= 0xA12000 && location < 0xA12100)) {
+		//Only called if the cart/exp doesn't have a more specific handler for this region
+		return get_open_bus_value(&gen->header);
+	} else if (location == 0xA14000 || location == 0xA14002) {
+		if (gen->version_reg & 0xF) {
+			return gen->tmss_lock[location >> 1 & 1];
+		} else {
+			fatal_error("Machine freeze due to read from TMSS lock when TMSS is not present %X\n", location);
+			return 0xFFFF;
+		}
+	} else if (location == 0xA14100) {
+		if (gen->version_reg & 0xF) {
+			return get_open_bus_value(&gen->header);
+		} else {
+			fatal_error("Machine freeze due to read from TMSS control when TMSS is not present %X\n", location);
+			return 0xFFFF;
+		}
+	} else {
+		fatal_error("Machine freeze due to unmapped read from %X\n", location);
+		return 0xFFFF;
+	}
+}
+
+static uint8_t unused_read_b(uint32_t location, void *vcontext)
+{
+	uint16_t v = unused_read(location & 0xFFFFFE, vcontext);
+	if (location & 1) {
+		return v;
+	} else {
+		return v >> 8;
+	}
+}
+
+static void *unused_write(uint32_t location, void *vcontext, uint16_t value)
+{
+	m68k_context *context = vcontext;
+	genesis_context *gen = context->system;
+	uint8_t has_tmss = gen->version_reg & 0xF;
+	if (has_tmss && (location == 0xA14000 || location == 0xA14002)) {
+		gen->tmss_lock[location >> 1 & 1] = value;
+	} else if (has_tmss && location == 0xA14100) {
+		//TODO: implement TMSS control register
+	} else {
+		fatal_error("Machine freeze due to unmapped write to %X\n", location);
+	}
+	return vcontext;
+}
+
+static void *unused_write_b(uint32_t location, void *vcontext, uint8_t value)
+{
+	m68k_context *context = vcontext;
+	genesis_context *gen = context->system;
+	uint8_t has_tmss = gen->version_reg & 0xF;
+	if (has_tmss && location >= 0xA14000 && location <= 0xA14003) {
+		uint32_t offset = location >> 1 & 1;
+		if (location & 1) {
+			gen->tmss_lock[offset] &= 0xFF00;
+			gen->tmss_lock[offset] |= value;
+		} else {
+			gen->tmss_lock[offset] &= 0xFF;
+			gen->tmss_lock[offset] |= value << 8;
+		}
+	} else if (has_tmss && (location == 0xA14100 || location == 0xA14101)) {
+		//TODO: implement TMSS control register
+	} else {
+		fatal_error("Machine freeze due to unmapped byte write to %X\n", location);
+	}
+	return vcontext;
 }
 
 static void set_speed_percent(system_header * system, uint32_t percent)
@@ -1548,7 +1632,10 @@ genesis_context *alloc_config_genesis(void *rom, uint32_t rom_size, void *lock_o
 		           (read_8_fun)vdp_port_read_b, (write_8_fun)vdp_port_write_b},
 		{0xA00000, 0xA12000,  0x1FFFF,  0, 0, 0,                                  NULL,
 		           (read_16_fun)io_read_w,      (write_16_fun)io_write_w,
-		           (read_8_fun)io_read,         (write_8_fun)io_write}
+		           (read_8_fun)io_read,         (write_8_fun)io_write},
+		{0x000000, 0xFFFFFF, 0xFFFFFF, 0, 0, 0,                                   NULL,
+		           (read_16_fun)unused_read,    (write_16_fun)unused_write,
+		           (read_8_fun)unused_read_b,   (write_8_fun)unused_write_b}
 	};
 	static tern_node *rom_db;
 	if (!rom_db) {
