@@ -58,6 +58,8 @@ struct system_header {
 	system_fun              config_updated;
 	system_ptrszt_fun_rptr8 serialize;
 	system_ptr8_sizet_fun   deserialize;
+	system_str_fun          start_vgm_log;
+	system_fun              stop_vgm_log;
 	rom_info                info;
 	arena                   *arena;
 	char                    *next_rom;
@@ -67,6 +69,7 @@ struct system_header {
 	uint8_t                 save_state;
 	uint8_t                 delayed_load_slot;
 	uint8_t                 has_keyboard;
+	uint8_t                 vgm_logging;
 	debugger_type           debugger_type;
 	system_type             type;
 };

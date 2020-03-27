@@ -404,6 +404,9 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 			context->current_cycle -= deduction;
 			z80_adjust_cycles(z_context, deduction);
 			ym_adjust_cycles(gen->ym, deduction);
+			if (gen->ym->vgm) {
+				vgm_adjust_cycles(gen->ym->vgm, deduction);
+			}
 			gen->psg->cycles -= deduction;
 			if (gen->reset_cycle != CYCLE_NEVER) {
 				gen->reset_cycle -= deduction;
@@ -1452,6 +1455,30 @@ static void config_updated(system_header *system)
 	set_audio_config(gen);
 }
 
+static void start_vgm_log(system_header *system, char *filename)
+{
+	genesis_context *gen = (genesis_context *)system;
+	vgm_writer *vgm = vgm_write_open(filename, gen->version_reg & HZ50 ? 50 : 60, gen->master_clock, gen->m68k->current_cycle);
+	if (vgm) {
+		printf("Started logging VGM to %s\n", filename);
+		sync_sound(gen, vgm->last_cycle);
+		ym_vgm_log(gen->ym, gen->master_clock, vgm);
+		psg_vgm_log(gen->psg, gen->master_clock, vgm);
+		gen->header.vgm_logging = 1;
+	} else {
+		printf("Failed to start logging to %s\n", filename);
+	}
+}
+
+static void stop_vgm_log(system_header *system)
+{
+	puts("Stopped VGM log");
+	genesis_context *gen = (genesis_context *)system;
+	vgm_close(gen->ym->vgm);
+	gen->ym->vgm = gen->psg->vgm = NULL;
+	gen->header.vgm_logging = 0;
+}
+
 genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on, uint32_t system_opts, uint8_t force_region)
 {
 	static memmap_chunk z80_map[] = {
@@ -1484,6 +1511,8 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	gen->header.config_updated = config_updated;
 	gen->header.serialize = serialize;
 	gen->header.deserialize = deserialize;
+	gen->header.start_vgm_log = start_vgm_log;
+	gen->header.stop_vgm_log = stop_vgm_log;
 	gen->header.type = SYSTEM_GENESIS;
 	gen->header.info = *rom;
 	set_region(gen, rom, force_region);
