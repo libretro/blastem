@@ -113,7 +113,7 @@ int main(int argc, char ** argv)
 	height = height < 240 ? (width/320) * 240 : height;
 
 	render_init(width, height, "GST State Viewer", 0);
-	vdp_context *context = init_vdp_context(0);
+	vdp_context *context = init_vdp_context(0, 0);
 	vdp_load_gst(context, state_file);
 	vdp_run_to_vblank(context);
 	vdp_print_sprite_table(context);
