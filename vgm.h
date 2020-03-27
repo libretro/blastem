@@ -1,6 +1,9 @@
 #ifndef VGM_H_
 #define VGM_H_
 
+#include <stdint.h>
+#include <stdio.h>
+
 #pragma pack(push, 1)
 typedef struct {
 	char     ident[4];
@@ -70,5 +73,21 @@ typedef struct {
 	uint32_t          size;
 	uint8_t           type;
 } data_block;
+
+typedef struct {
+	vgm_header header;
+	FILE       *f;
+	uint32_t   master_clock;
+	uint32_t   last_cycle;
+} vgm_writer;
+
+vgm_writer *vgm_write_open(char *filename, uint32_t rate, uint32_t clock, uint32_t cycle);
+void vgm_sn76489_init(vgm_writer *writer, uint32_t clock, uint16_t feedback, uint8_t shift_reg_size, uint8_t flags);
+void vgm_sn76489_write(vgm_writer *writer, uint32_t cycle, uint8_t value);
+void vgm_ym2612_init(vgm_writer *writer, uint32_t clock);
+void vgm_ym2612_part1_write(vgm_writer *writer, uint32_t cycle, uint8_t reg, uint8_t value);
+void vgm_ym2612_part2_write(vgm_writer *writer, uint32_t cycle, uint8_t reg, uint8_t value);
+void vgm_adjust_cycles(vgm_writer *writer, uint32_t deduction);
+void vgm_close(vgm_writer *writer);
 
 #endif //VGM_H_

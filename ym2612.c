@@ -779,6 +779,19 @@ static uint32_t ym_calc_phase_inc(ym2612_context * context, ym_operator * operat
 	return inc;
 }
 
+void ym_vgm_log(ym2612_context *context, uint32_t master_clock, vgm_writer *vgm)
+{
+	vgm_ym2612_init(vgm, 6 * master_clock / context->clock_inc);
+	context->vgm = vgm;
+	for (uint8_t reg = YM_PART1_START; reg < YM_REG_END; reg++) {
+		vgm_ym2612_part1_write(context->vgm, context->current_cycle, reg, context->part1_regs[reg - YM_PART1_START]);
+	}
+	
+	for (uint8_t reg = YM_PART2_START; reg < YM_REG_END; reg++) {
+		vgm_ym2612_part2_write(context->vgm, context->current_cycle, reg, context->part2_regs[reg - YM_PART2_START]);
+	}
+}
+
 void ym_data_write(ym2612_context * context, uint8_t value)
 {
 	context->write_cycle = context->current_cycle;
@@ -791,10 +804,16 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 		if (context->selected_reg < YM_PART2_START) {
 			return;
 		}
+		if (context->vgm) {
+			vgm_ym2612_part2_write(context->vgm, context->current_cycle, context->selected_reg, value);
+		}
 		context->part2_regs[context->selected_reg - YM_PART2_START] = value;
 	} else {
 		if (context->selected_reg < YM_PART1_START) {
 			return;
+		}
+		if (context->vgm) {
+			vgm_ym2612_part1_write(context->vgm, context->current_cycle, context->selected_reg, value);
 		}
 		context->part1_regs[context->selected_reg - YM_PART1_START] = value;
 	}

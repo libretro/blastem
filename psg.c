@@ -32,6 +32,9 @@ void psg_adjust_master_clock(psg_context * context, uint32_t master_clock)
 
 void psg_write(psg_context * context, uint8_t value)
 {
+	if (context->vgm) {
+		vgm_sn76489_write(context->vgm, context->cycles, value);
+	}
 	if (value & 0x80) {
 		context->latch = value & 0x70;
 		uint8_t channel = value >> 5 & 0x3;
@@ -119,6 +122,30 @@ void psg_run(psg_context * context, uint32_t cycles)
 		render_put_mono_sample(context->audio, accum);
 
 		context->cycles += context->clock_inc;
+	}
+}
+
+void psg_vgm_log(psg_context *context, uint32_t master_clock, vgm_writer *vgm)
+{
+	vgm_sn76489_init(vgm, master_clock / context->clock_inc, 9, 16, 0);
+	context->vgm = vgm;
+	for (int chan = 0; chan < 4; chan++)
+	{
+		uint8_t base = chan << 5 | 0x80;
+		vgm_sn76489_write(context->vgm, context->cycles, context->volume[chan] | base | 0x10);
+		if (chan == 3) {
+			if (context->noise_use_tone) {
+				vgm_sn76489_write(context->vgm, context->cycles, 3 | base);
+			} else {
+				//0x10 = 0
+				//0x20 = 1
+				//0x40 = 2
+				vgm_sn76489_write(context->vgm, context->cycles, context->counter_load[chan] >> 5 | base);
+			}
+		} else {
+			vgm_sn76489_write(context->vgm, context->cycles, (context->counter_load[chan] & 0xF) | base);
+			vgm_sn76489_write(context->vgm, context->cycles, context->counter_load[chan] >> 4 & 0x3F);
+		}
 	}
 }
 
