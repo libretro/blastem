@@ -36,6 +36,7 @@ typedef enum {
 	UI_RELOAD,
 	UI_SMS_PAUSE,
 	UI_SCREENSHOT,
+	UI_VGM_LOG,
 	UI_EXIT,
 	UI_PLANE_DEBUG,
 	UI_VRAM_DEBUG,
@@ -258,6 +259,39 @@ static uint8_t mouse_captured;
 #define localtime_r(a,b) localtime(a)
 #endif
 
+char *get_content_config_path(char *config_path, char *config_template, char *default_name)
+{
+	char *base = tern_find_path(config, config_path, TVAL_PTR).ptrval;
+	if (!base) {
+		base = "$HOME";
+	}
+	const system_media *media = current_media();
+	tern_node *vars = tern_insert_ptr(NULL, "HOME", get_home_dir());
+	vars = tern_insert_ptr(vars, "EXEDIR", get_exe_dir());
+	vars = tern_insert_ptr(vars, "USERDATA", (char *)get_userdata_dir());
+	vars = tern_insert_ptr(vars, "ROMNAME", media->name);
+	vars = tern_insert_ptr(vars, "ROMDIR", media->dir);
+	base = replace_vars(base, vars, 1);
+	tern_free(vars);
+	ensure_dir_exists(base);
+	time_t now = time(NULL);
+	struct tm local_store;
+	char fname_part[256];
+	char *template = tern_find_path(config, config_template, TVAL_PTR).ptrval;
+	if (template) {
+		vars = tern_insert_ptr(NULL, "ROMNAME", media->name);
+		template = replace_vars(template, vars, 0);
+	} else {
+		template = strdup(default_name);
+	}
+	strftime(fname_part, sizeof(fname_part), template, localtime_r(&now, &local_store));
+	char const *parts[] = {base, PATH_SEP, fname_part};
+	char *path = alloc_concat_m(3, parts);
+	free(base);
+	free(template);
+	return path;
+}
+
 void handle_binding_up(keybinding * binding)
 {
 	uint8_t allow_content_binds = content_binds_enabled && current_system;
@@ -352,40 +386,23 @@ void handle_binding_up(keybinding * binding)
 				current_system->gamepad_down(current_system, GAMEPAD_MAIN_UNIT, MAIN_UNIT_PAUSE);
 			}
 			break;
-		case UI_SCREENSHOT: {
+		case UI_SCREENSHOT:
 			if (allow_content_binds) {
-				char *screenshot_base = tern_find_path(config, "ui\0screenshot_path\0", TVAL_PTR).ptrval;
-				if (!screenshot_base) {
-					screenshot_base = "$HOME";
-				}
-				const system_media *media = current_media();
-				tern_node *vars = tern_insert_ptr(NULL, "HOME", get_home_dir());
-				vars = tern_insert_ptr(vars, "EXEDIR", get_exe_dir());
-				vars = tern_insert_ptr(vars, "USERDATA", (char *)get_userdata_dir());
-				vars = tern_insert_ptr(vars, "ROMNAME", media->name);
-				vars = tern_insert_ptr(vars, "ROMDIR", media->dir);
-				screenshot_base = replace_vars(screenshot_base, vars, 1);
-				tern_free(vars);
-				ensure_dir_exists(screenshot_base);
-				time_t now = time(NULL);
-				struct tm local_store;
-				char fname_part[256];
-				char *template = tern_find_path(config, "ui\0screenshot_template\0", TVAL_PTR).ptrval;
-				if (template) {
-					vars = tern_insert_ptr(NULL, "ROMNAME", media->name);
-					template = replace_vars(template, vars, 0);
-				} else {
-					template = strdup("blastem_%c.ppm");
-				}
-				strftime(fname_part, sizeof(fname_part), template, localtime_r(&now, &local_store));
-				char const *parts[] = {screenshot_base, PATH_SEP, fname_part};
-				char *path = alloc_concat_m(3, parts);
-				free(screenshot_base);
-				free(template);
+				char *path = get_content_config_path("ui\0screenshot_path\0", "ui\0screenshot_template\0", "blastem_%c.ppm");
 				render_save_screenshot(path);
 			}
 			break;
-		}
+		case UI_VGM_LOG:
+			if (allow_content_binds && current_system->start_vgm_log) {
+				if (current_system->vgm_logging) {
+					current_system->stop_vgm_log(current_system);
+				} else {
+					char *path = get_content_config_path("ui\0vgm_path\0", "ui\0vgm_template\0", "blastem_%c.vgm");
+					current_system->start_vgm_log(current_system, path);
+					free(path);
+				}
+			}
+			break;
 		case UI_EXIT:
 #ifndef DISABLE_NUKLEAR
 			if (is_nuklear_active()) {
@@ -634,6 +651,8 @@ int parse_binding_target(int device_num, char * target, tern_node * padbuttons, 
 			*subtype_a = UI_SMS_PAUSE;
 		} else if (!strcmp(target + 3, "screenshot")) {
 			*subtype_a = UI_SCREENSHOT;
+		} else if (!strcmp(target + 3, "vgm_log")) {
+			*subtype_a = UI_VGM_LOG;
 		} else if(!strcmp(target + 3, "exit")) {
 			*subtype_a = UI_EXIT;
 		} else if (!strcmp(target + 3, "plane_debug")) {

@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include "serialize.h"
 #include "render_audio.h"
+#include "vgm.h"
 
 #define NUM_PART_REGS (0xB7-0x30)
 #define NUM_CHANNELS 6
@@ -68,6 +69,7 @@ typedef struct {
 
 typedef struct {
 	audio_source *audio;
+	vgm_writer  *vgm;
     uint32_t    clock_inc;
 	uint32_t    current_cycle;
 	uint32_t    write_cycle;
@@ -144,6 +146,7 @@ void ym_run(ym2612_context * context, uint32_t to_cycle);
 void ym_address_write_part1(ym2612_context * context, uint8_t address);
 void ym_address_write_part2(ym2612_context * context, uint8_t address);
 void ym_data_write(ym2612_context * context, uint8_t value);
+void ym_vgm_log(ym2612_context *context, uint32_t master_clock, vgm_writer *vgm);
 uint8_t ym_read_status(ym2612_context * context, uint32_t cycle, uint32_t port);
 uint8_t ym_load_gst(ym2612_context * context, FILE * gstfile);
 uint8_t ym_save_gst(ym2612_context * context, FILE * gstfile);
