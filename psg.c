@@ -127,7 +127,7 @@ void psg_run(psg_context * context, uint32_t cycles)
 
 void psg_vgm_log(psg_context *context, uint32_t master_clock, vgm_writer *vgm)
 {
-	vgm_sn76489_init(vgm, master_clock / context->clock_inc, 9, 16, 0);
+	vgm_sn76489_init(vgm, 16 * master_clock / context->clock_inc, 9, 16, 0);
 	context->vgm = vgm;
 	for (int chan = 0; chan < 4; chan++)
 	{
