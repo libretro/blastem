@@ -784,10 +784,18 @@ void ym_vgm_log(ym2612_context *context, uint32_t master_clock, vgm_writer *vgm)
 	vgm_ym2612_init(vgm, 6 * master_clock / context->clock_inc);
 	context->vgm = vgm;
 	for (uint8_t reg = YM_PART1_START; reg < YM_REG_END; reg++) {
+		if ((reg >= REG_DETUNE_MULT && (reg & 3) == 3) || (reg >= 0x2D && reg < REG_DETUNE_MULT) || reg == 0x23 || reg == 0x29) {
+			//skip invalid registers
+			continue;
+		}
 		vgm_ym2612_part1_write(context->vgm, context->current_cycle, reg, context->part1_regs[reg - YM_PART1_START]);
 	}
 	
 	for (uint8_t reg = YM_PART2_START; reg < YM_REG_END; reg++) {
+		if ((reg & 3) == 3 || (reg >= REG_FNUM_LOW_CH3 && reg < REG_ALG_FEEDBACK)) {
+			//skip invalid registers
+			continue;
+		}
 		vgm_ym2612_part2_write(context->vgm, context->current_cycle, reg, context->part2_regs[reg - YM_PART2_START]);
 	}
 }
