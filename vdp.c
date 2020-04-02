@@ -3500,6 +3500,8 @@ static void vdp_inactive(vdp_context *context, uint32_t target_cycles, uint8_t i
 			} else if (context->regs[REG_MODE_1] & BIT_MODE_4) {
 				bg_index = 0x10 + (context->regs[REG_BG_COLOR] & 0xF);
 				bg_color = context->colors[MODE4_OFFSET + bg_index];
+			} else {
+				bg_color = render_map_color(0, 0, 0);
 			}
 			if (context->done_composite) {
 				uint8_t pixel = context->compositebuf[dst-context->output];
