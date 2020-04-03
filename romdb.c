@@ -384,8 +384,13 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 				info->map[1].write_16 = (write_16_fun)write_sram_area_w;//these will be called all writes to the area
 				info->map[1].write_8 = (write_8_fun)write_sram_area_b;
 				info->map[1].buffer = rom + 0x200000;
-
+				
+				//Last entry in the base map is a catch all one that needs to be
+				//after all the other entries
+				memmap_chunk *unused = info->map + info->map_chunks - 2;
 				memmap_chunk *last = info->map + info->map_chunks - 1;
+				*last = *unused;
+				last = unused;
 				memset(last, 0, sizeof(memmap_chunk));
 				last->start = 0xA13000;
 				last->end = 0xA13100;
