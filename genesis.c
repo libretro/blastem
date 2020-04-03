@@ -888,7 +888,8 @@ static uint8_t io_read(uint32_t location, m68k_context * context)
 				value = 0xFF;
 			}
 		} else {
-			value = 0xFF;
+			uint16_t word = get_open_bus_value(&gen->header);
+			value = location & 1 ? word : word >> 8;
 		}
 	} else {
 		if (location < 0x10100) {
