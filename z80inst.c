@@ -1570,7 +1570,7 @@ uint8_t z80_word_reg(uint8_t reg)
 uint8_t z80_is_terminal(z80inst * inst)
 {
 	return inst->op == Z80_RET || inst->op == Z80_RETI || inst->op == Z80_RETN || inst->op == Z80_JP
-		|| inst->op == Z80_JR || inst->op == Z80_HALT || (inst->op == Z80_NOP && inst->immed == 42);
+		|| inst->op == Z80_JR || (inst->op == Z80_NOP && inst->immed == 42);
 }
 
 
