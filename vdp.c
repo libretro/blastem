@@ -3732,7 +3732,9 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 		}
 	} else {
 		uint8_t mode_5 = context->regs[REG_MODE_2] & BIT_MODE_5;
-		context->address = (context->address &0xC000) | (value & 0x3FFF);
+		//contrary to what's in Charles MacDonald's doc, it seems top 2 address bits are cleared
+		//needed for the Mona in 344 Bytes demo
+		context->address = value & 0x3FFF;
 		context->cd = (context->cd & 0x3C) | (value >> 14);
 		if ((value & 0xC000) == 0x8000) {
 			//Register write
