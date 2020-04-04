@@ -2327,7 +2327,7 @@ void translate_z80inst(z80inst * inst, z80_context * context, uint16_t address, 
 		if (inst->addr_mode == Z80_IMMED_INDIRECT) {
 			mov_ir(code, inst->immed, opts->gen.scratch1, SZ_B);
 		} else {
-			zreg_to_native(opts, Z80_C, opts->gen.scratch2);
+			zreg_to_native(opts, Z80_C, opts->gen.scratch1);
 		}
 		call(code, opts->read_io);
 		if (inst->addr_mode != Z80_IMMED_INDIRECT) {
