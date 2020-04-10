@@ -552,12 +552,15 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 				}
 				break;
 			}
+			case '?':
+				print_z80_help();
+				break;
 			default:
 				if (
 					!context->Z80_OPTS->gen.debug_cmd_handler
 					|| !context->Z80_OPTS->gen.debug_cmd_handler(&system->header, input_buf)
 				) {
-					fprintf(stderr, "Unrecognized debugger command %s\n", input_buf);
+					fprintf(stderr, "Unrecognized debugger command %s\nUse '?' for help.\n", input_buf);
 				}
 				break;
 		}
@@ -925,17 +928,58 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 			break;
 		}
 #endif
+		case '?':
+			print_m68k_help();
+			break;
 		case 'q':
 			puts("Quitting");
 			exit(0);
 			break;
-		default:
-			fprintf(stderr, "Unrecognized debugger command %s\n", input_buf);
+			default:
+			fprintf(stderr, "Unrecognized debugger command %s\nUse '?' for help.\n", input_buf);
 			break;
 	}
 	return 1;
 }
 
+void print_m68k_help()
+{
+	printf("M68k Debugger Commands\n");
+	printf("    b ADDRESS            - Set a breakpoint at ADDRESS\n");
+	printf("    d BREAKPOINT         - Delete a 68K breakpoint\n");
+	printf("    co BREAKPOINT        - Run a list of debugger commands each time\n");
+	printf("                           BREAKPOINT is hit\n");
+	printf("    a ADDRESS            - Advance to address\n");
+	printf("    n                    - Advance to next instruction\n");
+	printf("    o                    - Advance to next instruction ignoring branches to\n");
+	printf("                           lower addresses (good for breaking out of loops)\n");
+	printf("    s                    - Advance to next instruction (follows bsr/jsr)\n");
+	printf("    c                    - Continue\n");
+	printf("    bt                   - Print a backtrace\n");
+	printf("    p[/(x|X|d|c)] VALUE  - Print a register or memory location\n");
+	printf("    di[/(x|X|d|c)] VALUE - Print a register or memory location each time\n");
+	printf("                           a breakpoint is hit\n");
+	printf("    vs                   - Print VDP sprite list\n");
+	printf("    vr                   - Print VDP register info\n");
+	printf("    zb ADDRESS           - Set a Z80 breakpoint\n");
+	printf("    zp[/(x|X|d|c)] VALUE - Display a Z80 value\n");
+	printf("    ?                    - Display help\n");
+	printf("    q                    - Quit BlastEm\n");
+}
+
+void print_z80_help()
+{
+	printf("Z80 Debugger Commands\n");
+	printf("    b  ADDRESS           - Set a breakpoint at ADDRESS\n");
+	printf("    de BREAKPOINT        - Delete a Z80 breakpoint\n");
+	printf("    a  ADDRESS           - Advance to address\n");
+	printf("    n                    - Advance to next instruction\n");
+	printf("    c                    - Continue\n");
+	printf("    p[/(x|X|d|c)] VALUE  - Print a register or memory location\n");
+	printf("    di[/(x|X|d|c)] VALUE - Print a register or memory location each time\n");
+	printf("                           a breakpoint is hit\n");
+	printf("    q                    - Quit BlastEm\n");
+}
 
 void debugger(m68k_context * context, uint32_t address)
 {

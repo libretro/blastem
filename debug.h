@@ -29,5 +29,7 @@ void add_display(disp_def ** head, uint32_t *index, char format_char, char * par
 void remove_display(disp_def ** head, uint32_t index);
 void debugger(m68k_context * context, uint32_t address);
 z80_context * zdebugger(z80_context * context, uint16_t address);
+void print_m68k_help();
+void print_z80_help();
 
 #endif //DEBUG_H_
