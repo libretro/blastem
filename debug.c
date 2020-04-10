@@ -141,7 +141,7 @@ void debugger_print(m68k_context *context, char format_char, char *param)
 				value &= 0xFF;
 			}
 		}
-	} else if (param[0] == 'S' && param[1] == 'R') {
+	} else if (param[0] == 's' && param[1] == 'r') {
 		value = (context->status << 8);
 		for (int flag = 0; flag < 5; flag++) {
 			value |= context->flags[flag] << (4-flag);
@@ -151,6 +151,8 @@ void debugger_print(m68k_context *context, char format_char, char *param)
 	} else if(param[0] == 'f') {
 		genesis_context *gen = context->system;
 		value = gen->vdp->frame;
+	} else if (param[0] == 'p' && param[1] == 'c') {
+		value = 0; //TODO PC value here;
 	} else if ((param[0] == '0' && param[1] == 'x') || param[0] == '$') {
 		char *after;
 		uint32_t p_addr = strtol(param+(param[0] == '0' ? 2 : 1), &after, 16);
@@ -573,7 +575,7 @@ z80_context * zdebugger(z80_context * context, uint16_t address)
 static uint32_t branch_t;
 static uint32_t branch_f;
 
-int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, uint32_t after)
+int run_debugger_command(m68k_context *context, uint32_t address, char *input_buf, m68kinst inst, uint32_t after)
 {
 	char * param;
 	char format_char;
@@ -723,7 +725,8 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 			}
 			param = find_param(input_buf);
 			if (!param) {
-				fputs("p command requires a parameter\n", stderr);
+				m68k_disasm(&inst, input_buf);
+				printf("%X: %s\n", address, input_buf);
 				break;
 			}
 			debugger_print(context, format_char, param);
@@ -790,10 +793,12 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 				param = find_param(input_buf);
 				if (!param) {
 					fputs("Missing destination parameter for set\n", stderr);
+					return 1;
 				}
 				char *val = find_param(param);
 				if (!val) {
 					fputs("Missing value parameter for set\n", stderr);
+					return 1;
 				}
 				long int_val;
 				int reg_num;
@@ -834,6 +839,9 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 					fprintf(stderr, "Invalid destinatino %s\n", param);
 				}
 				break;
+			} else if (input_buf[1] == 'r') {
+				system->header.soft_reset(&system->header);
+				return 0;
 			} else {
 				if (inst.op == M68K_RTS) {
 					after = m68k_read_long(context->aregs[7], context);
@@ -935,7 +943,7 @@ int run_debugger_command(m68k_context *context, char *input_buf, m68kinst inst, 
 			puts("Quitting");
 			exit(0);
 			break;
-			default:
+		default:
 			fprintf(stderr, "Unrecognized debugger command %s\nUse '?' for help.\n", input_buf);
 			break;
 	}
@@ -954,6 +962,8 @@ void print_m68k_help()
 	printf("    o                    - Advance to next instruction ignoring branches to\n");
 	printf("                           lower addresses (good for breaking out of loops)\n");
 	printf("    s                    - Advance to next instruction (follows bsr/jsr)\n");
+	printf("    se REG|ADDRESS VALUE - Set value\n");
+	printf("    sr                   - Soft reset\n");
 	printf("    c                    - Continue\n");
 	printf("    bt                   - Print a backtrace\n");
 	printf("    p[/(x|X|d|c)] VALUE  - Print a register or memory location\n");
@@ -961,6 +971,8 @@ void print_m68k_help()
 	printf("                           a breakpoint is hit\n");
 	printf("    vs                   - Print VDP sprite list\n");
 	printf("    vr                   - Print VDP register info\n");
+	printf("    yc [CHANNEL NUM]     - Print YM-2612 channel info\n");
+	printf("    yt                   - Print YM-2612 timer info\n");
 	printf("    zb ADDRESS           - Set a Z80 breakpoint\n");
 	printf("    zp[/(x|X|d|c)] VALUE - Display a Z80 value\n");
 	printf("    ?                    - Display help\n");
@@ -1029,7 +1041,7 @@ void debugger(m68k_context * context, uint32_t address)
 				char *cmd = commands;
 				strip_nl(cmd);
 				commands += strlen(cmd) + 1;
-				debugging = run_debugger_command(context, cmd, inst, after);
+				debugging = run_debugger_command(context, address, cmd, inst, after);
 			}
 			free(copy);
 		}
@@ -1082,7 +1094,7 @@ void debugger(m68k_context * context, uint32_t address)
 		} else {
 			strcpy(input_buf, last_cmd);
 		}
-		debugging = run_debugger_command(context, input_buf, inst, after);
+		debugging = run_debugger_command(context, address, input_buf, inst, after);
 	}
 	return;
 }
