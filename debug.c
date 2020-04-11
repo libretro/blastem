@@ -348,22 +348,7 @@ void zdebugger_print(z80_context * context, char format_char, char * param)
 	case '0':
 		if (param[1] == 'x') {
 			uint16_t p_addr = strtol(param+2, NULL, 16);
-			if (p_addr < 0x4000) {
-				value = system->zram[p_addr & 0x1FFF];
-			} else if(p_addr >= 0x8000) {
-				uint32_t v_addr = system->z80_bank_reg << 15;
-				v_addr += p_addr & 0x7FFF;
-				if (v_addr < 0x400000) {
-					value = system->cart[v_addr/2];
-				} else if(v_addr > 0xE00000) {
-					value = system->work_ram[(v_addr & 0xFFFF)/2];
-				}
-				if (v_addr & 1) {
-					value &= 0xFF;
-				} else {
-					value >>= 8;
-				}
-			}
+			value = read_byte(p_addr, (void **)context->mem_pointers, &context->options->gen, context);
 		}
 		break;
 	}
