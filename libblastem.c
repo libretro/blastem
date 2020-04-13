@@ -6,6 +6,8 @@
 #include "vdp.h"
 #include "render.h"
 #include "io.h"
+#include "genesis.h"
+#include "sms.h"
 
 static retro_environment_t retro_environment;
 RETRO_API void retro_set_environment(retro_environment_t re)
@@ -191,6 +193,7 @@ RETRO_API void retro_cheat_set(unsigned index, bool enabled, const char *code)
 }
 
 /* Loads a game. */
+static system_type stype;
 RETRO_API bool retro_load_game(const struct retro_game_info *game)
 {
 	serialize_size_cache = 0;
@@ -202,7 +205,8 @@ RETRO_API bool retro_load_game(const struct retro_game_info *game)
 	media.buffer = malloc(nearest_pow2(game->size));
 	memcpy(media.buffer, game->data, game->size);
 	media.size = game->size;
-	current_system = alloc_config_system(detect_system_type(&media), &media, 0, 0);
+	stype = detect_system_type(&media);
+	current_system = alloc_config_system(stype, &media, 0, 0);
 	
 	unsigned format = RETRO_PIXEL_FORMAT_XRGB8888;
 	retro_environment(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &format);
@@ -238,11 +242,43 @@ RETRO_API unsigned retro_get_region(void)
 /* Gets region of memory. */
 RETRO_API void *retro_get_memory_data(unsigned id)
 {
+	if (id == RETRO_MEMORY_SYSTEM_RAM)
+	{
+		switch (stype)
+		{
+		case SYSTEM_GENESIS:
+		{
+			genesis_context *gen = (genesis_context *)current_system;
+			return (uint8_t *)gen->work_ram;
+		}
+		break;
+#ifndef NO_Z80
+		case SYSTEM_SMS:
+		{
+			sms_context *sms = (sms_context *)current_system;
+			return sms->ram;
+		}
+		break;
+#endif
+		}
+	}
 	return NULL;
 }
 
 RETRO_API size_t retro_get_memory_size(unsigned id)
 {
+	if (id == RETRO_MEMORY_SYSTEM_RAM)
+	{
+		switch (stype)
+		{
+		case SYSTEM_GENESIS:
+			return RAM_WORDS * sizeof(uint16_t);
+#ifndef NO_Z80
+		case SYSTEM_SMS:
+			return SMS_RAM_SIZE;
+#endif
+		}
+	}
 	return 0;
 }
 
