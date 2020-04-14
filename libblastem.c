@@ -269,35 +269,39 @@ RETRO_API unsigned retro_get_region(void)
 /* Gets region of memory. */
 RETRO_API void *retro_get_memory_data(unsigned id)
 {
-	if (id == RETRO_MEMORY_SYSTEM_RAM)
-	{
-		switch (stype)
-		{
-		case SYSTEM_GENESIS:
-		{
+	switch (id) {
+	case RETRO_MEMORY_SYSTEM_RAM:
+		switch (stype) {
+		case SYSTEM_GENESIS: {
 			genesis_context *gen = (genesis_context *)current_system;
 			return (uint8_t *)gen->work_ram;
 		}
-		break;
 #ifndef NO_Z80
-		case SYSTEM_SMS:
-		{
+		case SYSTEM_SMS: {
 			sms_context *sms = (sms_context *)current_system;
 			return sms->ram;
 		}
-		break;
 #endif
 		}
+		break;
+	case RETRO_MEMORY_SAVE_RAM:
+		if (stype == SYSTEM_GENESIS) {
+			genesis_context *gen = (genesis_context *)current_system;
+			if (gen->save_type != SAVE_NONE)
+				return gen->save_storage;
+		}
+		break;
+	default:
+		break;
 	}
 	return NULL;
 }
 
 RETRO_API size_t retro_get_memory_size(unsigned id)
 {
-	if (id == RETRO_MEMORY_SYSTEM_RAM)
-	{
-		switch (stype)
-		{
+	switch (id) {
+	case RETRO_MEMORY_SYSTEM_RAM:
+		switch (stype) {
 		case SYSTEM_GENESIS:
 			return RAM_WORDS * sizeof(uint16_t);
 #ifndef NO_Z80
@@ -305,6 +309,16 @@ RETRO_API size_t retro_get_memory_size(unsigned id)
 			return SMS_RAM_SIZE;
 #endif
 		}
+		break;
+	case RETRO_MEMORY_SAVE_RAM:
+		if (stype == SYSTEM_GENESIS) {
+			genesis_context *gen = (genesis_context *)current_system;
+			if (gen->save_type != SAVE_NONE)
+				return gen->save_size;
+		}
+		break;
+	default:
+		break;
 	}
 	return 0;
 }
