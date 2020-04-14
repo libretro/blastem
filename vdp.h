@@ -174,6 +174,7 @@ typedef struct {
 	int32_t        fifo_write;
 	int32_t        fifo_read;
 	uint32_t       address;
+	uint32_t       address_latch;
 	uint32_t       serial_address;
 	uint32_t       colors[CRAM_SIZE*4];
 	uint32_t       debugcolors[1 << (3 + 1 + 1 + 1)];//3 bits for source, 1 bit for priority, 1 bit for shadow, 1 bit for hilight
@@ -181,6 +182,7 @@ typedef struct {
 	uint32_t       frame;
 	uint32_t       vsram_size;
 	uint8_t        cd;
+	uint8_t        cd_latch;
 	uint8_t	       flags;
 	uint8_t        regs[VDP_REGS];
 	//cycle count in MCLKs
