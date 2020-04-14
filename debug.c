@@ -105,7 +105,7 @@ uint32_t m68k_read_long(uint32_t address, m68k_context *context)
 	return m68k_read_word(address, context) << 16 | m68k_read_word(address + 2, context);
 }
 
-void debugger_print(m68k_context *context, char format_char, char *param)
+void debugger_print(m68k_context *context, char format_char, char *param, uint32_t address)
 {
 	uint32_t value;
 	char format[8];
@@ -152,7 +152,7 @@ void debugger_print(m68k_context *context, char format_char, char *param)
 		genesis_context *gen = context->system;
 		value = gen->vdp->frame;
 	} else if (param[0] == 'p' && param[1] == 'c') {
-		value = 0; //TODO PC value here;
+		value = address;
 	} else if ((param[0] == '0' && param[1] == 'x') || param[0] == '$') {
 		char *after;
 		uint32_t p_addr = strtol(param+(param[0] == '0' ? 2 : 1), &after, 16);
@@ -693,7 +693,7 @@ int run_debugger_command(m68k_context *context, uint32_t address, char *input_bu
 					fputs("display command requires a parameter\n", stderr);
 					break;
 				}
-				debugger_print(context, format_char, param);
+				debugger_print(context, format_char, param, address);
 				add_display(&displays, &disp_index, format_char, param);
 			} else {
 				param = find_param(input_buf);
@@ -724,12 +724,13 @@ int run_debugger_command(m68k_context *context, uint32_t address, char *input_bu
 				}
 			}
 			param = find_param(input_buf);
-			if (!param) {
+			if (param) {
+				debugger_print(context, format_char, param, address);
+			} else {
 				m68k_disasm(&inst, input_buf);
 				printf("%X: %s\n", address, input_buf);
-				break;
 			}
-			debugger_print(context, format_char, param);
+			
 			break;
 		case 'n':
 			if (inst.op == M68K_RTS) {
@@ -1054,7 +1055,7 @@ void debugger(m68k_context * context, uint32_t address)
 		remove_breakpoint(context, address);
 	}
 	for (disp_def * cur = displays; cur; cur = cur->next) {
-		debugger_print(context, cur->format_char, cur->param);
+		debugger_print(context, cur->format_char, cur->param, address);
 	}
 	m68k_disasm(&inst, input_buf);
 	printf("%X: %s\n", address, input_buf);
