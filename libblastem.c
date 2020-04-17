@@ -48,14 +48,14 @@ RETRO_API void retro_set_video_refresh(retro_video_refresh_t rvf)
 	retro_video_refresh = rvf;
 }
 
-static retro_audio_sample_t retro_audio_sample;
 RETRO_API void retro_set_audio_sample(retro_audio_sample_t ras)
 {
-	retro_audio_sample = ras;
 }
 
+static retro_audio_sample_batch_t retro_audio_sample_batch;
 RETRO_API void retro_set_audio_sample_batch(retro_audio_sample_batch_t rasb)
 {
+	retro_audio_sample_batch = rasb;
 }
 
 static retro_input_poll_t retro_input_poll;
@@ -81,6 +81,7 @@ system_media media;
 
 RETRO_API void retro_init(void)
 {
+	render_audio_initialized(RENDER_AUDIO_S16, 53693175 / (7 * 6 * 4), 2, 4, sizeof(int16_t));
 }
 
 RETRO_API void retro_deinit(void)
@@ -143,6 +144,9 @@ RETRO_API void retro_get_system_av_info(struct retro_system_av_info *info)
 	info->timing.fps = master_clock / (3420.0 * lines);
 	info->timing.sample_rate = master_clock / (7 * 6 * 24); //sample rate of YM2612
 	sample_rate = info->timing.sample_rate;
+	render_audio_initialized(RENDER_AUDIO_S16, info->timing.sample_rate, 2, 4, sizeof(int16_t));
+	//force adjustment of resampling parameters since target sample rate may have changed slightly
+	current_system->set_speed_percent(current_system, 100);
 }
 
 RETRO_API void retro_set_controller_port_device(unsigned port, unsigned device)
@@ -237,6 +241,7 @@ RETRO_API bool retro_load_game(const struct retro_game_info *game)
 	
 	unsigned format = RETRO_PIXEL_FORMAT_XRGB8888;
 	retro_environment(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &format);
+	
 	return current_system != NULL;
 }
 
@@ -441,77 +446,70 @@ void render_infobox(char *title, char *message)
 {
 }
 
-typedef struct {
-	int32_t freq;
-	int32_t left_accum;
-	int32_t right_accum;
-	int32_t num_samples;
-} audio_source;
-
-static audio_source *audio_sources[8];
-static uint8_t num_audio_sources;
-audio_source *render_audio_source(uint64_t master_clock, uint64_t sample_divider, uint8_t channels)
+uint8_t render_is_audio_sync(void)
 {
-	audio_sources[num_audio_sources] = calloc(1, sizeof(audio_source));
-	audio_sources[num_audio_sources]->freq = master_clock / sample_divider;
-	return audio_sources[num_audio_sources++];
+	//whether this is true depends on the libretro frontend implementation
+	//but the sync to audio path works better here
+	return 1;
 }
 
-void render_audio_adjust_clock(audio_source *src, uint64_t master_clock, uint64_t sample_divider)
+void render_buffer_consumed(audio_source *src)
 {
 }
 
-void render_audio_source_gaindb(audio_source *src, float gain)
+void *render_new_audio_opaque(void)
 {
-	//TODO: Implement this once I hook up a core option for individual FM/PSG gain
+	return NULL;
 }
 
-static void check_put_sample(void)
+void render_free_audio_opaque(void *opaque)
 {
-	for (int i = 0; i < num_audio_sources; i++)
-	{
-		int32_t min_samples = audio_sources[i]->freq / sample_rate;
-		if (audio_sources[i]->num_samples < min_samples) {
-			return;
-		}
+}
+
+void render_lock_audio(void)
+{
+}
+
+void render_unlock_audio()
+{
+}
+
+uint32_t render_min_buffered(void)
+{
+	//not actually used in the sync to audio path
+	return 4;
+}
+
+uint32_t render_audio_syncs_per_sec(void)
+{
+	return 0;
+}
+
+void render_audio_created(audio_source *src)
+{
+}
+
+void render_do_audio_ready(audio_source *src)
+{
+	int16_t *tmp = src->front;
+	src->front = src->back;
+	src->back = tmp;
+	src->front_populated = 1;
+	src->buffer_pos = 0;
+	if (all_sources_ready()) {
+		int16_t buffer[8];
+		int min_remaining_out;
+		mix_and_convert((uint8_t *)buffer, sizeof(buffer), &min_remaining_out);
+		retro_audio_sample_batch(buffer, sizeof(buffer)/(2*sizeof(*buffer)));
 	}
-	int16_t left = 0, right = 0;
-	for (int i = 0; i < num_audio_sources; i++)
-	{
-		left += audio_sources[i]->left_accum / audio_sources[i]->num_samples;
-		right += audio_sources[i]->right_accum / audio_sources[i]->num_samples;
-		audio_sources[i]->left_accum = audio_sources[i]->right_accum = audio_sources[i]->num_samples = 0;
-	}
-	retro_audio_sample(left, right);
 }
 
-void render_put_mono_sample(audio_source *src, int16_t value)
+void render_source_paused(audio_source *src, uint8_t remaining_sources)
 {
-	src->left_accum += value;
-	src->right_accum += value;
-	src->num_samples++;
-	check_put_sample();
-}
-void render_put_stereo_sample(audio_source *src, int16_t left, int16_t right)
-{
-	src->left_accum += left;
-	src->right_accum += right;
-	src->num_samples++;
-	check_put_sample();
 }
 
-void render_free_source(audio_source *src)
+void render_source_resumed(audio_source *src)
 {
-	int index;
-	for (index = 0; index < num_audio_sources; index++)
-	{
-		if (audio_sources[index] == src) {
-			break;
-		}
-	}
-	num_audio_sources--;
-	audio_sources[index] = audio_sources[num_audio_sources];
-	free(src);
 }
 
 void bindings_set_mouse_mode(uint8_t mode)
