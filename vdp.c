@@ -814,7 +814,7 @@ static void write_cram(vdp_context * context, uint16_t address, uint16_t value)
 	}
 	write_cram_internal(context, addr, value);
 	
-	if (context->hslot >= BG_START_SLOT && (
+	if (context->output && context->hslot >= BG_START_SLOT && (
 		context->vcounter < context->inactive_start + context->border_bot 
 		|| context->vcounter > 0x200 - context->border_top
 	)) {
