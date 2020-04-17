@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
-#include "libretro.h"
+#include "libretro-common/include/libretro.h"
+#include "libretro_core_options.h"
 #include "system.h"
 #include "util.h"
 #include "vdp.h"
@@ -39,7 +40,9 @@ RETRO_API void retro_set_environment(retro_environment_t re)
 		{ 0 },
 	};
 
+
 	re(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, (void *)desc);
+	libretro_set_core_options(re);
 }
 
 static retro_video_refresh_t retro_video_refresh;
@@ -105,13 +108,12 @@ RETRO_API void retro_get_system_info(struct retro_system_info *info)
 	info->block_extract = 0;
 }
 
+static uint8_t overscan;
 static vid_std video_standard;
 static uint32_t last_width, last_height;
 static uint32_t overscan_top, overscan_bot, overscan_left, overscan_right;
 static void update_overscan(void)
 {
-	uint8_t overscan;
-	retro_environment(RETRO_ENVIRONMENT_GET_OVERSCAN, &overscan);
 	if (overscan) {
 		overscan_top = overscan_bot = overscan_left = overscan_right = 0;
 	} else {
@@ -159,6 +161,29 @@ RETRO_API void retro_reset(void)
 	current_system->soft_reset(current_system);
 }
 
+static void update_variables()
+{
+	struct retro_variable var = {};
+
+	var.value = NULL;
+	var.key = "blastem_crop_overscan";
+
+	if (retro_environment(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+	{
+		uint8_t oldval = overscan;
+		overscan = (!strcmp(var.value, "disabled")) ? 1 : 0;
+		if (overscan != oldval)
+			update_overscan();
+	}
+}
+
+static void check_variables(void)
+{
+	bool updated;
+	if (retro_environment(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
+		update_variables();
+}
+
 /* Runs the game for one video frame.
  * During retro_run(), input_poll callback must be called at least once.
  *
@@ -170,6 +195,8 @@ RETRO_API void retro_reset(void)
 static uint8_t started;
 RETRO_API void retro_run(void)
 {
+	check_variables();
+
 	if (started) {
 		current_system->resume_context(current_system);
 	} else {
@@ -227,6 +254,7 @@ RETRO_API void retro_cheat_set(unsigned index, bool enabled, const char *code)
 static system_type stype;
 RETRO_API bool retro_load_game(const struct retro_game_info *game)
 {
+	update_variables();
 	serialize_size_cache = 0;
 	if (game->path) {
 		media.dir = path_dirname(game->path);
