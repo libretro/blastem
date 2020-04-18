@@ -303,7 +303,7 @@ ztestrun : ztestrun.o serialize.o $(Z80OBJS) $(TRANSOBJS)
 ztestgen : ztestgen.o z80inst.o
 	$(CC) -ggdb -o ztestgen ztestgen.o z80inst.o
 
-stateview$(EXE) : stateview.o vdp.o $(RENDEROBJS) serialize.o $(CONFIGOBJS) gst.o
+stateview$(EXE) : stateview.o vdp.o $(RENDEROBJS) serialize.o $(CONFIGOBJS) gst.o render_audio.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 	$(FIXUP) ./$@
 
