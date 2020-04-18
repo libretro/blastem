@@ -3695,7 +3695,13 @@ static void clear_pending(vdp_context *context)
 {
 	context->flags &= ~FLAG_PENDING;
 	context->address = context->address_latch;
-	context->cd = context->cd_latch;
+	//It seems like the DMA enable bit doesn't so much enable DMA so much 
+	//as it enables changing CD5 from control port writes
+	if (context->regs[REG_MODE_2] & BIT_DMA_ENABLE) {
+		context->cd = context->cd_latch;
+	} else {
+		context->cd = (context->cd & 0x20) | (context->cd_latch & 0x1F);
+	}
 }
 
 int vdp_control_port_write(vdp_context * context, uint16_t value)
@@ -3706,10 +3712,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 	}
 	if (context->flags & FLAG_PENDING) {
 		context->address_latch = (context->address_latch & 0x3FFF) | (value << 14 & 0x1C000);
-		//It seems like the DMA enable bit doesn't so much enable DMA so much 
-		//as it enables changing CD5 from control port writes
-		uint8_t preserve = (context->regs[REG_MODE_2] & BIT_DMA_ENABLE) ? 0x3 : 0x23;
-		context->cd_latch = (context->cd_latch & preserve) | ((value >> 2) & ~preserve & 0xFF);
+		context->cd_latch = (context->cd_latch & 0x3) | ((value >> 2) & ~0x3 & 0xFF);
 		clear_pending(context);
 		//Should these be taken care of here or after the first write?
 		context->flags &= ~FLAG_READ_FETCHED;
