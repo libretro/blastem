@@ -428,22 +428,22 @@ static void run_sms(system_header *system)
 			target_cycle -= adjust;
 		}
 	}
-#ifndef IS_LIB
-	bindings_release_capture();
-	vdp_release_framebuffer(sms->vdp);
-	render_pause_source(sms->psg->audio);
-#endif
+	if (render_should_release_on_exit()) {
+		bindings_release_capture();
+		vdp_release_framebuffer(sms->vdp);
+		render_pause_source(sms->psg->audio);
+	}
 	sms->should_return = 0;
 }
 
 static void resume_sms(system_header *system)
 {
 	sms_context *sms = (sms_context *)system;
-#ifndef IS_LIB
-	bindings_reacquire_capture();
-	vdp_reacquire_framebuffer(sms->vdp);
-	render_resume_source(sms->psg->audio);
-#endif
+	if (render_should_release_on_exit()) {
+		bindings_reacquire_capture();
+		vdp_reacquire_framebuffer(sms->vdp);
+		render_resume_source(sms->psg->audio);
+	}
 	run_sms(system);
 }
 

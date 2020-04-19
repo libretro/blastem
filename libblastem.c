@@ -453,6 +453,11 @@ uint8_t render_is_audio_sync(void)
 	return 1;
 }
 
+uint8_t render_should_release_on_exit(void)
+{
+	return 0;
+}
+
 void render_buffer_consumed(audio_source *src)
 {
 }
