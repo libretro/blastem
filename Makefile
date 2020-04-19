@@ -96,16 +96,17 @@ LDFLAGS:=-lm glew/lib/libGLEW.a
 endif
 
 ifeq ($(OS),Darwin)
-CFLAGS+= -IFrameworks/SDL2.framework/Headers
+SDL_INCLUDE_PATH:=Frameworks/SDL2.framework/Headers
 LDFLAGS+= -FFrameworks -framework SDL2 -framework OpenGL -framework AppKit
 FIXUP:=install_name_tool -change @rpath/SDL2.framework/Versions/A/SDL2 @executable_path/Frameworks/SDL2.framework/Versions/A/SDL2
 else
-CFLAGS+= -Isdl/include
+SDL_INCLUDE_PATH:=sdl/include
 LDFLAGS+= -Wl,-rpath='$$ORIGIN/lib' -Llib -lSDL2
 ifndef USE_GLES
 LDFLAGS+= $(shell pkg-config --libs gl)
 endif
 endif #Darwin
+CFLAGS+= -I$(SDL_INCLUDE_PATH)
 
 else
 ifeq ($(MAKECMDGOALS),libblastem.$(SO))
