@@ -255,6 +255,10 @@ ifdef DATA_PATH
 CFLAGS+= -DDATA_PATH='"'$(DATA_PATH)'"'
 endif
 
+ifdef FONT_PATH
+CFLAGS+= -DFONT_PATH='"'$(FONT_PATH)'"'
+endif
+
 ALL=dis$(EXE) zdis$(EXE) stateview$(EXE) vgmplay$(EXE) blastem$(EXE)
 ifneq ($(OS),Windows)
 ALL+= termhelper
