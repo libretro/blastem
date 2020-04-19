@@ -903,7 +903,8 @@ static void init_audio()
    		rate = 48000;
    	}
     desired.freq = rate;
-	desired.format = AUDIO_F32SYS;
+	char *config_format = tern_find_path_default(config, "audio\0format\0", (tern_val){.ptrval="f32"}, TVAL_PTR).ptrval;
+	desired.format = !strcmp(config_format, "s16") ? AUDIO_S16SYS : AUDIO_F32SYS;
 	desired.channels = 2;
     char * samples_str = tern_find_path(config, "audio\0buffer\0", TVAL_PTR).ptrval;
    	int samples = samples_str ? atoi(samples_str) : 0;
