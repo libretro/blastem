@@ -1,11 +1,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include "../util.h"
 #include "sfnt.h"
 
 char *default_font_path(void)
 {
+#ifdef FONT_PATH
+	FILE *f = fopen(FONT_PATH, "rb");
+	if (f) {
+		fclose(f);
+		return strdup(FONT_PATH);
+	}
+#endif
 	FILE *fc_pipe = popen("fc-match -f '%{file}'", "r");
 	if (!fc_pipe) {
 		return NULL;
