@@ -676,6 +676,7 @@ int main(int argc, char ** argv)
 	current_system->debugger_type = dtype;
 	current_system->enter_debugger = start_in_debugger && menu == debug_target;
 	current_system->start_context(current_system,  menu ? NULL : statefile);
+	render_video_loop();
 	for(;;)
 	{
 		if (current_system->should_exit) {

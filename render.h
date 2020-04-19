@@ -135,6 +135,8 @@ void render_config_updated(void);
 void render_set_gl_context_handlers(ui_render_fun destroy, ui_render_fun create);
 void render_set_ui_render_fun(ui_render_fun);
 void render_set_ui_fb_resize_handler(ui_render_fun resize);
+void render_video_loop(void);
+uint8_t render_should_release_on_exit(void);
 
 #endif //RENDER_H_
 
