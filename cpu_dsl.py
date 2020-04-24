@@ -1597,7 +1597,11 @@ class Program:
 				pieces.append('\n\t\tif (context->cycles >= context->sync_cycle) {')
 				self.meta = {}
 				self.temp = {}
-				self.subroutines[self.interrupt].inline(self, [], pieces, otype, None)
+				intpieces = []
+				self.subroutines[self.interrupt].inline(self, [], intpieces, otype, None)
+				for size in self.temp:
+					pieces.append('\n\tuint{sz}_t gen_tmp{sz}__;'.format(sz=size))
+				pieces += intpieces
 				pieces.append('\n\t\t}')
 			self.meta = {}
 			self.temp = {}
