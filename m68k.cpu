@@ -401,6 +401,8 @@ m68k_save_dst
 	m68k_prefetch
 	
 1101DDD1ZZMMMRRR add_dn_ea
+	invalid M 0
+	invalid M 1
 	invalid M 7 R 2
 	invalid M 7 R 3
 	invalid M 7 R 4
@@ -439,6 +441,7 @@ m68k_save_dst
 00000110ZZMMMRRR addi
 	local immed 32
 	invalid Z 3
+	invalid M 1
 	invalid M 7 R 2
 	invalid M 7 R 3
 	invalid M 7 R 4
@@ -690,6 +693,173 @@ m68k_save_dst
 	#fetch immediate operand
 	m68k_prefetch
 	xor prefetch ccr ccr
+	m68k_prefetch
+	
+1000DDD0ZZMMMRRR or_ea_dn
+	invalid M 1
+	invalid M 7 R 5
+	invalid M 7 R 6
+	invalid M 7 R 7
+	invalid Z 3
+	m68k_fetch_src_ea M R Z
+	
+	or src dregs.D dregs.D Z
+	update_flags NZV0C0
+	m68k_prefetch
+	
+1000DDD1ZZMMMRRR or_dn_ea
+	invalid M 0
+	invalid M 1
+	invalid M 7 R 2
+	invalid M 7 R 3
+	invalid M 7 R 4
+	invalid M 7 R 5
+	invalid M 7 R 6
+	invalid M 7 R 7
+	invalid Z 3
+	m68k_fetch_dst_ea M R Z
+	
+	or dregs.D dst dst Z
+	update_flags NZV0C0
+	m68k_save_dst Z
+	m68k_prefetch
+	
+00000000ZZMMMRRR ori
+	local immed 32
+	invalid Z 3
+	invalid M 1
+	invalid M 7 R 2
+	invalid M 7 R 3
+	invalid M 7 R 4
+	invalid M 7 R 5
+	invalid M 7 R 6
+	invalid M 7 R 7
+	#fetch immediate operand
+	m68k_prefetch
+	switch Z
+	case 2
+		lsl prefetch 16 immed
+		m68k_prefetch
+		or prefetch immed immed
+	default
+		mov prefetch immed
+	end
+	#fetch dst EA
+	m68k_fetch_dst_ea M R Z
+	
+	or immed dst dst Z
+	update_flags NZV0C0
+	m68k_save_dst Z
+	m68k_prefetch
+
+0000000000111100 ori_to_ccr
+	#fetch immediate operand
+	m68k_prefetch
+	or prefetch ccr ccr
+	m68k_prefetch
+	
+1001DDD0ZZMMMRRR sub_ea_dn
+	invalid M 7 R 5
+	invalid M 7 R 6
+	invalid M 7 R 7
+	invalid Z 3
+	m68k_fetch_src_ea M R Z
+	
+	sub src dregs.D dregs.D Z
+	update_flags XNZVC
+	m68k_prefetch
+	
+1001DDD1ZZMMMRRR sub_dn_ea
+	invalid M 0
+	invalid M 1
+	invalid M 7 R 2
+	invalid M 7 R 3
+	invalid M 7 R 4
+	invalid M 7 R 5
+	invalid M 7 R 6
+	invalid M 7 R 7
+	invalid Z 3
+	m68k_fetch_dst_ea M R Z
+	
+	sub dregs.D dst dst Z
+	update_flags XNZVC
+	m68k_save_dst Z
+	m68k_prefetch
+
+1001AAAZ11MMMRRR suba
+	invalid M 7 R 5
+	invalid M 7 R 6
+	invalid M 7 R 7
+	local size 16
+	local ext_src 32
+	if Z
+	mov 2 size
+	else
+	mov 1 size
+	end
+	m68k_fetch_src_ea M R size
+	switch size
+	case 1
+	sext 32 src ext_src
+	meta src ext_src
+	end
+	
+	sub src aregs.A aregs.A
+	m68k_prefetch
+
+00000100ZZMMMRRR subi
+	local immed 32
+	invalid Z 3
+	invalid M 1
+	invalid M 7 R 2
+	invalid M 7 R 3
+	invalid M 7 R 4
+	invalid M 7 R 5
+	invalid M 7 R 6
+	invalid M 7 R 7
+	#fetch immediate operand
+	m68k_prefetch
+	switch Z
+	case 2
+		lsl prefetch 16 immed
+		m68k_prefetch
+		or prefetch immed immed
+	default
+		mov prefetch immed
+	end
+	#fetch dst EA
+	m68k_fetch_dst_ea M R Z
+	
+	sub immed dst dst Z
+	update_flags XNZVC
+	m68k_save_dst Z
+	m68k_prefetch
+	
+0101III1ZZMMMRRR subq
+	invalid Z 3
+	invalid M 7 R 2
+	invalid M 7 R 3
+	invalid M 7 R 4
+	invalid M 7 R 5
+	invalid M 7 R 6
+	invalid M 7 R 7
+	local src 32
+	switch I
+	case 0
+	mov 8 src
+	default
+	mov I src
+	end
+	
+	m68k_fetch_dst_ea M R Z
+	switch M
+	case 1
+		sub src dst dst Z
+	default
+		sub src dst dst Z
+		update_flags XNZVC
+	end
+	m68k_save_dst Z
 	m68k_prefetch
 
 00ZZRRRMMMEEESSS move
