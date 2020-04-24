@@ -641,6 +641,56 @@ m68k_save_dst
 	m68k_prefetch
 	and prefetch ccr ccr
 	m68k_prefetch
+	
+1011DDD1ZZMMMRRR eor_dn_ea
+	invalid M 1
+	invalid M 7 R 2
+	invalid M 7 R 3
+	invalid M 7 R 4
+	invalid M 7 R 5
+	invalid M 7 R 6
+	invalid M 7 R 7
+	invalid Z 3
+	m68k_fetch_dst_ea M R Z
+	
+	xor dregs.D dst dst Z
+	update_flags NZV0C0
+	m68k_save_dst Z
+	m68k_prefetch
+
+00001010ZZMMMRRR eori
+	local immed 32
+	invalid Z 3
+	invalid M 1
+	invalid M 7 R 2
+	invalid M 7 R 3
+	invalid M 7 R 4
+	invalid M 7 R 5
+	invalid M 7 R 6
+	invalid M 7 R 7
+	#fetch immediate operand
+	m68k_prefetch
+	switch Z
+	case 2
+		lsl prefetch 16 immed
+		m68k_prefetch
+		or prefetch immed immed
+	default
+		mov prefetch immed
+	end
+	#fetch dst EA
+	m68k_fetch_dst_ea M R Z
+	
+	xor immed dst dst Z
+	update_flags NZV0C0
+	m68k_save_dst Z
+	m68k_prefetch
+	
+0000001000111100 eori_to_ccr
+	#fetch immediate operand
+	m68k_prefetch
+	xor prefetch ccr ccr
+	m68k_prefetch
 
 00ZZRRRMMMEEESSS move
 	invalid Z 0
