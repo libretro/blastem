@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "vgm.h"
+#include "system.h"
 
 #define MCLKS_NTSC 53693175
 #define MCLKS_PAL  53203395
@@ -21,6 +22,8 @@
 #define MCLKS_PER_YM  MCLKS_PER_68K
 #define MCLKS_PER_Z80 15
 #define MCLKS_PER_PSG (MCLKS_PER_Z80*16)
+
+system_header *current_system;
 
 void handle_keydown(int keycode)
 {
