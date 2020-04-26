@@ -34,11 +34,11 @@ else
 fi
 make menu.bin
 if [ $OS = "Windows" -o $OS = "Win64" ]; then
-	binaries="dis.exe zdis.exe stateview.exe vgmplay.exe blastem.exe $SDLDLLPATH/SDL2.dll"
+	binaries="dis.exe zdis.exe vgmplay.exe blastem.exe $SDLDLLPATH/SDL2.dll"
 	verstr=`sed -E -n 's/^[^B]+BLASTEM_VERSION "([^"]+)"/blastem \1/p' blastem.c`
 	txt=".txt"
 else
-	binaries="dis zdis stateview vgmplay blastem termhelper"
+	binaries="dis zdis vgmplay blastem termhelper"
 	if [ $OS = "Darwin" ]; then
 		binaries="$binaries Frameworks"
 	else
