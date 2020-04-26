@@ -1315,8 +1315,6 @@ void translate_m68k_arith(m68k_options *opts, m68kinst * inst, uint32_t flag_mas
 			numcycles = 6;
 		} else if (inst->op == M68K_AND && inst->variant == VAR_IMMEDIATE) {
 			numcycles = 6;
-		} else if (inst->op == M68K_ADD && inst->dst.addr_mode == MODE_AREG && inst->extra.size == OPSIZE_WORD && inst->variant == VAR_QUICK) {
-			numcycles = 4;
 		} else if (inst->dst.addr_mode <= MODE_AREG) {
 			numcycles = inst->src.addr_mode <= MODE_AREG || inst->src.addr_mode == MODE_IMMEDIATE ? 8 : 6;
 		} else {
