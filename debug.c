@@ -158,6 +158,9 @@ void debugger_print(m68k_context *context, char format_char, char *param, uint32
 		uint32_t p_addr = strtol(param+(param[0] == '0' ? 2 : 1), &after, 16);
 		if (after[0] == '.' && after[1] == 'l') {
 			value = m68k_read_long(p_addr, context);
+		} else if (after[0] == '.' && after[1] == 'b') {
+			value = m68k_read_word(p_addr, context);
+			value &= 0xFF;
 		} else {
 			value = m68k_read_word(p_addr, context);
 		}
@@ -166,6 +169,9 @@ void debugger_print(m68k_context *context, char format_char, char *param, uint32
 		uint32_t p_addr = param[1] == 'a' ? context->aregs[reg] : context->dregs[reg];
 		if (param[4] == '.' && param[5] == 'l') {
 			value = m68k_read_long(p_addr, context);
+		} else if (param[4] == '.' && param[5] == 'b') {
+			value = m68k_read_word(p_addr, context);
+			value &= 0xFF;
 		} else {
 			value = m68k_read_word(p_addr, context);
 		}
