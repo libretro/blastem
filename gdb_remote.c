@@ -401,6 +401,10 @@ void gdb_run_command(m68k_context * context, uint32_t pc, char * command)
 			gdb_send_command("m1");
 		} else if (!strcmp("sThreadInfo", command + 1)) {
 			gdb_send_command("l");
+		} else if (!memcmp("ThreadExtraInfo", command+1, strlen("ThreadExtraInfo"))) {
+			gdb_send_command("");
+		} else if (command[1] == 'P') {
+			gdb_send_command("");
 		} else {
 			goto not_impl;
 		}
