@@ -9,6 +9,7 @@
 #include <string.h>
 #include "render.h"
 #include "util.h"
+#include "event_log.h"
 
 #define NTSC_INACTIVE_START 224
 #define PAL_INACTIVE_START 240
@@ -908,14 +909,17 @@ static void external_slot(vdp_context * context)
 		{
 		case VRAM_WRITE:
 			if ((context->regs[REG_MODE_2] & (BIT_128K_VRAM|BIT_MODE_5)) == (BIT_128K_VRAM|BIT_MODE_5)) {
+				event_vram_word(context->cycles, start->address, start->value);
 				vdp_check_update_sat(context, start->address, start->value);
 				write_vram_word(context, start->address, start->value);
 			} else {
 				uint8_t byte = start->partial == 1 ? start->value >> 8 : start->value;
-				vdp_check_update_sat_byte(context, start->address ^ 1, byte);
-				write_vram_byte(context, start->address ^ 1, byte);
+				uint32_t address = start->address ^ 1;
+				event_vram_byte(context->cycles, start->address, byte, context->regs[REG_AUTOINC]);
+				vdp_check_update_sat_byte(context, address, byte);
+				write_vram_byte(context, address, byte);
 				if (!start->partial) {
-					start->address = start->address ^ 1;
+					start->address = address;
 					start->partial = 1;
 					//skip auto-increment and removal of entry from fifo
 					return;
@@ -924,18 +928,20 @@ static void external_slot(vdp_context * context)
 			break;
 		case CRAM_WRITE: {
 			//printf("CRAM Write | %X to %X\n", start->value, (start->address/2) & (CRAM_SIZE-1));
+			uint16_t val;
 			if (start->partial == 3) {
-				uint16_t val;
 				if ((start->address & 1) && (context->regs[REG_MODE_2] & BIT_MODE_5)) {
 					val = (context->cram[start->address >> 1 & (CRAM_SIZE-1)] & 0xFF) | start->value << 8;
 				} else {
 					uint16_t address = (context->regs[REG_MODE_2] & BIT_MODE_5) ? start->address >> 1 & (CRAM_SIZE-1) : start->address & 0x1F;
 					val = (context->cram[address] & 0xFF00) | start->value;
 				}
-				write_cram(context, start->address, val);
 			} else {
-				write_cram(context, start->address, start->partial ? context->fifo[context->fifo_write].value : start->value);
+				val = start->partial ? context->fifo[context->fifo_write].value : start->value;
 			}
+			uint8_t buffer[3] = {start->address, val >> 8, val};
+			event_log(EVENT_CRAM, context->cycles, sizeof(buffer), buffer);
+			write_cram(context, start->address, val);
 			break;
 		}
 		case VSRAM_WRITE:
@@ -952,6 +958,8 @@ static void external_slot(vdp_context * context)
 				} else {
 					context->vsram[(start->address/2) & 63] = start->partial ? context->fifo[context->fifo_write].value : start->value;
 				}
+				uint8_t buffer[3] = {(start->address/2) & 63, context->vsram[(start->address/2) & 63] >> 8, context->vsram[(start->address/2) & 63]};
+				event_log(EVENT_VSRAM, context->cycles, sizeof(buffer), buffer);
 			}
 
 			break;
@@ -2110,6 +2118,8 @@ static void advance_output_line(vdp_context *context)
 			context->pushed_frame = 1;
 			context->fb = NULL;
 		}
+		//TODO: Check whether this happens before or after the cycle increment
+		event_flush(context->cycles);
 		vdp_update_per_frame_debug(context);
 		context->h40_lines = 0;
 		context->frame++;
@@ -3760,6 +3770,8 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 				/*if (reg == REG_MODE_4 && ((value ^ context->regs[reg]) & BIT_H40)) {
 					printf("Mode changed from H%d to H%d @ %d, frame: %d\n", context->regs[reg] & BIT_H40 ? 40 : 32, value & BIT_H40 ? 40 : 32, context->cycles, context->frame);
 				}*/
+				uint8_t buffer[2] = {reg, value};
+				event_log(EVENT_VDP_REG, context->cycles, sizeof(buffer), buffer);
 				context->regs[reg] = value;
 				if (reg == REG_MODE_4) {
 					context->double_res = (value & (BIT_INTERLACE | BIT_DOUBLE_RES)) == (BIT_INTERLACE | BIT_DOUBLE_RES);
@@ -4549,5 +4561,80 @@ void vdp_inc_debug_mode(vdp_context *context)
 			context->debug_modes[i]++;
 			return;
 		}
+	}
+}
+
+void vdp_replay_event(vdp_context *context, uint8_t event, event_reader *reader)
+{
+	uint32_t address;
+	deserialize_buffer *buffer = &reader->buffer;
+	switch (event)
+	{
+	case EVENT_VRAM_BYTE:
+		address = load_int16(buffer);
+		break;
+	case EVENT_VRAM_BYTE_DELTA:
+		address = reader->last_byte_address + load_int8(buffer);
+		break;
+	case EVENT_VRAM_BYTE_ONE:
+		address = reader->last_byte_address + 1;
+		break;
+	case EVENT_VRAM_BYTE_AUTO:
+		address = reader->last_byte_address + context->regs[REG_AUTOINC];
+		break;
+	case EVENT_VRAM_WORD:
+		address = load_int8(buffer) << 16;
+		address |= load_int16(buffer);
+		break;
+	case EVENT_VRAM_WORD_DELTA:
+		address = reader->last_word_address + load_int8(buffer);
+		break;
+	case EVENT_VDP_REG:
+	case EVENT_CRAM:
+	case EVENT_VSRAM:
+		address = load_int8(buffer);
+		break;
+	}
+	
+	switch (event)
+	{
+	case EVENT_VDP_REG: {
+		uint8_t value = load_int8(buffer);
+		context->regs[address] = value;
+		if (address == REG_MODE_4) {
+			context->double_res = (value & (BIT_INTERLACE | BIT_DOUBLE_RES)) == (BIT_INTERLACE | BIT_DOUBLE_RES);
+			if (!context->double_res) {
+				context->flags2 &= ~FLAG2_EVEN_FIELD;
+			}
+		}
+		if (address == REG_MODE_1 || address == REG_MODE_2 || address == REG_MODE_4) {
+			update_video_params(context);
+		}
+		break;
+	}
+	case EVENT_VRAM_BYTE:
+	case EVENT_VRAM_BYTE_DELTA:
+	case EVENT_VRAM_BYTE_ONE:
+	case EVENT_VRAM_BYTE_AUTO: {
+		uint8_t byte = load_int8(buffer);
+		reader->last_byte_address = address;
+		vdp_check_update_sat_byte(context, address ^ 1, byte);
+		write_vram_byte(context, address ^ 1, byte);
+		break;
+	}
+	case EVENT_VRAM_WORD:
+	case EVENT_VRAM_WORD_DELTA: {
+		uint16_t value = load_int16(buffer);
+		reader->last_word_address = address;
+		vdp_check_update_sat(context, address, value);
+		write_vram_word(context, address, value);
+		break;
+	}
+	case EVENT_CRAM:
+		write_cram(context, address, load_int16(buffer));
+		break;
+	case EVENT_VSRAM:
+		context->vsram[address] = load_int16(buffer);
+		break;
 	}
 }

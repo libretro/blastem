@@ -9,8 +9,10 @@ typedef struct system_media system_media;
 typedef enum {
 	SYSTEM_UNKNOWN,
 	SYSTEM_GENESIS,
+	SYSTEM_GENESIS_PLAYER,
 	SYSTEM_SMS,
-	SYSTEM_JAGUAR
+	SYSTEM_SMS_PLAYER,
+	SYSTEM_JAGUAR,
 } system_type;
 
 typedef enum {
@@ -33,6 +35,7 @@ typedef void (*system_ptr8_sizet_fun)(system_header *, uint8_t *, size_t);
 
 #include "arena.h"
 #include "romdb.h"
+#include "event_log.h"
 
 struct system_header {
 	system_header           *next_context;
@@ -87,5 +90,6 @@ struct system_media {
 
 system_type detect_system_type(system_media *media);
 system_header *alloc_config_system(system_type stype, system_media *media, uint32_t opts, uint8_t force_region);
+system_header *alloc_config_player(system_type stype, event_reader *reader);
 
 #endif //SYSTEM_H_

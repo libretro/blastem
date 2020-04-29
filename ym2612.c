@@ -11,6 +11,7 @@
 #include "render.h"
 #include "wave.h"
 #include "blastem.h"
+#include "event_log.h"
 
 //#define DO_DEBUG_PRINT
 #ifdef DO_DEBUG_PRINT
@@ -825,6 +826,8 @@ void ym_data_write(ym2612_context * context, uint8_t value)
 		}
 		context->part1_regs[context->selected_reg - YM_PART1_START] = value;
 	}
+	uint8_t buffer[3] = {context->selected_part, context->selected_reg, value};
+	event_log(EVENT_YM_REG, context->current_cycle, sizeof(buffer), buffer);
 	dfprintf(debug_file, "write of %X to reg %X in part %d\n", value, context->selected_reg, context->selected_part+1);
 	if (context->selected_reg < 0x30) {
 		//Shared regs

@@ -285,5 +285,6 @@ void vdp_toggle_debug_view(vdp_context *context, uint8_t debug_type);
 void vdp_inc_debug_mode(vdp_context *context);
 //to be implemented by the host system
 uint16_t read_dma_value(uint32_t address);
+void vdp_replay_event(vdp_context *context, uint8_t event, event_reader *reader);
 
 #endif //VDP_H_
