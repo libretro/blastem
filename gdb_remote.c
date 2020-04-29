@@ -588,6 +588,7 @@ void gdb_remote_init(void)
 	if (bind(listen_sock, result->ai_addr, result->ai_addrlen) < 0) {
 		fatal_error("Failed to bind GDB remote debugging socket");
 	}
+	freeaddrinfo(result);
 	if (listen(listen_sock, 1) < 0) {
 		fatal_error("Failed to listen on GDB remote debugging socket");
 	}
