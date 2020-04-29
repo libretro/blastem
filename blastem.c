@@ -30,6 +30,7 @@
 #include "bindings.h"
 #include "menu.h"
 #include "zip.h"
+#include "event_log.h"
 #ifndef DISABLE_NUKLEAR
 #include "nuklear_ui/blastem_nuklear.h"
 #endif
@@ -430,6 +431,23 @@ void init_system_with_media(const char *path, system_type force_stype)
 	update_title(game_system->info.name);
 }
 
+char *parse_addr_port(char *arg)
+{
+	while (*arg && *arg != ':') {
+		++arg;
+	}
+	if (!*arg) {
+		return NULL;
+	}
+	char *end;
+	int port = strtol(arg + 1, &end, 10);
+	if (port && !*end) {
+		*arg = 0;
+		return arg + 1;
+	}
+	return NULL;
+}
+
 int main(int argc, char ** argv)
 {
 	set_exe_str(argv[0]);
@@ -441,10 +459,12 @@ int main(int argc, char ** argv)
 	system_type stype = SYSTEM_UNKNOWN, force_stype = SYSTEM_UNKNOWN;
 	char * romfname = NULL;
 	char * statefile = NULL;
+	event_reader reader = {0};
 	debugger_type dtype = DEBUGGER_NATIVE;
 	uint8_t start_in_debugger = 0;
 	uint8_t fullscreen = FULLSCREEN_DEFAULT, use_gl = 1;
 	uint8_t debug_target = 0;
+	char *port;
 	for (int i = 1; i < argc; i++) {
 		if (argv[i][0] == '-') {
 			switch(argv[i][1]) {
@@ -467,6 +487,18 @@ int main(int argc, char ** argv)
 				gdb_remote_init();
 				dtype = DEBUGGER_GDB;
 				start_in_debugger = 1;
+				break;
+			case 'e':
+				i++;
+				if (i >= argc) {
+					fatal_error("-e must be followed by a file name\n");
+				}
+				port = parse_addr_port(argv[i]);
+				if (port) {
+					event_log_tcp(argv[i], port);
+				} else {
+					event_log_file(argv[i]);
+				}
 				break;
 			case 'f':
 				fullscreen = !fullscreen;
@@ -555,18 +587,24 @@ int main(int argc, char ** argv)
 					"	-v          Display version number and exit\n"
 					"	-l          Log 68K code addresses (useful for assemblers)\n"
 					"	-y          Log individual YM-2612 channels to WAVE files\n"
+					"   -e FILE     Write hardware event log to FILE\n"
 				);
 				return 0;
 			default:
 				fatal_error("Unrecognized switch %s\n", argv[i]);
 			}
 		} else if (!loaded) {
-			if (!(cart.size = load_rom(argv[i], &cart.buffer, stype == SYSTEM_UNKNOWN ? &stype : NULL))) {
-				fatal_error("Failed to open %s for reading\n", argv[i]);
+			char *port = parse_addr_port(argv[i]);
+			if (port) {
+				init_event_reader_tcp(&reader, argv[i], port);
+			} else {
+				if (!(cart.size = load_rom(argv[i], &cart.buffer, stype == SYSTEM_UNKNOWN ? &stype : NULL))) {
+					fatal_error("Failed to open %s for reading\n", argv[i]);
+				}
+				cart.dir = path_dirname(argv[i]);
+				cart.name = basename_no_extension(argv[i]);
+				cart.extension = path_extension(argv[i]);
 			}
-			cart.dir = path_dirname(argv[i]);
-			cart.name = basename_no_extension(argv[i]);
-			cart.extension = path_extension(argv[i]);
 			romfname = argv[i];
 			loaded = 1;
 		} else if (width < 0) {
@@ -645,13 +683,22 @@ int main(int argc, char ** argv)
 	}
 
 	if (loaded) {
-		if (stype == SYSTEM_UNKNOWN) {
-			stype = detect_system_type(&cart);
+		if (stype == SYSTEM_UNKNOWN || reader.socket) {
+			if (reader.socket) {
+				stype = reader_system_type(&reader);
+			} else {
+				stype = detect_system_type(&cart);
+			}
 		}
 		if (stype == SYSTEM_UNKNOWN) {
 			fatal_error("Failed to detect system type for %s\n", romfname);
 		}
-		current_system = alloc_config_system(stype, &cart, menu ? 0 : opts, force_region);
+		
+		if (reader.socket) {
+			current_system = alloc_config_player(stype, &reader);
+		} else {
+			current_system = alloc_config_system(stype, &cart, menu ? 0 : opts, force_region);
+		}
 		if (!current_system) {
 			fatal_error("Failed to configure emulated machine for %s\n", romfname);
 		}

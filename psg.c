@@ -5,6 +5,7 @@
 */
 #include "psg.h"
 #include "blastem.h"
+#include "event_log.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -35,6 +36,7 @@ void psg_write(psg_context * context, uint8_t value)
 	if (context->vgm) {
 		vgm_sn76489_write(context->vgm, context->cycles, value);
 	}
+	event_log(EVENT_PSG_REG, context->cycles, sizeof(value), &value);
 	if (value & 0x80) {
 		context->latch = value & 0x70;
 		uint8_t channel = value >> 5 & 0x3;

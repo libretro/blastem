@@ -77,8 +77,6 @@
 #define FRAMEBUFFER_UI 2
 #define FRAMEBUFFER_USER_START 3
 
-#include "vdp.h"
-
 typedef enum {
 	VID_NTSC,
 	VID_PAL,

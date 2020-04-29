@@ -7,6 +7,7 @@
 
 #define QUICK_SAVE_SLOT 10
 #define SERIALIZE_SLOT 11
+#define EVENTLOG_SLOT 12
 
 typedef struct {
 	char   *desc;

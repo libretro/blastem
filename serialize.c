@@ -20,8 +20,13 @@ void init_serialize(serialize_buffer *buf)
 static void reserve(serialize_buffer *buf, size_t amount)
 {
 	if (amount > (buf->storage - buf->size)) {
-		buf->storage *= 2;
-		buf = realloc(buf, buf->storage + sizeof(*buf));
+		if (amount < buf->storage) {
+			buf->storage *= 2;
+		} else {
+			//doublign isn't enough, increase by the precise amount needed
+			buf->storage += amount - (buf->storage - buf->size);
+		}
+		buf->data = realloc(buf->data, buf->storage + sizeof(*buf));
 	}
 }
 
