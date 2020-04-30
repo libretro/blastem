@@ -401,7 +401,7 @@ uint8_t reader_next_event(event_reader *reader, uint32_t *cycle_out)
 	uint8_t ret;
 	uint32_t delta;
 	if ((header & 0xF0) < FORMAT_3BYTE) {
-		delta = header & 0xF + 16;
+		delta = (header & 0xF) + 16;
 		ret = header >> 4;
 	} else if ((header & 0xF0) == FORMAT_3BYTE) {
 		delta = load_int16(&reader->buffer);
