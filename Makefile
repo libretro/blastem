@@ -31,7 +31,7 @@ SDL2_PREFIX:="sdl/x86_64-w64-mingw32"
 GLUDIR:=x64
 endif
 GLEW32S_LIB:=$(GLEW_PREFIX)/lib/Release/$(GLUDIR)/glew32s.lib
-CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration
+CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -Wpointer-arith -Werror=pointer-arith
 LDFLAGS:=-lm -lmingw32 -lws2_32 -mwindows
 ifneq ($(MAKECMDGOALS),libblastem.dll)
 CFLAGS+= -I"$(SDL2_PREFIX)/include/SDL2" -I"$(GLEW_PREFIX)/include" -DGLEW_STATIC
@@ -47,7 +47,7 @@ NET:=net.o
 EXE:=
 
 HAS_PROC:=$(shell if [ -d /proc ]; then /bin/echo -e -DHAS_PROC; fi)
-CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -Wno-unused-value $(HAS_PROC) -DHAVE_UNISTD_H
+CFLAGS:=-std=gnu99 -Wreturn-type -Werror=return-type -Werror=implicit-function-declaration -Wno-unused-value  -Wpointer-arith -Werror=pointer-arith $(HAS_PROC) -DHAVE_UNISTD_H
 
 ifeq ($(OS),Darwin)
 LIBS=sdl2 glew
