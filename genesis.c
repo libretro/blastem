@@ -1657,6 +1657,7 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 			gen->bank_regs[i] = i;
 		}
 	}
+	gen->reset_cycle = CYCLE_NEVER;
 
 	return gen;
 }
