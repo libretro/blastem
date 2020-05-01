@@ -171,7 +171,7 @@ char * x86_sizes[] = {
 };
 
 #ifdef X86_64
-#define CHECK_DISP(disp) (disp <= 0x7FFFFFFF && disp >= -2147483648)
+#define CHECK_DISP(disp) (disp <= ((ptrdiff_t)INT32_MAX) && disp >= ((ptrdiff_t)INT32_MIN))
 #else
 #define CHECK_DISP(disp) 1
 #endif
@@ -1261,7 +1261,7 @@ void mov_ir(code_info *code, int64_t val, uint8_t dst, uint8_t size)
 	check_alloc_code(code, 14);
 	code_ptr out = code->cur;
 	uint8_t sign_extend = 0;
-	if (size == SZ_Q && val <= 0x7FFFFFFF && val >= -2147483648) {
+	if (size == SZ_Q && val <= ((int64_t)INT32_MAX) && val >= ((int64_t)INT32_MIN)) {
 		sign_extend = 1;
 	}
 	if (size == SZ_W) {
