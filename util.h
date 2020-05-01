@@ -90,5 +90,15 @@ void debug_message(char *format, ...);
 void disable_stdout_messages(void);
 //Deletes a file, returns true on success, false on failure
 uint8_t delete_file(char *path);
+//Initializes the socket library on platforms that need it
+void socket_init(void);
+//Sets a sockt to blocking or non-blocking mode
+int socket_blocking(int sock, int should_block);
+//Close a socket
+void socket_close(int sock);
+//Return the last error on a socket operation
+int socket_last_error(void);
+//Returns if the last socket error was EAGAIN/EWOULDBLOCK
+int socket_error_is_wouldblock(void);
 
 #endif //UTIL_H_

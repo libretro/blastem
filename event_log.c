@@ -6,7 +6,6 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <fcntl.h>
 #include <netdb.h>
 #include <netinet/tcp.h>
 #endif
@@ -46,6 +45,7 @@ static int num_remotes;
 void event_log_tcp(char *address, char *port)
 {
 	struct addrinfo request, *result;
+	socket_init();
 	memset(&request, 0, sizeof(request));
 	request.ai_family = AF_INET;
 	request.ai_socktype = SOCK_STREAM;
@@ -57,19 +57,19 @@ void event_log_tcp(char *address, char *port)
 		warning("Failed to open event log listen socket on %s:%s\n", address, port);
 		goto cleanup_address;
 	}
-	int non_block = 1;
-	setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &non_block, sizeof(non_block));
+	int param = 1;
+	setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, (const char *)&param, sizeof(param));
 	if (bind(listen_sock, result->ai_addr, result->ai_addrlen) < 0) {
 		warning("Failed to bind event log listen socket on %s:%s\n", address, port);
-		close(listen_sock);
+		socket_close(listen_sock);
 		goto cleanup_address;
 	}
 	if (listen(listen_sock, 3) < 0) {
 		warning("Failed to listen for event log remotes on %s:%s\n", address, port);
-		close(listen_sock);
+		socket_close(listen_sock);
 		goto cleanup_address;
 	}
-	fcntl(listen_sock, F_SETFL, O_NONBLOCK);
+	socket_blocking(listen_sock, 0);
 	active = 1;
 cleanup_address:
 	freeaddrinfo(result);
@@ -136,7 +136,7 @@ static void flush_socket(void)
 	int remote = accept(listen_sock, NULL, NULL);
 	if (remote != -1) {
 		if (num_remotes == 7) {
-			close(remote);
+			socket_close(remote);
 		} else {
 			printf("remote %d connected\n", num_remotes);
 			remotes[num_remotes] = remote;
@@ -146,7 +146,6 @@ static void flush_socket(void)
 	}
 	size_t min_progress = 0;
 	for (int i = 0; i < num_remotes; i++) {
-		errno = 0;
 		int sent = 1;
 		if (remote_needs_state[i]) {
 			remote_send_progress[i] = buffer.size;
@@ -186,8 +185,8 @@ static void flush_socket(void)
 			sent = send(remotes[i], buffer.data + remote_send_progress[i], buffer.size - remote_send_progress[i], 0);
 			if (sent >= 0) {
 				remote_send_progress[i] += sent;
-			} else if (errno != EAGAIN && errno != EWOULDBLOCK) {
-				close(remotes[i]);
+			} else if (socket_error_is_wouldblock()) {
+				socket_close(remotes[i]);
 				remotes[i] = remotes[num_remotes-1];
 				remote_send_progress[i] = remote_send_progress[num_remotes-1];
 				remote_needs_state[i] = remote_needs_state[num_remotes-1];
@@ -285,12 +284,12 @@ void event_state(uint32_t cycle, serialize_buffer *state)
 			) {
 				remote_send_progress[i] = buffer.size;
 				remote_needs_state[i] = 0;
-				fcntl(remotes[i], F_SETFL, O_NONBLOCK);
+				socket_blocking(remotes[i], 0);
 				int flag = 1;
-				setsockopt(remotes[i], IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
+				setsockopt(remotes[i], IPPROTO_TCP, TCP_NODELAY, (const char *)&flag, sizeof(flag));
 				fully_active = 1;
 			} else {
-				close(remotes[i]);
+				socket_close(remotes[i]);
 				remotes[i] = remotes[num_remotes-1];
 				remote_send_progress[i] = remote_send_progress[num_remotes-1];
 				remote_needs_state[i] = remote_needs_state[num_remotes-1];
@@ -328,6 +327,7 @@ void init_event_reader(event_reader *reader, uint8_t *data, size_t size)
 void init_event_reader_tcp(event_reader *reader, char *address, char *port)
 {
 	struct addrinfo request, *result;
+	socket_init();
 	memset(&request, 0, sizeof(request));
 	request.ai_family = AF_INET;
 	request.ai_socktype = SOCK_STREAM;
@@ -354,9 +354,9 @@ void init_event_reader_tcp(event_reader *reader, char *address, char *port)
 		}
 		reader->buffer.size += bytes;
 	}
-	fcntl(reader->socket, F_SETFL, O_NONBLOCK);
+	socket_blocking(reader->socket, 0);
 	int flag = 1;
-	setsockopt(reader->socket, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
+	setsockopt(reader->socket, IPPROTO_TCP, TCP_NODELAY, (const char *)&flag, sizeof(flag));
 }
 
 uint8_t reader_next_event(event_reader *reader, uint32_t *cycle_out)
@@ -365,7 +365,7 @@ uint8_t reader_next_event(event_reader *reader, uint32_t *cycle_out)
 		uint8_t blocking = 0;
 		if (reader->buffer.size - reader->buffer.cur_pos < 9) {
 			//set back to block mode
-			fcntl(reader->socket, F_SETFL, 0);
+			socket_blocking(reader->socket, 1);
 			blocking = 1;
 		}
 		if (reader->storage - (reader->buffer.size - reader->buffer.cur_pos) < 128 * 1024) {
@@ -384,16 +384,14 @@ uint8_t reader_next_event(event_reader *reader, uint32_t *cycle_out)
 		int bytes = 128;
 		while (bytes > 127 && reader->buffer.size < reader->storage)
 		{
-			errno = 0;
 			bytes = recv(reader->socket, reader->buffer.data + reader->buffer.size, reader->storage - reader->buffer.size, 0);
 			if (bytes >= 0) {
 				reader->buffer.size += bytes;
 				if (blocking && reader->buffer.size - reader->buffer.cur_pos >= 9) {
-					fcntl(reader->socket, F_SETFL, O_NONBLOCK);
+					socket_blocking(reader->socket, 0);
 				}
-			} else if (errno != EAGAIN && errno != EWOULDBLOCK) {
-				puts("Connection closed");
-				exit(0);
+			} else if (!socket_error_is_wouldblock()) {
+				printf("Connection closed, error = %X\n", socket_last_error());
 			}
 		}
 	}
