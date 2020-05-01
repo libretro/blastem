@@ -158,8 +158,9 @@ uint32_t load_rom_zip(const char *filename, void **dst)
 						for (offset = 0; offset + SMD_BLOCK_SIZE + SMD_HEADER_SIZE <= out_size; offset += SMD_BLOCK_SIZE)
 						{
 							uint8_t tmp[SMD_BLOCK_SIZE];
-							memcpy(tmp, *dst + offset + SMD_HEADER_SIZE, SMD_BLOCK_SIZE);
-							process_smd_block(*dst + offset, tmp, SMD_BLOCK_SIZE);
+							uint8_t *u8dst = *dst;
+							memcpy(tmp, u8dst + offset + SMD_HEADER_SIZE, SMD_BLOCK_SIZE);
+							process_smd_block((void *)(u8dst + offset), tmp, SMD_BLOCK_SIZE);
 						}
 						out_size = offset;
 					}

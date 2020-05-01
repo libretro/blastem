@@ -1361,14 +1361,14 @@ uint32_t *render_get_framebuffer(uint8_t which, int *pitch)
 			warning("Request for invalid framebuffer number %d\n", which);
 			return NULL;
 		}
-		void *pixels;
-		if (SDL_LockTexture(sdl_textures[which], NULL, &pixels, pitch) < 0) {
+		uint8_t *pixels;
+		if (SDL_LockTexture(sdl_textures[which], NULL, (void **)&pixels, pitch) < 0) {
 			warning("Failed to lock texture: %s\n", SDL_GetError());
 			return NULL;
 		}
 		static uint8_t last;
 		if (which <= FRAMEBUFFER_EVEN) {
-			locked_pixels = pixels;
+			locked_pixels = (uint32_t *)pixels;
 			if (which == FRAMEBUFFER_EVEN) {
 				pixels += *pitch;
 			}
@@ -1378,7 +1378,7 @@ uint32_t *render_get_framebuffer(uint8_t which, int *pitch)
 			}
 			last = which;
 		}
-		return pixels;
+		return (uint32_t *)pixels;
 #ifndef DISABLE_OPENGL
 	}
 #endif
