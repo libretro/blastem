@@ -441,6 +441,10 @@ void fatal_error(char *format, ...)
 	exit(1);
 }
 
+#ifndef _WIN32
+#include <unistd.h>
+#endif
+
 void warning(char *format, ...)
 {
 	va_list args;
@@ -722,7 +726,6 @@ int socket_error_is_wouldblock(void)
 
 #else
 #include <fcntl.h>
-#include <unistd.h>
 
 void socket_init(void)
 {
@@ -730,7 +733,7 @@ void socket_init(void)
 
 int socket_blocking(int sock, int should_block)
 {
-	if (fcntl(listen_sock, F_SETFL, should_block ? 0 : O_NONBLOCK)) {
+	if (fcntl(sock, F_SETFL, should_block ? 0 : O_NONBLOCK)) {
 		return errno;
 	}
 	return 0;
