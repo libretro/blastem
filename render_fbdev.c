@@ -50,200 +50,21 @@ static uint8_t scanlines = 0;
 
 static uint32_t last_frame = 0;
 static snd_pcm_uframes_t buffer_samples;
+static size_t buffer_bytes;
 static unsigned int output_channels, sample_rate;
-static uint32_t missing_count;
 
 
 static uint8_t quitting = 0;
 
-struct audio_source {
-	int16_t  *front;
-	int16_t  *back;
-	double   dt;
-	uint64_t buffer_fraction;
-	uint64_t buffer_inc;
-	uint32_t buffer_pos;
-	uint32_t read_start;
-	uint32_t read_end;
-	uint32_t lowpass_alpha;
-	uint32_t mask;
-	int16_t  last_left;
-	int16_t  last_right;
-	uint8_t  num_channels;
-	uint8_t  front_populated;
-};
-
-static audio_source *audio_sources[8];
-static audio_source *inactive_audio_sources[8];
-static uint8_t num_audio_sources;
-static uint8_t num_inactive_audio_sources;
-static uint32_t min_buffered;
-
-typedef int32_t (*mix_func)(audio_source *audio, void *vstream, int len);
-
-static int32_t mix_s16(audio_source *audio, void *vstream, int len)
-{
-	int samples = len/(sizeof(int16_t)*output_channels);
-	int16_t *stream = vstream;
-	int16_t *end = stream + output_channels*samples;
-	int16_t *src = audio->front;
-	uint32_t i = audio->read_start;
-	uint32_t i_end = audio->read_end;
-	int16_t *cur = stream;
-	size_t first_add = output_channels > 1 ? 1 : 0, second_add = output_channels > 1 ? output_channels - 1 : 1;
-	if (audio->num_channels == 1) {
-		while (cur < end && i != i_end)
-		{
-			*cur += src[i];
-			cur += first_add;
-			*cur += src[i++];
-			cur += second_add;
-			i &= audio->mask;
-		}
-	} else {
-		while (cur < end && i != i_end)
-		{
-			*cur += src[i++];
-			cur += first_add;
-			*cur += src[i++];
-			cur += second_add;
-			i &= audio->mask;
-		}
-	}
-	
-	if (cur != end) {
-		printf("Underflow of %d samples, read_start: %d, read_end: %d, mask: %X\n", (int)(end-cur)/2, audio->read_start, audio->read_end, audio->mask);
-	}
-	if (cur != end) {
-		//printf("Underflow of %d samples, read_start: %d, read_end: %d, mask: %X\n", (int)(end-cur)/2, audio->read_start, audio->read_end, audio->mask);
-		return (cur-end)/2;
-	} else {
-		return ((i_end - i) & audio->mask) / audio->num_channels;
-	}
-}
-
-static int32_t mix_f32(audio_source *audio, void *vstream, int len)
-{
-	int samples = len/(sizeof(float)*output_channels);
-	float *stream = vstream;
-	float *end = stream + output_channels*samples;
-	int16_t *src = audio->front;
-	uint32_t i = audio->read_start;
-	uint32_t i_end = audio->read_end;
-	float *cur = stream;
-	size_t first_add = output_channels > 1 ? 1 : 0, second_add = output_channels > 1 ? output_channels - 1 : 1;
-	if (audio->num_channels == 1) {
-		while (cur < end && i != i_end)
-		{
-			*cur += ((float)src[i]) / 0x7FFF;
-			cur += first_add;
-			*cur += ((float)src[i++]) / 0x7FFF;
-			cur += second_add;
-			i &= audio->mask;
-		}
-	} else {
-		while(cur < end && i != i_end)
-		{
-			*cur += ((float)src[i++]) / 0x7FFF;
-			cur += first_add;
-			*cur += ((float)src[i++]) / 0x7FFF;
-			cur += second_add;
-			i &= audio->mask;
-		}
-	}
-	if (cur != end) {
-		printf("Underflow of %d samples, read_start: %d, read_end: %d, mask: %X\n", (int)(end-cur)/2, audio->read_start, audio->read_end, audio->mask);
-		return (cur-end)/2;
-	} else {
-		return ((i_end - i) & audio->mask) / audio->num_channels;
-	}
-}
-
-static int32_t mix_null(audio_source *audio, void *vstream, int len)
-{
-	return 0;
-}
-
-static mix_func mix;
 
 static void render_close_audio()
 {
 
 }
 
-#define BUFFER_INC_RES 0x40000000UL
-
-void render_audio_adjust_clock(audio_source *src, uint64_t master_clock, uint64_t sample_divider)
-{
-	src->buffer_inc = ((BUFFER_INC_RES * (uint64_t)sample_rate) / master_clock) * sample_divider;
-}
-
-audio_source *render_audio_source(uint64_t master_clock, uint64_t sample_divider, uint8_t channels)
-{
-	audio_source *ret = NULL;
-	uint32_t alloc_size = channels * buffer_samples;
-	if (num_audio_sources < 8) {
-		ret = malloc(sizeof(audio_source));
-		ret->back = malloc(alloc_size * sizeof(int16_t));
-		ret->front = malloc(alloc_size * sizeof(int16_t));
-		ret->front_populated = 0;
-		ret->num_channels = channels;
-		audio_sources[num_audio_sources++] = ret;
-	}
-	if (!ret) {
-		fatal_error("Too many audio sources!");
-	} else {
-		render_audio_adjust_clock(ret, master_clock, sample_divider);
-		double lowpass_cutoff = get_lowpass_cutoff(config);
-		double rc = (1.0 / lowpass_cutoff) / (2.0 * M_PI);
-		ret->dt = 1.0 / ((double)master_clock / (double)(sample_divider));
-		double alpha = ret->dt / (ret->dt + rc);
-		ret->lowpass_alpha = (int32_t)(((double)0x10000) * alpha);
-		ret->buffer_pos = 0;
-		ret->buffer_fraction = 0;
-		ret->last_left = ret->last_right = 0;
-		ret->read_start = 0;
-		ret->read_end = buffer_samples * channels;
-		ret->mask = 0xFFFFFFFF;
-	}
-	return ret;
-}
-
-void render_pause_source(audio_source *src)
-{
-	for (uint8_t i = 0; i < num_audio_sources; i++)
-	{
-		if (audio_sources[i] == src) {
-			audio_sources[i] = audio_sources[--num_audio_sources];
-			break;
-		}
-	}
-	inactive_audio_sources[num_inactive_audio_sources++] = src;
-}
-
-void render_resume_source(audio_source *src)
-{
-	if (num_audio_sources < 8) {
-		audio_sources[num_audio_sources++] = src;
-	}
-	for (uint8_t i = 0; i < num_inactive_audio_sources; i++)
-	{
-		if (inactive_audio_sources[i] == src) {
-			inactive_audio_sources[i] = inactive_audio_sources[--num_inactive_audio_sources];
-		}
-	}
-}
-
-void render_free_source(audio_source *src)
-{
-	render_pause_source(src);
-	
-	free(src->front);
-	free(src->back);
-	free(src);
-}
-snd_pcm_t *audio_handle;
-static void do_audio_ready(audio_source *src)
+static snd_pcm_t *audio_handle;
+static void *output_buffer;
+void render_do_audio_ready(audio_source *src)
 {
 	if (src->front_populated) {
 		fatal_error("Audio source filled up a buffer a second time before other sources finished their first\n");
@@ -254,82 +75,18 @@ static void do_audio_ready(audio_source *src)
 	src->front_populated = 1;
 	src->buffer_pos = 0;
 	
-	for (uint8_t i = 0; i < num_audio_sources; i++)
-	{
-		if (!audio_sources[i]->front_populated) {
-			//at least one audio source is not ready yet.
-			return;
-		}
+	if (!all_sources_ready()) {
+		return;
 	}
-	
-	size_t bytes = (mix == mix_s16 ? sizeof(int16_t) : sizeof(float)) * output_channels * buffer_samples;
-	void *buffer = malloc(bytes);
-	for (uint8_t i = 0; i < num_audio_sources; i++)
-	{
-		mix(audio_sources[i], buffer, bytes);
-		audio_sources[i]->front_populated = 0;
-	}
-	int frames = snd_pcm_writei(audio_handle, buffer, buffer_samples);
+	mix_and_convert(output_buffer, buffer_bytes, NULL);
+
+	int frames = snd_pcm_writei(audio_handle, output_buffer, buffer_samples);
 	if (frames < 0) {
 		frames = snd_pcm_recover(audio_handle, frames, 0);
 	}
 	if (frames < 0) {
 		fprintf(stderr, "Failed to write samples: %s\n", snd_strerror(frames));
 	}
-}
-
-static int16_t lowpass_sample(audio_source *src, int16_t last, int16_t current)
-{
-	int32_t tmp = current * src->lowpass_alpha + last * (0x10000 - src->lowpass_alpha);
-	current = tmp >> 16;
-	return current;
-}
-
-static void interp_sample(audio_source *src, int16_t last, int16_t current)
-{
-	int64_t tmp = last * ((src->buffer_fraction << 16) / src->buffer_inc);
-	tmp += current * (0x10000 - ((src->buffer_fraction << 16) / src->buffer_inc));
-	src->back[src->buffer_pos++] = tmp >> 16;
-}
-
-void render_put_mono_sample(audio_source *src, int16_t value)
-{
-	value = lowpass_sample(src, src->last_left, value);
-	src->buffer_fraction += src->buffer_inc;
-	uint32_t base = 0;
-	while (src->buffer_fraction > BUFFER_INC_RES)
-	{
-		src->buffer_fraction -= BUFFER_INC_RES;
-		interp_sample(src, src->last_left, value);
-		
-		if (((src->buffer_pos - base) & src->mask) >= buffer_samples) {
-			do_audio_ready(src);
-		}
-		src->buffer_pos &= src->mask;
-	}
-	src->last_left = value;
-}
-
-void render_put_stereo_sample(audio_source *src, int16_t left, int16_t right)
-{
-	left = lowpass_sample(src, src->last_left, left);
-	right = lowpass_sample(src, src->last_right, right);
-	src->buffer_fraction += src->buffer_inc;
-	uint32_t base = 0;
-	while (src->buffer_fraction > BUFFER_INC_RES)
-	{
-		src->buffer_fraction -= BUFFER_INC_RES;
-		
-		interp_sample(src, src->last_left, left);
-		interp_sample(src, src->last_right, right);
-		
-		if (((src->buffer_pos - base) & src->mask)/2 >= buffer_samples) {
-			do_audio_ready(src);
-		}
-		src->buffer_pos &= src->mask;
-	}
-	src->last_left = left;
-	src->last_right = right;
 }
 
 int render_width()
