@@ -18,13 +18,13 @@ int gdb_sock;
 #define GDB_OUT_FD STDOUT_FILENO
 #define GDB_READ read
 #define GDB_WRITE write
+#include <unistd.h>
 #endif
 
 #include "gdb_remote.h"
 #include "68kinst.h"
 #include "debug.h"
 #include "util.h"
-#include <unistd.h>
 #include <fcntl.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -558,21 +558,13 @@ void  gdb_debug_enter(m68k_context * context, uint32_t pc)
 	}
 }
 
-#ifdef _WIN32
-void gdb_cleanup(void)
-{
-	WSACleanup();
-}
-WSADATA wsa_data;
-#endif
-
 void gdb_remote_init(void)
 {
 	buf = malloc(INITIAL_BUFFER_SIZE);
 	curbuf = NULL;
 	bufsize = INITIAL_BUFFER_SIZE;
 #ifdef _WIN32
-	WSAStartup(MAKEWORD(2,2), &wsa_data);
+	socket_init();
 
 	struct addrinfo request, *result;
 	memset(&request, 0, sizeof(request));
@@ -596,7 +588,7 @@ void gdb_remote_init(void)
 	if (gdb_sock < 0) {
 		fatal_error("accept returned an error while listening on GDB remote debugging socket");
 	}
-	closesocket(listen_sock);
+	socket_close(listen_sock);
 #else
 	disable_stdout_messages();
 #endif

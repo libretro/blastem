@@ -1136,7 +1136,6 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 
 	atexit(render_quit);
 }
-#include<unistd.h>
 static int in_toggle;
 
 void render_config_updated(void)
