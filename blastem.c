@@ -460,6 +460,7 @@ int main(int argc, char ** argv)
 	system_type stype = SYSTEM_UNKNOWN, force_stype = SYSTEM_UNKNOWN;
 	char * romfname = NULL;
 	char * statefile = NULL;
+	char *reader_addr = NULL, *reader_port = NULL;
 	event_reader reader = {0};
 	debugger_type dtype = DEBUGGER_NATIVE;
 	uint8_t start_in_debugger = 0;
@@ -595,9 +596,10 @@ int main(int argc, char ** argv)
 				fatal_error("Unrecognized switch %s\n", argv[i]);
 			}
 		} else if (!loaded) {
-			char *port = parse_addr_port(argv[i]);
-			if (port) {
-				init_event_reader_tcp(&reader, argv[i], port);
+			reader_port = parse_addr_port(argv[i]);
+			if (reader_port) {
+				//init_event_reader_tcp(&reader, argv[i], port);
+				reader_addr = argv[i];
 			} else {
 				if (!(cart.size = load_rom(argv[i], &cart.buffer, stype == SYSTEM_UNKNOWN ? &stype : NULL))) {
 					fatal_error("Failed to open %s for reading\n", argv[i]);
@@ -683,23 +685,15 @@ int main(int argc, char ** argv)
 		warning("%s is not a valid value for the ui.state_format setting. Valid values are gst and native\n", state_format);
 	}
 
-	if (loaded) {
-		if (stype == SYSTEM_UNKNOWN || reader.socket) {
-			if (reader.socket) {
-				stype = reader_system_type(&reader);
-			} else {
-				stype = detect_system_type(&cart);
-			}
+	if (loaded && !reader_addr) {
+		if (stype == SYSTEM_UNKNOWN) {
+			stype = detect_system_type(&cart);
 		}
 		if (stype == SYSTEM_UNKNOWN) {
 			fatal_error("Failed to detect system type for %s\n", romfname);
 		}
 		
-		if (reader.socket) {
-			current_system = alloc_config_player(stype, &reader);
-		} else {
-			current_system = alloc_config_system(stype, &cart, menu ? 0 : opts, force_region);
-		}
+		current_system = alloc_config_system(stype, &cart, menu ? 0 : opts, force_region);
 		if (!current_system) {
 			fatal_error("Failed to configure emulated machine for %s\n", romfname);
 		}
@@ -720,6 +714,17 @@ int main(int argc, char ** argv)
 		menu = 0;
 	}
 #endif
+
+	if (reader_addr) {
+		init_event_reader_tcp(&reader, reader_addr, reader_port);
+		stype = reader_system_type(&reader);
+		if (stype == SYSTEM_UNKNOWN) {
+			fatal_error("Failed to detect system type for %s\n", romfname);
+		}
+		game_system = current_system = alloc_config_player(stype, &reader);
+		setup_saves(&cart, current_system);
+		update_title(current_system->info.name);
+	}
 	
 	current_system->debugger_type = dtype;
 	current_system->enter_debugger = start_in_debugger && menu == debug_target;

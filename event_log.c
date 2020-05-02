@@ -381,18 +381,14 @@ uint8_t reader_next_event(event_reader *reader, uint32_t *cycle_out)
 			reader->buffer.size -= reader->buffer.cur_pos;
 			reader->buffer.cur_pos = 0;
 		}
-		int bytes = 128;
-		while (bytes > 127 && reader->buffer.size < reader->storage)
-		{
-			bytes = recv(reader->socket, reader->buffer.data + reader->buffer.size, reader->storage - reader->buffer.size, 0);
-			if (bytes >= 0) {
-				reader->buffer.size += bytes;
-				if (blocking && reader->buffer.size - reader->buffer.cur_pos >= 9) {
-					socket_blocking(reader->socket, 0);
-				}
-			} else if (!socket_error_is_wouldblock()) {
-				printf("Connection closed, error = %X\n", socket_last_error());
+		int bytes = recv(reader->socket, reader->buffer.data + reader->buffer.size, reader->storage - reader->buffer.size, 0);
+		if (bytes >= 0) {
+			reader->buffer.size += bytes;
+			if (blocking && reader->buffer.size - reader->buffer.cur_pos >= 9) {
+				socket_blocking(reader->socket, 0);
 			}
+		} else if (!socket_error_is_wouldblock()) {
+			printf("Connection closed, error = %X\n", socket_last_error());
 		}
 	}
 	uint8_t header = load_int8(&reader->buffer);
