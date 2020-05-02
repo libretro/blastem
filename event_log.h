@@ -48,6 +48,7 @@ void event_flush(uint32_t cycle);
 void init_event_reader(event_reader *reader, uint8_t *data, size_t size);
 void init_event_reader_tcp(event_reader *reader, char *address, char *port);
 uint8_t reader_next_event(event_reader *reader, uint32_t *cycle_out);
+void reader_ensure_data(event_reader *reader, size_t bytes);
 uint8_t reader_system_type(event_reader *reader);
 void reader_send_gamepad_event(event_reader *reader, uint8_t pad, uint8_t button, uint8_t down);
 
