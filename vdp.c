@@ -939,8 +939,8 @@ static void external_slot(vdp_context * context)
 			} else {
 				val = start->partial ? context->fifo[context->fifo_write].value : start->value;
 			}
-			uint8_t buffer[3] = {start->address, val >> 8, val};
-			event_log(EVENT_CRAM, context->cycles, sizeof(buffer), buffer);
+			uint8_t buffer[3] = {start->address & 127, val >> 8, val};
+			event_log(EVENT_VDP_INTRAM, context->cycles, sizeof(buffer), buffer);
 			write_cram(context, start->address, val);
 			break;
 		}
@@ -958,8 +958,8 @@ static void external_slot(vdp_context * context)
 				} else {
 					context->vsram[(start->address/2) & 63] = start->partial ? context->fifo[context->fifo_write].value : start->value;
 				}
-				uint8_t buffer[3] = {(start->address/2) & 63, context->vsram[(start->address/2) & 63] >> 8, context->vsram[(start->address/2) & 63]};
-				event_log(EVENT_VSRAM, context->cycles, sizeof(buffer), buffer);
+				uint8_t buffer[3] = {((start->address/2) & 63) + 128, context->vsram[(start->address/2) & 63] >> 8, context->vsram[(start->address/2) & 63]};
+				event_log(EVENT_VDP_INTRAM, context->cycles, sizeof(buffer), buffer);
 			}
 
 			break;
@@ -4590,8 +4590,7 @@ void vdp_replay_event(vdp_context *context, uint8_t event, event_reader *reader)
 		address = reader->last_word_address + load_int8(buffer);
 		break;
 	case EVENT_VDP_REG:
-	case EVENT_CRAM:
-	case EVENT_VSRAM:
+	case EVENT_VDP_INTRAM:
 		address = load_int8(buffer);
 		break;
 	}
@@ -4630,11 +4629,12 @@ void vdp_replay_event(vdp_context *context, uint8_t event, event_reader *reader)
 		write_vram_word(context, address, value);
 		break;
 	}
-	case EVENT_CRAM:
-		write_cram(context, address, load_int16(buffer));
-		break;
-	case EVENT_VSRAM:
-		context->vsram[address] = load_int16(buffer);
+	case EVENT_VDP_INTRAM:
+		if (address < 128) {
+			write_cram(context, address, load_int16(buffer));
+		} else {
+			context->vsram[address&63] = load_int16(buffer);
+		}
 		break;
 	}
 }

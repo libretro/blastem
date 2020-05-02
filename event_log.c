@@ -104,9 +104,39 @@ void event_system_start(system_type stype, vid_std video_std, char *name)
 //Four byte: 8-bit type, 24-bit signed delta
 #define FORMAT_3BYTE 0xE0
 #define FORMAT_4BYTE 0xF0
+static uint8_t last_event_type = 0xFF;
+static uint32_t last_delta;
+static uint8_t multi_count;
+static size_t multi_start;
 static void event_header(uint8_t type, uint32_t cycle)
 {
 	uint32_t delta = cycle - last;
+	if (multi_count) {
+		if (type != last_event_type || delta != last_delta) {
+			buffer.data[multi_start] |= multi_count - 2;
+			multi_count = 0;
+		} else {
+			++multi_count;
+			if (multi_count == 17) {
+				buffer.data[multi_start] |= multi_count - 2;
+				last_event_type = 0xFF;
+				multi_count = 0;
+			}
+			return;
+		}
+	} else if (type == last_event_type && delta == last_delta) {
+		//make some room
+		save_int8(&buffer, 0);
+		//shift existing command
+		memmove(buffer.data + multi_start + 1, buffer.data + multi_start, buffer.size - multi_start - 1);
+		buffer.data[multi_start] = EVENT_MULTI << 4;
+		multi_count = 2;
+		return;
+	}
+	multi_start = buffer.size;
+	last_event_type = type;
+	last_delta = delta;
+	
 	if (delta > 65535) {
 		save_int8(&buffer, FORMAT_4BYTE | type);
 		save_int8(&buffer, delta >> 16);
@@ -202,6 +232,8 @@ static void flush_socket(void)
 	if (min_progress == buffer.size) {
 		buffer.size = 0;
 		memset(remote_send_progress, 0, sizeof(remote_send_progress));
+		multi_count = 0;
+		last_event_type = 0xFF;
 	}
 }
 
@@ -312,6 +344,8 @@ void event_flush(uint32_t cycle)
 		fwrite(buffer.data, 1, buffer.size, event_file);
 		fflush(event_file);
 		buffer.size = 0;
+		multi_count = 0;
+		last_event_type = 0xFF;
 	} else if (listen_sock) {
 		flush_socket();
 	}
@@ -321,6 +355,7 @@ void init_event_reader(event_reader *reader, uint8_t *data, size_t size)
 {
 	reader->socket = 0;
 	reader->last_cycle = 0;
+	reader->repeat_event = 0xFF;
 	init_deserialize(&reader->buffer, data, size);
 }
 
@@ -361,6 +396,12 @@ void init_event_reader_tcp(event_reader *reader, char *address, char *port)
 
 uint8_t reader_next_event(event_reader *reader, uint32_t *cycle_out)
 {
+	if (reader->repeat_remaining) {
+		reader->repeat_remaining--;
+		*cycle_out = reader->last_cycle + reader->repeat_delta;
+		reader->last_cycle = *cycle_out;
+		return reader->repeat_event;
+	}
 	if (reader->socket) {
 		uint8_t blocking = 0;
 		if (reader->buffer.size - reader->buffer.cur_pos < 9) {
@@ -394,6 +435,12 @@ uint8_t reader_next_event(event_reader *reader, uint32_t *cycle_out)
 	uint8_t header = load_int8(&reader->buffer);
 	uint8_t ret;
 	uint32_t delta;
+	uint8_t multi_start = 0;
+	if ((header & 0xF0) == (EVENT_MULTI << 4)) {
+		reader->repeat_remaining = (header & 0xF) + 1;
+		multi_start = 1;
+		header = load_int8(&reader->buffer);
+	}
 	if ((header & 0xF0) < FORMAT_3BYTE) {
 		delta = (header & 0xF) + 16;
 		ret = header >> 4;
@@ -408,6 +455,10 @@ uint8_t reader_next_event(event_reader *reader, uint32_t *cycle_out)
 		}
 		delta |= load_int16(&reader->buffer);
 		ret = header & 0xF;
+	}
+	if (multi_start) {
+		reader->repeat_event = ret;
+		reader->repeat_delta = delta;
 	}
 	*cycle_out = reader->last_cycle + delta;
 	reader->last_cycle = *cycle_out;
