@@ -47,10 +47,12 @@ void start_context(system_header *sys, char *statefile)
 			break;
 		case EVENT_PSG_REG:
 			sync_sound(player, cycle);
+			reader_ensure_data(&player->reader, 1);
 			psg_write(player->psg, load_int8(&player->reader.buffer));
 			break;
 		case EVENT_YM_REG: {
 			sync_sound(player, cycle);
+			reader_ensure_data(&player->reader, 3);
 			uint8_t part = load_int8(&player->reader.buffer);
 			uint8_t reg = load_int8(&player->reader.buffer);
 			uint8_t value = load_int8(&player->reader.buffer);
@@ -62,12 +64,10 @@ void start_context(system_header *sys, char *statefile)
 			ym_data_write(player->ym, value);
 			break;
 		case EVENT_STATE: {
+			reader_ensure_data(&player->reader, 3);
 			uint32_t size = load_int8(&player->reader.buffer) << 16;
 			size |= load_int16(&player->reader.buffer);
-			if (player->reader.buffer.size - player->reader.buffer.cur_pos < size) {
-				puts("State has not been fully loaded!");
-				exit(1);
-			}
+			reader_ensure_data(&player->reader, size);
 			deserialize_buffer buffer;
 			init_deserialize(&buffer, player->reader.buffer.data + player->reader.buffer.cur_pos, size);
 			register_section_handler(&buffer, (section_handler){.fun = vdp_deserialize, .data = player->vdp}, SECTION_VDP);

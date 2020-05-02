@@ -4571,26 +4571,33 @@ void vdp_replay_event(vdp_context *context, uint8_t event, event_reader *reader)
 	switch (event)
 	{
 	case EVENT_VRAM_BYTE:
+		reader_ensure_data(reader, 3);
 		address = load_int16(buffer);
 		break;
 	case EVENT_VRAM_BYTE_DELTA:
+		reader_ensure_data(reader, 2);
 		address = reader->last_byte_address + load_int8(buffer);
 		break;
 	case EVENT_VRAM_BYTE_ONE:
+		reader_ensure_data(reader, 1);
 		address = reader->last_byte_address + 1;
 		break;
 	case EVENT_VRAM_BYTE_AUTO:
+		reader_ensure_data(reader, 1);
 		address = reader->last_byte_address + context->regs[REG_AUTOINC];
 		break;
 	case EVENT_VRAM_WORD:
+		reader_ensure_data(reader, 4);
 		address = load_int8(buffer) << 16;
 		address |= load_int16(buffer);
 		break;
 	case EVENT_VRAM_WORD_DELTA:
+		reader_ensure_data(reader, 3);
 		address = reader->last_word_address + load_int8(buffer);
 		break;
 	case EVENT_VDP_REG:
 	case EVENT_VDP_INTRAM:
+		reader_ensure_data(reader, event == EVENT_VDP_REG ? 2 : 3);
 		address = load_int8(buffer);
 		break;
 	}
