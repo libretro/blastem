@@ -13,9 +13,9 @@ enum {
 	EVENT_VRAM_BYTE_AUTO = 8,
 	EVENT_VRAM_WORD = 9,
 	EVENT_VRAM_WORD_DELTA = 10,
-	EVENT_CRAM = 11,
-	EVENT_VSRAM = 12,
-	EVENT_STATE = 13
+	EVENT_VDP_INTRAM = 11,
+	EVENT_STATE = 12,
+	EVENT_MULTI = 13
 	//14 and 15 are reserved for header types
 };
 
@@ -26,7 +26,10 @@ typedef struct {
 	uint32_t last_cycle;
 	uint32_t last_word_address;
 	uint32_t last_byte_address;
+	uint32_t repeat_delta;
 	deserialize_buffer buffer;
+	uint8_t repeat_event;
+	uint8_t repeat_remaining;
 } event_reader;
 
 #include "system.h"
