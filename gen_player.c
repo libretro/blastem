@@ -88,6 +88,9 @@ void start_context(system_header *sys, char *statefile)
 		}
 			
 		}
+		if (!player->reader.socket) {
+			reader_ensure_data(&player->reader, 1);
+		}
 	}
 	
 }
@@ -147,6 +150,7 @@ gen_player *alloc_config_gen_player_reader(event_reader *reader)
 {
 	gen_player *player = calloc(1, sizeof(gen_player));
 	player->reader = *reader;
+	inflateCopy(&player->reader.input_stream, &reader->input_stream);
 	config_common(player);
 	return player;
 }

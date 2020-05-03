@@ -598,7 +598,6 @@ int main(int argc, char ** argv)
 		} else if (!loaded) {
 			reader_port = parse_addr_port(argv[i]);
 			if (reader_port) {
-				//init_event_reader_tcp(&reader, argv[i], port);
 				reader_addr = argv[i];
 			} else {
 				if (!(cart.size = load_rom(argv[i], &cart.buffer, stype == SYSTEM_UNKNOWN ? &stype : NULL))) {
@@ -722,6 +721,8 @@ int main(int argc, char ** argv)
 			fatal_error("Failed to detect system type for %s\n", romfname);
 		}
 		game_system = current_system = alloc_config_player(stype, &reader);
+		//free inflate stream as it was inflateCopied to an internal event reader in the player
+		inflateEnd(&reader.input_stream);
 		setup_saves(&cart, current_system);
 		update_title(current_system->info.name);
 	}
