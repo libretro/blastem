@@ -210,6 +210,35 @@ static void end_reply(megawifi *mw)
 	mw_putc(mw, ETX);
 }
 
+static void cmd_ap_cfg_get(megawifi *mw)
+{
+	char ssid[32] = {0};
+	char pass[64] = {0};
+	uint8_t slot = mw->transmit_buffer[4];
+
+	sprintf(ssid, "BLASTEM! SSID %d", slot + 1);
+	sprintf(pass, "BLASTEM! PASS %d", slot + 1);
+	start_reply(mw, CMD_OK);
+	mw_putc(mw, slot);
+	mw_putc(mw, 7);	/// 11bgn
+	mw_putraw(mw, ssid, 32);
+	mw_putraw(mw, pass, 64);
+	end_reply(mw);
+}
+
+static void cmd_ip_cfg_get(megawifi *mw)
+{
+	uint32_t ipv4s[5] = {0};
+
+	start_reply(mw, CMD_OK);
+	mw_putc(mw, mw->transmit_buffer[4]);
+	mw_putc(mw, 0);
+	mw_putc(mw, 0);
+	mw_putc(mw, 0);
+	mw_putraw(mw, (char*)ipv4s, sizeof(ipv4s));
+	end_reply(mw);
+}
+
 static void process_command(megawifi *mw)
 {
 	uint32_t command = mw->transmit_buffer[0] << 8 | mw->transmit_buffer[1];
@@ -231,6 +260,9 @@ static void process_command(megawifi *mw)
 	case CMD_ECHO:
 		mw->receive_bytes = mw->transmit_bytes;
 		memcpy(mw->receive_buffer, mw->transmit_buffer, mw->transmit_bytes);
+		break;
+	case CMD_AP_CFG_GET:
+		cmd_ap_cfg_get(mw);
 		break;
 	case CMD_IP_CURRENT: {
 		iface_info i;
@@ -258,6 +290,14 @@ static void process_command(megawifi *mw)
 		end_reply(mw);
 		break;
 	}
+	case CMD_IP_CFG_GET:
+		cmd_ip_cfg_get(mw);
+		break;
+	case CMD_DEF_AP_CFG_GET:
+		start_reply(mw, CMD_OK);
+		mw_putc(mw, 0);
+		end_reply(mw);
+		break;
 	case CMD_AP_JOIN:
 		mw->module_state = STATE_READY;
 		start_reply(mw, CMD_OK);
@@ -336,6 +376,12 @@ static void process_command(megawifi *mw)
 		mw_putc(mw, mw->flags);
 		mw_putc(mw, mw->channel_flags >> 8);
 		mw_putc(mw, mw->channel_flags);
+		end_reply(mw);
+		break;
+	case CMD_SERVER_URL_GET:
+		start_reply(mw, CMD_OK);
+		// FIXME: This should be get from config file
+		mw_puts(mw, "192.168.1.32");
 		end_reply(mw);
 		break;
 	default:
