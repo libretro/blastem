@@ -14,6 +14,7 @@
 #endif
 #include <errno.h>
 #include <fcntl.h>
+#include <time.h>
 #include "genesis.h"
 #include "net.h"
 
@@ -313,6 +314,45 @@ err:
 	end_reply(mw);
 }
 
+#define AVATAR_BYTES	(32 * 48 / 2)
+static void cmd_gamertag_get(megawifi *mw)
+{
+	uint32_t id = htonl(1);
+	char buf[AVATAR_BYTES];
+
+	start_reply(mw, CMD_OK);
+	// TODO Get items from config file
+	mw_putraw(mw, (const char*)&id, 4);
+	strncpy(buf, "doragasu on Blastem!", 32);
+	mw_putraw(mw, buf, 32);
+	strncpy(buf, "My cool password", 32);
+	mw_putraw(mw, buf, 32);
+	strncpy(buf, "All your WiFi are belong to me!", 32);
+	mw_putraw(mw, buf, 32);
+	memset(buf, 0, 64); // Telegram token
+	mw_putraw(mw, buf, 64);
+	mw_putraw(mw, buf, AVATAR_BYTES); // Avatar tiles
+	mw_putraw(mw, buf, 32); // Avatar palette
+	end_reply(mw);
+}
+
+static void cmd_hrng_get(megawifi *mw)
+{
+	uint16_t len = (mw->transmit_buffer[4]<<8) + mw->transmit_buffer[5];
+	if (len > (MAX_RECV_SIZE - 4)) {
+		start_reply(mw, CMD_ERROR);
+		end_reply(mw);
+		return;
+	}
+	// Pseudo-random, but who cares
+	start_reply(mw, CMD_OK);
+	srand(time(NULL));
+	for (uint16_t i = 0; i < len; i++) {
+		mw_putc(mw, rand());
+	}
+	end_reply(mw);
+}
+
 static void process_command(megawifi *mw)
 {
 	uint32_t command = mw->transmit_buffer[0] << 8 | mw->transmit_buffer[1];
@@ -454,6 +494,17 @@ static void process_command(megawifi *mw)
 		mw_putc(mw, mw->channel_flags >> 8);
 		mw_putc(mw, mw->channel_flags);
 		end_reply(mw);
+		break;
+	case CMD_GAMERTAG_GET:
+		cmd_gamertag_get(mw);
+		break;
+	case CMD_LOG:
+		start_reply(mw, CMD_OK);
+		puts((char*)&mw->transmit_buffer[4]);
+		end_reply(mw);
+		break;
+	case CMD_HRNG_GET:
+		cmd_hrng_get(mw);
 		break;
 	case CMD_SERVER_URL_GET:
 		start_reply(mw, CMD_OK);
