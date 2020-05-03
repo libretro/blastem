@@ -20,14 +20,18 @@ enum {
 };
 
 #include "serialize.h"
+#include "zlib/zlib.h"
 typedef struct {
 	size_t storage;
+	uint8_t *socket_buffer;
+	size_t socket_buffer_size;
 	int socket;
 	uint32_t last_cycle;
 	uint32_t last_word_address;
 	uint32_t last_byte_address;
 	uint32_t repeat_delta;
 	deserialize_buffer buffer;
+	z_stream input_stream;
 	uint8_t repeat_event;
 	uint8_t repeat_remaining;
 } event_reader;
