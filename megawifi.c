@@ -10,6 +10,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <netinet/in.h>
+#include <netdb.h>
 #endif
 #include <errno.h>
 #include <fcntl.h>
@@ -185,6 +186,7 @@ static void poll_all_sockets(megawifi *mw)
 	}
 }
 
+
 static void start_reply(megawifi *mw, uint8_t cmd)
 {
 	mw_putc(mw, STX);
@@ -236,6 +238,78 @@ static void cmd_ip_cfg_get(megawifi *mw)
 	mw_putc(mw, 0);
 	mw_putc(mw, 0);
 	mw_putraw(mw, (char*)ipv4s, sizeof(ipv4s));
+	end_reply(mw);
+}
+
+static void cmd_tcp_con(megawifi *mw, uint32_t size)
+{
+	struct addrinfo hints;
+	struct addrinfo *res = NULL;
+	char dst_port[6];
+	char src_port[6];
+	char host[MAX_RECV_SIZE - 13];
+	int s;
+
+	int err;
+
+	uint8_t channel = mw->transmit_buffer[16];
+	if (!channel || channel > 15 || mw->sock_fds[channel - 1] >= 0) {
+		start_reply(mw, CMD_ERROR);
+		end_reply(mw);
+		return;
+	}
+	channel--;
+
+	strncpy(dst_port, (char*)&mw->transmit_buffer[4], 5);
+	dst_port[5] = '\0';
+	// TODO src_port is unused
+	strncpy(src_port, (char*)&mw->transmit_buffer[10], 5);
+	src_port[5] = '\0';
+	strncpy(host, (char*)&mw->transmit_buffer[17], MAX_RECV_SIZE - 14);
+	host[MAX_RECV_SIZE - 14] = '\0';
+
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_INET;
+	hints.ai_flags = AI_NUMERICSERV;
+	hints.ai_socktype = SOCK_STREAM;
+
+	if ((err = getaddrinfo(host, dst_port, &hints, &res)) != 0) {
+		printf("getaddrinfo failed: %s\n", gai_strerror(err));
+		start_reply(mw, CMD_ERROR);
+		end_reply(mw);
+		return;
+	}
+
+	s = socket(AF_INET, SOCK_STREAM, 0);
+	if (s < 0) {
+		goto err;
+	}
+
+	// Should this be handled in a separate thread to avoid blocking emulation?
+	if (connect(s, res->ai_addr, res->ai_addrlen) != 0) {
+		goto err;
+	}
+
+#ifndef _WIN32
+	//FIXME: Set nonblocking on Windows too
+	fcntl(s, F_SETFL, O_NONBLOCK);
+#endif
+	mw->sock_fds[channel] = s;
+	mw->channel_state[channel] = SOCKST_TCP_EST;
+	mw->channel_flags |= 1 << (channel + 1);
+	printf("Connection established on ch %d with %s:%s\n", channel + 1, host, dst_port);
+
+	if (res) {
+		freeaddrinfo(res);
+	}
+	start_reply(mw, CMD_OK);
+	end_reply(mw);
+	return;
+
+err:
+	freeaddrinfo(res);
+	printf("Connection to %s:%s failed, %s\n", host, dst_port, strerror(errno));
+	start_reply(mw, CMD_ERROR);
 	end_reply(mw);
 }
 
@@ -302,6 +376,9 @@ static void process_command(megawifi *mw)
 		mw->module_state = STATE_READY;
 		start_reply(mw, CMD_OK);
 		end_reply(mw);
+		break;
+	case CMD_TCP_CON:
+		cmd_tcp_con(mw, size);
 		break;
 	case CMD_TCP_BIND:{
 		if (size < 7){
