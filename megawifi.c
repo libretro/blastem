@@ -25,7 +25,7 @@ enum {
 };
 #define STX 0x7E
 #define ETX 0x7E
-#define MAX_RECV_SIZE 1440
+#define MAX_RECV_SIZE 1460
 
 #define E(N) N
 enum {
@@ -50,6 +50,14 @@ enum {
 	STATE_READY,
 	STATE_TRANSPARENT
 };
+
+enum {
+	SOCKST_NONE = 0,
+	SOCKST_TCP_LISTEN,
+	SOCKST_TCP_EST,
+	SOCKST_UDP_READY
+};
+
 
 #define FLAG_ONLINE 
 
@@ -112,14 +120,19 @@ static void mw_copy(megawifi *mw, const uint8_t *src, uint32_t count)
 	mw->receive_bytes += count;
 }
 
-static void mw_puts(megawifi *mw, char *s)
+static void mw_putraw(megawifi *mw, const char *data, size_t len)
 {
-	uint32_t len = strlen(s);
 	if ((mw->receive_bytes + len) > sizeof(mw->receive_buffer)) {
 		return;
 	}
-	memcpy(mw->receive_buffer + mw->receive_bytes, s, len);
+	memcpy(mw->receive_buffer + mw->receive_bytes, data, len);
 	mw->receive_bytes += len;
+}
+
+static void mw_puts(megawifi *mw, const char *s)
+{
+	size_t len = strlen(s);
+	mw_putraw(mw, s, len);
 }
 
 static void poll_socket(megawifi *mw, uint8_t channel)
@@ -127,7 +140,7 @@ static void poll_socket(megawifi *mw, uint8_t channel)
 	if (mw->sock_fds[channel] < 0) {
 		return;
 	}
-	if (mw->channel_state[channel] == 1) {
+	if (mw->channel_state[channel] == SOCKST_TCP_LISTEN) {
 		int res = accept(mw->sock_fds[channel], NULL, NULL);
 		if (res >= 0) {
 			close(mw->sock_fds[channel]);
@@ -136,14 +149,14 @@ static void poll_socket(megawifi *mw, uint8_t channel)
 			fcntl(res, F_SETFL, O_NONBLOCK);
 #endif
 			mw->sock_fds[channel] = res;
-			mw->channel_state[channel] = 2;
+			mw->channel_state[channel] = SOCKST_TCP_EST;
 			mw->channel_flags |= 1 << (channel + 1);
 		} else if (errno != EAGAIN && errno != EWOULDBLOCK) {
 			close(mw->sock_fds[channel]);
-			mw->channel_state[channel] = 0;
+			mw->channel_state[channel] = SOCKST_NONE;
 			mw->channel_flags |= 1 << (channel + 1);
 		}
-	} else if (mw->channel_state[channel] == 2 && mw->receive_bytes < sizeof(mw->receive_buffer) - 4) {
+	} else if (mw->channel_state[channel] == SOCKST_TCP_EST && mw->receive_bytes < sizeof(mw->receive_buffer) - 4) {
 		size_t max = sizeof(mw->receive_buffer) - 4 - mw->receive_bytes;
 		if (max > MAX_RECV_SIZE) {
 			max = MAX_RECV_SIZE;
@@ -158,7 +171,7 @@ static void poll_socket(megawifi *mw, uint8_t channel)
 			//should this set the channel flag?
 		} else if (bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
 			close(mw->sock_fds[channel]);
-			mw->channel_state[channel] = 0;
+			mw->channel_state[channel] = SOCKST_NONE;
 			mw->channel_flags |= 1 << (channel + 1);
 		}
 	}
@@ -197,152 +210,163 @@ static void end_reply(megawifi *mw)
 	mw_putc(mw, ETX);
 }
 
+static void process_command(megawifi *mw)
+{
+	uint32_t command = mw->transmit_buffer[0] << 8 | mw->transmit_buffer[1];
+	uint32_t size = mw->transmit_buffer[2] << 8 | mw->transmit_buffer[3];
+	if (size > mw->transmit_bytes - 4) {
+		size = mw->transmit_bytes - 4;
+	}
+	int orig_receive_bytes = mw->receive_bytes;
+	switch (command)
+	{
+	case CMD_VERSION:
+		start_reply(mw, CMD_OK);
+		mw_putc(mw, 1);
+		mw_putc(mw, 3);
+		mw_putc(mw, 0);
+		mw_puts(mw, "blastem");
+		end_reply(mw);
+		break;
+	case CMD_ECHO:
+		mw->receive_bytes = mw->transmit_bytes;
+		memcpy(mw->receive_buffer, mw->transmit_buffer, mw->transmit_bytes);
+		break;
+	case CMD_IP_CURRENT: {
+		iface_info i;
+		if (get_host_address(&i)) {
+			start_reply(mw, CMD_OK);
+			//config number and reserved bytes
+			mw_set(mw, 0, 4);
+			//ip
+			mw_copy(mw, i.ip, sizeof(i.ip));
+			//net mask
+			mw_copy(mw, i.net_mask, sizeof(i.net_mask));
+			//gateway guess
+			mw_putc(mw, i.ip[0] & i.net_mask[0]);
+			mw_putc(mw, i.ip[1] & i.net_mask[1]);
+			mw_putc(mw, i.ip[2] & i.net_mask[2]);
+			mw_putc(mw, (i.ip[3] & i.net_mask[3]) + 1);
+			//dns
+			static const uint8_t localhost[] = {127,0,0,1};
+			mw_copy(mw, localhost, sizeof(localhost));
+			mw_copy(mw, localhost, sizeof(localhost));
+			
+		} else {
+			start_reply(mw, CMD_ERROR);
+		}
+		end_reply(mw);
+		break;
+	}
+	case CMD_AP_JOIN:
+		mw->module_state = STATE_READY;
+		start_reply(mw, CMD_OK);
+		end_reply(mw);
+		break;
+	case CMD_TCP_BIND:{
+		if (size < 7){
+			start_reply(mw, CMD_ERROR);
+			end_reply(mw);
+			break;
+		}
+		uint8_t channel = mw->transmit_buffer[10];
+		if (!channel || channel > 15) {
+			start_reply(mw, CMD_ERROR);
+			end_reply(mw);
+			break;
+		}
+		channel--;
+		if (mw->sock_fds[channel] >= 0) {
+			close(mw->sock_fds[channel]);
+		}
+		mw->sock_fds[channel] = socket(AF_INET, SOCK_STREAM, 0);
+		if (mw->sock_fds[channel] < 0) {
+			start_reply(mw, CMD_ERROR);
+			end_reply(mw);
+			break;
+		}
+		int value = 1;
+		setsockopt(mw->sock_fds[channel], SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value));
+		struct sockaddr_in bind_addr;
+		memset(&bind_addr, 0, sizeof(bind_addr));
+		bind_addr.sin_family = AF_INET;
+		bind_addr.sin_port = htons(mw->transmit_buffer[8] << 8 | mw->transmit_buffer[9]);
+		if (bind(mw->sock_fds[channel], (struct sockaddr *)&bind_addr, sizeof(bind_addr)) != 0) {
+			close(mw->sock_fds[channel]);
+			mw->sock_fds[channel] = -1;
+			start_reply(mw, CMD_ERROR);
+			end_reply(mw);
+			break;
+		}
+		int res = listen(mw->sock_fds[channel], 2);
+		start_reply(mw, res ? CMD_ERROR : CMD_OK);
+		if (res) {
+			close(mw->sock_fds[channel]);
+			mw->sock_fds[channel] = -1;
+		} else {
+			mw->channel_flags |= 1 << (channel + 1);
+			mw->channel_state[channel] = SOCKST_TCP_LISTEN;
+#ifndef _WIN32
+//FIXME: Set nonblocking on Windows too
+			fcntl(mw->sock_fds[channel], F_SETFL, O_NONBLOCK);
+#endif
+		}
+		end_reply(mw);
+		break;
+	}
+	case CMD_SOCK_STAT: {
+		uint8_t channel = mw->transmit_buffer[4];
+		if (!channel || channel > 15) {
+			start_reply(mw, CMD_ERROR);
+			end_reply(mw);
+			break;
+		}
+		mw->channel_flags &= ~(1 << channel);
+		channel--;
+		poll_socket(mw, channel);
+		start_reply(mw, CMD_OK);
+		mw_putc(mw, mw->channel_state[channel]);
+		end_reply(mw);
+		break;
+	}
+	case CMD_SYS_STAT:
+		poll_all_sockets(mw);
+		start_reply(mw, CMD_OK);
+		mw_putc(mw, mw->module_state);
+		mw_putc(mw, mw->flags);
+		mw_putc(mw, mw->channel_flags >> 8);
+		mw_putc(mw, mw->channel_flags);
+		end_reply(mw);
+		break;
+	default:
+		printf("Unhandled MegaWiFi command %s(%d) with length %X\n", cmd_names[command], command, size);
+		break;
+	}
+}
+
 static void process_packet(megawifi *mw)
 {
 	if (mw->transmit_channel == 0) {
-		uint32_t command = mw->transmit_buffer[0] << 8 | mw->transmit_buffer[1];
-		uint32_t size = mw->transmit_buffer[2] << 8 | mw->transmit_buffer[3];
-		if (size > mw->transmit_bytes - 4) {
-			size = mw->transmit_bytes - 4;
-		}
-		int orig_receive_bytes = mw->receive_bytes;
-		switch (command)
-		{
-		case CMD_VERSION:
-			start_reply(mw, CMD_OK);
-			mw_putc(mw, 1);
-			mw_putc(mw, 0);
-			mw_puts(mw, "blastem");
-			end_reply(mw);
-			break;
-		case CMD_ECHO:
-			mw->receive_bytes = mw->transmit_bytes;
-			memcpy(mw->receive_buffer, mw->transmit_buffer, mw->transmit_bytes);
-			break;
-		case CMD_IP_CURRENT: {
-			iface_info i;
-			if (get_host_address(&i)) {
-				start_reply(mw, CMD_OK);
-				//config number and reserved bytes
-				mw_set(mw, 0, 4);
-				//ip
-				mw_copy(mw, i.ip, sizeof(i.ip));
-				//net mask
-				mw_copy(mw, i.net_mask, sizeof(i.net_mask));
-				//gateway guess
-				mw_putc(mw, i.ip[0] & i.net_mask[0]);
-				mw_putc(mw, i.ip[1] & i.net_mask[1]);
-				mw_putc(mw, i.ip[2] & i.net_mask[2]);
-				mw_putc(mw, (i.ip[3] & i.net_mask[3]) + 1);
-				//dns
-				static const uint8_t localhost[] = {127,0,0,1};
-				mw_copy(mw, localhost, sizeof(localhost));
-				mw_copy(mw, localhost, sizeof(localhost));
-				
-			} else {
-				start_reply(mw, CMD_ERROR);
-			}
-			end_reply(mw);
-			break;
-		}
-		case CMD_AP_JOIN:
-			mw->module_state = STATE_READY;
-			start_reply(mw, CMD_OK);
-			end_reply(mw);
-			break;
-		case CMD_TCP_BIND:{
-			if (size < 7){
-				start_reply(mw, CMD_ERROR);
-				end_reply(mw);
-				break;
-			}
-			uint8_t channel = mw->transmit_buffer[10];
-			if (!channel || channel > 15) {
-				start_reply(mw, CMD_ERROR);
-				end_reply(mw);
-				break;
-			}
-			channel--;
-			if (mw->sock_fds[channel] >= 0) {
-				close(mw->sock_fds[channel]);
-			}
-			mw->sock_fds[channel] = socket(AF_INET, SOCK_STREAM, 0);
-			if (mw->sock_fds[channel] < 0) {
-				start_reply(mw, CMD_ERROR);
-				end_reply(mw);
-				break;
-			}
-			int value = 1;
-			setsockopt(mw->sock_fds[channel], SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value));
-			struct sockaddr_in bind_addr;
-			memset(&bind_addr, 0, sizeof(bind_addr));
-			bind_addr.sin_family = AF_INET;
-			bind_addr.sin_port = htons(mw->transmit_buffer[8] << 8 | mw->transmit_buffer[9]);
-			if (bind(mw->sock_fds[channel], (struct sockaddr *)&bind_addr, sizeof(bind_addr)) != 0) {
-				close(mw->sock_fds[channel]);
-				mw->sock_fds[channel] = -1;
-				start_reply(mw, CMD_ERROR);
-				end_reply(mw);
-				break;
-			}
-			int res = listen(mw->sock_fds[channel], 2);
-			start_reply(mw, res ? CMD_ERROR : CMD_OK);
-			if (res) {
-				close(mw->sock_fds[channel]);
-				mw->sock_fds[channel] = -1;
-			} else {
-				mw->channel_flags |= 1 << (channel + 1);
-				mw->channel_state[channel] = 1;
-#ifndef _WIN32
-//FIXME: Set nonblocking on Windows too
-				fcntl(mw->sock_fds[channel], F_SETFL, O_NONBLOCK);
-#endif
-			}
-			end_reply(mw);
-			break;
-		}
-		case CMD_SOCK_STAT: {
-			uint8_t channel = mw->transmit_buffer[4];
-			if (!channel || channel > 15) {
-				start_reply(mw, CMD_ERROR);
-				end_reply(mw);
-				break;
-			}
-			mw->channel_flags &= ~(1 << channel);
-			channel--;
-			poll_socket(mw, channel);
-			start_reply(mw, CMD_OK);
-			mw_putc(mw, mw->channel_state[channel]);
-			end_reply(mw);
-			break;
-		}
-		case CMD_SYS_STAT:
-			poll_all_sockets(mw);
-			start_reply(mw, CMD_OK);
-			mw_putc(mw, mw->module_state);
-			mw_putc(mw, mw->flags);
-			mw_putc(mw, mw->channel_flags >> 8);
-			mw_putc(mw, mw->channel_flags);
-			end_reply(mw);
-			break;
-		default:
-			printf("Unhandled MegaWiFi command %s(%d) with length %X\n", cmd_names[command], command, size);
-			break;
-		}
-	} else if (mw->sock_fds[mw->transmit_channel - 1] >= 0 && mw->channel_state[mw->transmit_channel - 1] == 2) {
-		uint8_t channel = mw->transmit_channel - 1;
-		int sent = send(mw->sock_fds[channel], mw->transmit_buffer, mw->transmit_bytes, MSG_NOSIGNAL);
-		if (sent < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-			close(mw->sock_fds[channel]);
-			mw->sock_fds[channel] = -1;
-			mw->channel_state[channel] = 0;
-			mw->channel_flags |= 1 << mw->transmit_channel;
-		} else if (sent < mw->transmit_bytes) {
-			//TODO: save this data somewhere so it can be sent in poll_socket
-			printf("Sent %d bytes on channel %d, but %d were requested\n", sent, mw->transmit_channel, mw->transmit_bytes);
-		}
+		process_command(mw);
 	} else {
-		printf("Unhandled receive of MegaWiFi data on channel %d\n", mw->transmit_channel);
+		uint8_t channel = mw->transmit_channel - 1;
+		int channel_state = mw->channel_state[channel];
+		int sock_fd = mw->sock_fds[channel];
+		// TODO Handle UDP type sockets
+		if (sock_fd >= 0 && channel_state == SOCKST_TCP_EST) {
+			int sent = send(sock_fd, mw->transmit_buffer, mw->transmit_bytes, MSG_NOSIGNAL);
+			if (sent < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+				close(sock_fd);
+				mw->sock_fds[channel] = -1;
+				mw->channel_state[channel] = SOCKST_NONE;
+				mw->channel_flags |= 1 << mw->transmit_channel;
+			} else if (sent < mw->transmit_bytes) {
+				//TODO: save this data somewhere so it can be sent in poll_socket
+				printf("Sent %d bytes on channel %d, but %d were requested\n", sent, mw->transmit_channel, mw->transmit_bytes);
+			}
+		} else {
+			printf("Unhandled receive of MegaWiFi data on channel %d\n", mw->transmit_channel);
+		}
 	}
 	mw->transmit_bytes = mw->expected_bytes = 0;
 }
