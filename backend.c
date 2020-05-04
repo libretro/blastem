@@ -160,7 +160,7 @@ void write_word(uint32_t address, uint16_t value, void **mem_pointers, cpu_optio
 	if (!chunk) {
 		return;
 	}
-	uint32_t offset = (address - chunk->start) & chunk->mask;
+	uint32_t offset = address & chunk->mask;
 	if (chunk->flags & MMAP_WRITE) {
 		uint8_t *base;
 		if (chunk->flags & MMAP_PTR_IDX) {
@@ -210,6 +210,8 @@ uint8_t read_byte(uint32_t address, void **mem_pointers, cpu_options *opts, void
 					return 0xFF;
 				}
 				offset /= 2;
+			} else if(opts->byte_swap) {
+				offset ^= 1;
 			}
 			return base[offset];
 		}
@@ -244,6 +246,8 @@ void write_byte(uint32_t address, uint8_t value, void **mem_pointers, cpu_option
 					return;
 				}
 				offset /= 2;
+			} else if(opts->byte_swap) {
+				offset ^= 1;
 			}
 			base[offset] = value;
 		}
