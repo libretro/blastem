@@ -95,6 +95,12 @@ void strip_nl(char * buf)
 	}
 }
 
+static uint8_t m68k_read_byte(uint32_t address, m68k_context *context)
+{
+	//TODO: share this implementation with GDB debugger
+	return read_byte(address, (void **)context->mem_pointers, &context->options->gen, context);
+}
+
 uint16_t m68k_read_word(uint32_t address, m68k_context *context)
 {
 	return read_word(address, (void **)context->mem_pointers, &context->options->gen, context);
@@ -159,8 +165,7 @@ void debugger_print(m68k_context *context, char format_char, char *param, uint32
 		if (after[0] == '.' && after[1] == 'l') {
 			value = m68k_read_long(p_addr, context);
 		} else if (after[0] == '.' && after[1] == 'b') {
-			value = m68k_read_word(p_addr, context);
-			value &= 0xFF;
+			value = m68k_read_byte(p_addr, context);
 		} else {
 			value = m68k_read_word(p_addr, context);
 		}
@@ -170,8 +175,7 @@ void debugger_print(m68k_context *context, char format_char, char *param, uint32
 		if (param[4] == '.' && param[5] == 'l') {
 			value = m68k_read_long(p_addr, context);
 		} else if (param[4] == '.' && param[5] == 'b') {
-			value = m68k_read_word(p_addr, context);
-			value &= 0xFF;
+			value = m68k_read_byte(p_addr, context);
 		} else {
 			value = m68k_read_word(p_addr, context);
 		}
