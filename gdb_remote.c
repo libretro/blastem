@@ -132,22 +132,10 @@ void update_status(m68k_context * context, uint16_t value)
 	}
 }
 
-uint8_t m68k_read_byte(m68k_context * context, uint32_t address)
+static uint8_t m68k_read_byte(m68k_context *context, uint32_t address)
 {
-	
-	genesis_context *gen = context->system;
-	//TODO: Use generated read/write functions to support access to hardware that is not ROM or RAM
-	uint16_t * word = get_native_pointer(address & 0xFFFFFFFE, (void **)context->mem_pointers, &context->options->gen);
-	if (word) {	
-	if (address & 1) {
-		return *word;
-	}
-	return *word >> 8;
-}
-	if (address >= 0xA00000 && address < 0xA04000) {
-		return gen->zram[address & 0x1FFF];
-	}
-	return 0;
+	//TODO: share this implementation with builtin debugger
+	return read_byte(address, (void **)context->mem_pointers, &context->options->gen, context);
 }
 
 void m68k_write_byte(m68k_context * context, uint32_t address, uint8_t value)
