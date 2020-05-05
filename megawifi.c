@@ -271,7 +271,9 @@ static void cmd_tcp_con(megawifi *mw, uint32_t size)
 
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_INET;
+#ifndef _WIN32
 	hints.ai_flags = AI_NUMERICSERV;
+#endif
 	hints.ai_socktype = SOCK_STREAM;
 
 	if ((err = getaddrinfo(host, dst_port, &hints, &res)) != 0) {
