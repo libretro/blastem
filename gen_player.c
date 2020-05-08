@@ -24,9 +24,8 @@ static void sync_sound(gen_player *gen, uint32_t target)
 	//printf("Target: %d, YM bufferpos: %d, PSG bufferpos: %d\n", target, gen->ym->buffer_pos, gen->psg->buffer_pos * 2);
 }
 
-void start_context(system_header *sys, char *statefile)
+static void run(gen_player *player)
 {
-	gen_player *player = (gen_player *)sys;
 	while(player->reader.socket || player->reader.buffer.cur_pos < player->reader.buffer.size)
 	{
 		uint32_t cycle;
@@ -92,7 +91,22 @@ void start_context(system_header *sys, char *statefile)
 			reader_ensure_data(&player->reader, 1);
 		}
 	}
-	
+}
+
+static int thread_main(void *player)
+{
+	run(player);
+	return 0;
+}
+
+void start_context(system_header *sys, char *statefile)
+{
+	gen_player *player = (gen_player *)sys;
+	if (player->reader.socket) {
+		render_create_thread(&player->thread, "player", thread_main, player);
+	} else {
+		run(player);
+	}
 }
 
 static void gamepad_down(system_header *system, uint8_t gamepad_num, uint8_t button)
@@ -151,6 +165,7 @@ gen_player *alloc_config_gen_player_reader(event_reader *reader)
 	gen_player *player = calloc(1, sizeof(gen_player));
 	player->reader = *reader;
 	inflateCopy(&player->reader.input_stream, &reader->input_stream);
+	render_set_external_sync(1);
 	config_common(player);
 	return player;
 }
