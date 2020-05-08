@@ -253,12 +253,20 @@ static void flush_socket(void)
 			sent = send(remotes[i], remote_send_progress[i], output_stream.next_out - remote_send_progress[i], 0);
 			if (sent >= 0) {
 				remote_send_progress[i] += sent;
-			} else if (socket_error_is_wouldblock()) {
+			} else if (!socket_error_is_wouldblock()) {
 				socket_close(remotes[i]);
 				remotes[i] = remotes[num_remotes-1];
 				remote_send_progress[i] = remote_send_progress[num_remotes-1];
 				remote_needs_state[i] = remote_needs_state[num_remotes-1];
 				num_remotes--;
+				if (!num_remotes) {
+					//last remote disconnected, reset buffers/deflate
+					fully_active = 0;
+					deflateReset(&output_stream);
+					output_stream.next_out = compressed;
+					output_stream.avail_out = compressed_storage;
+					buffer.size = 0;
+				}
 				i--;
 				break;
 			}
