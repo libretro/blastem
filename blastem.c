@@ -639,6 +639,9 @@ int main(int argc, char ** argv)
 		fullscreen = !fullscreen;
 	}
 	if (!headless) {
+		if (reader_addr) {
+			render_set_external_sync(1);
+		}
 		render_init(width, height, "BlastEm", fullscreen);
 		render_set_drag_drop_handler(on_drag_drop);
 	}
