@@ -726,9 +726,14 @@ int socket_error_is_wouldblock(void)
 
 #else
 #include <fcntl.h>
+#include <signal.h>
 
 void socket_init(void)
 {
+	//SIGPIPE on network sockets is not desired
+	//would be better to do this in a more limited way,
+	//but the alternatives are not portable
+	signal(SIGPIPE, SIG_IGN);
 }
 
 int socket_blocking(int sock, int should_block)
