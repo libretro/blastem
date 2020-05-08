@@ -265,7 +265,10 @@ void render_set_external_sync(uint8_t ext_sync_on)
 {
 	if (ext_sync_on != external_sync) {
 		external_sync = ext_sync_on;
-		render_config_updated();
+		if (windowed_width) {
+			//only do this if render_init has already been called
+			render_config_updated();
+		}
 	}
 }
 
