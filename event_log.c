@@ -276,6 +276,7 @@ static void flush_socket(void)
 	}
 }
 
+uint8_t wrote_since_last_flush;
 void event_log(uint8_t type, uint32_t cycle, uint8_t size, uint8_t *payload)
 {
 	if (!fully_active) {
@@ -294,6 +295,7 @@ void event_log(uint8_t type, uint32_t cycle, uint8_t size, uint8_t *payload)
 		if (listen_sock) {
 			if ((output_stream.next_out - compressed) > 1280 || !output_stream.avail_out) {
 				flush_socket();
+				wrote_since_last_flush = 1;
 			}
 		} else if (!output_stream.avail_out) {
 			fwrite(compressed, 1, compressed_storage, event_file);
@@ -467,7 +469,20 @@ void event_flush(uint32_t cycle)
 		output_stream.avail_out = compressed_storage;
 	} else if (listen_sock) {
 		flush_socket();
+		wrote_since_last_flush = 0;
 	}
+}
+
+void event_soft_flush(uint32_t cycle)
+{
+	if (!fully_active || wrote_since_last_flush || event_file) {
+		return;
+	}
+	event_header(EVENT_FLUSH, cycle);
+	last = cycle;
+	
+	deflate_flush(0);
+	flush_socket();
 }
 
 static void init_event_reader_common(event_reader *reader)

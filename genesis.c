@@ -348,9 +348,6 @@ static void sync_sound(genesis_context * gen, uint32_t target)
 	//printf("Target: %d, YM bufferpos: %d, PSG bufferpos: %d\n", target, gen->ym->buffer_pos, gen->psg->buffer_pos * 2);
 }
 
-//TODO: move this inside the system context
-static uint32_t last_frame_num;
-
 //My refresh emulation isn't currently good enough and causes more problems than it solves
 #define REFRESH_EMULATION
 #ifdef REFRESH_EMULATION
@@ -387,9 +384,11 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 		context->should_return = 1;
 		gen->reset_cycle = CYCLE_NEVER;
 	}
-	if (v_context->frame != last_frame_num) {
-		//printf("reached frame end %d | MCLK Cycles: %d, Target: %d, VDP cycles: %d, vcounter: %d, hslot: %d\n", last_frame_num, mclks, gen->frame_end, v_context->cycles, v_context->vcounter, v_context->hslot);
-		last_frame_num = v_context->frame;
+	if (v_context->frame != gen->last_frame) {
+		//printf("reached frame end %d | MCLK Cycles: %d, Target: %d, VDP cycles: %d, vcounter: %d, hslot: %d\n", gen->last_frame, mclks, gen->frame_end, v_context->cycles, v_context->vcounter, v_context->hslot);
+		gen->last_frame = v_context->frame;
+		event_flush(mclks);
+		gen->last_flush_cycle = mclks;
 
 		if(exit_after){
 			--exit_after;
@@ -417,7 +416,11 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 				gen->reset_cycle -= deduction;
 			}
 			event_cycle_adjust(mclks, deduction);
+			gen->last_flush_cycle -= deduction;
 		}
+	} else if (mclks - gen->last_flush_cycle > gen->soft_flush_cycles) {
+		event_soft_flush(mclks);
+		gen->last_flush_cycle = mclks;
 	}
 	gen->frame_end = vdp_cycles_to_frame_end(v_context);
 	context->sync_cycle = gen->frame_end;
@@ -1188,8 +1191,10 @@ void set_region(genesis_context *gen, rom_info *info, uint8_t region)
 	
 	if (region & HZ50) {
 		gen->normal_clock = MCLKS_PAL;
+		gen->soft_flush_cycles = MCLKS_LINE * 262 / 3 + 2;
 	} else {
 		gen->normal_clock = MCLKS_NTSC;
+		gen->soft_flush_cycles = MCLKS_LINE * 313 / 3 + 2;
 	}
 	gen->master_clock = gen->normal_clock;
 }

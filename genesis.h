@@ -51,6 +51,9 @@ struct genesis_context {
 	uint32_t        int_latency_prev1;
 	uint32_t        int_latency_prev2;
 	uint32_t        reset_cycle;
+	uint32_t        last_frame;
+	uint32_t        last_flush_cycle;
+	uint32_t        soft_flush_cycles;
 	uint8_t         bank_regs[8];
 	uint16_t        z80_bank_reg;
 	uint16_t        tmss_lock[2];
