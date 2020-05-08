@@ -1,6 +1,7 @@
 #ifndef GEN_PLAYER_H_
 #define GEN_PLAYER_H_
 
+#include "render.h"
 #include "system.h"
 #include "vdp.h"
 #include "psg.h"
@@ -13,6 +14,7 @@ typedef struct {
 	vdp_context     *vdp;
 	ym2612_context  *ym;
 	psg_context     *psg;
+	render_thread   thread;
 	event_reader    reader;
 } gen_player;
 

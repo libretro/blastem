@@ -50,7 +50,14 @@ static SDL_mutex *audio_mutex, *frame_mutex, *free_buffer_mutex;
 static SDL_cond *audio_ready, *frame_ready;
 static uint8_t quitting = 0;
 
-static uint8_t sync_to_audio, run_on_audio_thread;
+enum {
+	SYNC_AUDIO,
+	SYNC_AUDIO_THREAD,
+	SYNC_VIDEO,
+	SYNC_EXTERNAL
+};
+
+static uint8_t sync_src;
 static uint32_t min_buffered;
 
 uint32_t **frame_buffers;
@@ -64,12 +71,12 @@ uint32_t render_min_buffered(void)
 
 uint8_t render_is_audio_sync(void)
 {
-	return sync_to_audio || run_on_audio_thread;
+	return sync_src < SYNC_VIDEO;
 }
 
 uint8_t render_should_release_on_exit(void)
 {
-	return !run_on_audio_thread;
+	return sync_src != SYNC_AUDIO_THREAD;
 }
 
 void render_buffer_consumed(audio_source *src)
@@ -120,7 +127,7 @@ static void audio_callback_run_on_audio(void *user_data, uint8_t *byte_stream, i
 
 void render_lock_audio()
 {
-	if (sync_to_audio) {
+	if (sync_src == SYNC_AUDIO) {
 		SDL_LockMutex(audio_mutex);
 	} else {
 		SDL_LockAudio();
@@ -129,7 +136,7 @@ void render_lock_audio()
 
 void render_unlock_audio()
 {
-	if (sync_to_audio) {
+	if (sync_src == SYNC_AUDIO) {
 		SDL_UnlockMutex(audio_mutex);
 	} else {
 		SDL_UnlockAudio();
@@ -164,7 +171,7 @@ void render_free_audio_opaque(void *opaque)
 
 void render_audio_created(audio_source *source)
 {
-	if (sync_to_audio && SDL_GetAudioStatus() == SDL_AUDIO_PAUSED) {
+	if (sync_src == SYNC_AUDIO && SDL_GetAudioStatus() == SDL_AUDIO_PAUSED) {
 		SDL_PauseAudio(0);
 	}
 	if (current_system) {
@@ -174,7 +181,7 @@ void render_audio_created(audio_source *source)
 
 void render_source_paused(audio_source *src, uint8_t remaining_sources)
 {
-	if (sync_to_audio) {
+	if (sync_src == SYNC_AUDIO) {
 		SDL_CondSignal(audio_ready);
 	}
 	if (!remaining_sources) {
@@ -184,14 +191,14 @@ void render_source_paused(audio_source *src, uint8_t remaining_sources)
 
 void render_source_resumed(audio_source *src)
 {
-	if (sync_to_audio) {
+	if (sync_src == SYNC_AUDIO) {
 		SDL_PauseAudio(0);
 	}
 }
 
 void render_do_audio_ready(audio_source *src)
 {
-	if (run_on_audio_thread) {
+	if (sync_src == SYNC_AUDIO_THREAD) {
 		int16_t *tmp = src->front;
 		src->front = src->back;
 		src->back = tmp;
@@ -201,7 +208,7 @@ void render_do_audio_ready(audio_source *src)
 			//we've emulated far enough to fill the current buffer
 			current_system->request_exit(current_system);
 		}
-	} else if (sync_to_audio) {
+	} else if (sync_src == SYNC_AUDIO) {
 		SDL_LockMutex(audio_mutex);
 			while (src->front_populated) {
 				SDL_CondWait(src->opaque, audio_mutex);
@@ -251,6 +258,15 @@ uint32_t render_map_color(uint8_t r, uint8_t g, uint8_t b)
 #else
 	return 255 << 24 | r << 16 | g << 8 | b;
 #endif
+}
+
+static uint8_t external_sync;
+void render_set_external_sync(uint8_t ext_sync_on)
+{
+	if (ext_sync_on != external_sync) {
+		external_sync = ext_sync_on;
+		render_config_updated();
+	}
 }
 
 #ifndef DISABLE_OPENGL
@@ -913,7 +929,16 @@ static void init_audio()
    	}
     debug_message("config says: %d\n", samples);
     desired.samples = samples*2;
-	desired.callback = sync_to_audio ? audio_callback : run_on_audio_thread ? audio_callback_run_on_audio : audio_callback_drc;
+	switch (sync_src)
+	{
+	case SYNC_AUDIO:
+		desired.callback = audio_callback;
+		break;
+	case SYNC_AUDIO_THREAD:
+		desired.callback = audio_callback_run_on_audio;
+	default:
+		desired.callback = audio_callback_drc;
+	}
 	desired.userdata = NULL;
 
 	if (SDL_OpenAudio(&desired, &actual) < 0) {
@@ -943,12 +968,31 @@ void window_setup(void)
 	}
 	
 	tern_val def = {.ptrval = "audio"};
-	char *sync_src = tern_find_path_default(config, "system\0sync_source\0", def, TVAL_PTR).ptrval;
-	sync_to_audio = !strcmp(sync_src, "audio");
-	run_on_audio_thread = !strcmp(sync_src, "audio_thread");
+	if (external_sync) {
+		sync_src = SYNC_EXTERNAL;
+	} else {
+		char *sync_src_str = tern_find_path_default(config, "system\0sync_source\0", def, TVAL_PTR).ptrval;
+		if (!strcmp(sync_src_str, "audio")) {
+			sync_src = SYNC_AUDIO;
+		} else if (!strcmp(sync_src_str, "audio_thread")) {
+			sync_src = SYNC_AUDIO_THREAD;
+		} else {
+			sync_src = SYNC_VIDEO;
+		}
+	}
+	
+	if (!num_buffers && (sync_src == SYNC_AUDIO_THREAD || sync_src == SYNC_EXTERNAL)) {
+		frame_mutex = SDL_CreateMutex();
+		free_buffer_mutex = SDL_CreateMutex();
+		frame_ready = SDL_CreateCond();
+		buffer_storage = 4;
+		frame_buffers = calloc(buffer_storage, sizeof(uint32_t*));
+		frame_buffers[0] = texture_buf;
+		num_buffers = 1;
+	}
 	
 	const char *vsync;
-	if (sync_to_audio) {
+	if (sync_src == SYNC_AUDIO) {
 		def.ptrval = "off";
 		vsync = tern_find_path_default(config, "video\0vsync\0", def, TVAL_PTR).ptrval;
 	} else {
@@ -1108,16 +1152,6 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 	audio_mutex = SDL_CreateMutex();
 	audio_ready = SDL_CreateCond();
 	
-	if (run_on_audio_thread) {
-		frame_mutex = SDL_CreateMutex();
-		free_buffer_mutex = SDL_CreateMutex();
-		frame_ready = SDL_CreateCond();
-		buffer_storage = 4;
-		frame_buffers = calloc(buffer_storage, sizeof(uint32_t*));
-		frame_buffers[0] = texture_buf;
-		num_buffers = 1;
-	}
-	
 	init_audio();
 	
 	uint32_t db_size;
@@ -1140,8 +1174,6 @@ static int in_toggle;
 
 void render_config_updated(void)
 {
-	uint8_t old_sync_to_audio = sync_to_audio;
-	
 	free_surfaces();
 #ifndef DISABLE_OPENGL
 	if (render_gl) {
@@ -1335,7 +1367,7 @@ uint32_t *locked_pixels;
 uint32_t locked_pitch;
 uint32_t *render_get_framebuffer(uint8_t which, int *pitch)
 {
-	if (run_on_audio_thread) {
+	if (sync_src == SYNC_AUDIO_THREAD || sync_src == SYNC_EXTERNAL) {
 		*pitch = LINEBUF_SIZE * sizeof(uint32_t);
 		uint32_t *buffer;
 		SDL_LockMutex(free_buffer_mutex);
@@ -1407,7 +1439,7 @@ static uint8_t interlaced;
 static void process_framebuffer(uint32_t *buffer, uint8_t which, int width)
 {
 	static uint8_t last;
-	if (!render_is_audio_sync() && which <= FRAMEBUFFER_EVEN && source_frame_count < 0) {
+	if (sync_src == SYNC_VIDEO && which <= FRAMEBUFFER_EVEN && source_frame_count < 0) {
 		source_frame++;
 		if (source_frame >= source_hz) {
 			source_frame = 0;
@@ -1463,7 +1495,7 @@ static void process_framebuffer(uint32_t *buffer, uint8_t which, int width)
 		}
 	} else {
 #endif
-		//TODO: Support run_on_audio_thread for render API framebuffers
+		//TODO: Support SYNC_AUDIO_THREAD/SYNC_EXTERNAL for render API framebuffers
 		if (which <= FRAMEBUFFER_EVEN && last != which) {
 			uint8_t *cur_dst = (uint8_t *)locked_pixels;
 			uint8_t *cur_saved = (uint8_t *)texture_buf;
@@ -1612,7 +1644,7 @@ int frame_queue_len, frame_queue_read, frame_queue_write;
 
 void render_framebuffer_updated(uint8_t which, int width)
 {
-	if (run_on_audio_thread) {
+	if (sync_src == SYNC_AUDIO_THREAD || sync_src == SYNC_EXTERNAL) {
 		SDL_LockMutex(frame_mutex);
 			while (frame_queue_len == 4) {
 				SDL_CondSignal(frame_ready);
@@ -1650,7 +1682,7 @@ void render_framebuffer_updated(uint8_t which, int width)
 
 void render_video_loop(void)
 {
-	if (!run_on_audio_thread) {
+	if (sync_src != SYNC_AUDIO_THREAD && sync_src != SYNC_EXTERNAL) {
 		return;
 	}
 	SDL_PauseAudio(0);
@@ -1972,4 +2004,10 @@ uint8_t render_get_active_framebuffer(void)
 		}
 	}
 	return 0xFF;
+}
+
+uint8_t render_create_thread(render_thread *thread, const char *name, render_thread_fun fun, void *data)
+{
+	*thread = SDL_CreateThread(fun, name, data);
+	return *thread != 0;
 }

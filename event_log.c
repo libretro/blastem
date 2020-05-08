@@ -551,7 +551,6 @@ void init_event_reader_tcp(event_reader *reader, char *address, char *port)
 	if (Z_OK != res && Z_BUF_ERROR != res) {
 		fatal_error("inflate returned %d in init_event_reader_tcp\n", res);
 	}
-	socket_blocking(reader->socket, 0);
 	int flag = 1;
 	setsockopt(reader->socket, IPPROTO_TCP, TCP_NODELAY, (const char *)&flag, sizeof(flag));
 }
@@ -608,19 +607,14 @@ static void inflate_flush(event_reader *reader)
 void reader_ensure_data(event_reader *reader, size_t bytes)
 {
 	if (reader->buffer.size - reader->buffer.cur_pos < bytes) {
-		if (reader->socket) {
-			read_from_socket(reader);
-		}
 		if (reader->input_stream.avail_in) {
 			inflate_flush(reader);
 		}
-		if (reader->socket && reader->buffer.size - reader->buffer.cur_pos < bytes) {
-			socket_blocking(reader->socket, 1);
+		if (reader->socket) {
 			while (reader->buffer.size - reader->buffer.cur_pos < bytes) {
 				read_from_socket(reader);
 				inflate_flush(reader);
 			}
-			socket_blocking(reader->socket, 0);
 		}
 	}
 }
