@@ -357,7 +357,8 @@ static size_t send_all(int sock, uint8_t *data, size_t size, int flags)
 void deflate_flush(uint8_t full)
 {
 	output_stream.avail_in = buffer.size - (output_stream.next_in - buffer.data);
-	while (output_stream.avail_in)
+	uint8_t force = full;
+	while (output_stream.avail_in || force)
 	{
 		if (!output_stream.avail_out) {
 			size_t old_storage = compressed_storage;
@@ -376,12 +377,13 @@ void deflate_flush(uint8_t full)
 		if (result != (full ? Z_STREAM_END : Z_OK)) {
 			fatal_error("deflate returned %d\n", result);
 		}
-		if (full) {
+		if (full && result == Z_STREAM_END) {
 			result = deflateReset(&output_stream);
 			if (result != Z_OK) {
 				fatal_error("deflateReset returned %d\n", result);
 			}
 		}
+		force = 0;
 	}
 	output_stream.next_in = buffer.data;
 	buffer.size = 0;
