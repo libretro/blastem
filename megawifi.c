@@ -6,6 +6,7 @@
 #define WINVER 0x501
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <sys/param.h>
 #else
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -19,6 +20,14 @@
 #include "genesis.h"
 #include "net.h"
 #include "util.h"
+
+#ifdef _WIN32
+#  if BYTE_ORDER == LITTLE_ENDIAN
+#define htobe64(val)   ((((uint64_t)htonl((val)&0xFFFFFFFF))<<32) | htonl((val)>>32))
+#  else
+#define htobe64(val)	(val)
+#  endif
+#endif
 
 enum {
 	TX_IDLE,
@@ -47,7 +56,7 @@ static const char *cmd_names[] = {
 #define MSG_NOSIGNAL 0
 #endif
 
-enum {
+enum mw_state {
 	STATE_IDLE=1,
 	STATE_AP_JOIN,
 	STATE_SCAN,
@@ -99,6 +108,7 @@ static megawifi *get_megawifi(void *context)
 		gen->extra = calloc(1, sizeof(megawifi));
 		megawifi *mw = gen->extra;
 		mw->module_state = STATE_IDLE;
+		mw->flags = 0xE0; // cfg_ok, dt_ok, online
 		for (int i = 0; i < 15; i++) {
 			mw->sock_fds[i] = -1;
 		}
@@ -512,6 +522,25 @@ static void cmd_hrng_get(megawifi *mw)
 	end_reply(mw);
 }
 
+static void cmd_datetime(megawifi *mw)
+{
+	start_reply(mw, CMD_OK);
+#ifdef _WIN32
+	__time64_t t = _time64(NULL);
+	int64_t t_be = htobe64(t);
+	mw_copy(mw, (uint8_t*)&t_be, sizeof(int64_t));
+	mw_puts(mw, _ctime64(&t));
+#else
+	time_t t = time(NULL);
+	int64_t t_be = htobe64(t);
+	mw_copy(mw, (uint8_t*)&t_be, sizeof(int64_t));
+	mw_puts(mw, ctime(&t));
+#endif
+
+	mw_putc(mw, '\0');
+	end_reply(mw);
+}
+
 static void process_command(megawifi *mw)
 {
 	uint32_t command = mw->transmit_buffer[0] << 8 | mw->transmit_buffer[1];
@@ -528,6 +557,7 @@ static void process_command(megawifi *mw)
 		mw_putc(mw, 3);
 		mw_putc(mw, 0);
 		mw_puts(mw, "blastem");
+		mw_putc(mw, '\0');
 		end_reply(mw);
 		break;
 	case CMD_ECHO:
@@ -602,7 +632,7 @@ static void process_command(megawifi *mw)
 			break;
 		}
 		int value = 1;
-		setsockopt(mw->sock_fds[channel], SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value));
+		setsockopt(mw->sock_fds[channel], SOL_SOCKET, SO_REUSEADDR, (char*)&value, sizeof(value));
 		struct sockaddr_in bind_addr;
 		memset(&bind_addr, 0, sizeof(bind_addr));
 		bind_addr.sin_family = AF_INET;
@@ -648,6 +678,9 @@ static void process_command(megawifi *mw)
 		end_reply(mw);
 		break;
 	}
+	case CMD_DATETIME:
+		cmd_datetime(mw);
+		break;
 	case CMD_SYS_STAT:
 		poll_all_sockets(mw);
 		start_reply(mw, CMD_OK);
@@ -672,6 +705,7 @@ static void process_command(megawifi *mw)
 		start_reply(mw, CMD_OK);
 		// FIXME: This should be get from config file
 		mw_puts(mw, "doragasu.com");
+		mw_putc(mw,'\0');
 		end_reply(mw);
 		break;
 	default:
