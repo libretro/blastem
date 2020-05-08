@@ -2118,8 +2118,6 @@ static void advance_output_line(vdp_context *context)
 			context->pushed_frame = 1;
 			context->fb = NULL;
 		}
-		//TODO: Check whether this happens before or after the cycle increment
-		event_flush(context->cycles);
 		vdp_update_per_frame_debug(context);
 		context->h40_lines = 0;
 		context->frame++;

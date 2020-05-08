@@ -48,6 +48,7 @@ void event_vram_word(uint32_t cycle, uint32_t address, uint16_t value);
 void event_vram_byte(uint32_t cycle, uint16_t address, uint8_t byte, uint8_t auto_inc);
 void event_state(uint32_t cycle, serialize_buffer *state);
 void event_flush(uint32_t cycle);
+void event_soft_flush(uint32_t cycle);
 
 void init_event_reader(event_reader *reader, uint8_t *data, size_t size);
 void init_event_reader_tcp(event_reader *reader, char *address, char *port);
