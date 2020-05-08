@@ -79,8 +79,18 @@ void event_log_file(char *fname)
 	atexit(file_finish);
 }
 
-static int listen_sock, remotes[7];
+typedef struct {
+	uint8_t  *send_progress;
+	int      sock;
+	uint8_t  players[1]; //TODO: Expand when support for multiple players per remote is added
+	uint8_t  num_players;
+} remote;
+
+static int listen_sock;
+static remote remotes[7];
 static int num_remotes;
+static uint8_t available_players[7] = {2,3,4,5,6,7,8};
+static int num_available_players = 7;
 void event_log_tcp(char *address, char *port)
 {
 	struct addrinfo request, *result;
@@ -197,45 +207,66 @@ void event_cycle_adjust(uint32_t cycle, uint32_t deduction)
 	save_int32(&buffer, deduction);
 }
 
-static uint8_t *remote_send_progress[7];
-static uint8_t remote_needs_state[7];
+static uint8_t next_available_player(void)
+{
+	uint8_t lowest = 0xFF;
+	int lowest_index = -1;
+	for (int i = 0; i < num_available_players; i++)
+	{
+		if (available_players[i] < lowest) {
+			lowest = available_players[i];
+			lowest_index = i;
+		}
+	}
+	if (lowest_index >= 0) {
+		available_players[lowest_index] = available_players[num_available_players - 1];
+		--num_available_players;
+	}
+	return lowest;
+}
+
 static void flush_socket(void)
 {
-	int remote = accept(listen_sock, NULL, NULL);
-	if (remote != -1) {
+	int remote_sock = accept(listen_sock, NULL, NULL);
+	if (remote_sock != -1) {
 		if (num_remotes == 7) {
-			socket_close(remote);
+			socket_close(remote_sock);
 		} else {
 			printf("remote %d connected\n", num_remotes);
-			remotes[num_remotes] = remote;
-			remote_needs_state[num_remotes++] = 1;
+			uint8_t player = next_available_player();
+			remotes[num_remotes++] = (remote){
+				.sock = remote_sock,
+				.send_progress = NULL,
+				.players = {player},
+				.num_players = player == 0xFF ? 0 : 1
+			};
 			current_system->save_state = EVENTLOG_SLOT + 1;
 		}
 	}
 	uint8_t *min_progress = compressed;
 	for (int i = 0; i < num_remotes; i++) {
-		int sent = 1;
-		if (remote_needs_state[i]) {
-			remote_send_progress[i] = output_stream.next_out;
-		} else {
-			uint8_t buffer[1500];
-			int bytes = recv(remotes[i], buffer, sizeof(buffer), 0);
+		if (remotes[i].send_progress) {
+			uint8_t recv_buffer[1500];
+			int bytes = recv(remotes[i].sock, recv_buffer, sizeof(recv_buffer), 0);
 			for (int j = 0; j < bytes; j++)
 			{
-				uint8_t cmd = buffer[j];
+				uint8_t cmd = recv_buffer[j];
 				switch(cmd)
 				{
 				case CMD_GAMEPAD_DOWN:
 				case CMD_GAMEPAD_UP: {
 					++j;
 					if (j < bytes) {
-						uint8_t button = buffer[j];
-						uint8_t pad = (button >> 5) + i + 1;
+						uint8_t button = recv_buffer[j];
+						uint8_t pad = (button >> 5) - 1;
 						button &= 0x1F;
-						if (cmd == CMD_GAMEPAD_DOWN) {
-							current_system->gamepad_down(current_system, pad, button);
-						} else {
-							current_system->gamepad_up(current_system, pad, button);
+						if (pad <  remotes[i].num_players) {
+							pad = remotes[i].players[pad];
+							if (cmd == CMD_GAMEPAD_DOWN) {
+								current_system->gamepad_down(current_system, pad, button);
+							} else {
+								current_system->gamepad_up(current_system, pad, button);
+							}
 						}
 					} else {
 						warning("Received incomplete command %X\n", cmd);
@@ -247,31 +278,33 @@ static void flush_socket(void)
 					j = bytes;
 				}
 			}
-		}
-		while (sent && output_stream.next_out > remote_send_progress[i])
-		{
-			sent = send(remotes[i], remote_send_progress[i], output_stream.next_out - remote_send_progress[i], 0);
-			if (sent >= 0) {
-				remote_send_progress[i] += sent;
-			} else if (!socket_error_is_wouldblock()) {
-				socket_close(remotes[i]);
-				remotes[i] = remotes[num_remotes-1];
-				remote_send_progress[i] = remote_send_progress[num_remotes-1];
-				remote_needs_state[i] = remote_needs_state[num_remotes-1];
-				num_remotes--;
-				if (!num_remotes) {
-					//last remote disconnected, reset buffers/deflate
-					fully_active = 0;
-					deflateReset(&output_stream);
-					output_stream.next_out = compressed;
-					output_stream.avail_out = compressed_storage;
-					buffer.size = 0;
+			int sent = 1;
+			while (sent && output_stream.next_out > remotes[i].send_progress)
+			{
+				sent = send(remotes[i].sock, remotes[i].send_progress, output_stream.next_out - remotes[i].send_progress, 0);
+				if (sent >= 0) {
+					remotes[i].send_progress += sent;
+				} else if (!socket_error_is_wouldblock()) {
+					socket_close(remotes[i].sock);
+					for (int j = 0; j < remotes[i].num_players; j++) {
+						available_players[num_available_players++] = remotes[i].players[j];
+					}
+					remotes[i] = remotes[num_remotes-1];
+					num_remotes--;
+					if (!num_remotes) {
+						//last remote disconnected, reset buffers/deflate
+						fully_active = 0;
+						deflateReset(&output_stream);
+						output_stream.next_out = compressed;
+						output_stream.avail_out = compressed_storage;
+						buffer.size = 0;
+					}
+					i--;
+					break;
 				}
-				i--;
-				break;
-			}
-			if (remote_send_progress[i] > min_progress) {
-				min_progress = remote_send_progress[i];
+				if (remotes[i].send_progress > min_progress) {
+					min_progress = remotes[i].send_progress;
+				}
 			}
 		}
 	}
@@ -279,7 +312,9 @@ static void flush_socket(void)
 		output_stream.next_out = compressed;
 		output_stream.avail_out = compressed_storage;
 		for (int i = 0; i < num_remotes; i++) {
-			remote_send_progress[i] = compressed;
+			if (remotes[i].send_progress) {
+				remotes[i].send_progress = compressed;
+			}
 		}
 	}
 }
@@ -376,8 +411,8 @@ void deflate_flush(uint8_t full)
 			output_stream.next_out = compressed + old_storage;
 			output_stream.avail_out = old_storage;
 			for (int i = 0; i < num_remotes; i++) {
-				if (!remote_needs_state[i]) {
-					remote_send_progress[i] = compressed + (remote_send_progress[i] - old_compressed);
+				if (remotes[i].send_progress) {
+					remotes[i].send_progress = compressed + (remotes[i].send_progress - old_compressed);
 				}
 			}
 		}
@@ -411,14 +446,12 @@ void event_state(uint32_t cycle, serialize_buffer *state)
 	uint8_t sent_system_start = 0;
 	for (int i = 0; i < num_remotes; i++)
 	{
-		if (remote_needs_state[i]) {
-			if (send_all(remotes[i], system_start, system_start_size, 0) == system_start_size) {
+		if (!remotes[i].send_progress) {
+			if (send_all(remotes[i].sock, system_start, system_start_size, 0) == system_start_size) {
 				sent_system_start = 1;
 			} else {
-				socket_close(remotes[i]);
+				socket_close(remotes[i].sock);
 				remotes[i] = remotes[num_remotes-1];
-				remote_send_progress[i] = remote_send_progress[num_remotes-1];
-				remote_needs_state[i] = remote_needs_state[num_remotes-1];
 				num_remotes--;
 				i--;
 			}
@@ -438,19 +471,16 @@ void event_state(uint32_t cycle, serialize_buffer *state)
 		deflate_flush(1);
 		size_t state_size = output_stream.next_out - compressed - old_compressed_size;
 		for (int i = 0; i < num_remotes; i++) {
-			if (remote_needs_state[i]) {
-				if (send_all(remotes[i], compressed + old_compressed_size, state_size, 0) == state_size) {
-					remote_send_progress[i] = compressed + old_compressed_size;
-					remote_needs_state[i] = 0;
-					socket_blocking(remotes[i], 0);
+			if (!remotes[i].send_progress) {
+				if (send_all(remotes[i].sock, compressed + old_compressed_size, state_size, 0) == state_size) {
+					remotes[i].send_progress = compressed + old_compressed_size;
+					socket_blocking(remotes[i].sock, 0);
 					int flag = 1;
-					setsockopt(remotes[i], IPPROTO_TCP, TCP_NODELAY, (const char *)&flag, sizeof(flag));
+					setsockopt(remotes[i].sock, IPPROTO_TCP, TCP_NODELAY, (const char *)&flag, sizeof(flag));
 					fully_active = 1;
 				} else {
-					socket_close(remotes[i]);
+					socket_close(remotes[i].sock);
 					remotes[i] = remotes[num_remotes-1];
-					remote_send_progress[i] = remote_send_progress[num_remotes-1];
-					remote_needs_state[i] = remote_needs_state[num_remotes-1];
 					num_remotes--;
 					i--;
 				}
