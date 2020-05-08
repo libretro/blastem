@@ -17,6 +17,7 @@
 #include <time.h>
 #include "genesis.h"
 #include "net.h"
+#include "util.h"
 
 enum {
 	TX_IDLE,
@@ -85,11 +86,11 @@ static megawifi *get_megawifi(void *context)
 	m68k_context *m68k = context;
 	genesis_context *gen = m68k->system;
 	if (!gen->extra) {
+		socket_init();
 		gen->extra = calloc(1, sizeof(megawifi));
 		megawifi *mw = gen->extra;
 		mw->module_state = STATE_IDLE;
-		for (int i = 0; i < 15; i++)
-		{
+		for (int i = 0; i < 15; i++) {
 			mw->sock_fds[i] = -1;
 		}
 	}
@@ -145,16 +146,13 @@ static void poll_socket(megawifi *mw, uint8_t channel)
 	if (mw->channel_state[channel] == SOCKST_TCP_LISTEN) {
 		int res = accept(mw->sock_fds[channel], NULL, NULL);
 		if (res >= 0) {
-			close(mw->sock_fds[channel]);
-#ifndef _WIN32
-//FIXME: Set nonblocking on Windows too
-			fcntl(res, F_SETFL, O_NONBLOCK);
-#endif
+			socket_close(mw->sock_fds[channel]);
+			socket_blocking(res, 0);
 			mw->sock_fds[channel] = res;
 			mw->channel_state[channel] = SOCKST_TCP_EST;
 			mw->channel_flags |= 1 << (channel + 1);
 		} else if (errno != EAGAIN && errno != EWOULDBLOCK) {
-			close(mw->sock_fds[channel]);
+			socket_close(mw->sock_fds[channel]);
 			mw->channel_state[channel] = SOCKST_NONE;
 			mw->channel_flags |= 1 << (channel + 1);
 		}
@@ -163,7 +161,7 @@ static void poll_socket(megawifi *mw, uint8_t channel)
 		if (max > MAX_RECV_SIZE) {
 			max = MAX_RECV_SIZE;
 		}
-		int bytes = recv(mw->sock_fds[channel], mw->receive_buffer + mw->receive_bytes + 3, max, 0);
+		int bytes = recv(mw->sock_fds[channel], (char*)(mw->receive_buffer + mw->receive_bytes + 3), max, 0);
 		if (bytes > 0) {
 			mw_putc(mw, STX);
 			mw_putc(mw, bytes >> 8 | (channel+1) << 4);
@@ -171,8 +169,8 @@ static void poll_socket(megawifi *mw, uint8_t channel)
 			mw->receive_bytes += bytes;
 			mw_putc(mw, ETX);
 			//should this set the channel flag?
-		} else if (bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-			close(mw->sock_fds[channel]);
+		} else if (bytes < 0 && !socket_error_is_wouldblock()) {
+			socket_close(mw->sock_fds[channel]);
 			mw->channel_state[channel] = SOCKST_NONE;
 			mw->channel_flags |= 1 << (channel + 1);
 		}
@@ -293,10 +291,7 @@ static void cmd_tcp_con(megawifi *mw, uint32_t size)
 		goto err;
 	}
 
-#ifndef _WIN32
-	//FIXME: Set nonblocking on Windows too
-	fcntl(s, F_SETFL, O_NONBLOCK);
-#endif
+	socket_blocking(s, 0);
 	mw->sock_fds[channel] = s;
 	mw->channel_state[channel] = SOCKST_TCP_EST;
 	mw->channel_flags |= 1 << (channel + 1);
@@ -436,7 +431,7 @@ static void process_command(megawifi *mw)
 		}
 		channel--;
 		if (mw->sock_fds[channel] >= 0) {
-			close(mw->sock_fds[channel]);
+			socket_close(mw->sock_fds[channel]);
 		}
 		mw->sock_fds[channel] = socket(AF_INET, SOCK_STREAM, 0);
 		if (mw->sock_fds[channel] < 0) {
@@ -451,7 +446,7 @@ static void process_command(megawifi *mw)
 		bind_addr.sin_family = AF_INET;
 		bind_addr.sin_port = htons(mw->transmit_buffer[8] << 8 | mw->transmit_buffer[9]);
 		if (bind(mw->sock_fds[channel], (struct sockaddr *)&bind_addr, sizeof(bind_addr)) != 0) {
-			close(mw->sock_fds[channel]);
+			socket_close(mw->sock_fds[channel]);
 			mw->sock_fds[channel] = -1;
 			start_reply(mw, CMD_ERROR);
 			end_reply(mw);
@@ -460,15 +455,12 @@ static void process_command(megawifi *mw)
 		int res = listen(mw->sock_fds[channel], 2);
 		start_reply(mw, res ? CMD_ERROR : CMD_OK);
 		if (res) {
-			close(mw->sock_fds[channel]);
+			socket_close(mw->sock_fds[channel]);
 			mw->sock_fds[channel] = -1;
 		} else {
 			mw->channel_flags |= 1 << (channel + 1);
 			mw->channel_state[channel] = SOCKST_TCP_LISTEN;
-#ifndef _WIN32
-//FIXME: Set nonblocking on Windows too
-			fcntl(mw->sock_fds[channel], F_SETFL, O_NONBLOCK);
-#endif
+			socket_blocking(mw->sock_fds[channel], 0);
 		}
 		end_reply(mw);
 		break;
@@ -511,7 +503,7 @@ static void process_command(megawifi *mw)
 	case CMD_SERVER_URL_GET:
 		start_reply(mw, CMD_OK);
 		// FIXME: This should be get from config file
-		mw_puts(mw, "192.168.1.32");
+		mw_puts(mw, "doragasu.com");
 		end_reply(mw);
 		break;
 	default:
@@ -530,9 +522,9 @@ static void process_packet(megawifi *mw)
 		int sock_fd = mw->sock_fds[channel];
 		// TODO Handle UDP type sockets
 		if (sock_fd >= 0 && channel_state == SOCKST_TCP_EST) {
-			int sent = send(sock_fd, mw->transmit_buffer, mw->transmit_bytes, MSG_NOSIGNAL);
-			if (sent < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-				close(sock_fd);
+			int sent = send(sock_fd, (char*)mw->transmit_buffer, mw->transmit_bytes, 0);
+			if (sent < 0 && !socket_error_is_wouldblock()) {
+				socket_close(sock_fd);
 				mw->sock_fds[channel] = -1;
 				mw->channel_state[channel] = SOCKST_NONE;
 				mw->channel_flags |= 1 << mw->transmit_channel;
