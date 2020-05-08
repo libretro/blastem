@@ -8,6 +8,7 @@
 #include <ws2tcpip.h>
 #else
 #include <sys/socket.h>
+#include <arpa/inet.h>
 #include <unistd.h>
 #include <netinet/in.h>
 #include <netdb.h>
@@ -61,6 +62,13 @@ enum {
 	SOCKST_UDP_READY
 };
 
+// TCP/UDP address message
+struct mw_addr_msg {
+	char dst_port[6];
+	char src_port[6];
+	uint8_t channel;
+	char host[];
+};
 
 #define FLAG_ONLINE 
 
@@ -79,6 +87,7 @@ typedef struct {
 	uint8_t  flags;
 	uint8_t  transmit_buffer[4096];
 	uint8_t  receive_buffer[4096];
+	struct sockaddr_in remote_addr[15];	// Needed for UDP sockets
 } megawifi;
 
 static megawifi *get_megawifi(void *context)
@@ -123,19 +132,88 @@ static void mw_copy(megawifi *mw, const uint8_t *src, uint32_t count)
 	mw->receive_bytes += count;
 }
 
-static void mw_putraw(megawifi *mw, const char *data, size_t len)
-{
-	if ((mw->receive_bytes + len) > sizeof(mw->receive_buffer)) {
-		return;
-	}
-	memcpy(mw->receive_buffer + mw->receive_bytes, data, len);
-	mw->receive_bytes += len;
-}
-
 static void mw_puts(megawifi *mw, const char *s)
 {
 	size_t len = strlen(s);
-	mw_putraw(mw, s, len);
+	mw_copy(mw, (uint8_t*)s, len);
+}
+
+static void udp_recv(megawifi *mw, uint8_t idx)
+{
+	ssize_t recvd;
+	int s = mw->sock_fds[idx];
+	struct sockaddr_in remote;
+	socklen_t addr_len = sizeof(struct sockaddr_in);
+
+	if (mw->remote_addr[idx].sin_addr.s_addr != htonl(INADDR_ANY)) {
+		// Receive only from specified address
+		recvd = recvfrom(s, (char*)mw->receive_buffer + 3, MAX_RECV_SIZE, 0,
+				(struct sockaddr*)&remote, &addr_len);
+		if (recvd > 0) {
+			if (remote.sin_addr.s_addr != mw->remote_addr[idx].sin_addr.s_addr) {
+				printf("Discarding UDP packet from unknown addr %s:%d\n",
+						inet_ntoa(remote.sin_addr), ntohs(remote.sin_port));
+				recvd = 0;
+			}
+		}
+	} else {
+		// Reuse mode, data is preceded by remote IPv4 and port
+		recvd = recvfrom(s, (char*)mw->receive_buffer + 9, MAX_RECV_SIZE - 6,
+				0, (struct sockaddr*)&remote, &addr_len);
+		if (recvd > 0) {
+			mw->receive_buffer[3] = remote.sin_addr.s_addr;
+			mw->receive_buffer[4] = remote.sin_addr.s_addr>>8;
+			mw->receive_buffer[5] = remote.sin_addr.s_addr>>16;
+			mw->receive_buffer[6] = remote.sin_addr.s_addr>>24;
+			mw->receive_buffer[7] = remote.sin_port;
+			mw->receive_buffer[8] = remote.sin_port>>8;
+			recvd += 6;
+		}
+	}
+
+	if (recvd > 0) {
+		mw_putc(mw, STX);
+		mw_putc(mw, (recvd >> 8) | ((idx+1) << 4));
+		mw_putc(mw, recvd);
+		mw->receive_bytes += recvd;
+		mw_putc(mw, ETX);
+		//should this set the channel flag?
+	} else if (recvd < 0 && !socket_error_is_wouldblock()) {
+		socket_close(mw->sock_fds[idx]);
+		mw->channel_state[idx] = SOCKST_NONE;
+		mw->channel_flags |= 1 << (idx + 1);
+	}
+}
+
+static void udp_send(megawifi *mw, uint8_t idx)
+{
+	struct sockaddr_in remote;
+	int s = mw->sock_fds[idx];
+	int sent;
+	char *data = (char*)mw->transmit_buffer;
+
+	if (mw->remote_addr[idx].sin_addr.s_addr != htonl(INADDR_ANY)) {
+		sent = sendto(s, data, mw->transmit_bytes, 0, (struct sockaddr*)&mw->remote_addr[idx],
+				sizeof(struct sockaddr_in));
+	} else {
+		// Reuse mode, extract address from leading bytes
+		// NOTE: mw->remote_addr[idx].sin_addr.s_addr == INADDR_ANY
+		remote.sin_addr.s_addr = *((int32_t*)data);
+		remote.sin_port = *((int16_t*)(data + 4));
+		remote.sin_family = AF_INET;
+		memset(remote.sin_zero, 0, sizeof(remote.sin_zero));
+		sent = sendto(s, data + 6, mw->transmit_bytes - 6, 0, (struct sockaddr*)&remote,
+				sizeof(struct sockaddr_in)) + 6;
+	}
+	if (sent < 0 && !socket_error_is_wouldblock()) {
+		socket_close(s);
+		mw->sock_fds[idx] = -1;
+		mw->channel_state[idx] = SOCKST_NONE;
+		mw->channel_flags |= 1 << (idx + 1);
+	} else if (sent < mw->transmit_bytes) {
+		//TODO: save this data somewhere so it can be sent in poll_socket
+		printf("Sent %d bytes on channel %d, but %d were requested\n", sent, idx + 1, mw->transmit_bytes);
+	}
 }
 
 static void poll_socket(megawifi *mw, uint8_t channel)
@@ -156,7 +234,7 @@ static void poll_socket(megawifi *mw, uint8_t channel)
 			mw->channel_state[channel] = SOCKST_NONE;
 			mw->channel_flags |= 1 << (channel + 1);
 		}
-	} else if (mw->channel_state[channel] == SOCKST_TCP_EST && mw->receive_bytes < sizeof(mw->receive_buffer) - 4) {
+	} else if (mw->channel_state[channel] == SOCKST_TCP_EST && mw->receive_bytes < (sizeof(mw->receive_buffer) - 4)) {
 		size_t max = sizeof(mw->receive_buffer) - 4 - mw->receive_bytes;
 		if (max > MAX_RECV_SIZE) {
 			max = MAX_RECV_SIZE;
@@ -174,6 +252,8 @@ static void poll_socket(megawifi *mw, uint8_t channel)
 			mw->channel_state[channel] = SOCKST_NONE;
 			mw->channel_flags |= 1 << (channel + 1);
 		}
+	} else if (mw->channel_state[channel] == SOCKST_UDP_READY && !mw->receive_bytes) {
+		udp_recv(mw, channel);
 	}
 }
 
@@ -222,8 +302,8 @@ static void cmd_ap_cfg_get(megawifi *mw)
 	start_reply(mw, CMD_OK);
 	mw_putc(mw, slot);
 	mw_putc(mw, 7);	/// 11bgn
-	mw_putraw(mw, ssid, 32);
-	mw_putraw(mw, pass, 64);
+	mw_copy(mw, (uint8_t*)ssid, 32);
+	mw_copy(mw, (uint8_t*)pass, 64);
 	end_reply(mw);
 }
 
@@ -236,36 +316,25 @@ static void cmd_ip_cfg_get(megawifi *mw)
 	mw_putc(mw, 0);
 	mw_putc(mw, 0);
 	mw_putc(mw, 0);
-	mw_putraw(mw, (char*)ipv4s, sizeof(ipv4s));
+	mw_copy(mw, (uint8_t*)ipv4s, sizeof(ipv4s));
 	end_reply(mw);
 }
 
 static void cmd_tcp_con(megawifi *mw, uint32_t size)
 {
+	struct mw_addr_msg *addr = (struct mw_addr_msg*)(mw->transmit_buffer + 4);
 	struct addrinfo hints;
 	struct addrinfo *res = NULL;
-	char dst_port[6];
-	char src_port[6];
-	char host[MAX_RECV_SIZE - 13];
 	int s;
-
 	int err;
 
-	uint8_t channel = mw->transmit_buffer[16];
+	uint8_t channel = addr->channel;
 	if (!channel || channel > 15 || mw->sock_fds[channel - 1] >= 0) {
 		start_reply(mw, CMD_ERROR);
 		end_reply(mw);
 		return;
 	}
 	channel--;
-
-	strncpy(dst_port, (char*)&mw->transmit_buffer[4], 5);
-	dst_port[5] = '\0';
-	// TODO src_port is unused
-	strncpy(src_port, (char*)&mw->transmit_buffer[10], 5);
-	src_port[5] = '\0';
-	strncpy(host, (char*)&mw->transmit_buffer[17], MAX_RECV_SIZE - 14);
-	host[MAX_RECV_SIZE - 14] = '\0';
 
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_INET;
@@ -274,7 +343,7 @@ static void cmd_tcp_con(megawifi *mw, uint32_t size)
 #endif
 	hints.ai_socktype = SOCK_STREAM;
 
-	if ((err = getaddrinfo(host, dst_port, &hints, &res)) != 0) {
+	if ((err = getaddrinfo(addr->host, addr->dst_port, &hints, &res)) != 0) {
 		printf("getaddrinfo failed: %s\n", gai_strerror(err));
 		start_reply(mw, CMD_ERROR);
 		end_reply(mw);
@@ -295,7 +364,8 @@ static void cmd_tcp_con(megawifi *mw, uint32_t size)
 	mw->sock_fds[channel] = s;
 	mw->channel_state[channel] = SOCKST_TCP_EST;
 	mw->channel_flags |= 1 << (channel + 1);
-	printf("Connection established on ch %d with %s:%s\n", channel + 1, host, dst_port);
+	printf("Connection established on ch %d with %s:%s\n", channel + 1,
+			addr->host, addr->dst_port);
 
 	if (res) {
 		freeaddrinfo(res);
@@ -306,7 +376,99 @@ static void cmd_tcp_con(megawifi *mw, uint32_t size)
 
 err:
 	freeaddrinfo(res);
-	printf("Connection to %s:%s failed, %s\n", host, dst_port, strerror(errno));
+	printf("Connection to %s:%s failed, %s\n", addr->host, addr->dst_port, strerror(errno));
+	start_reply(mw, CMD_ERROR);
+	end_reply(mw);
+}
+
+static void cmd_close(megawifi *mw)
+{
+	int channel = mw->transmit_buffer[4] - 1;
+
+	if (channel >= 15 || mw->sock_fds[channel] < 0) {
+		start_reply(mw, CMD_ERROR);
+		end_reply(mw);
+		return;
+	}
+
+	socket_close(mw->sock_fds[channel]);
+	mw->sock_fds[channel] = -1;
+	mw->channel_state[channel] = SOCKST_NONE;
+	mw->channel_flags |= 1 << (channel + 1);
+	start_reply(mw, CMD_OK);
+	end_reply(mw);
+}
+
+static void cmd_udp_set(megawifi *mw)
+{
+	struct mw_addr_msg *addr = (struct mw_addr_msg*)(mw->transmit_buffer + 4);
+	unsigned int local_port, remote_port;
+	int s;
+	struct addrinfo *raddr;
+	struct addrinfo hints;
+	struct sockaddr_in local;
+	int err;
+
+	uint8_t channel = addr->channel;
+	if (!channel || channel > 15 || mw->sock_fds[channel - 1] >= 0) {
+		goto err;
+	}
+	channel--;
+	local_port = atoi(addr->src_port);
+	remote_port = atoi(addr->dst_port);
+
+	if ((s = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
+		printf("Datagram socket creation failed\n");
+		goto err;
+	}
+
+	memset(local.sin_zero, 0, sizeof(local.sin_zero));
+	local.sin_family = AF_INET;
+	local.sin_addr.s_addr = htonl(INADDR_ANY);
+	local.sin_port = htons(local_port);
+	if (remote_port && addr->host[0]) {
+		// Communication with remote peer
+		printf("Set UDP ch %d, port %d to addr %s:%d\n", addr->channel,
+				local_port, addr->host, remote_port);
+
+		memset(&hints, 0, sizeof(hints));
+		hints.ai_family = AF_INET;
+#ifndef _WIN32
+		hints.ai_flags = AI_NUMERICSERV;
+#endif
+		hints.ai_socktype = SOCK_DGRAM;
+
+		if ((err = getaddrinfo(addr->host, addr->dst_port, &hints, &raddr)) != 0) {
+			printf("getaddrinfo failed: %s\n", gai_strerror(err));
+			goto err;
+		}
+		mw->remote_addr[channel] = *((struct sockaddr_in*)raddr->ai_addr);
+		freeaddrinfo(raddr);
+	} else if (local_port) {
+		// Server in reuse mode
+		printf("Set UDP ch %d, src port %d\n", addr->channel, local_port);
+		mw->remote_addr[channel] = local;
+	} else {
+		printf("Invalid UDP socket data\n");
+		goto err;
+	}
+
+	if (bind(s, (struct sockaddr*)&local, sizeof(struct sockaddr_in)) < 0) {
+		printf("bind to port %d failed\n", local_port);
+		goto err;
+	}
+
+	socket_blocking(s, 0);
+	mw->sock_fds[channel] = s;
+	mw->channel_state[channel] = SOCKST_UDP_READY;
+	mw->channel_flags |= 1 << (channel + 1);
+
+	start_reply(mw, CMD_OK);
+	end_reply(mw);
+
+	return;
+
+err:
 	start_reply(mw, CMD_ERROR);
 	end_reply(mw);
 }
@@ -319,17 +481,17 @@ static void cmd_gamertag_get(megawifi *mw)
 
 	start_reply(mw, CMD_OK);
 	// TODO Get items from config file
-	mw_putraw(mw, (const char*)&id, 4);
+	mw_copy(mw, (uint8_t*)&id, 4);
 	strncpy(buf, "doragasu on Blastem!", 32);
-	mw_putraw(mw, buf, 32);
+	mw_copy(mw, (uint8_t*)buf, 32);
 	strncpy(buf, "My cool password", 32);
-	mw_putraw(mw, buf, 32);
+	mw_copy(mw, (uint8_t*)buf, 32);
 	strncpy(buf, "All your WiFi are belong to me!", 32);
-	mw_putraw(mw, buf, 32);
+	mw_copy(mw, (uint8_t*)buf, 32);
 	memset(buf, 0, 64); // Telegram token
-	mw_putraw(mw, buf, 64);
-	mw_putraw(mw, buf, AVATAR_BYTES); // Avatar tiles
-	mw_putraw(mw, buf, 32); // Avatar palette
+	mw_copy(mw, (uint8_t*)buf, 64);
+	mw_copy(mw, (uint8_t*)buf, AVATAR_BYTES); // Avatar tiles
+	mw_copy(mw, (uint8_t*)buf, 32); // Avatar palette
 	end_reply(mw);
 }
 
@@ -465,6 +627,12 @@ static void process_command(megawifi *mw)
 		end_reply(mw);
 		break;
 	}
+	case CMD_CLOSE:
+		cmd_close(mw);
+		break;
+	case CMD_UDP_SET:
+		cmd_udp_set(mw);
+		break;
 	case CMD_SOCK_STAT: {
 		uint8_t channel = mw->transmit_buffer[4];
 		if (!channel || channel > 15) {
@@ -520,7 +688,6 @@ static void process_packet(megawifi *mw)
 		uint8_t channel = mw->transmit_channel - 1;
 		int channel_state = mw->channel_state[channel];
 		int sock_fd = mw->sock_fds[channel];
-		// TODO Handle UDP type sockets
 		if (sock_fd >= 0 && channel_state == SOCKST_TCP_EST) {
 			int sent = send(sock_fd, (char*)mw->transmit_buffer, mw->transmit_bytes, 0);
 			if (sent < 0 && !socket_error_is_wouldblock()) {
@@ -532,6 +699,8 @@ static void process_packet(megawifi *mw)
 				//TODO: save this data somewhere so it can be sent in poll_socket
 				printf("Sent %d bytes on channel %d, but %d were requested\n", sent, mw->transmit_channel, mw->transmit_bytes);
 			}
+		} else if (sock_fd >= 0 && channel_state == SOCKST_UDP_READY) {
+			udp_send(mw, channel);
 		} else {
 			printf("Unhandled receive of MegaWiFi data on channel %d\n", mw->transmit_channel);
 		}
