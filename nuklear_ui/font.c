@@ -14,7 +14,8 @@ char *default_font_path(void)
 		return strdup(FONT_PATH);
 	}
 #endif
-	FILE *fc_pipe = popen("fc-match -f '%{file}'", "r");
+	//TODO: specify language dynamically once BlastEm is localized
+	FILE *fc_pipe = popen("fc-match :lang=en -f '%{file}'", "r");
 	if (!fc_pipe) {
 		return NULL;
 	}
