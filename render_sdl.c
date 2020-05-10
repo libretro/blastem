@@ -1709,13 +1709,16 @@ void render_video_loop(void)
 				SDL_CondWait(frame_ready, frame_mutex);
 			}
 			for (int i = 0; i < frame_queue_len; i++)
+			while (frame_queue_len)
 			{
 				frame f = frame_queue[frame_queue_read++];
 				frame_queue_read &= 0x3;
+				frame_queue_len--;
+				SDL_UnlockMutex(frame_mutex);
 				process_framebuffer(f.buffer, f.which, f.width);
 				release_buffer(f.buffer);
+				SDL_LockMutex(frame_mutex);
 			}
-			frame_queue_len = 0;
 		}
 	
 	SDL_UnlockMutex(frame_mutex);
