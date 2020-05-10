@@ -273,7 +273,8 @@ void render_set_external_sync(uint8_t ext_sync_on)
 }
 
 #ifndef DISABLE_OPENGL
-static GLuint textures[3], buffers[2], vshader, fshader, program, un_textures[2], un_width, un_height, at_pos;
+static GLuint textures[3], buffers[2], vshader, fshader, program, un_textures[2], un_width, un_height, un_texsize, at_pos;
+static int tex_width, tex_height;
 
 static GLfloat vertex_data_default[] = {
 	-1.0f, -1.0f,
@@ -379,6 +380,15 @@ static void gl_setup()
 	char *scaling = tern_find_path_default(config, "video\0scaling\0", def, TVAL_PTR).ptrval;
 	GLint filter = strcmp(scaling, "linear") ? GL_NEAREST : GL_LINEAR;
 	glGenTextures(3, textures);
+	def.ptrval = "off";
+	char *npot_textures = tern_find_path_default(config, "video\0npot_textures\0", def, TVAL_PTR).ptrval;
+	if (!strcmp(npot_textures, "on")) {
+		tex_width = LINEBUF_SIZE;
+		tex_height = 294; //PAL height with full borders
+	} else {
+		tex_width = tex_height = 512;
+	}
+	printf("Using %dx%d textures\n", tex_width, tex_height);
 	for (int i = 0; i < 3; i++)
 	{
 		glBindTexture(GL_TEXTURE_2D, textures[i]);
@@ -388,7 +398,7 @@ static void gl_setup()
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		if (i < 2) {
 			//TODO: Fixme for PAL + invalid display mode
-			glTexImage2D(GL_TEXTURE_2D, 0, INTERNAL_FORMAT, 512, 512, 0, SRC_FORMAT, GL_UNSIGNED_BYTE, texture_buf);
+			glTexImage2D(GL_TEXTURE_2D, 0, INTERNAL_FORMAT, tex_width, tex_height, 0, SRC_FORMAT, GL_UNSIGNED_BYTE, texture_buf);
 		} else {
 			uint32_t blank = 255 << 24;
 			glTexImage2D(GL_TEXTURE_2D, 0, INTERNAL_FORMAT, 1, 1, 0, SRC_FORMAT, GL_UNSIGNED_BYTE, &blank);
@@ -417,6 +427,7 @@ static void gl_setup()
 	un_textures[1] = glGetUniformLocation(program, "textures[1]");
 	un_width = glGetUniformLocation(program, "width");
 	un_height = glGetUniformLocation(program, "height");
+	un_texsize = glGetUniformLocation(program, "texsize");
 	at_pos = glGetAttribLocation(program, "pos");
 }
 
@@ -1377,7 +1388,7 @@ uint32_t *render_get_framebuffer(uint8_t which, int *pitch)
 			if (num_buffers) {
 				buffer = frame_buffers[--num_buffers];
 			} else {
-				buffer = calloc(512*512, sizeof(uint32_t));
+				buffer = calloc(tex_width*(tex_height + 1), sizeof(uint32_t));
 			}
 		SDL_UnlockMutex(free_buffer_mutex);
 		locked_pixels = buffer;
@@ -1733,6 +1744,7 @@ void render_update_display()
 
 		glUniform1f(un_width, render_emulated_width());
 		glUniform1f(un_height, last_height);
+		glUniform2f(un_texsize, tex_width, tex_height);
 
 		glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
 		glVertexAttribPointer(at_pos, 2, GL_FLOAT, GL_FALSE, sizeof(GLfloat[2]), (void *)0);
