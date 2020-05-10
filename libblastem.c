@@ -381,7 +381,7 @@ void render_framebuffer_updated(uint8_t which, int width)
 		last_height = height;
 	}
 	retro_video_refresh(fb + overscan_left + LINEBUF_SIZE * overscan_top, width, height, LINEBUF_SIZE * sizeof(uint32_t));
-	current_system->request_exit(current_system);
+	system_request_exit(current_system, 0);
 }
 
 uint8_t render_get_active_framebuffer(void)

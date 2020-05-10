@@ -89,3 +89,9 @@ system_header *alloc_config_player(system_type stype, event_reader *reader)
 	}
 	return NULL;
 }
+
+void system_request_exit(system_header *system, uint8_t force_release)
+{
+	system->force_release = force_release;
+	system->request_exit(system);
+}

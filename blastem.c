@@ -327,7 +327,7 @@ static void on_drag_drop(const char *filename)
 			free(current_system->next_rom);
 		}
 		current_system->next_rom = strdup(filename);
-		current_system->request_exit(current_system);
+		system_request_exit(current_system, 1);
 		if (menu_system && menu_system->type == SYSTEM_GENESIS) {
 			genesis_context *gen = (genesis_context *)menu_system;
 			if (gen->extra) {
@@ -368,7 +368,7 @@ void reload_media(void)
 		num_parts--;
 	}
 	current_system->next_rom = alloc_concat_m(num_parts, start);
-	current_system->request_exit(current_system);
+	system_request_exit(current_system, 1);
 }
 
 void lockon_media(char *lock_on_path)
@@ -749,6 +749,7 @@ int main(int argc, char ** argv)
 			current_system->debugger_type = dtype;
 			current_system->enter_debugger = start_in_debugger && menu == debug_target;
 			current_system->start_context(current_system, statefile);
+			render_video_loop();
 		} else if (menu && game_system) {
 			current_system->arena = set_current_arena(game_system->arena);
 			current_system = game_system;
@@ -766,6 +767,7 @@ int main(int argc, char ** argv)
 			}
 			if (!current_system->next_rom) {
 				current_system->resume_context(current_system);
+				render_video_loop();
 			}
 		} else {
 			break;

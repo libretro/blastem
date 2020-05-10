@@ -73,6 +73,7 @@ struct system_header {
 	uint8_t                 delayed_load_slot;
 	uint8_t                 has_keyboard;
 	uint8_t                 vgm_logging;
+	uint8_t                 force_release;
 	debugger_type           debugger_type;
 	system_type             type;
 };
@@ -91,5 +92,6 @@ struct system_media {
 system_type detect_system_type(system_media *media);
 system_header *alloc_config_system(system_type stype, system_media *media, uint32_t opts, uint8_t force_region);
 system_header *alloc_config_player(system_type stype, event_reader *reader);
+void system_request_exit(system_header *system, uint8_t force_release);
 
 #endif //SYSTEM_H_

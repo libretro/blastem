@@ -428,7 +428,7 @@ static void run_sms(system_header *system)
 			target_cycle -= adjust;
 		}
 	}
-	if (render_should_release_on_exit()) {
+	if (sms->header.force_release || render_should_release_on_exit()) {
 		bindings_release_capture();
 		vdp_release_framebuffer(sms->vdp);
 		render_pause_source(sms->psg->audio);
@@ -439,7 +439,8 @@ static void run_sms(system_header *system)
 static void resume_sms(system_header *system)
 {
 	sms_context *sms = (sms_context *)system;
-	if (render_should_release_on_exit()) {
+	if (sms->header.force_release || render_should_release_on_exit()) {
+		sms->header.force_release = 0;
 		bindings_reacquire_capture();
 		vdp_reacquire_framebuffer(sms->vdp);
 		render_resume_source(sms->psg->audio);
