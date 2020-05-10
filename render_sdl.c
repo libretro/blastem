@@ -950,6 +950,7 @@ static void init_audio()
 		break;
 	case SYNC_AUDIO_THREAD:
 		desired.callback = audio_callback_run_on_audio;
+		break;
 	default:
 		desired.callback = audio_callback_drc;
 	}
