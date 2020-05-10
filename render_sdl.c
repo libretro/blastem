@@ -171,11 +171,11 @@ void render_free_audio_opaque(void *opaque)
 
 void render_audio_created(audio_source *source)
 {
-	if (sync_src == SYNC_AUDIO && SDL_GetAudioStatus() == SDL_AUDIO_PAUSED) {
+	if (render_is_audio_sync()) {
 		SDL_PauseAudio(0);
 	}
-	if (current_system) {
-		current_system->request_exit(current_system);
+	if (current_system && sync_src == SYNC_AUDIO_THREAD) {
+		system_request_exit(current_system, 0);
 	}
 }
 
@@ -184,15 +184,21 @@ void render_source_paused(audio_source *src, uint8_t remaining_sources)
 	if (sync_src == SYNC_AUDIO) {
 		SDL_CondSignal(audio_ready);
 	}
-	if (!remaining_sources) {
-		SDL_PauseAudio(0);
+	if (!remaining_sources && render_is_audio_sync()) {
+		SDL_PauseAudio(1);
+		if (sync_src == SYNC_AUDIO_THREAD) {
+			SDL_CondSignal(frame_ready);
+		}
 	}
 }
 
 void render_source_resumed(audio_source *src)
 {
-	if (sync_src == SYNC_AUDIO) {
+	if (render_is_audio_sync()) {
 		SDL_PauseAudio(0);
+	}
+	if (current_system && sync_src == SYNC_AUDIO_THREAD) {
+		system_request_exit(current_system, 0);
 	}
 }
 
@@ -206,7 +212,7 @@ void render_do_audio_ready(audio_source *src)
 		src->buffer_pos = 0;
 		if (all_sources_ready()) {
 			//we've emulated far enough to fill the current buffer
-			current_system->request_exit(current_system);
+			system_request_exit(current_system, 0);
 		}
 	} else if (sync_src == SYNC_AUDIO) {
 		SDL_LockMutex(audio_mutex);
@@ -1700,15 +1706,13 @@ void render_video_loop(void)
 	if (sync_src != SYNC_AUDIO_THREAD && sync_src != SYNC_EXTERNAL) {
 		return;
 	}
-	SDL_PauseAudio(0);
 	SDL_LockMutex(frame_mutex);
 		for(;;)
 		{
-			while (!frame_queue_len)
+			while (!frame_queue_len && SDL_GetAudioStatus() == SDL_AUDIO_PLAYING)
 			{
 				SDL_CondWait(frame_ready, frame_mutex);
 			}
-			for (int i = 0; i < frame_queue_len; i++)
 			while (frame_queue_len)
 			{
 				frame f = frame_queue[frame_queue_read++];
@@ -1718,6 +1722,9 @@ void render_video_loop(void)
 				process_framebuffer(f.buffer, f.which, f.width);
 				release_buffer(f.buffer);
 				SDL_LockMutex(frame_mutex);
+			}
+			if (SDL_GetAudioStatus() != SDL_AUDIO_PLAYING) {
+				break;
 			}
 		}
 	

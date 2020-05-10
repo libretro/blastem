@@ -1254,7 +1254,7 @@ static void handle_reset_requests(genesis_context *gen)
 			resume_68k(gen->m68k);
 		}
 	}
-	if (render_should_release_on_exit()) {
+	if (gen->header.force_release || render_should_release_on_exit()) {
 		bindings_release_capture();
 		vdp_release_framebuffer(gen->vdp);
 		render_pause_source(gen->ym->audio);
@@ -1302,7 +1302,8 @@ static void start_genesis(system_header *system, char *statefile)
 static void resume_genesis(system_header *system)
 {
 	genesis_context *gen = (genesis_context *)system;
-	if (render_should_release_on_exit()) {
+	if (gen->header.force_release || render_should_release_on_exit()) {
+		gen->header.force_release = 0;
 		render_set_video_standard((gen->version_reg & HZ50) ? VID_PAL : VID_NTSC);
 		bindings_reacquire_capture();
 		vdp_reacquire_framebuffer(gen->vdp);

@@ -409,7 +409,7 @@ void handle_binding_up(keybinding * binding)
 				show_pause_menu();
 			} else {
 #endif
-			current_system->request_exit(current_system);
+			system_request_exit(current_system, 1);
 			if (current_system->type == SYSTEM_GENESIS) {
 				genesis_context *gen = (genesis_context *)current_system;
 				if (gen->extra) {

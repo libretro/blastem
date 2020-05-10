@@ -2220,7 +2220,7 @@ void show_pause_menu(void)
 		context->style.window.fixed_background = nk_style_item_color(nk_rgba(0, 0, 0, 128));
 		current_view = view_pause;
 		context->input.selected_widget = 0;
-		current_system->request_exit(current_system);
+		system_request_exit(current_system, 1);
 	} else if (current_system && !set_binding) {
 		clear_view_stack();
 		show_play_view();
