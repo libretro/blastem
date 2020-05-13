@@ -171,7 +171,7 @@ void render_free_audio_opaque(void *opaque)
 
 void render_audio_created(audio_source *source)
 {
-	if (render_is_audio_sync()) {
+	if (sync_src == SYNC_AUDIO) {
 		SDL_PauseAudio(0);
 	}
 	if (current_system && sync_src == SYNC_AUDIO_THREAD) {
@@ -194,7 +194,7 @@ void render_source_paused(audio_source *src, uint8_t remaining_sources)
 
 void render_source_resumed(audio_source *src)
 {
-	if (render_is_audio_sync()) {
+	if (sync_src == SYNC_AUDIO) {
 		SDL_PauseAudio(0);
 	}
 	if (current_system && sync_src == SYNC_AUDIO_THREAD) {
@@ -1706,6 +1706,7 @@ void render_video_loop(void)
 	if (sync_src != SYNC_AUDIO_THREAD && sync_src != SYNC_EXTERNAL) {
 		return;
 	}
+	SDL_PauseAudio(0);
 	SDL_LockMutex(frame_mutex);
 		for(;;)
 		{
