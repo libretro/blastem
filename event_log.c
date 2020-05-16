@@ -10,6 +10,8 @@
 #include <netinet/tcp.h>
 #endif
 
+#include <stdlib.h>
+#include <string.h>
 #include <errno.h>
 #include "event_log.h"
 #include "util.h"

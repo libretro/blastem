@@ -1,6 +1,13 @@
+#include <stdlib.h>
 #include "gen_player.h"
 #include "event_log.h"
 #include "render.h"
+
+#define MCLKS_NTSC 53693175
+#define MCLKS_PAL  53203395
+#define MCLKS_PER_YM  7
+#define MCLKS_PER_Z80 15
+#define MCLKS_PER_PSG (MCLKS_PER_Z80*16)
 
 #ifdef IS_LIB
 #define MAX_SOUND_CYCLES (MCLKS_PER_YM*NUM_OPERATORS*6*4)
@@ -103,7 +110,9 @@ void start_context(system_header *sys, char *statefile)
 {
 	gen_player *player = (gen_player *)sys;
 	if (player->reader.socket) {
+#ifndef IS_LIB
 		render_create_thread(&player->thread, "player", thread_main, player);
+#endif
 	} else {
 		run(player);
 	}
@@ -120,12 +129,6 @@ static void gamepad_up(system_header *system, uint8_t gamepad_num, uint8_t butto
 	gen_player *player = (gen_player *)system;
 	reader_send_gamepad_event(&player->reader, gamepad_num, button, 0);
 }
-
-#define MCLKS_NTSC 53693175
-#define MCLKS_PAL  53203395
-#define MCLKS_PER_YM  7
-#define MCLKS_PER_Z80 15
-#define MCLKS_PER_PSG (MCLKS_PER_Z80*16)
 
 static void config_common(gen_player *player)
 {
