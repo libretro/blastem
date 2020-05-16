@@ -217,7 +217,7 @@ MAINOBJS=blastem.o system.o genesis.o debug.o gdb_remote.o vdp.o $(RENDEROBJS) i
 
 LIBOBJS=libblastem.o system.o genesis.o debug.o gdb_remote.o vdp.o io.o romdb.o hash.o xband.o realtec.o \
 	i2c.o nor.o sega_mapper.o multi_game.o megawifi.o $(NET) serialize.o $(TERMINAL) $(CONFIGOBJS) gst.o \
-	$(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS) saves.o jcart.o rom.db.o
+	$(M68KOBJS) $(TRANSOBJS) $(AUDIOOBJS) saves.o jcart.o rom.db.o gen_player.o
 	
 ifdef NONUKLEAR
 CFLAGS+= -DDISABLE_NUKLEAR

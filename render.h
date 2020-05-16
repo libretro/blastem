@@ -6,6 +6,8 @@
 #ifndef RENDER_H_
 #define RENDER_H_
 
+#include <stdint.h>
+
 #ifndef IS_LIB
 #ifdef USE_FBDEV
 #include "special_keys_evdev.h"
@@ -138,7 +140,9 @@ void render_set_ui_fb_resize_handler(ui_render_fun resize);
 void render_video_loop(void);
 uint8_t render_should_release_on_exit(void);
 void render_set_external_sync(uint8_t ext_sync_on);
+#ifndef IS_LIB
 uint8_t render_create_thread(render_thread *thread, const char *name, render_thread_fun fun, void *data);
+#endif
 
 #endif //RENDER_H_
 

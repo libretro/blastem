@@ -14,7 +14,9 @@ typedef struct {
 	vdp_context     *vdp;
 	ym2612_context  *ym;
 	psg_context     *psg;
+#ifndef IS_LIB
 	render_thread   thread;
+#endif
 	event_reader    reader;
 } gen_player;
 
