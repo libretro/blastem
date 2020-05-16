@@ -25,6 +25,10 @@
 
 system_header *current_system;
 
+void system_request_exit(system_header *system, uint8_t force_release)
+{
+}
+
 void handle_keydown(int keycode)
 {
 }
