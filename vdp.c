@@ -3787,6 +3787,7 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 			//context->flags &= ~FLAG_READ_FETCHED;
 			//context->flags2 &= ~FLAG2_READ_PENDING;
 		} else {
+			clear_pending(context);
 			context->flags &= ~FLAG_READ_FETCHED;
 			context->flags2 &= ~FLAG2_READ_PENDING;
 		}
