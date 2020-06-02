@@ -1089,7 +1089,7 @@ static uint16_t unused_read(uint32_t location, void *vcontext)
 {
 	m68k_context *context = vcontext;
 	genesis_context *gen = context->system;
-	if ((location >= 0xA13000 && location < 0xA13100) || (location >= 0xA12000 && location < 0xA12100)) {
+	if (location < 0x800000 || (location >= 0xA13000 && location < 0xA13100) || (location >= 0xA12000 && location < 0xA12100)) {
 		//Only called if the cart/exp doesn't have a more specific handler for this region
 		return get_open_bus_value(&gen->header);
 	} else if (location == 0xA14000 || location == 0xA14002) {
@@ -1131,7 +1131,9 @@ static void *unused_write(uint32_t location, void *vcontext, uint16_t value)
 		gen->tmss_lock[location >> 1 & 1] = value;
 	} else if (has_tmss && location == 0xA14100) {
 		//TODO: implement TMSS control register
-	} else if (location < 0xA12000 || location >= 0xA13100 || (location >= 0xA12100 && location < 0xA13000)) {
+	} else if (location < 0x800000 || (location >= 0xA13000 && location < 0xA13100) || (location >= 0xA12000 && location < 0xA12100)) {
+		//these writes are ignored when no relevant hardware is present
+	} else {
 		fatal_error("Machine freeze due to unmapped write to %X\n", location);
 	}
 	return vcontext;
@@ -1153,7 +1155,9 @@ static void *unused_write_b(uint32_t location, void *vcontext, uint8_t value)
 		}
 	} else if (has_tmss && (location == 0xA14100 || location == 0xA14101)) {
 		//TODO: implement TMSS control register
-	} else if (location < 0xA12000 || location >= 0xA13100 || (location >= 0xA12100 && location < 0xA13000)) {
+	} else if (location < 0x800000 || (location >= 0xA13000 && location < 0xA13100) || (location >= 0xA12000 && location < 0xA12100)) {
+		//these writes are ignored when no relevant hardware is present
+	} else {
 		fatal_error("Machine freeze due to unmapped byte write to %X\n", location);
 	}
 	return vcontext;
