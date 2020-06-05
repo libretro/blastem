@@ -261,7 +261,7 @@ ALL+= termhelper
 endif
 
 ifeq ($(MAKECMDGOALS),libblastem.$(SO))
-CFLAGS+= -fpic -DIS_LIB
+CFLAGS+= -fcommon -fpic -DIS_LIB
 endif
 
 all : $(ALL)
