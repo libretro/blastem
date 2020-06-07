@@ -68,7 +68,7 @@
 
 #define DISPLAY_ENABLE 0x40
 
-enum {
+enum vdp_regs{
 	REG_MODE_1=0,
 	REG_MODE_2,
 	REG_SCROLL_A,
@@ -93,7 +93,7 @@ enum {
 	REG_DMASRC_L,
 	REG_DMASRC_M,
 	REG_DMASRC_H
-} vdp_regs;
+};
 
 //Mode reg 1
 #define BIT_VSCRL_LOCK 0x80

@@ -9,7 +9,7 @@
 #include <stdint.h>
 #include "gen.h"
 
-enum {
+enum x86_regs{
 	RAX = 0,
 	RCX,
 	RDX,
@@ -30,9 +30,9 @@ enum {
 	R13,
 	R14,
 	R15
-} x86_regs;
+};
 
-enum {
+enum x86_cc{
 	CC_O = 0,
 	CC_NO,
 	CC_C,
@@ -51,14 +51,14 @@ enum {
 	CC_GE,
 	CC_LE,
 	CC_G
-} x86_cc;
+};
 
-enum {
+enum x86_size{
 	SZ_B = 0,
 	SZ_W,
 	SZ_D,
 	SZ_Q
-} x86_size;
+};
 
 #ifdef X86_64
 #define SZ_PTR SZ_Q
@@ -75,7 +75,7 @@ enum {
 #define MAX_INST_LEN 11
 #endif
 
-enum {
+enum x86_modes{
 	MODE_REG_INDIRECT = 0,
 	MODE_REG_INDEXED = 4,
 	MODE_REG_DISPLACE8 = 0x40,
@@ -85,7 +85,7 @@ enum {
 	MODE_REG_DIRECT = 0xC0,
 //"phony" mode
 	MODE_IMMED = 0xFF
-} x86_modes;
+};
 
 void rol_ir(code_info *code, uint8_t val, uint8_t dst, uint8_t size);
 void ror_ir(code_info *code, uint8_t val, uint8_t dst, uint8_t size);
