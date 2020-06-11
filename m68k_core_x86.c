@@ -421,7 +421,11 @@ uint8_t translate_m68k_op(m68kinst * inst, host_ea * ea, m68k_options * opts, ui
 			push_r(code, opts->gen.scratch1);
 		}
 		dec_amount = inst->extra.size == OPSIZE_WORD ? 2 : (inst->extra.size == OPSIZE_LONG ? 4 : (op->params.regs.pri == 7 ? 2 :1));
-		if (!dst) {
+		if (!dst || (
+			inst->op != M68K_MOVE && inst->op != M68K_MOVEM 
+			&& inst->op != M68K_SUBX && inst->op != M68K_ADDX 
+			&& inst->op != M68K_ABCD && inst->op != M68K_SBCD
+		)) {
 			cycles(&opts->gen, PREDEC_PENALTY);
 		}
 		subi_areg(opts, dec_amount, op->params.regs.pri);
@@ -874,7 +878,7 @@ void translate_m68k_scc(m68k_options * opts, m68kinst * inst)
 		code_ptr end_off = code->cur+1;
 		jmp(code, code->cur+2);
 		*true_off = code->cur - (true_off+1);
-		cycles(&opts->gen, 6);
+		cycles(&opts->gen, inst->dst.addr_mode == MODE_REG ? 6 : 4);
 		if (dst_op.mode == MODE_REG_DIRECT) {
 			mov_ir(code, 0xFF, dst_op.base, SZ_B);
 		} else {
@@ -1190,8 +1194,6 @@ void translate_shift(m68k_options * opts, m68kinst * inst, host_ea *src_op, host
 void translate_m68k_reset(m68k_options *opts, m68kinst *inst)
 {
 	code_info *code = &opts->gen.code;
-	//RESET instructions take a long time to give peripherals time to reset themselves
-	cycles(&opts->gen, 132);
 	mov_rdispr(code, opts->gen.context_reg, offsetof(m68k_context, reset_handler), opts->gen.scratch1, SZ_PTR);
 	cmp_ir(code, 0, opts->gen.scratch1, SZ_PTR);
 	code_ptr no_reset_handler = code->cur + 1;
@@ -1201,6 +1203,8 @@ void translate_m68k_reset(m68k_options *opts, m68kinst *inst)
 	mov_rr(code, RAX, opts->gen.context_reg, SZ_PTR);
 	call(code, opts->gen.load_context);
 	*no_reset_handler = code->cur - (no_reset_handler + 1);
+	//RESET instructions take a long time to give peripherals time to reset themselves
+	cycles(&opts->gen, 132);
 }
 
 void op_ir(code_info *code, m68kinst *inst, int32_t val, uint8_t dst, uint8_t size)
@@ -1309,14 +1313,17 @@ void translate_m68k_arith(m68k_options *opts, m68kinst * inst, uint32_t flag_mas
 	
 	uint32_t numcycles;
 	if ((inst->op == M68K_ADDX || inst->op == M68K_SUBX) && inst->src.addr_mode != MODE_REG) {
-		numcycles = 6;
+		numcycles = 4;
 	} else if (size == OPSIZE_LONG) {
 		if (inst->op == M68K_CMP) {
+			numcycles = inst->src.addr_mode > MODE_AREG && inst->dst.addr_mode > MODE_AREG ? 4 : 6;
+		} else if (inst->op == M68K_AND && inst->variant == VAR_IMMEDIATE && inst->dst.addr_mode == MODE_REG) {
 			numcycles = 6;
-		} else if (inst->op == M68K_AND && inst->variant == VAR_IMMEDIATE) {
-			numcycles = 6;
-		} else if (inst->dst.addr_mode <= MODE_AREG) {
+		} else if (inst->dst.addr_mode == MODE_REG) {
 			numcycles = inst->src.addr_mode <= MODE_AREG || inst->src.addr_mode == MODE_IMMEDIATE ? 8 : 6;
+		} else if (inst->dst.addr_mode == MODE_AREG) {
+			numcycles = numcycles = inst->src.addr_mode <= MODE_AREG || inst->src.addr_mode == MODE_IMMEDIATE  
+				|| inst->extra.size == OPSIZE_WORD ? 8 : 6;
 		} else {
 			numcycles = 4;
 		}
@@ -1493,8 +1500,9 @@ void translate_m68k_abcd_sbcd(m68k_options *opts, m68kinst *inst, host_ea *src_o
 		//destination is in memory so we need to preserve scratch2 for the write at the end
 		push_r(code, opts->gen.scratch2);
 	}
-	//MC68000 User's Manual suggests NBCD hides the 2 cycle penalty during the write cycle somehow
-	cycles(&opts->gen, inst->op == M68K_NBCD && inst->dst.addr_mode != MODE_REG_DIRECT ? BUS : BUS + 2);
+	
+	//reg to reg takes 6 cycles, mem to mem is 4 cycles + all the operand fetch/writing (including 2 cycle predec penalty for first operand)
+	cycles(&opts->gen, inst->dst.addr_mode != MODE_REG ? BUS : BUS + 2);
 	uint8_t other_reg;
 	//WARNING: This may need adjustment if register assignments change
 	if (opts->gen.scratch2 > RBX) {
@@ -2068,7 +2076,7 @@ void translate_m68k_mul(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 void translate_m68k_negx(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op)
 {
 	code_info *code = &opts->gen.code;
-	cycles(&opts->gen, BUS);
+	cycles(&opts->gen, inst->extra.size == OPSIZE_LONG && inst->dst.addr_mode == MODE_REG ? BUS+2 : BUS);
 	if (dst_op->mode == MODE_REG_DIRECT) {
 		if (dst_op->base == opts->gen.scratch1) {
 			push_r(code, opts->gen.scratch2);
@@ -2134,6 +2142,7 @@ void translate_m68k_rot(m68k_options *opts, m68kinst *inst, host_ea *src_op, hos
 			}
 			update_flags(opts, init_flags);
 		} else {
+			cycles(&opts->gen, inst->extra.size == OPSIZE_LONG ? 8 : 6);
 			if (src_op->mode == MODE_REG_DIRECT) {
 				if (src_op->base != opts->gen.scratch1) {
 					mov_rr(code, src_op->base, opts->gen.scratch1, SZ_B);
@@ -2441,7 +2450,7 @@ void translate_m68k_odd(m68k_options *opts, m68kinst *inst)
 void translate_m68k_move_from_sr(m68k_options *opts, m68kinst *inst, host_ea *src_op, host_ea *dst_op)
 {
 	code_info *code = &opts->gen.code;
-	cycles(&opts->gen, inst->dst.addr_mode == MODE_REG_DIRECT ? BUS+2 : BUS);
+	cycles(&opts->gen, inst->dst.addr_mode == MODE_REG ? BUS+2 : BUS);
 	call(code, opts->get_sr);
 	if (dst_op->mode == MODE_REG_DIRECT) {
 		mov_rr(code, opts->gen.scratch1, dst_op->base, SZ_W);
