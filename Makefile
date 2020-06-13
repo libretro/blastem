@@ -297,7 +297,7 @@ libemu68k.a : $(M68KOBJS) $(TRANSOBJS)
 	ar rcs libemu68k.a $(M68KOBJS) $(TRANSOBJS)
 
 trans : trans.o serialize.o $(M68KOBJS) $(TRANSOBJS) util.o
-	$(CC) -o trans trans.o $(M68KOBJS) $(TRANSOBJS) util.o $(OPT)
+	$(CC) -o $@ $^ $(OPT)
 
 transz80 : transz80.o $(Z80OBJS) $(TRANSOBJS)
 	$(CC) -o transz80 transz80.o $(Z80OBJS) $(TRANSOBJS)
