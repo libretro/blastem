@@ -1377,3 +1377,17 @@ cda73e4caf53cbc8f0750b69e5e7f394ad3735d1 {
 		}
 	}
 }
+NETO-001 {
+	name Sonic Delta
+	map {
+		0 {
+			device ROM
+			last 7FFFF
+		}
+		80000 {
+			device Sega mapper
+			last 3FFFFF
+			offset 80000
+		}
+	}
+}
