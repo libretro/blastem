@@ -40,7 +40,11 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 m68k_context *reset_handler(m68k_context *context)
 {
 	m68k_print_regs(context);
+#ifdef NEW_CORE
+	printf("cycles: %d\n", context->cycles);
+#else
 	printf("cycles: %d\n", context->current_cycle);
+#endif
 	exit(0);
 	//unreachable
 	return context;
@@ -82,8 +86,10 @@ int main(int argc, char ** argv)
 	m68k_context * context = init_68k_context(&opts, reset_handler);
 	context->mem_pointers[0] = memmap[0].buffer;
 	context->mem_pointers[1] = memmap[1].buffer;
+#ifdef NEW_CORE
+	context->cycles = 40;
+#else
 	context->current_cycle = 40;
-#ifndef NEW_CORE
 	context->target_cycle = context->sync_cycle = 8000;
 #endif
 	m68k_reset(context);
