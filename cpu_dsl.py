@@ -899,7 +899,7 @@ class NormalOp:
 			else:
 				param = parent.resolveLocal(param) or param
 				if param in fieldVals:
-					param = fieldVals[index]
+					param = fieldVals[param]
 			prog.meta[self.params[0]] = param
 		elif self.op == 'dis':
 			#TODO: Disassembler
