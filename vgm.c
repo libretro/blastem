@@ -109,6 +109,8 @@ void vgm_adjust_cycles(vgm_writer *writer, uint32_t deduction)
 
 void vgm_close(vgm_writer *writer)
 {
+	uint8_t cmd = 0x66;
+	fwrite(&cmd, 1, sizeof(cmd), writer->f);
 	writer->header.eof_offset = ftell(writer->f) - offsetof(vgm_header, eof_offset);
 	fseek(writer->f, SEEK_SET, 0);
 	fwrite(&writer->header, sizeof(writer->header), 1, writer->f);
