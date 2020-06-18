@@ -3750,8 +3750,6 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 		}
 	} else {
 		uint8_t mode_5 = context->regs[REG_MODE_2] & BIT_MODE_5;
-		//contrary to what's in Charles MacDonald's doc, it seems top 2 address bits are cleared
-		//needed for the Mona in 344 Bytes demo
 		context->address_latch = (context->address_latch & 0x1C000) | (value & 0x3FFF);
 		context->cd_latch = (context->cd_latch & 0x3C) | (value >> 14);
 		if ((value & 0xC000) == 0x8000) {
@@ -3781,6 +3779,11 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 					update_video_params(context);
 				}
 			}
+			// The fact that this is needed seems to pour some cold water on my theory
+			// about how the address latch actually works. Needs more search to definitively confirm
+			clear_pending(context);
+			context->flags &= ~FLAG_READ_FETCHED;
+			context->flags2 &= ~FLAG2_READ_PENDING;
 		} else if (mode_5) {
 			context->flags |= FLAG_PENDING;
 			//Should these be taken care of here or after the second write?
