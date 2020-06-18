@@ -62,12 +62,13 @@ static void wait_commands(vgm_writer *writer, uint32_t delta)
 
 static void add_wait(vgm_writer *writer, uint32_t cycle)
 {
-	uint64_t delta = cycle - writer->last_cycle;
-	delta *= (uint64_t)44100;
-	delta /= (uint64_t)writer->master_clock;
+	uint64_t last_sample = (uint64_t)writer->last_cycle * (uint64_t)44100;
+	last_sample /= (uint64_t)writer->master_clock;
+	uint64_t sample = (uint64_t)cycle * (uint64_t)44100;
+	sample /= (uint64_t)writer->master_clock;
+	uint32_t delta = sample - last_sample;
 	
-	uint32_t mclks_per_sample = writer->master_clock / 44100;
-	writer->last_cycle += delta * mclks_per_sample; 
+	writer->last_cycle = cycle;
 	writer->header.num_samples += delta;
 	wait_commands(writer, delta);
 }
