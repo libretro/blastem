@@ -3953,6 +3953,20 @@ uint16_t vdp_data_port_read(vdp_context * context)
 	}
 	if (context->cd & 1) {
 		warning("Read from VDP data port while writes are configured, CPU is now frozen. VDP Address: %X, CD: %X\n", context->address, context->cd);
+		context->system->enter_debugger = 1;
+		return context->prefetch;
+	}
+	switch (context->cd)
+	{
+	case VRAM_READ:
+	case VSRAM_READ:
+	case CRAM_READ:
+	case VRAM_READ8:
+		break;
+	default:
+		warning("Read from VDP data port with invalid source, CPU is now frozen. VDP Address: %X, CD: %X\n", context->address, context->cd);
+		context->system->enter_debugger = 1;
+		return context->prefetch;
 	}
 	while (!(context->flags & FLAG_READ_FETCHED)) {
 		vdp_run_context_full(context, context->cycles + ((context->regs[REG_MODE_4] & BIT_H40) ? 16 : 20));

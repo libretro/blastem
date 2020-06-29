@@ -266,7 +266,7 @@ static void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 	}
 
 	context->target_cycle = context->int_cycle < context->sync_cycle ? context->int_cycle : context->sync_cycle;
-	if (context->should_return) {
+	if (context->should_return || gen->header.enter_debugger) {
 		context->target_cycle = context->current_cycle;
 	} else if (context->target_cycle < context->current_cycle) {
 		//Changes to SR can result in an interrupt cycle that's in the past
