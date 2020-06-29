@@ -3755,6 +3755,10 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 		if ((value & 0xC000) == 0x8000) {
 			//Register write
 			uint8_t reg = (value >> 8) & 0x1F;
+			// The fact that this is needed seems to pour some cold water on my theory
+			// about how the address latch actually works. Needs more search to definitively confirm
+			context->address = (context->address & 0x1C000) | (value & 0x3FFF);
+			context->cd = (context->cd & 0x3C) | (value >> 14);
 			if (reg < (mode_5 ? VDP_REGS : 0xB)) {
 				//printf("register %d set to %X\n", reg, value & 0xFF);
 				if (reg == REG_MODE_1 && (value & BIT_HVC_LATCH) && !(context->regs[reg] & BIT_HVC_LATCH)) {
@@ -3779,11 +3783,6 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 					update_video_params(context);
 				}
 			}
-			// The fact that this is needed seems to pour some cold water on my theory
-			// about how the address latch actually works. Needs more search to definitively confirm
-			clear_pending(context);
-			context->flags &= ~FLAG_READ_FETCHED;
-			context->flags2 &= ~FLAG2_READ_PENDING;
 		} else if (mode_5) {
 			context->flags |= FLAG_PENDING;
 			//Should these be taken care of here or after the second write?
