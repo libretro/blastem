@@ -92,7 +92,7 @@ enum {
 	REG_DMASRC_L,
 	REG_DMASRC_M,
 	REG_DMASRC_H
-} vdp_regs;
+};
 
 //Mode reg 1
 #define BIT_VSCRL_LOCK 0x80
