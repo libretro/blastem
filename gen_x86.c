@@ -130,7 +130,7 @@ enum {
 	X86_R13,
 	X86_R14,
 	X86_R15
-} x86_regs_enc;
+};
 
 char * x86_reg_names[] = {
 #ifdef X86_64
