@@ -517,7 +517,19 @@ void render_source_resumed(audio_source *src)
 {
 }
 
+void render_set_external_sync(uint8_t ext_sync_on)
+{
+}
+
 void bindings_set_mouse_mode(uint8_t mode)
+{
+}
+
+void bindings_release_capture(void)
+{
+}
+
+void bindings_reacquire_capture(void)
 {
 }
 
