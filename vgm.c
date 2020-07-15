@@ -60,8 +60,15 @@ static void wait_commands(vgm_writer *writer, uint32_t delta)
 	}
 }
 
+#include "util.h"
 static void add_wait(vgm_writer *writer, uint32_t cycle)
 {
+	if (cycle < writer->last_cycle) {
+		//This can happen when a YM-2612 write happens immediately after a PSG write
+		//due to the relatively low granularity of the PSG's internal clock
+		//given that VGM only has a granularity of 44.1 kHz ignoring this is harmless
+		return;
+	}
 	uint64_t last_sample = (uint64_t)writer->last_cycle * (uint64_t)44100;
 	last_sample /= (uint64_t)writer->master_clock;
 	uint64_t sample = (uint64_t)cycle * (uint64_t)44100;
@@ -73,10 +80,12 @@ static void add_wait(vgm_writer *writer, uint32_t cycle)
 	wait_commands(writer, delta);
 }
 
+static uint8_t last_cmd;
 void vgm_sn76489_write(vgm_writer *writer, uint32_t cycle, uint8_t value)
 {
 	add_wait(writer, cycle);
 	uint8_t cmd[2] = {CMD_PSG, value};
+	last_cmd = CMD_PSG;
 	fwrite(cmd, 1, sizeof(cmd), writer->f);
 }
 
@@ -89,6 +98,7 @@ void vgm_ym2612_part1_write(vgm_writer *writer, uint32_t cycle, uint8_t reg, uin
 {
 	add_wait(writer, cycle);
 	uint8_t cmd[3] = {CMD_YM2612_0, reg, value};
+	last_cmd = CMD_YM2612_0;
 	fwrite(cmd, 1, sizeof(cmd), writer->f);
 }
 
@@ -96,6 +106,7 @@ void vgm_ym2612_part2_write(vgm_writer *writer, uint32_t cycle, uint8_t reg, uin
 {
 	add_wait(writer, cycle);
 	uint8_t cmd[3] = {CMD_YM2612_1, reg, value};
+	last_cmd = CMD_YM2612_1;
 	fwrite(cmd, 1, sizeof(cmd), writer->f);
 }
 
