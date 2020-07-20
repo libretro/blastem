@@ -31,7 +31,7 @@ typedef struct
 	struct nk_image  ui;
 } ui_image;
 
-static ui_image **ui_images, *controller_360, *controller_ps4, *controller_ps4_6b;
+static ui_image **ui_images, *controller_360, *controller_ps4, *controller_ps4_6b, *controller_wiiu;
 static uint32_t num_ui_images, ui_image_storage;
 
 typedef void (*view_fun)(struct nk_context *);
@@ -981,6 +981,8 @@ static ui_image *select_best_image(controller_info *info)
 		return controller_ps4_6b;
 	} else if (info->type == TYPE_PSX) {
 		return controller_ps4;
+	} else if (info->type == TYPE_NINTENDO) {
+		return controller_wiiu;
 	} else {
 		return controller_360;
 	}
@@ -2310,6 +2312,7 @@ void blastem_nuklear_init(uint8_t file_loaded)
 	controller_360 = load_ui_image("images/360.png");
 	controller_ps4 = load_ui_image("images/ps4.png");
 	controller_ps4_6b = load_ui_image("images/ps4_6b.png");
+	controller_wiiu = load_ui_image("images/wiiu.png");
 	
 	texture_init();
 	
