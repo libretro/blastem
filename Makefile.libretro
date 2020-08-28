@@ -18,6 +18,11 @@ else ifneq ($(findstring MINGW32,$(UNAME)),)
 	libname = blastem_libretro.dll
 else ifneq ($(findstring Darwin,$(UNAME)),)
 	platform = osx
+	OS :=Darwin
+	CC :=gcc
+	ABI := x86_64
+	target = libblastem.dylib
+	libname = blastem_libretro.dylib
 else
 	platform = linux
 	OS :=Linux
