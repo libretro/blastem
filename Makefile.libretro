@@ -10,28 +10,28 @@ ifeq ($(platform), emscripten)
 else ifneq ($(findstring MINGW64,$(UNAME)),)
 	platform = win
 	OS :=Windows
-	CC :=gcc
+	CC ?=gcc
 	ABI := x86_64
 	target = libblastem.dll
 	libname = blastem_libretro.dll
 else ifneq ($(findstring MINGW32,$(UNAME)),)
 	platform = win
 	OS :=Windows
-	CC :=gcc
+	CC ?=gcc
 	ABI := i686
 	target = libblastem.dll
 	libname = blastem_libretro.dll
 else ifneq ($(findstring Darwin,$(UNAME)),)
 	platform = osx
 	OS :=Darwin
-	CC :=gcc
+	CC ?=gcc
 	ABI := x86_64
 	target = libblastem.dylib
 	libname = blastem_libretro.dylib
 else
 	platform = linux
 	OS :=Linux
-	CC :=gcc
+	CC ?=gcc
 	ABI := x86_64
 	target = libblastem.so
 	libname = blastem_libretro.so
