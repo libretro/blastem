@@ -2,7 +2,12 @@ UNAME=$(shell uname -s)
 UNAMEM=$(shell uname -m)
 
 platform ?= unix
-ifneq ($(findstring MINGW64,$(UNAME)),)
+ifeq ($(platform), emscripten)
+	platform = emscripten
+	ABI := x86_64
+	target = libblastem.so
+	libname = blastem_libretro_emscripten.bc
+else ifneq ($(findstring MINGW64,$(UNAME)),)
 	platform = win
 	OS :=Windows
 	CC :=gcc
