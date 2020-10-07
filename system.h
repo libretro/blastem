@@ -2,8 +2,8 @@
 #define SYSTEM_H_
 #include <stddef.h>
 #include <stdint.h>
+#include "system_header.h"
 
-typedef struct system_header system_header;
 typedef struct system_media system_media;
 
 typedef enum {
