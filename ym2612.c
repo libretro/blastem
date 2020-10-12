@@ -179,6 +179,11 @@ void ym_reset(ym2612_context *context)
 	for (int i = 0; i < NUM_CHANNELS; i++) {
 		context->channels[i].lr = 0xC0;
 		context->channels[i].logfile = savedlogs[i];
+		if (i < 3) {
+			context->part1_regs[REG_LR_AMS_PMS - YM_PART1_START + i] = 0xC0;
+		} else {
+			context->part2_regs[REG_LR_AMS_PMS - YM_PART2_START + i - 3] = 0xC0;
+		}
 	}
 	context->write_cycle = CYCLE_NEVER;
 	for (int i = 0; i < NUM_OPERATORS; i++) {
