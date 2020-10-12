@@ -172,7 +172,13 @@ void render_free_audio_opaque(void *opaque)
 void render_audio_created(audio_source *source)
 {
 	if (sync_src == SYNC_AUDIO) {
-		SDL_PauseAudio(0);
+		//SDL_PauseAudio acquires the audio device lock, which is held while the callback runs
+		//since our callback can itself be stuck waiting on the audio_ready condition variable
+		//calling SDL_PauseAudio(0) again for audio sources after the first can deadlock
+		//fortunately SDL_GetAudioStatus does not acquire the lock so is safe to call here
+		if (SDL_GetAudioStatus() == SDL_AUDIO_PAUSED) {
+			SDL_PauseAudio(0);
+		}
 	}
 	if (current_system && sync_src == SYNC_AUDIO_THREAD) {
 		system_request_exit(current_system, 0);
@@ -195,7 +201,13 @@ void render_source_paused(audio_source *src, uint8_t remaining_sources)
 void render_source_resumed(audio_source *src)
 {
 	if (sync_src == SYNC_AUDIO) {
-		SDL_PauseAudio(0);
+		//SDL_PauseAudio acquires the audio device lock, which is held while the callback runs
+		//since our callback can itself be stuck waiting on the audio_ready condition variable
+		//calling SDL_PauseAudio(0) again for audio sources after the first can deadlock
+		//fortunately SDL_GetAudioStatus does not acquire the lock so is safe to call here
+		if (SDL_GetAudioStatus() == SDL_AUDIO_PAUSED) {
+			SDL_PauseAudio(0);
+		}
 	}
 	if (current_system && sync_src == SYNC_AUDIO_THREAD) {
 		system_request_exit(current_system, 0);
