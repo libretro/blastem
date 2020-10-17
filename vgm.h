@@ -79,6 +79,7 @@ typedef struct {
 	FILE       *f;
 	uint32_t   master_clock;
 	uint32_t   last_cycle;
+	uint32_t   extra_delta;
 } vgm_writer;
 
 vgm_writer *vgm_write_open(char *filename, uint32_t rate, uint32_t clock, uint32_t cycle);

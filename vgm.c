@@ -71,11 +71,12 @@ static void add_wait(vgm_writer *writer, uint32_t cycle)
 	}
 	uint64_t last_sample = (uint64_t)writer->last_cycle * (uint64_t)44100;
 	last_sample /= (uint64_t)writer->master_clock;
-	uint64_t sample = (uint64_t)cycle * (uint64_t)44100;
+	uint64_t sample = ((uint64_t)cycle + (uint64_t)writer->extra_delta) * (uint64_t)44100;
 	sample /= (uint64_t)writer->master_clock;
 	uint32_t delta = sample - last_sample;
 	
 	writer->last_cycle = cycle;
+	writer->extra_delta = 0;
 	writer->header.num_samples += delta;
 	wait_commands(writer, delta);
 }
@@ -113,6 +114,7 @@ void vgm_ym2612_part2_write(vgm_writer *writer, uint32_t cycle, uint8_t reg, uin
 void vgm_adjust_cycles(vgm_writer *writer, uint32_t deduction)
 {
 	if (deduction > writer->last_cycle) {
+		writer->extra_delta += deduction - writer->last_cycle;
 		writer->last_cycle = 0;
 	} else {
 		writer->last_cycle -= deduction;
