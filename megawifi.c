@@ -21,7 +21,7 @@
 #include "net.h"
 #include "util.h"
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
 #  if BYTE_ORDER == LITTLE_ENDIAN
 #define htobe64(val)   ((((uint64_t)htonl((val)&0xFFFFFFFF))<<32) | htonl((val)>>32))
 #  else
