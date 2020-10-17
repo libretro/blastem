@@ -97,7 +97,8 @@ endif
 
 ifeq ($(OS),Darwin)
 SDL_INCLUDE_PATH:=Frameworks/SDL2.framework/Headers
-LDFLAGS+= -FFrameworks -framework SDL2 -framework OpenGL -framework AppKit
+CFLAGS+=  -mmacosx-version-min=10.10
+LDFLAGS+= -FFrameworks -framework SDL2 -framework OpenGL -framework AppKit -mmacosx-version-min=10.10
 FIXUP:=install_name_tool -change @rpath/SDL2.framework/Versions/A/SDL2 @executable_path/Frameworks/SDL2.framework/Versions/A/SDL2
 else
 SDL_INCLUDE_PATH:=sdl/include
