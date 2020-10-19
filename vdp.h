@@ -91,7 +91,10 @@ enum {
 	REG_DMALEN_H,
 	REG_DMASRC_L,
 	REG_DMASRC_M,
-	REG_DMASRC_H
+	REG_DMASRC_H,
+	REG_KMOD_CTRL=29,
+	REG_KMOD_MSG,
+	REG_KMOD_TIMER
 };
 
 //Mode reg 1
@@ -168,6 +171,10 @@ typedef struct {
 	uint32_t       *fb;
 	uint8_t        *done_composite;
 	uint32_t       *debug_fbs[VDP_NUM_DEBUG_TYPES];
+	char           *kmod_msg_buffer;
+	uint32_t       kmod_buffer_storage;
+	uint32_t       kmod_buffer_length;
+	uint32_t       timer_start_cycle;
 	uint32_t       output_pitch;
 	uint32_t       debug_fb_pitch[VDP_NUM_DEBUG_TYPES];
 	fifo_entry     fifo[FIFO_SIZE];

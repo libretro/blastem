@@ -10,6 +10,7 @@
 #include "render.h"
 #include "util.h"
 #include "event_log.h"
+#include "terminal.h"
 
 #define NTSC_INACTIVE_START 224
 #define PAL_INACTIVE_START 240
@@ -3781,6 +3782,33 @@ int vdp_control_port_write(vdp_context * context, uint16_t value)
 				}
 				if (reg == REG_MODE_1 || reg == REG_MODE_2 || reg == REG_MODE_4) {
 					update_video_params(context);
+				}
+			} else if (reg == REG_KMOD_CTRL) {
+				if (!(value & 0xFF)) {
+					context->system->enter_debugger = 1;
+				}
+			} else if (reg == REG_KMOD_MSG) {
+				char c = value;
+				if (c) {
+					context->kmod_buffer_length++;
+					if ((context->kmod_buffer_length + 1) > context->kmod_buffer_storage) {
+						context->kmod_buffer_storage = context->kmod_buffer_length ? 128 : context->kmod_buffer_length * 2;
+						context->kmod_msg_buffer = realloc(context->kmod_msg_buffer, context->kmod_buffer_storage);
+					}
+					context->kmod_msg_buffer[context->kmod_buffer_length - 1] = c;
+				} else if (context->kmod_buffer_length) {
+					context->kmod_msg_buffer[context->kmod_buffer_length] = 0;
+					init_terminal();
+					printf("KDEBUG MESSAGE: %s\n", context->kmod_msg_buffer);
+					context->kmod_buffer_length = 0;
+				}
+			} else if (reg == REG_KMOD_TIMER) {
+				if (!(value & 0x80)) {
+					init_terminal();
+					printf("KDEBUG TIMER: %d\n", (context->cycles - context->timer_start_cycle) / 7);
+				}
+				if (value & 0xC0) {
+					context->timer_start_cycle = context->cycles;
 				}
 			}
 		} else if (mode_5) {
