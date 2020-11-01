@@ -1160,7 +1160,7 @@ static void read_map_scroll(uint16_t column, uint16_t vsram_off, uint32_t line, 
 	vscroll >>= vscroll_shift;
 	//TODO: Verify the behavior for a setting of 2
 	static const uint16_t hscroll_masks[] = {0x1F, 0x3F, 0x1F, 0x7F};
-	static const uint16_t v_shifts[] = {6, 7, 0, 8};
+	static const uint16_t v_shifts[] = {6, 7, 16, 8};
 	uint16_t hscroll_mask = hscroll_masks[context->regs[REG_SCROLL] & 0x3];
 	uint16_t v_shift = v_shifts[context->regs[REG_SCROLL] & 0x3];
 	uint16_t hscroll, offset;
