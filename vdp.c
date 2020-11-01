@@ -3369,6 +3369,8 @@ static void check_switch_inactive(vdp_context *context, uint8_t is_h40)
 	//technically the second hcounter check should be different for H40, but this is probably close enough for now
 	if (context->state == ACTIVE && context->vcounter == context->inactive_start && (context->hslot >= (is_h40 ? 167 : 135) || context->hslot < 133)) {
 		context->state = INACTIVE;
+		context->cur_slot = MAX_SPRITES_LINE-1;
+		context->sprite_x_offset = 0;
 	}
 }
 
