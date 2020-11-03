@@ -1962,17 +1962,19 @@ void view_system_settings(struct nk_context *context)
 	uint32_t desired_width = context->style.font->height * 10;
 	if (nk_begin(context, "System Settings", nk_rect(0, 0, width, height), 0)) {
 		nk_layout_row_static(context, context->style.font->height, desired_width, 2);
+		
+		selected_model = settings_dropdown_ex(context, "Model", model_opts, model_names, num_models, selected_model, "system\0model\0");
+		selected_io_1 = settings_dropdown_ex(context, "IO Port 1 Device", io_opts_1, device_type_names, num_io, selected_io_1, "io\0devices\0""1\0");
+		selected_io_2 = settings_dropdown_ex(context, "IO Port 2 Device", io_opts_2, device_type_names, num_io, selected_io_2, "io\0devices\0""2\0");
+		selected_region = settings_dropdown_ex(context, "Default Region", region_codes, regions, num_regions, selected_region, "system\0default_region\0");
 		selected_sync = settings_dropdown(context, "Sync Source", sync_opts, num_sync_opts, selected_sync, "system\0sync_source\0");
 		settings_int_property(context, "68000 Clock Divider", "", "clocks\0m68k_divider\0", 7, 1, 53);
+		selected_format = settings_dropdown(context, "Save State Format", formats, num_formats, selected_format, "ui\0state_format\0");
+		selected_init = settings_dropdown(context, "Initial RAM Value", ram_inits, num_inits, selected_init, "system\0ram_init\0");
 		settings_toggle(context, "Remember ROM Path", "ui\0remember_path\0", 1);
 		settings_toggle(context, "Save config with EXE", "ui\0config_in_exe_dir\0", 0);
 		settings_string(context, "Game Save Path", "ui\0save_path\0", "$USERDATA/blastem/$ROMNAME");
-		selected_region = settings_dropdown_ex(context, "Default Region", region_codes, regions, num_regions, selected_region, "system\0default_region\0");
-		selected_model = settings_dropdown_ex(context, "Model", model_opts, model_names, num_models, selected_model, "system\0model\0");
-		selected_format = settings_dropdown(context, "Save State Format", formats, num_formats, selected_format, "ui\0state_format\0");
-		selected_init = settings_dropdown(context, "Initial RAM Value", ram_inits, num_inits, selected_init, "system\0ram_init\0");
-		selected_io_1 = settings_dropdown_ex(context, "IO Port 1 Device", io_opts_1, device_type_names, num_io, selected_io_1, "io\0devices\0""1\0");
-		selected_io_2 = settings_dropdown_ex(context, "IO Port 2 Device", io_opts_2, device_type_names, num_io, selected_io_2, "io\0devices\0""2\0");
+		
 		if (nk_button_label(context, "Back")) {
 			pop_view();
 		}
