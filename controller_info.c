@@ -62,7 +62,10 @@ static const char *subtype_human_names[] = {
 static const char *variant_names[] = {
 	"normal",
 	"6b bumpers",
-	"6b right"
+	"6b right",
+	"3button",
+	"6button",
+	"8button"
 };
 
 static void load_ctype_config(void)
@@ -242,6 +245,12 @@ static char const *labels_nintendo[] = {
 static char const *labels_genesis[] = {
 	"A", "B", "X", "Y", NULL, NULL, "Start", NULL, NULL, "Z", "C", NULL, "Mode"
 };
+static char const *labels_genesis_3button[] = {
+	"A", "B", NULL, NULL, NULL, NULL, "Start", NULL, NULL, NULL, "C", NULL, "Mode"
+};
+static char const *labels_genesis_8button[] = {
+	"A", "B", "X", "Y", "Mode", NULL, "Start", NULL, NULL, "Z", "C", "L", "R"
+};
 static char const *labels_saturn[] = {
 	"A", "B", "X", "Y", NULL, NULL, "Start", NULL, NULL, "Z", "C", "LT", "RT"
 };
@@ -266,7 +275,13 @@ static const char** label_source(controller_info *info)
 		}
 	} else {
 		if (info->subtype == SUBTYPE_GENESIS) {
-			return labels_genesis;
+			if (info->variant == VARIANT_8BUTTON) {
+				return labels_genesis_8button;
+			} else if (info->variant == VARIANT_3BUTTON) {
+				return labels_genesis_3button;
+			} else {
+				return labels_genesis;
+			}
 		} else {
 			return labels_saturn;
 		}

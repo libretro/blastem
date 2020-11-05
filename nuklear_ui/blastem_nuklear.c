@@ -1332,26 +1332,41 @@ static void view_controller_variant(struct nk_context *context)
 		nk_label(context, "Select the layout that", NK_TEXT_CENTERED);
 		nk_label(context, "best matches your controller", NK_TEXT_CENTERED);
 		nk_label(context, "", NK_TEXT_CENTERED);
-		if (nk_button_label(context, "4 face buttons")) {
-			selected_controller_info.variant = VARIANT_NORMAL;
-			selected = 1;
-		}
-		char buffer[512];
-		snprintf(buffer, sizeof(buffer), "6 face buttons including %s and %s", 
-			get_button_label(&selected_controller_info, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER), 
-			get_axis_label(&selected_controller_info, SDL_CONTROLLER_AXIS_TRIGGERRIGHT)
-		);
-		if (nk_button_label(context, buffer)) {
-			selected_controller_info.variant = VARIANT_6B_RIGHT;
-			selected = 1;
-		}
-		snprintf(buffer, sizeof(buffer), "6 face buttons including %s and %s", 
-			get_button_label(&selected_controller_info, SDL_CONTROLLER_BUTTON_LEFTSHOULDER), 
-			get_button_label(&selected_controller_info, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
-		);
-		if (nk_button_label(context, buffer)) {
-			selected_controller_info.variant = VARIANT_6B_BUMPERS;
-			selected = 1;
+		if (selected_controller_info.subtype == SUBTYPE_GENESIS) {
+			if (nk_button_label(context, "3 button")) {
+				selected_controller_info.variant = VARIANT_3BUTTON;
+				selected = 1;
+			}
+			if (nk_button_label(context, "Standard 6 button")) {
+				selected_controller_info.variant = VARIANT_6B_BUMPERS;
+				selected = 1;
+			}
+			if (nk_button_label(context, "6 button with 2 shoulder buttons")) {
+				selected_controller_info.variant = VARIANT_8BUTTON;
+				selected = 1;
+			}
+		} else {
+			if (nk_button_label(context, "4 face buttons")) {
+				selected_controller_info.variant = VARIANT_NORMAL;
+				selected = 1;
+			}
+			char buffer[512];
+			snprintf(buffer, sizeof(buffer), "6 face buttons including %s and %s", 
+				get_button_label(&selected_controller_info, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER), 
+				get_axis_label(&selected_controller_info, SDL_CONTROLLER_AXIS_TRIGGERRIGHT)
+			);
+			if (nk_button_label(context, buffer)) {
+				selected_controller_info.variant = VARIANT_6B_RIGHT;
+				selected = 1;
+			}
+			snprintf(buffer, sizeof(buffer), "6 face buttons including %s and %s", 
+				get_button_label(&selected_controller_info, SDL_CONTROLLER_BUTTON_LEFTSHOULDER), 
+				get_button_label(&selected_controller_info, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
+			);
+			if (nk_button_label(context, buffer)) {
+				selected_controller_info.variant = VARIANT_6B_BUMPERS;
+				selected = 1;
+			}
 		}
 		nk_end(context);
 	}
@@ -1382,7 +1397,22 @@ static void controller_type_group(struct nk_context *context, char *name, int ty
 				selected_controller_info.type = type_id;
 				selected_controller_info.subtype = first_subtype_id + i;
 				pop_view();
-				push_view(view_controller_variant);
+				if (selected_controller_info.subtype == SUBTYPE_SATURN) {
+					selected_controller_info.variant = VARIANT_6B_BUMPERS;
+					save_controller_info(selected_controller, &selected_controller_info);
+					if (initial_controller_config) {
+						SDL_GameController *controller = render_get_controller(selected_controller);
+						if (controller) {
+							push_view(view_controller_bindings);
+							controller_binding_changed = 0;
+							SDL_GameControllerClose(controller);
+						} else {
+							show_mapping_view();
+						}
+					}
+				} else {
+					push_view(view_controller_variant);
+				}
 			}
 		}
 		nk_group_end(context);
