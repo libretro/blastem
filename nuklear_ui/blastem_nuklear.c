@@ -98,7 +98,8 @@ void view_file_browser(struct nk_context *context, uint8_t normal_open)
 	if (nk_begin(context, "Load ROM", nk_rect(0, 0, width, height), 0)) {
 		nk_layout_row_static(context, height - context->style.font->height * 3, width - 60, 1);
 		int32_t old_selected = selected_entry;
-		if (nk_group_begin(context, "Select ROM", NK_WINDOW_BORDER | NK_WINDOW_TITLE)) {
+		char *title = alloc_concat("Select ROM: ", current_path);
+		if (nk_group_begin(context, title, NK_WINDOW_BORDER | NK_WINDOW_TITLE)) {
 			nk_layout_row_static(context, context->style.font->height - 2, width-100, 1);
 			for (int32_t i = 0; i < num_entries; i++)
 			{
@@ -118,6 +119,7 @@ void view_file_browser(struct nk_context *context, uint8_t normal_open)
 			}
 			nk_group_end(context);
 		}
+		free(title);
 		nk_layout_row_static(context, context->style.font->height * 1.75, width > 600 ? 300 : width / 2, 2);
 		if (nk_button_label(context, "Back")) {
 			pop_view();
