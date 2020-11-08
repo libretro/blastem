@@ -88,6 +88,15 @@ void view_file_browser(struct nk_context *context, uint8_t normal_open)
 		if (entries) {
 			sort_dir_list(entries, num_entries);
 		}
+		if (!num_entries) {
+			//get_dir_list can fail if the user doesn't have permission
+			//for the current folder, make sure they can still navigate up
+			free_dir_list(entries, num_entries);
+			entries = calloc(1, sizeof(dir_entry));
+			entries[0].name = strdup("..");
+			entries[0].is_dir = 1;
+			num_entries = 1;
+		}
 	}
 	if (!got_ext_list) {
 		ext_list = get_extension_list(config, &num_exts);
