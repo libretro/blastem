@@ -2023,6 +2023,29 @@ void view_system_settings(struct nk_context *context)
 	}
 }
 
+void view_confirm_reset(struct nk_context *context)
+{
+	if (nk_begin(context, "Reset Confirm", nk_rect(0, 0, render_width(), render_height()), 0)) {
+		uint32_t desired_width = context->style.font->height * 20;
+		nk_layout_row_static(context, context->style.font->height, desired_width, 1);
+		nk_label(context, "This will reset all settings and controller", NK_TEXT_LEFT);
+		nk_label(context, "mappings back to the defaults.", NK_TEXT_LEFT);
+		nk_label(context, "Are you sure you want to proceed?", NK_TEXT_LEFT);
+		nk_layout_row_static(context, context->style.font->height * 1.5, desired_width / 2, 2);
+		if (nk_button_label(context, "Maybe not")) {
+			pop_view();
+		}
+		if (nk_button_label(context, "Yep, delete it all")) {
+			delete_custom_config();
+			config = load_config();
+			delete_controller_info();
+			config_dirty = 1;
+			pop_view();
+		}
+		nk_end(context);
+	}
+}
+
 void view_back(struct nk_context *context)
 {
 	pop_view();
@@ -2038,6 +2061,7 @@ void view_settings(struct nk_context *context)
 		{"Video", view_video_settings},
 		{"Audio", view_audio_settings},
 		{"System", view_system_settings},
+		{"Reset to Defaults", view_confirm_reset},
 		{"Back", view_back}
 	};
 	

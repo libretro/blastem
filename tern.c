@@ -305,12 +305,11 @@ char * tern_int_key(uint32_t key, char * buf)
 
 void tern_free(tern_node *head)
 {
-	if (head->left) {
-		tern_free(head->left);
+	if (!head) {
+		return;
 	}
-	if (head->right) {
-		tern_free(head->right);
-	}
+	tern_free(head->left);
+	tern_free(head->right);
 	if (head->el) {
 		tern_free(head->straight.next);
 	}

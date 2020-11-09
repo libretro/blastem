@@ -1203,6 +1203,19 @@ void render_init(int width, int height, char * title, uint8_t fullscreen)
 
 	atexit(render_quit);
 }
+
+void render_reset_mappings(void)
+{
+	SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
+	SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER);
+	uint32_t db_size;
+	char *db_data = read_bundled_file("gamecontrollerdb.txt", &db_size);
+	if (db_data) {
+		int added = SDL_GameControllerAddMappingsFromRW(SDL_RWFromMem(db_data, db_size), 1);
+		free(db_data);
+		debug_message("Added %d game controller mappings from gamecontrollerdb.txt\n", added);
+	}
+}
 static int in_toggle;
 
 void render_config_updated(void)

@@ -140,6 +140,7 @@ void render_set_ui_fb_resize_handler(ui_render_fun resize);
 void render_video_loop(void);
 uint8_t render_should_release_on_exit(void);
 void render_set_external_sync(uint8_t ext_sync_on);
+void render_reset_mappings(void);
 #ifndef IS_LIB
 uint8_t render_create_thread(render_thread *thread, const char *name, render_thread_fun fun, void *data);
 #endif

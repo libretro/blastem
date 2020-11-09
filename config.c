@@ -298,6 +298,21 @@ void persist_config(tern_node *config)
 	persist_config_at(config, config, "blastem.cfg");
 }
 
+void delete_custom_config_at(char *fname)
+{
+	char *confpath = path_append(get_exe_dir(), fname);
+	delete_file(confpath);
+	free(confpath);
+	confpath = path_append(get_config_dir(), fname);
+	delete_file(confpath);
+	free(confpath);
+}
+
+void delete_custom_config(void)
+{
+	delete_custom_config_at("blastem.cfg");
+}
+
 char **get_extension_list(tern_node *config, uint32_t *num_exts_out)
 {
 	char *ext_filter = strdup(tern_find_path_default(config, "ui\0extensions\0", (tern_val){.ptrval = "bin gen md smd sms gg"}, TVAL_PTR).ptrval);
