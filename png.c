@@ -204,7 +204,7 @@ static uint8_t filter_paeth(uint8_t *cur, uint8_t *last, uint8_t bpp, uint32_t x
 
 static uint32_t pixel_gray(uint8_t **cur, uint8_t **last, uint8_t bpp, uint32_t x, filter_fun filter)
 {
-	uint8_t value = filter(*cur, *last, bpp, x);
+	uint8_t value = **cur = filter(*cur, *last, bpp, x);
 	(*cur)++;
 	if (*last) {
 		(*last)++;
@@ -214,17 +214,17 @@ static uint32_t pixel_gray(uint8_t **cur, uint8_t **last, uint8_t bpp, uint32_t 
 
 static uint32_t pixel_true(uint8_t **cur, uint8_t **last, uint8_t bpp, uint32_t x, filter_fun filter)
 {
-	uint8_t red = filter(*cur, *last, bpp, x);
+	uint8_t red = **cur = filter(*cur, *last, bpp, x);
 	(*cur)++;
 	if (*last) {
 		(*last)++;
 	}
-	uint8_t green = filter(*cur, *last, bpp, x);
+	uint8_t green = **cur = filter(*cur, *last, bpp, x);
 	(*cur)++;
 	if (*last) {
 		(*last)++;
 	}
-	uint8_t blue = filter(*cur, *last, bpp, x);
+	uint8_t blue = **cur = filter(*cur, *last, bpp, x);
 	(*cur)++;
 	if (*last) {
 		(*last)++;
@@ -234,12 +234,12 @@ static uint32_t pixel_true(uint8_t **cur, uint8_t **last, uint8_t bpp, uint32_t 
 
 static uint32_t pixel_gray_alpha(uint8_t **cur, uint8_t **last, uint8_t bpp, uint32_t x, filter_fun filter)
 {
-	uint8_t value = filter(*cur, *last, bpp, x);
+	uint8_t value = **cur = filter(*cur, *last, bpp, x);
 	(*cur)++;
 	if (*last) {
 		(*last)++;
 	}
-	uint8_t alpha = filter(*cur, *last, bpp, x);
+	uint8_t alpha = **cur = filter(*cur, *last, bpp, x);
 	(*cur)++;
 	if (*last) {
 		(*last)++;
@@ -249,22 +249,22 @@ static uint32_t pixel_gray_alpha(uint8_t **cur, uint8_t **last, uint8_t bpp, uin
 
 static uint32_t pixel_true_alpha(uint8_t **cur, uint8_t **last, uint8_t bpp, uint32_t x, filter_fun filter)
 {
-	uint8_t red = filter(*cur, *last, bpp, x);
+	uint8_t red = **cur = filter(*cur, *last, bpp, x);
 	(*cur)++;
 	if (*last) {
 		(*last)++;
 	}
-	uint8_t green = filter(*cur, *last, bpp, x);
+	uint8_t green = **cur = filter(*cur, *last, bpp, x);
 	(*cur)++;
 	if (*last) {
 		(*last)++;
 	}
-	uint8_t blue = filter(*cur, *last, bpp, x);
+	uint8_t blue = **cur = filter(*cur, *last, bpp, x);
 	(*cur)++;
 	if (*last) {
 		(*last)++;
 	}
-	uint8_t alpha = filter(*cur, *last, bpp, x);
+	uint8_t alpha = **cur = filter(*cur, *last, bpp, x);
 	(*cur)++;
 	if (*last) {
 		(*last)++;
@@ -354,6 +354,7 @@ uint32_t *load_png(uint8_t *buffer, uint32_t buf_size, uint32_t *width, uint32_t
 					}
 					memcpy(idat_buf + idat_size, buffer + cur, chunk_size);
 					idat_size += chunk_size;
+					idat_needs_free = 1;
 				} else {
 					idat_buf = buffer + cur;
 					idat_size = chunk_size;
