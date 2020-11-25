@@ -1261,14 +1261,14 @@ static void view_controller_mappings(struct nk_context *context)
 				)) {
 				if (current_button <= SDL_CONTROLLER_BUTTON_B || axis_moved != button_a_axis) {
 					start_mapping();
+					if (current_button >= SDL_CONTROLLER_BUTTON_DPAD_UP) {
+						mapping_string[mapping_pos++] = axis_value >= 0 ? '+' : '-';
+					}
 					mapping_string[mapping_pos++] = 'a';
 					if (axis_moved > 9) {
 						mapping_string[mapping_pos++] = '0' + axis_moved / 10;
 					}
 					mapping_string[mapping_pos++] = '0' + axis_moved % 10;
-					if (current_button >= SDL_CONTROLLER_BUTTON_DPAD_UP) {
-						mapping_string[mapping_pos++] = axis_value >= 0 ? '+' : '-';
-					}
 					last_axis = axis_moved;
 					last_axis_value = axis_value;
 				}
