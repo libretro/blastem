@@ -644,27 +644,16 @@ static uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 	refresh_counter = refresh_counter % (MCLKS_PER_68K * REFRESH_INTERVAL);
 	last_sync_cycle = context->current_cycle;
 #endif
+	sync_components(context, 0);
 	genesis_context *gen = context->system;
 	vdp_context * v_context = gen->vdp;
+	uint32_t before_cycle = v_context->cycles;
 	if (vdp_port < 0x10) {
 		if (vdp_port < 4) {
-			sync_components(context, 0);
-			uint32_t before_cycle = v_context->cycles;
 			value = vdp_data_port_read(v_context);
-			if (v_context->cycles != before_cycle) {
-				//printf("68K paused for %d (%d) cycles at cycle %d (%d) for read\n", v_context->cycles - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
-				context->current_cycle = v_context->cycles;
-				//Lock the Z80 out of the bus until the VDP access is complete
-				genesis_context *gen = context->system;
-				gen->bus_busy = 1;
-				sync_z80(gen->z80, v_context->cycles);
-				gen->bus_busy = 0;
-			}
 		} else if(vdp_port < 8) {
-			vdp_run_context(v_context, context->current_cycle);
 			value = vdp_control_port_read(v_context);
 		} else {
-			vdp_run_context(v_context, context->current_cycle);
 			value = vdp_hv_counter_read(v_context);
 			//printf("HV Counter: %X at cycle %d\n", value, v_context->cycles);
 		}
@@ -672,6 +661,15 @@ static uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 		fatal_error("Illegal read from PSG  port %X\n", vdp_port);
 	} else {
 		value = get_open_bus_value(&gen->header);
+	}
+	if (v_context->cycles != before_cycle) {
+		//printf("68K paused for %d (%d) cycles at cycle %d (%d) for read\n", v_context->cycles - context->current_cycle, v_context->cycles - before_cycle, context->current_cycle, before_cycle);
+		context->current_cycle = v_context->cycles;
+		//Lock the Z80 out of the bus until the VDP access is complete
+		genesis_context *gen = context->system;
+		gen->bus_busy = 1;
+		sync_z80(gen->z80, v_context->cycles);
+		gen->bus_busy = 0;
 	}
 #ifdef REFRESH_EMULATION
 	last_sync_cycle -= 4 * MCLKS_PER_68K;
