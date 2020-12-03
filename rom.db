@@ -1405,3 +1405,23 @@ NETO-001 {
 		}
 	}
 }
+68366449fd1497538741b5a1949e342202d48948 {
+	name Rock World
+	map {
+		0 {
+			device ROM
+			last 3FFFFF
+		}
+		500008 {
+			device fixed
+			value 4000
+			last 500009
+		}
+		500208 {
+			device fixed
+			value A000
+			last 500209
+		}
+		
+	}
+}
