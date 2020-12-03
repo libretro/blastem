@@ -1391,3 +1391,17 @@ NETO-001 {
 		}
 	}
 }
+5e5ca20b39122c86b8f662bd8014af674f9dbed7 {
+	name Rock Heaven
+	map {
+		0 {
+			device ROM
+			last 3FFFFF
+		}
+		500008 {
+			device fixed
+			value 5082
+			last 500009
+		}
+	}
+}
