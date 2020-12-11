@@ -212,7 +212,7 @@ RETRO_API bool retro_serialize(void *data, size_t size)
 RETRO_API bool retro_unserialize(const void *data, size_t size)
 {
 	current_system->deserialize(current_system, (uint8_t *)data, size);
-	return 0;
+	return 1;
 }
 
 RETRO_API void retro_cheat_reset(void)
