@@ -44,6 +44,9 @@ core: $(OBJ)
 	make $(target) OS=$(OS) CC=$(CC) CPU=$(ABI)
 	cp -v $(target) $(libname)
 
+install: $(libname)
+	install -Dp -m755 $(libname) $(DESTDIR)$(prefix)/lib/libretro/$(libname)
+
 .PHONY: clean
 
 clean:
