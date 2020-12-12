@@ -414,8 +414,8 @@ void process_events()
 {
 	static int16_t prev_state[2][RETRO_DEVICE_ID_JOYPAD_L2];
 	static const uint8_t map[] = {
-		BUTTON_A, BUTTON_X, BUTTON_MODE, BUTTON_START, DPAD_UP, DPAD_DOWN,
-		DPAD_LEFT, DPAD_RIGHT, BUTTON_B, BUTTON_Y, BUTTON_Z, BUTTON_C
+		BUTTON_B, BUTTON_A, BUTTON_MODE, BUTTON_START, DPAD_UP, DPAD_DOWN,
+		DPAD_LEFT, DPAD_RIGHT, BUTTON_C, BUTTON_Y, BUTTON_X, BUTTON_Z
 	};
 	//TODO: handle other input device types
 	//TODO: handle more than 2 ports when appropriate
