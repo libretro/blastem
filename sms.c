@@ -309,7 +309,8 @@ void sms_deserialize(deserialize_buffer *buf, sms_context *sms)
 	//TODO: cart RAM
 	while (buf->cur_pos < buf->size)
 	{
-		load_section(buf);
+		if (!load_section(buf))
+			break;
 	}
 	z80_invalidate_code_range(sms->z80, 0xC000, 0x10000);
 	if (sms->bank_regs[0] & 8) {

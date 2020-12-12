@@ -211,7 +211,8 @@ void genesis_deserialize(deserialize_buffer *buf, genesis_context *gen)
 	gen->tmss = 0xFF;
 	while (buf->cur_pos < buf->size)
 	{
-		load_section(buf);
+		if (!load_section(buf))
+			break;
 	}
 	if (gen->version_reg & 0xF) {
 		if (gen->tmss == 0xFF) {
