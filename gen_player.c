@@ -81,7 +81,8 @@ static void run(gen_player *player)
 			register_section_handler(&buffer, (section_handler){.fun = psg_deserialize, .data = player->psg}, SECTION_PSG);
 			while (buffer.cur_pos < buffer.size)
 			{
-				load_section(&buffer);
+				if (!load_section(&buffer))
+					break;
 			}
 			player->reader.buffer.cur_pos += size;
 			free(buffer.handlers);

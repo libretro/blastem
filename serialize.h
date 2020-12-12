@@ -28,7 +28,7 @@ struct deserialize_buffer {
 };
 
 enum {
-	SECTION_HEADER,
+	SECTION_END_OF_SERIALIZATION,
 	SECTION_68000,
 	SECTION_Z80,
 	SECTION_VDP,
@@ -63,7 +63,7 @@ uint8_t load_int8(deserialize_buffer *buf);
 void load_buffer8(deserialize_buffer *buf, void *dst, size_t len);
 void load_buffer16(deserialize_buffer *buf, uint16_t *dst, size_t len);
 void load_buffer32(deserialize_buffer *buf, uint32_t *dst, size_t len);
-void load_section(deserialize_buffer *buf);
+int load_section(deserialize_buffer *buf);
 uint8_t save_to_file(serialize_buffer *buf, char *path);
 uint8_t load_from_file(deserialize_buffer *buf, char *path);
 #endif //SERIALIZE_H
