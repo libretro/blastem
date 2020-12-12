@@ -184,14 +184,9 @@ RETRO_API void retro_run(void)
  * returned size is never allowed to be larger than a previous returned
  * value, to ensure that the frontend can allocate a save state buffer once.
  */
-static size_t serialize_size_cache;
 RETRO_API size_t retro_serialize_size(void)
 {
-	if (!serialize_size_cache) {
-		uint8_t *tmp = current_system->serialize(current_system, &serialize_size_cache);
-		free(tmp);
-	}
-	return serialize_size_cache;
+	return SERIALIZE_DEFAULT_SIZE;
 }
 
 /* Serializes internal state. If failed, or size is lower than
@@ -227,7 +222,6 @@ RETRO_API void retro_cheat_set(unsigned index, bool enabled, const char *code)
 static system_type stype;
 RETRO_API bool retro_load_game(const struct retro_game_info *game)
 {
-	serialize_size_cache = 0;
 	if (game->path) {
 		media.dir = path_dirname(game->path);
 		media.name = basename_no_extension(game->path);

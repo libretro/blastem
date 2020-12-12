@@ -189,7 +189,8 @@ void genesis_deserialize(deserialize_buffer *buf, genesis_context *gen)
 	register_section_handler(buf, (section_handler){.fun = cart_deserialize, .data = gen}, SECTION_MAPPER);
 	while (buf->cur_pos < buf->size)
 	{
-		load_section(buf);
+		if (!load_section(buf))
+			break;
 	}
 	update_z80_bank_pointer(gen);
 	adjust_int_cycle(gen->m68k, gen->vdp);

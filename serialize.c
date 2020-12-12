@@ -4,11 +4,6 @@
 #include "serialize.h"
 #include "util.h"
 
-#ifndef SERIALIZE_DEFAULT_SIZE
-#define SERIALIZE_DEFAULT_SIZE (256*1024) //default to enough for a Genesis save state
-#endif
-
-
 void init_serialize(serialize_buffer *buf)
 {
 	buf->storage = SERIALIZE_DEFAULT_SIZE;
@@ -205,12 +200,15 @@ void load_buffer32(deserialize_buffer *buf, uint32_t *dst, size_t len)
 	}
 }
 
-void load_section(deserialize_buffer *buf)
+int load_section(deserialize_buffer *buf)
 {
 	if (!buf->handlers) {
 		fatal_error("load_section called on a deserialize_buffer with no handlers registered\n");
 	}
 	uint16_t section_id = load_int16(buf);
+	if (section_id == SECTION_END_OF_SERIALIZATION) {
+		return 0;
+	}
 	uint32_t size = load_int32(buf);
 	if (size > (buf->size - buf->cur_pos)) {
 		fatal_error("Section is bigger than remaining space in file");
@@ -218,12 +216,13 @@ void load_section(deserialize_buffer *buf)
 	if (section_id > buf->max_handler || !buf->handlers[section_id].fun) {
 		warning("No handler for section ID %d, save state may be from a newer version\n", section_id);
 		buf->cur_pos += size;
-		return;
+		return 1;
 	}
 	deserialize_buffer section;
 	init_deserialize(&section, buf->data + buf->cur_pos, size);
 	buf->handlers[section_id].fun(&section, buf->handlers[section_id].data);
 	buf->cur_pos += size;
+	return 1;
 }
 
 static const char sz_ident[] = "BLSTSZ\x01\x07";
