@@ -4,6 +4,10 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#ifndef SERIALIZE_DEFAULT_SIZE
+#define SERIALIZE_DEFAULT_SIZE (256*1024) //default to enough for a Genesis save state
+#endif
+
 typedef struct {
 	size_t  size;
 	size_t  storage;
