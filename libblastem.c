@@ -129,6 +129,13 @@ static void update_overscan(void)
 	}
 }
 
+static float get_aspect_ratio(void)
+{
+	float aspect_width = LINEBUF_SIZE - overscan_left - overscan_right;
+	float aspect_height = (video_standard == VID_NTSC ? 243 : 294) - overscan_top - overscan_bot;
+	return aspect_width / aspect_height;
+}
+
 static int32_t sample_rate;
 RETRO_API void retro_get_system_av_info(struct retro_system_av_info *info)
 {
@@ -138,7 +145,7 @@ RETRO_API void retro_get_system_av_info(struct retro_system_av_info *info)
 	info->geometry.base_height = (video_standard == VID_NTSC ? 243 : 294) - (overscan_top + overscan_bot);
 	last_height = info->geometry.base_height;
 	info->geometry.max_height = info->geometry.base_height * 2;
-	info->geometry.aspect_ratio = 0;
+	info->geometry.aspect_ratio = get_aspect_ratio();
 	double master_clock = video_standard == VID_NTSC ? 53693175 : 53203395;
 	double lines = video_standard == VID_NTSC ? 262 : 313;
 	info->timing.fps = master_clock / (3420.0 * lines);
@@ -368,7 +375,7 @@ void render_framebuffer_updated(uint8_t which, int width)
 		struct retro_game_geometry geometry = {
 			.base_width = width,
 			.base_height = height,
-			.aspect_ratio = (float)LINEBUF_SIZE / base_height
+			.aspect_ratio = get_aspect_ratio()
 		};
 		retro_environment(RETRO_ENVIRONMENT_SET_GEOMETRY, &geometry);
 		last_width = width;
