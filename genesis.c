@@ -234,13 +234,14 @@ static void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 		context->sync_cycle = context->current_cycle + gen->max_cycles;
 	}
 	context->int_cycle = CYCLE_NEVER;
-	if ((context->status & 0x7) < 6) {
+	uint8_t mask = context->status & 0x7;
+	if (mask < 6) {
 		uint32_t next_vint = vdp_next_vint(v_context);
 		if (next_vint != CYCLE_NEVER) {
 			context->int_cycle = next_vint;
 			context->int_num = 6;
 		}
-		if ((context->status & 0x7) < 4) {
+		if (mask < 4) {
 			uint32_t next_hint = vdp_next_hint(v_context);
 			if (next_hint != CYCLE_NEVER) {
 				next_hint = next_hint < context->current_cycle ? context->current_cycle : next_hint;
@@ -248,6 +249,21 @@ static void adjust_int_cycle(m68k_context * context, vdp_context * v_context)
 					context->int_cycle = next_hint;
 					context->int_num = 4;
 
+				}
+			}
+			if (mask < 2 && (v_context->regs[REG_MODE_3] & BIT_EINT_EN)) {
+				uint32_t next_eint_port0 = io_next_interrupt(gen->io.ports, context->current_cycle);
+				uint32_t next_eint_port1 = io_next_interrupt(gen->io.ports + 1, context->current_cycle);
+				uint32_t next_eint_port2 = io_next_interrupt(gen->io.ports + 2, context->current_cycle);
+				uint32_t next_eint = next_eint_port0 < next_eint_port1 
+					? (next_eint_port0 < next_eint_port2 ? next_eint_port0 : next_eint_port2)
+					: (next_eint_port1 < next_eint_port2 ? next_eint_port1 : next_eint_port2);
+				if (next_eint != CYCLE_NEVER) {
+					next_eint = next_eint < context->current_cycle ? context->current_cycle : next_eint;
+					if (next_eint < context->int_cycle) {
+						context->int_cycle = next_eint;
+						context->int_num = 2;
+					}
 				}
 			}
 		}
@@ -379,6 +395,9 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	sync_z80(z_context, mclks);
 	sync_sound(gen, mclks);
 	vdp_run_context(v_context, mclks);
+	io_run(gen->io.ports, mclks);
+	io_run(gen->io.ports + 1, mclks);
+	io_run(gen->io.ports + 2, mclks);
 	if (mclks >= gen->reset_cycle) {
 		gen->reset_requested = 1;
 		context->should_return = 1;
@@ -793,7 +812,7 @@ static m68k_context * io_write(uint32_t location, m68k_context * context, uint8_
 				io_control_write(gen->io.ports+2, value, context->current_cycle);
 				break;
 			case 0x7:
-				gen->io.ports[0].serial_out = value;
+				io_tx_write(gen->io.ports, value, context->current_cycle);
 				break;
 			case 0x8:
 			case 0xB:
@@ -801,19 +820,20 @@ static m68k_context * io_write(uint32_t location, m68k_context * context, uint8_
 				//serial input port is not writeable
 				break;
 			case 0x9:
+				io_sctrl_write(gen->io.ports, value, context->current_cycle);
 				gen->io.ports[0].serial_ctrl = value;
 				break;
 			case 0xA:
-				gen->io.ports[1].serial_out = value;
+				io_tx_write(gen->io.ports + 1, value, context->current_cycle);
 				break;
 			case 0xC:
-				gen->io.ports[1].serial_ctrl = value;
+				io_sctrl_write(gen->io.ports + 1, value, context->current_cycle);
 				break;
 			case 0xD:
-				gen->io.ports[2].serial_out = value;
+				io_tx_write(gen->io.ports + 2, value, context->current_cycle);
 				break;
 			case 0xF:
-				gen->io.ports[2].serial_ctrl = value;
+				io_sctrl_write(gen->io.ports + 2, value, context->current_cycle);
 				break;
 			}
 		} else {
@@ -949,28 +969,28 @@ static uint8_t io_read(uint32_t location, m68k_context * context)
 				value = gen->io.ports[0].serial_out;
 				break;
 			case 0x8:
-				value = gen->io.ports[0].serial_in;
+				value = io_rx_read(gen->io.ports, context->current_cycle);
 				break;
 			case 0x9:
-				value = gen->io.ports[0].serial_ctrl;
+				value = io_sctrl_read(gen->io.ports, context->current_cycle);
 				break;
 			case 0xA:
 				value = gen->io.ports[1].serial_out;
 				break;
 			case 0xB:
-				value = gen->io.ports[1].serial_in;
+				value = io_rx_read(gen->io.ports + 1, context->current_cycle);
 				break;
 			case 0xC:
-				value = gen->io.ports[1].serial_ctrl;
+				value = io_sctrl_read(gen->io.ports, context->current_cycle);
 				break;
 			case 0xD:
 				value = gen->io.ports[2].serial_out;
 				break;
 			case 0xE:
-				value = gen->io.ports[2].serial_in;
+				value = io_rx_read(gen->io.ports + 1, context->current_cycle);
 				break;
 			case 0xF:
-				value = gen->io.ports[2].serial_ctrl;
+				value = io_sctrl_read(gen->io.ports, context->current_cycle);
 				break;
 			default:
 				value = get_open_bus_value(&gen->header) >> 8;

@@ -39,7 +39,8 @@ const char * device_type_names[] = {
 	"EA 4-way Play cable A",
 	"EA 4-way Play cable B",
 	"Sega Parallel Transfer Board",
-	"Generic Device"
+	"Generic Device",
+	"Generic Serial"
 };
 
 #define GAMEPAD_TH0 0
@@ -210,8 +211,20 @@ uint8_t io_has_keyboard(sega_io *io)
 	return find_keyboard(io) != NULL;
 }
 
+static void set_serial_clock(io_port *port)
+{
+	switch(port->serial_ctrl >> 6)
+	{
+	case 0: port->serial_divider = 11186; break; //4800 bps
+	case 1: port->serial_divider = 22372; break; //2400 bps
+	case 2: port->serial_divider = 44744; break; //1200 bps
+	case 3: port->serial_divider = 178976; break; //300 bps
+	}
+}
+
 void process_device(char * device_type, io_port * port)
 {
+	set_serial_clock(port);
 	//assuming that the io_port struct has been zeroed if this is the first time this has been called
 	if (!device_type)
 	{
@@ -269,6 +282,12 @@ void process_device(char * device_type, io_port * port)
 	} else if(!strcmp(device_type, "generic")) {
 		if (port->device_type != IO_GENERIC) {
 			port->device_type = IO_GENERIC;
+			port->device.stream.data_fd = -1;
+			port->device.stream.listen_fd = -1;
+		}
+	} else if(!strcmp(device_type, "serial")) {
+		if (port->device_type != IO_GENERIC_SERIAL) {
+			port->device_type = IO_GENERIC_SERIAL;
 			port->device.stream.data_fd = -1;
 			port->device.stream.listen_fd = -1;
 		}
@@ -354,7 +373,7 @@ void setup_io_devices(tern_node * config, rom_info *rom, sega_io *io)
 					}
 				}
 			}
-		} else if (ports[i].device_type == IO_GENERIC && ports[i].device.stream.data_fd == -1) {
+		} else if (ports[i].device_type == IO_GENERIC || ports[i].device_type == IO_GENERIC_SERIAL && ports[i].device.stream.data_fd == -1) {
 			char *sock_name = tern_find_path(config, "io\0socket\0", TVAL_PTR).ptrval;
 			if (!sock_name)
 			{
@@ -427,7 +446,6 @@ void mouse_check_ready(io_port *port, uint32_t current_cycle)
 	}
 }
 
-uint32_t last_poll_cycle;
 void io_adjust_cycles(io_port * port, uint32_t current_cycle, uint32_t deduction)
 {
 	/*uint8_t control = pad->control | 0x80;
@@ -459,25 +477,80 @@ void io_adjust_cycles(io_port * port, uint32_t current_cycle, uint32_t deduction
 			}
 		}
 	}
-	if (last_poll_cycle >= deduction) {
-		last_poll_cycle -= deduction;
+	if (port->transmit_end >= deduction) {
+		port->transmit_end -= deduction;
 	} else {
-		last_poll_cycle = 0;
+		port->transmit_end = 0;
+	}
+	if (port->receive_end >= deduction) {
+		port->receive_end -= deduction;
+	} else {
+		port->receive_end = 0;
+	}
+	if (port->last_poll_cycle >= deduction) {
+		port->last_poll_cycle -= deduction;
+	} else {
+		port->last_poll_cycle = 0;
 	}
 }
 
 #ifndef _WIN32
-static void wait_for_connection(io_port * port)
+static void wait_for_connection(io_port *port)
 {
 	if (port->device.stream.data_fd == -1)
 	{
-		debug_message("Waiting for socket connection...");
+		debug_message("Waiting for socket connection...\n");
 		port->device.stream.data_fd = accept(port->device.stream.listen_fd, NULL, NULL);
 		fcntl(port->device.stream.data_fd, F_SETFL, O_NONBLOCK | O_RDWR);
 	}
 }
 
-static void service_pipe(io_port * port)
+static void poll_for_connection(io_port *port)
+{
+	if (port->device.stream.data_fd == -1)
+	{
+		fcntl(port->device.stream.listen_fd, F_SETFL, O_NONBLOCK | O_RDWR);
+		port->device.stream.data_fd = accept(port->device.stream.listen_fd, NULL, NULL);
+		fcntl(port->device.stream.listen_fd, F_SETFL, O_RDWR);
+		if (port->device.stream.data_fd != -1) {
+			fcntl(port->device.stream.data_fd, F_SETFL, O_NONBLOCK | O_RDWR);
+		}
+	}
+}
+
+static void write_serial_byte(io_port *port)
+{
+	fcntl(port->device.stream.data_fd, F_SETFL, O_RDWR);
+	for (int sent = 0; sent != sizeof(port->serial_transmitting);)
+	{
+		sent = send(port->device.stream.data_fd, &port->serial_transmitting, sizeof(port->serial_transmitting), 0);
+		if (sent < 0) {
+			close(port->device.stream.data_fd);
+			port->device.stream.data_fd = -1;
+			wait_for_connection(port);
+			fcntl(port->device.stream.data_fd, F_SETFL, O_RDWR);
+		}
+	}
+	fcntl(port->device.stream.data_fd, F_SETFL, O_NONBLOCK | O_RDWR);
+}
+
+static void read_serial_byte(io_port *port)
+{
+	poll_for_connection(port);
+	if (port->device.stream.data_fd == -1) {
+		return;
+	}
+	int read = recv(port->device.stream.data_fd, &port->serial_receiving, sizeof(port->serial_receiving), 0);
+	if (read < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+		close(port->device.stream.data_fd);
+		port->device.stream.data_fd = -1;
+	}
+	if (read > 0) {
+		port->receive_end = port->serial_cycle + 10 * port->serial_divider;
+	}
+}
+
+static void service_pipe(io_port *port)
 {
 	uint8_t value;
 	int numRead = read(port->device.stream.data_fd, &value, sizeof(value));
@@ -575,6 +648,61 @@ enum {
 	KB_READ,
 	KB_WRITE
 };
+
+enum {
+	SCTRL_BIT_TX_FULL = 1,
+	SCTRL_BIT_RX_READY = 2,
+	SCTRL_BIT_RX_ERROR = 4,
+	SCTRL_BIT_RX_INTEN = 8,
+	SCTRL_BIT_TX_ENABLE = 0x10,
+	SCTRL_BIT_RX_ENABLE = 0x20
+};
+
+void io_run(io_port *port, uint32_t current_cycle)
+{
+	uint32_t new_serial_cycle = ((current_cycle - port->serial_cycle) / port->serial_divider) * port->serial_divider + port->serial_cycle;
+	if (port->transmit_end && port->transmit_end <= new_serial_cycle) {
+		port->transmit_end = 0;
+		
+		if (port->serial_ctrl & SCTRL_BIT_TX_ENABLE) {
+			switch (port->device_type)
+			{
+#ifndef _WIN32
+			case IO_GENERIC_SERIAL:
+				write_serial_byte(port);
+				break;
+#endif
+			//TODO: think about how serial mode might interact with non-serial peripherals
+			}
+		}
+	}
+	if (!port->transmit_end && new_serial_cycle != port->serial_cycle && (port->serial_ctrl & SCTRL_BIT_TX_FULL)) {
+		//there's a transmit byte pending and no byte is currently being sent
+		port->serial_transmitting = port->serial_out;
+		port->serial_ctrl &= ~SCTRL_BIT_TX_FULL;
+		//1 start bit, 8 data bits and 1 stop bit
+		port->transmit_end = new_serial_cycle + 10 * port->serial_divider;
+	}
+	port->serial_cycle = new_serial_cycle;
+	if (port->serial_ctrl && SCTRL_BIT_RX_ENABLE) {
+		if (port->receive_end && new_serial_cycle >= port->receive_end) {
+			port->serial_in = port->serial_receiving;
+			port->serial_ctrl |= SCTRL_BIT_RX_READY;
+			port->receive_end = 0;
+		}
+		if (!port->receive_end) {
+			switch(port->device_type)
+			{
+#ifndef _WIN32
+			case IO_GENERIC_SERIAL:
+				read_serial_byte(port);
+				break;
+#endif
+			//TODO: think about how serial mode might interact with non-serial peripherals
+			}
+		}
+	}
+}
 
 void io_control_write(io_port *port, uint8_t value, uint32_t current_cycle)
 {
@@ -723,6 +851,20 @@ void io_data_write(io_port * port, uint8_t value, uint32_t current_cycle)
 
 }
 
+void io_tx_write(io_port *port, uint8_t value, uint32_t current_cycle)
+{
+	io_run(port, current_cycle);
+	port->serial_out = value;
+	port->serial_ctrl |= SCTRL_BIT_TX_FULL;
+}
+
+void io_sctrl_write(io_port *port, uint8_t value, uint32_t current_cycle)
+{
+	io_run(port, current_cycle);
+	port->serial_ctrl = (port->serial_ctrl & 0x7) | (value & 0xF8);
+	set_serial_clock(port);
+}
+
 uint8_t get_scancode_bytes(io_port *port)
 {
 	if (port->device.keyboard.read_pos == 0xFF) {
@@ -766,9 +908,9 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 	uint8_t th = output & 0x40;
 	uint8_t input;
 	uint8_t device_driven;
-	if (current_cycle - last_poll_cycle > MIN_POLL_INTERVAL) {
+	if (current_cycle - port->last_poll_cycle > MIN_POLL_INTERVAL) {
 		process_events();
-		last_poll_cycle = current_cycle;
+		port->last_poll_cycle = current_cycle;
 	}
 	switch (port->device_type)
 	{
@@ -1047,6 +1189,36 @@ uint8_t io_data_read(io_port * port, uint32_t current_cycle)
 		printf ("value: %X\n", value);
 	}*/
 	return value;
+}
+
+uint8_t io_rx_read(io_port * port, uint32_t current_cycle)
+{
+	io_run(port, current_cycle);
+	port->serial_ctrl &= ~SCTRL_BIT_RX_READY;
+	return port->serial_in;
+}
+
+uint8_t io_sctrl_read(io_port *port, uint32_t current_cycle)
+{
+	io_run(port, current_cycle);
+	return port->serial_ctrl;
+}
+
+uint32_t io_next_interrupt(io_port *port, uint32_t current_cycle)
+{
+	if (!(port->control & 0x80)) {
+		return CYCLE_NEVER;
+	}
+	if (port->serial_ctrl & SCTRL_BIT_RX_INTEN) {
+		if (port->serial_ctrl & SCTRL_BIT_RX_READY) {
+			return current_cycle;
+		}
+		if ((port->serial_ctrl & SCTRL_BIT_RX_ENABLE) && port->receive_end) {
+			return port->receive_end;
+		}
+	}
+	//TODO: handle external interrupts from TH transitions
+	return CYCLE_NEVER;
 }
 
 void io_serialize(io_port *port, serialize_buffer *buf)

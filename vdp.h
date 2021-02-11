@@ -118,7 +118,7 @@ enum {
 #define BIT_SPRITE_SZ  0x02
 
 //Mode reg 3
-#define BIT_EINT_EN    0x10
+#define BIT_EINT_EN    0x08
 #define BIT_VSCROLL    0x04
 
 //Mode reg 4
