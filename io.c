@@ -1548,7 +1548,21 @@ void io_serialize(io_port *port, serialize_buffer *buf)
 			save_int8(buf, port->device.keyboard.cmd);
 		}
 		break;
+	case IO_HEARTBEAT_TRAINER:
+		save_int8(buf, port->device.heartbeat_trainer.bpm);
+		save_int8(buf, port->device.heartbeat_trainer.cadence);
+		save_int8(buf, port->device.heartbeat_trainer.param);
+		save_int8(buf, port->device.heartbeat_trainer.state);
+		save_int8(buf, port->device.heartbeat_trainer.status);
+		save_int8(buf, port->device.heartbeat_trainer.cmd);
+		save_int8(buf, port->device.heartbeat_trainer.remaining_bytes);
+		break;
 	}
+	save_int32(buf, port->serial_cycle);
+	save_int32(buf, port->transmit_end);
+	save_int32(buf, port->receive_end);
+	save_int8(buf, port->serial_transmitting);
+	save_int8(buf, port->serial_receiving);
 }
 
 void io_deserialize(deserialize_buffer *buf, void *vport)
@@ -1559,7 +1573,9 @@ void io_deserialize(deserialize_buffer *buf, void *vport)
 	port->serial_out = load_int8(buf);
 	port->serial_in = load_int8(buf);
 	port->serial_ctrl = load_int8(buf);
+	set_serial_clock(port);
 	uint8_t device_type = load_int8(buf);
+	load_buffer32(buf, port->slow_rise_start, 8);
 	if (device_type != port->device_type) {
 		warning("Loaded save state has a different device type from the current configuration");
 		return;
@@ -1586,5 +1602,21 @@ void io_deserialize(deserialize_buffer *buf, void *vport)
 			port->device.keyboard.cmd = load_int8(buf);
 		}
 		break;
+	case IO_HEARTBEAT_TRAINER:
+		port->device.heartbeat_trainer.bpm = load_int8(buf);
+		port->device.heartbeat_trainer.cadence = load_int8(buf);
+		port->device.heartbeat_trainer.param = load_int8(buf);
+		port->device.heartbeat_trainer.state = load_int8(buf);
+		port->device.heartbeat_trainer.status = load_int8(buf);
+		port->device.heartbeat_trainer.cmd = load_int8(buf);
+		port->device.heartbeat_trainer.remaining_bytes = load_int8(buf);
+		break;
+	}
+	if (buf->cur_pos < buf->size) {
+		port->serial_cycle = load_int32(buf);
+		port->transmit_end = load_int32(buf);
+		port->receive_end = load_int32(buf);
+		port->serial_transmitting = load_int8(buf);
+		port->serial_receiving = load_int8(buf);
 	}
 }
