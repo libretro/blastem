@@ -32,6 +32,8 @@ char const *save_type_name(uint8_t save_type)
 		return "EEPROM";
 	} else if(save_type == SAVE_NOR) {
 		return "NOR Flash";
+	} else if(save_type == SAVE_HBPT) {
+		return "Heartbeat Personal Trainer";
 	}
 	return "SRAM";
 }
@@ -986,6 +988,19 @@ rom_info configure_rom(tern_node *rom_db, void *vrom, uint32_t rom_size, void *l
 		info.port1_override = tern_find_ptr(device_overrides, "1");
 		info.port2_override = tern_find_ptr(device_overrides, "2");
 		info.ext_override = tern_find_ptr(device_overrides, "ext");
+		if (
+			info.save_type == SAVE_NONE
+			&& (
+				(info.port1_override && startswith(info.port1_override, "heartbeat_trainer."))
+				|| (info.port2_override && startswith(info.port2_override, "heartbeat_trainer."))
+				|| (info.ext_override && startswith(info.ext_override, "heartbeat_trainer."))
+			)
+		) {
+			info.save_type = SAVE_HBPT;
+			info.save_size = atoi(tern_find_path_default(entry, "HeartbeatTrainer\0size\0", (tern_val){.ptrval="512"}, TVAL_PTR).ptrval);
+			info.save_buffer = calloc(info.save_size + 5 + 8, 1);
+			memset(info.save_buffer, 0xFF, info.save_size);
+		}
 	} else {
 		info.port1_override = info.port2_override = info.ext_override = NULL;
 	}

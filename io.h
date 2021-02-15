@@ -25,7 +25,8 @@ enum {
 	IO_EA_MULTI_B,
 	IO_SEGA_PARALLEL,
 	IO_GENERIC,
-	IO_GENERIC_SERIAL
+	IO_GENERIC_SERIAL,
+	IO_HEARTBEAT_TRAINER
 };
 
 typedef struct {
@@ -58,6 +59,23 @@ typedef struct {
 			uint8_t  mode;
 			uint8_t  cmd;
 		} keyboard;
+		struct {
+			uint8_t  *nv_memory;
+			uint8_t  *cur_buffer;
+			uint64_t rtc_base_timestamp;
+			uint8_t  rtc_base[5];
+			uint8_t  bpm;
+			uint8_t  cadence;
+			uint8_t  buttons;
+			uint8_t  nv_page_size;
+			uint8_t  nv_pages;
+			uint8_t  param;
+			uint8_t  state;
+			uint8_t  status;
+			uint8_t  device_num;
+			uint8_t  cmd;
+			uint8_t  remaining_bytes;
+		} heartbeat_trainer;
 	} device;
 	uint8_t  output;
 	uint8_t  control;

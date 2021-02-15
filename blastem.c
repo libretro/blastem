@@ -281,12 +281,23 @@ static char *get_save_dir(system_media *media)
 	return save_dir;
 }
 
+const char *get_save_fname(uint8_t save_type)
+{
+	switch(save_type)
+	{
+	case SAVE_I2C: return "save.eeprom";
+	case SAVE_NOR: return "save.nor";
+	case SAVE_HBPT: return "save.hbpt";
+	default: return "save.sram";
+	}
+}
+
 void setup_saves(system_media *media, system_header *context)
 {
 	static uint8_t persist_save_registered;
 	rom_info *info = &context->info;
 	char *save_dir = get_save_dir(info->is_save_lock_on ? media->chain : media);
-	char const *parts[] = {save_dir, PATH_SEP, info->save_type == SAVE_I2C ? "save.eeprom" : info->save_type == SAVE_NOR ? "save.nor" : "save.sram"};
+	char const *parts[] = {save_dir, PATH_SEP, get_save_fname(info->save_type)};
 	free(save_filename);
 	save_filename = alloc_concat_m(3, parts);
 	if (info->is_save_lock_on) {

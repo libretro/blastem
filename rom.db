@@ -1425,3 +1425,13 @@ NETO-001 {
 		
 	}
 }
+T-122026 {
+	name Outback Joey
+	HeartbeatTrainer {
+		size 512
+	}
+	device_overrides {
+		1 heartbeat_trainer.1
+		2 gamepad3.2
+	}
+}
