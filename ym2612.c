@@ -407,6 +407,9 @@ void ym_run_timers(ym2612_context *context)
 				context->timer_b = context->timer_b_load;
 			}
 		}
+	} else if (context->timer_control & BIT_TIMERB_LOAD) {
+		context->timer_control &= ~BIT_TIMERB_LOAD;
+		context->timer_b = context->timer_b_load;
 	}
 	context->sub_timer_b += 0x10;
 	//Update LFO
