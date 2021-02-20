@@ -406,7 +406,7 @@ static void gl_setup()
 	} else {
 		tex_width = tex_height = 512;
 	}
-	printf("Using %dx%d textures\n", tex_width, tex_height);
+	debug_message("Using %dx%d textures\n", tex_width, tex_height);
 	for (int i = 0; i < 3; i++)
 	{
 		glBindTexture(GL_TEXTURE_2D, textures[i]);
