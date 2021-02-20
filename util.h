@@ -88,6 +88,8 @@ void warning(char *format, ...);
 void debug_message(char *format, ...);
 //Disables output of info and debug messages to stdout
 void disable_stdout_messages(void);
+//Returns stdout disable status
+uint8_t is_stdout_enabled(void);
 //Deletes a file, returns true on success, false on failure
 uint8_t delete_file(char *path);
 //Initializes the socket library on platforms that need it

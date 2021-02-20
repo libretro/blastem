@@ -534,6 +534,11 @@ void disable_stdout_messages(void)
 	output_enabled = 0;
 }
 
+uint8_t is_stdout_enabled(void)
+{
+	return output_enabled;
+}
+
 #ifdef _WIN32
 #define WINVER 0x501
 #include <winsock2.h>
