@@ -459,7 +459,11 @@ m68k_context * sync_components(m68k_context * context, uint32_t address)
 	if (address) {
 		if (gen->header.enter_debugger) {
 			gen->header.enter_debugger = 0;
-			debugger(context, address);
+			if (gen->header.debugger_type == DEBUGGER_NATIVE) {
+				debugger(context, address);
+			} else {
+				gdb_debug_enter(context, address);
+			}
 		}
 #ifdef NEW_CORE
 		if (gen->header.save_state) {
