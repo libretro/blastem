@@ -254,6 +254,15 @@ vdp_context *init_vdp_context(uint8_t region_pal, uint8_t has_max_vsram)
 
 void vdp_free(vdp_context *context)
 {
+	if (headless) {
+		free(context->fb);
+	}
+	for (int i = 0; i < VDP_NUM_DEBUG_TYPES; i++)
+	{
+		if (context->enabled_debuggers & (1 << i)) {
+			vdp_toggle_debug_view(context, i);
+		}
+	}
 	free(context);
 }
 
