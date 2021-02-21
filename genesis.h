@@ -39,6 +39,12 @@ struct genesis_context {
 	uint8_t         *save_storage;
 	void            *mapper_temp;
 	eeprom_map      *eeprom_map;
+	write_16_fun    tmss_write_16;
+	write_8_fun     tmss_write_8;
+	read_16_fun     tmss_read_16;
+	read_8_fun      tmss_read_8;
+	uint16_t        *tmss_pointers[NUM_MEM_AREAS];
+	uint8_t         *tmss_buffer;
 	uint8_t         *serialize_tmp;
 	size_t          serialize_size;
 	uint32_t        num_eeprom;
@@ -54,6 +60,7 @@ struct genesis_context {
 	uint32_t        last_frame;
 	uint32_t        last_flush_cycle;
 	uint32_t        soft_flush_cycles;
+	uint32_t        tmss_write_offset;
 	uint8_t         bank_regs[8];
 	uint16_t        z80_bank_reg;
 	uint16_t        tmss_lock[2];

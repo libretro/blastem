@@ -1176,7 +1176,17 @@ static void *unused_write(uint32_t location, void *vcontext, uint16_t value)
 	if (has_tmss && (location == 0xA14000 || location == 0xA14002)) {
 		gen->tmss_lock[location >> 1 & 1] = value;
 	} else if (has_tmss && location == 0xA14100) {
-		//TODO: implement TMSS control register
+		value &= 1;
+		if (gen->tmss != value) {
+			gen->tmss = value;
+			for (int i = 0; i < NUM_MEM_AREAS; i++)
+			{
+				uint16_t *tmp = context->mem_pointers[i];
+				context->mem_pointers[i] = gen->tmss_pointers[i];
+				gen->tmss_pointers[i] = tmp;
+			}
+			m68k_invalidate_code_range(context, 0, 0x400000);
+		}
 	} else if (location < 0x800000 || (location >= 0xA13000 && location < 0xA13100) || (location >= 0xA12000 && location < 0xA12100)) {
 		//these writes are ignored when no relevant hardware is present
 	} else {
@@ -1200,7 +1210,19 @@ static void *unused_write_b(uint32_t location, void *vcontext, uint8_t value)
 			gen->tmss_lock[offset] |= value << 8;
 		}
 	} else if (has_tmss && (location == 0xA14100 || location == 0xA14101)) {
-		//TODO: implement TMSS control register
+		if (location & 1) {
+			value &= 1;
+			if (gen->tmss != value) {
+				gen->tmss = value;
+				for (int i = 0; i < NUM_MEM_AREAS; i++)
+				{
+					uint16_t *tmp = context->mem_pointers[i];
+					context->mem_pointers[i] = gen->tmss_pointers[i];
+					gen->tmss_pointers[i] = tmp;
+				}
+				m68k_invalidate_code_range(context, 0, 0x400000);
+			}
+		}
 	} else if (location < 0x800000 || (location >= 0xA13000 && location < 0xA13100) || (location >= 0xA12000 && location < 0xA12100)) {
 		//these writes are ignored when no relevant hardware is present
 	} else {
@@ -1544,6 +1566,136 @@ static void stop_vgm_log(system_header *system)
 	gen->header.vgm_logging = 0;
 }
 
+static void *tmss_rom_write_16(uint32_t address, void *context, uint16_t value)
+{
+	m68k_context *m68k = context;
+	genesis_context *gen = m68k->system;
+	if (gen->tmss) {
+		return gen->tmss_write_16(address, context, value);
+	}
+	
+	return context;
+}
+
+static void *tmss_rom_write_8(uint32_t address, void *context, uint8_t value)
+{
+	m68k_context *m68k = context;
+	genesis_context *gen = m68k->system;
+	if (gen->tmss) {
+		return gen->tmss_write_8(address, context, value);
+	}
+	
+	return context;
+}
+
+static uint16_t tmss_rom_read_16(uint32_t address, void *context)
+{
+	m68k_context *m68k = context;
+	genesis_context *gen = m68k->system;
+	if (gen->tmss) {
+		return gen->tmss_read_16(address, context);
+	}
+	return ((uint16_t *)gen->tmss_buffer)[address >> 1];
+}
+
+static uint8_t tmss_rom_read_8(uint32_t address, void *context)
+{
+	m68k_context *m68k = context;
+	genesis_context *gen = m68k->system;
+	if (gen->tmss) {
+		return gen->tmss_read_8(address, context);
+	}
+#ifdef BLASTEM_BIG_ENDIAN
+	return gen->tmss_buffer[address];
+#else
+	return gen->tmss_buffer[address ^ 1];
+#endif
+}
+
+static void *tmss_word_write_16(uint32_t address, void *context, uint16_t value)
+{
+	m68k_context *m68k = context;
+	genesis_context *gen = m68k->system;
+	if (gen->tmss) {
+		address += gen->tmss_write_offset;
+		uint16_t *dest = get_native_pointer(address, (void **)m68k->mem_pointers, &m68k->options->gen);
+		*dest = value;
+		m68k_handle_code_write(address, m68k);
+	}
+	
+	return context;
+}
+
+static void *tmss_word_write_8(uint32_t address, void *context, uint8_t value)
+{
+	m68k_context *m68k = context;
+	genesis_context *gen = m68k->system;
+	if (gen->tmss) {
+		address += gen->tmss_write_offset;
+		uint8_t *dest = get_native_pointer(address & ~1, (void **)m68k->mem_pointers, &m68k->options->gen);
+#ifdef BLASTEM_BIG_ENDIAN
+		dest[address & 1] = value;
+#else
+		dest[address & 1 ^ 1] = value;
+#endif
+		m68k_handle_code_write(address & ~1, m68k);
+	}
+	
+	return context;
+}
+
+static void *tmss_odd_write_16(uint32_t address, void *context, uint16_t value)
+{
+	m68k_context *m68k = context;
+	genesis_context *gen = m68k->system;
+	if (gen->tmss) {
+		memmap_chunk const *chunk = find_map_chunk(address + gen->tmss_write_offset, &m68k->options->gen, 0, NULL);
+		address >>= 1;
+		uint8_t *base = (uint8_t *)m68k->mem_pointers[chunk->ptr_index];
+		base[address] = value;
+	}
+	return context;
+}
+
+static void *tmss_odd_write_8(uint32_t address, void *context, uint8_t value)
+{
+	m68k_context *m68k = context;
+	genesis_context *gen = m68k->system;
+	if (gen->tmss && (address & 1)) {
+		memmap_chunk const *chunk = find_map_chunk(address + gen->tmss_write_offset, &m68k->options->gen, 0, NULL);
+		address >>= 1;
+		uint8_t *base = (uint8_t *)m68k->mem_pointers[chunk->ptr_index];
+		base[address] = value;
+	}
+	return context;
+}
+
+static void *tmss_even_write_16(uint32_t address, void *context, uint16_t value)
+{
+	m68k_context *m68k = context;
+	genesis_context *gen = m68k->system;
+	if (gen->tmss) {
+		memmap_chunk const *chunk = find_map_chunk(address + gen->tmss_write_offset, &m68k->options->gen, 0, NULL);
+		address >>= 1;
+		uint8_t *base = (uint8_t *)m68k->mem_pointers[chunk->ptr_index];
+		base[address] = value >> 8;
+	}
+	return context;
+}
+
+static void *tmss_even_write_8(uint32_t address, void *context, uint8_t value)
+{
+	m68k_context *m68k = context;
+	genesis_context *gen = m68k->system;
+	if (gen->tmss && !(address & 1)) {
+		memmap_chunk const *chunk = find_map_chunk(address + gen->tmss_write_offset, &m68k->options->gen, 0, NULL);
+		address >>= 1;
+		uint8_t *base = (uint8_t *)m68k->mem_pointers[chunk->ptr_index];
+		base[address] = value;
+	}
+	return context;
+}
+
 genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on, uint32_t system_opts, uint8_t force_region)
 {
 	static memmap_chunk z80_map[] = {
@@ -1680,13 +1832,145 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 		gen->save_storage = NULL;
 	}
 	
+	gen->mapper_start_index = rom->mapper_start_index;
+	
 	//This must happen before we generate memory access functions in init_m68k_opts
+	uint8_t next_ptr_index = 0;
+	uint32_t tmss_min_alloc = 16 * 1024;
 	for (int i = 0; i < rom->map_chunks; i++)
 	{
 		if (rom->map[i].start == 0xE00000) {
 			rom->map[i].buffer = gen->work_ram;
-			break;
+			if (!tmss) {
+				break;
+			}
 		}
+		if (rom->map[i].flags & MMAP_PTR_IDX && rom->map[i].ptr_index >= next_ptr_index) {
+			next_ptr_index = rom->map[i].ptr_index + 1;
+		}
+		if (rom->map[i].start < 0x400000 && rom->map[i].read_16 != unused_read) {
+			uint32_t highest_offset = (rom->map[i].end & rom->map[i].mask) + 1;
+			if (highest_offset > tmss_min_alloc) {
+				tmss_min_alloc = highest_offset;
+			}
+		}
+	}
+	if (tmss) {
+		char *tmss_path = tern_find_path_default(config, "system\0tmss_path\0", (tern_val){.ptrval = "tmss.md"}, TVAL_PTR).ptrval;
+		uint8_t *buffer = malloc(tmss_min_alloc);
+		uint32_t tmss_size;
+		if (is_absolute_path(tmss_path)) {
+			FILE *f = fopen(tmss_path, "rb");
+			if (!f) {
+				fatal_error("Configured to use a model with TMSS, but failed to load the TMSS ROM from %s\n", tmss_path);
+			}
+			tmss_size = fread(buffer, 1, tmss_min_alloc, f);
+			fclose(f);
+		} else {
+			char *tmp = read_bundled_file(tmss_path, &tmss_size);
+			if (!tmp) {
+				fatal_error("Configured to use a model with TMSS, but failed to load the TMSS ROM from %s\n", tmss_path);
+			}
+			memcpy(buffer, tmp, tmss_size);
+			free(tmp);
+		}
+		for (uint32_t padded = nearest_pow2(tmss_size); tmss_size < padded; tmss_size++)
+		{
+			buffer[tmss_size] = 0xFF;
+		}
+#ifndef BLASTEM_BIG_ENDIAN
+		byteswap_rom(tmss_size, (uint16_t *)buffer);
+#endif
+		//mirror TMSS ROM until we fill up to tmss_min_alloc
+		for (uint32_t dst = tmss_size; dst < tmss_min_alloc; dst += tmss_size)
+		{
+			memcpy(buffer + dst, buffer, dst + tmss_size > tmss_min_alloc ? tmss_min_alloc - dst : tmss_size);
+		}
+		//modify mappings for ROM space to point to the TMSS ROM and fixup flags to allow switching back and forth
+		//WARNING: This code makes some pretty big assumptions about the kinds of map chunks it will encounter
+		for (int i = 0; i < rom->map_chunks; i++)
+		{
+			if (rom->map[i].start < 0x400000 && rom->map[i].read_16 != unused_read) {
+				if (rom->map[i].flags == MMAP_READ) {
+					//Normal ROM
+					rom->map[i].flags |= MMAP_PTR_IDX | MMAP_CODE;
+					rom->map[i].ptr_index = next_ptr_index++;
+					if (rom->map[i].ptr_index >= NUM_MEM_AREAS) {
+						fatal_error("Too many memmap chunks with MMAP_PTR_IDX after TMSS remap\n");
+					}
+					gen->tmss_pointers[rom->map[i].ptr_index] = rom->map[i].buffer;
+					rom->map[i].buffer = buffer + (rom->map[i].start & ~rom->map[i].mask & (tmss_size - 1));
+				} else if (rom->map[i].flags & MMAP_PTR_IDX) {
+					//Sega mapper page or multi-game mapper
+					gen->tmss_pointers[rom->map[i].ptr_index] = rom->map[i].buffer;
+					rom->map[i].buffer = buffer + (rom->map[i].start & ~rom->map[i].mask & (tmss_size - 1));
+					if (rom->map[i].write_16) {
+						if (!gen->tmss_write_16) {
+							gen->tmss_write_16 = rom->map[i].write_16;
+							gen->tmss_write_8 = rom->map[i].write_8;
+							rom->map[i].write_16 = tmss_rom_write_16;
+							rom->map[i].write_8 = tmss_rom_write_8;
+						} else if (gen->tmss_write_16 == rom->map[i].write_16) {
+							rom->map[i].write_16 = tmss_rom_write_16;
+							rom->map[i].write_8 = tmss_rom_write_8;
+						} else {
+							warning("Chunk starting at %X has a write function, but we've already stored a different one for TMSS remap\n", rom->map[i].start);
+						}
+					}
+				} else if ((rom->map[i].flags & (MMAP_READ | MMAP_WRITE)) == (MMAP_READ | MMAP_WRITE)) {
+					//RAM or SRAM
+					rom->map[i].flags |= MMAP_PTR_IDX;
+					rom->map[i].ptr_index = next_ptr_index++;
+					gen->tmss_pointers[rom->map[i].ptr_index] = rom->map[i].buffer;
+					rom->map[i].buffer = buffer + (rom->map[i].start & ~rom->map[i].mask & (tmss_size - 1));
+					if (!gen->tmss_write_offset || gen->tmss_write_offset == rom->map[i].start) {
+						gen->tmss_write_offset = rom->map[i].start;
+						rom->map[i].flags &= ~MMAP_WRITE;
+						if (rom->map[i].flags & MMAP_ONLY_ODD) {
+							rom->map[i].write_16 = tmss_odd_write_16;
+							rom->map[i].write_8 = tmss_odd_write_8;
+						} else if (rom->map[i].flags & MMAP_ONLY_EVEN) {
+							rom->map[i].write_16 = tmss_even_write_16;
+							rom->map[i].write_8 = tmss_even_write_8;
+						} else {
+							rom->map[i].write_16 = tmss_word_write_16;
+							rom->map[i].write_8 = tmss_word_write_8;
+						}
+					} else {
+						warning("Could not remap writes for chunk starting at %X for TMSS because write_offset is %X\n", rom->map[i].start, gen->tmss_write_offset);
+					}
+				} else if (rom->map[i].flags & MMAP_READ_CODE) {
+					//NOR flash
+					rom->map[i].flags |= MMAP_PTR_IDX;
+					rom->map[i].ptr_index = next_ptr_index++;
+					if (rom->map[i].ptr_index >= NUM_MEM_AREAS) {
+						fatal_error("Too many memmap chunks with MMAP_PTR_IDX after TMSS remap\n");
+					}
+					gen->tmss_pointers[rom->map[i].ptr_index] = rom->map[i].buffer;
+					rom->map[i].buffer = buffer + (rom->map[i].start & ~rom->map[i].mask & (tmss_size - 1));
+					if (!gen->tmss_write_16) {
+						gen->tmss_write_16 = rom->map[i].write_16;
+						gen->tmss_write_8 = rom->map[i].write_8;
+						gen->tmss_read_16 = rom->map[i].read_16;
+						gen->tmss_read_8 = rom->map[i].read_8;
+						rom->map[i].write_16 = tmss_rom_write_16;
+						rom->map[i].write_8 = tmss_rom_write_8;
+						rom->map[i].read_16 = tmss_rom_read_16;
+						rom->map[i].read_8 = tmss_rom_read_8;
+					} else if (gen->tmss_write_16 == rom->map[i].write_16) {
+						rom->map[i].write_16 = tmss_rom_write_16;
+						rom->map[i].write_8 = tmss_rom_write_8;
+						rom->map[i].read_16 = tmss_rom_read_16;
+						rom->map[i].read_8 = tmss_rom_read_8;
+					} else {
+						warning("Chunk starting at %X has a write function, but we've already stored a different one for TMSS remap\n", rom->map[i].start);
+					}
+				} else {
+					warning("Didn't remap chunk starting at %X for TMSS because it has flags %X\n", rom->map[i].start, rom->map[i].flags);
+				}
+			}
+		}
+		gen->tmss_buffer = buffer;
 	}
 
 	m68k_options *opts = malloc(sizeof(m68k_options));

@@ -366,6 +366,8 @@ void add_memmap_header(rom_info *info, uint8_t *rom, uint32_t size, memmap_chunk
 					info->map[1].flags |= MMAP_ONLY_ODD;
 				} else if (info->save_type == RAM_FLAG_EVEN) {
 					info->map[1].flags |= MMAP_ONLY_EVEN;
+				} else {
+					info->map[1].flags |= MMAP_CODE;
 				}
 				info->map[1].buffer = info->save_buffer;
 			} else {
@@ -719,6 +721,8 @@ void map_iter_fun(char *key, tern_val val, uint8_t valtype, void *data)
 			map->flags |= MMAP_ONLY_ODD;
 		} else if(state->info->save_type == RAM_FLAG_EVEN) {
 			map->flags |= MMAP_ONLY_EVEN;
+		} else {
+			map->flags |= MMAP_CODE;
 		}
 		map->mask = calc_mask(state->info->save_size, start, end);
 	} else if (!strcmp(dtype, "RAM")) {
