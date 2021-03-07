@@ -367,6 +367,9 @@ m68k.c : m68k.cpu cpu_dsl.py
 %.bin : %.s68
 	vasmm68k_mot -Fbin -m68000 -no-opt -spaces -o $@ -L $@.list $<
 
+%.md : %.s68
+	vasmm68k_mot -Fbin -m68000 -no-opt -spaces -o $@ -L $@.list $<
+
 %.bin : %.sz8
 	vasmz80_mot -Fbin -spaces -o $@ $<
 res.o : blastem.rc
@@ -379,6 +382,7 @@ button.tiles : button.png
 font.tiles : font.png
 
 menu.bin : font_interlace_variable.tiles arrow.tiles cursor.tiles button.tiles font.tiles
+tmss.md : font.tiles
 
 clean :
 	rm -rf $(ALL) trans ztestrun ztestgen *.o nuklear_ui/*.o zlib/*.o

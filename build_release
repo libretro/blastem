@@ -32,7 +32,7 @@ else
 	make PORTABLE=1 clean all
 	SDLDLLPATH=sdl/i686-w64-mingw32/bin
 fi
-make menu.bin
+make menu.bin tmss.md
 if [ $OS = "Windows" -o $OS = "Win64" ]; then
 	binaries="dis.exe zdis.exe vgmplay.exe blastem.exe $SDLDLLPATH/SDL2.dll"
 	verstr=`sed -E -n 's/^[^B]+BLASTEM_VERSION "([^"]+)"/blastem \1/p' blastem.c`
@@ -47,7 +47,7 @@ else
 	verstr=`./blastem -v`
 	txt=""
 fi
-binaries="$binaries menu.bin"
+binaries="$binaries menu.bin tmss.md"
 ver=`echo $verstr | awk '/blastem/ { gsub(/\r/, "", $2); print $2 }'`
 if [ $OS = "Windows" ]; then
 	suffix='-win32'
