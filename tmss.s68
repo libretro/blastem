@@ -141,10 +141,6 @@ tloop:
 ploop:
 	move.w d0, (a0)
 	dbra d1, ploop
-
-	move.b #$40, $A10009
-	move.b #$00, $A10003
-
 	move.l #$45960002, d7
 	move.l d7, (a1)
 	move.l #$800000, d6
@@ -201,6 +197,7 @@ wait:
 	jmp (a6)
 	
 is_bad:
+	move.b d0, (a4)
 	lea bad(pc), a6
 	bsr.s print_string
 	
