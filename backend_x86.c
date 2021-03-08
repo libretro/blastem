@@ -299,10 +299,16 @@ code_ptr gen_mem_fun(cpu_options * opts, memmap_chunk const * memmap, uint32_t n
 			retn(code);
 		}
 		if (memmap[chunk].flags & MMAP_CODE) {
+			uint32_t added_offset;
 			if (memmap[chunk].mask == opts->address_mask) {
-				ram_flags_off += (memmap[chunk].end - memmap[chunk].start) / (1 << opts->ram_flags_shift) / 8; ;
+				added_offset = (memmap[chunk].end - memmap[chunk].start) / (1 << opts->ram_flags_shift) / 8;
 			} else {
-				ram_flags_off += (memmap[chunk].mask + 1) /  (1 << opts->ram_flags_shift) / 8;;
+				added_offset = (memmap[chunk].mask + 1) /  (1 << opts->ram_flags_shift) / 8;
+			}
+			if (added_offset) {
+				ram_flags_off += added_offset;
+			} else {
+				ram_flags_off += 1;
 			}
 		}
 		if (lb_jcc) {
