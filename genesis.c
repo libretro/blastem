@@ -103,6 +103,16 @@ void genesis_serialize(genesis_context *gen, serialize_buffer *buf, uint32_t m68
 		save_buffer8(buf, gen->zram, Z80_RAM_BYTES);
 		end_section(buf);
 		
+		if (gen->version_reg & 0xF) {
+			//only save TMSS info if it's present
+			//that will allow a state saved on a model lacking TMSS
+			//to be loaded on a model that has it
+			start_section(buf, SECTION_TMSS);
+			save_int8(buf, gen->tmss);
+			save_buffer16(buf, gen->tmss_lock, 2);
+			end_section(buf);
+		}
+		
 		cart_serialize(&gen->header, buf);
 	}
 }
@@ -172,7 +182,16 @@ static void bus_arbiter_deserialize(deserialize_buffer *buf, void *vgen)
 	gen->z80_bank_reg = load_int16(buf) & 0x1FF;
 }
 
+static void tmss_deserialize(deserialize_buffer *buf, void *vgen)
+{
+	genesis_context *gen = vgen;
+	gen->tmss = load_int8(buf);
+	load_buffer16(buf, gen->tmss_lock, 2);
+}
+
 static void adjust_int_cycle(m68k_context * context, vdp_context * v_context);
+static void check_tmss_lock(genesis_context *gen);
+static void toggle_tmss_rom(genesis_context *gen);
 void genesis_deserialize(deserialize_buffer *buf, genesis_context *gen)
 {
 	register_section_handler(buf, (section_handler){.fun = m68k_deserialize, .data = gen->m68k}, SECTION_68000);
@@ -187,9 +206,25 @@ void genesis_deserialize(deserialize_buffer *buf, genesis_context *gen)
 	register_section_handler(buf, (section_handler){.fun = ram_deserialize, .data = gen}, SECTION_MAIN_RAM);
 	register_section_handler(buf, (section_handler){.fun = zram_deserialize, .data = gen}, SECTION_SOUND_RAM);
 	register_section_handler(buf, (section_handler){.fun = cart_deserialize, .data = gen}, SECTION_MAPPER);
+	register_section_handler(buf, (section_handler){.fun = tmss_deserialize, .data = gen}, SECTION_TMSS);
+	uint8_t tmss_old = gen->tmss;
+	gen->tmss = 0xFF;
 	while (buf->cur_pos < buf->size)
 	{
 		load_section(buf);
+	}
+	if (gen->version_reg & 0xF) {
+		if (gen->tmss == 0xFF) {
+			//state lacked a TMSS section, assume that the game ROM is mapped in
+			//and that the VDP is unlocked
+			gen->tmss_lock[0] = 0x5345;
+			gen->tmss_lock[1] = 0x4741;
+			gen->tmss = 1;
+		}
+		if (gen->tmss != tmss_old) {
+			toggle_tmss_rom(gen);
+		}
+		check_tmss_lock(gen);
 	}
 	update_z80_bank_pointer(gen);
 	adjust_int_cycle(gen->m68k, gen->vdp);
@@ -1176,7 +1211,19 @@ static uint8_t unused_read_b(uint32_t location, void *vcontext)
 
 static void check_tmss_lock(genesis_context *gen)
 {
-	gen->vdp_unlocked = gen->tmss_lock[0] == 'SE' && gen->tmss_lock[1] == 'GA';
+	gen->vdp_unlocked = gen->tmss_lock[0] == 0x5345 && gen->tmss_lock[1] == 0x4741;
+}
+
+static void toggle_tmss_rom(genesis_context *gen)
+{
+	m68k_context *context = gen->m68k;
+	for (int i = 0; i < NUM_MEM_AREAS; i++)
+	{
+		uint16_t *tmp = context->mem_pointers[i];
+		context->mem_pointers[i] = gen->tmss_pointers[i];
+		gen->tmss_pointers[i] = tmp;
+	}
+	m68k_invalidate_code_range(context, 0, 0x400000);
 }
 
 static void *unused_write(uint32_t location, void *vcontext, uint16_t value)
@@ -1191,13 +1238,7 @@ static void *unused_write(uint32_t location, void *vcontext, uint16_t value)
 		value &= 1;
 		if (gen->tmss != value) {
 			gen->tmss = value;
-			for (int i = 0; i < NUM_MEM_AREAS; i++)
-			{
-				uint16_t *tmp = context->mem_pointers[i];
-				context->mem_pointers[i] = gen->tmss_pointers[i];
-				gen->tmss_pointers[i] = tmp;
-			}
-			m68k_invalidate_code_range(context, 0, 0x400000);
+			toggle_tmss_rom(gen);
 		}
 	} else if (location < 0x800000 || (location >= 0xA13000 && location < 0xA13100) || (location >= 0xA12000 && location < 0xA12100)) {
 		//these writes are ignored when no relevant hardware is present
@@ -1227,13 +1268,7 @@ static void *unused_write_b(uint32_t location, void *vcontext, uint8_t value)
 			value &= 1;
 			if (gen->tmss != value) {
 				gen->tmss = value;
-				for (int i = 0; i < NUM_MEM_AREAS; i++)
-				{
-					uint16_t *tmp = context->mem_pointers[i];
-					context->mem_pointers[i] = gen->tmss_pointers[i];
-					gen->tmss_pointers[i] = tmp;
-				}
-				m68k_invalidate_code_range(context, 0, 0x400000);
+				toggle_tmss_rom(gen);
 			}
 		}
 	} else if (location < 0x800000 || (location >= 0xA13000 && location < 0xA13100) || (location >= 0xA12000 && location < 0xA12100)) {
