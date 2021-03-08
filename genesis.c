@@ -519,6 +519,10 @@ static m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, 
 	if (vdp_port & 0x2700E0) {
 		fatal_error("machine freeze due to write to address %X\n", 0xC00000 | vdp_port);
 	}
+	genesis_context * gen = context->system;
+	if (!gen->vdp_unlocked) {
+		fatal_error("machine freeze due to VDP write to %X without TMSS unlock\n", 0xC00000 | vdp_port);
+	}
 	vdp_port &= 0x1F;
 	//printf("vdp_port write: %X, value: %X, cycle: %d\n", vdp_port, value, context->current_cycle);
 #ifdef REFRESH_EMULATION
@@ -529,7 +533,6 @@ static m68k_context * vdp_port_write(uint32_t vdp_port, m68k_context * context, 
 	last_sync_cycle = context->current_cycle;
 #endif
 	sync_components(context, 0);
-	genesis_context * gen = context->system;
 	vdp_context *v_context = gen->vdp;
 	uint32_t before_cycle = v_context->cycles;
 	if (vdp_port < 0x10) {
@@ -658,6 +661,10 @@ static uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 	if (vdp_port & 0x2700E0) {
 		fatal_error("machine freeze due to read from address %X\n", 0xC00000 | vdp_port);
 	}
+	genesis_context *gen = context->system;
+	if (!gen->vdp_unlocked) {
+		fatal_error("machine freeze due to VDP read from %X without TMSS unlock\n", 0xC00000 | vdp_port);
+	}
 	vdp_port &= 0x1F;
 	uint16_t value;
 #ifdef REFRESH_EMULATION
@@ -668,7 +675,6 @@ static uint16_t vdp_port_read(uint32_t vdp_port, m68k_context * context)
 	last_sync_cycle = context->current_cycle;
 #endif
 	sync_components(context, 0);
-	genesis_context *gen = context->system;
 	vdp_context * v_context = gen->vdp;
 	uint32_t before_cycle = v_context->cycles;
 	if (vdp_port < 0x10) {
@@ -1168,6 +1174,11 @@ static uint8_t unused_read_b(uint32_t location, void *vcontext)
 	}
 }
 
+static void check_tmss_lock(genesis_context *gen)
+{
+	gen->vdp_unlocked = gen->tmss_lock[0] == 'SE' && gen->tmss_lock[1] == 'GA';
+}
+
 static void *unused_write(uint32_t location, void *vcontext, uint16_t value)
 {
 	m68k_context *context = vcontext;
@@ -1175,6 +1186,7 @@ static void *unused_write(uint32_t location, void *vcontext, uint16_t value)
 	uint8_t has_tmss = gen->version_reg & 0xF;
 	if (has_tmss && (location == 0xA14000 || location == 0xA14002)) {
 		gen->tmss_lock[location >> 1 & 1] = value;
+		check_tmss_lock(gen);
 	} else if (has_tmss && location == 0xA14100) {
 		value &= 1;
 		if (gen->tmss != value) {
@@ -1209,6 +1221,7 @@ static void *unused_write_b(uint32_t location, void *vcontext, uint8_t value)
 			gen->tmss_lock[offset] &= 0xFF;
 			gen->tmss_lock[offset] |= value << 8;
 		}
+		check_tmss_lock(gen);
 	} else if (has_tmss && (location == 0xA14100 || location == 0xA14101)) {
 		if (location & 1) {
 			value &= 1;
@@ -1737,6 +1750,8 @@ genesis_context *alloc_init_genesis(rom_info *rom, void *main_rom, void *lock_on
 	uint8_t tmss = !strcmp(tern_find_ptr_default(model, "tmss", "off"), "on");
 	if (tmss) {
 		gen->version_reg |= 1;
+	} else {
+		gen->vdp_unlocked = 1;
 	}
 
 	uint8_t max_vsram = !strcmp(tern_find_ptr_default(model, "vsram", "40"), "64");

@@ -72,6 +72,7 @@ struct genesis_context {
 	uint8_t         bus_busy;
 	uint8_t         reset_requested;
 	uint8_t         tmss;
+	uint8_t         vdp_unlocked;
 	eeprom_state    eeprom;
 	nor_state       nor;
 };
