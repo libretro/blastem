@@ -33,7 +33,11 @@ else
 	platform = linux
 	OS :=Linux
 	CC ?=gcc
+ifeq ($(ARCH),x86)
+	ABI := x86
+else
 	ABI := x86_64
+endif
 	target = libblastem.so
 	libname = blastem_libretro.so
 endif
