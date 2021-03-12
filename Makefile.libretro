@@ -34,7 +34,7 @@ else
 	OS :=Linux
 	CC ?=gcc
 ifeq ($(ARCH),x86)
-	ABI := x86
+	ABI := i686
 else
 	ABI := x86_64
 endif
