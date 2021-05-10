@@ -853,15 +853,27 @@ dir_entry *get_dir_list(char *path, size_t *numret)
 	struct dirent* entry;
 	while (entry = readdir(d))
 	{
+#if defined(__HAIKU__)
+		struct stat sp;
+		stat(entry->d_name, &sp);
+		if (!S_ISREG(sp.st_mode) && !S_ISLNK(sp.st_mode) && !S_ISDIR(sp.st_mode)) {
+			continue;
+		}
+#else
 		if (entry->d_type != DT_REG && entry->d_type != DT_LNK && entry->d_type != DT_DIR) {
 			continue;
 		}
+#endif
 		if (pos == storage) {
 			storage = storage * 2;
 			ret = realloc(ret, sizeof(dir_entry) * storage);
 		}
 		ret[pos].name = strdup(entry->d_name);
+#if defined(__HAIKU__)
+		ret[pos++].is_dir = S_ISDIR(sp.st_mode);
+#else
 		ret[pos++].is_dir = entry->d_type == DT_DIR;
+#endif
 	}
 	if (numret) {
 		*numret = pos;
