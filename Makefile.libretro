@@ -29,6 +29,18 @@ else ifneq ($(findstring Darwin,$(UNAME)),)
 	ABI := x86_64
 	target = libblastem.dylib
 	libname = blastem_libretro.dylib
+else ifneq ($(findstring Haiku,$(UNAME)),)
+	platform = haiku
+	OS :=Haiku
+ifeq ($(UNAMEM),x86_64)
+	ABI :=x86_64
+	CC ?=gcc
+else
+	ABI :=i686
+	CC :=gcc-x86
+endif
+	target = libblastem.so
+	libname = blastem_libretro.so
 else
 	platform = linux
 	OS :=Linux

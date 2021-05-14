@@ -177,6 +177,11 @@ CPU:=i686
 endif
 endif
 
+#Haiku uses a different name for 32bit
+ifeq ($(CPU),BePC)
+CPU:=i686
+endif
+
 TRANSOBJS=gen.o backend.o $(MEM) arena.o tern.o
 M68KOBJS=68kinst.o
 
