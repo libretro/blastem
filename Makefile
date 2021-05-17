@@ -352,7 +352,7 @@ m68k.c : m68k.cpu cpu_dsl.py
 	./cpu_dsl.py -d goto $< > $@
 
 %.db.c : %.db
-	sed $< -e 's/"/\\"/g' -e 's/^\(.*\)$$/"\1\\n"/' -e'1s/^\(.*\)$$/const char $(shell echo $< | tr '.' '_')_data[] = \1/' -e '$$s/^\(.*\)$$/\1;/' > $@
+	sed -e 's/"/\\"/g' -e 's/^\(.*\)$$/"\1\\n"/' -e'1s/^\(.*\)$$/const char $(shell echo $< | tr '.' '_')_data[] = \1/' -e '$$s/^\(.*\)$$/\1;/' $< > $@
 
 %.o : %.S
 	$(CC) -c -o $@ $<
