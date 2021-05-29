@@ -1,5 +1,6 @@
 UNAME=$(shell uname -s)
 UNAMEM=$(shell uname -m)
+LIBRETRO=1
 
 platform ?= unix
 

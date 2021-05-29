@@ -121,7 +121,9 @@ endif
 endif #libblastem.so
 
 ifeq ($(OS),Darwin)
+ifneq ($(LIBRETRO),1)
 LDFLAGS+= -framework OpenGL -framework AppKit
+endif
 endif
 
 endif #PORTABLE
