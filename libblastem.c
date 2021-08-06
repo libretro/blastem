@@ -199,13 +199,14 @@ RETRO_API void retro_reset(void)
 static uint8_t started;
 RETRO_API void retro_run(void)
 {
+	retro_input_poll();
 	if (started)
 		current_system->resume_context(current_system);
-   else
-   {
+	else
+	{
 		current_system->start_context(current_system, NULL);
 		started = 1;
-   }
+	}
 }
 
 /* Returns the amount of data the implementation requires to serialize
