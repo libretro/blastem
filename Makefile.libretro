@@ -57,7 +57,12 @@ endif
 	libname = blastem_libretro.so
 endif
 
-
+# webOS
+ifneq (,$(or $(findstring webos,$(CROSS_COMPILE)),$(findstring starfish,$(CROSS_COMPILE))))
+	ifneq (,$(findstring aarch64,$(CROSS_COMPILE)))
+		ABI := aarch64
+	endif
+endif
 
 core: $(OBJ)
 	$(MAKE) $(target) OS=$(OS) CC=$(CC) CPU=$(ABI) LIBRETRO=$(LIBRETRO)
