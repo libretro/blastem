@@ -12,6 +12,7 @@
 #include "genesis.h"
 #include "sms.h"
 #include "cdimage.h"
+#include "vfs_file.h"
 
 tern_node *config;
 
@@ -101,6 +102,17 @@ RETRO_API void retro_set_environment(retro_environment_t re)
 	};
 	vars[0].value = system_type_desc;
 	re(RETRO_ENVIRONMENT_SET_VARIABLES, (void *)vars);
+
+	//Everything we open by name - CD images and each track file a cue sheet
+	//points at, compressed ROMs, the Sega CD and 32X BIOS - goes through the
+	//frontend when it offers this, so those paths work when they are Android
+	//content:// URIs or live on an SMB share. Version 1 is all we need: open,
+	//read, seek, tell, size and close. Nothing happens if it is unavailable,
+	//vfs_file falls back to stdio.
+	struct retro_vfs_interface_info vfs_info = { .required_interface_version = 1, .iface = NULL };
+	if (re(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &vfs_info) && vfs_info.iface) {
+		vfs_file_set_interface(vfs_info.iface, vfs_info.required_interface_version);
+	}
 
 	const char *system_dir = NULL;
 	re(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &system_dir);

@@ -313,7 +313,9 @@ endif
 
 MAINOBJS:=$(COREOBJS) blastem.o $(RENDEROBJS) zip.o  menu.o debug.o gdb_remote.o bindings.o oscilloscope.o
 
-LIBOBJS:=$(COREOBJS) libblastem.o lib_stubs.o rom.db.o $(LIBZOBJS)
+#vfs_file.o only in this list: it is the libretro build's file layer, and the
+#standalone one keeps using stdio directly (see media_file.h).
+LIBOBJS:=$(COREOBJS) libblastem.o lib_stubs.o rom.db.o vfs_file.o $(LIBZOBJS)
 
 ifdef NONUKLEAR
 CFLAGS+= -DDISABLE_NUKLEAR

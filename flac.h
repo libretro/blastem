@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include "media_file.h"
 
 typedef struct flac_file flac_file;
 
@@ -52,7 +53,7 @@ struct flac_file {
 };
 
 flac_file *flac_file_from_buffer(void *buffer, uint32_t size);
-flac_file *flac_file_from_file(FILE *file);
+flac_file *flac_file_from_file(media_file *file);
 uint8_t flac_get_sample(flac_file *f, int16_t *out, uint8_t desired_channels);
 void flac_seek(flac_file *f, uint64_t sample_number);
 

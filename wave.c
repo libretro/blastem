@@ -28,10 +28,10 @@ int wave_init(FILE * f, uint32_t sample_rate, uint16_t bits_per_sample, uint16_t
 	return fwrite(&header, 1, sizeof(header) - sizeof(header.data_offset), f) == sizeof(header);
 }
 
-uint8_t wave_read_header(FILE *f, wave_header *header)
+uint8_t wave_read_header(media_file *f, wave_header *header)
 {
 	size_t initial_read = offsetof(wave_header, data_header);
-	if (fread(header, 1, initial_read, f) != initial_read) {
+	if (media_fread(header, 1, initial_read, f) != initial_read) {
 		return 0;
 	}
 	if (memcmp(header->chunk.id, "RIFF", 4)) {
@@ -49,17 +49,17 @@ uint8_t wave_read_header(FILE *f, wave_header *header)
 	if (header->format_header.size < offsetof(wave_header, data_header) - sizeof(header->chunk) - sizeof(header->format_header)) {
 		return 0;
 	}
-	fseek(f, header->format_header.size + sizeof(header->chunk) + sizeof(header->format_header), SEEK_SET);
+	media_fseek(f, header->format_header.size + sizeof(header->chunk) + sizeof(header->format_header), SEEK_SET);
 	for (;;)
 	{
-		if (fread(&header->data_header, 1, sizeof(header->data_header), f) != sizeof(header->data_header)) {
+		if (media_fread(&header->data_header, 1, sizeof(header->data_header), f) != sizeof(header->data_header)) {
 			return 0;
 		}
 		if (!memcmp(header->data_header.id, "data", 4)) {
-			header->data_offset = ftell(f);
+			header->data_offset = media_ftell(f);
 			return 1;
 		}
-		fseek(f, header->data_header.size, SEEK_CUR);
+		media_fseek(f, header->data_header.size, SEEK_CUR);
 	}
 }
 

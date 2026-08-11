@@ -123,13 +123,13 @@ static uint8_t bin_seek(system_media *media, uint32_t sector)
 					if (!media->tmp_buffer) {
 						media->tmp_buffer = calloc(1, 96);
 					}
-					fseek(media->tracks[track].f, media->tracks[track].file_offset + (rel + 1) * media->tracks[track].sector_bytes - 96, SEEK_SET);
-					int bytes = fread(media->tmp_buffer, 1, 96, media->tracks[track].f);
+					media_fseek(media->tracks[track].f, media->tracks[track].file_offset + (rel + 1) * media->tracks[track].sector_bytes - 96, SEEK_SET);
+					int bytes = media_fread(media->tmp_buffer, 1, 96, media->tracks[track].f);
 					if (bytes != 96) {
 						fprintf(stderr, "Only read %d subcode bytes\n", bytes);
 					}
 				}
-				fseek(media->tracks[track].f, media->tracks[track].file_offset + rel * media->tracks[track].sector_bytes, SEEK_SET);
+				media_fseek(media->tracks[track].f, media->tracks[track].file_offset + rel * media->tracks[track].sector_bytes, SEEK_SET);
 			}
 		}
 		if (media->tracks[track].type == TRACK_DATA) {
@@ -185,9 +185,9 @@ static uint8_t bin_read(system_media *media, uint32_t offset)
 			if (offset & 1) {
 				retval = media->byte_storage[0];
 			}
-			media->byte_storage[0] = fgetc(media->tracks[media->cur_track].f);
+			media->byte_storage[0] = media_fgetc(media->tracks[media->cur_track].f);
 		} else {
-			retval = fgetc(media->tracks[media->cur_track].f);
+			retval = media_fgetc(media->tracks[media->cur_track].f);
 		}
 	}
 	if (offset >= 12 && media->tracks[media->cur_track].type == TRACK_DATA) {
@@ -245,7 +245,7 @@ uint8_t parse_cue(system_media *media)
 	line = media->buffer;
 	int track = -1;
 	uint8_t audio_byte_swap = 0;
-	FILE *f = NULL;
+	media_file *f = NULL;
 	flac_file *flac = NULL;
 	int track_of_file = -1;
 	uint8_t has_index_0 = 0;
@@ -314,13 +314,13 @@ uint8_t parse_cue(system_media *media)
 							if (flac) {
 								track_size = flac->total_samples * 4;
 							} else if (f) {
-								track_size = file_size(f);
+								track_size = media_file_size(f);
 							}
 							track_size -= tracks[track].file_offset;
 							tracks[track].end_lba = tracks[track].pregap_lba + tracks[track].fake_pregap + track_size / tracks[track].sector_bytes;
 						}
 						flac = NULL;
-						f = fopen(fname, "rb");
+						f = media_fopen(fname, "rb");
 						if (!f) {
 							fatal_error("Failed to open %s specified by FILE command in CUE sheet %s.%s\n", fname, media->name, media->extension);
 						}
@@ -343,7 +343,7 @@ uint8_t parse_cue(system_media *media)
 										}
 										extra_offset = wave.data_offset;
 									} else {
-										fseek(f, 0, SEEK_SET);
+										media_fseek(f, 0, SEEK_SET);
 										flac = flac_file_from_file(f);
 										if (!flac) {
 											fatal_error("WAVE file %s in cue sheet %s.%s is neither a valid WAVE nor a valid FLAC file\n", fname, media->name, media->extension);
@@ -406,9 +406,9 @@ uint8_t parse_cue(system_media *media)
 								if (!tracks[track].fake_pregap) {
 									if (tracks[track].type == TRACK_DATA && tracks[track].sector_bytes == 2352) {
 										//Infer pregap from position in sector header
-										fseek(f, start_lba + 12, SEEK_SET);
+										media_fseek(f, start_lba + 12, SEEK_SET);
 										uint8_t timecode[3];
-										if (sizeof(timecode) == fread(timecode, 1, sizeof(timecode), f)) {
+										if (sizeof(timecode) == media_fread(timecode, 1, sizeof(timecode), f)) {
 											tracks[track].fake_pregap = (timecode[0] >> 4) * 600;
 											tracks[track].fake_pregap += (timecode[0] & 0xF) * 60;
 											tracks[track].fake_pregap += (timecode[1] >> 4) * 10;
@@ -445,7 +445,7 @@ uint8_t parse_cue(system_media *media)
 		if (flac) {
 			track_size = flac->total_samples * 4;
 		} else if (f) {
-			track_size = file_size(f);
+			track_size = media_file_size(f);
 		}
 		track_size -= tracks[track].file_offset;
 		tracks[track].end_lba = tracks[track].pregap_lba + tracks[track].fake_pregap + track_size / tracks[track].sector_bytes;
@@ -454,8 +454,8 @@ uint8_t parse_cue(system_media *media)
 			//replace cue sheet with first sector
 			aligned_free(media->buffer);
 			media->buffer = calloc(2048, 1);
-			fseek(tracks[0].f, tracks[0].sector_bytes >= 2352 ? 16 : 0, SEEK_SET);
-			media->size = fread(media->buffer, 1, 2048, tracks[0].f);
+			media_fseek(tracks[0].f, tracks[0].sector_bytes >= 2352 ? 16 : 0, SEEK_SET);
+			media->size = media_fread(media->buffer, 1, 2048, tracks[0].f);
 		}
 		media->seek = bin_seek;
 		media->read = bin_read;
@@ -486,7 +486,7 @@ uint8_t parse_toc(system_media *media)
 	media->tracks = tracks;
 	line = media->buffer;
 	char *last_file_name = NULL;
-	FILE *f = NULL;
+	media_file *f = NULL;
 	int track = -1;
 	do {
 		char *cmd = cmd_start(line);
@@ -557,7 +557,7 @@ uint8_t parse_toc(system_media *media)
 										memcpy(fname + dirlen + 1, fname_start, fname_end-fname_start);
 										fname[dirlen + 1 + (fname_end-fname_start)] = 0;
 									}
-									f = fopen(fname, "rb");
+									f = media_fopen(fname, "rb");
 									if (!f) {
 										fatal_error("Failed to open %s specified by DATAFILE command in TOC file %s.%s\n", fname, media->name, media->extension);
 									}
@@ -584,7 +584,7 @@ uint8_t parse_toc(system_media *media)
 									uint32_t length = timecode_to_lba(cmd);
 									tracks[track].end_lba += length;
 								} else {
-									long fsize = file_size(f);
+									long fsize = media_file_size(f);
 									tracks[track].end_lba += (fsize - tracks[track].file_offset) / tracks[track].sector_bytes;
 								}
 							}
@@ -617,8 +617,8 @@ uint8_t parse_toc(system_media *media)
 		if (tracks[0].type == TRACK_DATA && tracks[0].sector_bytes == 2352) {
 			// if the first track is a data track, don't trust the TOC file and look at the MM:SS:FF from first sector
 			uint8_t msf[3];
-			fseek(tracks[0].f, 12, SEEK_SET);
-			if (sizeof(msf) == fread(msf, 1, sizeof(msf), tracks[0].f)) {
+			media_fseek(tracks[0].f, 12, SEEK_SET);
+			if (sizeof(msf) == media_fread(msf, 1, sizeof(msf), tracks[0].f)) {
 				tracks[0].fake_pregap = msf[2] + (msf[0] * 60 + msf[1]) * 75;
 			}
 		} else if (!tracks[0].fake_pregap) {
@@ -638,8 +638,8 @@ uint8_t parse_toc(system_media *media)
 			}
 		}
 
-		fseek(tracks[0].f, tracks[0].sector_bytes == 2352 ? 16 : 0, SEEK_SET);
-		media->size = fread(media->buffer, 1, 2048, tracks[0].f);
+		media_fseek(tracks[0].f, tracks[0].sector_bytes == 2352 ? 16 : 0, SEEK_SET);
+		media->size = media_fread(media->buffer, 1, 2048, tracks[0].f);
 		media->seek = bin_seek;
 		media->read = bin_read;
 		media->read_subcodes = bin_subcode_read;
@@ -652,12 +652,12 @@ uint8_t parse_toc(system_media *media)
 
 uint32_t make_iso_media(system_media *media, const char *filename)
 {
-	FILE *f = fopen(filename, "rb");
+	media_file *f = media_fopen(filename, "rb");
 	if (!f) {
 		return 0;
 	}
 	media->buffer = calloc(2048, 1);
-	media->size = fread(media->buffer, 1, 2048, f);
+	media->size = media_fread(media->buffer, 1, 2048, f);
 	media->num_tracks = 1;
 	media->tracks = calloc(sizeof(track_info), 1);
 	media->tracks[0] = (track_info){
@@ -665,7 +665,7 @@ uint32_t make_iso_media(system_media *media, const char *filename)
 		.file_offset = 0,
 		.fake_pregap = 2 * 75,
 		.start_lba = 0,
-		.end_lba = file_size(f),
+		.end_lba = media_file_size(f),
 		.sector_bytes = 2048,
 		.has_subcodes = SUBCODES_NONE,
 		.need_swap = 0,
@@ -686,7 +686,7 @@ void cdimage_serialize(system_media *media, serialize_buffer *buf)
 	save_int32(buf, media->cur_track);
 	save_int32(buf, media->cur_sector);
 	if (media->cur_track < media->num_tracks && media->tracks[media->cur_track].f) {
-		save_int32(buf, ftell(media->tracks[media->cur_track].f));
+		save_int32(buf, media_ftell(media->tracks[media->cur_track].f));
 	} else {
 		save_int32(buf, 0);
 	}
@@ -709,7 +709,7 @@ void cdimage_deserialize(deserialize_buffer *buf, void *vmedia)
 	media->cur_sector = load_int32(buf);
 	uint32_t seekpos = load_int32(buf);
 	if (media->cur_track < media->num_tracks && media->tracks[media->cur_track].f) {
-		fseek(media->tracks[media->cur_track].f, seekpos, SEEK_SET);
+		media_fseek(media->tracks[media->cur_track].f, seekpos, SEEK_SET);
 	}
 	media->in_fake_pregap = load_int8(buf);
 	media->byte_storage[0] = load_int8(buf);

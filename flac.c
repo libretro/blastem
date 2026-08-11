@@ -24,7 +24,7 @@ static uint32_t tell_buffer(flac_file *f)
 
 static uint8_t read_byte_file(flac_file *f)
 {
-	int result = fgetc(f->read_data);
+	int result = media_fgetc(f->read_data);
 	if (result == EOF) {
 		return 0;
 	}
@@ -33,12 +33,12 @@ static uint8_t read_byte_file(flac_file *f)
 
 static void seek_file(flac_file *f, uint32_t offset, uint8_t relative)
 {
-	fseek(f->read_data, offset, relative ? SEEK_CUR : SEEK_SET);
+	media_fseek(f->read_data, offset, relative ? SEEK_CUR : SEEK_SET);
 }
 
 static uint32_t tell_file(flac_file *f)
 {
-	return ftell(f->read_data);
+	return media_ftell(f->read_data);
 }
 
 static void read_chars(flac_file *f, char *dest, uint32_t count)
@@ -199,7 +199,7 @@ flac_file *flac_file_from_buffer(void *buffer, uint32_t size)
 	return NULL;
 }
 
-flac_file *flac_file_from_file(FILE *file)
+flac_file *flac_file_from_file(media_file *file)
 {
 	flac_file *f = calloc(1, sizeof(flac_file));
 	f->read_data = file;

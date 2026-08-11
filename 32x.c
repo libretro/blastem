@@ -8,6 +8,7 @@
 #include "blastem.h"
 #include "util.h"
 #include "debug.h"
+#include "media_file.h"
 
 #define MAX_SH2_CYCLES 2000
 
@@ -1069,11 +1070,11 @@ static uint16_t *get_68K_vector_rom(uint32_t size)
 	}
 	uint16_t *ret = calloc(1, size);
 	char *m68k_path = tern_find_path_default(config, "system\0s32x_68k_bios\0", (tern_val){.ptrval = "32X_G_BIOS.bin"}, TVAL_PTR).ptrval;
-	FILE *f = fopen(m68k_path, "rb");
+	media_file *f = media_fopen(m68k_path, "rb");
 	if (f) {
-		fread(ret, 1, 0x100, f);
+		media_fread(ret, 1, 0x100, f);
 		byteswap_rom(0x100, ret);
-		fclose(f);
+		media_fclose(f);
 	} else {
 		warning("32X 68K BIOS not found at %s. Some games may function without it, but it is needed for full compatibility\n", m68k_path);
 		ret[0] = ret[1] = 0;
@@ -1414,11 +1415,11 @@ s32x *alloc_32x(system_media *media, uint8_t pal, uint8_t cd_boot)
 	}
 	main_map[5].buffer = aligned_calloc(1, main_map[5].end, 16);
 	char *main_path = tern_find_path_default(config, "system\0s32x_main_bios\0", (tern_val){.ptrval = "32X_M_BIOS.bin"}, TVAL_PTR).ptrval;
-	FILE *f = fopen(main_path, "rb");
+	media_file *f = media_fopen(main_path, "rb");
 	if (f) {
-		fread(main_map[5].buffer, 1, main_map[5].end, f);
+		media_fread(main_map[5].buffer, 1, main_map[5].end, f);
 		byteswap_rom(main_map[5].end, main_map[5].buffer);
-		fclose(f);
+		media_fclose(f);
 	} else {
 		warning("32X Main SH2 BIOS not found at %s. 32X will not function correctly until you fix your config\n", main_path);
 	}
@@ -1446,11 +1447,11 @@ s32x *alloc_32x(system_media *media, uint8_t pal, uint8_t cd_boot)
 	}
 	sub_map[5].buffer = aligned_calloc(1, sub_map[5].end, 16);
 	char *sub_path = tern_find_path_default(config, "system\0s32x_sub_bios\0", (tern_val){.ptrval = "32X_S_BIOS.bin"}, TVAL_PTR).ptrval;
-	f = fopen(sub_path, "rb");
+	f = media_fopen(sub_path, "rb");
 	if (f) {
-		fread(sub_map[5].buffer, 1, sub_map[5].end, f);
+		media_fread(sub_map[5].buffer, 1, sub_map[5].end, f);
 		byteswap_rom(sub_map[5].end, sub_map[5].buffer);
-		fclose(f);
+		media_fclose(f);
 	} else {
 		warning("32X Sub SH2 BIOS not found at %s. 32X will not function correctly until you fix your config\n", sub_path);
 	}

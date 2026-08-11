@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include "media_file.h"
 #include "flac.h"
 #include "zip.h"
 
@@ -68,7 +69,7 @@ enum {
 };
 
 typedef struct {
-	FILE       *f;
+	media_file *f;
 	flac_file  *flac;
 	uint32_t   file_offset;
 	uint32_t   fake_pregap;

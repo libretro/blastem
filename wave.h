@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include "media_file.h"
 
 #pragma pack(push, 1)
 
@@ -38,7 +39,7 @@ typedef struct {
 #pragma pack(pop)
 
 int wave_init(FILE * f, uint32_t sample_rate, uint16_t bits_per_sample, uint16_t num_channels);
-uint8_t wave_read_header(FILE *f, wave_header *header);
+uint8_t wave_read_header(media_file *f, wave_header *header);
 int wave_finalize(FILE * f);
 
 #endif //WAVE_H_

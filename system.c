@@ -18,7 +18,19 @@
 #define SMD_MAGIC3 0xBB
 #define SMD_BLOCK_SIZE 0x4000
 
-#ifdef DISABLE_ZLIB
+#ifdef IS_LIB
+//The frontend may hand us a path only it can open - an Android content:// URI,
+//a file on an SMB share - so reads go through its VFS when it offers one. That
+//layer inflates gzipped files as well, which is what gzopen() was doing here.
+#include "vfs_file.h"
+#define ROMFILE vfs_file*
+#define romopen vfs_fopen
+#define romread vfs_fread
+#define romseek vfs_fseek
+#define romgetc vfs_fgetc
+#define romclose vfs_fclose
+#define gzdirect vfs_fdirect
+#elif defined(DISABLE_ZLIB)
 #define ROMFILE FILE*
 #ifdef __ANDROID__
 #define romopen fopen_wrapper

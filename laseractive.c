@@ -8,6 +8,7 @@
 #include "blastem.h"
 #include "paths.h"
 #include "debug.h"
+#include "media_file.h"
 
 static void laseractive_next_shake(upd78k2_context *upd, uint8_t port_bit, uint32_t cycle)
 {
@@ -502,18 +503,18 @@ laseractive *alloc_laseractive(system_media *media, uint32_t opts)
 	la->header.info.name = strdup(media->name);
 	char *upd_rom_path = tern_find_path_default(config, "system\0laseractive_upd_rom\0", (tern_val){.ptrval = "laseractive_dyw_1322a.bin"}, TVAL_PTR).ptrval;
 	uint32_t firmware_size;
-	if (is_absolute_path(upd_rom_path)) {
-		FILE *f = fopen(upd_rom_path, "rb");
+	if (media_path_is_external(upd_rom_path)) {
+		media_file *f = media_fopen(upd_rom_path, "rb");
 		if (f) {
-			long to_read = file_size(f);
+			long to_read = media_file_size(f);
 			if (to_read > sizeof(la->upd_rom)) {
 				to_read = sizeof(la->upd_rom);
 			}
-			firmware_size = fread(la->upd_rom, 1, to_read, f);
+			firmware_size = media_fread(la->upd_rom, 1, to_read, f);
 			if (!firmware_size) {
 				warning("Failed to read from %s\n", upd_rom_path);
 			}
-			fclose(f);
+			media_fclose(f);
 		} else {
 			warning("Failed to open %s\n", upd_rom_path);
 		}

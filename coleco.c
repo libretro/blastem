@@ -9,6 +9,7 @@
 #include "debug.h"
 #include "bindings.h"
 #include "saves.h"
+#include "media_file.h"
 
 #ifdef NEW_Z80
 #define Z80_CYCLE cycles
@@ -482,11 +483,11 @@ coleco_context *alloc_configure_coleco(system_media *media)
 {
 	coleco_context *coleco = calloc(1, sizeof(coleco_context));
 	char *bios_path = tern_find_path_default(config, "system\0coleco_bios_path\0", (tern_val){.ptrval = "colecovision_bios.col"}, TVAL_PTR).ptrval;
-	if (is_absolute_path(bios_path)) {
-		FILE *f = fopen(bios_path, "rb");
+	if (media_path_is_external(bios_path)) {
+		media_file *f = media_fopen(bios_path, "rb");
 		if (f) {
-			fread(coleco->bios, 1, sizeof(coleco->bios), f);
-			fclose(f);
+			media_fread(coleco->bios, 1, sizeof(coleco->bios), f);
+			media_fclose(f);
 		} else {
 			warning("Failed to open Colecovision BIOS from %s\n", bios_path);
 		}

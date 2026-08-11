@@ -202,13 +202,67 @@ static uint8_t read_track_metadata(chd_file *chd, uint32_t index, track_info *tr
 	return 1;
 }
 
+//libchdr can be handed either a path or a core_file of callbacks. The libretro
+//build takes the second route so a CHD behind the frontend's VFS - an Android
+//content:// URI, a file on an SMB share - opens like any other. media_file is
+//plain stdio outside that build, so this is the same code either way.
+static uint64_t chd_media_fsize(struct chd_core_file *file)
+{
+	long size = media_file_size((media_file *)file->argp);
+	return size < 0 ? (uint64_t)-1 : (uint64_t)size;
+}
+
+static size_t chd_media_fread(void *dst, size_t size, size_t count, struct chd_core_file *file)
+{
+	return media_fread(dst, size, count, (media_file *)file->argp);
+}
+
+static int chd_media_fclose(struct chd_core_file *file)
+{
+	int ret = media_fclose((media_file *)file->argp);
+	free(file);
+	return ret;
+}
+
+static int chd_media_fseek(struct chd_core_file *file, int64_t offset, int whence)
+{
+	return media_fseek((media_file *)file->argp, offset, whence);
+}
+
+//Owns the media_file: a successful chd_open_core_file() hands the lifetime to
+//libchdr, which closes it through the callback above.
+static core_file *chd_media_open(const char *path)
+{
+	media_file *f = media_fopen(path, "rb");
+	if (!f) {
+		return NULL;
+	}
+	core_file *cf = calloc(1, sizeof(core_file));
+	if (!cf) {
+		media_fclose(f);
+		return NULL;
+	}
+	cf->argp = f;
+	cf->fsize = chd_media_fsize;
+	cf->fread = chd_media_fread;
+	cf->fclose = chd_media_fclose;
+	cf->fseek = chd_media_fseek;
+	return cf;
+}
+
 //chd_open() fails on a zstd compressed CHD because the codec is stubbed out (see
 //libchdr/zstd.h), and a failed open says nothing about why. The header parses
 //without any codec, so ask it directly.
 static uint8_t uses_zstd(const char *path)
 {
 	chd_header header;
-	if (chd_read_header(path, &header) != CHDERR_NONE) {
+	core_file *cf = chd_media_open(path);
+	if (!cf) {
+		return 0;
+	}
+	chd_error err = chd_read_header_core_file(cf, &header);
+	core_fclose(cf);
+	if (err != CHDERR_NONE) {
 		return 0;
 	}
 	for (int i = 0; i < 4; i++)
@@ -223,8 +277,12 @@ static uint8_t uses_zstd(const char *path)
 uint8_t parse_chd(system_media *media)
 {
 	chd_file *chd = NULL;
-	chd_error err = chd_open(media->orig_path, CHD_OPEN_READ, NULL, &chd);
+	core_file *cf = chd_media_open(media->orig_path);
+	chd_error err = cf ? chd_open_core_file(cf, CHD_OPEN_READ, NULL, &chd) : CHDERR_FILE_NOT_FOUND;
 	if (err != CHDERR_NONE) {
+		//libchdr closes the core_file for us here: its failure path runs
+		//chd_close(), which calls the fclose callback. The one exception is
+		//failing to allocate its own handle, an OOM path not worth unwinding.
 		//The one codec this build leaves out is the one worth naming, since the
 		//file is perfectly good and chdman can rewrite it with another.
 		if (uses_zstd(media->orig_path)) {
