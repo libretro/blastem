@@ -315,7 +315,7 @@ MAINOBJS:=$(COREOBJS) blastem.o $(RENDEROBJS) zip.o  menu.o debug.o gdb_remote.o
 
 #vfs_file.o only in this list: it is the libretro build's file layer, and the
 #standalone one keeps using stdio directly (see media_file.h).
-LIBOBJS:=$(COREOBJS) libblastem.o lib_stubs.o rom.db.o vfs_file.o $(LIBZOBJS)
+LIBOBJS:=$(COREOBJS) libblastem.o lib_stubs.o rom.db.o systems.cfg.o vfs_file.o $(LIBZOBJS)
 
 ifdef NONUKLEAR
 CFLAGS+= -DDISABLE_NUKLEAR
@@ -456,6 +456,11 @@ sh2dis$(EXE) : $(SH2DISOBJS:%.o=$(OBJDIR)/%.o)
 	./cpu_dsl.py -d $(shell echo $@ | sed -E -e "s/^z80.*$$/$(Z80_DISPATCH)/" -e '/^goto/! s/^.*$$/call/') $< > $(shell echo $@ | sed -E 's/\.[ch]$$/./')c
 
 %.db.c : %.db
+	sed -e 's/"/\\"/g' -e 's/^\(.*\)$$/"\1\\n"/' -e'1s/^\(.*\)$$/const char $(shell echo $< | tr '.' '_')_data[] = \1/' -e '$$s/^\(.*\)$$/\1;/' $< > $@
+
+#The libretro core has no files of its own next to it, so the machine
+#descriptions get built in the same way the ROM database does.
+%.cfg.c : %.cfg
 	sed -e 's/"/\\"/g' -e 's/^\(.*\)$$/"\1\\n"/' -e'1s/^\(.*\)$$/const char $(shell echo $< | tr '.' '_')_data[] = \1/' -e '$$s/^\(.*\)$$/\1;/' $< > $@
 
 $(OBJDIR)/%.o : %.S | $(ORDERONLY)

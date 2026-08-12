@@ -5,6 +5,7 @@
 #include "libretro.h"
 #include "system.h"
 #include "util.h"
+#include "config.h"
 #include "paths.h"
 #include "vdp.h"
 #include "render.h"
@@ -42,6 +43,397 @@ static const struct {
 	{ "mediaplayer", SYSTEM_MEDIA_PLAYER }
 };
 #define NUM_SYSTEM_TYPE_OPTIONS (sizeof(system_type_options)/sizeof(*system_type_options))
+
+/*
+ Core options.
+
+ Everything the standalone build lets a user change lives in one config tree,
+ which the emulation code reads with tern_find_path() as it builds a machine. A
+ libretro frontend has its own settings UI, so each option below is one of those
+ config keys wearing a different name, written back into the same tree before a
+ system is created.
+
+ What the standalone offers but is missing here belongs to the frontend rather
+ than to the emulator: window size, shaders, scaling and vsync, audio device
+ rate and buffer size, key bindings, sync source, save paths, the file picker.
+ Sega CD, 32X, Colecovision and TMSS ROM paths are settings too, but a libretro
+ core takes those from the system directory instead of asking.
+*/
+typedef struct {
+	const char *key;
+	const char *desc;
+	const char *info;
+	const char *category;
+	//The config path the emulator reads it from, or NULL for an option this file
+	//acts on itself.
+	const char *config_path;
+	//NULL terminated, first entry is the default. Points at one of the static
+	//lists below, or at one filled in by build_dynamic_values() for the ones
+	//whose choices are only known at runtime.
+	const struct retro_core_option_value *values;
+} core_option;
+
+//Long lists that are built rather than spelled out, so that what is advertised
+//and what the code accepts cannot drift apart.
+#define MAX_MODEL_VALUES 32
+#define MAX_OVERSCAN 32
+static struct retro_core_option_value system_type_values[NUM_SYSTEM_TYPE_OPTIONS + 2];
+static struct retro_core_option_value model_values[MAX_MODEL_VALUES + 1];
+static struct retro_core_option_value sms_model_values[MAX_MODEL_VALUES + 1];
+static struct retro_core_option_value overscan_values[MAX_OVERSCAN + 3];
+
+static const struct retro_core_option_value region_values[] = {
+	{ "U", "U - Americas" },
+	{ "J", "J - Japan" },
+	{ "E", "E - Europe" },
+	{ NULL, NULL }
+};
+static const struct retro_core_option_value off_on_values[] = {
+	{ "off", "Off" },
+	{ "on", "On" },
+	{ NULL, NULL }
+};
+static const struct retro_core_option_value ram_init_values[] = {
+	{ "zero", "Zero" },
+	{ "random", "Random" },
+	{ NULL, NULL }
+};
+//The standalone lets any divider from 1 to 53 be typed in; these are the ones
+//worth picking from a list. 7 is the hardware's.
+static const struct retro_core_option_value m68k_divider_values[] = {
+	{ "7", "7 (7.67 MHz, native)" },
+	{ "6", "6 (8.9 MHz)" },
+	{ "5", "5 (10.7 MHz)" },
+	{ "4", "4 (13.4 MHz)" },
+	{ "3", "3 (17.9 MHz)" },
+	{ "2", "2 (26.8 MHz)" },
+	{ "1", "1 (53.7 MHz)" },
+	{ "8", "8 (6.7 MHz)" },
+	{ "10", "10 (5.4 MHz)" },
+	{ "14", "14 (3.8 MHz)" },
+	{ NULL, NULL }
+};
+//Only the pad types the input glue below can actually drive. The standalone's
+//list also has multitaps, mice and keyboards, which need ports and device types
+//this core does not implement yet.
+static const struct retro_core_option_value io_1_values[] = {
+	{ "gamepad6.1", "6-button pad" },
+	{ "gamepad3.1", "3-button pad" },
+	{ "none", "None" },
+	{ NULL, NULL }
+};
+static const struct retro_core_option_value io_2_values[] = {
+	{ "gamepad6.2", "6-button pad" },
+	{ "gamepad3.2", "3-button pad" },
+	{ "none", "None" },
+	{ NULL, NULL }
+};
+static const struct retro_core_option_value lowpass_values[] = {
+	{ "3390", "3390 Hz (Model 1)" },
+	{ "2000", "2000 Hz" },
+	{ "2500", "2500 Hz" },
+	{ "3000", "3000 Hz" },
+	{ "4000", "4000 Hz" },
+	{ "5000", "5000 Hz" },
+	{ "8000", "8000 Hz" },
+	{ "24000", "24000 Hz (off)" },
+	{ NULL, NULL }
+};
+//Gain lists share everything but which entry comes first, since the standalone
+//starts the mixed-in chips lower than the ones on the main board.
+#define GAIN_VALUES_TAIL \
+	{ "6.0", "+6 dB" }, \
+	{ "4.5", "+4.5 dB" }, \
+	{ "3.0", "+3 dB" }, \
+	{ "1.5", "+1.5 dB" }, \
+	{ "0.0", "0 dB" }, \
+	{ "-1.5", "-1.5 dB" }, \
+	{ "-3.0", "-3 dB" }, \
+	{ "-4.5", "-4.5 dB" }, \
+	{ "-6.0", "-6 dB" }, \
+	{ "-9.5", "-9.5 dB" }, \
+	{ "-12.0", "-12 dB" }, \
+	{ "-18.0", "-18 dB" }, \
+	{ "-24.0", "-24 dB" }, \
+	{ NULL, NULL }
+static const struct retro_core_option_value gain_values[] = {
+	{ "0.0", "0 dB" },
+	GAIN_VALUES_TAIL
+};
+static const struct retro_core_option_value rf5c164_gain_values[] = {
+	{ "-6.0", "-6 dB" },
+	GAIN_VALUES_TAIL
+};
+static const struct retro_core_option_value cdda_gain_values[] = {
+	{ "-9.5", "-9.5 dB" },
+	GAIN_VALUES_TAIL
+};
+static const struct retro_core_option_value fm_dac_values[] = {
+	{ "auto", "Default for model" },
+	{ "zero_offset", "Zero offset (discrete YM2612)" },
+	{ "linear", "Linear (integrated YM3438)" },
+	{ NULL, NULL }
+};
+
+static const core_option core_options[] = {
+	{
+		"blastem_system_type", "System Type",
+		"Which machine to emulate. Auto works out the system from the media, which is right for everything except a LaserActive disc and some Pico and Copera titles.",
+		"system", NULL, system_type_values
+	},
+	{
+		"blastem_model", "Mega Drive Model",
+		"Which revision of the console to emulate. Models from the Mega Drive 2 on have TMSS, which needs a TMSS ROM named tmss.md in the system directory.",
+		"system", "system\0model\0", model_values
+	},
+	{
+		"blastem_sms_model", "Master System Model",
+		"Which machine to run Master System software on. The Mega Drive models run it the way a Mega Drive with a Power Base Converter does.",
+		"system", "sms\0system\0model\0", sms_model_values
+	},
+	{
+		"blastem_region", "Default Region",
+		"Region to use when the software does not say which it wants, or says it will take more than one.",
+		"system", "system\0default_region\0", region_values
+	},
+	{
+		"blastem_force_region", "Force Default Region",
+		"Use the region above even for software that asks for a different one.",
+		"system", "system\0force_region\0", off_on_values
+	},
+	{
+		"blastem_ram_init", "Initial RAM Value",
+		"What work RAM holds at power on. Random exposes software that relies on uninitialized memory.",
+		"system", "system\0ram_init\0", ram_init_values
+	},
+	{
+		"blastem_m68k_divider", "68000 Clock Divider",
+		"Divider between the master clock and the 68000. Anything below 7 overclocks the CPU, which some software will not survive.",
+		"system", "clocks\0m68k_divider\0", m68k_divider_values
+	},
+	{
+		"blastem_megawifi", "MegaWiFi",
+		"Emulate the MegaWiFi cartridge hardware, which lets software make its own connections to the internet. Only turn this on for software you trust.",
+		"system", "system\0megawifi\0", off_on_values
+	},
+	{
+		"blastem_io_1", "Port 1 Device",
+		"What is plugged into the first controller port.",
+		"input", "io\0devices\0" "1\0", io_1_values
+	},
+	{
+		"blastem_io_2", "Port 2 Device",
+		"What is plugged into the second controller port.",
+		"input", "io\0devices\0" "2\0", io_2_values
+	},
+	{
+		"blastem_gain", "Overall Gain",
+		"Gain applied to the mix of every sound chip.",
+		"audio", "audio\0gain\0", gain_values
+	},
+	{
+		"blastem_fm_gain", "FM Gain",
+		"Gain applied to the YM2612 / YM3438.",
+		"audio", "audio\0fm_gain\0", gain_values
+	},
+	{
+		"blastem_psg_gain", "PSG Gain",
+		"Gain applied to the SN76489 PSG.",
+		"audio", "audio\0psg_gain\0", gain_values
+	},
+	{
+		"blastem_rf5c164_gain", "RF5C164 Gain",
+		"Gain applied to the Sega CD's PCM chip.",
+		"audio", "audio\0rf5c164_gain\0", rf5c164_gain_values
+	},
+	{
+		//The standalone's settings menu writes this one to "audio.cdd_gain",
+		//which is not the key set_audio_config() reads, so the slider there does
+		//nothing. Spelled the way the emulator reads it.
+		"blastem_cdda_gain", "CD Audio Gain",
+		"Gain applied to CD audio tracks.",
+		"audio", "audio\0cdda_gain\0", cdda_gain_values
+	},
+	{
+		"blastem_fm_dac", "FM DAC",
+		"Which DAC behaviour to emulate. The discrete YM2612's zero offset is the source of the ladder effect, the integrated YM3438 in later models does not have it.",
+		"audio", "audio\0fm_dac\0", fm_dac_values
+	},
+	{
+		"blastem_lowpass_cutoff", "Low Pass Filter Cutoff",
+		"Cutoff of the low pass filter the console's audio circuit applies. Higher values leave more high end in.",
+		"audio", "audio\0lowpass_cutoff\0", lowpass_values
+	},
+	{
+		"blastem_overscan_top", "Overscan Cropped, Top",
+		"Lines cropped off the top of the picture. Auto follows the frontend's own crop overscan setting.",
+		"video", NULL, overscan_values
+	},
+	{
+		"blastem_overscan_bottom", "Overscan Cropped, Bottom",
+		"Lines cropped off the bottom of the picture. Auto follows the frontend's own crop overscan setting.",
+		"video", NULL, overscan_values
+	},
+	{
+		"blastem_overscan_left", "Overscan Cropped, Left",
+		"Columns cropped off the left of the picture. Auto follows the frontend's own crop overscan setting.",
+		"video", NULL, overscan_values
+	},
+	{
+		"blastem_overscan_right", "Overscan Cropped, Right",
+		"Columns cropped off the right of the picture. Auto follows the frontend's own crop overscan setting.",
+		"video", NULL, overscan_values
+	}
+};
+#define NUM_CORE_OPTIONS (sizeof(core_options)/sizeof(*core_options))
+
+//The model list is whatever systems.cfg holds, filtered the way the standalone's
+//settings menu filters it: models that hide themselves are left out, and the
+//Mega Drive list only keeps the ones with a Mega Drive VDP.
+typedef struct {
+	struct retro_core_option_value *values;
+	uint32_t num;
+	uint32_t max;
+	uint8_t genesis_only;
+} model_collect_state;
+
+static void model_iter(char *key, tern_val val, uint8_t valtype, void *data)
+{
+	model_collect_state *state = data;
+	if (valtype != TVAL_NODE || state->num == state->max) {
+		return;
+	}
+	tern_node *model = val.ptrval;
+	if (!strcmp(tern_find_ptr_default(model, "show", "yes"), "no")) {
+		return;
+	}
+	if (state->genesis_only && strcmp(tern_find_ptr_default(model, "vdp", "genesis"), "genesis")) {
+		return;
+	}
+	//tern_foreach() hands out one reusable buffer for the key, so it has to be
+	//copied; the name it is displayed under lives in the config tree and does not.
+	char *name = strdup(key);
+	state->values[state->num].value = name;
+	state->values[state->num].label = tern_find_ptr_default(model, "name", name);
+	state->num++;
+}
+
+static void collect_models(struct retro_core_option_value *values, uint32_t max, uint8_t genesis_only, const char *first)
+{
+	model_collect_state state = { .values = values, .num = 0, .max = max, .genesis_only = genesis_only };
+	tern_foreach(get_systems_config(), model_iter, &state);
+	//The frontend takes the first entry as the default, so move it to the front.
+	for (uint32_t i = 1; i < state.num; i++)
+	{
+		if (!strcmp(values[i].value, first)) {
+			struct retro_core_option_value tmp = values[i];
+			memmove(values + 1, values, i * sizeof(*values));
+			values[0] = tmp;
+			break;
+		}
+	}
+	values[state.num].value = values[state.num].label = NULL;
+}
+
+static void build_dynamic_values(void)
+{
+	static uint8_t built;
+	if (built) {
+		return;
+	}
+	built = 1;
+	system_type_values[0].value = "auto";
+	system_type_values[0].label = "Auto";
+	for (size_t i = 0; i < NUM_SYSTEM_TYPE_OPTIONS; i++)
+	{
+		system_type_values[i + 1].value = system_type_values[i + 1].label = system_type_options[i].value;
+	}
+	system_type_values[NUM_SYSTEM_TYPE_OPTIONS + 1].value = NULL;
+	system_type_values[NUM_SYSTEM_TYPE_OPTIONS + 1].label = NULL;
+
+	//md1va3 is what the standalone defaults to and what this core emulated before
+	//it could be chosen. Master System software defaults to a real Master System
+	//here rather than to the standalone's md1va3, which would run it through the
+	//Mega Drive VDP - a change of behaviour rather than a new option.
+	collect_models(model_values, MAX_MODEL_VALUES, 1, "md1va3");
+	collect_models(sms_model_values, MAX_MODEL_VALUES, 0, "sms2");
+
+	static char overscan_numbers[MAX_OVERSCAN + 1][3];
+	overscan_values[0].value = "auto";
+	overscan_values[0].label = "Auto";
+	for (uint32_t i = 0; i <= MAX_OVERSCAN; i++)
+	{
+		snprintf(overscan_numbers[i], sizeof(overscan_numbers[i]), "%u", i);
+		overscan_values[i + 1].value = overscan_values[i + 1].label = overscan_numbers[i];
+	}
+	overscan_values[MAX_OVERSCAN + 2].value = NULL;
+	overscan_values[MAX_OVERSCAN + 2].label = NULL;
+}
+
+//A frontend that predates categorised options gets the same list flattened into
+//the "description; value|value" strings the first interface used.
+static void publish_core_options_v0(retro_environment_t re)
+{
+	static struct retro_variable vars[NUM_CORE_OPTIONS + 1];
+	static char descs[NUM_CORE_OPTIONS][512];
+	for (size_t i = 0; i < NUM_CORE_OPTIONS; i++)
+	{
+		const core_option *opt = core_options + i;
+		int len = snprintf(descs[i], sizeof(descs[i]), "%s; ", opt->desc);
+		for (size_t j = 0; opt->values[j].value && len < (int)sizeof(descs[i]); j++)
+		{
+			len += snprintf(descs[i] + len, sizeof(descs[i]) - len, j ? "|%s" : "%s", opt->values[j].value);
+		}
+		vars[i].key = opt->key;
+		vars[i].value = descs[i];
+	}
+	vars[NUM_CORE_OPTIONS].key = NULL;
+	vars[NUM_CORE_OPTIONS].value = NULL;
+	re(RETRO_ENVIRONMENT_SET_VARIABLES, (void *)vars);
+}
+
+static void publish_core_options(retro_environment_t re)
+{
+	//A frontend may set the environment callback more than once, so this has to
+	//survive being called again; the lists it builds are the same every time.
+	build_dynamic_values();
+
+	unsigned version = 0;
+	if (!re(RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION, &version) || version < 2) {
+		publish_core_options_v0(re);
+		return;
+	}
+
+	static struct retro_core_option_v2_category categories[] = {
+		{ "system", "System", "Which machine is emulated, how it is clocked and where it thinks it is." },
+		{ "video",  "Video",  "How much of the picture the core hands to the frontend." },
+		{ "audio",  "Audio",  "Mixing and filtering of the emulated sound chips." },
+		{ "input",  "Input",  "What is plugged into the console's controller ports." },
+		{ NULL, NULL, NULL }
+	};
+	static struct retro_core_option_v2_definition definitions[NUM_CORE_OPTIONS + 1];
+	for (size_t i = 0; i < NUM_CORE_OPTIONS; i++)
+	{
+		const core_option *opt = core_options + i;
+		definitions[i].key = (char *)opt->key;
+		definitions[i].desc = (char *)opt->desc;
+		definitions[i].desc_categorized = NULL;
+		definitions[i].info = (char *)opt->info;
+		definitions[i].info_categorized = NULL;
+		definitions[i].category_key = (char *)opt->category;
+		size_t j;
+		for (j = 0; opt->values[j].value && j < RETRO_NUM_CORE_OPTION_VALUES_MAX - 1; j++)
+		{
+			definitions[i].values[j] = opt->values[j];
+		}
+		definitions[i].values[j].value = NULL;
+		definitions[i].values[j].label = NULL;
+		definitions[i].default_value = (char *)opt->values[0].value;
+	}
+	memset(definitions + NUM_CORE_OPTIONS, 0, sizeof(definitions[0]));
+	static struct retro_core_options_v2 options = { categories, definitions };
+	re(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2, &options);
+}
 
 static retro_environment_t retro_environment;
 RETRO_API void retro_set_environment(retro_environment_t re)
@@ -88,20 +480,7 @@ RETRO_API void retro_set_environment(retro_environment_t re)
 	};
 	re(RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE, (void *)scio);
 
-	//Built from the table rather than spelled out so the advertised values and the
-	//ones option_system_type() accepts cannot drift apart. Rebuilt from scratch on
-	//every call because a frontend may set the environment callback more than once.
-	static char system_type_desc[256];
-	int len = snprintf(system_type_desc, sizeof(system_type_desc), "System type; auto");
-	for (size_t i = 0; i < NUM_SYSTEM_TYPE_OPTIONS && len < (int)sizeof(system_type_desc); i++) {
-		len += snprintf(system_type_desc + len, sizeof(system_type_desc) - len, "|%s", system_type_options[i].value);
-	}
-	static struct retro_variable vars[] = {
-		{ "blastem_system_type", NULL },
-		{ NULL, NULL }
-	};
-	vars[0].value = system_type_desc;
-	re(RETRO_ENVIRONMENT_SET_VARIABLES, (void *)vars);
+	publish_core_options(re);
 
 	//Everything we open by name - CD images and each track file a cue sheet
 	//points at, compressed ROMs, the Sega CD and 32X BIOS - goes through the
@@ -131,6 +510,8 @@ RETRO_API void retro_set_environment(retro_environment_t re)
 		//Without an absolute path here alloc_laseractive() falls back to read_bundled_file(),
 		//which looks next to the standalone binary and finds nothing in a libretro build.
 		config = tern_insert_path(config, "system\0laseractive_upd_rom\0", (tern_val){.ptrval = alloc_concat(system_dir, "/laseractive_dyw_1322a.bin")}, TVAL_PTR);
+		//Same story for the TMSS ROM every model from the Mega Drive 2 on needs.
+		config = tern_insert_path(config, "system\0tmss_path\0", (tern_val){.ptrval = alloc_concat(system_dir, "/tmss.md")}, TVAL_PTR);
 	}
 }
 
@@ -205,10 +586,52 @@ RETRO_API void retro_get_system_info(struct retro_system_info *info)
 	info->block_extract = 0;
 }
 
+//The frontend's own value for an option, or NULL if it has none.
+static const char *core_option_value(const char *key)
+{
+	struct retro_variable var = { .key = key };
+	if (!retro_environment(RETRO_ENVIRONMENT_GET_VARIABLE, &var)) {
+		return NULL;
+	}
+	return var.value;
+}
+
+//Every option that names a config path is simply written into the tree the
+//emulator reads while it builds a machine, which is why this has to run before
+//alloc_config_system() rather than at any later point.
+static void apply_core_options(void)
+{
+	for (size_t i = 0; i < NUM_CORE_OPTIONS; i++)
+	{
+		const core_option *opt = core_options + i;
+		if (!opt->config_path) {
+			continue;
+		}
+		const char *value = core_option_value(opt->key);
+		if (!value) {
+			//A frontend with no options support at all answers nothing, so the
+			//documented default goes in rather than leaving the emulator to fall
+			//back on whatever its own default happens to be.
+			value = opt->values[0].value;
+		}
+		//The tree owns what it is given and the old value is not reachable from
+		//anywhere else once it has been replaced.
+		config = tern_insert_path(config, (char *)opt->config_path, (tern_val){.ptrval = strdup(value)}, TVAL_PTR);
+	}
+}
+
 static vid_std video_standard;
 static uint32_t last_width, last_height;
 static uint8_t frame_presented;
 static uint32_t overscan_top, overscan_bot, overscan_left, overscan_right;
+static void override_overscan(const char *key, uint32_t *dst)
+{
+	const char *value = core_option_value(key);
+	if (value && strcmp(value, "auto")) {
+		*dst = atoi(value);
+	}
+}
+
 static void update_overscan(void)
 {
 	uint8_t overscan;
@@ -228,6 +651,13 @@ static void update_overscan(void)
 			overscan_right = 14;
 		}
 	}
+	//Unlike the rest, cropping is this file's own doing rather than something the
+	//emulator reads out of the config tree, so it can follow the option as soon
+	//as it changes.
+	override_overscan("blastem_overscan_top", &overscan_top);
+	override_overscan("blastem_overscan_bottom", &overscan_bot);
+	override_overscan("blastem_overscan_left", &overscan_left);
+	override_overscan("blastem_overscan_right", &overscan_right);
 }
 
 static int32_t sample_rate;
@@ -271,6 +701,22 @@ RETRO_API void retro_reset(void)
 static uint8_t started;
 RETRO_API void retro_run(void)
 {
+	bool options_updated = false;
+	if (retro_environment(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &options_updated) && options_updated) {
+		apply_core_options();
+		update_overscan();
+		//Gains, the DAC and what is in the controller ports are re-read from the
+		//config tree on demand, the same way the standalone picks up a change in
+		//its settings menu. Everything else - the model, the region, the clock
+		//divider - is read while a machine is built and so waits for the next
+		//load.
+		if (sample_rate) {
+			render_audio_initialized(RENDER_AUDIO_S16, sample_rate, 2, 4, sizeof(int16_t));
+		}
+		if (current_system->config_updated) {
+			current_system->config_updated(current_system);
+		}
+	}
 	frame_presented = 0;
 	if (started) {
 		current_system->resume_context(current_system);
@@ -467,6 +913,7 @@ RETRO_API bool retro_load_game(const struct retro_game_info *game)
 		return 0;
 	}
 	fatal_recover_valid = 1;
+	apply_core_options();
 	if (game->path) {
 		char *ext = path_extension(game->path);
 		uint8_t unsupported = is_unsupported_disc_format(ext);
@@ -814,13 +1261,22 @@ void bindings_reacquire_capture(void)
 }
 
 extern const char rom_db_data[];
+extern const char systems_cfg_data[];
 char *read_bundled_file(char *name, uint32_t *sizeret)
 {
+	//A libretro core is a single file with nothing alongside it, so the two data
+	//files the emulator cannot work without are compiled into it.
+	const char *data = NULL;
 	if (!strcmp(name, "rom.db")) {
-		*sizeret = strlen(rom_db_data);
-		char *ret = malloc(*sizeret+1);
-		memcpy(ret, rom_db_data, *sizeret + 1);
-		return ret;
+		data = rom_db_data;
+	} else if (!strcmp(name, "systems.cfg")) {
+		data = systems_cfg_data;
 	}
-	return NULL;
+	if (!data) {
+		return NULL;
+	}
+	*sizeret = strlen(data);
+	char *ret = malloc(*sizeret+1);
+	memcpy(ret, data, *sizeret + 1);
+	return ret;
 }
