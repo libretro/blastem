@@ -170,7 +170,7 @@ static uint8_t parse_subcode_type(const char *subtype)
 	return SUBCODES_NONE;
 }
 
-static uint8_t read_track_metadata(chd_file *chd, uint32_t index, track_info *track, uint32_t *frames_out)
+static uint8_t read_track_metadata(chd_file *chd, uint32_t index, track_info *track, uint32_t *frames_out, uint32_t *real_pregap_out)
 {
 	char metadata[METADATA_MAX];
 	char type[32], subtype[32], pgtype[32], pgsub[32];
@@ -196,8 +196,10 @@ static uint8_t read_track_metadata(chd_file *chd, uint32_t index, track_info *tr
 	track->has_subcodes = parse_subcode_type(subtype);
 	//A pregap type starting with V is one MAME generated rather than stored, so
 	//those frames are not in the image and blastem has to fake them. Anything
-	//else means the pregap is part of the frames the metadata counts.
+	//else means the pregap is part of the frames the metadata counts, so it
+	//takes up image space and only moves where index 1 falls.
 	track->fake_pregap = pgtype[0] == 'V' ? pregap : 0;
+	*real_pregap_out = pgtype[0] == 'V' ? 0 : pregap;
 	*frames_out = frames;
 	return 1;
 }
@@ -250,6 +252,28 @@ static core_file *chd_media_open(const char *path)
 	return cf;
 }
 
+//A CHD numbers its frames from the start of track 1's data, while the rest of
+//blastem numbers sectors the way the drive reports them, counting from the
+//start of the lead-in - so the two differ by the pregap in front of track 1,
+//which a CHD only records when a cue sheet asked for one. The cue parser infers
+//the same gap the same way when a cue sheet leaves it out.
+static uint32_t chd_lead_in(system_media *media, track_info *track)
+{
+	if (track->type == TRACK_DATA && track->sector_bytes == 2352 && read_frame(media, 0)) {
+		//The sector header holds the absolute time of the first sector, which is
+		//exactly the size of the gap in front of it.
+		uint8_t *timecode = media->chd_frame + 12;
+		uint32_t lba = (timecode[0] >> 4) * 600 + (timecode[0] & 0xF) * 60;
+		lba += (timecode[1] >> 4) * 10 + (timecode[1] & 0xF);
+		lba *= 75;
+		lba += (timecode[2] >> 4) * 10 + (timecode[2] & 0xF);
+		return lba;
+	}
+	//Same assumption the cue parser makes for a track it cannot read a time out
+	//of: the standard two second pregap.
+	return 2 * 75;
+}
+
 //chd_open() fails on a zstd compressed CHD because the codec is stubbed out (see
 //libchdr/zstd.h), and a failed open says nothing about why. The header parses
 //without any codec, so ask it directly.
@@ -295,8 +319,8 @@ uint8_t parse_chd(system_media *media)
 
 	uint32_t num_tracks = 0;
 	track_info scratch;
-	uint32_t frames;
-	while (read_track_metadata(chd, num_tracks, &scratch, &frames))
+	uint32_t frames, real_pregap;
+	while (read_track_metadata(chd, num_tracks, &scratch, &frames, &real_pregap))
 	{
 		num_tracks++;
 	}
@@ -311,28 +335,36 @@ uint8_t parse_chd(system_media *media)
 	media->num_tracks = num_tracks;
 	media->chd = chd;
 
-	uint32_t lba = 0;
-	uint32_t chd_frame = 0;
-	for (uint32_t i = 0; i < num_tracks; i++)
-	{
-		read_track_metadata(chd, i, tracks + i, &frames);
-		tracks[i].pregap_lba = lba;
-		//file_offset is the frame the track starts at within the CHD rather than
-		//a byte offset; nothing outside this file interprets it.
-		tracks[i].file_offset = chd_frame;
-		tracks[i].start_lba = lba + tracks[i].fake_pregap;
-		tracks[i].end_lba = tracks[i].start_lba + frames;
-		lba = tracks[i].end_lba;
-		//Each track is padded out to a four frame boundary in the CHD.
-		chd_frame += frames;
-		chd_frame += (CD_TRACK_PADDING - (frames % CD_TRACK_PADDING)) % CD_TRACK_PADDING;
-	}
-
+	//read_frame() needs these, and working out the lead-in reads a frame
 	const chd_header *header = chd_get_header(chd);
 	media->chd_hunk = calloc(1, header->hunkbytes);
 	media->chd_frame = calloc(1, CD_FRAME_SIZE);
 	media->chd_hunk_valid = 0;
 	media->chd_frame_valid = 0;
+
+	uint32_t lba = 0;
+	uint32_t chd_frame = 0;
+	for (uint32_t i = 0; i < num_tracks; i++)
+	{
+		read_track_metadata(chd, i, tracks + i, &frames, &real_pregap);
+		if (!i && !tracks[i].fake_pregap && !real_pregap) {
+			//Nothing in front of track 1, so the lead-in the drive reports is
+			//missing from the image and has to be faked like a virtual pregap.
+			tracks[i].fake_pregap = chd_lead_in(media, tracks);
+		}
+		tracks[i].pregap_lba = lba;
+		//file_offset is the frame the track starts at within the CHD rather than
+		//a byte offset; nothing outside this file interprets it.
+		tracks[i].file_offset = chd_frame;
+		//A stored pregap is part of the frames the metadata counts, so it moves
+		//index 1 without moving where the track's data starts.
+		tracks[i].start_lba = lba + tracks[i].fake_pregap + real_pregap;
+		tracks[i].end_lba = lba + tracks[i].fake_pregap + frames;
+		lba = tracks[i].end_lba;
+		//Each track is padded out to a four frame boundary in the CHD.
+		chd_frame += frames;
+		chd_frame += (CD_TRACK_PADDING - (frames % CD_TRACK_PADDING)) % CD_TRACK_PADDING;
+	}
 
 	media->seek = chdmedia_seek;
 	media->read = chdmedia_read;
