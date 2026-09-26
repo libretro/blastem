@@ -1570,24 +1570,10 @@ static void *laseractive_write8(uint32_t address, void *vcontext, uint8_t value)
 	return vcontext;
 }
 
-segacd_context *alloc_configure_segacd(system_media *media, uint32_t opts, uint8_t force_region, rom_info *info)
+static uint16_t *load_bios(uint8_t force_region, rom_info *info, uint32_t *size_out, char **path_out)
 {
-	static memmap_chunk sub_cpu_map[] = {
-		{0x000000, 0x01FF00, 0xFFFFFF, .flags=MMAP_READ | MMAP_CODE, .write_16 = prog_ram_wp_write16, .write_8 = prog_ram_wp_write8},
-		{0x01FF00, 0x080000, 0xFFFFFF, .flags=MMAP_READ | MMAP_WRITE | MMAP_CODE},
-		{0x080000, 0x0C0000, 0x03FFFF, .flags=MMAP_READ | MMAP_WRITE | MMAP_CODE | MMAP_PTR_IDX | MMAP_FUNC_NULL, .ptr_index = 0,
-			.read_16 = word_ram_2M_read16, .write_16 = word_ram_2M_write16, .read_8 = word_ram_2M_read8, .write_8 = word_ram_2M_write8},
-		{0x0C0000, 0x0E0000, 0x01FFFF, .flags=MMAP_READ | MMAP_WRITE | MMAP_CODE | MMAP_PTR_IDX | MMAP_FUNC_NULL, .ptr_index = 1,
-			.read_16 = word_ram_1M_read16, .write_16 = word_ram_1M_write16, .read_8 = word_ram_1M_read8, .write_8 = word_ram_1M_write8, .shift = 1},
-		{0xFE0000, 0xFF0000, 0x003FFF, .flags=MMAP_READ | MMAP_WRITE | MMAP_ONLY_ODD},
-		{0xFF0000, 0xFF8000, 0x003FFF, .read_16 = pcm_read16, .write_16 = pcm_write16, .read_8 = pcm_read8, .write_8 = pcm_write8},
-		{0xFF8000, 0xFF8200, 0x0001FF, .read_16 = sub_gate_read16, .write_16 = sub_gate_write16, .read_8 = sub_gate_read8, .write_8 = sub_gate_write8},
-		{0xFD0000, 0xFE0000, 0xFFFFFF, .read_16 = laseractive_read16, .write_16 = laseractive_write16, .read_8 = laseractive_read8, .write_8 = laseractive_write8}
-	};
-
-	segacd_context *cd = calloc(sizeof(segacd_context), 1);
-	cd->speed_percent = 100;
-	uint32_t firmware_size;
+	uint16_t *rom = NULL;
+	uint32_t firmware_size = 0;
 	uint8_t region = force_region;
 	if (!region) {
 		char * def_region = tern_find_path_default(config, "system\0default_region\0", (tern_val){.ptrval = "U"}, TVAL_PTR).ptrval;
@@ -1610,17 +1596,52 @@ segacd_context *alloc_configure_segacd(system_media *media, uint32_t opts, uint8
 		media_file *f = media_fopen(bios_path, "rb");
 		if (f) {
 			long to_read = media_file_size(f);
-			cd->rom = malloc(to_read);
-			firmware_size = media_fread(cd->rom, 1, to_read, f);
+			rom = malloc(to_read);
+			firmware_size = media_fread(rom, 1, to_read, f);
 			if (!firmware_size) {
-				free(cd->rom);
-				cd->rom = NULL;
+				free(rom);
+				rom = NULL;
 			}
 			media_fclose(f);
 		}
 	} else {
-		cd->rom = (uint16_t *)read_bundled_file(bios_path, &firmware_size);
+		rom = (uint16_t *)read_bundled_file(bios_path, &firmware_size);
 	}
+	*size_out = firmware_size;
+	if (path_out) {
+		*path_out = bios_path;
+	}
+	return rom;
+}
+
+uint8_t segacd_bios_available(uint8_t force_region, rom_info *info)
+{
+	uint32_t size;
+	uint16_t *rom = load_bios(force_region, info, &size, NULL);
+	free(rom);
+	return rom != NULL;
+}
+
+segacd_context *alloc_configure_segacd(system_media *media, uint32_t opts, uint8_t force_region, rom_info *info)
+{
+	static memmap_chunk sub_cpu_map[] = {
+		{0x000000, 0x01FF00, 0xFFFFFF, .flags=MMAP_READ | MMAP_CODE, .write_16 = prog_ram_wp_write16, .write_8 = prog_ram_wp_write8},
+		{0x01FF00, 0x080000, 0xFFFFFF, .flags=MMAP_READ | MMAP_WRITE | MMAP_CODE},
+		{0x080000, 0x0C0000, 0x03FFFF, .flags=MMAP_READ | MMAP_WRITE | MMAP_CODE | MMAP_PTR_IDX | MMAP_FUNC_NULL, .ptr_index = 0,
+			.read_16 = word_ram_2M_read16, .write_16 = word_ram_2M_write16, .read_8 = word_ram_2M_read8, .write_8 = word_ram_2M_write8},
+		{0x0C0000, 0x0E0000, 0x01FFFF, .flags=MMAP_READ | MMAP_WRITE | MMAP_CODE | MMAP_PTR_IDX | MMAP_FUNC_NULL, .ptr_index = 1,
+			.read_16 = word_ram_1M_read16, .write_16 = word_ram_1M_write16, .read_8 = word_ram_1M_read8, .write_8 = word_ram_1M_write8, .shift = 1},
+		{0xFE0000, 0xFF0000, 0x003FFF, .flags=MMAP_READ | MMAP_WRITE | MMAP_ONLY_ODD},
+		{0xFF0000, 0xFF8000, 0x003FFF, .read_16 = pcm_read16, .write_16 = pcm_write16, .read_8 = pcm_read8, .write_8 = pcm_write8},
+		{0xFF8000, 0xFF8200, 0x0001FF, .read_16 = sub_gate_read16, .write_16 = sub_gate_write16, .read_8 = sub_gate_read8, .write_8 = sub_gate_write8},
+		{0xFD0000, 0xFE0000, 0xFFFFFF, .read_16 = laseractive_read16, .write_16 = laseractive_write16, .read_8 = laseractive_read8, .write_8 = laseractive_write8}
+	};
+
+	segacd_context *cd = calloc(sizeof(segacd_context), 1);
+	cd->speed_percent = 100;
+	uint32_t firmware_size;
+	char *bios_path;
+	cd->rom = load_bios(force_region, info, &firmware_size, &bios_path);
 	if (!cd->rom) {
 		fatal_error("Failed to load Sega CD BIOS from %s\n", bios_path);
 	}

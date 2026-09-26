@@ -357,7 +357,11 @@ static void update_status(cdd_mcu *context, uint16_t *gate_array)
 			break;
 		}
 		if (context->error_status == DS_STOP) {
-			if (context->requested_format >= SF_TOCO && context->requested_format <= SF_TOCN) {
+			if (context->status == DS_NO_DISC) {
+				//a drive with no disc answers a TOC request with no disc, rather
+				//than claiming to read a TOC that is never going to come
+				context->status_buffer.status = DS_NO_DISC;
+			} else if (context->requested_format >= SF_TOCO && context->requested_format <= SF_TOCN) {
 				context->status_buffer.status = DS_TOC_READ;
 			} else if (context->seeking && context->status != DS_TRACKING) {
 				context->status_buffer.status = DS_SEEK;
@@ -596,6 +600,12 @@ void cdd_mcu_run(cdd_mcu *context, uint32_t cycle, uint16_t *gate_array, lc8951*
 			}
 		}
 		gate_array[GAO_CDD_CTRL] |= BIT_MUTE;
+		//the host dropping HOCK ends the conversation; when it is raised again
+		//the drive reports zeroes until it gets a command, as it does at power
+		//on. The BIOS checks for exactly that after the sub CPU is reset, and a
+		//Mode 1 cartridge that resets the sub CPU a second time otherwise gets
+		//the drive's last status, which the BIOS takes for a drive error
+		context->first_cmd_received = 0;
 		return;
 	}
 	uint32_t next_subcode = context->last_sector_cycle + SECTOR_CLOCKS;

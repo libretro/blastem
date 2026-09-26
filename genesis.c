@@ -3152,7 +3152,15 @@ static genesis_context *shared_init_gen(rom_info info, void *lock_on, uint32_t l
 	}
 	memmap_chunk* map = info.map;
 	uint32_t map_chunks = info.map_chunks;
-	if (info.wants_cd || (current_media()->chain && current_media()->chain->type == MEDIA_CDROM)) {
+	uint8_t cd_attached = current_media()->chain && current_media()->chain->type == MEDIA_CDROM;
+	if (info.wants_cd && !cd_attached && !segacd_bios_available(force_region, &info)) {
+		//a cartridge that can use a Sega CD but does not need one; without the
+		//BIOS it runs as a plain cartridge, the way it does on a console with no
+		//Sega CD attached, rather than not at all
+		warning("%s can use a Sega CD, but the Sega CD BIOS could not be loaded; running it without one\n", info.name);
+		info.wants_cd = gen->header.info.wants_cd = 0;
+	}
+	if (info.wants_cd || cd_attached) {
 		gen->header.type = SYSTEM_SEGACD;
 		segacd_context *cd = alloc_configure_segacd((system_media *)current_media(), 0, force_region, &info);
 		gen->expansion = cd;
