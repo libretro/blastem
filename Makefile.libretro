@@ -6,7 +6,12 @@ platform ?= unix
 
 ifeq ($(platform), emscripten)
 	platform = emscripten
-	ABI := x86_64
+#The JIT is x86-only and wasm has no RWX memory to hand it, so this has to
+#come out as a CPU the main Makefile does not know, which is what selects
+#the generated 68K/Z80 cores. Not CPU=wasm: that is the standalone web
+#build, and it would put --use-port=sdl2 and its --embed-file list on a
+#libretro core.
+	ABI := emscripten
 	target = libblastem.so
 	libname = blastem_libretro_emscripten.bc
 else ifneq (,$(findstring android,$(platform)))
