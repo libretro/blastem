@@ -2,6 +2,15 @@
 #define NET_H_
 #include <stdint.h>
 
+#ifdef IS_LIB
+//RetroArch's libretro-common has its own socket_init and
+//socket_close. A static link (the emscripten build) has
+//no version script to keep ours private, so the two
+//would collide.
+#define socket_init blastem_socket_init
+#define socket_close blastem_socket_close
+#endif
+
 typedef struct {
 	uint8_t ip[4];
 	uint8_t net_mask[4];
