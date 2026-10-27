@@ -75,6 +75,10 @@ include:
   ################################## CONSOLES ################################
   #
   #################################### MISC ##################################
+  # Emscripten
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/emscripten-static.yml'
+
   # webOS
   - project: 'libretro-infrastructure/ci-templates'
     file: '/webos-make.yml'
@@ -178,6 +182,12 @@ android-x86_64:
     - .core-defs
 
 ##################################### MISC ###################################
+# Emscripten
+libretro-build-emscripten:
+  extends:
+    - .libretro-emscripten-static-retroarch-master
+    - .core-defs
+
 # webOS ARMv7a
 libretro-build-webos-armv7a:
   extends:
