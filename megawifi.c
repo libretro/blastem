@@ -20,6 +20,7 @@
 #include "genesis.h"
 #include "net.h"
 #include "util.h"
+#include "paths.h"
 
 #if defined(_WIN32) || defined(__APPLE__)
 #  if BYTE_ORDER == LITTLE_ENDIAN
@@ -81,6 +82,39 @@ struct mw_addr_msg {
 
 #define FLAG_ONLINE 
 
+#define NUM_AP_CFGS    3
+#define NUM_GAMERTAGS  3
+#define SSID_MAXLEN    32
+#define PASS_MAXLEN    64
+#define IP_CFG_LEN     20 //ip, mask, gateway, dns1, dns2
+#define NTP_POOL_MAXLEN 144
+#define SERVER_URL_MAXLEN 64
+#define WIFI_ADV_LEN   24
+#define GAMERTAG_LEN   964
+#define FLASH_SIZE     0x200000 //user partition of the module flash
+#define FLASH_SECT_LEN 0x1000
+#define DEF_CFG_MAGIC  0xFEAA5501
+#define PHY_11B        1
+#define PHY_11BG       3
+#define PHY_11BGN      7
+
+//The module's non-volatile configuration. The firmware keeps it in RAM and
+//only writes it to flash on NV_CFG_SAVE and FACTORY_RESET, so this does too.
+typedef struct {
+	char     ssid[NUM_AP_CFGS][SSID_MAXLEN];
+	char     pass[NUM_AP_CFGS][PASS_MAXLEN];
+	uint8_t  phy[NUM_AP_CFGS];
+	uint8_t  ip_cfg[NUM_AP_CFGS][IP_CFG_LEN];
+	uint8_t  default_ap; //0xFF when there is none
+	uint8_t  ntp_pool_len[2];
+	uint8_t  ntp_pool[NTP_POOL_MAXLEN];
+	char     server_url[SERVER_URL_MAXLEN];
+	uint8_t  wifi_adv[WIFI_ADV_LEN];
+	uint8_t  gamertag[NUM_GAMERTAGS][GAMERTAG_LEN];
+} mw_config;
+
+#define CONFIG_MAGIC "BEMWCFG1"
+
 typedef struct {
 	uint32_t transmit_bytes;
 	uint32_t expected_bytes;
@@ -97,7 +131,98 @@ typedef struct {
 	uint8_t  transmit_buffer[4096];
 	uint8_t  receive_buffer[4096];
 	struct sockaddr_in remote_addr[15];	// Needed for UDP sockets
+	char     *storage_base; //module config and flash files are this plus an extension
+	mw_config config;
 } megawifi;
+
+static char *storage_prefix;
+
+void megawifi_set_storage_prefix(const char *prefix)
+{
+	free(storage_prefix);
+	storage_prefix = prefix ? strdup(prefix) : NULL;
+}
+
+static char *storage_path(megawifi *mw, const char *ext)
+{
+	if (!mw->storage_base) {
+		return NULL;
+	}
+	return alloc_concat(mw->storage_base, ext);
+}
+
+static void default_config(mw_config *cfg)
+{
+	static const char ntp_pool[] = "GMT\0" "0.pool.ntp.org\0" "1.pool.ntp.org\0" "2.pool.ntp.org\0";
+	//qos, ampdu rx, rx ba win, rx ampdu buf num, rx ampdu buf len, rx max single pkt len,
+	//rx buf len, amsdu rx, rx buf num, rx pkt num, left continuous rx buf num, tx buf num
+	static const uint8_t wifi_adv[WIFI_ADV_LEN] = {
+		1, 1, 6, 5, 0, 0, 0x01, 0x00, 0, 0, 0x06, 0x40, 0, 0, 0x06, 0x40,
+		0, 16, 7, 4, 6, 0, 0, 0
+	};
+	memset(cfg, 0, sizeof(*cfg));
+	//A game can only get online through a configured access point, so slot 0
+	//holds the network the host is already on and it is the default one.
+	strcpy(cfg->ssid[0], "BlastEm");
+	for (int i = 0; i < NUM_AP_CFGS; i++) {
+		cfg->phy[i] = PHY_11BGN;
+	}
+	cfg->default_ap = 0;
+	uint16_t pool_len = sizeof(ntp_pool);
+	memcpy(cfg->ntp_pool, ntp_pool, pool_len);
+	cfg->ntp_pool_len[0] = pool_len >> 8;
+	cfg->ntp_pool_len[1] = pool_len;
+	strcpy(cfg->server_url, "doragasu.com");
+	memcpy(cfg->wifi_adv, wifi_adv, sizeof(wifi_adv));
+	for (int i = 0; i < NUM_GAMERTAGS; i++) {
+		uint8_t *tag = cfg->gamertag[i];
+		tag[3] = i + 1; //id, big endian
+		snprintf((char *)tag + 4, 32, "doragasu on Blastem!");
+		snprintf((char *)tag + 36, 32, "My cool password");
+		snprintf((char *)tag + 68, 32, "All your WiFi are belong to me!");
+		//telegram token, avatar tiles and palette stay zeroed
+	}
+}
+
+static void load_config(megawifi *mw)
+{
+	default_config(&mw->config);
+	char *path = storage_path(mw, ".mwcfg");
+	if (!path) {
+		return;
+	}
+	FILE *f = fopen(path, "rb");
+	free(path);
+	if (!f) {
+		return;
+	}
+	char magic[sizeof(CONFIG_MAGIC) - 1];
+	mw_config cfg;
+	if (fread(magic, 1, sizeof(magic), f) == sizeof(magic) && !memcmp(magic, CONFIG_MAGIC, sizeof(magic))
+		&& fread(&cfg, 1, sizeof(cfg), f) == sizeof(cfg)
+	) {
+		mw->config = cfg;
+	}
+	fclose(f);
+}
+
+static uint8_t save_config(megawifi *mw)
+{
+	char *path = storage_path(mw, ".mwcfg");
+	if (!path) {
+		return 0;
+	}
+	FILE *f = fopen(path, "wb");
+	if (!f) {
+		warning("Failed to save MegaWiFi configuration to %s\n", path);
+		free(path);
+		return 0;
+	}
+	free(path);
+	uint8_t ok = fwrite(CONFIG_MAGIC, 1, sizeof(CONFIG_MAGIC) - 1, f) == sizeof(CONFIG_MAGIC) - 1
+		&& fwrite(&mw->config, 1, sizeof(mw->config), f) == sizeof(mw->config);
+	return fclose(f) == 0 && ok;
+}
 
 static megawifi *get_megawifi(void *context)
 {
@@ -112,6 +237,12 @@ static megawifi *get_megawifi(void *context)
 		for (int i = 0; i < 15; i++) {
 			mw->sock_fds[i] = -1;
 		}
+		if (storage_prefix) {
+			mw->storage_base = strdup(storage_prefix);
+		} else if (gen->header.save_dir) {
+			mw->storage_base = path_append(gen->header.save_dir, "megawifi");
+		}
+		load_config(mw);
 	}
 	return gen->extra;
 }
@@ -301,33 +432,263 @@ static void end_reply(megawifi *mw)
 	mw_putc(mw, ETX);
 }
 
+static uint32_t read_be32(const uint8_t *src)
+{
+	return (uint32_t)src[0] << 24 | src[1] << 16 | src[2] << 8 | src[3];
+}
+
+static void reply_status(megawifi *mw, uint8_t ok)
+{
+	start_reply(mw, ok ? CMD_OK : CMD_ERROR);
+	end_reply(mw);
+}
+
+static void cmd_ap_cfg(megawifi *mw, uint32_t size)
+{
+	uint8_t *data = mw->transmit_buffer + 4;
+	uint8_t slot = data[0];
+	uint8_t phy = data[1];
+	if (size < 2 + SSID_MAXLEN + PASS_MAXLEN || slot >= NUM_AP_CFGS
+		|| (phy != PHY_11B && phy != PHY_11BG && phy != PHY_11BGN)
+	) {
+		reply_status(mw, 0);
+		return;
+	}
+	mw->config.phy[slot] = phy;
+	memcpy(mw->config.ssid[slot], data + 2, SSID_MAXLEN);
+	memcpy(mw->config.pass[slot], data + 2 + SSID_MAXLEN, PASS_MAXLEN);
+	mw->config.default_ap = slot;
+	reply_status(mw, 1);
+}
+
 static void cmd_ap_cfg_get(megawifi *mw)
 {
-	char ssid[32] = {0};
-	char pass[64] = {0};
 	uint8_t slot = mw->transmit_buffer[4];
-
-	sprintf(ssid, "BLASTEM! SSID %d", slot + 1);
-	sprintf(pass, "BLASTEM! PASS %d", slot + 1);
+	if (slot >= NUM_AP_CFGS) {
+		reply_status(mw, 0);
+		return;
+	}
 	start_reply(mw, CMD_OK);
 	mw_putc(mw, slot);
-	mw_putc(mw, 7);	/// 11bgn
-	mw_copy(mw, (uint8_t*)ssid, 32);
-	mw_copy(mw, (uint8_t*)pass, 64);
+	mw_putc(mw, mw->config.phy[slot]);
+	mw_copy(mw, (uint8_t*)mw->config.ssid[slot], SSID_MAXLEN);
+	mw_copy(mw, (uint8_t*)mw->config.pass[slot], PASS_MAXLEN);
 	end_reply(mw);
+}
+
+static void cmd_ap_scan(megawifi *mw)
+{
+	//There is a single network to be found: the host's own connection
+	static const char ssid[] = "BlastEm";
+	start_reply(mw, CMD_OK);
+	mw_putc(mw, 1); //number of access points
+	mw_putc(mw, 0); //auth mode: open
+	mw_putc(mw, 1); //channel
+	mw_putc(mw, (uint8_t)-40); //RSSI in dBm
+	mw_putc(mw, sizeof(ssid) - 1);
+	mw_puts(mw, ssid);
+	end_reply(mw);
+}
+
+static void cmd_ip_cfg(megawifi *mw, uint32_t size)
+{
+	uint8_t slot = mw->transmit_buffer[4];
+	if (size < 4 + IP_CFG_LEN || slot >= NUM_AP_CFGS) {
+		reply_status(mw, 0);
+		return;
+	}
+	memcpy(mw->config.ip_cfg[slot], mw->transmit_buffer + 8, IP_CFG_LEN);
+	reply_status(mw, 1);
 }
 
 static void cmd_ip_cfg_get(megawifi *mw)
 {
-	uint32_t ipv4s[5] = {0};
-
+	uint8_t slot = mw->transmit_buffer[4];
+	if (slot >= NUM_AP_CFGS) {
+		reply_status(mw, 0);
+		return;
+	}
 	start_reply(mw, CMD_OK);
-	mw_putc(mw, mw->transmit_buffer[4]);
-	mw_putc(mw, 0);
-	mw_putc(mw, 0);
-	mw_putc(mw, 0);
-	mw_copy(mw, (uint8_t*)ipv4s, sizeof(ipv4s));
+	mw_putc(mw, slot);
+	mw_set(mw, 0, 3);
+	mw_copy(mw, mw->config.ip_cfg[slot], IP_CFG_LEN);
 	end_reply(mw);
+}
+
+static void cmd_sntp_cfg(megawifi *mw, uint32_t size)
+{
+	//timezone, then at least one server, each one null terminated, then an empty string
+	uint8_t *data = mw->transmit_buffer + 4;
+	uint32_t tokens = 0, pos = 0;
+	while (pos < size && data[pos])
+	{
+		uint8_t *end = memchr(data + pos, 0, size - pos);
+		if (!end) {
+			break;
+		}
+		if (!tokens && end - (data + pos) < 3) {
+			//timezone is at least 3 characters long
+			break;
+		}
+		tokens++;
+		pos = end - data + 1;
+	}
+	if (tokens < 2 || pos >= size || data[pos] || pos + 1 != size || size > NTP_POOL_MAXLEN) {
+		reply_status(mw, 0);
+		return;
+	}
+	memcpy(mw->config.ntp_pool, data, size);
+	mw->config.ntp_pool_len[0] = size >> 8;
+	mw->config.ntp_pool_len[1] = size;
+	reply_status(mw, 1);
+}
+
+static void cmd_sntp_cfg_get(megawifi *mw)
+{
+	uint16_t len = mw->config.ntp_pool_len[0] << 8 | mw->config.ntp_pool_len[1];
+	if (len > NTP_POOL_MAXLEN) {
+		len = NTP_POOL_MAXLEN;
+	}
+	start_reply(mw, CMD_OK);
+	mw_copy(mw, mw->config.ntp_pool, len);
+	end_reply(mw);
+}
+
+//The user partition of the module's flash lives in a file of its own, created
+//erased on first use. Programming can only clear bits, like on the real chip.
+static FILE *open_flash(megawifi *mw)
+{
+	char *path = storage_path(mw, ".mwflash");
+	if (!path) {
+		return NULL;
+	}
+	FILE *f = fopen(path, "r+b");
+	if (!f) {
+		f = fopen(path, "w+b");
+		if (f) {
+			uint8_t erased[FLASH_SECT_LEN];
+			memset(erased, 0xFF, sizeof(erased));
+			for (uint32_t i = 0; i < FLASH_SIZE / FLASH_SECT_LEN; i++)
+			{
+				if (fwrite(erased, 1, sizeof(erased), f) != sizeof(erased)) {
+					fclose(f);
+					f = NULL;
+					break;
+				}
+			}
+		}
+		if (!f) {
+			warning("Failed to create MegaWiFi flash file %s\n", path);
+		}
+	}
+	free(path);
+	return f;
+}
+
+static uint8_t flash_read(megawifi *mw, uint32_t addr, uint32_t len, uint8_t *dst)
+{
+	if (addr >= FLASH_SIZE || len > FLASH_SIZE - addr) {
+		return 0;
+	}
+	FILE *f = open_flash(mw);
+	if (!f) {
+		return 0;
+	}
+	uint8_t ok = !fseek(f, addr, SEEK_SET) && fread(dst, 1, len, f) == len;
+	fclose(f);
+	return ok;
+}
+
+static uint8_t flash_write(megawifi *mw, uint32_t addr, uint32_t len, const uint8_t *src, uint8_t erase)
+{
+	if (addr >= FLASH_SIZE || len > FLASH_SIZE - addr) {
+		return 0;
+	}
+	FILE *f = open_flash(mw);
+	if (!f) {
+		return 0;
+	}
+	uint8_t buf[FLASH_SECT_LEN];
+	uint8_t ok = !fseek(f, addr, SEEK_SET) && fread(buf, 1, len, f) == len;
+	if (ok) {
+		for (uint32_t i = 0; i < len; i++)
+		{
+			buf[i] = erase ? 0xFF : buf[i] & src[i];
+		}
+		ok = !fseek(f, addr, SEEK_SET) && fwrite(buf, 1, len, f) == len;
+	}
+	return fclose(f) == 0 && ok;
+}
+
+static void cmd_flash_write(megawifi *mw, uint32_t size)
+{
+	uint8_t *data = mw->transmit_buffer + 4;
+	if (size < 4) {
+		reply_status(mw, 0);
+		return;
+	}
+	uint32_t addr = read_be32(data);
+	reply_status(mw, flash_write(mw, addr, size - 4, data + 4, 0));
+}
+
+static void cmd_flash_read(megawifi *mw)
+{
+	uint8_t *data = mw->transmit_buffer + 4;
+	uint32_t addr = read_be32(data);
+	uint16_t len = data[4] << 8 | data[5];
+	uint8_t buf[MAX_RECV_SIZE];
+	if (len > sizeof(buf) || !flash_read(mw, addr, len, buf)) {
+		reply_status(mw, 0);
+		return;
+	}
+	start_reply(mw, CMD_OK);
+	mw_copy(mw, buf, len);
+	end_reply(mw);
+}
+
+static void cmd_flash_erase(megawifi *mw)
+{
+	uint16_t sector = mw->transmit_buffer[4] << 8 | mw->transmit_buffer[5];
+	reply_status(mw, flash_write(mw, sector * FLASH_SECT_LEN, FLASH_SECT_LEN, NULL, 1));
+}
+
+static void cmd_gamertag_set(megawifi *mw, uint32_t size)
+{
+	//slot, 3 reserved bytes, gamertag
+	uint8_t slot = mw->transmit_buffer[4];
+	if (size != 4 + GAMERTAG_LEN || slot >= NUM_GAMERTAGS) {
+		reply_status(mw, 0);
+		return;
+	}
+	memcpy(mw->config.gamertag[slot], mw->transmit_buffer + 8, GAMERTAG_LEN);
+	reply_status(mw, 1);
+}
+
+static void cmd_server_url_set(megawifi *mw, uint32_t size)
+{
+	char *url = (char *)mw->transmit_buffer + 4;
+	if (!size || size > SERVER_URL_MAXLEN || !memchr(url, 0, size)) {
+		reply_status(mw, 0);
+		return;
+	}
+	strcpy(mw->config.server_url, url);
+	reply_status(mw, 1);
+}
+
+static void cmd_wifi_adv_set(megawifi *mw, uint32_t size)
+{
+	uint8_t *adv = mw->transmit_buffer + 4;
+	//left continuous rx buf num, rx ba win, rx buf num, rx pkt num and tx buf num
+	//have to be in range, and the block ack window needs AMPDU
+	if (size < WIFI_ADV_LEN || adv[19] > 16 || adv[2] > 16
+		|| adv[17] < 14 || adv[17] > 28 || adv[18] < 4 || adv[18] > 16
+		|| adv[20] < 4 || adv[20] > 16 || (!adv[1] && adv[2])
+	) {
+		reply_status(mw, 0);
+		return;
+	}
+	memcpy(mw->config.wifi_adv, adv, WIFI_ADV_LEN);
+	reply_status(mw, 1);
 }
 
 static void cmd_tcp_con(megawifi *mw, uint32_t size)
@@ -483,25 +844,15 @@ err:
 	end_reply(mw);
 }
 
-#define AVATAR_BYTES	(32 * 48 / 2)
 static void cmd_gamertag_get(megawifi *mw)
 {
-	uint32_t id = htonl(1);
-	char buf[AVATAR_BYTES];
-
+	uint8_t slot = mw->transmit_buffer[4];
+	if (slot >= NUM_GAMERTAGS) {
+		reply_status(mw, 0);
+		return;
+	}
 	start_reply(mw, CMD_OK);
-	// TODO Get items from config file
-	mw_copy(mw, (uint8_t*)&id, 4);
-	strncpy(buf, "doragasu on Blastem!", 32);
-	mw_copy(mw, (uint8_t*)buf, 32);
-	strncpy(buf, "My cool password", 32);
-	mw_copy(mw, (uint8_t*)buf, 32);
-	strncpy(buf, "All your WiFi are belong to me!", 32);
-	mw_copy(mw, (uint8_t*)buf, 32);
-	memset(buf, 0, 64); // Telegram token
-	mw_copy(mw, (uint8_t*)buf, 64);
-	mw_copy(mw, (uint8_t*)buf, AVATAR_BYTES); // Avatar tiles
-	mw_copy(mw, (uint8_t*)buf, 32); // Avatar palette
+	mw_copy(mw, mw->config.gamertag[slot], GAMERTAG_LEN);
 	end_reply(mw);
 }
 
@@ -564,6 +915,12 @@ static void process_command(megawifi *mw)
 		mw->receive_bytes = mw->transmit_bytes;
 		memcpy(mw->receive_buffer, mw->transmit_buffer, mw->transmit_bytes);
 		break;
+	case CMD_AP_SCAN:
+		cmd_ap_scan(mw);
+		break;
+	case CMD_AP_CFG:
+		cmd_ap_cfg(mw, size);
+		break;
 	case CMD_AP_CFG_GET:
 		cmd_ap_cfg_get(mw);
 		break;
@@ -593,18 +950,46 @@ static void process_command(megawifi *mw)
 		end_reply(mw);
 		break;
 	}
+	case CMD_IP_CFG:
+		cmd_ip_cfg(mw, size);
+		break;
 	case CMD_IP_CFG_GET:
 		cmd_ip_cfg_get(mw);
 		break;
+	case CMD_DEF_AP_CFG:
+		if (mw->transmit_buffer[4] < NUM_AP_CFGS) {
+			mw->config.default_ap = mw->transmit_buffer[4];
+			reply_status(mw, 1);
+		} else {
+			reply_status(mw, 0);
+		}
+		break;
 	case CMD_DEF_AP_CFG_GET:
 		start_reply(mw, CMD_OK);
-		mw_putc(mw, 0);
+		mw_putc(mw, mw->config.default_ap);
 		end_reply(mw);
 		break;
-	case CMD_AP_JOIN:
+	case CMD_AP_JOIN: {
+		uint8_t slot = mw->transmit_buffer[4];
+		if (slot >= NUM_AP_CFGS || !mw->config.ssid[slot][0]) {
+			reply_status(mw, 0);
+			break;
+		}
 		mw->module_state = STATE_READY;
-		start_reply(mw, CMD_OK);
-		end_reply(mw);
+		reply_status(mw, 1);
+		break;
+	}
+	case CMD_AP_LEAVE:
+		for (int i = 0; i < 15; i++)
+		{
+			if (mw->sock_fds[i] >= 0) {
+				socket_close(mw->sock_fds[i]);
+				mw->sock_fds[i] = -1;
+				mw->channel_state[i] = SOCKST_NONE;
+			}
+		}
+		mw->module_state = STATE_IDLE;
+		reply_status(mw, 1);
 		break;
 	case CMD_TCP_CON:
 		cmd_tcp_con(mw, size);
@@ -678,8 +1063,53 @@ static void process_command(megawifi *mw)
 		end_reply(mw);
 		break;
 	}
+	case CMD_SNTP_CFG:
+		cmd_sntp_cfg(mw, size);
+		break;
+	case CMD_SNTP_CFG_GET:
+		cmd_sntp_cfg_get(mw);
+		break;
 	case CMD_DATETIME:
 		cmd_datetime(mw);
+		break;
+	case CMD_FLASH_WRITE:
+		cmd_flash_write(mw, size);
+		break;
+	case CMD_FLASH_READ:
+		cmd_flash_read(mw);
+		break;
+	case CMD_FLASH_ERASE:
+		cmd_flash_erase(mw);
+		break;
+	case CMD_FLASH_ID:
+		//Winbond W25Q32, the 4 MiB part on ESP-12 modules
+		start_reply(mw, CMD_OK);
+		mw_putc(mw, 0x40);
+		mw_putc(mw, 0x16);
+		mw_putc(mw, 0xEF);
+		end_reply(mw);
+		break;
+	case CMD_DEF_CFG_SET: {
+		uint8_t *data = mw->transmit_buffer + 4;
+		if (size == 4 && read_be32(data) == DEF_CFG_MAGIC) {
+			default_config(&mw->config);
+			reply_status(mw, save_config(mw));
+		} else {
+			reply_status(mw, 0);
+		}
+		break;
+	}
+	case CMD_BSSID_GET: {
+		//locally administered address, last byte tells station and AP interfaces apart
+		static const uint8_t mac[] = {0x02, 0xB1, 0xA5, 0x7E, 0x40, 0x00};
+		start_reply(mw, CMD_OK);
+		mw_copy(mw, mac, sizeof(mac) - 1);
+		mw_putc(mw, mac[5] | (mw->transmit_buffer[4] & 1));
+		end_reply(mw);
+		break;
+	}
+	case CMD_GAMERTAG_SET:
+		cmd_gamertag_set(mw, size);
 		break;
 	case CMD_SYS_STAT:
 		poll_all_sockets(mw);
@@ -701,12 +1131,33 @@ static void process_command(megawifi *mw)
 	case CMD_HRNG_GET:
 		cmd_hrng_get(mw);
 		break;
+	case CMD_FACTORY_RESET:
+		default_config(&mw->config);
+		reply_status(mw, save_config(mw));
+		break;
 	case CMD_SERVER_URL_GET:
 		start_reply(mw, CMD_OK);
-		// FIXME: This should be get from config file
-		mw_puts(mw, "doragasu.com");
+		mw_puts(mw, mw->config.server_url);
 		mw_putc(mw,'\0');
 		end_reply(mw);
+		break;
+	case CMD_SERVER_URL_SET:
+		cmd_server_url_set(mw, size);
+		break;
+	case CMD_WIFI_ADV_GET:
+		start_reply(mw, CMD_OK);
+		mw_copy(mw, mw->config.wifi_adv, WIFI_ADV_LEN);
+		end_reply(mw);
+		break;
+	case CMD_WIFI_ADV_SET:
+		cmd_wifi_adv_set(mw, size);
+		break;
+	case CMD_NV_CFG_SAVE:
+		reply_status(mw, save_config(mw));
+		break;
+	case CMD_UPGRADE_LIST:
+		//no firmware upgrades on offer
+		reply_status(mw, 1);
 		break;
 	default:
 		printf("Unhandled MegaWiFi command %s(%d) with length %X\n", cmd_names[command], command, size);
