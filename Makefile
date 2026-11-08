@@ -100,7 +100,7 @@ FONT:=nuklear_ui/font_web.o
 Z80_DISPATCH:=call
 else #CPU=wasm
 FONT:=nuklear_ui/font.o
-ifneq ($(MAKECMDGOALS),libblastem.$(SO))
+ifeq (,$(filter libblastem.$(SO) libblastem.a,$(MAKECMDGOALS)))
 CHOOSER:=nuklear_ui/filechooser_gtk.o
 GTKFLAGS:=$(shell pkg-config --cflags gtk+-3.0 2>/dev/null)
 ifeq ($(GTKFLAGS),)
@@ -109,7 +109,7 @@ ifeq ($(GTKFLAGS),)
 CHOOSER:=nuklear_ui/filechooser_null.o
 endif
 endif
-endif #neq ($(MAKECMDGOALS),libblastem.$(SO))
+endif #libblastem.$(SO) libblastem.a
 endif #CPU=wasm
 ifeq ($(GTKFLAGS),)
 else
@@ -169,7 +169,7 @@ endif #Darwin
 CFLAGS+= -I$(SDL_INCLUDE_PATH)
 
 else #PORTABLE
-ifeq ($(MAKECMDGOALS),libblastem.$(SO))
+ifneq (,$(filter libblastem.$(SO) libblastem.a,$(MAKECMDGOALS)))
 LDFLAGS:=-lm
 else
 CFLAGS:=$(shell pkg-config --cflags-only-I $(LIBS)) $(CFLAGS)
@@ -429,6 +429,12 @@ endif
 
 libblastem.$(SO) : $(LIBOBJS:%.o=$(LIBOBJDIR)/%.o) link.T
 	$(CC) -shared -fPIC -o $@ $(filter %.o,$^) $(LDFLAGS) $(LIBLDFLAGS)
+
+#Static frontends (emscripten) link the core into the frontend executable, so
+#they take an archive rather than a shared library.
+libblastem.a : $(LIBOBJS:%.o=$(LIBOBJDIR)/%.o)
+	rm -f $@
+	$(AR) rcs $@ $^
 
 blastem$(EXE) : $(MAINOBJS:%.o=$(OBJDIR)/%.o)
 	$(CC) -o $@ $^ $(LDFLAGS) $(PROFFLAGS)

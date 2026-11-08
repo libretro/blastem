@@ -7,7 +7,12 @@ platform ?= unix
 ifeq ($(platform), emscripten)
 	platform = emscripten
 	ABI := emscripten
-	target = libblastem.so
+	AR = emar
+#RetroArch links the archive straight into its executable. LTO bitcode members
+#would push the generated CPU cores through one whole-program LTO pass there,
+#so the archive carries plain wasm objects.
+	CORE_ARGS := NOLTO=1
+	target = libblastem.a
 	libname = blastem_libretro_emscripten.bc
 else ifneq (,$(findstring android,$(platform)))
 #Android, built the way libretro-infrastructure's android-make jobs drive it:
@@ -148,7 +153,7 @@ ifneq (,$(or $(findstring webos,$(CROSS_COMPILE)),$(findstring starfish,$(CROSS_
 endif
 
 core: $(OBJ)
-	$(MAKE) $(target) OS=$(OS) CC="$(CC)" CPU=$(ABI) LIBRETRO=$(LIBRETRO) $(CORE_ARGS)
+	$(MAKE) $(target) OS=$(OS) CC="$(CC)" AR="$(AR)" CPU=$(ABI) LIBRETRO=$(LIBRETRO) $(CORE_ARGS)
 	cp -v $(target) $(libname)
 
 install: $(libname)
