@@ -14,6 +14,7 @@
 #include "sms.h"
 #include "cdimage.h"
 #include "vfs_file.h"
+#include "megawifi.h"
 
 tern_node *config;
 
@@ -1046,6 +1047,23 @@ RETRO_API bool retro_load_game(const struct retro_game_info *game)
 	return 0;
 }
 
+//A MegaWiFi cartridge's module keeps its settings and flash next to the game's
+//other saves, the frontend's save directory if it has one.
+static void set_megawifi_storage(void)
+{
+	const char *save_dir = NULL;
+	if (!retro_environment(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &save_dir) || !save_dir || !*save_dir) {
+		save_dir = media.dir;
+	}
+	if (!save_dir || !media.name) {
+		megawifi_set_storage_prefix(NULL);
+		return;
+	}
+	char *prefix = path_append(save_dir, media.name);
+	megawifi_set_storage_prefix(prefix);
+	free(prefix);
+}
+
 static bool load_game(const struct retro_game_info *game)
 {
 	serialize_size_cache = 0;
@@ -1103,6 +1121,7 @@ static bool load_game(const struct retro_game_info *game)
 		fatal_recover_valid = 0;
 		return 0;
 	}
+	set_megawifi_storage();
 	current_system = alloc_config_system(stype, &media, 0, 0);
 	fatal_recover_valid = 0;
 	if (!current_system) {
