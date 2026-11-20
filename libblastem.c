@@ -823,6 +823,14 @@ RETRO_API void retro_reset(void)
  */
 static uint8_t started;
 static void poll_input(void);
+//cartridge SRAM in the layout the frontend sees, see sram_view_system() below
+static uint8_t *sram_view;
+static uint32_t sram_view_size;
+static uint8_t sram_view_loaded;
+static char *sram_file_dir, *sram_file_name;
+static void sram_view_setup(void);
+static void sram_view_first_frame(void);
+static void sram_view_export(void);
 RETRO_API void retro_run(void)
 {
 	bool options_updated = false;
@@ -840,6 +848,8 @@ RETRO_API void retro_run(void)
 			current_system->config_updated(current_system);
 		}
 	}
+	//the frontend has loaded the .srm by now
+	sram_view_first_frame();
 	//once per frame, before the machine that will read it runs
 	poll_input();
 	frame_presented = 0;
@@ -857,6 +867,7 @@ RETRO_API void retro_run(void)
 		present_framebuffer(render_get_active_framebuffer(), LINEBUF_SIZE);
 	}
 	flush_audio();
+	sram_view_export();
 }
 
 /* Returns the amount of data the implementation requires to serialize
@@ -1114,6 +1125,22 @@ static bool load_game(const struct retro_game_info *game)
 	retro_environment(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &format);
 
 	update_av_info();
+	//RetroArch names the .srm after the content file, and for a game inside an
+	//archive after the archive: "dir/game.zip#game.md" saves as "game.srm"
+	free(sram_file_dir);
+	free(sram_file_name);
+	sram_file_dir = sram_file_name = NULL;
+	if (game->path) {
+		char *outer = strdup(game->path);
+		char *hash = strchr(outer, '#');
+		if (hash) {
+			*hash = 0;
+		}
+		sram_file_dir = path_dirname(outer);
+		sram_file_name = basename_no_extension(outer);
+		free(outer);
+	}
+	sram_view_setup();
 
 	return 1;
 }
@@ -1137,9 +1164,162 @@ RETRO_API void retro_unload_game(void)
 	media.buffer = NULL;
 	current_system->free_context(current_system);
 	current_system = NULL;
+	free(sram_view);
+	sram_view = NULL;
+	sram_view_size = 0;
+	sram_view_loaded = 0;
+	free(sram_file_dir);
+	free(sram_file_name);
+	sram_file_dir = sram_file_name = NULL;
 	//the next system loaded has never run, so retro_run() must start it rather
 	//than resume it; resuming would enter the recompiler at a NULL resume_pc
 	started = 0;
+}
+
+//Cartridge SRAM as the frontend sees it, laid out the way Genesis Plus GX lays
+//it out, so a .srm moves between the two cores (and EmulatorJS, which runs
+//Genesis Plus GX) unchanged. Byte N of the file is the byte at cartridge
+//address (start & ~mask) + N:
+// - 8-bit SRAM on odd (or even) addresses keeps its bytes at those offsets with
+//   a 0xFF filler byte in between; BlastEm itself packs them to half the size.
+// - 16-bit SRAM is in the cartridge's big-endian byte order; BlastEm keeps it
+//   as host-order words.
+//The machine keeps working on its own buffer. This copy is filled from it after
+//every frame and read back into it once, before the first frame, which is after
+//the frontend has loaded the .srm. Saves of other kinds (EEPROM, NOR flash) and
+//the standalone emulator's save files are not touched.
+static genesis_context *sram_view_system(void)
+{
+	if (stype != SYSTEM_GENESIS || !current_system) {
+		return NULL;
+	}
+	genesis_context *gen = (genesis_context *)current_system;
+	if (!gen->save_storage || !gen->save_size) {
+		return NULL;
+	}
+	if (gen->save_type != RAM_FLAG_ODD && gen->save_type != RAM_FLAG_EVEN && gen->save_type != RAM_FLAG_BOTH) {
+		return NULL;
+	}
+	return gen;
+}
+
+//byte `offset` of the view ↔ the machine's buffer; NULL for a filler byte
+static uint8_t *sram_machine_byte(genesis_context *gen, uint32_t offset)
+{
+	switch (gen->save_type)
+	{
+	case RAM_FLAG_ODD:
+		return (offset & 1) ? gen->save_storage + (offset >> 1) : NULL;
+	case RAM_FLAG_EVEN:
+		return (offset & 1) ? NULL : gen->save_storage + (offset >> 1);
+	default:
+		//host-order (little-endian) words, see read_sram_b in sega_mapper.c
+		return gen->save_storage + (offset ^ 1);
+	}
+}
+
+static void sram_view_export(void)
+{
+	genesis_context *gen = sram_view_system();
+	if (!gen || !sram_view) {
+		return;
+	}
+	for (uint32_t i = 0; i < sram_view_size; i++)
+	{
+		uint8_t *b = sram_machine_byte(gen, i);
+		if (b) {
+			sram_view[i] = *b;
+		}
+	}
+}
+
+static void sram_view_import(void)
+{
+	genesis_context *gen = sram_view_system();
+	if (!gen || !sram_view) {
+		return;
+	}
+	for (uint32_t i = 0; i < sram_view_size; i++)
+	{
+		uint8_t *b = sram_machine_byte(gen, i);
+		if (b) {
+			*b = sram_view[i];
+		}
+	}
+}
+
+static void sram_view_setup(void)
+{
+	free(sram_view);
+	sram_view = NULL;
+	sram_view_size = 0;
+	sram_view_loaded = 0;
+	genesis_context *gen = sram_view_system();
+	if (!gen) {
+		return;
+	}
+	sram_view_size = gen->save_type == RAM_FLAG_BOTH ? gen->save_size : gen->save_size * 2;
+	sram_view = malloc(sram_view_size);
+	memset(sram_view, 0xFF, sram_view_size);
+	sram_view_export();
+}
+
+//A .srm written by this core before the change is the machine's own buffer:
+//half the size for 8-bit SRAM. Read such a file straight into the machine; the
+//frontend writes it back in the new layout the next time it saves.
+//16-bit SRAM had the same size in both layouts, so an old file of that kind
+//cannot be told apart and is read as the new layout.
+static uint8_t sram_load_old_file(genesis_context *gen)
+{
+	if (gen->save_type == RAM_FLAG_BOTH || !sram_file_name) {
+		return 0;
+	}
+	const char *dirs[2] = { NULL, sram_file_dir };
+	retro_environment(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &dirs[0]);
+	for (int i = 0; i < 2; i++)
+	{
+		if (!dirs[i] || !dirs[i][0]) {
+			continue;
+		}
+		char *path = alloc_concat_m(4, (char const *[]){ dirs[i], PATH_SEP, sram_file_name, ".srm" });
+		FILE *f = fopen(path, "rb");
+		free(path);
+		if (!f) {
+			continue;
+		}
+		long size = file_size(f);
+		uint8_t converted = 0;
+		if (size == gen->save_size && fread(gen->save_storage, 1, gen->save_size, f) == gen->save_size) {
+			converted = 1;
+		}
+		fclose(f);
+		if (converted) {
+			memset(sram_view, 0xFF, sram_view_size);
+			sram_view_export();
+			static char message[] = "BlastEm: converted the save file to the shared Genesis save format";
+			struct retro_message msg = { message, 300 };
+			retro_environment(RETRO_ENVIRONMENT_SET_MESSAGE, &msg);
+			fprintf(stderr, "%s\n", message);
+		}
+		//the first file found is the one the frontend loaded
+		return converted;
+	}
+	return 0;
+}
+
+static void sram_view_first_frame(void)
+{
+	if (sram_view_loaded) {
+		return;
+	}
+	sram_view_loaded = 1;
+	genesis_context *gen = sram_view_system();
+	if (!gen || !sram_view) {
+		return;
+	}
+	if (!sram_load_old_file(gen)) {
+		sram_view_import();
+	}
 }
 
 /* Gets region of game. */
@@ -1167,6 +1347,9 @@ RETRO_API void *retro_get_memory_data(unsigned id)
 		}
 		break;
 	case RETRO_MEMORY_SAVE_RAM:
+		if (sram_view) {
+			return sram_view;
+		}
 		if (stype == SYSTEM_GENESIS) {
 			genesis_context *gen = (genesis_context *)current_system;
 			if (gen->save_type != SAVE_NONE)
@@ -1193,6 +1376,9 @@ RETRO_API size_t retro_get_memory_size(unsigned id)
 		}
 		break;
 	case RETRO_MEMORY_SAVE_RAM:
+		if (sram_view) {
+			return sram_view_size;
+		}
 		if (stype == SYSTEM_GENESIS) {
 			genesis_context *gen = (genesis_context *)current_system;
 			if (gen->save_type != SAVE_NONE)
