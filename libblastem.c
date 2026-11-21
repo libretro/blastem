@@ -11,6 +11,7 @@
 #include "render.h"
 #include "io.h"
 #include "genesis.h"
+#include "segacd.h"
 #include "sms.h"
 #include "cdimage.h"
 #include "vfs_file.h"
@@ -168,6 +169,24 @@ static const struct retro_core_option_value cdda_gain_values[] = {
 	{ "-9.5", "-9.5 dB" },
 	GAIN_VALUES_TAIL
 };
+static const struct retro_core_option_value scd_bram_values[] = {
+	{ "per_bios", "Per BIOS (shared)" },
+	{ "per_game", "Per game" },
+	{ NULL, NULL }
+};
+//system\0bram_cart_size_id\0: the cartridge holds 0x2000 << id bytes
+static const struct retro_core_option_value scd_bram_cart_values[] = {
+	{ "4", "1 Mbit (128 KB)" },
+	{ "none", "None" },
+	{ "0", "64 Kbit (8 KB)" },
+	{ "1", "128 Kbit (16 KB)" },
+	{ "2", "256 Kbit (32 KB)" },
+	{ "3", "512 Kbit (64 KB)" },
+	{ "5", "2 Mbit (256 KB)" },
+	{ "6", "4 Mbit (512 KB)" },
+	{ "7", "8 Mbit (1 MB)" },
+	{ NULL, NULL }
+};
 static const struct retro_core_option_value fm_dac_values[] = {
 	{ "auto", "Default for model" },
 	{ "zero_offset", "Zero offset (discrete YM2612)" },
@@ -215,6 +234,16 @@ static const core_option core_options[] = {
 		"blastem_megawifi", "MegaWiFi",
 		"Emulate the MegaWiFi cartridge hardware, which lets software make its own connections to the internet. Only turn this on for software you trust.",
 		"system", "system\0megawifi\0", off_on_values
+	},
+	{
+		"blastem_scd_bram", "Sega CD Backup RAM Files",
+		"Where the Sega CD's internal backup RAM and the RAM cartridge are saved, with Genesis Plus GX's file names so the two cores share them. Per BIOS keeps one internal backup RAM per region (scd_U/E/J.brm) and one file per cartridge size, shared by every game; per game gives each game its own.",
+		"system", NULL, scd_bram_values
+	},
+	{
+		"blastem_scd_bram_cart", "Sega CD RAM Cartridge",
+		"Size of the backup RAM cartridge plugged into the Sega CD, or none. Takes effect when content is loaded. Set it to the size Genesis Plus GX uses to share its cartridge file.",
+		"system", "system\0bram_cart_size_id\0", scd_bram_cart_values
 	},
 	{
 		"blastem_io_1", "Port 1 Device",
@@ -831,6 +860,9 @@ static char *sram_file_dir, *sram_file_name;
 static void sram_view_setup(void);
 static void sram_view_first_frame(void);
 static void sram_view_export(void);
+static void bram_setup(void);
+static void bram_save_if_changed(uint8_t now);
+static void bram_close(void);
 RETRO_API void retro_run(void)
 {
 	bool options_updated = false;
@@ -868,6 +900,7 @@ RETRO_API void retro_run(void)
 	}
 	flush_audio();
 	sram_view_export();
+	bram_save_if_changed(0);
 }
 
 /* Returns the amount of data the implementation requires to serialize
@@ -1141,6 +1174,7 @@ static bool load_game(const struct retro_game_info *game)
 		free(outer);
 	}
 	sram_view_setup();
+	bram_setup();
 
 	return 1;
 }
@@ -1162,6 +1196,8 @@ RETRO_API void retro_unload_game(void)
 	media.dir = media.name = media.extension = NULL;
 	//buffer is freed by the context
 	media.buffer = NULL;
+	//before the context frees the memory it points at
+	bram_close();
 	current_system->free_context(current_system);
 	current_system = NULL;
 	free(sram_view);
@@ -1320,6 +1356,172 @@ static void sram_view_first_frame(void)
 	if (!sram_load_old_file(gen)) {
 		sram_view_import();
 	}
+}
+
+//Sega CD backup RAM: the 8 KB inside the console and the RAM cartridge. The
+//standalone emulator loads, formats and saves them in genesis.c's load_save() and
+//persist_save(), which this build never calls, so here the core does it with
+//Genesis Plus GX's file names in the save directory. Both cores keep the memory
+//packed (one byte per word) with the same format block, so the files are shared.
+//They are written when the game is unloaded and, while it runs, about once a
+//second after they change.
+#define BRAM_INTERNAL_SIZE (8 * 1024)
+#define BRAM_CHECK_FRAMES 60
+//the last 0x20 bytes of a formatted backup RAM, whatever its size
+static const char bram_signature[0x20] = "SEGA_CD_ROM\0\001\0\0\0RAM_CARTRIDGE___";
+
+typedef struct {
+	uint8_t  *memory; //the emulator's buffer
+	uint32_t size;
+	char     *path;   //NULL: not saved
+	uint8_t  *saved;  //what the file holds, to see changes
+} bram_file;
+static bram_file bram_internal, bram_cart;
+static uint32_t bram_frames;
+
+static segacd_context *bram_system(void)
+{
+	if (!current_system) {
+		return NULL;
+	}
+	switch (stype)
+	{
+	case SYSTEM_GENESIS: //a Mode 1 cartridge with the Sega CD attached
+	case SYSTEM_SEGACD:
+	case SYSTEM_32X:
+	case SYSTEM_32XCD:
+		return ((genesis_context *)current_system)->expansion;
+	default:
+		return NULL;
+	}
+}
+
+static uint8_t bram_formatted(const uint8_t *memory, uint32_t size)
+{
+	return size >= 0x40 && !memcmp(memory + size - 0x20, bram_signature, sizeof(bram_signature));
+}
+
+static void bram_write(bram_file *b)
+{
+	//like Genesis Plus GX, an unformatted backup RAM is not worth a file
+	if (!b->path || !b->memory || !bram_formatted(b->memory, b->size) || !memcmp(b->memory, b->saved, b->size)) {
+		return;
+	}
+	FILE *f = fopen(b->path, "wb");
+	if (!f) {
+		fprintf(stderr, "Failed to write Sega CD backup RAM to %s\n", b->path);
+		return;
+	}
+	uint8_t ok = fwrite(b->memory, 1, b->size, f) == b->size;
+	ok = !fclose(f) && ok;
+	if (ok) {
+		memcpy(b->saved, b->memory, b->size);
+	}
+}
+
+static void bram_release(bram_file *b)
+{
+	free(b->path);
+	free(b->saved);
+	memset(b, 0, sizeof(*b));
+}
+
+//Read a backup RAM file, or format the memory when there is none (or it is not
+//formatted), the way the console's BIOS would before a game could use it.
+static void bram_open(bram_file *b, uint8_t *memory, uint32_t size, char *path)
+{
+	bram_release(b);
+	b->memory = memory;
+	b->size = size;
+	b->path = path;
+	b->saved = malloc(size);
+	uint8_t loaded = 0;
+	FILE *f = path ? fopen(path, "rb") : NULL;
+	if (f) {
+		long file_bytes = file_size(f);
+		if (file_bytes == size) {
+			loaded = fread(memory, 1, size, f) == size;
+		} else {
+			//a cartridge file of another size: leave it alone rather than
+			//overwrite it with a cartridge of the size set in the options
+			char message[256];
+			snprintf(message, sizeof(message), "BlastEm: %s is %ld KB, not the %u KB the Sega CD RAM Cartridge option sets; it is not used",
+				path, file_bytes / 1024, (unsigned)(size / 1024));
+			struct retro_message msg = { message, 600 };
+			retro_environment(RETRO_ENVIRONMENT_SET_MESSAGE, &msg);
+			fprintf(stderr, "%s\n", message);
+			free(b->path);
+			b->path = NULL;
+		}
+		fclose(f);
+	}
+	if (!loaded || !bram_formatted(memory, size)) {
+		segacd_format_bram(memory, size);
+	}
+	//the file is written once the game changes it, not just for having been formatted
+	memcpy(b->saved, memory, size);
+}
+
+static char *bram_path(const char *name)
+{
+	const char *dir = NULL;
+	retro_environment(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &dir);
+	if (!dir || !dir[0]) {
+		dir = sram_file_dir;
+	}
+	if (!dir || !dir[0]) {
+		return NULL;
+	}
+	return alloc_concat_m(3, (char const *[]){ dir, PATH_SEP, name });
+}
+
+static void bram_setup(void)
+{
+	bram_release(&bram_internal);
+	bram_release(&bram_cart);
+	bram_frames = 0;
+	segacd_context *cd = bram_system();
+	if (!cd) {
+		return;
+	}
+	const char *mode = core_option_value("blastem_scd_bram");
+	uint8_t per_game = mode && !strcmp(mode, "per_game") && sram_file_name;
+	genesis_context *gen = (genesis_context *)current_system;
+	char name[1024];
+	if (per_game) {
+		snprintf(name, sizeof(name), "%s.brm", sram_file_name);
+	} else {
+		//version register: 0x80 overseas, 0x40 50 Hz (see genesis.c)
+		char region = !(gen->version_reg & 0x80) ? 'J' : (gen->version_reg & 0x40) ? 'E' : 'U';
+		snprintf(name, sizeof(name), "scd_%c.brm", region);
+	}
+	bram_open(&bram_internal, cd->bram, BRAM_INTERNAL_SIZE, bram_path(name));
+	if (cd->bram_cart && cd->bram_cart_id < 8) {
+		static const char *sizes[8] = { "64Kbit", "128Kbit", "256Kbit", "512Kbit", "1Mbit", "2Mbit", "4Mbit", "8Mbit" };
+		if (per_game) {
+			snprintf(name, sizeof(name), "%s_%s_cart.brm", sram_file_name, sizes[cd->bram_cart_id]);
+		} else {
+			snprintf(name, sizeof(name), "%s_cart.brm", sizes[cd->bram_cart_id]);
+		}
+		bram_open(&bram_cart, cd->bram_cart, 0x2000 << cd->bram_cart_id, bram_path(name));
+	}
+}
+
+static void bram_close(void)
+{
+	bram_save_if_changed(1);
+	bram_release(&bram_internal);
+	bram_release(&bram_cart);
+}
+
+static void bram_save_if_changed(uint8_t now)
+{
+	if (!now && ++bram_frames < BRAM_CHECK_FRAMES) {
+		return;
+	}
+	bram_frames = 0;
+	bram_write(&bram_internal);
+	bram_write(&bram_cart);
 }
 
 /* Gets region of game. */
