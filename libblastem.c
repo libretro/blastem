@@ -169,24 +169,33 @@ static const struct retro_core_option_value cdda_gain_values[] = {
 	{ "-9.5", "-9.5 dB" },
 	GAIN_VALUES_TAIL
 };
-static const struct retro_core_option_value scd_bram_values[] = {
-	{ "per_bios", "Per BIOS (shared)" },
-	{ "per_game", "Per game" },
+//The three Sega CD backup RAM options are Genesis Plus GX's, with its values,
+//labels and defaults, so that a player moving between the two cores finds the
+//same choices and the same files.
+static const struct retro_core_option_value scd_system_bram_values[] = {
+	{ "per bios", "Per-BIOS" },
+	{ "per game", "Per-Game" },
 	{ NULL, NULL }
 };
-//system\0bram_cart_size_id\0: the cartridge holds 0x2000 << id bytes
-static const struct retro_core_option_value scd_bram_cart_values[] = {
-	{ "4", "1 Mbit (128 KB)" },
-	{ "none", "None" },
-	{ "0", "64 Kbit (8 KB)" },
-	{ "1", "128 Kbit (16 KB)" },
-	{ "2", "256 Kbit (32 KB)" },
-	{ "3", "512 Kbit (64 KB)" },
-	{ "5", "2 Mbit (256 KB)" },
-	{ "6", "4 Mbit (512 KB)" },
-	{ "7", "8 Mbit (1 MB)" },
+static const struct retro_core_option_value scd_cart_bram_values[] = {
+	{ "per cart", "Per-Cart" },
+	{ "per game", "Per-Game" },
 	{ NULL, NULL }
 };
+//Genesis Plus GX's default, 4meg, comes first here because the first entry is
+//the default; the rest are in its order. scd_cart_size_ids maps them onto
+//system\0bram_cart_size_id\0, where the cartridge holds 0x2000 << id bytes.
+static const struct retro_core_option_value scd_cart_size_values[] = {
+	{ "4meg", "4Mbit" },
+	{ "disabled", "Disabled" },
+	{ "128k", "128Kbit" },
+	{ "256k", "256Kbit" },
+	{ "512k", "512Kbit" },
+	{ "1meg", "1Mbit" },
+	{ "2meg", "2Mbit" },
+	{ NULL, NULL }
+};
+static const char *scd_cart_size_ids[] = { "6", "none", "1", "2", "3", "4", "5" };
 static const struct retro_core_option_value fm_dac_values[] = {
 	{ "auto", "Default for model" },
 	{ "zero_offset", "Zero offset (discrete YM2612)" },
@@ -236,14 +245,19 @@ static const core_option core_options[] = {
 		"system", "system\0megawifi\0", off_on_values
 	},
 	{
-		"blastem_scd_bram", "Sega CD Backup RAM Files",
-		"Where the Sega CD's internal backup RAM and the RAM cartridge are saved, with Genesis Plus GX's file names so the two cores share them. Per BIOS keeps one internal backup RAM per region (scd_U/E/J.brm) and one file per cartridge size, shared by every game; per game gives each game its own.",
-		"system", NULL, scd_bram_values
+		"blastem_scd_system_bram", "CD System BRAM (Requires Restart)",
+		"When running Sega CD/Mega-CD content, specifies whether to share a single save file between all games from a specific region (Per-BIOS, scd_U/E/J.brm) or to create a separate save file for each game (Per-Game). The files are the ones Genesis Plus GX uses, so the two cores share them. Note that the Sega CD/Mega-CD has limited internal storage, sufficient only for a handful of titles.",
+		"system", NULL, scd_system_bram_values
 	},
 	{
-		"blastem_scd_bram_cart", "Sega CD RAM Cartridge",
-		"Size of the backup RAM cartridge plugged into the Sega CD, or none. Takes effect when content is loaded. Set it to the size Genesis Plus GX uses to share its cartridge file.",
-		"system", "system\0bram_cart_size_id\0", scd_bram_cart_values
+		"blastem_scd_cart_bram", "CD Backup Cart BRAM (Requires Restart)",
+		"When running Sega CD/Mega-CD content, specifies whether to share a single backup RAM cart for all games (Per-Cart) or to create a separate backup RAM cart for each game (Per-Game). The files are the ones Genesis Plus GX uses, so the two cores share them.",
+		"system", NULL, scd_cart_bram_values
+	},
+	{
+		"blastem_scd_cart_size", "CD Backup Cart BRAM Size (Requires Restart)",
+		"Sets the backup RAM cart size when running Sega CD/Mega-CD content. Useful when setting the backup RAM cart to Per-Game to avoid multiple larger cart sizes. Use the size Genesis Plus GX is set to for the two cores to share the cart file.",
+		"system", NULL, scd_cart_size_values
 	},
 	{
 		"blastem_io_1", "Port 1 Device",
@@ -744,6 +758,17 @@ static void apply_core_options(void)
 		//anywhere else once it has been replaced.
 		config = tern_insert_path(config, (char *)opt->config_path, (tern_val){.ptrval = strdup(value)}, TVAL_PTR);
 	}
+	//Genesis Plus GX's values for the cart size are not what the emulator reads
+	const char *cart_size = core_option_value("blastem_scd_cart_size");
+	const char *cart_id = scd_cart_size_ids[0];
+	for (size_t i = 0; cart_size && scd_cart_size_values[i].value; i++)
+	{
+		if (!strcmp(cart_size, scd_cart_size_values[i].value)) {
+			cart_id = scd_cart_size_ids[i];
+			break;
+		}
+	}
+	config = tern_insert_path(config, "system\0bram_cart_size_id\0", (tern_val){.ptrval = strdup(cart_id)}, TVAL_PTR);
 }
 
 static vid_std video_standard;
@@ -1445,7 +1470,7 @@ static void bram_open(bram_file *b, uint8_t *memory, uint32_t size, char *path)
 			//a cartridge file of another size: leave it alone rather than
 			//overwrite it with a cartridge of the size set in the options
 			char message[256];
-			snprintf(message, sizeof(message), "BlastEm: %s is %ld KB, not the %u KB the Sega CD RAM Cartridge option sets; it is not used",
+			snprintf(message, sizeof(message), "BlastEm: %s is %ld KB, not the %u KB the CD Backup Cart BRAM Size option sets; it is not used",
 				path, file_bytes / 1024, (unsigned)(size / 1024));
 			struct retro_message msg = { message, 600 };
 			retro_environment(RETRO_ENVIRONMENT_SET_MESSAGE, &msg);
@@ -1484,8 +1509,11 @@ static void bram_setup(void)
 	if (!cd) {
 		return;
 	}
-	const char *mode = core_option_value("blastem_scd_bram");
-	uint8_t per_game = mode && !strcmp(mode, "per_game") && sram_file_name;
+	//each falls back to the shared file when there is no content name to go by
+	const char *mode = core_option_value("blastem_scd_system_bram");
+	uint8_t per_game = mode && !strcmp(mode, "per game") && sram_file_name;
+	mode = core_option_value("blastem_scd_cart_bram");
+	uint8_t cart_per_game = mode && !strcmp(mode, "per game") && sram_file_name;
 	genesis_context *gen = (genesis_context *)current_system;
 	char name[1024];
 	if (per_game) {
@@ -1498,7 +1526,7 @@ static void bram_setup(void)
 	bram_open(&bram_internal, cd->bram, BRAM_INTERNAL_SIZE, bram_path(name));
 	if (cd->bram_cart && cd->bram_cart_id < 8) {
 		static const char *sizes[8] = { "64Kbit", "128Kbit", "256Kbit", "512Kbit", "1Mbit", "2Mbit", "4Mbit", "8Mbit" };
-		if (per_game) {
+		if (cart_per_game) {
 			snprintf(name, sizeof(name), "%s_%s_cart.brm", sram_file_name, sizes[cd->bram_cart_id]);
 		} else {
 			snprintf(name, sizeof(name), "%s_cart.brm", sizes[cd->bram_cart_id]);
